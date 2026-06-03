@@ -1,0 +1,917 @@
+﻿@{
+    Layout = null;
+}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>连心心理|心理咨询|心理团体活动|心理团体活动|心理相关知识讲座、培训|心理相关会议及研讨班|心理咨询信息系统</title>
+    <meta name="keywords" content="连心心理,心理咨询,心理团体活动,心理团体活动,心理相关知识讲座、培训,心理相关会议及研讨班,心理咨询信息系统" />
+    <meta name="description" content="高品质、信息化的专业心理服务平台，结合最新技术，提供系统的心理健康服务和优质的学习课程。旨在提升大众心理健康水平、促进心理行业发展。" />
+    <link rel="shortcut icon" href="/Public/favicon.ico">
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+    <link rel="stylesheet" href="/Public/login/bootstrap/css/bootstrap.min.css">
+    <link rel="stylesheet" type="text/css" href="/Public/index/css/public.css">
+    <link rel="stylesheet" type="text/css" href="/Public/index/css/animate.css">
+    <link rel="stylesheet" type="text/css" href="/Public/index/css/slick.css">
+    <link rel="stylesheet" type="text/css" href="/Public/index/css/style.css">
+    <link rel="stylesheet" href="/Public/login/css/login.css" />
+    <script type="text/javascript" src="/Public/index/js/jquery.min.js"></script>
+    <script src="/Public/login/bootstrap/js/bootstrap.min.js"></script>
+    <script type="text/javascript" src="/Public/index/js/wow.min.js"></script>
+    <script type="text/javascript" src="/Public/index/js/slick.min.js"></script>
+    <script type="text/javascript" src="/Public/index/js/public.js"></script>
+    <script type="text/javascript" src="/Public/index/js/zturn.js"></script>
+    <script type="text/javascript" src="/Public/index/js/countUp.min.js"></script>
+    <style>
+        .logbtn {
+            width: 94px;
+            text-align: center;
+            height: 100px;
+            background: #191919;
+            font-size: 14px;
+            font-family: PingFangSC-Regular,PingFang SC;
+            font-weight: 400;
+            color: #fff;
+            line-height: 100px;
+            border-radius: 4px;
+            padding: 12px;
+        }
+
+        .showLayer {
+            display: initial;
+        }
+    </style>
+</head>
+<body>
+    <!--header start-->
+
+    <header id="top">
+        <div class="top">
+            <div class="nav clearfix">
+                <div class="logo f-l"><a href="/"><img src="/Public/tongxinli/jixinli.jpg" style="width: 100px;"></a></div>
+                <div class="nav-con f-l">
+                    <ul class="nav-list">
+                        <li id="activeindex" class="">
+                            <a href="/home/Index">
+                                <span>首页</span>
+                            </a>
+                        </li>                       
+                        <li id="consultantList" class="">
+                            <a href="/home/consultantList">
+                                <span>心理服务</span>
+                            </a>
+                            <div class="nav-con2">
+                                <dl>
+                                    <dd><a href="/home/consultantList">心理咨询</a></dd>
+                                    <dd><a href="/home/consultantList?type=1">了解咨询</a></dd>
+                                    <dd><a href="/home/consultantList?type=2">心理测量</a></dd>
+                                </dl>
+                            </div>
+                        </li>
+                        <li id="activeNewsList" class="">
+                            <a href="/home/newsList">
+                                <span>专业活动</span>
+                            </a>
+                            <div class="nav-con2">
+                                <dl>
+                                    <dd><a href="/home/newsList?type=2">活动招募</a></dd>
+                                    <dd><a href="/home/newsList?type=1">心理主题</a></dd>
+                                    <dd><a href="/home/newsList">往期精华</a></dd>
+                                </dl>
+                            </div>
+                        </li>
+                        <li id="knowledge" class="">
+                            <a href="/home/knowledgeList">
+                                <span>付费知识</span>
+                            </a>
+                            <div class="nav-con2">
+                                <dl>
+                                    <dd><a href="/home/knowledgeList">付费阅读</a></dd>
+                                    <dd><a href="#" onclick="knowledgeWap(2);">发布知识</a></dd>
+                                </dl>
+                            </div>
+                        </li>
+                        @*<li id="activedownload" class="">
+                            <a href="/jixinli/index">
+                                <span> 同心理</span>
+                            </a>
+                        </li>*@
+                        <li id="activeabout" class="">
+                            <a href="/home/about">
+                                <span> 关于我们</span>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+                <div class="f-r">
+                    @*<div class="contact-wx">
+                        <a href="" rel="nofollow"><em><img class="vcenter" src="/Public/index/images/nav-wx.png"></em><span>关注微信</span></a>
+                        <div><img src="/Public/jixinli/jierweima.png"></div>
+                    </div>*@
+                   @* <div class="contact-dh">
+        <a href="tel:" rel="nofollow"><em><img class="vcenter" src="/Public/index/images/nav-dh.png"></em><span></span></a>
+    </div>*@
+                    <div class="log-wrap">
+                        <div id="Login_User" style="font-size: 14px; color: #191919; text-align: center; margin-top: 20px; margin-top: 20px; display: -webkit-inline-box; ">
+                            <span id="Login_Name" style="font-size: 14px; color: #191919; line-height: 40px;">关注</span>
+                            <br />
+                            <a id="Logout" href="#" style="color: #191919; background-color: #5cb85c; border-radius: 3px; padding-top: 3px; padding-bottom: 3px; padding-left: 12px; padding-right: 12px; ">退出</a>
+                        </div>
+                        <a id="Login_start_" href="#" class="logbtn" style="color: #fff; display: none;">登录/注册</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+    <!--header end-->
+    <div >
+        @RenderBody()
+    </div>
+    <!--footer-->
+
+    <footer>
+        <div class="bottom">
+            <div class="bottom-con">
+                @*<div class="bottom-top clearfix">
+                    <div class="img"><img class="vcenter" src="/Public/index/images/bottom-dh.png"></div>
+                    <h5>全国热线</h5>
+                    <p></p>
+                </div>*@
+                <div class="bottom-box clearfix">
+                    <div class="botbox-le f-l">
+                        <ul>
+                            <li><a href="#" rel="nofollow"> W </a></li>
+                            <li><a href="/home/index" rel="nofollow">首页</a></li>
+                            <li><a href="/home/index" rel="nofollow">心理课程</a></li>
+                            <li><a href="/home/index" rel="nofollow">心理咨询</a></li>
+                            <li><a href="/home/index" rel="nofollow">知识</a></li>
+                            <li><a href="/home/index" rel="nofollow">济心理</a></li>
+                            <li><a href="/home/about" rel="nofollow">关于我们</a></li>
+                        </ul><ul style="width: 220px;">
+                            <li><a href="#" rel="nofollow"><span>SOCIAL</span></a>
+                            <li><a href="#" rel="nofollow">17702168106</a></li>
+                            <li><a href="#" rel="nofollow"></a></li>
+                            <li><a href="#" rel="nofollow">https://www.ji-psy.com/</a></li>
+                            <li><a href="#" rel="nofollow">上海市杨浦区同济科技大厦</a></li>
+                        </ul>
+                    </div>
+                    <div class="botbox-ri f-r">
+                        <div class="img f-r"><img src="/Public/jixinli/jierweima.png" style="width: 180px;"></div>
+                        <div>
+                            <p>扫码关注微信公众号</p>
+                        </div>
+
+                    </div>
+                </div>
+                <div class="bottom-bot"><p>
+                    <p><span>版权 © 2022-2023 上海连心心理咨询有限公司</span> 
+                        <a href="https://beian.miit.gov.cn" target="_blank" style="color: #fff;">&nbsp;沪ICP备2022028778号-1</a>
+                        <a href="http://www.beian.gov.cn/portal/registerSystemInfo?recordcode=31011002006015" target="_blank" style="color: #fff;">
+                            <img src="/Public/index/images/gongan.png" alt="" class="mc_ft_ab">沪公网安备 31011002006015号
+                        </a>&nbsp;&nbsp;
+                                  
+                    </p>
+                </div>
+            </div>
+        </div>
+    </footer>
+    <div class="fixed_right">
+        <div class="right-box">
+            <ul>
+                @*<li>
+                    <a class="zixun" href="javascript:void(0);" rel="nofollow">
+                        <div class="icon">
+                            <img class="vcenter" src="/Public/index/images/fixed_ricon01.png">
+                            <img class="vcenter" src="/Public/index/images/fixed_ricon01-1.png">
+                        </div>
+                        <div class="text"><h5>在线咨询</h5></div>
+                    </a>
+                </li>*@
+                <li>
+                    <a href="javascript:void(0);" rel="nofollow">
+                        <div class="icon">
+                            <img class="vcenter" src="/Public/index/images/fixed_ricon02.png">
+                            <img class="vcenter" src="/Public/index/images/fixed_ricon02-1.png">
+                        </div>
+                        <div class="text"><h5>关注微信</h5></div>
+                        <div class="wximg"><img src="/Public/jixinli/jierweima.png" style="width: 124px;"></div>
+                    </a>
+                </li>
+                @*<li>
+                    <a href="javascript:void(0);" rel="nofollow">
+                        <div class="icon">
+                            <img class="vcenter" src="/Public/index/images/fixed_ricon03.png">
+                            <img class="vcenter" src="/Public/index/images/fixed_ricon03-1.png">
+                        </div>
+                        <div class="text"><h5>热线</h5></div>
+                        <div class="dhtext"><p>17702168106</p></div>
+                    </a>
+                </li>*@
+                <li>
+                    <a href="#top" rel="nofollow">
+                        <div class="icon">
+                            <img class="vcenter" src="/Public/index/images/fixed_ricon05.png">
+                            <img class="vcenter" src="/Public/index/images/fixed_ricon05-1.png">
+                        </div>
+                        <div class="text"><h5>返回顶部</h5></div>
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- 会员登录  -->
+    <!--<div id='Login_start' style="position: absolute;" >-->
+    <div id='_start'>
+        <div id='_close' style="display: none;">
+            <span class="glyphicon glyphicon-remove"></span>
+        </div>
+        <br />
+        <!--登录框-->
+        <div id="login_container">
+            <div id="lab1">
+                <span id="lab_login">用户登录</span>
+                <span id="lab_toRegist">
+                    &emsp;还没有账号&nbsp;
+                    <span id='toRegist' style="color: #EB9316;cursor: pointer;">立即注册</span>
+                </span>
+            </div>
+            <div style="width: 330px; margin-left: 15px;">
+                <span id="lab_type1">手机号/邮箱登录</span>
+            </div>
+            <div id="form_container1">
+                <br />
+                <input type="text" class="form-control" placeholder="手机号/邮箱" id="login_number" value="" />
+                <input type="password" class="form-control" placeholder="密码" id="login_password" />
+                <input type="button" value="登录" class="btn btn-success" id="login_btn" onclick="sendLogin(this)" style="margin-left:30px;" />
+                <span id="rememberOrfindPwd">
+                    <span>
+                        <input id="remember" type="checkbox" style="-webkit-appearance:auto; ">
+                    </span>
+                    <span style="color:#000000">
+                        记住密码&emsp;&emsp;&emsp;&emsp;
+                    </span>
+                    @*<span style="color:#000000">
+                        忘记密码
+                    </span>*@
+                </span>
+            </div>
+
+            @*<div style="display:block;width:330px;height：40px;">
+                <span id="lab_type2">使用第三方直接登陆</span>
+            </div>
+            <div style="width:330px;height:100px;border-bottom: 1px solid #FFFFFF;">
+                <br />
+                <button id="login_WB" type="button" class="btn btn-danger">
+                    <img src="//jdxl-img.jdxlt.com/uploads/20be140488f0413a99b00b5c58f1447e.png" style="width:20px;margin-top:-4px;" />&emsp;微博登录
+                </button>
+                <button id="login_QQ" type="button" class="btn btn-info">
+                    <img src="//jdxl-img.jdxlt.com/uploads/d97d3a783c9144288531fb15e6df9254.png" style="width:20px;margin-top:-4px;" />&emsp;QQ登录
+                </button>
+
+            </div>*@
+        </div>
+        <!-- 会员注册 -->
+        <div id='regist_container' style="display: none; margin-top:10px;">
+            <div id="lab1">
+                <span id="lab_login">用户注册</span>
+                <span id="lab_toLogin">
+                    &emsp;已有账号&nbsp;
+                    <span id='toLogin' style="color: #EB9316;cursor: pointer;">立即登录</span>
+                </span>
+            </div>
+            <div id="form_container2" style="padding-top: 15px; margin-left: 15px;">
+                <input type="text" class="form-control" placeholder="用户名" id="regist_account">
+                <input type="text" class="form-control" placeholder="邮箱" id="regist_email" style="margin-top: 6px;">
+                <input type="password" class="form-control" placeholder="密码" id="regist_password1" />
+                <input type="password" class="form-control" placeholder="确认密码" id="regist_password2" />
+                <input type="text" class="form-control" placeholder="手机号" id="regist_phone" />
+                <input type="text" class="form-control" placeholder="验证码" id="regist_vcode" />
+                <!--<button id="getVCode" type="button" class="btn btn-success" >获取验证码</button>-->
+                <input id="getVCode" type="button" class="btn btn-success" value="点击发送验证码" onclick="sendCode(this)" />
+            </div>
+            <div class="weui_cell" style="text-align: center; width: 100%; margin-top: 10px; font-size: smaller;">
+                <label><input type="checkbox" class="surebtn" style="-webkit-appearance:auto;" />已阅读并同意<a id="reg_now1" href="javascript:" style="color:red;">《用户协议》</a>和<a id="reg_now2" href="javascript:" style="color:red;">《用户隐私协议》</a></label>
+            </div>
+            <input type="button" value="注册" class="btn btn-success" id="regist_btn" onclick="sendRegist(this)" disabled style="background-color: #3A87AD; margin-top: 0px;" />
+        </div>
+    </div>
+
+    <!-- 服务协议  -->
+    <div id="approveLayer" style="display:none;">
+        <div class="reg_bar" style="margin-top: 20px;">
+            <h3 style="text-align: center;">心理咨询服务协议</h3>
+        </div>
+        <div class="reg_wrap">
+            <div class="login_input" style="margin: 20px;">
+                <p style="font-weight: bold;">重要提示：</p>
+                <p>
+                    本服务协议是您与上海连心心理咨询有限公司（以下或简称“本公司”）之间就心理咨询服务等相关事宜所订立的协议，具有法律效力。您（以下或简称“来访者”）在使用本公司提供的各项服务（以下简称“本服务”）之前，请您务必审慎阅读、充分理解各条款内容，特别是免除或限制责任的条款。免除或限制责任的条款将以粗体标识，请重点阅读。
+                </p>
+                <p>
+                    如来访者对协议内容有任何疑问，请不要进行后续操作。
+                </p>
+                <p>
+                    若来访者为未成年人，应由来访者的监护人阅读本协议并向来访者解释说明。来访者的监护人需与来访者一同签署本协议。
+                </p>
+                <p>
+                    甲方（来访者）：____________________
+                </p>
+                <p>
+                    乙方（咨询机构）：上海连心心理咨询有限公司
+                </p>
+                <p style="font-weight: bold;">
+                    第一条 服务目的
+                </p> <p>
+                    甲方主动寻求心理咨询与治疗的专业帮助，乙方从事专业心理咨询工作，乙方运用专业的咨询技术与方法帮助甲方，为甲方提供咨询。
+                </p> <p style="font-weight: bold;">
+                    第二条 服务内容
+                </p>
+                <p>
+                    乙方指定咨询师______为甲方提供咨询服务，甲方对此予以认可并接受。双方应遵循本合同的约定，以实现相关服务的提供。
+                </p> <p style="font-weight: bold;">
+                    第三条 服务时间及与预约
+                </p> <p>
+                    1. 服务时间一般____分钟起，具体服务时间可由甲方与咨询师预约确定。
+                </p> <p>
+                    2. 甲方应至少提前48小时预约咨询服务。甲方需要更改预约（包括咨询时间、咨询方式、取消预约等），需要在预约开始前至少24小时提出。
+
+                </p> <p>
+                    3. 若甲方超出前述可更改时间后提出更改要求的，更改无效，即使甲方缺席，乙方仍按照预约收取费用。除非双方另行协商一致。
+                </p> <p>
+                    4. 若甲方迟到，乙方提供的咨询服务仍在原定时间开始及结束，除非双方另行协商一致。若乙方咨询师迟到，咨询服务时间顺延。
+                </p> <p style="font-weight: bold;">
+                    第四条 服务费用及支付
+                </p> <p>
+                    1. 本协议项下心理咨询服务的收费标准为________元/分钟（大写：人民币________/分钟）。具体计费方式为：每次咨询以50分钟为一节，超过50分钟以10分钟为时间单位计费；在1小时咨询时间中，包含10-15分钟咨询师做记录的时间，故每节实际咨询时间为45-50分钟。
+                </p> <p>
+                    2. 咨询的计时方式为：自乙方咨询师与甲方交流开始至双方交流结束离开咨询室。
+                </p> <p>
+                    3. 甲方最迟应于咨询开始前一天支付相应的咨询费用。
+                </p> <p style="font-weight: bold;">
+                    第五条 甲方权利义务
+                </p> <p>
+                    1. 甲方确认，在接受乙方提供的服务时甲方具备完全民事权利能力。若甲方系未成年人，保证在接受乙方提供的服务前已取得监护人的同意。
+                </p> <p>
+                    2. 甲方在咨询期间不得有自杀、严重自伤行为。如有此类想法，甲方或者甲方监护人应当及时告知，寻求乙方帮助。
+                </p> <p>
+                    3. 甲方必须遵守中华人民共和国相关法律法规的规定，不得有违法犯罪行为，不得将乙方提供的服务用于任何违法或不正当或不道德的活动。
+                </p> <p>
+                    4. 甲方应提供真实、正确、完整及最新的资料，特别是紧急联系人与紧急联系电话。
+                </p> <p>
+                    5. 甲方有义务提供与心理咨询有关的真实资料，有义务提供专业医疗机构作出的精神疾病相关诊断，不得隐瞒精神病史，有义务按照乙方要求到专业医疗机构进行精神疾病鉴别诊断，在精神科医生指导下通过心理咨询进行辅助治疗。
+                </p> <p>
+                    6. 甲方有权更换本协议内指定的咨询师。
+                </p> <p>
+                    7. 甲方应当根据本协议的约定按时足额向乙方支付相应的服务费用。如甲方迟延支付或者未支付乙方相应的服务费用，乙方有权拒绝提供本协议约定的相关服务。
+                </p> <p>
+                    8. 甲方不得对心理咨询会谈进行录音录像。为保障服务质量，提升专业胜任力，咨询师如需录音录像需要和甲方另签知情同意协议。
+                </p> <p style="font-weight: bold;">
+                    第六条 乙方权利义务
+                </p> <p>
+                    1. 乙方承诺向甲方提供心理咨询服务的工作人员系取得相应资质的咨询师。未经甲方同意，乙方不得更换本协议内指定的咨询师。
+                </p> <p>
+                    2. 乙方及乙方咨询师应遵守职业道德，遵守国家有关法律法规。
+                </p> <p>
+                    3. 乙方及乙方咨询师应严格遵守保密原则。
+                </p> <p>
+                    4. 乙方及乙方咨询师本着对甲方负责的态度，有权提出转介、中止或终止咨询服务。
+                </p> <p>
+                    5. 乙方有权按照本协议的约定向甲方收取相应的服务费用。
+                </p> <p>
+                    6. 乙方不得对心理咨询会谈进行录音录像。为保障服务质量，提升专业胜任力，咨询师如需录音录像需要和甲方另签知情同意协议。
+                </p> <p style="font-weight: bold;">
+                    第七条 免责条款
+                </p> <p>
+                    1. 在咨询过程中，甲方因自身原因而突发疾病或意外死亡，或因自身原因造成情绪失控而发生自伤、自残、自杀等后果，乙方及乙方咨询师尽可能采取措施控制事态发展，防止事态恶化，必要时与相关部门取得联系。由此造成的损害后果，乙方不承担责任。
+                </p> <p>
+                    2. 甲方在咨询期间不得有自杀与严重自伤行为。甲方仅有轻微自杀自伤意念前来咨询时，乙方会尽量为甲方提供帮助，必要时提供转介途径，终止咨询。如甲方最终选择自杀或对自己、对他人造成伤害的，责任及后果由甲方全部承担，乙方不承担责任。
+                </p> <p>
+                    3. 乙方提供的心理咨询服务不属于疾病诊断或治疗活动，不属于开展诊疗活动，不属于医疗机构。若甲方对本条款不同意或不理解，请立即停止后续操作，乙方将立即终止服务。
+                </p> <p>
+                    4. 甲方理解并同意，心理咨询的效果取决于甲方与咨询师双方配合作用的结果。无论乙方提供何种咨询方式，乙方并不保证甲方接受乙方的咨询服务后一定能达到某种效果。
+                </p> <p>
+                    5. 甲方理解并同意：若接受乙方咨询服务后达不到甲方心理预期的心理咨询效果，不属于服务质量问题，甲方不应以此为由要求乙方退款，且乙方不承担任何责任。
+                </p> <p>
+                    5. 甲方在接受乙方提供的咨询服务前，应提供与其心理状态有关的真实资料；若甲方故意隐瞒、虚构资料而造成的不良后果由甲方自身承担。
+                </p> <p>
+                    6. 为保障甲方权益，甲方应在乙方提供的咨询服务范围内接受服务，任何未经乙方知晓并同意私下与咨询师达成的交易而产生纠纷与乙方无关。
+                </p> <p style="font-weight: bold;">
+                    第八条 保密条款
+                </p> <p>
+                    1. 乙方将采取合理的安全手段保护甲方提供的个人信息，除下述信息披露条款外，在未得到甲方许可之前，乙方不会将甲方的任何个人信息提供给任何第三方：
+                </p> <p>
+                    （1）经甲方事先同意，向第三方披露；
+                </p> <p>
+                    （2）如甲方出现自杀、严重自伤或伤害他人行为或风险，必要时乙方会与相关部门取得联系并提供甲方的相关个人信息；
+                </p> <p>
+                    （3）如甲方违反中国有关法律法规，行政或司法机构依法要求调查时，乙方会依法向行政或司法机构披露；
+                </p> <p>
+                    （4）乙方在研讨会、课堂或学术作品中引用经过修饰的案例材料，在引用时，乙方将删除所有能够识别出个人的信息，以保证甲方的匿名身份；
+                </p> <p>
+                    （5）为维护甲方合法权益等其他必要情况。
+                </p> <p>
+                    2. 乙方不允许任何第三方以任何手段收集、编辑、出售或无偿传播甲方的个人信息。
+                </p> <p>
+                    3. 咨询服务的终止不影响本保密条款的效力，本条款始终有效。
+                </p> <p>
+            </div>
+        </div>
+    </div>
+
+    <!--移动端导航开始-->
+    <div class="manv">
+        <div class="moblie_head">
+            <div class="f-l mlogo">
+                <a href="/">
+                    <img src="/Public/tongxinli/jixinli.jpg">
+                </a>
+            </div>
+            <div class="f-r menu">
+                <a href="javascript:;" class="a_js">
+                    <img src="/Public/index/images/menu.png">
+                </a>
+            </div>
+            <div class="clear"></div>
+        </div>
+
+        <div class="a_txt">
+
+            <div class="div1 a_closed"></div>
+
+            <div class="div3">
+                @*<div class="English f-r"><p>CN<a href="http://enreacheducation.com/" target="view_window"> | EN</a></p></div>*@
+                <div class="div2">
+                    <a href="/">
+                        <img src="/Public/tongxinli/jixinli.jpg">
+                    </a>
+                    <a href="javascript:;" class="a_closed">
+                        <img src="/Public/index/images/Return.png" width="22">
+                    </a>
+                </div>
+                @*<ul>
+                    <li>
+                        <a class="a_js2" href="/home/Index">首页</a>
+                    </li>
+                    <li>
+                        <a class="a_js2" href="/home/examiner">咨询师介绍</a>
+                    </li>
+                    <li>
+                        <a class="a_js2" href="/home/course">国际课程</a>
+                    </li>
+                    <li>
+                        <a class="a_js2" href="/home/guide">名师阅读</a>                  
+                    </li>
+                    <li>
+                        <a class="a_js2" href="//home/case">优秀案例</a>
+                    </li>
+                    <li>
+                        <a class="a_js2" href="/home/download">真题下载</a>
+                    </li>
+                    <li>
+                        <a class="a_js2" href="/home/about">关于我们</a>
+                    </li>
+                    <div class="clear"></div>
+                </ul>*@
+                @*<div class="mnav-contact">
+                    <a href="#"><img class="vcenter" src="/Public/index/images/nav-wx.png"></a> <a href="tel:"><img class="vcenter" src="/Public/index/images/nav-dh.png"></a>
+                    <a id="feedback" class="zixun" href="#">预约咨询</a>
+                </div>*@
+            </div>
+        </div>
+        <!--移动端导航结束-->
+    </div>
+    <script type="text/javascript" src="/Public/js/layer/layer.js"></script>
+    <script type="text/javascript">
+        $(function () {
+            //菜单激活
+            $(".nav-list li").click(function () {
+                $this = $(this);
+                if ($this.attr("id")) {
+                    localStorage.active = $this.attr("id");
+                }
+            })
+            var active = localStorage.active;
+            $("#" + localStorage.active).addClass("active");
+            if (!$(".nav-list").find("#" + active).hasClass('hsub')) {
+                $(".nav-list").find("#" + active).parent().parent().addClass("open").addClass("active");
+                $(".nav-list").find("#" + active).parent().stop().slideDown('normal');
+            }
+        })
+    </script>
+    <script>
+        $('.sendf').click(function () {
+            var from_id = $(this).attr('from_id');
+            $.ajax({
+                url: "/home/PostMessage",
+                type: "post",
+                dataType: "json",
+                data: $('#' + from_id).serialize(),
+                success: function (request) {
+                    if (request.code == 1) {
+                        showErrorMsg(request.msg);
+                        setTimeout(function () {
+                            window.location.reload();
+                            // console.log(request)
+                        }, 2000);
+                        return false;
+                    } else {
+                        showErrorMsg(request.msg);
+                        return false;
+                    }
+
+                },
+                error: function (request) {
+                    showErrorMsg("服务器繁忙, 请联系管理员!");
+                    return false;
+                }
+            });
+        });
+        function showErrorMsg(msg) {
+            layer.open({ title: '提示', content: msg });
+        }
+    </script>
+    <script>
+        var user = null;
+        var openUrl = "";
+        $(document).ready(function () {
+            $.get('/Register/getLoginUser', {}, function (res) {
+                console.log(res);
+                if (res.code == 0) {
+                    document.getElementById("Login_start_").style.display = "none";
+                    document.getElementById("Login_User").style.display = "-webkit-inline-box";
+                    document.getElementById("Login_Name").innerText = "欢迎，" + res.data.User.name;
+                    user = res.data.User;
+                }
+                else {
+                    document.getElementById("Login_start_").style.display = "inline";
+                    document.getElementById("Login_User").style.display = "none";
+                }
+            });
+            //打开会员登录
+            $("#Login_start_").click(function () {
+                $("#regist_container").hide();
+                $("#_close").show();
+                $("#_start").animate({
+                    left: '50%',
+                    height: '520px',
+                    width: '400px'
+                }, 500, function () {
+                    $("#login_container").show(500);
+                    $("#_close").animate({
+                        height: '40px',
+                        width: '40px'
+                    }, 500);
+                });
+            });
+            //打开会员注册
+            $("#Regist_start_").click(function () {
+                $("#login_container").hide();
+                $("#_close").show();
+                $("#_start").animate({
+                    //left: '50%;',
+                    height: '520px',
+                    width: '400px'
+                }, 500, function () {
+                    $("#regist_container").show(500);
+                    $("#_close").animate({
+                        height: '40px',
+                        width: '40px'
+                    }, 500);
+                });
+            });
+            $("#Logout").click(function () {
+                $.get('/Register/Logout', {}, function (res) {
+                    document.getElementById("Login_start_").style.display = "inline";
+                    document.getElementById("Login_User").style.display = "none";
+                    user = null;
+                });
+            });
+            //关闭
+            $("#_close").click(function () {
+
+                $("#_close").animate({
+                    height: '0px',
+                    width: '0px'
+                }, 500, function () {
+                    $("#_close").hide(500);
+                    $("#login_container").hide(500);
+                    $("#regist_container").hide(500);
+                    $("#_start").animate({
+                        left: '0px',
+                        height: '0px',
+                        width: '0px'
+                    }, 500);
+                });
+                openUrl = "";
+            });
+            //去 注册
+            $("#toRegist").click(function () {
+                $("#login_container").hide(500);
+                $("#regist_container").show(500);
+            });
+            //去 登录
+            $("#toLogin").click(function () {
+                $("#regist_container").hide(500);
+                $("#login_container").show(500);
+            });
+        });
+
+        var clock = '';
+        var nums = 30;
+        var btn;
+        function sendCode(thisBtn) {
+            btn = thisBtn;
+            btn.disabled = true; //将按钮置为不可点击
+
+            get_mobile_code();
+        }
+
+        function get_mobile_code() {
+            var myreg = /^\+?[1-9]\d{1,14}$/;
+            //var myreg = /^(0|86|17951)?(13[0-9]|15[012356789]|17[678]|18[0-9]|14[57])[0-9]{8}$/;
+            //var regEmail = /^([a-zA-Z]|[0-9])(\w|\-)+[a-zA-Z0-9]+\.([a-zA-Z]{2,4})$/;
+            if (!myreg.test($("#regist_phone").val())) {
+                layer.alert("请输入正确的手机号码!");
+                btn.disabled = false;
+            }
+            //else if (!regEmail.test($("#regist_phone").val()))//Email地址形式上就不对
+            //{
+            //    alert("请输入合法的邮箱!");
+            //    btn.disabled = false;
+            //}
+            else {
+                btn.value = '重新获取（' + nums + '）';
+                clock = setInterval(doLoop, 1000); //一秒执行一次
+                $.get('/Register/acRegistered', { tel: $.trim($('#regist_phone').val()), type: 0 }, function (msg) {
+                    if (msg == '存在') {
+                        alert("该号码已存在，无法获取验证码");
+                    }
+                    else if (msg == '不存在') {
+                        $.get('/Register/SendMsgType', { tel: $.trim($('#regist_phone').val()) }, function (msg) {
+                            if (msg == '发送成功') {
+                                layer.alert("已发送验证码，请查收！");
+
+                            }
+                            else {
+                                layer.alert("获取验证码失败");
+                            }
+                        });
+                    }
+                });
+
+
+            }
+        };
+
+        function doLoop() {
+            nums--;
+            if (nums > 0) {
+                btn.value = '重新获取（' + nums + '）';
+            } else {
+                clearInterval(clock); //清除js定时器
+                btn.disabled = false;
+                btn.value = '点击发送验证码';
+                nums = 30; //重置时间
+            }
+        }
+
+        $(document).ready(function () {
+            $("#login_QQ").click(function () {
+                alert("暂停使用！");
+            });
+            $("#login_WB").click(function () {
+                alert("暂停使用！");
+            });
+        });
+
+        function sendLogin(thisBtn) {
+            if ($("#login_number").val()=="") {
+                alert("请输入手机号码或者邮箱!");
+                return;
+            }
+            if ($("#login_number").val()== "") {
+                alert("请输入密码!");
+
+                return;
+            }
+            $.get('/Register/getUser', { tel: $.trim($('#login_number').val()), password: $('#login_password').val() }, function (res) {
+                if (res.code == 0) {
+                    loginSuccess(res.data.User)
+                    layer.msg("登录成功");
+                    //alert("登录成功");
+
+                }
+                else {
+                    alert("登录失败");
+                }
+            });
+        }
+
+        function sendRegist(thisBtn) {
+            var regist_password1 = $('#regist_password1').val();
+            if (regist_password1 == "") {
+                alert("请输入密码");
+                return;
+            }
+            var regist_password2 = $('#regist_password2').val();
+            if (regist_password1 != regist_password2)
+            {
+                alert("密码不一致");
+                return;
+            }
+            var account = $('#regist_account').val(); if (regist_password1 == "") {
+                alert("请输入用户名");
+                return;
+            }
+            var mail = $('#regist_email').val();
+            if (regist_password1 == "") {
+                alert("请输入邮箱");
+                return;
+            }            
+            var regist_phone = $.trim($('#regist_phone').val());
+            if (regist_password1 == "") {
+                alert("请输入手机号");
+                return;
+            }
+            var regist_vcode = $('#regist_vcode').val();
+            if (regist_password1 == "") {
+                alert("请输入验证码");
+                return;
+            }
+            $.get('/Register/sendRegist', { tel: regist_phone, password: regist_password1, name: account, mail: mail, vcode: regist_vcode }, function (res) {
+                if (res.code == 0) {
+                    loginSuccess(res.data.User);
+                    alert("注册成功");
+                }
+                else {
+                    alert("注册失败");
+                }
+            });
+            
+        }
+        
+        function loginSuccess(User) {
+            user = User;
+            document.getElementById("Login_start_").style.display = "none";
+            document.getElementById("Login_User").style.display = "-webkit-inline-box";
+            document.getElementById("Login_Name").innerText = "欢迎，" + User.name;
+            $("#_close").animate({
+                height: '0px',
+                width: '0px'
+            }, 500, function () {
+                $("#_close").hide(500);
+                $("#login_container").hide(500);
+                $("#regist_container").hide(500);
+                $("#_start").animate({
+                    left: '0px',
+                    height: '0px',
+                    width: '0px'
+                }, 500);
+            });
+            if (openUrl != "") {
+                window.open(openUrl)
+            }
+        }
+        function knowledgeWap(type) {
+            console.log(user)
+            //if(user == null)
+            //{
+            //    $("#regist_container").hide();
+            //    $("#_close").show();
+            //    $("#_start").animate({
+            //        left: '50%',
+            //        height: '520px',
+            //        width: '400px'
+            //    }, 500, function () {
+            //        $("#login_container").show(500);
+            //        $("#_close").animate({
+            //            height: '40px',
+            //            width: '40px'
+            //        }, 500);
+            //    });
+            //}
+            //else
+            //{
+                if(type==1)
+                {
+                    window.open("/home/knowledgeList")
+                }
+                else
+                {
+                    if (user == null) {
+                        $("#regist_container").hide();
+                        $("#_close").show();
+                        $("#_start").animate({
+                            left: '50%',
+                            height: '520px',
+                            width: '400px'
+                        }, 500, function () {
+                            $("#login_container").show(500);
+                            $("#_close").animate({
+                                height: '40px',
+                                width: '40px'
+                            }, 500);
+                        });
+                        openUrl = "/user/Index";
+                    }
+                    else {
+                        window.open("/user/Index")
+                    }
+                }
+            //}
+        }
+
+        function knowledge_Detail(urlD) {
+            if(user == null)
+            {
+                $("#regist_container").hide();
+                $("#_close").show();
+                $("#_start").animate({
+                    left: '50%',
+                    height: '520px',
+                    width: '400px'
+                }, 500, function () {
+                    $("#login_container").show(500);
+                    $("#_close").animate({
+                        height: '40px',
+                        width: '40px'
+                    }, 500);
+                });
+
+                openUrl = urlD;
+            }
+            else
+            {
+                window.open(urlD);
+            }
+        }
+    </script>
+    <script type="text/javascript">
+        $(function () {
+            $(".surebtn").change(function () {
+                if ($(this).is(':checked')) {
+                    $("#regist_btn").attr("disabled", false);
+                    //$("#regist_btn").css("background-color", "#3A87AD");
+                }
+                else {
+                    $("#regist_btn").attr("disabled", true);
+                    //$("#regist_btn").css("background-color", "#CCC");
+                }
+            }).change();
+
+            $('#reg_now1').bind('click', function () {
+                var index = layer.open({
+                    type: 1,
+                    skin: 'layui-layer-rim',
+                    title: "心理咨询服务协议",
+                    offset: "80px",
+                    area: ['800px', '600px'],
+                    shadeClose: true,
+                    content: jQuery("#approveLayer"),                    
+                    cancel: function (index, layero) {
+                        $('#approveLayer').removeClass("showLayer");
+                    },
+                });
+                $('#approveLayer').addClass("showLayer");
+                //$(window).unbind('touchmove');
+            });
+            $('#reg_now2').bind('click', function () {
+                var index = layer.open({
+                    type: 2,
+                    skin: 'layui-layer-rim',
+                    title: "用户隐私协议",
+                    offset: "80px",
+                    area: ['800px', '600px'],
+                    shadeClose: true,
+                    content: "https://www.ji-psy.com/Public/index/html/tysyxy.html",
+                    cancel: function (index, layero) {
+                    },
+                });
+            });
+            $('.reg_bar_close').bind('touchstart touchend click',
+            function (e) {
+                if (e.type == 'touchstart') {
+                    $(this).addClass('ton1');
+                } else if (e.type == 'touchend') {
+                    $(this).removeClass('ton1');
+                } else {
+                    if (document.getElementById('us_panel')) {
+                        $('#approveLayer').removeClass('show');
+                        $(window).bind('touchmove',
+                        function (e) {
+                            e.preventDefault();
+                            e.stopImmediatePropagation();
+                        });
+                    } else {
+                        $('#approveLayer').removeClass('show');
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>
+

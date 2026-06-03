@@ -1,0 +1,252 @@
+﻿@using lxxl.Models;
+@{
+    Layout = "~/Views/Shared/_LayoutWe2.cshtml";
+    ViewBag.Title = "ConsultantView";
+    T_Doctor Doctor = ViewBag.Doctor;
+}
+
+
+<script src="/Content/weui//js/iscroll-lite.js"></script>
+<script>
+    $(function () {
+        TagNav('#tagnav', {
+            type: 'scrollToNext',
+            curClassName: 'weui-state-active',
+            index: 1
+        });
+    });
+
+
+</script>
+
+<style>
+    .weui-navigator.weui-navigator-wrapper {
+        position: fixed;
+    }
+
+    #tagnav {
+        overflow: hidden;
+        position: fixed;
+        z-index: 99;
+        width: 100%;
+        left: 0;
+        top: 46px;
+    }
+
+    .weui-navbar__item {
+        padding: 8px 0;
+    }
+    .cli {
+        display: block;
+        height: 30px; /*和顶部fixed的高度一致*/
+        margin-top: -30px; /*和顶部fixed的高度一致*/
+        visibility: hidden;
+    }
+
+    .tagnavI {
+        margin-top: 20px;
+        padding-bottom: 2px;
+        border-bottom: 1px solid #dadada;
+    }
+
+    img {
+        border-radius: 8px;
+    }
+</style>
+
+<div id="container" class="container" style="margin-top:46px;">
+    <div id="tagnav" class="weui-navigator weui-navigator-wrapper">
+        <ul class="weui-navigator-list">
+            <li><a href="#tagnavI0">个人介绍</a></li>
+            <li><a href="#tagnavI1">咨询过程</a></li>
+            <li><a href="#tagnavI2">可约时间</a></li>
+        </ul>
+    </div>
+    <div class="" style="background-color: white;padding-left: 5%;padding-right: 5%;padding-bottom: 16px;">
+        <div class="cli" id="tagnavI0" style="height: 100px; margin-top: -90px;"></div>
+        <div id="" class="tagnavI" style="margin-top:40px;">
+            @*<div class="weui-cells">
+                <div class="weui-cell">
+                    <div class="weui-cell__bd">
+                        <h2 class="weui-c-title">@Doctor.name</h2>
+                    </div>
+                    <div class="weui-cell__ft">收费标准：500元/小时</div>
+                    <div class="weui-news-media" style="width: 80%;margin-left: 10%;padding: 0;">
+                        <img class="img-responsive" src="@(Doctor.url == "" ? "/Public/we/tc59.png" : Doctor.url)" alt="@Doctor.name" title="@Doctor.name" />
+                        <div class="dimship">地面/视频</div>
+                    </div>
+                </div>
+                <div class="weui-cell">
+                    <div class="weui-news-media" style="width: 80%;margin-left: 10%;padding: 0;">
+                        <img class="img-responsive" src="@(Doctor.url == "" ? "/Public/we/tc59.png" : Doctor.url)" alt="@Doctor.name" title="@Doctor.name" />
+                        <div class="dimship">地面/视频</div>
+                    </div>
+                </div>
+            </div>*@
+            <div class="weui-c-inner">
+                <div class="weui-c-content">
+                    <div class="weui-c-meta" style="margin-bottom: 6px;">
+                        <div style="margin-left: 6%; margin-right: 6%; margin-top: 4px;">
+                            <h2 class="weui-c-title" style="margin-bottom:8px;">@Doctor.name<span style="font-size: 14px; float: right; margin-top: 4px; ">收费标准：@Doctor.Billing 元/50分钟</span></h2>
+                        </div>
+                        <div class="weui-news-media" style="width: 90%;margin-left: 5%;padding: 0;">
+                            <img class="img-responsive" src="@(Doctor.url == "" ? "/Public/we/tc59.png" : Doctor.url)" alt="@Doctor.name" title="@Doctor.name" />
+                            <div class="dimship">地面/视频</div>
+                        </div>
+                    </div>
+                    @*<div class="weui-c-article">
+                        从业年限
+                        <span style="font-size: 14px; float: right; margin-top: 4px; ">@Doctor.WorkYears 年以上</span>
+                    </div>
+                    <div class="weui-c-article">
+                        <h2 class="weui-c-title">咨询时数</h2>
+                        @Html.Raw(Doctor.introduce)
+                    </div>
+                    <div class="weui-c-article">
+                        <h2 class="weui-c-title">个人简介</h2>
+                        @Html.Raw(Doctor.introduce)
+                    </div>
+                    <div class="weui-c-article">
+                        <h2 class="weui-c-title">个人简介</h2>
+                        @Html.Raw(Doctor.introduce)
+                    </div>*@
+                </div>
+            </div>
+
+            <div class="weui-news">
+                <ul class="weui-news-list" style="margin-left: 2%; margin-right: 2%; margin-top: 4px;">
+                    <li class="weui-news-item" style="padding-top:0px; padding-bottom:2px;">
+                        <div class="weui-news-inners">
+                            <div class="weui-news-title">
+                                <span class="weui-news-left" style="color:rgb(67,74,118); font-weight:bold;">从业年限</span>
+                                <span style="color: rgb(139,86,192); float: right; font-size: 14px;margin-top:2px;"> @Doctor.WorkYears 年以上</span>
+                            </div>
+                            <div class="weui-news-title">
+                                <span class="weui-news-left" style="color:rgb(67,74,118); font-weight:bold;">咨询时数</span>
+                                <span style="color: rgb(139,86,192); float: right; font-size: 14px;margin-top:2px;"> @Doctor.ConsultHours 小时+</span>
+                            </div>
+                            <div class="weui-news-text">
+                                <span class="weui-news-left" style="color:rgb(67,74,118); font-weight:bold;">简介</span>
+                                <p class="weui-news-p my-news-p">@Doctor.Profile</p>
+                            </div>
+                            <div class="weui-news-text">
+                                <span class="weui-news-left" style="color:rgb(67,74,118); font-weight:bold;">资质</span>
+                                <span style="color: rgb(139,86,192); float: right; font-size: 14px;margin-top:2px;"> @Doctor.Qualification</span>
+                            </div>
+                            <div class="weui-news-text">
+                                <span class="weui-news-left" style="color:rgb(67,74,118); font-weight:bold;">个人介绍</span>
+                                @Html.Raw(Doctor.introduce)
+                            </div>
+                            <div class="weui-news-info">
+                                <div class="weui-news-infoitem">
+                                    <span class="weui-news-left" style="color:rgb(67,74,118); font-size:12px !important; background-color:rgb(245,245,245);">家庭婚姻 | 亲子关系</span>
+                                </div>
+                                <div class="weui-news-infoitem">
+                                    <span>￥@Doctor.Billing /50分钟</span>
+                                </div>
+                            </div>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+            <br />
+        </div>
+        
+        <div class="cli" id="tagnavI1"></div>
+        <div id="" class="tagnavI">
+            <h2 class="weui-c-title">咨询过程</h2>
+            <div class="weui-c-article">
+                精神分析取向：
+                <br />
+                若选择此流派，当前困扰的缓解可能需时间沉淀。通过逐步深入的对话，你将获得自我认知、接纳与自尊的深层蜕变，提升关系质量与内在动力。过程中或触及复杂情绪，但我们会共同探讨、陪伴经历。每次50分钟，前3-4次为初始访谈，每周1-2次（可调整）。咨询时长：短程15-30次，中长程50-100次，长程超100次。
+                <br />
+                人本主义聚焦疗法：
+                <br />
+                从身体感受切入，通过觉察身体信号理解情绪根源，逐步增强自主应对能力。每次50分钟，每周1-2次，包含聚焦练习与讨论。
+                <br />
+                其他流派：
+                <br />
+                如认知行为、叙事疗法等，同样以过程为导向，每次50分钟，每周1-2次，聚焦具体问题与成长目标。
+                <br />
+                伴侣/家庭咨询：
+                <br />
+                针对关系问题，每次90分钟，每周1次，通过互动模式探索促进理解与改变。
+                <br />
+                共同核心：
+                无论选择何种流派：
+                <br />
+                目标非速成，过程即疗愈；
+                <br />
+                时间积累带来持久改变；
+                <br />
+                安全关系中共同面对挑战；
+                <br />
+                节奏灵活适配个人需求。
+                <br />
+                改变需要耐心，让我陪你一步步向前。
+                <br />
+            </div>
+            <br />
+        </div>
+        <div class="cli" id="tagnavI2"></div>
+        <div id="" class="tagnavI">
+            <h2 class="weui-c-title">可约时间</h2>
+            <div class="weui-c-article">
+                咨询是以精神分析取向的心理咨询，这意味着当前状况的缓解可能不是一个很快的过程，但是你会通过这样一个逐步展开的咨询得到一个更深入的转变，无论是自我认识，还是自我的接纳和自尊的改善，以及生活的关系中的动力和快乐。
+                <br />
+                但是可能也会在咨询的过程中体验到许多未曾感受的情感，这些也许会让你感觉到有一些难以耐受，但是所有这些我们可以去讨论，我也会和你在一起来经历这些。
+                每次50分钟。前面的3-4次为初始访谈，每周的频率在1-2次，有些可以是3-4次。一个个短程的咨询在15-30次，中长程持续50-100次，长程在100次以上。
+                如果你不喜欢精神分析，也可以采用人本主义聚焦疗法的方式，是从身体的感受入手来工作。所以需要通过一点点地增加对自己的身体的理解，来帮助自己解决困扰，增强自己对于自己的情绪及反应的领悟。会有一个更加自主性的过程。每次也是50分钟，频率一周1-2次。每次会包括聚焦和讨论。
+                <br />
+                目前面询与视频都可以工作。
+                <br />
+                但是可能也会在咨询的过程中体验到许多未曾感受的情感，这些也许会让你感觉到有一些难以耐受，但是所有这些我们可以去讨论，我也会和你在一起来经历这些。
+                每次50分钟。前面的3-4次为初始访谈，每周的频率在1-2次，有些可以是3-4次。一个个短程的咨询在15-30次，中长程持续50-100次，长程在100次以上。
+                如果你不喜欢精神分析，也可以采用人本主义聚焦疗法的方式，是从身体的感受入手来工作。所以需要通过一点点地增加对自己的身体的理解，来帮助自己解决困扰，增强自己对于自己的情绪及反应的领悟。会有一个更加自主性的过程。每次也是50分钟，频率一周1-2次。每次会包括聚焦和讨论。
+                <br />
+                目前面询与视频都可以工作。
+            </div>
+            <br />
+        </div>
+        <br />
+    </div>
+</div>
+
+<br>
+
+<script type="text/javascript">
+    $(document).ready(function () {
+        saction();
+    });
+
+    $(window).scroll(function () {
+        console.log(122);
+        saction();
+    });
+    function saction() {
+        st = $(window).scrollTop(); //滚动条高度
+        stickeyI0 = $("#tagnavI0").offset().top;
+        stickeyI1 = $("#tagnavI1").offset().top;
+        stickeyI2 = $("#tagnavI2").offset().top;
+
+        bh = window.innerHeight;
+        console.log(st);
+        console.log(stickeyI0);
+        console.log(stickeyI1);
+        console.log(stickeyI2);
+
+        topVal = 200;
+        if (st < stickeyI1 - topVal) {
+            console.log(0);
+            $("#tagnav li:first-child").addClass('weui-state-active').siblings().removeClass('weui-state-active');
+        } else if (st < stickeyI2 - topVal) {
+            console.log(1);
+            $("#tagnav li").eq(1).addClass('weui-state-active').siblings().removeClass('weui-state-active');
+        } else {
+            console.log(2);
+            $("#tagnav li").eq(2).addClass('weui-state-active').siblings().removeClass('weui-state-active');
+        }
+    };
+</script>
+
+

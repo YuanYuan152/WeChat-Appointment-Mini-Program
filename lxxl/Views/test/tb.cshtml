@@ -1,0 +1,107 @@
+﻿@{
+    Layout = null;
+    ViewBag.Title = "tb";
+}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>layui</title>
+    <meta name="renderer" content="webkit">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+    <!-- 注意：如果你直接复制所有代码到本地，上述css路径需要改成你本地的 -->
+
+    <link rel="stylesheet" href="/Content/mhome/css/font.css">
+    <link rel="stylesheet" href="/Content/mhome/css/index.css">
+    <script src="/Content/mhome/lib/layui/layui.js" charset="utf-8"></script>
+    <script type="text/javascript" src="/Content/mhome/js/index.js"></script>
+</head>
+<body>
+    <table class="layui-table" id="tableOut" lay-filter="tableOut"></table>
+    <!-- 注意：如果你直接复制所有代码到本地，上述js路径需要改成你本地的 -->
+    <script>
+        layui.use(['jquery', 'laydate', 'util', 'layer', 'table', 'form'], function ($, laydate, util, layer, table, form) {
+
+
+            var tableIns = table.render({
+                elem: '#tableOut',
+
+                data: [
+                    {
+                        id: 1, name: '小米', age: '16',
+                        friend: [{ id: 2, name: '大米', age: '28' }, { id: 5, name: '小虎', age: '16' }]
+                    },
+                    {
+                        id: 2, name: '大米', age: '28',
+                        friend: [{ id: 1, name: '小米', age: '28' }]
+                    },
+                    { id: 3, name: '小花', age: 0 },
+                    { id: 4, name: '小甲', age: '28' },
+                    { id: 5, name: '小虎', age: '16' },
+                    { id: 6, name: '小贤', age: '28' }],
+                page: {},
+                cols: [[
+
+                    {
+                        field: 'btn',
+                        width: 50,
+                        align: 'center',
+                        templet: function (d) {
+                            return '<a style="width: 100%; height: 100%;cursor: pointer;" lay-event="addRowTable">+</a>'
+                        }
+                    },
+                    { field: 'id', title: 'ID', sort: true },
+                    { field: 'name', title: '名称', edit: true },
+                    { field: 'age', title: '年龄', sort: true }
+                ]],
+
+            });
+
+
+            // 假释真的需要默认点击搜索在下面table render过之后再调用$dom.click()即可
+            //监听工具条
+            table.on('tool(tableOut)', function (obj) { //注：tool是工具条事件名，test是table原始容器的属性 lay-filter="对应的值"
+                var data = obj.data; //获得当前行数据
+                var layEvent = obj.event; //获得 lay-event 对应的值（也可以是表头的 event 参数对应的值）
+                // 异常不要用它原来的这个作为tr的dom
+                // var tr = obj.tr; //获得当前行 tr 的DOM对象
+                var $this = $(this);
+                var tr = $this.parents('tr');
+                var trIndex = tr.data('index');
+                if (layEvent === 'addRowTable') {
+                    // 外围的table的id + tableIn_ + 当前的tr的data-index
+                    $(this).attr('lay-event', 'fold').html('-');
+                    var tableId = 'tableOut_tableIn_' + trIndex;
+                    var _html = [
+                        '<tr class="table-item">',
+                        '<td colspan="' + tr.find('td').length + '" style="padding: 6px 12px;">',
+                        '<table id="' + tableId + '"></table>',//可以嵌套表格也可以是其他内容，如是其他内容则无须渲染该表格
+                        '</td>',
+                        '</tr>'
+                    ];
+                    tr.after(_html.join('\n'));
+                    // 渲染table
+                    table.render({
+                        elem: '#' + tableId,
+                        data: data.friend || [],
+                        cols: [[
+                            { field: 'id', title: 'ID' },
+                            { field: 'name', title: '朋友姓名' },
+                            { field: 'age', title: '年龄' }
+                        ]],
+
+                    });
+                    // $(window).resize();
+
+                } else if (layEvent === 'fold') {
+                    $(this).attr('lay-event', 'addRowTable').html('+');
+                    tr.next().remove();
+                }
+            });
+
+
+        });
+    </script>
+</body>
+</html>

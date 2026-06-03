@@ -1,0 +1,28 @@
+﻿@using lxxl.Models;
+@{
+    Layout = "~/Views/Shared/_LayoutPatient.cshtml";
+}
+
+<div id="container" class="page-bd" style="top: 46px; padding-top: 46px; background-color: #F8F8F8;height:100%; ">
+    <div class="weui-panel" style="padding-bottom:20px;">
+        <div class="weui-panel__hd">我的通知</div>
+        <div class="weui-panel__bd">
+            <div class="weui-media-box weui-media-box_small-appmsg">
+                <p>您没有通知</p>
+         
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<link href="~/Content/css/validform.css" rel="stylesheet" />
+<script src="~/Content/js/Validform_v5.3.2.js"></script>
+<script>
+    $(document).ready(function () {
+        document.getElementById("headerTitle").innerHTML = "我的通知";
+        document.getElementsByClassName("weui-tabbar__item")[2].classList.remove("tabbarActive"); // 删除之前已选中tab的样式
+        document.getElementsByClassName("weui-tabbar__item")[4].classList.add("tabbarActive");
+    });
+
+</script>

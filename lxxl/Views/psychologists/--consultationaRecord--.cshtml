@@ -1,0 +1,260 @@
+﻿@{
+    Layout = null;
+    T_Consultation consultation = ViewBag.consultation;
+    //string[] alist = ViewBag.alist;
+}
+@using lxxl.Models
+
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>咨询服务详情</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=0">
+    <link rel="stylesheet" href="/Content/weui/css/weui.css" />
+    <link rel="stylesheet" href="/Content/weui/css/weuix.css" />
+    <script src="/Content/weui/js/zepto.min.js"></script>
+    <script src="/Content/weui/js/zepto.weui.js"></script>
+    <script src="/Content/weui/js/picker.city.js"></script>
+</head>
+
+<body style="background-color: #EFEFEF; ">
+    @*<div class="page-hd" style="padding-top: 5px; padding-bottom: 5px; background-color: #E7E8ED; ">
+            <h1 class="page-hd-title" style="color: #1ea0fa; font-weight: bold; margin: 0; padding: 0; text-align: center; padding-bottom: 2px;">
+                咨询服务详情
+                <a href="/wapgl/ConsultationLst?ordertype=3" style="white-space: nowrap; float: right; margin-left: -25px;"><i class="glyphicon" style="right:0; font-size:15px;">咨询记录</i></a>
+            </h1>
+            <p class="page-hd-desc"></p>
+        </div>*@
+    <div class="weui-header" style="background-color: #E7E8ED; ">
+        <div class="weui-header-left"> <a href="javascript:history.back(-1);" style="top: 18px; font-size: 16px; color: #1ea0fa;">返回</a>  </div>
+        <h1 class="weui-header-title" style="top: 18px; color: #1ea0fa;">咨询服务详情</h1>
+        <div class="weui-header-right"><a href="/wapgl/ConsultationLst?ordertype=3" style="top: 18px; font-size: 16px; color: #1ea0fa;">咨询记录</a></div>
+    </div>
+    <div class="weui-cells weui-cells_form" style="padding: 10px 15px;">
+        <div class="weui-cell">
+            <div class="weui-cell__hd">
+                <label class="weui-label">来访者</label>
+            </div>
+            <div class="weui-cell__bd">
+                <input type="text" id="gid" class="layui-input" hidden value="@consultation.gId">
+                <input hidden type="text" id="name">
+                @consultation.doctor.name
+            </div>
+        </div>
+        <div class="weui-cell">
+            <div class="weui-cell__hd">
+                <label class="weui-label">联系方式</label>
+            </div>
+            <div class="weui-cell__bd">
+                @consultation.doctor.tel
+            </div>
+        </div>
+        <div class="weui-cell">
+            <div class="weui-cell__hd">
+                <label class="weui-label">邮箱</label>
+            </div>
+            <div class="weui-cell__bd">
+                @consultation.doctor.email
+            </div>
+        </div>
+        <div class="weui-cell">
+            <div class="weui-cell__hd">
+                <label class="weui-label">单位</label>
+            </div>
+            <div class="weui-cell__bd">
+                @consultation.doctor.hospitalName
+            </div>
+        </div>
+        <div class="weui-cell">
+            <div class="weui-cell__hd">
+                <label class="weui-label">科室或专业</label>
+            </div>
+            <div class="weui-cell__bd">
+                @consultation.doctor.departmentName
+            </div>
+        </div>
+        <div class="weui-cell">
+            <div class="weui-cell__hd">
+                <label class="weui-label">职称/职务</label>
+            </div>
+            <div class="weui-cell__bd">
+                @consultation.doctor.position
+            </div>
+        </div>
+        <div class="weui-cell">
+            <div class="weui-cell__hd">
+                <label class="weui-label">疾病领域</label>
+            </div>
+            <div class="weui-cell__bd">
+                
+            </div>
+        </div>
+        <div class="weui-cell">
+            <div class="weui-cell__hd">
+                <label class="weui-label">咨询内容</label>
+            </div>
+            <div class="weui-cell__bd">
+                @consultation.content1
+            </div>
+        </div>
+        <div class="weui-cell">
+            <div class="weui-cell__hd">
+                <label class="weui-label">具体问题</label>
+            </div>
+            <div class="weui-cell__bd">
+                @consultation.problems
+            </div>
+        </div>
+        <div class="weui-cell">
+            <div class="weui-cell__hd">
+                <label class="weui-label">备注</label>
+            </div>
+            <div class="weui-cell__bd">
+                @consultation.remark
+            </div>
+        </div>
+        <div class="weui-cell">
+            <label class="weui-label">PI团队</label>
+            <div class="weui-cell__bd" style="padding-top: 4px;">
+                
+            </div>
+        </div>
+        <div class="weui-cell">
+            <label class="weui-label">项目名称</label>
+            <div class="weui-cell__bd">
+                
+            </div>
+        </div>
+        <div class="weui-cell" style="margin-top: 0px;">
+            <label class="weui-label">项目来源</label>
+            <div class="weui-cell__bd">
+                
+            </div>
+        </div>
+        <div class="weui-cell">
+            <label for="time-format" class="weui-label">咨询时间</label>
+            <div class="weui-cell__bd">
+                @consultation.cTime
+            </div>
+        </div>
+        <div class="weui-cell">
+            <label for="time-format" class="weui-label">咨询时长</label>
+            <div class="weui-cell__bd">
+                @consultation.duration 小时
+            </div>
+        </div>
+        <div class="weui-cell" style="margin-top: 0px;">
+            <label for="time-format" class="weui-label">咨询专家</label>
+            <div class="weui-cell__bd">
+                @consultation.expert
+            </div>
+        </div>
+
+        <div class="weui-cell">
+            <label class="weui-label">咨询记录</label>
+            <div class="weui-cell__bd">
+                @consultation.record
+            </div>
+        </div>
+        <div class="weui-cells" style="margin-top: 0px; padding-left: 15px; padding-bottom: 10px; ">
+            <label class="weui-label" style="width: 100%; margin-top: 8px; padding-bottom: 5px;">附件</label>
+            @foreach (var aimg in ViewBag.uppics)
+            {
+                <div class="weui-cell">
+                    <a href="@aimg" style="width: 100%;">
+                        <img src="@aimg" style="width: 100%; vertical-align: middle;" />
+                    </a>
+                </div>
+            }
+            @foreach (var aimg in ViewBag.upfilenames)
+            {
+                <div class="weui-cell">
+                    <a href="/Upload/UploadFile/@aimg">
+                        @aimg
+                    </a>
+                </div>
+            }
+        </div>
+        <div class="weui-cell">
+            <label class="weui-label">合作意图</label>
+            <div class="weui-cell__bd">
+                
+            </div>
+        </div>
+        <div class="weui-cell">
+            <label class="weui-label">是否发立项申请表</label>
+            <div class="weui-cell__bd">
+                
+            </div>
+        </div>
+        <div class="weui-cell">
+        </div>
+
+        @*<div class="weui-btn-area">
+                <a class="weui-btn weui-btn_primary" href="javascript:" id="btn">确定</a>
+            </div>*@
+        <!--上传文件-->
+        <link href="~/Content/kindeditor-4.1.7/themes/default/default.css" rel="stylesheet" />
+        <script src="~/Content/kindeditor-4.1.7/kindeditor-min.js"></script>
+        <script type="text/javascript">
+            KindEditor.ready(function (K) {
+                var uploadbutton = K.uploadbutton({
+                    button: K('#uploadButton'),
+                    fieldName: 'imgFile',
+                    url: '/Editor/UploadFile',
+                    afterUpload: function (data) {
+                        if (data.error === 0) {
+                            var url = K.formatUrl(data.url, 'absolute');
+                            var gval = K('input[name=Img]').val();
+                            if (gval != null && gval != "") {
+                                K('input[name=Img]').val(K('input[name=Img]').val() + "," + url);
+                            }
+                            else {
+
+                                K('input[name=Img]').val(url);
+                            }
+                            console.log(K('input[name=Img]').val());
+                            alert("上传成功");
+                        } else {
+                            alert(data.message);
+                        }
+                    },
+                    afterError: function (str) {
+                        alert('自定义错误信息: ' + str);
+                    }
+                });
+                uploadbutton.fileBox.change(function (e) {
+                    uploadbutton.submit();
+                });
+            });
+        </script>
+
+        <script>
+            $("#years-monthes").datetimePicker({
+                title: '选择咨询时间',
+                years: [2020, 2021],
+                onChange: function (picker, values, displayValues) {
+                    console.log(values);
+                }
+            });
+
+
+        </script>
+
+
+        <div class="weui-cells weui-cells_form">
+        </div>
+        <br>
+        <br>
+
+        <div class="weui-footer weui-footer_fixed-bottom">
+            <p class="weui-footer__links">
+                <a href="#" class="weui-footer__link">上海交通大学医学院临床研究中心</a>
+            </p>
+            <p class="weui-footer__text" style="color: #586C94; font-size: 12px;"> 若有问题，请联系我们，电话：021-63230736</p>
+            <p class="weui-footer__text" style="font-size: 12px;">Support By  上海策溯科技有限公司</p>
+        </div>
+    </div>
+</body>
+</html>

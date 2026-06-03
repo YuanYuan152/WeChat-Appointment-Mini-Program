@@ -1,0 +1,185 @@
+﻿@using lxxl.Models
+@{
+    Layout = null;
+    var Obj = ViewBag.Obj;
+}
+
+<!DOCTYPE html>
+
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=0.0, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0" />
+    <link rel="stylesheet" type="text/css" href="/Content/wx/css/style.css" />
+    <link rel="stylesheet" href="/Content/wx/css/weui.css" />
+    <link rel="stylesheet" href="/Content/wx/css/example.css" />
+    <link rel="stylesheet" type="text/css" href="/Content/wx/css/bootstrap.css">
+    <script src="/Content/wx/js/jquery-1.10.2.js"></script>
+    <script type="text/javascript">$(function () { $.getScript("/Content/wx/js/script.js"); })</script>
+    <title>咨询师登录</title>
+    <style type="text/css">
+        #reg_index1 {
+            width: 100%;
+            min-height: 100%;
+            background: #fff;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 9999;
+            overflow-x: hidden;
+            overflow-y: auto;
+            padding-bottom: 20px;
+            display: none;
+        }
+
+        #reg_index1 {
+            -webkit-transform: translate3d(0px,100%,0px);
+            -moz-transform: translate3d(0px,100%,0px);
+            transform: translate3d(0px,100%,0px);
+            -webkit-transition: background 0.3s ease-out,-webkit-transform 0.3s cubic-bezier(0.55,0.055,0.675,0.19);
+            -moz-transition: background 0.3s ease-out,-moz-transform 0.3s cubic-bezier(0.55,0.055,0.675,0.19);
+            -o-transition: background 0.3s ease-out,-o-transform 0.3s cubic-bezier(0.55,0.055,0.675,0.19);
+            transition: background 0.3s ease-out,transform 0.3s cubic-bezier(0.55,0.055,0.675,0.19);
+        }
+
+            #reg_index1.show {
+                -webkit-transform: translate3d(0px,0%,0px);
+                -moz-transform: translate3d(0px,0%,0px);
+                transform: translate3d(0px,0%,0px);
+                -webkit-transition: background 0.3s ease-out,-webkit-transform 0.3s cubic-bezier(0.165,0.84,0.44,1);
+                -moz-transition: background 0.3s ease-out,-moz-transform 0.3s cubic-bezier(0.165,0.84,0.44,1);
+                -o-transition: background 0.3s ease-out,-o-transform 0.3s cubic-bezier(0.165,0.84,0.44,1);
+                transition: background 0.3s ease-out,transform 0.3s cubic-bezier(0.165,0.84,0.44,1);
+            }
+
+        .login_input1 {
+            overflow-y: scroll;
+        }
+
+        .content_wrapper a {
+            color: #5EA4D4;
+        }
+
+        .content_wrapper1 {
+            display: none;
+        }
+
+        .content_wrapper2 {
+            display: none;
+        }
+
+        /*#reg_index2 {
+            width: 100%;
+            min-height: 100%;
+            background: #fff;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 9999;
+            overflow-x: hidden;
+            overflow-y: auto;
+            padding-bottom: 20px;
+            display: none;
+        }*/
+
+        /*#reg_index2 {
+            -webkit-transform: translate3d(0px,100%,0px);
+            -moz-transform: translate3d(0px,100%,0px);
+            transform: translate3d(0px,100%,0px);
+            -webkit-transition: background 0.3s ease-out,-webkit-transform 0.3s cubic-bezier(0.55,0.055,0.675,0.19);
+            -moz-transition: background 0.3s ease-out,-moz-transform 0.3s cubic-bezier(0.55,0.055,0.675,0.19);
+            -o-transition: background 0.3s ease-out,-o-transform 0.3s cubic-bezier(0.55,0.055,0.675,0.19);
+            transition: background 0.3s ease-out,transform 0.3s cubic-bezier(0.55,0.055,0.675,0.19);
+        }
+
+            #reg_index2.show {
+                -webkit-transform: translate3d(0px,0%,0px);
+                -moz-transform: translate3d(0px,0%,0px);
+                transform: translate3d(0px,0%,0px);
+                -webkit-transition: background 0.3s ease-out,-webkit-transform 0.3s cubic-bezier(0.165,0.84,0.44,1);
+                -moz-transition: background 0.3s ease-out,-moz-transform 0.3s cubic-bezier(0.165,0.84,0.44,1);
+                -o-transition: background 0.3s ease-out,-o-transform 0.3s cubic-bezier(0.165,0.84,0.44,1);
+                transition: background 0.3s ease-out,transform 0.3s cubic-bezier(0.165,0.84,0.44,1);
+            }*/
+    </style>
+</head>
+<body style="overflow:auto">
+
+    <div id="reg_index2">
+        <div class="reg_bar">
+            <div class="wrap">
+                <span class="fl"><i></i>咨询师登录</span>
+            </div>
+        </div>
+        <div id="container">
+            <div id="content" style="margin-bottom:5em;">
+                <div class="weui_cells weui_cells_access">
+                    @*<a class="weui_cell" href="javascript:" style="height:6em;">
+                            <div class="usertop" style="height:100%; width:30%; min-width:7em;">
+                                <img src="@(Obj["headimgurl"])" style="height:100%; border:solid #E3E0D5 0.8px; border-radius:5px;">
+                            </div>
+                            <div class="weui_cell_bd weui_cell_primary">
+                                <div style="font-size:1.3em; line-height:2.3em;">@(Obj["nickname"])</div>
+                                <div style="font-size:1em;line-height:2.3em;">@(Convert.ToInt64(Obj["sex"]) == 1 ? "男" : "女")</div>
+                            </div>
+                        </a>*@
+                </div>
+                <div class="weui_panel_bd">
+                    <form method="post" id="chologist" action="chologist">
+                        <div class="weui_cells weui_cells_form">
+                            <div class="weui_cell">
+                                <div class="weui_cell_hd"><label for="" class="weui_label">账号</label></div>
+                                <div class="weui_cell_bd weui_cell_primary">
+                                    <input class="weui_input" type="text" id="UserName" nullmsg="请输入账号" errormsg="请输入账号" name="UserName" value="" placeholder="账号" />
+                                </div>
+                            </div>
+                            <div class="weui_cell">
+                                <div class="weui_cell_hd"><label for="" class="weui_label">密码</label></div>
+                                <div class="weui_cell_bd weui_cell_primary">
+                                    <input class="weui_input" type="Password" datatype="s6-18" nullmsg="密码不能为空" errormsg="密码为6到18位字符!" name="Password" value="" placeholder="密码" />
+                                </div>
+                            </div>
+                        </div>
+                        <input type="hidden" name="openid" value="@ViewBag.openid" />
+                        <input type="hidden" name="topUrl" value="@ViewBag.topUrl" />
+                        <input type="hidden" name="nickName" value="@ViewBag.nickName" />
+
+                        <div class="weui_btn_area">
+                            <input type="submit" class="weui_btn weui_btn_primary yesbtn" style="background-color: #3A87AD;" value="登录" />
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>
+<!--验证表单-->
+<link href="~/Content/css/validform.css" rel="stylesheet" />
+<script src="~/Content/js/Validform_v5.3.2.js"></script>
+<script type="text/javascript">
+    $(function () {
+        $.Tipmsg.r = null;
+        $.Tipmsg.p = null;
+        $("#chologist").Validform({
+            tiptype: function (msg, o) {
+                if (msg.length != 0 && msg.indexOf("status") == -1 && msg.indexOf("正在提交数据") == -1)
+                    alert(msg);
+            },
+            ajaxPost: true,
+            callback: function (data) {
+                console.log(data);
+                if (data.responseText.split(":")[0] == "no") {
+                    alert(data.responseText.split(":")[1]);
+                } else if (data.responseText.split(":")[0] == "url") {
+                    alert("登录成功");
+                    location.href = data.responseText.split(":")[1];
+                } else {
+                    alert("服务器连接异常,请刷新页面");
+                }
+            },
+            tipSweep: true,
+        });
+    })
+</script>

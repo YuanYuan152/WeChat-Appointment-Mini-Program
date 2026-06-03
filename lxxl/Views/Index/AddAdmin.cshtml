@@ -1,0 +1,150 @@
+﻿@{
+    ViewBag.Title = "新增管理员";
+    Layout = "~/Views/Shared/_LayoutHome.cshtml";
+}
+
+<div class="main-content">
+    <!-- #section:basics/content.breadcrumbs -->
+    <div class="breadcrumbs breadcrumbs-fixed" id="breadcrumbs">
+        <script type="text/javascript">
+            try { ace.settings.check('breadcrumbs', 'fixed') } catch (e) { }
+        </script>
+        <ul class="breadcrumb">
+            <li>
+                <i class="ace-icon fa fa-home home-icon"></i>
+                <a href="@Url.Action("Index", "Index")">
+                    首页
+                </a>
+            </li>
+            <li class="active">管理员</li>
+            <li class="active">新增管理员</li>
+        </ul>
+        <!-- /.breadcrumb -->
+        <!-- #section:basics/content.searchbox -->
+        <div class="nav-search" id="nav-search" style="display: none">
+            <form action="javascript:alert('开发中')" method="post" class="form-search">
+                <span class="input-icon">
+                    <input type="text" placeholder="Search ..." class="nav-search-input" id="nav-search-input" autocomplete="off" />
+                    <i class="ace-icon fa fa-search nav-search-icon"></i>
+                </span>
+            </form>
+        </div>
+        <!-- /.nav-search -->
+        <!-- /section:basics/content.searchbox -->
+    </div>
+    <!-- /section:basics/content.breadcrumbs -->
+    <div class="page-content">
+        <div class="row">
+            <div class="col-xs-12">
+                <!-- PAGE CONTENT BEGINS -->
+                <div class="row">
+                    @if (Session["alert"] != null)
+                    {
+                        <div class="col-xs-12 col-sm-8 col-sm-offset-2">
+                            <div class="alert alert-warning alert-danger" role="alert">
+                                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                                @Session["alert"]
+                                @(Session["alert"] = null)
+                            </div>
+                        </div>
+                        <div class="col-xs-0 col-sm-2">
+                        </div>
+                    }
+                </div>
+                <div class="row">
+                    <div class="col-xs-12">
+                        <form action="@Url.Action("AddAdmin", "Index")" method="post" class="form-horizontal" role="form" enctype="multipart/form-data">
+                            <!-- #section:elements.form -->
+                            <div class="col-xs-12" style="padding: 0px;">
+                                <div class="widget-box">
+                                    <div class="widget-header">
+                                        <h4 class="widget-title">新增管理员</h4>
+                                    </div>
+                                    <div class="widget-body">
+                                        <div class="widget-main">
+                                            <div class="form-group">
+                                                <label class="col-sm-3 control-label no-padding-right" for="form-field-1">
+                                                    用户名
+                                                </label>
+                                                <div class="col-sm-9">
+                                                    <input type="text" name="UserName" datatype="s6-18" ajaxurl="@Url.Action("Vusername", "Index")" nullmsg="请输入用户名" errormsg="用户名至少6个字符,最多18个字符！" placeholder="用户名" value="" class="col-xs-10 col-sm-8" />
+                                                </div>
+                                            </div>
+                                            <hr />
+                                            <div class="form-group">
+                                                <label class="col-sm-3 control-label no-padding-right" for="form-field-1">
+                                                    密码
+                                                </label>
+                                                <div class="col-sm-9">
+                                                    <input type="password" name="Password" datatype="*6-16" nullmsg="请输入密码" errormsg="密码范围在6~16位之间" placeholder="密码" value="" class="col-xs-10 col-sm-8" />
+                                                </div>
+                                            </div>
+                                            <hr />
+                                            <div class="form-group">
+                                                <label class="col-sm-3 control-label no-padding-right" for="form-field-1">
+                                                    姓名
+                                                </label>
+                                                <div class="col-sm-9">
+                                                    <input type="text" name="Name" datatype="*" nullmsg="请输入姓名" placeholder="姓名" value="" class="col-xs-10 col-sm-8" />
+                                                </div>
+                                            </div>
+                                            <hr />
+                                            <div class="form-group">
+                                                <label class="col-sm-3 control-label no-padding-right" for="form-field-1">
+                                                    手机号
+                                                </label>
+                                                <div class="col-sm-9">
+                                                    <input type="tel" name="Tel" datatype="m" ignore="ignore" nullmsg="请输入手机号" errormsg="请输入正确的手机号格式" placeholder="手机号" value="" class="col-xs-10 col-sm-8" />
+                                                </div>
+                                            </div>
+                                            <hr />
+                                            <div class="form-group">
+                                                <label class="col-sm-3 control-label no-padding-right" for="form-field-1">
+                                                    邮箱
+                                                </label>
+                                                <div class="col-sm-9">
+                                                    <input type="text" name="Mail" datatype="e" ignore="ignore" nullmsg="请输入邮箱" errormsg="请输入正确的邮箱格式" placeholder="邮箱" value="" class="col-xs-10 col-sm-8" />
+                                                </div>
+                                            </div>
+                                            <hr />
+                                            <div class="form-group">
+                                                <div class="col-sm-4">
+                                                </div>
+                                                <div class="col-sm-3">
+                                                    <input type="submit" class="btn btn-success" value="保存" style="width: 100%" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                <!-- /.row -->
+            </div>
+            <!-- /.col -->
+        </div>
+        <!-- /.row -->
+    </div>
+    <!-- /.page-content -->
+</div>
+<!--弹出效果-->
+<link href="~/Content/css/dialog.css" rel="stylesheet" />
+<script src="~/Content/js/dialog.js"></script>
+<!--验证表单-->
+<script src="~/Content/js/Validform_v5.3.2.js"></script>
+<script type="text/javascript">
+    $(function () {
+        $.Tipmsg.r = null;
+        $("form").Validform({
+            tiptype: function (msg) {
+                if (msg)
+                    alert(msg);
+            },
+            tipSweep: true,
+        });
+    })
+</script>

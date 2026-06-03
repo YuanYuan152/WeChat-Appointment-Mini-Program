@@ -1,0 +1,159 @@
+﻿@using lxxl.Models
+@{
+    ViewBag.Title = "管理员列表";
+    Layout = "~/Views/Shared/_LayoutHome.cshtml";
+    List<T_Admin> AdminList = ViewBag.AdminList;
+    int index = (ViewBag.ThisPage - 1) * ViewBag.Pagesize + 1;
+}
+
+<div class="main-content">
+    <!-- #section:basics/content.breadcrumbs -->
+    <div class="breadcrumbs breadcrumbs-fixed" id="breadcrumbs">
+        <script type="text/javascript">
+            try { ace.settings.check('breadcrumbs', 'fixed') } catch (e) { }
+        </script>
+        <ul class="breadcrumb">
+            <li>
+                <i class="ace-icon fa fa-home home-icon"></i>
+                <a href="@Url.Action("Index", "Index")">
+                    首页
+                </a>
+            </li>
+            <li class="active">管理员</li>
+            <li class="active">管理员列表</li>
+        </ul>
+        <!-- /.breadcrumb -->
+        <!-- #section:basics/content.searchbox -->
+        <div class="nav-search" id="nav-search" style="display: none">
+            <form action="javascript:alert('开发中')" method="post" class="form-search">
+                <span class="input-icon">
+                    <input type="text" placeholder="Search ..." class="nav-search-input" id="nav-search-input" autocomplete="off" />
+                    <i class="ace-icon fa fa-search nav-search-icon"></i>
+                </span>
+            </form>
+        </div>
+        <!-- /.nav-search -->
+        <!-- /section:basics/content.searchbox -->
+    </div>
+    <!-- /section:basics/content.breadcrumbs -->
+    <div class="page-content">
+        <div class="row">
+            <div class="col-xs-12">
+                <!-- PAGE CONTENT BEGINS -->
+                <div class="row">
+                    @if (Session["alert"] != null)
+                    {
+                        <div class="col-xs-12 col-sm-8 col-sm-offset-2">
+                            <div class="alert alert-warning alert-danger" role="alert">
+                                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                                @Session["alert"]
+                                @(Session["alert"] = null)
+                            </div>
+                        </div>
+                        <div class="col-xs-0 col-sm-2">
+                        </div>
+                    }
+                </div>
+                <div class="row">
+                    <div class="col-xs-12" style="height: 50px;">
+                        <a href="/Index/AddAdmin" class="btn btn-danger addnew addtype">新增管理员</a>
+                    </div>
+                    <div class="col-xs-12">
+                        <table id="sample-table-1" class="table table-striped table-bordered table-hover">
+                            <thead>
+                                <tr>
+                                    <th>
+                                        序号
+                                    </th>
+                                    <th>
+                                        用户名
+                                    </th>
+                                    <th>
+                                        姓名
+                                    </th>
+                                    <th class="hidden-480">
+                                        邮箱
+                                    </th>
+                                    <th class="hidden-480">
+                                        电话
+                                    </th>
+                                    <th class="hidden-480">
+                                        创建时间
+                                    </th>
+                                    <th class="hidden-480">
+                                        操作
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var Admin in AdminList)
+                                {
+                                    <tr>
+                                        <td class="hidden-480">
+                                            <span class="label label-sm label-warning">@(index++)</span>
+                                        </td>
+                                        <td style=" max-width:200px;">
+                                            @Admin.UserName
+                                        </td>
+                                        <td>
+                                            @Admin.Name
+                                        </td>
+                                        <td>
+                                            @Admin.Mail
+                                        </td>
+                                        <td>
+                                            @Admin.Tel
+                                        </td>
+                                        <td>
+                                            @Admin.CreateTime
+                                        </td>
+                                        <td>
+                                            <div class="hidden-sm hidden-xs btn-group">
+                                                <a class="btn btn-xs btn-info" href="@Url.Action("EditAdmin", "Index", new { id = Admin.ID }) "><i class="ace-icon fa fa-pencil bigger-120"></i>编辑 </a>
+                                                <a class="btn btn-xs btn-danger" href="@Url.Action("DelAdmin", "Index", new { id = Admin.ID, hosturl = this.Request.Url }) " onclick="return confirm('是否确认删除该管理员?')"><i class="ace-icon fa fa-trash-o bigger-120"></i>删除 </a>
+                                                @if (Admin.Type == 2)
+                                                {
+                                                    <a class="btn btn-xs btn-bold" href="@Url.Action("SetMenu", "Modal", new { ID=Admin.ID })" data-toggle="modal" data-target="#myModal"><i class="ace-icon fa fa-cog bigger-120"></i>设定权限</a>
+                                                }
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="tcdPageCode">
+                    </div>
+                </div>
+                <!-- /.row -->
+            </div>
+            <!-- /.col -->
+        </div>
+        <!-- /.row -->
+    </div>
+    <!-- /.page-content -->
+</div>
+<link href="~/Content/css/page.css" rel="stylesheet" />
+<script src="~/Content/js/jquery.page.js"></script>
+<script type="text/javascript">
+    $(function () {
+        var ContentCount=parseInt(@ViewBag.Count);
+        var pagesize=parseInt(@ViewBag.Pagesize);
+        if( ContentCount>pagesize){
+            var pagecount=0;
+            if(ContentCount%pagesize==0)
+                pagecount=ContentCount/pagesize;
+            else
+                pagecount=parseInt(ContentCount/pagesize)+1;
+            $(".tcdPageCode").createPage({
+                pageCount: pagecount, //总页数
+                current: @ViewBag.ThisPage , //当前页
+                backFn: function (p) {
+                    location.href="/Index/Admin?page="+p;
+                }
+            });
+        }
+    })
+</script>

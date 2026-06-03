@@ -1,0 +1,302 @@
+﻿@{
+    Layout = null;
+    T_Consultation consultation = ViewBag.consultation;
+    string timeDay0 = ViewBag.time0;
+    string EndDay = ViewBag.EndDay;
+}
+@using lxxl.Models
+
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>确定咨询预约时间</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=0">
+    <link rel="stylesheet" href="/Content/weui/css/weui.css" />
+    <link rel="stylesheet" href="/Content/weui/css/weuix.css" />
+    <script src="/Content/weui/js/zepto.min.js"></script>
+    <script src="/Content/weui/js/zepto.weui.js"></script>
+    <script src="/Content/weui/js/picker.city.js"></script>
+    <script>
+        $(function () {
+            $(document).on("click", "#btn", function () {
+                var date = $("#years-monthes").val();
+                if (date == "") {
+                    $.toptip("日期不能为空");
+                    return false;
+                }
+                var shijian = $("#shijian").val();
+                var gid = $("#gid").val();
+                var duration = $("#duration").val();
+                var name = $("#name").val();
+                var remark = $("#remark").val();
+                //$.alert($("#name").val() + "预约咨询时间为" + date + " " + shijian + "。 已通知预约人。", "时间设置成功提示", function () {
+                //    WeixinJSBridge.call('closeWindow');
+                //});
+                $.ajax({
+                    url: "/wapig/EditconsultationTime",
+                    data: { "gid": gid, "appointmentTime": date, "duration": duration, "remark": remark },
+                    type: "post",
+                    dataType: "text",
+                    success: function (data) {
+                        var result = JSON.parse(data);
+                        if (result.code == 0) {
+                            abcd = 1
+                            $.alert("<span style='color:#fd7d36;font-weight: bold;font-size: 20px; '>" + name + "</span>" + "预约咨询时间为" + date + " 时长" + duration + "小时。 已通过临床研究中心微信公众号通知预约人。", "时间设置成功提示", function () {
+                                //WeixinJSBridge.call('closeWindow');
+                                var index = parent.layer.getFrameIndex(window.name); // 获取当前页面的索引
+                                parent.layer.close(index); // 关闭当前页面
+                            });
+                        }
+                        else {
+                            abcd = 1
+                            $.alert(result.msg, "提示", function () {
+
+                            });
+                        }
+                    },
+                    error: function () {
+                        abcd = 1
+                        $.alert("服务器连接失败。", "提示", function () {
+
+                        });
+                    }
+                })
+            })
+            //解决表单控件不能回弹 只有微信ios有这个问题
+            //    $("input,select,textarea").blur(function(){
+            //        setTimeout(() => {
+            //            const scrollHeight = document.documentElement.scrollTop || document.body.scrollTop || 0;
+            //        window.scrollTo(0, Math.max(scrollHeight - 1, 0));
+            //    }, 100);
+            //})
+            function isValidEmailAddress(emailAddress) {
+                var pattern = /^\w+((-\w+)|(\.\w+))*\@@[A-Za-z0-9]+((\.|-)[A-Za-z0-9]+)*\.[A-Za-z0-9]+$/;
+                return pattern.test(emailAddress);
+            };
+
+        });
+
+        function textarea(input) {
+            var content = $(input);
+            var max = content.next().find('i').text();
+            var value = content.val();
+            if (value.length > 0) {
+
+                value = value.replace(/\n|\r/gi, "");
+                var len = value.length;
+                content.next().find('span').text(len);
+                if (len > max) {
+                    content.next().addClass('f-red');
+                } else {
+                    content.next().removeClass('f-red');
+                }
+            }
+        }
+
+        function cleartxt(obj) {
+            $(obj).prev().find('.weui-input').val("");
+            return false;
+        }
+
+        function cleararea(obj) {
+            $(obj).prev().find('.weui-textarea').val("").next().find("span").text(0);
+            return false;
+        }
+
+    </script>
+</head>
+
+<body style="background-color: #EFEFEF; ">
+    @*<div class="page-hd" style="padding-top: 5px; padding-bottom: 5px; background-color: #E7E8ED; ">
+            <h1 class="page-hd-title" style="color: #1ea0fa; font-weight: bold; margin: 0; padding: 0; text-align: center; padding-bottom: 2px;">
+                咨询预约时间确定<a href="/wapgl/ConsultationLst" style="white-space: nowrap; float: right; margin-left: -25px;"><i class="glyphicon" style="right:0; font-size:15px;">咨询记录</i></a>
+            </h1>
+            <p class="page-hd-desc"></p>
+        </div>*@
+    <div class="weui-header" style="background-color: #E7E8ED; ">
+        <div class="weui-header-left"> <a href="javascript:history.back(-1);" style="top: 18px; font-size: 16px; color: #1ea0fa;">返回</a>  </div>
+        <h1 class="weui-header-title" style="top: 18px; color: #1ea0fa;">咨询预约时间确定</h1>
+        <div class="weui-header-right"><a href="/wapgl/ConsultationLst" style="top: 18px; font-size: 16px; color: #1ea0fa;">咨询记录</a></div>
+    </div>
+
+    <div class="weui-cells weui-cells_form" style="padding: 10px 15px;">
+        <div class="weui-cell">
+            <div class="weui-cell__hd">
+                <label class="weui-label">来访者</label>
+            </div>
+            <div class="weui-cell__bd">
+                <input type="text" id="gid" class="layui-input" hidden value="@consultation.gId">
+                @consultation.User.Name
+            </div>
+        </div>
+        <div class="weui-cell">
+            <div class="weui-cell__hd">
+                <label class="weui-label">联系方式</label>
+            </div>
+            <div class="weui-cell__bd">
+                @consultation.User.Tel
+            </div>
+        </div>
+        <div class="weui-cell">
+            <div class="weui-cell__hd">
+                <label class="weui-label">邮箱</label>
+            </div>
+            <div class="weui-cell__bd">
+                @consultation.doctor.email
+            </div>
+        </div>
+        <div class="weui-cell">
+            <div class="weui-cell__hd">
+                <label class="weui-label">咨询师</label>
+            </div>
+            <div class="weui-cell__bd">
+                @consultation.doctor.name - @consultation.doctor.tel
+            </div>
+        </div>
+        <div class="weui-cell">
+            <div class="weui-cell__hd "><label for="time-format" class="weui-label weui-start">咨询时间</label></div>
+            <div class="weui-cell__bd">
+                <input class="weui-input border-radius" id="years-monthes" type="text" value="@consultation.appointmentTime">
+            </div>
+        </div>
+        <div class="weui-cell">
+            <div class="weui-cell__hd"><label for="time-format" class="weui-label weui-start">咨询时长</label></div>
+            <div class="weui-cell__bd">
+                <input class="weui-input border-radius" pattern="[0-9]*" placeholder="请输入咨询时长" required type="number" id="duration" value="@consultation.duration" style="width: 85px;">小时
+            </div>
+        </div>
+        <div class="weui-cell">
+            <div class="weui-cell__hd">
+                <label class="weui-label">咨询内容</label>
+            </div>
+            <div class="weui-cell__bd">
+                <input class="weui-input border-radius" id="content1" type="text" value="@consultation.content1">
+            </div>
+        </div>
+        <div class="weui-cell">
+            <div class="weui-cell__hd">
+                <label class="weui-label">具体问题</label>
+            </div>
+            <div class="weui-cell__bd">
+                <input class="weui-input border-radius" id="problems" type="text" value="@consultation.problems">
+            </div>
+        </div>
+        <div class="weui-cell">
+            <div class="weui-cell__hd">
+                <label class="weui-label">备注</label>
+            </div>
+            <div class="weui-cell__bd">
+                <textarea class="weui-textarea border-radius" rows="3" id="remark">@consultation.remark</textarea>
+            </div>
+        </div>
+    </div>
+
+    <div class="weui-btn-area">
+        @if (consultation.State == 0)
+        {
+            <div style="color:red; margin-bottom:5px;">
+                <label>用户未付款</label>
+            </div>
+            <a class="weui-btn weui-btn_primary" href="javascript:" >确定</a>
+        }
+        else if (consultation.State == 1)
+        {
+            <div style="color:red; margin-bottom:5px;">
+                <label>请确认预约时间，点击确定后发送给用户确定</label>
+            </div>
+            <a class="weui-btn weui-btn_primary" href="javascript:" id="btn">确定</a>
+        }
+        else if (consultation.State == 2)
+        {
+            <div style="color:red; margin-bottom:5px;">
+                <label>已确认预约时间并发送给用户确定</label>
+            </div>
+            <a class="weui-btn weui-btn_primary" href="javascript:" id="btn">确定</a>
+        }
+        else if (consultation.State == 3)
+        {
+            <div style="color:red; margin-bottom:5px;">
+                <label>用户已确认预约时间</label>
+            </div>
+            <a class="weui-btn weui-btn_primary" href="javascript:">确定</a>
+        }
+        else
+        {
+            <div style="color:red; margin-bottom:5px;">
+                <label>
+                    预约咨询已完成
+                </label>
+            </div>
+        }
+
+    </div>
+
+    <script>
+        $("#years-monthes").datetimePicker({
+            title: '选择咨询时间',
+            years: [2023],
+            monthes: ['09', '10', '11', '12'],
+            onChange: function (picker, values, displayValues) {
+                console.log(values);
+            }
+        });
+
+        $("#date").calendar({
+            //value: ['2020-05-12'],
+            dateFormat: 'yyyy-mm-dd',
+            minDate: "@timeDay0",
+            maxDate: "@EndDay",
+            onChange: function (p, values, displayValues) {
+                //$("#date").calendar("close");
+                //var sel = document.getElementById("shijian");
+                //sel.multiple = "multiple";
+                //$("#shijian").attr("size", 2);
+                //open($("#shijian"));
+            }
+        });
+        $("#shijian").select({
+            title: "时间",
+            items: ['8:00', '8:30', '9:00', '9:30',
+                '10:00', '10:30',
+                '11:00', '11:30',
+                '12:00', '12:30',
+                '13:00', '13:30',
+                '14:00', '14:30',
+                '15:00', '15:30',
+                '16:00', '16:30',
+                '17:00', '17:30',
+                '18:00', '18:30',
+                '19:00', '19:30',
+                '20:00', '20:30',
+                '21:00', '21:30',
+                '22:00', '22:30',
+                '23:00', '23:30',
+            ],
+            onChange: function (d) {
+
+            },
+            onClose: function () {
+                //console.log("close");
+            },
+            onOpen: function () {
+                //console.log("open");
+            },
+        });
+    </script>
+
+
+    <div class="weui-cells weui-cells_form">
+    </div>
+    <br>
+    <br><br>
+
+    <div class="weui-footer weui-footer_fixed-bottom">
+        <p class="weui-footer__links">
+            <a href="#" class="weui-footer__link">连心心理</a>
+        </p>
+        <p class="weui-footer__text" style="color: #586C94; font-size: 12px;"> 若有问题，请联系我们，电话：021-</p>
+        <p class="weui-footer__text" style="font-size: 12px;">Support By  上海连心心理咨询有限公司</p>
+    </div>
+</body>
+</html>

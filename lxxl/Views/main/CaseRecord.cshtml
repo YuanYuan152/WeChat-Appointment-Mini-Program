@@ -1,0 +1,334 @@
+﻿@{
+    ViewBag.Title = "EditCaseRecord";
+    Layout = null;
+    T_Consultation consultation = ViewBag.consultation;
+    T_CaseRecord CaseRecord = ViewBag.CaseRecord;
+}
+@using lxxl.Models
+
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>心理咨询个案记录表</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=0">
+    <link rel="stylesheet" href="/Content/weui/css/weui.css" />
+    <link rel="stylesheet" href="/Content/weui/css/weuix.css" />
+    <script src="/Content/weui/js/zepto.min.js"></script>
+    <script src="/Content/weui/js/zepto.weui.js"></script>
+    <script src="/Content/weui/js/picker.city.js"></script>
+    <script>
+        function textarea(input) {
+            var content = $(input);
+            var max = content.next().find('i').text();
+            var value = content.val();
+            if (value.length > 0) {
+
+                value = value.replace(/\n|\r/gi, "");
+                var len = value.length;
+                content.next().find('span').text(len);
+                if (len > max) {
+                    content.next().addClass('f-red');
+                } else {
+                    content.next().removeClass('f-red');
+                }
+            }
+        }
+
+        function cleartxt(obj) {
+            $(obj).prev().find('.weui-input').val("");
+            return false;
+        }
+
+        function cleararea(obj) {
+            $(obj).prev().find('.weui-textarea').val("").next().find("span").text(0);
+            return false;
+        }
+
+    </script>
+</head>
+
+<body style="background-color: #EFEFEF; ">
+    <div class="page-hd" style="padding-top: 5px; padding-bottom: 5px; background-color: #E7E8ED; ">
+        <h1 class="page-hd-title" style="color: #1ea0fa; font-weight: bold; margin: 0; padding: 0; text-align: center; padding-bottom: 2px;">
+            心理咨询个案记录表
+        </h1>
+        <p class="page-hd-desc"></p>
+    </div>
+
+    <div class="weui-cells weui-cells_form" style="padding: 10px 15px;">
+        <div class="weui-cell">
+            <div class="weui-cell__hd">
+                <label class="weui-label">来访者</label>
+            </div>
+            <div class="weui-cell__bd">
+                <input type="text" id="gId" name="gId" class="layui-input" hidden value="@consultation.gId">
+                @consultation.User.Name
+            </div>
+            <div class="weui-cell__hd">
+                <label class="weui-label">咨询师</label>
+            </div>
+            <div class="weui-cell__bd">
+                @consultation.doctor.name - @consultation.doctor.tel
+            </div>
+        </div>
+        <div class="weui-cell">
+            <div class="weui-cell__hd "><label class="weui-label">咨询时间</label></div>
+            <div class="weui-cell__bd">
+                @*<input class="weui-input border-radius" id="years-monthes" type="text" value="@consultation.cTime">*@
+                <label >@consultation.cTime</label>
+            </div>
+            <div class="weui-cell__hd"><label class="weui-label">咨询时长</label></div>
+            <div class="weui-cell__bd">
+                @*<input class="weui-input border-radius" pattern="[0-9]*" placeholder="请输入咨询时长" required type="number" id="duration" value="@consultation.duration" style="width: 85px;">*@
+                <label >@consultation.duration 小时</label>
+            </div>
+        </div>
+
+        <div class="weui-cells weui-cells_form" style="margin-top: 0px; padding-left: 15px; padding-bottom: 10px; ">
+            <label class="weui-label weui-start" style="width: 100%; margin-top: 8px; padding-bottom: 5px;">来访者的主观描述（本周来访者主诉变化情况、与咨询师约定的任务完成情况、自身学业、生活情况及其它来访者主动报告的情况等）</label>
+            <div class="weui-cell" style="padding: 0px 0px;">
+                <div class="weui-cell__bd">
+                    <textarea class="weui-textarea border-radius" placeholder="请输入主观描述" rows="3" required id="SubjectiveDescription" name="SubjectiveDescription">@CaseRecord.SubjectiveDescription</textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="weui-cells weui-cells_form" style="margin-top: 0px; padding-left: 15px; padding-bottom: 10px; ">
+            <label class="weui-label weui-start" style="width: 100%; margin-top: 8px; padding-bottom: 5px;">对来访者客观描述（咨询师的观察、测试结果、医院就诊结果等）</label>
+            <div class="weui-cell" style="padding: 0px 0px;">
+                <div class="weui-cell__bd">
+                    <textarea class="weui-textarea border-radius" placeholder="请输入对来访者客观描述" rows="3" required id="ObjectiveDescription" name="ObjectiveDescription">@CaseRecord.ObjectiveDescription</textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="weui-cells weui-cells_form" style="margin-top: 0px; padding-left: 15px; padding-bottom: 10px; ">
+            <label class="weui-label weui-start" style="width: 100%; margin-top: 8px; padding-bottom: 5px;">咨询师对个案的风险等级评估、以及对来访者的问题和咨询过程的评估</label>
+            <div class="weui-cell" style="padding: 0px 0px;">
+                <div class="weui-cell__bd">
+                    <textarea class="weui-textarea border-radius" placeholder="请输入风险等级评估" rows="3" required id="RiskLevelAssessment" name="RiskLevelAssessment">@CaseRecord.RiskLevelAssessment</textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="weui-cells weui-cells_form" style="margin-top: 0px; padding-left: 15px; padding-bottom: 10px; ">
+            <label class="weui-label weui-start" style="width: 100%; margin-top: 8px; padding-bottom: 5px;">本次咨询要点及处理（本次咨询目标、方案、及当前会谈的效果，包括使用主要咨询方法及技术、作业、以及对风险的处理措施）</label>
+            <div class="weui-cell" style="padding: 0px 0px;">
+                <div class="weui-cell__bd">
+                    <textarea class="weui-textarea border-radius" placeholder="请输入咨询要点" rows="3" required id="ConsultationPoints" name="ConsultationPoints">@CaseRecord.ConsultationPoints</textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="weui-cells weui-cells_form" style="margin-top: 0px; padding-left: 15px; padding-bottom: 10px; ">
+            <label class="weui-label weui-start" style="width: 100%; margin-top: 8px; padding-bottom: 5px;">个案风险评估表</label>
+            <div class="weui-cell" style="padding: 0px 0px;">
+                <table>
+                    <thead>
+                        <tr><th style="width:200px;">项目</th><th style="width:30px;">选X</th><th style="width:300px;">选项/说明</th><th>其他</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td rowspan="4">1.是否诊断/就医其他</td>
+                            <td style="text-align:center;"><input name="Item1X" type="radio" class="ace" value="A" @(CaseRecord.Item1X == "A" ? "checked" : "")></td>
+                            <td><span class="lbl">A. 无</span></td>
+                            <td rowspan="4">
+                                <div class="weui-cell__bd">
+                                    <textarea class="weui-textarea"  rows="4" onkeyup="textarea(this);" id="Item1Other" name="Item1Other">@CaseRecord.Item1Other</textarea>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr><td style="text-align:center;"><input name="Item1X" type="radio" class="ace" value="B" @(CaseRecord.Item1X == "B" ? "checked" : "")></td><td><span class="lbl">B. 轻度（**状态，不需要用药，或短期用药）</span></td></tr>
+                        <tr><td style="text-align:center;"><input name="Item1X" type="radio" class="ace" value="C" @(CaseRecord.Item1X == "C" ? "checked" : "")></td><td><span class="lbl">C. 中度（**症，用药）</span></td></tr>
+                        <tr><td style="text-align:center;"><input name="Item1X" type="radio" class="ace" value="D" @(CaseRecord.Item1X == "D" ? "checked" : "")></td><td><span class="lbl">D. 重度（有复发史、住院史）</span></td></tr>
+
+                        <tr>
+                            <td rowspan="4">2.支持系统：包括父母、伴侣、老师、朋友等重要他人，宗教信仰等</td>
+                            <td style="text-align:center;"><input name="Item2X" type="radio" class="ace" value="A" @(CaseRecord.Item2X == "A" ? "checked" : "")></td>
+                            <td><span class="lbl">A. 良好</span></td>
+                            <td rowspan="4">
+                                <div class="weui-cell__bd">
+                                    <textarea class="weui-textarea"  rows="4" onkeyup="textarea(this);" id="Item2Other" name="Item2Other">@CaseRecord.Item2Other</textarea>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr><td style="text-align:center;"><input name="Item2X" type="radio" class="ace" value="B" @(CaseRecord.Item2X == "B" ? "checked" : "")></td><td><span class="lbl">B. 一般</span></td></tr>
+                        <tr><td style="text-align:center;"><input name="Item2X" type="radio" class="ace" value="C" @(CaseRecord.Item2X == "C" ? "checked" : "")></td><td><span class="lbl">C. 偏弱</span></td></tr>
+                        <tr><td style="text-align:center;"><input name="Item2X" type="radio" class="ace" value="D" @(CaseRecord.Item2X == "D" ? "checked" : "")></td><td><span class="lbl">D. 没有</span></td></tr>
+
+                        <tr>
+                            <td rowspan="4">3.自我伤害</td>
+                            <td style="text-align:center;"><input name="Item3X" type="radio" class="ace" value="A" @(CaseRecord.Item3X == "A" ? "checked" : "")></td>
+                            <td><span class="lbl">A.无</span></td>
+                            <td rowspan="4">
+                                <div class="weui-cell__bd">
+                                    <textarea class="weui-textarea"  rows="4" onkeyup="textarea(this);" id="Item3Other" name="Item3Other">@CaseRecord.Item3Other</textarea>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr><td style="text-align:center;"><input name="Item3X" type="radio" class="ace" value="B" @(CaseRecord.Item3X == "B" ? "checked" : "")></td><td><span class="lbl">B.轻度（有念头无实施计划和行为）</span></td></tr>
+                        <tr><td style="text-align:center;"><input name="Item3X" type="radio" class="ace" value="C" @(CaseRecord.Item3X == "C" ? "checked" : "")></td><td><span class="lbl">C.中度（有念头有计划但未实施过/有非自杀的自伤行为）</span></td></tr>
+                        <tr><td style="text-align:center;"><input name="Item3X" type="radio" class="ace" value="D" @(CaseRecord.Item3X == "D" ? "checked" : "")></td><td><span class="lbl">D.重度（反复自伤/有过自杀行为未成功）</span></td></tr>
+
+                        <tr>
+                            <td rowspan="4">4.伤害他人</td>
+                            <td style="text-align:center;"><input name="Item4X" type="radio" class="ace" value="A" @(CaseRecord.Item4X == "A" ? "checked" : "")></td>
+                            <td><span class="lbl">A.无</span></td>
+                            <td rowspan="4">
+                                <div class="weui-cell__bd">
+                                    <textarea class="weui-textarea"  rows="4" onkeyup="textarea(this);" id="Item4Other" name="Item4Other">@CaseRecord.Item4Other</textarea>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr><td style="text-align:center;"><input name="Item4X" type="radio" class="ace" value="B" @(CaseRecord.Item4X == "B" ? "checked" : "")></td><td><span class="lbl">B.轻度（有念头无实施计划和行为，可自我控制）</span></td></tr>
+                        <tr><td style="text-align:center;"><input name="Item4X" type="radio" class="ace" value="C" @(CaseRecord.Item4X == "C" ? "checked" : "")></td><td><span class="lbl">C.中度（有念头有计划但未实施过）</span></td></tr>
+                        <tr><td style="text-align:center;"><input name="Item4X" type="radio" class="ace" value="D" @(CaseRecord.Item4X == "D" ? "checked" : "")></td><td><span class="lbl">D.重度（有详细计划并准备实施）</span></td></tr>
+
+                        <tr>
+                            <td rowspan="4">5.自我照顾</td>
+                            <td style="text-align:center;"><input name="Item5X" type="radio" class="ace" value="A" @(CaseRecord.Item5X == "A" ? "checked" : "")></td>
+                            <td><span class="lbl">A.良好（完全可以自我照顾）</span></td>
+                            <td rowspan="4">
+                                <div class="weui-cell__bd">
+                                    <textarea class="weui-textarea"  rows="4" onkeyup="textarea(this);" id="Item5Other" name="Item5Other">@CaseRecord.Item5Other</textarea>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr><td style="text-align:center;"><input name="Item5X" type="radio" class="ace" value="B" @(CaseRecord.Item5X == "B" ? "checked" : "")></td><td><span class="lbl">B.轻度（偶尔不能自我照顾）</span></td></tr>
+                        <tr><td style="text-align:center;"><input name="Item5X" type="radio" class="ace" value="C" @(CaseRecord.Item5X == "C" ? "checked" : "")></td><td><span class="lbl">C.中度（经常不能自我照顾）</span></td></tr>
+                        <tr><td style="text-align:center;"><input name="Item5X" type="radio" class="ace" value="D" @(CaseRecord.Item5X == "D" ? "checked" : "")></td><td><span class="lbl">D.重度（完全无法自我照顾）</span></td></tr>
+
+                        <tr>
+                            <td rowspan="2">6.重大/应激事件</td>
+                            <td style="text-align:center;"><input name="Item6X" type="radio" class="ace" value="A" @(CaseRecord.Item6X == "A" ? "checked" : "")></td>
+                            <td><span class="lbl">A.无</span></td>
+                            <td rowspan="2">
+                                <div class="weui-cell__bd">
+                                    <textarea class="weui-textarea"  rows="3" onkeyup="textarea(this);" id="Item6Other" name="Item6Other">@CaseRecord.Item6Other</textarea>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr><td style="text-align:center;"><input name="Item6X" type="radio" class="ace" value="B" @(CaseRecord.Item6X == "B" ? "checked" : "")></td><td><span class="lbl">B.有（具体说明）</span></td></tr>
+
+                        <tr>
+                            <td rowspan="2">7.家族史</td>
+                            <td style="text-align:center;"><input name="Item7X" type="radio" class="ace" value="A" @(CaseRecord.Item7X == "A" ? "checked" : "")></td>
+                            <td><span class="lbl">A.无</span></td>
+                            <td rowspan="2">
+                                <div class="weui-cell__bd">
+                                    <textarea class="weui-textarea"  rows="3" onkeyup="textarea(this);" id="Item7Other" name="Item7Other">@CaseRecord.Item7Other</textarea>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr><td style="text-align:center;"><input name="Item7X" type="radio" class="ace" value="B" @(CaseRecord.Item7X == "B" ? "checked" : "")></td><td><span class="lbl">B.有（具体说明）</span></td></tr>
+
+                        <tr>
+                            <td rowspan="2">8.疾病史</td>
+                            <td style="text-align:center;"><input name="Item8X" type="radio" class="ace" value="A" @(CaseRecord.Item8X == "A" ? "checked" : "")></td>
+                            <td><span class="lbl">A.无</span></td>
+                            <td rowspan="2">
+                                <div class="weui-cell__bd">
+                                    <textarea class="weui-textarea"  rows="3" onkeyup="textarea(this);" id="Item8Other" name="Item8Other">@CaseRecord.Item8Other</textarea>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr><td style="text-align:center;"><input name="Item8X" type="radio" class="ace" value="B" @(CaseRecord.Item8X == "B" ? "checked" : "")></td><td><span class="lbl">B.有（具体说明）</span></td></tr>
+
+                        <tr>
+                            <td rowspan="2">9.创伤史</td>
+                            <td style="text-align:center;"><input name="Item9X" type="radio" class="ace" value="A" @(CaseRecord.Item9X == "A" ? "checked" : "")></td>
+                            <td><span class="lbl">A.无</span></td>
+                            <td rowspan="2">
+                                <div class="weui-cell__bd">
+                                    <textarea class="weui-textarea"  rows="3" onkeyup="textarea(this);" id="Item9Other" name="Item9Other">@CaseRecord.Item9Other</textarea>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr><td style="text-align:center;"><input name="Item9X" type="radio" class="ace" value="B" @(CaseRecord.Item9X == "B" ? "checked" : "")></td><td><span class="lbl">B.有（具体说明）</span></td></tr>
+
+                        <tr>
+                            <td rowspan="4">风险/危机等级</td>
+                            <td style="text-align:center;"><input name="ItemX" type="radio" class="ace" value="A" @(CaseRecord.ItemX == "A" ? "checked" : "")></td>
+                            <td><span class="lbl">一级风险/危机</span></td>
+                            <td rowspan="4">
+                                <div class="weui-cell__bd">
+                                    <textarea class="weui-textarea"  rows="4" onkeyup="textarea(this);" id="ItemOther" name="ItemOther">@CaseRecord.ItemOther</textarea>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr><td style="text-align:center;"><input name="ItemX" type="radio" class="ace" value="B" @(CaseRecord.ItemX == "B" ? "checked" : "")></td><td><span class="lbl">二级风险/危机</span></td></tr>
+                        <tr><td style="text-align:center;"><input name="ItemX" type="radio" class="ace" value="C" @(CaseRecord.ItemX == "C" ? "checked" : "")></td><td><span class="lbl">三级风险/危机</span></td></tr>
+                        <tr><td style="text-align:center;"><input name="ItemX" type="radio" class="ace" value="D" @(CaseRecord.ItemX == "D" ? "checked" : "")></td><td><span class="lbl">无危机</span></td></tr>
+
+                    </tbody>
+                </table>
+
+            </div>
+
+            <div class="weui-cells" style="margin-top: 0px; padding-left: 15px; padding-bottom: 10px; ">
+                <div style="width: 100%; margin-top: 8px; padding-bottom: 5px; float: left">
+                    <label class="weui-label" style=" float:left">上传文件</label>
+                    @*<input type="button" id="uploadButton" class="btn btn-sm btn-default" value="点击上传" />*@
+                </div>
+                <div id="img">
+                    @foreach (var aimg in ViewBag.uppics)
+                    {
+                        <div><a href="@aimg" target="_blank"><img src="@aimg" style="max-width: 80%;" /></a> <br /></div>
+                    }
+                    @foreach (var aimg in ViewBag.upfiles)
+                    {
+                        <div><a href="@aimg" target="_blank" style="font-size:12px;">@aimg</a><br /></div>
+                    }
+                </div>
+            </div>
+
+            <div style="padding:12px;">
+                <div>
+                    <label class="weui-label" style="width: 100%; margin-top: 8px; padding-bottom: 5px;">风险等级说明：</label>
+                </div>
+                <div>
+                    <label><span style="font-weight:bold;">一、一级风险/危机：</span>转介/不适合网络咨询；向来访者说明其困扰已经超出了心理咨询可提供的专业范围，必须尽快就医或寻求其他专业帮助；</label>
+                </div>
+                <div style="margin-left:32px;"><label>1、有明确诊断，患有严重精神疾病，且正在发作期的来访者，无医生建议“配合心理咨询”，不可接待；</label></div>
+                <div style="margin-left:32px;"><label>2、未就医，但初始访谈或首次咨询评估发现来访有明显精神疾病症状、或严重躯体疾病或症状；</label></div>
+                <div style="margin-left:32px;"><label>3、在咨询期间，发现来访者心理疾病复发，或处于危机状况；或涉及性虐待、暴力关系；</label></div>
+                <div>
+                    <label><span style="font-weight:bold;">二、二级风险/危机：</span>需要上报同心理咨询中心，且需要突破保密设置、以及做安全计划；</label>
+                </div>
+                <div style="margin-left:32px;"><label>1、	咨询师评估出来访者可能发生一级危机的情况时；</label></div>
+                <div style="margin-left:32px;"><label>2、	评来访者有中度自我伤害/伤害他人、或经常不能自我照顾的；</label></div>
+                <div>
+                    <label><span style="font-weight:bold;">三、三级风险/危机：</span>咨询师无需上报，但要关注来访危机情况变化，每次咨询评估，在需要的情况下突破保密设置或做安全计划；</label>
+                </div>
+                <div style="margin-left:32px;"><label>1、	来访者处于轻度自我伤害/伤害他人、轻度不能自我照顾、或支持系统一般的情况</label></div>
+
+                <div>
+                    <label><span style="font-weight:bold;">四、无危机：</span>一般咨询</label>
+                </div>
+                <div>
+                </div>
+            </div>
+        </div>
+
+        <div class="weui-btn-area">
+            @*@if ((CaseRecord.IsSure == false && CaseRecord.EditeTime < 100) || (CaseRecord.IsSure == true && CaseRecord.EditeTime > 100))
+                {
+                    <a class="weui-btn weui-btn_primary" href="javascript:" id="btnQD">提交</a>
+                }
+                else if (CaseRecord.IsSure == false && CaseRecord.EditeTime > 100)
+                {
+                    <a class="weui-btn weui-btn_primary" href="javascript:" disabled style="pointer-events: none;">已申请修改，请等待审核</a>
+                }
+                else
+                {
+                    <a class="weui-btn weui-btn_primary" href="javascript:" id="btnXGSQ">已提交，修改申请</a>
+                }*@
+        </div>
+    </div>
+
+    <br>
+    <br>
+</body>
+</html>
+

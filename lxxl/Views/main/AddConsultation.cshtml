@@ -1,0 +1,924 @@
+﻿@using lxxl.Models;
+@{
+    ViewBag.Title = "新增咨询记录";
+    Layout = null;
+    List<T_SystemSettings> RoomList = ViewBag.RoomList;
+}
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@ViewBag.Title</title>
+    
+    <!-- 引入必要的CSS和JS库 -->
+    <link href="~/Public/login/bootstrap/css/bootstrap.min.css" rel="stylesheet" />
+    <script src="~/static/web/js/jquery.min.1.12.4.js"></script>
+    <script src="~/Public/login/bootstrap/js/bootstrap.min.js"></script>
+    <script type="text/javascript" src="/Content/mhome/lib/layui/layui.js" charset="utf-8"></script>
+    <script type="text/javascript" src="/Content/mhome/js/xadmin.js"></script>
+</head>
+<body>
+
+<style>
+    .form-group {
+        margin-bottom: 15px;
+    }
+    .form-control {
+        width: 100%;
+        padding: 8px 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+    }
+    .btn-primary {
+        background-color: #007bff;
+        border-color: #007bff;
+        color: white;
+        padding: 10px 20px;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+    .btn-primary:hover {
+        background-color: #0056b3;
+        border-color: #0056b3;
+    }
+    .btn-secondary {
+        background-color: #6c757d;
+        border-color: #6c757d;
+        color: white;
+        padding: 10px 20px;
+        border-radius: 4px;
+        cursor: pointer;
+        margin-left: 10px;
+    }
+    .btn-secondary:hover {
+        background-color: #545b62;
+        border-color: #545b62;
+    }
+    .alert {
+        padding: 12px;
+        margin-bottom: 20px;
+        border: 1px solid transparent;
+        border-radius: 4px;
+    }
+    .alert-success {
+        color: #155724;
+        background-color: #d4edda;
+        border-color: #c3e6cb;
+    }
+    .alert-danger {
+        color: #721c24;
+        background-color: #f8d7da;
+        border-color: #f5c6cb;
+    }
+    .doctor-card {
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 15px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    .doctor-card:hover {
+        border-color: #007bff;
+        box-shadow: 0 2px 8px rgba(0,123,255,0.2);
+    }
+    .doctor-card.selected {
+        border-color: #007bff;
+        background-color: #f8f9fa;
+    }
+    .time-slot {
+        display: inline-block;
+        padding: 8px 12px;
+        margin: 5px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    .time-slot:hover {
+        border-color: #007bff;
+        background-color: #f8f9fa;
+    }
+    .time-slot.selected {
+        border-color: #007bff;
+        background-color: #007bff;
+        color: white;
+    }
+    .patient-info {
+        background-color: #f8f9fa;
+        padding: 15px;
+        border-radius: 4px;
+        margin-bottom: 20px;
+    }
+    .dropdown-container {
+        position: relative;
+    }
+    .dropdown-container input {
+        padding-right: 30px;
+    }
+    .dropdown-arrow {
+        position: absolute;
+        right: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #666;
+        pointer-events: none;
+        font-size: 12px;
+    }
+    .dropdown-panel {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        z-index: 1000;
+        max-height: 400px;
+    }
+    .search-container {
+        padding: 10px;
+        border-bottom: 1px solid #eee;
+    }
+    .patient-list {
+        max-height: 300px;
+        overflow-y: auto;
+    }
+    .patient-item {
+        padding: 8px 12px;
+        border-bottom: 1px solid #f0f0f0;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+    }
+    .patient-item:hover {
+        background-color: #f8f9fa;
+    }
+    .patient-item.selected {
+        background-color: #e3f2fd;
+    }
+    .patient-name {
+        font-weight: 500;
+    }
+    .patient-tel {
+        color: #666;
+        margin-left: 10px;
+    }
+    .doctor-list {
+        max-height: 300px;
+        overflow-y: auto;
+    }
+    .doctor-item {
+        padding: 8px 12px;
+        border-bottom: 1px solid #f0f0f0;
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+    }
+    .doctor-item:hover {
+        background-color: #f8f9fa;
+    }
+    .doctor-item.selected {
+        background-color: #e3f2fd;
+    }
+    .doctor-name {
+        font-weight: 500;
+        font-size: 14px;
+    }
+    .doctor-info {
+        color: #666;
+        font-size: 12px;
+        margin-top: 2px;
+    }
+    .doctor-price {
+        color: #e74c3c;
+        font-weight: 500;
+        margin-left: 10px;
+    }
+    .custom-time-section {
+        background-color: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        border: 1px solid #e9ecef;
+    }
+    .btn-success {
+        background-color: #28a745;
+        border-color: #28a745;
+        color: white;
+        padding: 8px 16px;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+    .btn-success:hover {
+        background-color: #218838;
+        border-color: #1e7e34;
+    }
+    .custom-time-slot {
+        background-color: #e3f2fd;
+        border: 2px solid #2196f3;
+        padding: 10px 15px;
+        margin: 5px;
+        border-radius: 6px;
+        display: inline-block;
+        position: relative;
+    }
+    .custom-time-slot .remove-btn {
+        position: absolute;
+        top: -5px;
+        right: -5px;
+        background-color: #f44336;
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 20px;
+        height: 20px;
+        font-size: 12px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .custom-time-inputs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 15px;
+        align-items: flex-end;
+    }
+    .custom-time-field {
+        display: flex;
+        flex-direction: column;
+        min-width: fit-content;
+    }
+    .custom-time-field label {
+        margin-bottom: 5px;
+        font-weight: 500;
+        color: #333;
+        font-size: 14px;
+        white-space: nowrap;
+    }
+    .custom-time-field input,
+    .custom-time-field select {
+        box-sizing: border-box;
+        font-size: 14px;
+    }
+</style>
+
+<div class="container" style="margin-top: 10px;">
+    <h2  style="text-align:center;">新增咨询记录</h2>
+    
+    <div id="alertMessage" class="alert" style="display: none;"></div>
+    
+    <form id="consultationForm">
+        <!-- 来访者信息 -->
+        <div class="form-group">
+            <label for="patientSelect">选择来访者：</label>
+            <div class="dropdown-container">
+                <input type="text" id="patientSelect" class="form-control" placeholder="点击选择来访者" readonly />
+                <div class="dropdown-arrow">▼</div>
+                <div id="patientDropdown" class="dropdown-panel" style="display: none;">
+                    <div class="search-container">
+                        <input type="text" id="patientSearch" class="form-control" placeholder="搜索来访者姓名或手机号" />
+                    </div>
+                    <div id="patientList" class="patient-list">
+                        <!-- 来访者列表将通过AJAX加载 -->
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="patientInfo" class="patient-info" style="display: none;">
+            <h4>来访者信息</h4>
+            <p><strong>姓名：</strong><span id="patientName"></span></p>
+            <p><strong>电话：</strong><span id="patientTel"></span></p>
+            <p><strong>年龄：</strong><span id="patientAge"></span></p>
+            <p><strong>性别：</strong><span id="patientSex"></span></p>
+        </div>
+        
+        <!-- 咨询师选择 -->
+        <div class="form-group">
+            <label for="doctorSelect">选择咨询师：</label>
+            <div class="dropdown-container">
+                <input type="text" id="doctorSelect" class="form-control" placeholder="点击选择咨询师" readonly />
+                <div class="dropdown-arrow">▼</div>
+                <div id="doctorDropdown" class="dropdown-panel" style="display: none;">
+                    <div class="search-container">
+                        <input type="text" id="doctorSearch" class="form-control" placeholder="搜索咨询师姓名或职称" />
+                    </div>
+                    <div id="doctorList" class="doctor-list">
+                        <!-- 咨询师列表将通过AJAX加载 -->
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 可预约时间 -->
+        <div class="form-group">
+            <label>可预约时间：</label>
+            <div id="timeSlots">
+                <!-- 时间槽将通过AJAX加载 -->
+            </div>
+            
+            <!-- 自定义时间选择区域 -->
+            <div id="customTimeSection" class="custom-time-section" style="margin-top: 15px;">
+                <h5 style="margin-bottom: 15px; color: #333;">或选择自定义时间：</h5>
+                <div class="custom-time-inputs">
+                    <div class="custom-time-field">
+                        <label for="customDate">日期：</label>
+                        <input type="date" id="customDate" class="form-control" min="" style="width: 130px;" />
+                    </div>
+                    <div class="custom-time-field">
+                        <label for="customStartTime">开始时间：</label>
+                        <input type="time" id="customStartTime" class="form-control" style="width: 90px;" />
+                    </div>
+                    <div class="custom-time-field">
+                        <label for="customEndTime">结束时间：</label>
+                        <input type="time" id="customEndTime" class="form-control" style="width: 90px;" />
+                    </div>
+                    <div class="custom-time-field">
+                        <label for="customPrice">费用(元/50分钟)：</label>
+                        <input type="number" id="customPrice" class="form-control" min="0" step="0.01" style="width: 100px;" />
+                    </div>
+                    <div class="custom-time-field">
+                        <label for="customMethods">咨询方式：</label>
+                        <select id="customMethods" class="form-control" style="width: 90px;">
+                            <option value="">请选择</option>
+                            <option value="面询">面询</option>
+                            <option value="视频">视频</option>
+                        </select>
+                    </div>
+                    <div class="custom-time-field">
+                        <label for="customAddress">咨询地点：</label>
+                        <select id="customAddress" class="form-control" style="width: 180px;">
+                            <option value="">请选择咨询地点</option>
+                            @if (RoomList != null)
+                            {
+                                foreach (T_SystemSettings item in RoomList)
+                                {
+                                    <option value="@item.content1">@item.content1</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div style="margin-top: 10px;">
+                    <button type="button" id="btnAddCustomTime" class="btn btn-success">添加自定义时间</button>
+                    <button type="button" id="btnClearCustomTime" class="btn btn-secondary">清空</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 咨询内容 -->
+        <div class="form-group">
+            <label for="consultationContent">咨询内容：</label>
+            <textarea id="consultationContent" class="form-control" rows="4" placeholder="请描述咨询的具体问题或内容"></textarea>
+        </div>
+        
+        <!-- 备注 -->
+        <div class="form-group">
+            <label for="remark">备注：</label>
+            <textarea id="remark" class="form-control" rows="3" placeholder="其他需要说明的信息"></textarea>
+        </div>
+        
+        <div class="form-group">
+            <button type="submit" class="btn btn-primary">提交咨询记录</button>
+            <button type="button" class="btn btn-secondary" onclick="history.back()">返回</button>
+        </div>
+    </form>
+</div>
+
+<script>
+    var selectedPatient = null;
+    var selectedDoctor = null;
+    var selectedTimeSlot = null;
+    var allPatients = [];
+    var filteredPatients = [];
+    var allDoctors = [];
+    var filteredDoctors = [];
+    var layer = null;
+    var customTimeSlots = []; // 存储自定义时间段
+    
+    // 初始化 layui
+    layui.use(['layer'], function() {
+        layer = layui.layer;
+    });
+    
+    $(document).ready(function() {
+        loadPatients();
+        loadDoctors();
+        
+        // 设置日期输入框的最小值为明天
+        var tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        var minDate = tomorrow.toISOString().split('T')[0];
+        $('#customDate').attr('min', minDate);
+        
+        // 来访者下拉框点击事件
+        $('#patientSelect').click(function() {
+            togglePatientDropdown();
+        });
+        
+        // 咨询师下拉框点击事件
+        $('#doctorSelect').click(function() {
+            toggleDoctorDropdown();
+        });
+        
+        // 来访者搜索功能
+        $('#patientSearch').on('input', function() {
+            var searchTerm = $(this).val().trim();
+            filterPatients(searchTerm);
+        });
+        
+        // 咨询师搜索功能
+        $('#doctorSearch').on('input', function() {
+            var searchTerm = $(this).val().trim();
+            filterDoctors(searchTerm);
+        });
+        
+        // 点击外部关闭下拉框
+        $(document).click(function(e) {
+            if (!$(e.target).closest('.dropdown-container').length) {
+                $('#patientDropdown').hide();
+                $('#doctorDropdown').hide();
+            }
+        });
+        
+        // 自定义时间相关事件
+        $('#btnAddCustomTime').click(function() {
+            addCustomTimeSlot();
+        });
+        
+        $('#btnClearCustomTime').click(function() {
+            clearCustomTimeForm();
+        });
+        
+        // 表单提交
+        $('#consultationForm').submit(function(e) {
+            e.preventDefault();
+            submitConsultation();
+        });
+    });
+    
+    // 切换来访者下拉框显示状态
+    function togglePatientDropdown() {
+        var dropdown = $('#patientDropdown');
+        if (dropdown.is(':visible')) {
+            dropdown.hide();
+        } else {
+            dropdown.show();
+            $('#patientSearch').focus();
+            if (allPatients.length === 0) {
+                loadPatients();
+            }
+        }
+    }
+    
+    // 过滤来访者列表
+    function filterPatients(searchTerm) {
+        if (!searchTerm) {
+            filteredPatients = allPatients;
+        } else {
+            filteredPatients = allPatients.filter(function(patient) {
+                return patient.Name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                       patient.Tel.includes(searchTerm);
+            });
+        }
+        renderPatientList();
+    }
+    
+    // 渲染来访者列表
+    function renderPatientList() {
+        var patientList = $('#patientList');
+        patientList.empty();
+        
+        if (filteredPatients.length === 0) {
+            patientList.html('<div class="patient-item" style="color: #666; text-align: center;">未找到匹配的来访者</div>');
+            return;
+        }
+        
+        filteredPatients.forEach(function(patient) {
+            var isSelected = selectedPatient && selectedPatient.ID === patient.ID;
+            var patientItem = $('<div class="patient-item' + (isSelected ? ' selected' : '') + '" data-id="' + patient.ID + '">' +
+                '<span class="patient-name">' + patient.Name + '</span>' +
+                '<span class="patient-tel">' + patient.Tel + '</span>' +
+                '</div>');
+            
+            patientItem.click(function() {
+                selectPatient(patient);
+            });
+            
+            patientList.append(patientItem);
+        });
+    }
+    
+    // 选择来访者
+    function selectPatient(patient) {
+        selectedPatient = patient;
+        $('#patientSelect').val(patient.Name + ' (' + patient.Tel + ')');
+        $('#patientDropdown').hide();
+        loadPatientInfo(patient.ID);
+        renderPatientList();
+    }
+    
+    // 切换咨询师下拉框显示状态
+    function toggleDoctorDropdown() {
+        var dropdown = $('#doctorDropdown');
+        if (dropdown.is(':visible')) {
+            dropdown.hide();
+        } else {
+            dropdown.show();
+            $('#doctorSearch').focus();
+            if (allDoctors.length === 0) {
+                loadDoctors();
+            }
+        }
+    }
+    
+    // 过滤咨询师列表
+    function filterDoctors(searchTerm) {
+        if (!searchTerm) {
+            filteredDoctors = allDoctors;
+        } else {
+            filteredDoctors = allDoctors.filter(function(doctor) {
+                return doctor.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                       doctor.position.toLowerCase().includes(searchTerm.toLowerCase());
+            });
+        }
+        renderDoctorList();
+    }
+    
+    // 渲染咨询师列表
+    function renderDoctorList() {
+        var doctorList = $('#doctorList');
+        doctorList.empty();
+        
+        if (filteredDoctors.length === 0) {
+            doctorList.html('<div class="doctor-item" style="color: #666; text-align: center;">未找到匹配的咨询师</div>');
+            return;
+        }
+        
+        filteredDoctors.forEach(function(doctor) {
+            var isSelected = selectedDoctor && selectedDoctor.ID === doctor.ID;
+            var doctorItem = $('<div class="doctor-item' + (isSelected ? ' selected' : '') + '" data-id="' + doctor.ID + '">' +
+                '<div class="doctor-name">' + doctor.name + '<span class="doctor-price">￥' + doctor.Billing + '/50分钟</span></div>' +
+                '<div class="doctor-info">' + doctor.position + '</div>' +
+                '</div>');
+            
+            doctorItem.click(function() {
+                selectDoctor(doctor);
+            });
+            
+            doctorList.append(doctorItem);
+        });
+    }
+    
+    // 选择咨询师
+    function selectDoctor(doctor) {
+        selectedDoctor = doctor;
+        $('#doctorSelect').val(doctor.name + ' (' + doctor.position + ') - ￥' + doctor.Billing + '/50分钟');
+        $('#doctorDropdown').hide();
+        
+        // 自动填入咨询师的默认价格到自定义时间价格字段
+        if (doctor.Billing && doctor.Billing > 0) {
+            $('#customPrice').val(doctor.Billing);
+        }
+        
+        // 加载该咨询师的可约时间
+        loadTimeSlots(doctor.ID);
+        renderDoctorList();
+    }
+    
+    // 加载来访者列表
+    function loadPatients() {
+        $.ajax({
+            url: '/main/GetPatients',
+            type: 'GET',
+            success: function(data) {
+                if (data.code === 0) {
+                    allPatients = data.patients;
+                    filteredPatients = allPatients;
+                    renderPatientList();
+                } else {
+                    showAlert('加载来访者列表失败：' + data.msg, 'danger');
+                }
+            },
+            error: function() {
+                showAlert('加载来访者列表失败，请检查网络连接', 'danger');
+            }
+        });
+    }
+    
+    // 加载来访者详细信息
+    function loadPatientInfo(patientId) {
+        $.ajax({
+            url: '/main/GetPatientInfo',
+            type: 'GET',
+            data: { id: patientId },
+            success: function(data) {
+                if (data.code === 0) {
+                    selectedPatient = data.patient;
+                    $('#patientName').text(data.patient.Name);
+                    $('#patientTel').text(data.patient.Tel);
+                    $('#patientAge').text(data.patient.Age);
+                    $('#patientSex').text(data.patient.Sex);
+                    $('#patientInfo').show();
+                }
+            }
+        });
+    }
+    
+    // 加载咨询师列表
+    function loadDoctors() {
+        $.ajax({
+            url: '/main/GetDoctors',
+            type: 'GET',
+            success: function(data) {
+                if (data.code === 0) {
+                    allDoctors = data.doctors;
+                    filteredDoctors = allDoctors;
+                    renderDoctorList();
+                } else {
+                    showAlert('加载咨询师列表失败：' + data.msg, 'danger');
+                }
+            },
+            error: function() {
+                showAlert('加载咨询师列表失败，请检查网络连接', 'danger');
+            }
+        });
+    }
+    
+    // 加载可约时间
+    function loadTimeSlots(doctorId) {
+        $.ajax({
+            url: '/main/GetDoctorSchedule',
+            type: 'GET',
+            data: { doctorId: doctorId },
+            success: function(data) {
+                if (data.code === 0) {
+                    var timeSlots = $('#timeSlots');
+                    timeSlots.empty();
+                    
+                    if (data.schedules && data.schedules.length > 0) {
+                        data.schedules.forEach(function(schedule) {
+                            var timeSlot = $('<div class="time-slot" data-id="' + schedule.ID + '">' +
+                                schedule.startDate + ':' + schedule.startHH + '-' + schedule.endHH + 
+                                ' (' + schedule.methods + ') (￥' + schedule.Price + ')' +
+                                '</div>');
+                            
+                            timeSlot.click(function() {
+                                $('.time-slot').removeClass('selected');
+                                $(this).addClass('selected');
+                                selectedTimeSlot = schedule;
+                            });
+                            
+                            timeSlots.append(timeSlot);
+                        });
+                    } else {
+                        timeSlots.html('<p>该咨询师暂无可用时间</p>');
+                    }
+                } else {
+                    showAlert('加载可约时间失败：' + data.msg, 'danger');
+                }
+            },
+            error: function() {
+                showAlert('加载可约时间失败，请检查网络连接', 'danger');
+            }
+        });
+    }
+    
+    // 添加自定义时间段
+    function addCustomTimeSlot() {
+        if (!selectedDoctor) {
+            showAlert('请先选择咨询师', 'danger');
+            return;
+        }
+        
+        var date = $('#customDate').val();
+        var startTime = $('#customStartTime').val();
+        var endTime = $('#customEndTime').val();
+        var price = $('#customPrice').val();
+        var methods = $('#customMethods').val();
+        var address = $('#customAddress').val();
+        
+        // 验证输入
+        if (!date || !startTime || !endTime || !price || !methods || !address) {
+            showAlert('请填写完整的自定义时间信息', 'danger');
+            return;
+        }
+        
+        if (startTime >= endTime) {
+            showAlert('结束时间必须大于开始时间', 'danger');
+            return;
+        }
+        
+        var startDateTime = new Date(date + 'T' + startTime);
+        var endDateTime = new Date(date + 'T' + endTime);
+        var now = new Date();
+        
+        if (startDateTime <= now) {
+            showAlert('预约时间不能是过去的时间', 'danger');
+            return;
+        }
+        
+        // 检查时间冲突
+        var conflictExists = false;
+        $.ajax({
+            url: '/main/CheckTimeConflict',
+            type: 'POST',
+            data: {
+                doctorId: selectedDoctor.ID,
+                startTime: startDateTime.toISOString(),
+                endTime: endDateTime.toISOString()
+            },
+            async: false,
+            success: function(data) {
+                if (data.code === 0) {
+                    if (data.hasConflict) {
+                        showAlert('该时间段与现有预约冲突，请选择其他时间', 'danger');
+                        conflictExists = true;
+                    }
+                } else {
+                    showAlert('检查时间冲突失败：' + data.msg, 'danger');
+                    conflictExists = true;
+                }
+            },
+            error: function() {
+                showAlert('检查时间冲突失败，请检查网络连接', 'danger');
+                conflictExists = true;
+            }
+        });
+        
+        if (conflictExists) {
+            return;
+        }
+        
+        // 创建自定义时间段对象
+        var customSlot = {
+            ID: 'custom_' + Date.now(),
+            startTime: startDateTime.toISOString(),
+            endTime: endDateTime.toISOString(),
+            startDate: date,
+            startHH: startTime,
+            endHH: endTime,
+            Price: parseFloat(price),
+            methods: methods,
+            address: address || '',
+            isCustom: true
+        };
+        
+        // 添加到自定义时间段数组
+        customTimeSlots.push(customSlot);
+        
+        // 显示自定义时间段
+        displayCustomTimeSlot(customSlot);
+        
+        // 清空表单
+        clearCustomTimeForm();
+        
+        showAlert('自定义时间段添加成功', 'success');
+    }
+    
+    // 显示自定义时间段
+    function displayCustomTimeSlot(slot) {
+        var timeSlotHtml = '<div class="time-slot custom-time-slot selected" data-id="' + slot.ID + '">' +
+            slot.startDate + ' ' + slot.startHH + '-' + slot.endHH + 
+            ' (' + slot.methods + ') (￥' + slot.Price + ')' +
+            '<button class="remove-btn" onclick="removeCustomTimeSlot(\'' + slot.ID + '\')" title="删除">×</button>' +
+            '</div>';
+        
+        $('#timeSlots').append(timeSlotHtml);
+        
+        // 清除其他选中状态
+        $('.time-slot').not('[data-id="' + slot.ID + '"]').removeClass('selected');
+        
+        // 设置为选中的时间段
+        selectedTimeSlot = slot;
+        
+        // 绑定点击事件
+        $('#timeSlots .time-slot[data-id="' + slot.ID + '"]').click(function() {
+            $('.time-slot').removeClass('selected');
+            $(this).addClass('selected');
+            selectedTimeSlot = slot;
+        });
+    }
+    
+    // 移除自定义时间段
+    function removeCustomTimeSlot(slotId) {
+        // 从数组中移除
+        customTimeSlots = customTimeSlots.filter(function(slot) {
+            return slot.ID !== slotId;
+        });
+        
+        // 从界面移除
+        $('#timeSlots .time-slot[data-id="' + slotId + '"]').remove();
+        
+        // 如果被删除的是选中的时间段，清空选择
+        if (selectedTimeSlot && selectedTimeSlot.ID === slotId) {
+            selectedTimeSlot = null;
+        }
+    }
+    
+    // 清空自定义时间表单
+    function clearCustomTimeForm() {
+        $('#customDate').val('');
+        $('#customStartTime').val('');
+        $('#customEndTime').val('');
+        $('#customPrice').val('');
+        $('#customMethods').val('');
+        $('#customAddress').val('');
+    }
+    
+    // 提交咨询记录
+    function submitConsultation() {
+        if (!selectedPatient) {
+            showAlert('请选择来访者', 'danger');
+            return;
+        }
+        
+        if (!selectedDoctor) {
+            showAlert('请选择咨询师', 'danger');
+            return;
+        }
+        
+        if (!selectedTimeSlot) {
+            showAlert('请选择预约时间', 'danger');
+            return;
+        }
+        
+        var formData = {
+            patientId: selectedPatient.ID,
+            doctorId: selectedDoctor.ID,
+            consultationContent: $('#consultationContent').val(),
+            remark: $('#remark').val()
+        };
+        
+        // 检查是否是自定义时间段
+        if (selectedTimeSlot.isCustom) {
+            // 自定义时间段需要先创建到数据库
+            formData.isCustomTime = true;
+            formData.customStartTime = selectedTimeSlot.startTime;
+            formData.customEndTime = selectedTimeSlot.endTime;
+            formData.customPrice = selectedTimeSlot.Price;
+            formData.customMethods = selectedTimeSlot.methods;
+            formData.customAddress = selectedTimeSlot.address;
+        } else {
+            // 现有时间段
+            formData.scheduleId = selectedTimeSlot.ID;
+        }
+        
+        $.ajax({
+            url: '/main/AddConsultation',
+            type: 'POST',
+            data: formData,
+            success: function(data) {
+                if (data.code === 0) {
+                    layer.alert("添加成功", {
+                        icon: 6
+                    },
+                    function () {
+                        //关闭当前frame
+                        var index = parent.layer.getFrameIndex(window.name);
+                        parent.layer.close(index);
+
+                        // 可以对父窗口进行刷新
+                        parent.location.reload();
+                    });
+                } else {
+                    layer.alert(data.msg);
+                }
+            },
+            error: function() {
+                showAlert('提交失败，请检查网络连接', 'danger');
+            }
+        });
+    }
+    
+    // 显示提示信息
+    function showAlert(message, type) {
+        var alertDiv = $('#alertMessage');
+        alertDiv.removeClass('alert-success alert-danger').addClass('alert-' + type);
+        alertDiv.text(message).show();
+        
+        // 滚动到错误信息框位置
+        $('html, body').animate({
+            scrollTop: alertDiv.offset().top - 20
+        }, 300, function() {
+            // 滚动完成后添加闪烁效果以吸引注意
+            if (type === 'danger') {
+                alertDiv.fadeOut(200).fadeIn(200).fadeOut(200).fadeIn(200);
+            }
+        });
+        
+        if (type === 'success') {
+            setTimeout(function() {
+                alertDiv.hide();
+            }, 3000);
+        }
+    }
+</script>
+</body>
+</html>
+

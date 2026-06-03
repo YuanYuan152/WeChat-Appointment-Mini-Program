@@ -1,0 +1,203 @@
+﻿@using lxxl.Models
+@{
+    ViewBag.Title = "文章管理";
+    Layout = "~/Views/Shared/_LayoutHome.cshtml";
+    List<T_Content> ContentList = ViewBag.ContentList;
+    int index = (ViewBag.ThisPage - 1) * ViewBag.Pagesize + 1;
+    long MenuID = ViewBag.urlcode;
+}
+
+<link rel="stylesheet" href="~/Content/assets/css/chosen.css" />
+<link rel="stylesheet" href="~/Content/assets/css/ace.min.css" />
+<div class="main-content">
+    <!-- #section:basics/content.breadcrumbs -->
+    <div class="breadcrumbs breadcrumbs-fixed" id="breadcrumbs">
+        <script type="text/javascript">
+            try { ace.settings.check('breadcrumbs', 'fixed') } catch (e) { }
+        </script>
+        <ul class="breadcrumb">
+            <li>
+                <i class="ace-icon fa fa-home home-icon"></i>
+                <a href="@Url.Action("Index", "Index")">
+                    首页
+                </a>
+            </li>
+            <li class="active">文章管理</li>
+            <li class="active">文章列表</li>
+        </ul>
+        <!-- /.breadcrumb -->
+        <!-- #section:basics/content.searchbox -->
+        <div class="nav-search" id="nav-search">
+            <form action="@Url.Action("Content", "Index")" id="sousuo" method="post" class="form-search">
+                <select name="MenuID" class="chosen-select" style="min-width:200px;" onchange="document.getElementById('sousuo').submit()">
+                    @if (MenuID == 0)
+                    {
+                        <option selected value="0">全部</option>
+                    }
+                    else
+                    { 
+                        <option value="0">全部</option>
+                    }
+                    @foreach (var menu in (Session["Menu"] as List<T_Menu>).Where(o => o.Type == 1 || o.Type == 2))
+                    {
+                        if (MenuID == menu.ID)
+                        {
+                            <option selected value="@menu.ID">@menu.MenuName</option>
+                        }
+                        else
+                        {
+                            <option value="@menu.ID">@menu.MenuName</option>
+                        }
+                    }
+                </select>
+                @*<span class="input-icon">
+                        <input type="text" placeholder="Search ..." class="nav-search-input" id="nav-search-input" autocomplete="off" />
+                        <i class="ace-icon fa fa-search nav-search-icon"></i>
+                    </span>*@
+            </form>
+        </div>
+        <!-- /.nav-search -->
+        <!-- /section:basics/content.searchbox -->
+    </div>
+    <!-- /section:basics/content.breadcrumbs -->
+    <div class="page-content">
+        <div class="row">
+            <div class="col-xs-12">
+                <!-- PAGE CONTENT BEGINS -->
+                <div class="row">
+                    @if (Session["alert"] != null)
+                    {
+                        <div class="col-xs-12 col-sm-8 col-sm-offset-2">
+                            <div class="alert alert-warning alert-danger" role="alert">
+                                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                                @Session["alert"]
+                                @(Session["alert"] = null)
+                            </div>
+                        </div>
+                        <div class="col-xs-0 col-sm-2">
+                        </div>
+                    }
+                </div>
+                <div class="row">
+                    <div class="col-xs-12" style="height: 50px;">
+                        <a href="@Url.Action("AddContent", "Index", new { MenuID = MenuID })" class="btn btn-danger addnew addtype">新增文章</a>
+                    </div>
+                    <div class="col-xs-12">
+                        <table id="sample-table-1" class="table table-striped table-bordered table-hover">
+                            <thead>
+                                <tr>
+                                    <th>
+                                        序号
+                                    </th>
+                                    <th>
+                                        标题
+                                    </th>
+                                    <th>
+                                        所属菜单
+                                    </th>
+                                    <th class="hidden-480">
+                                        是否置顶
+                                    </th>
+                                    <th class="hidden-480">
+                                        浏览量
+                                    </th>
+                                    <th class="hidden-480">
+                                        链接
+                                    </th>
+                                    <th class="hidden-480">
+                                        创建时间
+                                    </th>
+                                    <th class="hidden-480">
+                                        最后修改时间
+                                    </th>
+                                    <th class="hidden-480">
+                                        操作
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var Content in ContentList)
+                                {
+                                    <tr>
+                                        <td class="hidden-480">
+                                            <span class="label label-sm label-warning">@(index++)</span>
+                                        </td>
+                                        <td style=" max-width:200px;">
+                                            @Content.Title
+                                        </td>
+                                        <td>
+                                            @Content.Menu.MenuName
+                                        </td>
+                                        <td>
+                                            @(Content.IsTop ? "置顶" : "不置顶")
+                                        </td>
+                                        <td>
+                                            @Content.Views
+                                        </td>
+                                        <td>
+                                            @(this.Request.Url.Authority + "/Index/Content/" + Content.ID)
+                                        </td>
+                                        <td>
+                                            @Content.CreateTime
+                                        </td>
+                                        <td>
+                                            @Content.ModifyTime
+                                        </td>
+                                        <td>
+                                            <div class="hidden-sm hidden-xs btn-group">
+                                                <a class="btn btn-xs btn-info" href="@Url.Action("EditContent", "Index", new { id = Content.ID }) "><i class="ace-icon fa fa-pencil bigger-120"></i>编辑 </a>
+                                                <a class="btn btn-xs btn-danger" href="@Url.Action("DelContent", "Index", new { id = Content.ID, hosturl = this.Request.Url }) " onclick="return confirm('是否确认删除该文章！')"><i class="ace-icon fa fa-trash-o bigger-120"></i>删除 </a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="tcdPageCode">
+                    </div>
+                </div>
+                <!-- /.row -->
+            </div>
+            <!-- /.col -->
+        </div>
+        <!-- /.row -->
+    </div>
+    <!-- /.page-content -->
+</div>
+<input type="hidden" id="urlcode" value="@ViewBag.urlcode" />
+<link href="~/Content/css/page.css" rel="stylesheet" />
+<script src="~/Content/js/jquery.page.js"></script>
+<script type="text/javascript">
+    $(function () {
+        var ContentCount=parseInt(@ViewBag.Count);
+        var pagesize=parseInt(@ViewBag.Pagesize);
+        if( ContentCount>pagesize){
+            var pagecount=0;
+            if(ContentCount%pagesize==0)
+                pagecount=ContentCount/pagesize;
+            else
+                pagecount=parseInt(ContentCount/pagesize)+1;
+            $(".tcdPageCode").createPage({
+                pageCount: pagecount, //总页数
+                current: @ViewBag.ThisPage, //当前页
+                backFn: function (p) {
+                    location.href="/Index/Content?page="+p+"&MenuID="+$("#urlcode").val();
+                }
+            });
+        }
+    })
+</script>
+<!--选择效果-->
+<script src="~/Content/assets/js/chosen.jquery.min.js"></script>
+<script type="text/javascript">
+    $(function () {
+        $('.chosen-select').chosen({ allow_single_deselect: true });
+        $(window).on('resize.chosen', function () {
+            var w = $('.chosen-select').parent().width() * (2 / 3.0);
+            $('.chosen-select').next().css({ 'width': w });
+        }).trigger('resize.chosen');
+    })
+</script>

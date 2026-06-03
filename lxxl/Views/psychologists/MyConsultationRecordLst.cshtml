@@ -1,0 +1,263 @@
+﻿@{
+    Layout = null;
+    ViewBag.Title = "Doctor";
+}
+<!DOCTYPE html>
+<html class="x-admin-sm">
+<head>
+    <meta charset="UTF-8">
+    <title>来访者列表</title>
+    <meta name="renderer" content="webkit">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    
+    <link rel="stylesheet" href="/Content/mhome/css/font.css">
+    <link rel="stylesheet" href="/Content/mhome/css/index.css">
+    <script src="/Content/mhome/lib/layui/layui.js" charset="utf-8"></script>
+    <script type="text/javascript" src="/Content/mhome/js/index.js"></script>
+    <style type="text/css">
+        .layui-table-cell {
+            height: auto !important;
+            white-space: normal;
+        }
+
+        .layui-table img {
+            max-width: 300px;
+        }
+    </style>
+</head>
+<body>
+    <div class="x-nav">
+        <span class="layui-breadcrumb">
+            <a href="">首页</a>
+            <a>
+                <cite>来访者列表</cite>
+            </a>
+        </span>
+        <a class="layui-btn layui-btn-small" style="line-height:1.6em;margin-top:3px;float:right" onclick="location.reload()" title="刷新">
+            <i class="layui-icon layui-icon-refresh" style="line-height:30px"></i>
+        </a>
+    </div>
+    <div class="layui-fluid">
+        <div class="layui-row layui-col-space15">
+            <div class="layui-col-md12">
+                <div class="layui-card">
+                    <div class="layui-card-body ">
+                        <table class="layui-hide" id="mainList" lay-filter="mainList" style="max-height:95%;"></table>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+    <script type="text/html" id="toolbarDemo">
+        @*<div class="layui-btn-container" style="margin-right: 200px;">
+            <input type="text" placeholder="姓名、手机号" class="searchName" id="searchName" style="padding: 1px 0px 0px 25px;">
+            <i style="font-size: 18px; position: absolute; top: 16px;  cursor: pointer; margin-left: -19px;" class="layui-icon layui-icon-close" lay-event="searchclose"></i>
+            <input type="text" placeholder="查询时间" class="chooseDay" id="chooseDay" style="padding: 1px 0px 0px 10px; margin-left: 10px;">
+            <button class="layui-btn layui-btn-sm" lay-event="reload" style="margin-left: 10px;">查询</button>
+        </div>*@
+        <div>
+            <form class="layui-form layui-col-space5">
+                <div class="layui-inline layui-show-xs-block">
+                    <input type="text" placeholder="姓名、手机号" class="searchName layui-input" id="searchName" autocomplete="off">
+                </div>
+                @*<div class="layui-inline layui-show-xs-block">
+                    <input type="text" placeholder="查询时间" class="chooseDay layui-input" id="chooseDay" style="padding: 1px 0px 0px 10px; margin-left: 10px;">
+                </div>*@
+                <div class="layui-inline layui-show-xs-block">
+                    <button class="layui-btn layui-btn-sm" lay-event="reload" style="margin-left: 10px;">查询</button>
+                </div>
+            </form>
+        </div>
+    </script>
+    <!-- toolbar 模板，请注意 lay-event -->
+    @*<script type="text/html" id="barExpand1">
+            <a lay-event="expand1"><i class="layui-icon layui-icon-triangle-r"></i>{{d.expandTitle}}</a>
+        </script>*@
+    <script type="text/html" id="barDemo">
+        <a class="layui-btn layui-btn-xs" lay-event="edit" style="margin:5px;">结案</a>
+        @*{{#  if(d.formSum > 0){ }}
+        <a class="layui-btn layui-btn-xs" lay-event="register" style="margin:5px;">登记表</a>
+        {{#  } }}*@   
+        {{#  if(d.djbcount > 0){ }}
+        {{# layui.each(d.djb, function(index, item){ }}
+        <a class="layui-btn layui-btn-xs" data-id="{{ item }}" style="margin:5px;" onclick="onButtonClick('{{ item }}')">登记表 </a>
+        {{# }) }}
+        {{#  } }}
+    </script>
+    <script type="text/html" id="imgtmp">
+        <img src="{{ d.url }}">
+    </script>
+    <script type="text/html" id="checkboxTpl">
+        {{#  if(d.IsShow){ }}
+        <input type="checkbox" name="lock" value="{{d.ID}}" title="显示" lay-filter="lockDemo" checked>
+        {{#  } else  { }}
+        <input type="checkbox" name="lock" value="{{d.ID}}" title="显示" lay-filter="lockDemo">
+        {{#  }
+        }}
+    </script>
+    <script>
+        layui.use('table', function () {
+            var table = layui.table
+            , form = layui.form;
+
+            table.render({
+                elem: '#mainList'
+               , height: 'full-120'
+              , url: '/psychologists/GetMyConsultationRecordList'
+              , where: { keyword: '' }
+               , toolbar: true
+              , toolbar: '#toolbarDemo' //开启头部工具栏，并为其绑定左侧模板
+              , title: '来访者列表'
+              , totalRow: false
+              , cols: [[
+                //{ type: 'checkbox', fixed: 'left', unresize: true, width: 40 },
+                {
+                    field: 'ID',
+                    width: 50,
+                    align: 'center',
+                    templet: function (d) {
+                        return '<a style="width:100%; height:100%;cursor:pointer;" lay-event="addRowTable">+</a>'
+                    }
+                },
+              { field: 'patientName', title: '来访者', unresize: true, width: 120 }
+              //, { field: 'patientTel', title: '联系方式', unresize: true, width: 160 }
+              , { field: 'record', title: '来源', unresize: true, width: 160 }
+              , { field: 'duration', title: '咨询时长', width: 120 }
+              , { field: 'createTime', title: '创建时间',sort: true }
+              , { fixed: 'right', title: '操作', toolbar: '#barDemo', width: 180 }
+              ]]
+              , page: true
+              , limits: [10, 15, 20, 1000]
+              , limit: 15 //每页默认显示的数量
+                 , done: function (res, curr, count) {
+                     $(".layui-table-main tr").each(function (index, val) {
+                         $(".layui-table-fixed").each(function () {
+                             $($(this).find(".layui-table-body tbody tr")[index]).height($(val).height());
+                         });
+                     });
+                     $(".layui-table-header tr").each(function (index, val) {
+                         $(".layui-table-fixed").each(function () {
+                             $($(this).find(".layui-table-header thead tr")[index]).height($(val).height());
+                         });
+                     });
+                 }
+
+            });
+
+            //头工具栏事件
+            table.on('toolbar(mainList)', function (obj) {
+                var checkStatus = table.checkStatus(obj.config.id);
+                //layer.alert(obj.event);
+                switch (obj.event) {
+                    case 'getCheckData':
+                        //var data = checkStatus.data;
+                        //layer.alert(JSON.stringify(data));
+                        break;
+                    case 'getCheckLength':
+                        var data = checkStatus.data;
+                        layer.msg('选中了：' + data.length + ' 个');
+                        break;
+                    case 'isAll':
+                        layer.msg(checkStatus.isAll ? '全选' : '未全选');
+                        break;
+                        //自定义头工具栏右侧图标 - 提示
+                    case 'LAYTABLE_TIPS':
+                        layer.alert('帮助');
+                        break;
+                    case 'reload':
+                        var searchName = $('#searchName').val();
+                        //var chooseDay = $("#chooseDay").val();
+                        table.reload('mainList', {
+                            url: '/psychologists/GetMyConsultationRecordList'
+                            , where: { keyword: searchName }
+                            , page: 1
+                            , title: '来访者列表'
+                        }, 'data');
+                        $('#searchName').val(searchName);
+                        //if (chooseDay != "") {
+                        //    $('#chooseDay').val(chooseDay);
+                        //}
+                        //laydate.render({
+                        //    elem: '#chooseDay' //指定元素
+                        //        , type: 'date'
+                        //        , trigger: 'click'
+                        //        , range: true //开启日期范围，默认使用“_”分割
+                        //});
+                        break;
+                };
+            });
+
+            //监听行工具事件
+            table.on('tool(mainList)', function (obj) {
+                var data = obj.data; //获得当前行数据
+                var layEvent = obj.event; //获得 lay-event 对应的值（也可以是表头的 event 参数对应的值）
+                var $this = $(this);
+                var tr = $this.parents('tr');
+                var trIndex = tr.data('index');
+                if (layEvent === 'addRowTable') {
+                    // 外围的table的id + tableIn_ + 当前的tr的data-index
+                    $(this).attr('lay-event', 'fold').html('-');
+                    var tableId = 'tableOut_tableIn_' + trIndex;
+                    var _html = [
+                        '<tr class="table-item">',
+                        '<td colspan="' + tr.find('td').length + '" style="padding: 6px 12px;">',
+                        '<table id="' + tableId + '"></table>',//可以嵌套表格也可以是其他内容，如是其他内容则无须渲染该表格
+                        '</td>',
+                        '</tr>'
+                    ];
+                    tr.after(_html.join('\n'));
+                    // 渲染table
+                    table.render({
+                        elem: '#' + tableId,
+                        data: data.records || [],
+                        cols: [[
+                            //{ field: 'tel', title: '联系方式', unresize: true, width: 160 },
+                            { field: 'createTime', title: '创建时间', width: 200, sort: true }
+                            , { field: 'appointmentTime', title: '预约时间', width: 200 }
+                            , { field: 'cTime', title: '咨询时间', width: 200 }
+                            , { field: 'duration', title: '咨询时长', width: 120 }
+                            , { field: 'PayCost', title: '金额', width: 120 }
+                            , { field: 'StateDescription', title: '状态' }
+                        ]],
+                    });
+                    // $(window).resize();
+
+                } else if (layEvent === 'fold') {
+                    $(this).attr('lay-event', 'addRowTable').html('+');
+                    tr.next().remove();
+                }
+                else if (layEvent === 'del') {
+                    layer.confirm('真的删除' + data0.userName + '么', function (index) {
+
+                    });
+                } else if (layEvent === 'edit') {
+                    layer.open({
+                        type: 2
+                           , content: '/psychologists/EditConsultationRecord/' + data.ID
+                           , area: ['500px', '400px']
+                           , maxmin: true
+                    });
+                } else if (layEvent === 'register') {
+                    layer.open({
+                        type: 2
+                           , content: '/psychologists/wenjuanZY/' + data.UserID
+                           , area: ['100%', '100%']
+                           , maxmin: true
+                    });
+                }
+            });
+        });
+        function onButtonClick(gid) {
+            layer.open({
+                type: 2
+              , title: '登记表'
+                , content: '/psychologists/registrationForm/' + gid
+                , area: ['100%', '100%']
+                , maxmin: true
+            });
+        }
+    </script>
+</body>
+
+</html>

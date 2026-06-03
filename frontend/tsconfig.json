@@ -1,0 +1,40 @@
+{
+  "compilerOptions": {
+    "composite": true,
+    "skipLibCheck": true,
+    "module": "ESNext",
+    "moduleResolution": "Node",
+    "sourceMap": true,
+    "resolveJsonModule": true,
+    "noImplicitThis": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": false,
+    "allowJs": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+    "lib": ["esnext", "dom"],
+    "outDir": "dist",
+    "types": [
+      "@dcloudio/types",
+      "@uni-helper/uni-app-types",
+      "@uni-helper/uni-ui-types",
+      "vue",
+      "node"
+    ]
+  },
+  "vueCompilerOptions": {
+    "target": "auto",
+    "plugins": ["@uni-helper/uni-app-types/volar-plugin"]
+  },
+  "exclude": ["node_modules", "src/uni_modules"],
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.js",
+    "src/**/*.d.ts",
+    "src/**/*.tsx",
+    "src/**/*.vue",
+    "src/**/*.json"
+  ]
+} 

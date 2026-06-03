@@ -1,0 +1,246 @@
+﻿@using lxxl.Models
+@{
+    Layout = null;
+    ViewBag.Title = "EditClass";
+    T_DoctorClassSchedule DoctorClassSchedule = ViewBag.Doctor;
+    List<T_SystemSettings> RoomList = ViewBag.RoomList;
+}
+<!DOCTYPE html>
+<html class="x-admin-sm">
+
+<head>
+    <meta charset="UTF-8">
+    <title>编辑排期时间设置</title>
+    <meta name="renderer" content="webkit">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    
+    <link rel="stylesheet" href="/Content/mhome/css/font.css">
+    <link rel="stylesheet" href="/Content/mhome/css/index.css">
+    <script type="text/javascript" src="/Content/mhome/lib/layui/layui.js" charset="utf-8"></script>
+    <script type="text/javascript" src="/Content/mhome/js/index.js"></script>
+</head>
+<body>
+    <div class="layui-fluid">
+        <form class="layui-form">        
+            <div class="layui-form-item">
+                <label for="username" class="layui-form-label">
+                    <span class="x-red">*</span>开始时间
+                    <input type="text" id="ID" name="ID" hidden value="@DoctorClassSchedule.ID">
+                </label>
+                <div class="layui-input-inline">
+                    <input class="layui-input" placeholder="开始时间" name="startTime" id="startTime" required="" lay-verify="required" value="@DoctorClassSchedule.startTime.ToString("yyyy-MM-dd")">
+                </div>
+            </div>
+            <div class="layui-form-item">
+                <label for="phone" class="layui-form-label">
+                    <span class="x-red">*</span>结束时间
+                </label>
+                <div class="layui-input-inline">
+                    <input class="layui-input" placeholder="结束时间" name="endTime" id="endTime" required="" lay-verify="required" value="@DoctorClassSchedule.endTime.ToString("yyyy-MM-dd")">
+                </div>
+            </div>
+            <div class="layui-form-item">
+                <label for="L_email" class="layui-form-label">
+                    <span class="x-red">*</span>开始时刻
+                </label>
+                <div class="layui-input-inline">
+                    <select name="startH" lay-filter="startH">
+                        <option value="08:00" @(DoctorClassSchedule.startH=="08:00"?"selected":"")>08:00</option>
+                        <option value="08:30" @(DoctorClassSchedule.startH == "08:300" ? "selected" : "")>08:30</option>
+                        <option value="09:00" @(DoctorClassSchedule.startH == "09:00" ? "selected" : "")>09:00</option>
+                        <option value="09:30" @(DoctorClassSchedule.startH == "09:30" ? "selected" : "")>09:30</option>
+                        <option value="10:00" @(DoctorClassSchedule.startH == "10:00" ? "selected" : "")>10:00</option>
+                        <option value="10:30" @(DoctorClassSchedule.startH == "10:30" ? "selected" : "")>10:30</option>
+                        <option value="11:00" @(DoctorClassSchedule.startH == "11:00" ? "selected" : "")>11:00</option>
+                        <option value="11:30" @(DoctorClassSchedule.startH == "11:30" ? "selected" : "")>11:30</option>
+                        <option value="12:00" @(DoctorClassSchedule.startH == "12:00" ? "selected" : "")>12:00</option>
+                        <option value="12:30" @(DoctorClassSchedule.startH == "12:30" ? "selected" : "")>12:30</option>
+                        <option value="13:00" @(DoctorClassSchedule.startH == "13:00" ? "selected" : "")>13:00</option>
+                        <option value="13:30" @(DoctorClassSchedule.startH == "13:30" ? "selected" : "")>13:30</option>
+                        <option value="14:00" @(DoctorClassSchedule.startH == "14:00" ? "selected" : "")>14:00</option>
+                        <option value="14:30" @(DoctorClassSchedule.startH == "14:30" ? "selected" : "")>14:30</option>
+                        <option value="15:00" @(DoctorClassSchedule.startH == "15:00" ? "selected" : "")>15:00</option>
+                        <option value="15:30" @(DoctorClassSchedule.startH == "15:30" ? "selected" : "")>15:30</option>
+                        <option value="16:00" @(DoctorClassSchedule.startH == "16:00" ? "selected" : "")>16:00</option>
+                        <option value="16:30" @(DoctorClassSchedule.startH == "16:30" ? "selected" : "")>16:30</option>
+                        <option value="17:00" @(DoctorClassSchedule.startH == "17:00" ? "selected" : "")>17:00</option>
+                        <option value="17:30" @(DoctorClassSchedule.startH == "17:30" ? "selected" : "")>17:30</option>
+                        <option value="18:00" @(DoctorClassSchedule.startH == "18:00" ? "selected" : "")>18:00</option>
+                        <option value="18:30" @(DoctorClassSchedule.startH == "18:30" ? "selected" : "")>18:30</option>
+                        <option value="19:00" @(DoctorClassSchedule.startH == "19:00" ? "selected" : "")>19:00</option>
+                        <option value="19:30" @(DoctorClassSchedule.startH == "19:30" ? "selected" : "")>19:30</option>
+                        <option value="20:00" @(DoctorClassSchedule.startH == "20:00" ? "selected" : "")>20:00</option>
+                        <option value="20:30" @(DoctorClassSchedule.startH == "20:30" ? "selected" : "")>20:30</option>
+                        <option value="21:00" @(DoctorClassSchedule.startH == "21:00" ? "selected" : "")>21:00</option>
+                        <option value="21:30" @(DoctorClassSchedule.startH == "21:30" ? "selected" : "")>21:30</option>
+                        <option value="22:00" @(DoctorClassSchedule.startH == "22:00" ? "selected" : "")>22:00</option>
+                        <option value="22:30" @(DoctorClassSchedule.startH == "22:30" ? "selected" : "")>22:30</option>
+                        <option value="23:00" @(DoctorClassSchedule.startH == "23:00" ? "selected" : "")>23:00</option>
+                        <option value="23:30" @(DoctorClassSchedule.startH == "23:30" ? "selected" : "")>23:30</option>
+                    </select>
+                </div>
+            </div>
+            <div class="layui-form-item">
+                <label class="layui-form-label"><span class="x-red">*</span>结束时刻</label>
+                <div class="layui-input-inline">
+                    <select name="endH" lay-filter="endH">
+                        <option value="08:30" @(DoctorClassSchedule.endH == "08:30" ? "selected" : "")>08:30</option>
+                        <option value="09:00" @(DoctorClassSchedule.endH == "09:00" ? "selected" : "")>09:00</option>
+                        <option value="09:30" @(DoctorClassSchedule.endH == "09:30" ? "selected" : "")>09:30</option>
+                        <option value="10:00" @(DoctorClassSchedule.endH == "10:00" ? "selected" : "")>10:00</option>
+                        <option value="10:30" @(DoctorClassSchedule.endH == "10:30" ? "selected" : "")>10:30</option>
+                        <option value="11:00" @(DoctorClassSchedule.endH == "11:00" ? "selected" : "")>11:00</option>
+                        <option value="11:30" @(DoctorClassSchedule.endH == "11:30" ? "selected" : "")>11:30</option>
+                        <option value="13:30" @(DoctorClassSchedule.endH == "13:30" ? "selected" : "")>13:30</option>
+                        <option value="14:00" @(DoctorClassSchedule.endH == "14:00" ? "selected" : "")>14:00</option>
+                        <option value="14:30" @(DoctorClassSchedule.endH == "14:30" ? "selected" : "")>14:30</option>
+                        <option value="15:00" @(DoctorClassSchedule.endH == "15:00" ? "selected" : "")>15:00</option>
+                        <option value="15:30" @(DoctorClassSchedule.endH == "15:30" ? "selected" : "")>15:30</option>
+                        <option value="16:00" @(DoctorClassSchedule.endH == "16:00" ? "selected" : "")>16:00</option>
+                        <option value="16:30" @(DoctorClassSchedule.endH == "16:30" ? "selected" : "")>16:30</option>
+                        <option value="17:00" @(DoctorClassSchedule.endH == "17:00" ? "selected" : "")>17:00</option>
+                        <option value="17:30" @(DoctorClassSchedule.endH == "17:30" ? "selected" : "")>17:30</option>
+                        <option value="18:00" @(DoctorClassSchedule.endH == "18:00" ? "selected" : "")>18:00</option>
+                        <option value="18:30" @(DoctorClassSchedule.endH == "18:30" ? "selected" : "")>18:30</option>
+                        <option value="19:00" @(DoctorClassSchedule.endH == "19:00" ? "selected" : "")>19:00</option>
+                        <option value="19:30" @(DoctorClassSchedule.endH == "19:30" ? "selected" : "")>19:30</option>
+                        <option value="20:00" @(DoctorClassSchedule.endH == "20:00" ? "selected" : "")>20:00</option>
+                        <option value="20:30" @(DoctorClassSchedule.endH == "20:30" ? "selected" : "")>20:30</option>
+                        <option value="21:00" @(DoctorClassSchedule.endH == "21:00" ? "selected" : "")>21:00</option>
+                        <option value="21:30" @(DoctorClassSchedule.endH == "21:30" ? "selected" : "")>21:30</option>
+                        <option value="22:00" @(DoctorClassSchedule.endH == "22:00" ? "selected" : "")>22:00</option>
+                        <option value="21:00" @(DoctorClassSchedule.endH == "21:00" ? "selected" : "")>21:00</option>
+                        <option value="21:30" @(DoctorClassSchedule.endH == "21:30" ? "selected" : "")>21:30</option>
+                        <option value="22:00" @(DoctorClassSchedule.endH == "22:00" ? "selected" : "")>22:00</option>
+                        <option value="22:30" @(DoctorClassSchedule.endH == "22:30" ? "selected" : "")>22:30</option>
+                        <option value="23:00" @(DoctorClassSchedule.endH == "23:00" ? "selected" : "")>23:00</option>
+                        <option value="23:30" @(DoctorClassSchedule.endH == "23:30" ? "selected" : "")>23:30</option>
+                    </select>
+                </div>
+            </div>
+            <div class="layui-form-item">
+                <label for="L_pass" class="layui-form-label">
+                    <span class="x-red">*</span>星期
+                </label>
+                <div class="layui-input-inline">
+                    <select name="week" lay-filter="week">
+                        <option value="1" @(DoctorClassSchedule.week == "1" ? "selected" : "")>星期一</option>
+                        <option value="2" @(DoctorClassSchedule.week == "2" ? "selected" : "")>星期二</option>
+                        <option value="3" @(DoctorClassSchedule.week == "3" ? "selected" : "")>星期三</option>
+                        <option value="4" @(DoctorClassSchedule.week == "4" ? "selected" : "")>星期四</option>
+                        <option value="5" @(DoctorClassSchedule.week == "5" ? "selected" : "")>星期五</option>
+                        <option value="6" @(DoctorClassSchedule.week == "6" ? "selected" : "")>星期六</option>
+                        <option value="7" @(DoctorClassSchedule.week == "7" ? "selected" : "")>星期日</option>
+                    </select>
+                </div>
+            </div>
+            @*<div class="layui-form-item">
+                <label for="L_repass" class="layui-form-label">
+                    <span class="x-red">*</span>最大报名
+                </label>
+                <div class="layui-input-inline">
+                    <input type="number" id="maxSign" name="maxSign" required="" lay-verify="required" value="@DoctorClassSchedule.maxSign">
+                </div>
+            </div>*@
+            <div class="layui-form-item">
+                <label for="L_repass" class="layui-form-label">
+                    <span class="x-red">*</span>咨询费用
+                </label>
+                <div class="layui-input-inline">
+                    <input type="number" id="Price" name="Price" required="" lay-verify="required" value="@DoctorClassSchedule.Price">
+                </div>
+            </div>
+            <div class="layui-form-item">
+                <label for="L_pass" class="layui-form-label">
+                    咨询方式
+                </label>
+                <div class="layui-input-inline">
+                    <select name="methods" lay-filter="methods">
+                        <option value="面询" @(DoctorClassSchedule.methods == "面询" ? "selected" : "") > 面询</option>
+                        <option value="视频" @(DoctorClassSchedule.methods == "视频" ? "selected" : "")>视频</option>
+                    </select>
+                </div>
+            </div>
+            <div class="layui-form-item">
+                <label for="L_pass" class="layui-form-label">
+                    咨询地点
+                </label>
+                <div class="layui-input-inline">
+                    <select name="address" lay-filter="address">
+                        @foreach (T_SystemSettings item in RoomList)
+                        {
+                            <option value="@item.content1" @(DoctorClassSchedule.address == item.content1 ? "selected" : "") > @item.content1</option>
+                        }
+                    </select>
+                </div>
+            </div>
+
+            <div class="layui-form-item">
+                <label for="L_repass" class="layui-form-label">
+                </label>
+                <button class="layui-btn" lay-filter="add" lay-submit="">
+                    立即提交
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <link href="~/Content/kindeditor-4.1.7/themes/default/default.css" rel="stylesheet" />
+    <script src="~/Content/kindeditor-4.1.7/kindeditor-min.js"></script>
+    <script charset="utf-8" src="~/Content/kindeditor-4.1.7/lang/zh_CN.js"></script>
+    <script type="text/javascript" src="https://cdn.bootcss.com/jquery/3.2.1/jquery.min.js"></script>
+    <script type="text/javascript" src="/Content/mhome/js/xcity.js"></script>
+
+
+    <script>
+        layui.use(['laydate', 'element', 'form', 'layer'],
+                    function () {
+                        $ = layui.jquery;
+                        var form = layui.form,
+                        layer = layui.layer;
+                        laydate = layui.laydate;
+
+                        //自定义验证规则
+                        form.verify({
+
+                        });
+
+                        //执行一个laydate实例
+                        laydate.render({
+                            elem: '#startTime' //指定元素
+                        });
+
+                        //执行一个laydate实例
+                        laydate.render({
+                            elem: '#endTime' //指定元素
+                        });
+
+
+                        //监听提交
+                        form.on('submit(add)',
+                        function (data) {
+                            console.log(data);
+                            //发异步
+                            $.post("/main/EditClassSchedule2", { field: JSON.stringify(data.field) }, function (data) {
+                                if (data.code == 0) {
+                                    layer.alert("修改成功", {
+                                        icon: 6
+                                    },
+                                    function () {
+                                        //关闭当前frame
+                                        xadmin.close();
+
+                                        // 可以对父窗口进行刷新
+                                        xadmin.father_reload();
+                                    });
+                                } else {
+                                    layer.alert(data.msg);
+                                }
+                            });
+                            return false;
+                        });
+
+                    });
+    </script>
+</body>
+</html>

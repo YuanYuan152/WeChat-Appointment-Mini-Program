@@ -1,0 +1,114 @@
+﻿@using lxxl.Models;
+@{
+    Layout = "~/Views/Shared/_LayoutWe2.cshtml";
+    ViewBag.Title = "ConsultantView";
+}
+
+
+<script src="/Content/weui/js/iscroll-lite.js"></script>
+<script src="~/Content/js/vue.js"></script>
+
+
+<style>
+    .weui-navigator.weui-navigator-wrapper {
+        position: fixed;
+    }
+
+    #tagnav {
+        overflow: hidden;
+        /*position: fixed;*/
+        z-index: 99;
+        width: 100%;
+        left: 0;
+        top: 46px;
+    }
+
+    .weui-navbar__item {
+        padding: 8px 0;
+    }
+
+    img {
+        border-radius: 8px;
+    }
+</style>
+
+<div id="rrapp" class="" style="margin-top:46px;">
+
+    <div class="weui-tab" id="tagnav" style=" height: auto;">
+        <div class="weui-navbar" style="position:fixed;top:46px;">
+            <div class="weui-navbar__item">
+                个人介绍
+            </div>
+            <div class="weui-navbar__item">
+                咨询过程
+            </div>
+            <div class="weui-navbar__item">
+                可约时间
+            </div>
+        </div>
+    </div>
+
+    <div id="approveLayer" class="approveLayer" >
+        <div class="weui-pay">
+            <h1 class="weui-payselect-title">咨询费</h1>
+            <p class="weui-pay-num">￥1</p>
+            <ul class="weui-pay-u" style="width:92%;padding-left:4%;">
+                <li>
+                    <span class="title">咨询师</span>
+                    <span class="content">name</span>
+                </li>
+                <li>
+                    <span class="title">预约日期</span>
+                    <span class="content">2022-11-11</span>
+                </li>
+                <li>
+                    <span class="title">预约时间</span>
+                    <span class="content">10-11</span>
+                </li>
+                <li>
+                    <span class="title">咨询时长</span>
+                    <span class="content">1</span>
+                </li>
+            </ul>
+            <div class="pay-div">
+                <a href="javascript:;" class="weui-btn weui-btn_primary" id="pay" onclick="vm.onpay();">立即支付</a>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+
+<script>
+    var vm = new Vue({
+        el: '#rrapp',
+        data: {
+        },
+        created: function () {
+            
+
+        },
+        methods: {
+
+            onpay: function () {
+                var that = this;
+                $.ajax({
+                    url: '/we/appointment',
+                    data: { doctorScheduleID: vm.doctorSchedule.ID },
+                    type: 'post',
+                    success: function (data) {
+                        layer.msg(data.msg);
+                        if (data.code == 0) {
+                            window.location.reload();
+                        }
+                    }
+                })
+            },
+        }
+    })
+</script>
+
+
+
+
+

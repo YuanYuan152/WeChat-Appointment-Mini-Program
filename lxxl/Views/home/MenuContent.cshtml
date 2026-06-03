@@ -1,0 +1,49 @@
+﻿@using lxxl.Models
+@{
+    T_Content Content = ViewBag.Content;
+    ViewBag.Title = Content.Title;
+    Layout = "~/Views/Shared/_LayoutIndex.cshtml";
+    T_Menu Menu = (Session["Menu"] as List<T_Menu>).Where(o => o.ID == Content.MenuID).FirstOrDefault();
+    List<T_Menu> MenuList = (Session["Menu"] as List<T_Menu>).Where(o => (Menu.MenuID == 0 && (o.MenuID == Menu.ID || o.ID == Menu.ID)) || (Menu.MenuID != 0 && (o.MenuID == Menu.MenuID || o.ID == Menu.MenuID))).ToList();
+}
+
+<div class="row contentmain">
+    <div class="col-xs-3 menu">
+        <div class="item yiji">
+            @if (MenuList.Where(o => o.MenuID == 0).Count() == 1)
+            {
+                T_Menu menu = MenuList.Where(o => o.MenuID == 0).FirstOrDefault();
+                <a href="@Url.Action("Menu", "home", new { ID = menu.ID })">
+                    @menu.MenuName
+                </a>
+            }
+        </div>
+        @foreach (var menu in MenuList.Where(o => o.MenuID != 0))
+        {
+            if (Menu.ID == menu.ID)
+            {
+                <div class="item active">
+                    <a href="@Url.Action("Menu", "home", new { ID = menu.ID })">
+                        @menu.MenuName
+                    </a>
+                </div>
+            }
+            else
+            {
+                <div class="item">
+                    <a href="@Url.Action("Menu", "home", new { ID = menu.ID })">
+                        @menu.MenuName
+                    </a>
+                </div>
+            }
+        }
+    </div>
+    <blockquote class="col-xs-9" style="margin-top:20px;font-size:16px;min-height:600px;font-family:微软雅黑;">
+        <div style="height:40px;border-bottom:#EFEFEF solid 3px; ">
+            您所在的位置 : 首页 > @(Menu.MenuID == 0 ? Menu.MenuName : (MenuList.Where(o => o.ID == Menu.MenuID).FirstOrDefault().MenuName + " > " + Menu.MenuName))
+        </div>
+        <div style="line-height:26px;padding:30px;padding-bottom:100px;">
+            @Html.Raw(Content.ContentMain)
+        </div>
+    </blockquote>
+</div>

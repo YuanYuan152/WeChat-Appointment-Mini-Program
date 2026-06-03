@@ -1,0 +1,139 @@
+﻿@using lxxl.Models;
+@{
+    Layout = "~/Views/Shared/_LayoutPatient.cshtml";
+    T_Consultation Consultation = ViewBag.Consultation;
+    T_Order Order= ViewBag.Order ;
+}
+
+<div id="container" class="page-bd" style="top: 46px; padding-top: 46px; background-color: #F8F8F8; ">
+
+    <div class="weui-panel weui-panel_access">
+        <div class="weui-panel__hd">咨询师信息</div>
+        <div class="weui-panel__ft">
+            <a href="javascript:void(0);" class="weui-media-box weui-media-box_appmsg">
+                <div class="weui-media-box__hd weui-avatar-circle">
+                    <img class="weui-media-box__thumb" src="@Consultation.doctor.url" alt="" style="height:60px;">
+                </div>
+                <div class="weui-media-box__bd">
+                    <h4 class="weui-media-box__title">@Consultation.doctor.name</h4>
+                    <p class="weui-media-box__desc">从业年限: @Consultation.doctor.WorkYears 年以上</p>
+                    <p class="weui-media-box__desc">咨询时数: @Consultation.doctor.ConsultHours 小时+</p>
+                </div>
+            </a>
+            @*<div class="weui-media-box weui-media-box__bd">
+                    <p class="weui-media-box__desc" style="-webkit-line-clamp: initial;">@Consultation.doctor.Profile</p>
+                </div>*@
+        </div>
+    </div>
+
+
+    <div class="weui-panel" style="padding-bottom:20px;">
+        <div class="weui-panel__hd">我的订单详情</div>
+        <div class="weui-panel__bd">
+            <div class="weui-media-box weui-media-box_small-appmsg">
+                <div class="weui-cells">
+                    <a class="weui-cell weui-cell_access" href="#">
+                        <div class="weui-cell__hd"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAC4AAAAuCAMAAABgZ9sFAAAAVFBMVEXx8fHMzMzr6+vn5+fv7+/t7e3d3d2+vr7W1tbHx8eysrKdnZ3p6enk5OTR0dG7u7u3t7ejo6PY2Njh4eHf39/T09PExMSvr6+goKCqqqqnp6e4uLgcLY/OAAAAnklEQVRIx+3RSRLDIAxE0QYhAbGZPNu5/z0zrXHiqiz5W72FqhqtVuuXAl3iOV7iPV/iSsAqZa9BS7YOmMXnNNX4TWGxRMn3R6SxRNgy0bzXOW8EBO8SAClsPdB3psqlvG+Lw7ONXg/pTld52BjgSSkA3PV2OOemjIDcZQWgVvONw60q7sIpR38EnHPSMDQ4MjDjLPozhAkGrVbr/z0ANjAF4AcbXmYAAAAASUVORK5CYII=" alt="" style="width:20px;margin-right:5px;display:block"></div>
+                        <div class="weui-cell__bd weui-cell_primary">
+                            <input type="text" id="gid" class="layui-input" hidden value="@Order.gId">
+                            <input hidden type="text" id="name" value="@Consultation.name">
+                            <p class="weui-media-box__desc">咨询时间：@Consultation.appointmentTime.ToString("yyyy-MM-dd") @Consultation.expectedTime </p>
+                            <p class="weui-media-box__desc">咨询时长：@Consultation.duration 小时</p>
+                            <p class="weui-media-box__desc">@Order.Name</p>
+                            @if (Order.State == -1)
+                            {
+                                <p class="weui-media-box__desc">已失效</p>
+                            }
+                            else if (Order.State == 0)
+                            {
+                                <p class="weui-media-box__desc">未付款请去付款</p>
+                            }
+                            else if (Order.State == 1)
+                            {
+                                <p class="weui-media-box__desc">已付款</p>
+                                <p class="weui-media-box__desc">付款时间：@Consultation.PayTime</p>
+                            }                            
+                        </div>
+                        <span class="weui-cell__ft">
+
+                        </span>
+                    </a>
+                    @if (Order.State == 0)
+                    {                        
+                        <a class="weui-btn weui-btn_primary" href="javascript:" id="btnPay">付款</a>
+                    }
+                    @*else if (Consultation.State == 2)
+                    {
+                        <a class="weui-btn weui-btn_primary" href="javascript:" id="btn">确定</a>
+                    }*@
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<link href="~/Content/css/validform.css" rel="stylesheet" />
+<script src="~/Content/js/Validform_v5.3.2.js"></script>
+<script>
+    $(document).ready(function () {
+        document.getElementById("headerTitle").innerHTML = "订单详情";
+        document.getElementsByClassName("weui-tabbar__item")[2].classList.remove("tabbarActive"); // 删除之前已选中tab的样式
+        document.getElementsByClassName("weui-tabbar__item")[4].classList.add("tabbarActive");
+    });
+
+
+    $(function () {
+        $(document).on("click", "#btn", function () {
+            alert(1);
+            var gid = $("#gid").val();
+            var name = $("#name").val();
+            alert(2);
+            $.ajax({
+                url: "/Patient/EditconsultationTimeByU",
+                data: { "gid": gid },
+                type: "post",
+                dataType: "text",
+                success: function (data) {
+                    var result = JSON.parse(data);
+                    if (result.code == 0) {
+                        abcd = 1
+                        $.alert("<span style='color:#fd7d36;font-weight: bold;font-size: 20px; '>您好，" + name + "</span>" + "，您咨询预约时间已确认，期待您的到来，若有问题，请与我们联系，谢谢！", "确认提示", function () {
+                            //WeixinJSBridge.call('closeWindow');
+                            var index = parent.layer.getFrameIndex(window.name); // 获取当前页面的索引
+                            parent.layer.close(index); // 关闭当前页面
+                        });
+                    }
+                    else {
+                        abcd = 1
+                        alert(result.msg);
+                    }
+                },
+                error: function () {
+                    abcd = 1
+                    alert("服务器连接失败");
+                }
+            })
+        })
+
+
+        $(document).on("click", "#btnPay", function () {
+            var gid = $("#gid").val();
+            $.ajax({
+                url: '/Patient/appointment',
+                data: { gid: gid },
+                type: 'post',
+                success: function (data) {
+                    layer.msg(data.msg);
+                    if (data.code == 0) {
+                        window.location = data.url;
+                    }
+                    else {
+                        window.location.reload();
+                    }
+                }
+            })
+        })
+    });
+
+</script>

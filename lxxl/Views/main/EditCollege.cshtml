@@ -1,0 +1,137 @@
+﻿@using lxxl.Models
+@{
+    Layout = null;
+    ViewBag.Title = "AddBanner";
+    T_Banner Banner = ViewBag.Banner;
+}
+<!DOCTYPE html>
+<html class="x-admin-sm">
+
+<head>
+    <meta charset="UTF-8">
+    <title>编辑院校</title>
+    <meta name="renderer" content="webkit">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    
+    <link rel="stylesheet" href="/Content/mhome/css/font.css">
+    <link rel="stylesheet" href="/Content/mhome/css/index.css">
+    <script type="text/javascript" src="/Content/mhome/lib/layui/layui.js" charset="utf-8"></script>
+    <script type="text/javascript" src="/Content/mhome/js/index.js"></script>
+</head>
+<body>
+    <div class="layui-fluid">
+        <div class="layui-row">
+            <form class="layui-form">
+                <input type="text" id="ID" name="ID" hidden value="@Banner.ID">
+                <div class="layui-form-item">
+                    <label class="layui-form-label">
+                        <span class="x-red">*</span>名称
+                    </label>
+                    <div class="layui-input-block">
+                        <input type="text" id="Title" name="Title" class="layui-input" disabled value="@Banner.Title">
+                    </div>
+                </div>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">
+                        <span class="x-red">*</span>介绍
+                    </label>
+                    <div class="layui-input-block">
+                        <textarea id="Profile" placeholder="" rows="3" name="Profile" class="layui-textarea">@Banner.Profile</textarea>
+                    </div>
+                </div>
+                <div class="layui-form-item">
+                    <label for="link" class="layui-form-label">
+                        <span class="x-red">*</span>图片
+                    </label>
+                    <div class="layui-input-block">
+                        <div class="site-demo-upbar">
+                            <button type="button" class="layui-btn" id="uploadPicture"><i class="layui-icon"></i>上传图片</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="layui-form-item imgs" id="imgshow">
+                    <label class="layui-form-label">
+                        图片展示
+                    </label>
+                    <img src="@Banner.url" name="pimages" style="width: 400px;" />
+                    <input id="avatar" name="url" required="" type="hidden" value="@Banner.url" />
+                </div>
+                <div class="layui-form-item">
+                    <label for="L_repass" class="layui-form-label">
+                    </label>
+                    <button class="layui-btn" lay-filter="add" lay-submit="">
+                        立即提交
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        layui.use(['form', 'layer', 'upload'],
+            function () {
+                $ = layui.jquery;
+                var form = layui.form,
+                layer = layui.layer;
+                var upload = layui.upload;
+
+                //自定义验证规则
+                form.verify({
+                    Name: function (value) {
+                        if (value.length < 5) {
+                            return '至少得5个字符啊';
+                        }
+                    },
+                });
+
+                //监听提交
+                form.on('submit(add)',
+                function (data) {
+                    console.log(data);
+                    var submitData = data.field;
+                    //发异步
+                    $.post("/main/EditBanner", { field: JSON.stringify(submitData) }, function (data) {
+                        if (data.code == 0) {
+                            layer.alert("编辑成功", {
+                                icon: 6
+                            },
+                            function () {
+                                //关闭当前frame
+                                xadmin.close();
+
+                                // 可以对父窗口进行刷新
+                                xadmin.father_reload();
+                            });
+                        } else {
+                            layer.alert(data.msg);
+                        }
+                    });
+                    return false;
+                });
+
+                //指定允许上传的文件类型
+                upload.render({
+                    elem: '#uploadPicture',
+                    url: '/Editor/UploadFilexx',
+                    accept: 'images',  //普通文件
+                    ext: 'jpg|png|gif',
+                    done: function (res) {
+                        layer.msg(res.msg);
+                        console.log(res);
+                        if (res.msg == "上传成功") {
+                            console.log(res.name);
+                            layer.closeAll('loading');
+                            //layer.msg(data.info,{icon:1,time:1000});
+                            $("#pimages").attr('src', res.src);
+                            $("#avatar").val(res.src);
+                            $(".imgs").show();
+                            return false;
+                        }
+                    }
+                });
+
+            });
+    </script>
+
+</body>
+</html>

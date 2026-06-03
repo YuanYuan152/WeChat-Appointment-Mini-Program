@@ -1,0 +1,67 @@
+﻿@using lxxl.Models
+@{
+    ViewBag.Title = "newsDetail";
+    Layout = "~/Views/Shared/_LayoutWap.cshtml";
+    T_Content Content = ViewBag.Content;
+    T_Content preContent = ViewBag.preContent;
+    //T_Content nextContent = ViewBag.nextContent;
+}
+
+
+<div class="con">
+    <section>
+        <div class="news-data">
+            <div class="news-title">
+                <div><p><span>当前位置：</span><a href="/">首页</a> > <a href="/home/newsList?type=@Content.MenuID">@(Content.MenuID == 1 ? "了解咨询" : Content.MenuID == 2 ? "心理测量" : "")</a></p></div>
+            </div>
+            <div class="news-box">
+                <div class="news-top">
+                    <h3>@Content.Title</h3>
+                    <div class="but">
+                        <div>
+                            <p>发布时间:<span> @Content.CreateTime</span></p>
+                            @*<p>来源/作者：<span>@Content.Source</span></p>*@
+                            <p>浏览次数 :<span>@Content.Views</span></p>
+                        </div>
+                    </div>
+                </div>
+                <div class="con">
+                    @Html.Raw(Content.ContentMain)
+                </div>
+                <div class="bot">
+                    @if (preContent != null)
+                    {
+                        <p>
+                            上一篇：
+                            <a href="/home/newsDetail?ID=@preContent.ID&type=@preContent.Type">@preContent.Title</a>
+                        </p>
+                    }
+                    @if (ViewBag.nextContent != null)
+                    {
+                        <p>
+                            下一篇：
+                            <a href="/home/newsDetail?ID=@ViewBag.nextContent.ID&type=@ViewBag.nextContent.Type">@ViewBag.nextContent.Title</a>
+                        </p>
+                    }
+                    else
+                    {
+                        <p class="none">
+                            下一篇：
+                            <a href="javascript:void(0);">没有了</a>
+                        </p>
+                    }
+                </div>
+            </div>
+        </div>
+    </section>
+
+</div>
+<script type="text/javascript">
+    $(function () {
+        localStorage.active = "activeNewsList";
+    })
+</script>
+
+
+
+

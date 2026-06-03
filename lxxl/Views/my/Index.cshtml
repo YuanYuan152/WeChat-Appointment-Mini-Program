@@ -1,0 +1,480 @@
+﻿@using lxxl.Models
+@{
+    ViewBag.Title = "Index";
+    Layout = null;// "~/Views/Shared/_LayoutWap.cshtml";
+}
+
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <link rel="stylesheet" href="/Content/jixinli/css/element.min.css">
+    <link rel="stylesheet" href="/Content/jixinli/css/style.css">
+</head>
+<body>
+    <section>
+        <div id="app" style="width: 1000px;margin: 24px auto;">
+            <div class="view" style="background: #fff; display: block; width: 1000px; margin: auto;">
+                <div class="p-expert--list" style="padding-top: 32px;">
+                    <div class="expert-list--container">
+                        <div class="expert-list--header">
+                            <div class="tabs" style="display: inline-block; font-size: 0;">
+                                <span class="tab-item active" style="position: relative; color: #40434c; display: inline-block; vertical-align: middle; font-size: 16px; font-weight: 700; margin-right: 20px; cursor: pointer; ">全部</span>
+                            </div>
+                            <div class="expert-list-search" style="position: relative;display: block;float: right;">
+                                <div class="search-container flex-center">
+                                    <el-input placeholder="搜索咨询师"
+                                              prefix-icon="el-icon-search"
+                                              v-model="searchValue">
+                                    </el-input>
+                                    <el-button size="small" type="primary" style="margin-left: 6px;">
+                                        搜索
+                                    </el-button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="expert-list--filters">
+
+                            <div class="filter-item flex-center">
+                                <span class="name-text">领域：</span>
+                                <span class="name-tips">可多选</span>
+                                <div class="flex-center">
+                                    <el-checkbox-group v-model="allField" style="margin-right:8px;margin-left:8px;">
+                                        <el-checkbox label="不限">
+                                            <div class="Field">
+                                                不限
+                                            </div>
+                                        </el-checkbox>
+                                    </el-checkbox-group>
+                                    <el-checkbox-group v-model="FieldItem">
+                                        <el-checkbox label="情绪困扰" class="Field">
+                                            <div class="Field">
+                                                情绪困扰
+                                            </div>
+                                        </el-checkbox>
+                                        <el-checkbox label="婚姻恋爱" class="Field">
+                                            <div class="Field">
+                                                婚姻恋爱
+                                            </div>
+                                        </el-checkbox>
+                                        <el-checkbox label="人际关系" class="Field">
+                                            <div class="Field">
+                                                人际关系
+                                            </div>
+                                        </el-checkbox>
+                                    </el-checkbox-group>
+                                </div>
+                            </div>
+                            <div class="filter-item flex-center">
+                                <span class="name-text">城市：</span>
+                                <span class="name-tips">可多选</span>
+                                <div class="flex-center">
+                                    <el-checkbox-group v-model="allCity" style="margin-right:8px;margin-left:8px;">
+                                        <el-checkbox label="不限">
+                                            <div class="City">
+                                                不限
+                                            </div>
+                                        </el-checkbox>
+                                    </el-checkbox-group>
+                                    <el-checkbox-group v-model="CityItem">
+                                        <el-checkbox label="上海" class="City">
+                                            <div class="City">
+                                                上海
+                                            </div>
+                                        </el-checkbox>
+                                        <el-checkbox label="北京" class="City">
+                                            <div class="City">
+                                                北京
+                                            </div>
+                                        </el-checkbox>
+                                        <el-checkbox label="广州" class="City">
+                                            <div class="City">
+                                                广州
+                                            </div>
+                                        </el-checkbox>
+                                    </el-checkbox-group>
+                                </div>
+                            </div>
+                            <div class="filter-item">
+                                <span class="filter-item--name">价格：</span>
+                                <div class="filter-item--container">
+                                    <span class="price-show">价格范围￥{{valuePrice[0]}}--￥{{valuePrice[1]}} </span>
+                                    <div class="price-seletion--container">
+                                        <div class="block">
+                                            <el-slider v-model="valuePrice" range show-stops max="1000">
+                                            </el-slider>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="filter-item">
+                                <span class="filter-item--name"><span class="name-text">可约时间：</span> <span class="name-tips">可多选</span></span>
+                                <div class="filter-item--container" style="margin-bottom:6px;">
+                                    <div class="flexLC">
+                                        <!-- <div class="time-item" @@click="timeItem1(0)"><span v-bind:class="timeItemVal==0?'time-item--container activeJD':'time-item--container'">全天</span></div>
+                                    <div class="time-item" @@click="timeItem1(1)"><span v-bind:class="timeItemVal==1?'time-item--container activeJD':'time-item--container'">上午</span></div>
+                                    <div class="time-item" @@click="timeItem1(2)"><span class=" time-item--container">下午</span></div>
+                                    <div class="time-item" @@click="timeItem1(3)"><span class=" time-item--container">晚上</span></div> -->
+                                        <el-checkbox-group v-model="allDay" style="margin-right:8px;margin-left:8px;">
+                                            <el-checkbox label="全天"></el-checkbox>
+                                        </el-checkbox-group>
+                                        <el-checkbox-group v-model="dayItem">
+                                            <el-checkbox label="上午"></el-checkbox>
+                                            <el-checkbox label="下午"></el-checkbox>
+                                            <el-checkbox label="晚上"></el-checkbox>
+                                        </el-checkbox-group>
+                                        <span class="tipsNew">最早可预约24小后时段</span>
+                                    </div>
+                                    <div class="height6"></div>
+                                    <el-checkbox-group v-model="dayItem" style="margin-top: 6px;margin-left: 130px;">
+                                        <el-checkbox :label="item.time" v-for="(item,index) in timeWeek">
+                                            <div class="day-time">
+                                                <span class="day">{{item.time}}</span>
+                                                <span class="week">{{item.week}}</span>
+                                            </div>
+                                        </el-checkbox>
+                                    </el-checkbox-group>
+                                </div>
+                            </div>
+                            <div class="filter-item flex-center">
+                                <span class="name-text">擅长人群：</span>
+                                <span class="name-tips">可多选</span>
+                                <div class="flex-center">
+                                    <el-checkbox-group v-model="allDay" style="margin-right:8px;margin-left:8px;">
+                                        <el-checkbox label="不限">
+                                            <div class="day">
+                                                不限
+                                            </div>
+                                        </el-checkbox>
+                                    </el-checkbox-group>
+                                    <el-checkbox-group v-model="dayItem">
+                                        <el-checkbox label="幼儿&amp;儿童" class="day">
+                                            <div class="day">
+                                                幼儿&amp;儿童
+                                            </div>
+                                        </el-checkbox>
+                                        <el-checkbox label="青少年" class="day">
+                                            <div class="day">
+                                                青少年
+                                            </div>
+                                        </el-checkbox>
+                                        <el-checkbox label="伴侣" class="day">
+                                            <div class="day">
+                                                伴侣
+                                            </div>
+                                        </el-checkbox>
+                                    </el-checkbox-group>
+                                </div>
+                            </div>
+                            <div class="flex-center">
+                                <div class="filter-item flex-center" style="margin-right: 100px; border-bottom: 0px solid #f2f3f7;">
+                                    <span class="name-text">咨询方式：</span>
+                                    <div class="flex-center">
+                                        <el-radio-group v-model="ziXun">
+                                            <el-radio label="不限">
+                                                <div class="day">
+                                                    不限
+                                                </div>
+                                            </el-radio>
+                                            <el-radio label="面对面咨询">
+                                                <div class="day">
+                                                    面对面咨询
+                                                </div>
+                                            </el-radio>
+                                            <el-radio label="视频咨询">
+                                                <div class="day">
+                                                    视频咨询
+                                                </div>
+                                            </el-radio>
+                                        </el-radio-group>
+                                        <!-- <el-checkbox-group v-model="dayItem">
+                                        <el-checkbox label="不限" class="day">
+                                            <div class="day">
+                                                不限
+                                            </div>
+                                        </el-checkbox>
+                                        <el-checkbox label="面对面咨询"  class="day">
+
+                                        </el-checkbox>
+                                        <el-checkbox label="视频咨询"  class="day">
+
+                                        </el-checkbox>
+                                    </el-checkbox-group> -->
+                                    </div>
+                                </div>
+                                <div class="filter-item flex-center" style="border-bottom: 0px solid #f2f3f7;">
+                                    <span class="name-text">咨询师性别：</span>
+                                    <div class="flex-center">
+                                        <el-radio-group v-model="ziXun">
+                                            <el-radio label="不限">
+                                                <div class="day">
+                                                    不限
+                                                </div>
+                                            </el-radio>
+                                            <el-radio label="男性咨询师">
+                                                <div class="day">
+                                                    男性咨询师
+                                                </div>
+                                            </el-radio>
+                                            <el-radio label="女性咨询师">
+                                                <div class="day">
+                                                    女性咨询师
+                                                </div>
+                                            </el-radio>
+                                        </el-radio-group>
+                                        <!-- <el-checkbox-group v-model="dayItem">
+                                        <el-checkbox label="不限" class="day">
+                                            <div class="day">
+                                                不限
+                                            </div>
+                                        </el-checkbox>
+                                        <el-checkbox label="面对面咨询"  class="day">
+                                            <div class="day">
+                                                男性咨询师
+                                            </div>
+                                        </el-checkbox>
+                                        <el-checkbox label="视频咨询"  class="day">
+                                            <div class="day">
+                                                女性咨询师
+                                            </div>
+                                        </el-checkbox>
+                                    </el-checkbox-group> -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="expert-list--tags" style="margin-top: 20px;">
+                            <div class="selected-tags"></div>
+                        </div>
+                        <div class="expert-list--show" data-v-2912f6ce="" style="margin-top: 20px;">
+                            <div class="expert-list--main" data-v-2912f6ce="">
+                                <div class="expert-show--box" data-v-2912f6ce="">
+                                    <div data-v-6034f759="" data-v-2912f6ce="">
+                                        <a data-v-6034f759="" href="#" class="expert-item">
+                                            <div data-v-6034f759="" class="expert-item--container">
+                                                <div data-v-6034f759="" class="expert-item-icon">
+                                                    <div data-v-6034f759="" class="avator" style="background: url(./img/1.png) center center / contain no-repeat;"></div>
+                                                </div>
+                                                <div data-v-6034f759="" class="expert-item-inner">
+                                                    <div data-v-6034f759="" class="expert-item-header">
+                                                        <div data-v-6034f759="" class="expert-label">
+                                                            <span data-v-6034f759="" class="expert-name">甘薇薇</span>
+                                                            <span data-v-6034f759="" class="expert-level">实习咨询师</span>
+                                                        </div>
+                                                        <div data-v-6034f759="" class="expert-address">
+                                                            <span data-v-6034f759="" class="address-icon"></span>
+                                                            <span data-v-6034f759="" class="address-text"><span data-v-6034f759="">武汉市 街道口附近，南国大家装</span></span>
+                                                        </div>
+                                                    </div>
+                                                    <div data-v-6034f759="" class="expert-item--info">
+                                                        <span data-v-6034f759="">
+                                                            每个人一方面受到原生家庭、早期经历、亲密关系的影响，但同时它的发展也是复杂多样的，充满着可能性和改变的潜力。过去的环境塑造了我们的人际关系模式，这些模式在过去满足基本需求甚至造就了某些方面的成功，但同时也可能会对现在生活造成新的问题和困扰。
+
+                                                            感谢你鼓起勇气走到这里了，这并不容易；谢谢你选择信任我，我也愿意和你一起步入这独特的勇气与智慧、痛苦与喜悦并存的旅途。
+
+                                                            我会以我系统专业培训以及长期个人体验之所学，还有我人生38年所经历过自我的迷茫、人际的困惑、情感的惶恐以及走出心灵沼泽的切身体验、人生经历，去做你生命里那个真实有力的陪伴者，和你一起去面对那些彷徨、困顿、黑暗……
+
+                                                            我的咨询思路着眼于现在，在此基础上适当地和过去做连接和梳理。咨询定位是做一个陪伴者、合作和推动者，会着力去建立一个让你感到安全、被接纳、可以表达异议需求和不满的咨询关系。尊重你的选择和自主性是我工作中的底层的原则。在信任稳定的咨询关系基础上，用坦诚、支持、协作，和你一起探索困扰以及感到焦虑回避的领域，在理解包容的过程中去调试和优化必要的保护机制，帮助你重新整合到一个更完整、灵活、有自主性、和更涵容的自己，打开和他人交流的空间，获得更互相尊重理解支持的人际关系。
+                                                        </span>
+                                                    </div>
+                                                    <div data-v-6034f759="" class="expertFieldDiv">
+                                                        <span data-v-6034f759="" class="expertField">情绪压力</span>
+                                                        <span data-v-6034f759="" class="expertField">焦虑</span>
+                                                        <span data-v-6034f759="" class="expertField">无意义感</span>
+                                                        <span data-v-6034f759="" class="expertField">易怒</span>
+                                                        <span data-v-6034f759="" class="expertField">迷茫</span>
+                                                        <span data-v-6034f759="" class="expertField">孤独</span>
+                                                        <span data-v-6034f759="" class="expertField">敏感</span>
+                                                        <span data-v-6034f759="" class="expertField">存在感缺失</span>
+                                                        <span data-v-6034f759="" class="expertField">情绪不稳定</span>
+                                                        <span data-v-6034f759="" class="expertField">抑郁</span>
+                                                        <span data-v-6034f759="" class="expertField">空虚感</span>
+                                                        <span data-v-6034f759="" class="expertField">婚姻恋爱</span>
+                                                        <span data-v-6034f759="" class="expertField">伴侣沟通</span>
+                                                        <span data-v-6034f759="" class="expertField">安全感</span>
+                                                        <span data-v-6034f759="" class="expertField">失恋</span>
+                                                        <span data-v-6034f759="" class="expertField">感情变故</span>
+                                                        <span data-v-6034f759="" class="expertField">婚外情</span>
+                                                        <span data-v-6034f759="" class="expertField">婚姻危机</span>
+                                                        <span data-v-6034f759="" class="expertField">夫妻关系</span>
+                                                        <span data-v-6034f759="" class="expertField">离婚</span>
+                                                        <span data-v-6034f759="" class="expertField">性格不合</span>
+                                                        <span data-v-6034f759="" class="expertField">大龄单身</span>
+                                                        <span data-v-6034f759="" class="expertField">家庭困扰</span>
+                                                        <span data-v-6034f759="" class="expertField">成长创伤</span>
+                                                        <span data-v-6034f759="" class="expertField">家庭冲突</span>
+                                                        <span data-v-6034f759="" class="expertField">被忽略</span>
+                                                        <span data-v-6034f759="" class="expertField">重男轻女</span>
+                                                        <span data-v-6034f759="" class="expertField">过度依赖</span>
+                                                        <span data-v-6034f759="" class="expertField">单亲家庭</span>
+                                                        <span data-v-6034f759="" class="expertField">离异困境</span>
+                                                        <span data-v-6034f759="" class="expertField">育儿分歧</span>
+                                                        <span data-v-6034f759="" class="expertField">组合家庭</span>
+                                                        <span data-v-6034f759="" class="expertField">婆媳关系</span>
+                                                        <span data-v-6034f759="" class="expertField">亲子教育</span>
+                                                        <span data-v-6034f759="" class="expertField">校园暴力</span>
+                                                        <span data-v-6034f759="" class="expertField">注意力不集中</span>
+                                                        <span data-v-6034f759="" class="expertField">亲子冲突</span>
+                                                        <span data-v-6034f759="" class="expertField">青春期</span>
+                                                        <span data-v-6034f759="" class="expertField">叛逆</span>
+                                                        <span data-v-6034f759="" class="expertField">关系紧张</span>
+                                                        <span data-v-6034f759="" class="expertField">厌学</span>
+                                                        <span data-v-6034f759="" class="expertField">青少年抑郁</span>
+                                                        <span data-v-6034f759="" class="expertField">青少年焦虑</span>
+                                                        <span data-v-6034f759="" class="expertField">离异家庭</span>
+                                                    </div>
+                                                    <span data-v-6034f759="" class="expert-price">200元/次</span>
+                                                </div>
+                                            </div>
+                                        </a>
+                                    </div>
+                                    <!-- <div data-v-6034f759="" data-v-2912f6ce="">
+                                    <a data-v-6034f759="" href="/experts/4641317?utm_source=position&amp;utm_medium=zxlist-card-5" class="expert-item">
+                                    <div data-v-6034f759="" class="expert-item--container">
+                                        <div data-v-6034f759="" class="expert-item-icon">
+                                        <div data-v-6034f759="" class="avator" style="background: url(&quot;https://consultation-1251943848.jiandanxinli.com/avatar/0ccc0f91-fb79-444b-bb41-766896c0f9a3.png?imageMogr2/thumbnail/400x&quot;) center center / contain no-repeat;">
+                                            </div>
+                                        </div>
+                                        <div data-v-6034f759="" class="expert-item-inner">
+                                        <div data-v-6034f759="" class="expert-item-header">
+                                            <div data-v-6034f759="" class="expert-label">
+                                            <span data-v-6034f759="" class="expert-name">测试账号</span>
+                                            <span data-v-6034f759="" class="expert-level">实习咨询师</span>
+                                            </div>
+                                            <div data-v-6034f759="" class="expert-address">
+                                            <span data-v-6034f759="" class="address-icon"></span>
+                                            <span data-v-6034f759="" class="address-text"><span data-v-6034f759="">嘉峪关市 123</span></span>
+                                            </div>
+                                            </div>
+                                        <div data-v-6034f759="" class="expert-item--info">
+                                            <span data-v-6034f759="">审核账号，不要预约</span>
+                                            </div>
+                                        <div data-v-6034f759="" class="expertFieldDiv">
+                                            <span data-v-6034f759="" class="expertField">学业职场</span>
+                                            <span data-v-6034f759="" class="expertField">职业迷茫</span>
+                                            <span data-v-6034f759="" class="expertField">新工作适应</span>
+                                            <span data-v-6034f759="" class="expertField">职场人际关系</span>
+                                            </div>
+                                        <span data-v-6034f759="" class="expert-price">100元/次</span>
+                                        <span data-v-6034f759="" class="expert-status">本周预约已满</span>
+                                        </div>
+                                        </div>
+                                    </a>
+                                </div> -->
+                                </div>
+                            </div>
+                            <!-- <div class="expoert-list--right" style="position: absolute; inset: auto 0px 80px auto;" data-v-2912f6ce="">
+                            <div class="expert-list--guide" data-v-2912f6ce=""><span class="guide-name" data-v-2912f6ce="">咨询指南</span>
+                                <div class="guide-container" data-v-2912f6ce=""><span data-v-2912f6ce="" class="guide-item"><img data-v-2912f6ce="" src="https://image-1251943848.cos.ap-beijing.myqcloud.com/upload/zixun_guide/zixun_guide_1_pc.png" class="guide-icon"></span><span data-v-2912f6ce="" class="guide-item"><img data-v-2912f6ce="" src="https://image-1251943848.cos.ap-beijing.myqcloud.com/upload/zixun_guide/zixun_guide_2_pc.png" class="guide-icon"></span><span data-v-2912f6ce="" class="guide-item"><img data-v-2912f6ce="" src="//jdxl-img.jdxlt.com/uploads/0ab383a9e2c14b7f978dfc4db1592c56.png" class="guide-icon"></span></div>
+                            </div>
+                            <div class="expert-list--help j-card j-card-shadow" data-v-4d32a06b="" data-v-2912f6ce="">
+                                <div class="j-card-body" data-v-4d32a06b="">
+                                    <div class="help-container" data-v-4d32a06b="" data-v-2912f6ce="">
+                                        <div class="help-header" data-v-4d32a06b="" data-v-2912f6ce=""><span class="help-icon" data-v-4d32a06b="" data-v-2912f6ce=""></span>
+                                            <div class="help-text" data-v-4d32a06b="" data-v-2912f6ce=""><span data-v-4d32a06b="" data-v-2912f6ce="">纠结如何选择？试试找小助手帮你推荐~</span></div>
+                                        </div>
+                                        <div class="help-footer" data-v-4d32a06b="" data-v-2912f6ce="">
+                                            <button type="button" class="j-button j-button-primary j-button-small j-button-long" data-v-61f1494c="" data-v-2912f6ce="" data-v-4d32a06b="">
+                                                 <span class="slot" data-v-61f1494c="">
+                                                    人工推荐
+                                                </span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div> -->
+                        </div>
+                    </div>
+                </div>
+                <el-checkbox-button indeterminate="isIndeterminate" v-model="checkAll" @@change="handleCheckAllChange">全选</el-checkbox-button>
+                <div style="margin: 15px 0;"></div>
+                @*<el-checkbox-group v-model="checkedCities" @@change="handleCheckedCitiesChange">
+                    <el-checkbox-button v-for="city in cities" label="city" key="city">{{city}}</el-checkbox-button>
+                </el-checkbox-group>*@
+            </div>
+        </div>
+    </section>
+    <!--Include Js-->
+    <script src="/Content/jixinli/js/vue.min.js"></script>
+    <script src="/Content/jixinli/js/element.min.js"></script>
+    <script src="/Content/jixinli/js/axios.min.js"></script>
+    <script type="text/javascript">
+        const cityOptions = ['上海', '北京', '广州', '深圳'];
+        const timeWeek = [
+            {
+                time:'10.19',
+                week:'周二'
+            },
+            {
+                time:'10.20',
+                week:'周三'
+            },
+            {
+                time:'10.21',
+                week:'周四'
+            },
+            {
+                time:'10.22',
+                week:'周五'
+            },
+            {
+                time:'10.23',
+                week:'周六'
+            },
+        ]
+        new Vue({
+            el: '#app',
+            data: function() {
+                return {
+                    checkAll: false,
+                    checkedCities: ['上海', '北京'],
+                    //cities: cityOptions,
+                    isIndeterminate: true,
+                    valuePrice: [0, 500],
+                    timeItemVal: 0,
+                    allDay: [], //全天
+                    dayItem: [],//选择 上午 下午 晚上
+                    timeWeek, //选择时间
+                    ziXun:'',  //咨询
+                    sex:'',  //咨询
+                    allCity: [], //
+                    CityItem: cityOptions,
+                    FieldItem: cityOptions,
+                    allField: [], //
+                    searchValue:''
+                };
+            },
+            watch: {
+                'dayItem.length'(v) {
+                    if (v > 0)
+        this.allDay = []
+        },
+        'allDay.length'(v) {
+            if (v > 0)
+                this.dayItem = []
+        }
+        },
+        methods: {
+            handleCheckAllChange(val) {
+                this.checkedCities = val ? cityOptions : [];
+                this.isIndeterminate = false;
+            },
+            handleCheckedCitiesChange(value) {
+                let checkedCount = value.length;
+                this.checkAll = checkedCount === this.cities.length;
+                this.isIndeterminate = checkedCount > 0 && checkedCount < this.cities.length;
+            },
+            timeItem1: function(val) {
+                this.timeItemVal = val;
+                console.log(this.timeItemVal);
+                //$(this).addClass("activeJD").siblings().removeClass("activeJD");
+                //this.$emit('test');//把a标签的点击事件分发
+            }
+        }
+        })
+    </script>
+</body>
+</html>

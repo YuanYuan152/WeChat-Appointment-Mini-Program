@@ -1,0 +1,61 @@
+﻿@using lxxl.Models
+@{
+    List<T_Content> ContentList = ViewBag.ContentList;
+    ViewBag.Title = "搜索";
+    Layout = "~/Views/Shared/_LayoutIndex.cshtml";
+}
+<link rel="stylesheet" type="text/css" href="/Content/index/css/page.css">
+<script src="/Content/index/js/jquery.page.js"></script>
+
+<div class="row contentmain">
+    <div class="col-xs-3 menu">
+        <div class="item yiji">
+            <a href="javascript:">
+                搜索
+            </a>
+        </div>
+    </div>
+    <blockquote class="col-xs-9" style="margin-top:20px;font-size:16px;min-height:600px;font-family:微软雅黑;">
+        <div style="height:40px;border-bottom:#EFEFEF solid 3px; ">
+            您所在的位置 : 首页 > 搜索
+        </div>
+        <div style="line-height:26px;padding:30px;padding-bottom:20px;">
+            @foreach (var content in ContentList)
+            { 
+                <div class="item" style="border-bottom:solid 2px #EEEEEE;height:60px;padding-top:15px;">
+                    <a href="@Url.Action("Content", "home", new { ID = content.ID })" style="color:#666">
+                        <div class="title" style="width:80%; float:left;word-break:keep-all;white-space:nowrap; overflow:hidden;text-overflow:ellipsis;">
+                            @content.Title
+                        </div>
+                        <div class="time" style="width:20%; float:right; text-align:right;">
+                            @content.ModifyTime.ToString("yyyy-MM-dd")
+                        </div>
+                    </a>
+                </div>
+            }
+            <div class="tcdPageCode">
+            </div>
+        </div>
+    </blockquote>
+</div>
+<input type="hidden" id="urlcode" value="@ViewBag.Search" />
+<script type="text/javascript">
+    $(function () {
+        var ContentCount=parseInt(@ViewBag.Count);
+        var pagesize=parseInt(@ViewBag.Pagesize);
+        if( ContentCount>pagesize){
+            var pagecount=0;
+            if(ContentCount%pagesize==0)
+                pagecount=ContentCount/pagesize;
+            else
+                pagecount=parseInt(ContentCount/pagesize)+1;
+            $(".tcdPageCode").createPage({
+                pageCount: pagecount, //总页数
+                current: @ViewBag.ThisPage, //当前页
+                backFn: function (p) {
+                    location.href="/home/Search?page="+p+"&keyword="+$("#urlcode").val();
+                }
+            });
+        }
+    })
+</script>

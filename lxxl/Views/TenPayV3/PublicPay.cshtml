@@ -1,0 +1,113 @@
+﻿@{
+    Layout = null;
+    ViewBag.Title = "微信支付";
+    dynamic payInfo = ViewBag.wxJsApiParam;
+}
+
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>连心心理|心理咨询|心理团体活动|心理团体活动|心理相关知识讲座、培训|心理相关会议及研讨班|心理咨询信息系统</title>
+    <meta name="keywords" content="连心心理,心理咨询,心理团体活动,心理团体活动,心理相关知识讲座、培训,心理相关会议及研讨班,心理咨询信息系统" />
+    <meta name="description" content="高品质、信息化的专业心理服务平台，结合最新技术，提供系统的心理健康服务和优质的学习课程。旨在提升大众心理健康水平、促进心理行业发展。" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1">
+    <script src="https://lib.baomitu.com/jquery/3.3.1/jquery.min.js"></script>
+    <script src="http://res.wx.qq.com/open/js/jweixin-1.0.0.js"> </script>
+</head>
+
+<body>
+    @*<h2>付款</h2>*@
+    <script>
+    $.ajax({
+        url: "/WeixinCurrency/getJsToken",
+        type: "POST",
+        success: function (data) {
+            if (data.errcode == 0) {
+                wx.config({
+                    debug: false,
+                    appId: data.weixin.appId, // 必填，公众号的唯一标识
+                    timestamp: data.weixin.timestamp, // 必填，生成签名的时间戳
+                    nonceStr: data.weixin.nonceStr, // 必填，生成签名的随机串
+                    signature: data.weixin.signature, // 必填，签名，见附录1
+                    jsApiList: [
+                    'checkJsApi',
+                    'openLocation',
+                    'getLocation',
+                    'chooseWXPay'
+                    ]
+                });
+            } else {
+                alert("获取签名失败");
+            }
+        },
+        error: function () {
+            alert("获取签名失败");
+        }
+    })
+
+    //{"appId":"wx7c7c6f068de77af8","nonceStr":"johogLrEGIWCDhH","package":"prepay_id=wx24011814691646400d2bfbef70cb170001","paySign":"8BE65A95A88CE2D07DBE0C22E343C632","signType":"MD5","timeStamp":"F6etLj2bh4dzez1V"}
+
+    @*@*wx.config({
+        debug: false,
+        appId: '@payInfo["timeStamp"]', // 必填，公众号的唯一标识
+        timestamp: '@payInfo["timeStamp"]', // 必填，生成签名的时间戳
+        nonceStr: '@payInfo["timeStamp"]', // 必填，生成签名的随机串
+        signature: '@ViewBag.signature1', // 必填，签名，见附录1
+        jsApiList: [
+        'checkJsApi',
+        'openLocation',
+        'getLocation',
+        'chooseWXPay'
+        ]
+    });*@
+
+    wx.ready(function () {
+
+        wx.chooseWXPay({
+            timestamp: '@payInfo["timeStamp"]', // 支付签名时间戳，注意微信jssdk中的所有使用timestamp字段均为小写。但最新版的支付后台生成签名使用的timeStamp字段名需大写其中的S字符
+            nonceStr: '@payInfo["nonceStr"]', // 支付签名随机串，不长于 32 位
+            package: '@payInfo["package"]', // 统一支付接口返回的prepay_id参数值，提交格式如：prepay_id=***）
+            signType: '@payInfo["signType"]', // 签名方式，默认为'SHA1'，使用新版支付需传入'MD5'
+            paySign: '@payInfo["paySign"]', // 支付签名
+            success: function (res) {
+                //alert('@ViewBag.url');
+                $.ajax({
+                    url: "/WeixinCurrency/getJsToken",
+                    type: "POST",
+                    success: function (data) {
+                        if (data.errcode == 0) {
+                            wx.config({
+                                debug: false,
+                                appId: data.weixin.appId, // 必填，公众号的唯一标识
+                                timestamp: data.weixin.timestamp, // 必填，生成签名的时间戳
+                                nonceStr: data.weixin.nonceStr, // 必填，生成签名的随机串
+                                signature: data.weixin.signature, // 必填，签名，见附录1
+                                jsApiList: [
+                                'checkJsApi',
+                                'openLocation',
+                                'getLocation',
+                                'chooseWXPay'
+                                ]
+                            });
+                        } else {
+                            alert("获取签名失败");
+                        }
+                    },
+                    error: function () {
+                        alert("获取签名失败");
+                    }
+                })
+
+                window.location.href = '@ViewBag.url';
+            },
+            error: function () {
+                alert("sb");
+            }
+        });
+    });
+</script>
+
+</body>
+
+</html>

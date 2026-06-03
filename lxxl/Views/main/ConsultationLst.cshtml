@@ -1,0 +1,404 @@
+﻿@{
+    Layout = null;
+    ViewBag.Title = "Doctor";
+}
+<!DOCTYPE html>
+<html class="x-admin-sm">
+<head>
+    <meta charset="UTF-8">
+    <title>咨询列表</title>
+    <meta name="renderer" content="webkit">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta name="viewport" content="width=device-width,user-scalable=yes, minimum-scale=0.4, initial-scale=0.8" />
+    <link rel="stylesheet" href="/Content/mhome/css/font.css">
+    <link rel="stylesheet" href="/Content/mhome/css/index.css">
+    <script src="/Content/mhome/lib/layui/layui.js" charset="utf-8"></script>
+    <script type="text/javascript" src="/Content/mhome/js/index.js"></script>
+    <style type="text/css">
+        .layui-table-cell {
+            height: 50px !important;
+            white-space: nowrap;
+            line-height: 50px;
+            padding: 0 15px;
+            box-sizing: border-box;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .layui-table img {
+            max-width: 300px;
+        }
+        
+        /* 固定所有行的高度 */
+        .layui-table tbody tr {
+            height: 50px !important;
+        }
+        
+        .layui-table-header thead tr {
+            height: 50px !important;
+        }
+        
+        /* 固定列也使用相同高度 */
+        .layui-table-fixed .layui-table-body tbody tr {
+            height: 50px !important;
+        }
+        
+        .layui-table-fixed .layui-table-header thead tr {
+            height: 50px !important;
+        }
+        
+        /* 复选框列特殊处理 - 使用更直接的方法 */
+        .layui-table-cell:has(input[type="checkbox"]),
+        .layui-table-cell input[type="checkbox"] {
+            text-overflow: unset !important;
+            overflow: visible !important;
+        }
+        
+        /* 复选框列容器特殊处理 */
+        .layui-table-main tbody td:first-child .layui-table-cell,
+        .layui-table-fixed-left tbody td:first-child .layui-table-cell,
+        .layui-table-main thead th:first-child .layui-table-cell,
+        .layui-table-fixed-left thead th:first-child .layui-table-cell {
+            text-overflow: unset !important;
+            overflow: visible !important;
+            text-align: center;
+            white-space: normal !important;
+        }
+        
+        /* 复选框垂直居中 */
+        .layui-table-cell input[type="checkbox"] {
+            margin: 0;
+            vertical-align: middle;
+        }
+        
+        /* 个案记录表列特殊处理 */
+        .layui-table-cell .layui-btn {
+            margin: 5px;
+        }
+        
+        /* 个案记录表列内容溢出处理 */
+        .layui-table-cell {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="x-nav">
+        <span class="layui-breadcrumb">
+            <a href="">首页</a>
+            <a>
+                <cite>咨询列表</cite>
+            </a>
+        </span>
+        <a class="layui-btn layui-btn-small" style="line-height:1.6em;margin-top:3px;float:right" onclick="location.reload()" title="刷新">
+            <i class="layui-icon layui-icon-refresh" style="line-height:30px"></i>
+        </a>
+    </div>
+    <div class="layui-fluid">
+        <div class="layui-row layui-col-space15">
+            <div class="layui-col-md12">
+                <div class="layui-card">
+                    <div class="layui-card-body ">
+                        <table class="layui-hide" id="test" lay-filter="test" style="max-height:95%;"></table>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+    <input type="hidden" id="userType" value="@ViewBag.userType" />
+
+    <script type="text/html" id="toolbarDemo">
+        <div class="layui-inline layui-show-xs-block">
+            <form class="layui-form layui-col-space5">
+                <div class="layui-inline layui-show-xs-block">
+                    <input class="layui-input" autocomplete="off" placeholder="姓名、手机号" name="searchName" id="searchName" lay-key="1">
+                </div>
+                <div class="layui-inline layui-show-xs-block" style="width: 120px;">
+                    <input class="layui-input" placeholder="开始日" name="startDay" id="startDay">
+                </div>
+                <div class="layui-inline layui-show-xs-block" style="width: 120px;">
+                    <input class="layui-input" placeholder="截止日" name="endDay" id="endDay">
+                </div>
+                <div class="layui-inline layui-show-xs-block">
+                    <select name="state" id="state">
+                        <option value="10000">---请选择咨询状态---</option>
+                        <option value="-1">已取消</option>
+                        <option value="0">未付款</option>
+                        <option value="1">未确定</option>
+                        <option value="2">等待执行</option>
+                        <option value="3">已完成</option>
+
+                    </select>
+                </div>
+                <div class="layui-inline layui-show-xs-block">
+                    <button class="layui-btn layui-btn-sm" lay-event="reload" style="margin-left:10px;"><i class="layui-icon">查询</i></button>
+                </div>
+            </form>
+        </div>
+        <div class="layui-inline layui-show-xs-block">
+            <button class="layui-btn" onclick="xadmin.open('添加咨询记录', '/main/AddConsultation', 800, 600)"><i class="layui-icon"></i>添加</button>
+        </div>
+    </script>
+    <script type="text/html" id="barDemo">
+        @*<a class="layui-btn layui-btn-xs" lay-event="edit3" style="margin:5px;">编辑 {{ userType }}</a>*@
+
+        {{#  if(d.State==-1){ }}
+        <span>已取消</span>
+        {{#  } else if(d.State==0)  { }}
+        <span>未付款</span>
+        {{#  } else if(d.State==1)  { }}
+        未确定
+        {{#  } else if(d.State==2)  { }}
+        未确定
+        {{#  } else if(d.State==3)  { }}
+        {{#  } else { }}
+        {{#  } }}
+        
+        {{#  if(userType==1){ }}
+        <a class="layui-btn layui-btn-xs" lay-event="edit3" style="margin:5px;">编辑</a>
+        {{#  } else if(userType==3 )  { }}
+        <a class="layui-btn layui-btn-xs" lay-event="edit3" style="margin:5px;">编辑</a>     
+        {{#  } else { }}
+        {{#  } }}
+
+        {{#  if(d.State==-1){ }}
+        {{#  } else if(d.State==0)  { }}     
+        {{#  } else { }}
+        <a class="layui-btn layui-btn-xs" lay-event="addOrder" style="margin:5px;">补缴费</a>
+        {{#  } }}
+
+    </script>
+    <script type="text/html" id="barDemoGA">
+        {{#  if(userType==1){ }}
+        {{# layui.each(d.CaseRecords, function(index, item){ }}
+        <a class="layui-btn layui-btn-xs" data-id="{{ item.ID }}" style="margin:5px;" onclick="onButtonClick({{ item.ID }})">个案记录表 {{item.EditeTime>50?(item.EditeTime-50):item.EditeTime}}</a>
+        {{#  if(item.EditeTime>50 && item.IsSure==0){ }}
+        <a class="layui-btn layui-btn-xs imgID" data-id="{{ item.ID }}" onclick="onButtonImgIDClick({{ item.ID }})" style="margin:5px;">修改审核</a>
+        {{# } }}
+        {{# }) }}
+        {{#  } else { }}
+        {{#  } }}
+    </script>
+    <script type="text/html" id="imgtmp">
+        <img src="{{ d.url }}">
+    </script>
+    <script type="text/html" id="checkboxTpl">
+        {{#  if(d.IsShow){ }}
+        <input type="checkbox" name="lock" value="{{d.ID}}" title="显示" lay-filter="lockDemo" checked>
+        {{#  } else  { }}
+        <input type="checkbox" name="lock" value="{{d.ID}}" title="显示" lay-filter="lockDemo">
+        {{#  }
+        }}
+    </script>
+
+    <script>
+        var userType = '@ViewBag.userType';
+        layui.use(['laydate', 'form', 'table'], function () {
+            var table = layui.table
+            , form = layui.form;
+            var laydate = layui.laydate;
+            
+            table.render({
+                elem: '#test'
+               , height: 'full-120'
+              , url: '/main/GetConsultationList'
+              , where: { keyword: '' }
+               , toolbar: true
+              , toolbar: '#toolbarDemo' //开启头部工具栏，并为其绑定左侧模板
+              , title: '咨询师表'
+              , totalRow: false
+              , cols: [[
+                { type: 'checkbox', fixed: 'left', unresize: true, width: 40 }
+                //, { field: 'ID', title: 'ID', width: 80, unresize: true, sort: true}
+              , { field: 'gId', title: 'gId', hide: true, style: 'display:none;' }
+                 , { field: 'patientName', title: '来访者', fixed: 'left', unresize: true, width: 120 }
+                 , { field: 'patientTel', title: '联系方式', fixed: 'left', unresize: true, width: 150 }
+                , { field: 'appointmentTime', title: '预约时间', width: 150, sort: true }
+                , { field: 'name', title: '咨询师', width: 120 }
+                , { field: 'address', title: '咨询室', width: 180 }
+                , { field: 'duration', title: '咨询时长', width: 100 }
+                , { field: 'PayCost', title: '咨询费用', width: 100 }
+                
+             , { field: 'StateDescription', title: '咨询状态', width: 250 }
+                //, { field: 'createTime', title: '创建时间', width: 160, sort: true }
+                //, { field: 'appointmentTime', title: '预约时间', width: 200 }
+                //, { field: 'cTime', title: '咨询时间', width: 200 }
+                //, { field: 'remark', title: '备注' }
+                , { fixed: 'right', title: '个案记录表', toolbar: '#barDemoGA', width: 200 }
+                , { fixed: 'right', title: '操作', toolbar: '#barDemo', width: 250 }
+              ]]
+              , page: true
+              , limits: [10, 15, 20, 1000]
+              , limit: 15 //每页默认显示的数量
+              , done: function (res, curr, count) {
+                  // 执行一个laydate实例
+                  laydate.render({
+                      elem: '#startDay' //指定元素
+                  });
+
+                  //执行一个laydate实例
+                  laydate.render({
+                      elem: '#endDay' //指定元素
+                  });
+              }
+            });
+            
+            //头工具栏事件
+            table.on('toolbar(test)', function (obj) {
+                var checkStatus = table.checkStatus(obj.config.id);
+                //layer.alert(obj.event);
+                switch (obj.event) {
+                    case 'getCheckData':
+                        //var data = checkStatus.data;
+                        //layer.alert(JSON.stringify(data));
+
+                        break;
+                    case 'getCheckLength':
+                        var data = checkStatus.data;
+                        layer.msg('选中了：' + data.length + ' 个');
+                        break;
+                    case 'isAll':
+                        layer.msg(checkStatus.isAll ? '全选' : '未全选');
+                        break;
+
+                        //自定义头工具栏右侧图标 - 提示
+                    case 'LAYTABLE_TIPS':
+                        layer.alert('帮助');
+                        break;
+                    case 'reload':
+                        var searchName = $('#searchName').val();
+                        var startDay = $("#startDay").val();
+                        var endDay = $("#endDay").val();
+                        var state = $("#state").val();
+                        
+                        table.reload('test', {
+                            url: '/main/GetConsultationList'
+                            , where: { keyword: searchName,startDay:startDay, endDay: endDay,state:state }
+                            , page: 1
+                            , title: '咨询记录表' + startDay + '-' + startDay
+                        }, 'data');
+                        $('#searchName').val(searchName);
+                        if (startDay != "") {
+                            $('#startDay').val(startDay);
+                        }
+                        if (endDay != "") {
+                            $('#endDay').val(endDay);
+                        }
+                        
+                        // 固定行高，无需同步
+                        setTimeout(function() {
+                            // 固定行高已设置，无需额外处理
+                        }, 200);
+                        break;
+                };
+            });
+
+            //监听行工具事件
+            table.on('tool(test)', function (obj) {
+                var data0 = obj.data;
+                console.log(obj)
+                if (obj.event === 'del') {
+                    layer.confirm('真的删除' + data0.userName + '么', function (index) {
+
+                    });
+                } else if (obj.event === 'edit') {
+                    layer.open({
+                        type: 2
+                           , content: '/main/EditConsultation/' + data0.gId
+                           , area: ['700px', '600px']
+                           , maxmin: true
+                    });
+                } else if (obj.event === 'edit3') {
+                    layer.open({
+                        type: 2
+                           , content: '/main/EditConsultation3/' + data0.gId
+                           , area: ['500px', '600px']
+                           , maxmin: true
+                    });
+                } else if (obj.event === 'CaseRecord') {
+                    var caserecordID = obj.data.ID;
+                    console.log(caserecordID);
+                    layer.open({
+                        type: 2
+                        , title: '心理咨询个案记录表'
+                           , content: '/main/CaseRecord/' + data0.gId
+                           , area: ['100%', '100%']
+                           , maxmin: true
+                    });
+                } else if (obj.event === 'addOrder') {
+                    layer.open({
+                        type: 2
+                        , title: '补缴咨询费'
+                           , content: '/main/addOrder/' + data0.gId
+                            , area: ['500px', '600px']
+                           , maxmin: true
+                    });
+                }
+            });            
+        });
+        
+        function onButtonClick(id) {
+            layer.open({
+                type: 2
+              , title: '心理咨询个案记录表'
+                , content: '/main/CaseRecord/' + id
+                , area: ['100%', '100%']
+                , maxmin: true
+            });
+        }
+        function onSHClick(id) {
+            layer.open({
+                title:'确定信息',
+                btn:['同意修改','取消','不同意修改'],//多个按钮直接用btn1/btn2/btn3...回调
+                content:"<div style='font-size: 15px'>请确定是否同意修改个案记录表</div>",
+                yes:function (index, layero) {//这里也可以用btn1替代yes
+                    alert('确定按钮回调' + id )
+                    layer.close(index);
+                }, btn2 : function() {
+                    alert('取消按钮回调')
+                }, btn3 : function() {
+                    alert('按钮3回调')
+                },cancel: function(){
+                    //alert('右上角关闭按钮回调')
+                },end: function(){
+                    //alert('最后执行回调')
+                }});
+        }
+        function onButtonImgIDClick(id) {
+            var data = {};  //声明一个空对象
+            data["id"] = id;
+            data["isSure"] = true;
+            layer.open({
+                title:'确定信息',
+                btn:['同意修改','取消','不同意修改'],//多个按钮直接用btn1/btn2/btn3...回调
+                content:"<div style='font-size: 15px'>请确定是否同意修改个案记录表</div>",
+                yes:function (index, layero) {//这里也可以用btn1替代yes
+                    $.ajax({
+                        url: "/main/CaseRecordQC",
+                        data: data,
+                        type: "post",
+                        dataType: "text",
+                        success: function (data) {                    
+                        },
+                        error: function () {
+                            $.alert("服务器连接失败。", "提示", function () {
+                            });
+                        }
+                    });    
+                    t.remove(); 
+                    layer.close(index);
+                }, btn2 : function() {
+                    //alert('取消按钮回调')
+                }, btn3 : function() {
+                    //alert('按钮3回调')
+                },cancel: function(){
+                    //alert('右上角关闭按钮回调')
+                },end: function(){
+                    //alert('最后执行回调')
+                }});
+        }
+    </script>
+</body>
+
+</html>

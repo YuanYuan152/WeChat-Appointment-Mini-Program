@@ -1,0 +1,1516 @@
+﻿@{
+    ViewBag.Title = "register";
+}
+
+@{
+    ViewBag.Title = "EditCaseRecord";
+    Layout = null;
+    List<T_Field> Fieldlist = ViewBag.Fieldlist;
+    T_RegistrationForm RegistrationForm = ViewBag.RegistrationForm;
+}
+@using lxxl.Models
+
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>同心理咨询预约登记表</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=0">
+    <link rel="stylesheet" href="/Content/weui/css/weui.css" />
+    <link rel="stylesheet" href="/Content/weui/css/weuix.css" />
+    <script src="/Content/weui/js/zepto.min.js"></script>
+    <script src="/Content/weui/js/zepto.weui.js"></script>
+    <script src="/Content/weui/js/picker.city.js"></script>
+
+    <style>
+        .weui-cells {
+            margin-top: 0px;
+            padding-left: 15px;
+            padding-bottom: 5px;
+            padding-top: 5px;
+        }
+
+        .weui-label {
+            width: calc(100% - 24px);
+            margin-top: 6px;
+        }
+
+        .weui-labelz4 {
+            width: 72px;
+            text-align: right;
+        }
+
+        .weui-labelz3 {
+            width: 52px;
+            text-align: right;
+        }
+
+        .weui-cell__bd_z1 {
+            padding: 4px 28px 10px 22px;
+        }
+
+        .weui-cell__hd_z1 {
+            padding: 2px 28px 10px 22px;
+        }
+
+        .weui-cell__hd_z2 {
+            padding: 2px 28px 10px 22px;
+        }
+
+        .weui-form-li {
+            margin: 1px 1px;
+        }
+
+        .weui-form-li-z2 {
+            margin: 1px 1px;
+        }
+    </style>
+    <script>
+        $(function () {
+            var abcd = 1;
+            $(document).on("click", "#btnQD", function () {
+                //if (abcd == 0) { return; }
+                //abcd = 0;
+                var data = {};  //声明一个空对象
+
+                data["gId"] = $("#gId").val();
+                var ItemX = $("#name").val();
+                if (ItemX == null || ItemX == 'undefined' || ItemX == "") {
+                    $.alert("未填写姓名", "提示", function () { $("#name").focus(); });
+                    return;
+                }
+                data["name"] = ItemX;
+                ItemX = $("#gender").val();
+                if (ItemX == null || ItemX == 'undefined' || ItemX == "") {
+                    $.alert("未填写性别", "提示", function () { $("#gender").focus(); });
+                    return;
+                }
+                data["gender"] = $("#gender").val();
+                ItemX = $("#age").val();
+                if (ItemX == null || ItemX == 'undefined' || ItemX == "") {
+                    $.alert("未填写年龄", "提示", function () { $("#age").focus(); });
+                    return;
+                }
+                data["age"] = $("#age").val();
+                ItemX = $("#nation").val();
+                if (ItemX == null || ItemX == 'undefined' || ItemX == "") {
+                    $.alert("未填写民族", "提示", function () { $("#nation").focus(); });
+                    return;
+                }
+                data["nation"] = $("#nation").val();
+                ItemX = $("#mobile").val();
+                if (ItemX == null || ItemX == 'undefined' || ItemX == "") {
+                    $.alert("未填写手机号", "提示", function () { $("#nation").focus(); });
+                    return;
+                }
+                data["mobile"] = $("#mobile").val();
+                ItemX = $("#wechat").val();
+                if (ItemX == null || ItemX == 'undefined' || ItemX == "") {
+                    $.alert("未填写微信号", "提示", function () { $("#wechat").focus(); });
+                    return;
+                }
+                data["wechat"] = $("#wechat").val();
+                ItemX = $('input[name="isSelf"]:checked').val();
+                if (ItemX == null || ItemX == 'undefined' || ItemX == "") {
+                    $.alert("未选择否是本人", "提示", function () { });
+                    return;
+                }
+                data["isSelf"] = $('input[name="isSelf"]:checked').val();
+                if (ItemX == '否') {
+                    ItemX = $('input[name="relationship"]:checked').val();
+                    if (ItemX == null || ItemX == 'undefined' || ItemX == "") {
+                        $.alert("未选择关系", "提示", function () { });
+                        return;
+                    }
+                    data["relationship"] = $('input[name="relationship"]:checked').val();
+                }
+                else {
+                    data["relationship"] = "";
+                }
+
+                ItemX = $("#career").val();
+                if (ItemX == null || ItemX == 'undefined' || ItemX == "") {
+                    $.alert("未填写职业", "提示", function () { });
+                    return;
+                }
+                data["career"] = $('input[name="maritalStatus"]:checked').val();
+                ItemX = $("#name").val();
+                if (ItemX == null || ItemX == 'undefined' || ItemX == "") {
+                    $.alert("未选择婚姻状况", "提示", function () { });
+                    return;
+                }
+                data["maritalStatus"] = $('input[name="maritalStatus"]:checked').val();
+                ItemX = $('input[name="educationalLevel"]:checked').val();
+                if (ItemX == null || ItemX == 'undefined' || ItemX == "") {
+                    $.alert("未填写文化程度", "提示", function () { });
+                    return;
+                }
+                data["educationalLevel"] = $('input[name="educationalLevel"]:checked').val();
+                ItemX = $("#religion").val();
+                if (ItemX == null || ItemX == 'undefined' || ItemX == "") {
+                    $.alert("未填写宗教信仰", "提示", function () { $("#religion").focus(); });
+                    return;
+                }
+                data["religion"] = $("#religion").val();
+                ItemX = $("#city").val();
+                if (ItemX == null || ItemX == 'undefined' || ItemX == "") {
+                    $.alert("未填写城市姓名", "提示", function () { $("#city").focus(); });
+                    return;
+                }
+                data["city"] = $("#city").val();
+                ItemX = data["cohabit"] = $('input[name="cohabit"]:checked').val();
+                if (ItemX == null || ItemX == 'undefined' || ItemX == "") {
+                    $.alert("未填写姓名", "提示", function () { });
+                    return;
+                }
+                data["cohabit"] = $('input[name="cohabit"]:checked').val();
+                ItemX = $("#name").val();
+                if (ItemX == null || ItemX == 'undefined' || ItemX == "") {
+                    $.alert("未填写和谁同住", "提示", function () { });
+                    return;
+                }
+                data["gateway"] = $('input[name="gateway"]:checked').val();
+                ItemX = checkbox("subject");
+                if (ItemX == null || ItemX == 'undefined' || ItemX == "") {
+                    $.alert("未选择咨询主题", "提示", function () { });
+                    return;
+                }
+                data["subject"] = checkbox("subject");
+                ItemX = data["diagnosis"] = $('input[name="diagnosis"]:checked').val();
+                if (ItemX == null || ItemX == 'undefined' || ItemX == "") {
+                    $.alert("未选择是否经医院诊断", "提示", function () { });
+                    return;
+                }
+                data["diagnosis"] = $('input[name="diagnosis"]:checked').val();
+                ItemX = $('input[name="takeMedicine"]:checked').val();
+                if (ItemX == null || ItemX == 'undefined' || ItemX == "") {
+                    $.alert("未选择是否在服药", "提示", function () { });
+                    return;
+                }
+                data["takeMedicine"] = $('input[name="takeMedicine"]:checked').val();
+                ItemX = $('input[name="troubledTime"]:checked').val();
+                if (ItemX == null || ItemX == 'undefined' || ItemX == "") {
+                    $.alert("未选择困扰持续的时间", "提示", function () { });
+                    return;
+                }
+                data["troubledTime"] = $('input[name="troubledTime"]:checked').val();
+                ItemX = checkbox("recentEvents");
+                if (ItemX == null || ItemX == 'undefined' || ItemX == "") {
+                    $.alert("未选择近期遭遇事件", "提示", function () { });
+                    return;
+                }
+                data["recentEvents"] = ItemX;
+                ItemX = checkbox("experience");
+                if (ItemX == null || ItemX == 'undefined' || ItemX == "") {
+                    $.alert("未选择心理咨询经历", "提示", function () { });
+                    return;
+                }
+                data["experience"] = ItemX;
+                ItemX = checkbox("emotionalState");
+                if (ItemX == null || ItemX == 'undefined' || ItemX == "") {
+                    $.alert("未选择情绪状态", "提示", function () { });
+                    return;
+                }
+                data["emotionalState"] = ItemX;
+                ItemX = checkbox("acOfWill");
+                if (ItemX == null || ItemX == 'undefined' || ItemX == "") {
+                    $.alert("未选择意志行为", "提示", function () { });
+                    return;
+                }
+                data["acOfWill"] = ItemX;
+                ItemX = checkbox("manifestations");
+                if (ItemX == null || ItemX == 'undefined' || ItemX == "") {
+                    $.alert("未选择躯体表现", "提示", function () { });
+                    return;
+                }
+                data["manifestations"] = ItemX;
+                ItemX = $('input[name="urgency0"]:checked').val();
+                if (ItemX == null || ItemX == 'undefined' || ItemX == "") {
+                    $.alert("未选择紧急程度", "提示", function () { });
+                    return;
+                }
+                data["urgency"] = $('input[name="urgency0"]:checked').val();
+
+                if (ItemX === "我目前的情况不太紧急") {
+                    ItemX = checkbox("urgency1");
+                    if (ItemX == null || ItemX == 'undefined' || ItemX == "") {
+                        $.alert("未选择我目前的情况不太紧急", "提示", function () { });
+                        return;
+                    }
+                    data["urgency1"] = ItemX;
+                    data["urgency1"] = "";
+                }
+                else if ('@RegistrationForm.isSelf' === "我目前的情况比较紧急") {
+                    ItemX = checkbox("urgency2");
+                    if (ItemX == null || ItemX == 'undefined' || ItemX == "") {
+                        $.alert("未选择我目前的情况比较紧急", "提示", function () { });
+                        return;
+                    }
+                    data["urgency2"] = ItemX;
+                    data["urgency2"] = "";
+                }
+
+                ItemX = $('input[name="Item25"]:checked').val();
+                if (ItemX == null || ItemX == 'undefined' || ItemX == "") {
+                    $.alert("未选择是否最近三个月曾经听到或看到别人听不到或看不到的人或事", "提示", function () { });
+                    return;
+                }
+                data["Item25"] = $('input[name="Item25"]:checked').val();
+                ItemX = $('input[name="Item26"]:checked').val();
+                if (ItemX == null || ItemX == 'undefined' || ItemX == "") {
+                    $.alert("未选择是否感到有人或者组织想要伤害我，我处在危险中", "提示", function () { });
+                    return;
+                }
+                data["Item26"] = $('input[name="Item26"]:checked').val();
+                data["serviceForm"] = checkbox("serviceForm");
+                data["feeRange"] = "";//$('input[name="feeRange"]:checked').val();
+                data["otherMsg"] = $("#otherMsg").val();
+                //ItemX = checkbox("telephoning");
+                //if (ItemX == null || ItemX == 'undefined' || ItemX == "") {
+                //    $.alert("未选择沟通时间", "提示", function () { });
+                //    return;
+                //}
+                data["telephoning"] = "";
+
+                console.log(data);
+
+                $.showLoading("数据提交中");
+                setTimeout(function () {
+                    $.hideLoading();
+                }, 3000);
+                $.ajax({
+                    url: "/wapForm/postRegister",
+                    data: data,
+                    type: "post",
+                    dataType: "text",
+                    success: function (data) {
+                        var result = JSON.parse(data);
+                        if (result.code == 0) {
+                            abcd = 1
+                            $.alert(result.msg, "提示", function () {
+                                window.parent.layer.closeAll();//关闭弹窗
+                                window.parent.location.reload();
+                            });
+                        }
+                        else {
+                            abcd = 1
+                            $.alert(result.msg, "提示", function () {
+
+                            });
+                        }
+                    },
+                    error: function () {
+                        abcd = 1
+                        $.alert("服务器连接失败。", "提示", function () {
+
+                        });
+                    }
+                })
+            });
+
+            function isValidEmailAddress(emailAddress) {
+                var pattern = /^\w+((-\w+)|(\.\w+))*\@@[A-Za-z0-9]+((\.|-)[A-Za-z0-9]+)*\.[A-Za-z0-9]+$/;
+                return pattern.test(emailAddress);
+            };
+
+        });
+
+        function textarea(input) {
+            var content = $(input);
+            var max = content.next().find('i').text();
+            var value = content.val();
+            if (value.length > 0) {
+
+                value = value.replace(/\n|\r/gi, "");
+                var len = value.length;
+                content.next().find('span').text(len);
+                if (len > max) {
+                    content.next().addClass('f-red');
+                } else {
+                    content.next().removeClass('f-red');
+                }
+            }
+        }
+
+        function cleartxt(obj) {
+            $(obj).prev().find('.weui-input').val("");
+            return false;
+        }
+
+        function cleararea(obj) {
+            $(obj).prev().find('.weui-textarea').val("").next().find("span").text(0);
+            return false;
+        }
+
+
+        function checkbox(name) {
+            var str = document.getElementsByName(name); //通过name来获取遍历对象
+            var objarray = str.length;
+            var choosestr = "";
+            for (i = 0; i < objarray; i++) {
+                if (str[i].checked == true) {
+                    if (choosestr === "") {
+                        choosestr = str[i].value;
+                    }
+                    else {
+                        choosestr += ";" + str[i].value;
+                    }
+                }
+            }
+            return choosestr;
+        }
+
+        function checkValue(value) {
+
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            iniValue();
+        });
+        function iniValue() {
+            if ('@RegistrationForm.isSelf' === "是") {
+                document.getElementById('relationshipDiv').style.display = 'none';
+            };
+            if ('@RegistrationForm.urgency' === "我目前的情况不太紧急") {
+                document.getElementById('24Div').style.display = 'none';
+                document.getElementById('23Div').style.display = 'block';
+            }
+            else if ('@RegistrationForm.urgency' === "我目前的情况比较紧急") {
+                document.getElementById('23Div').style.display = 'none';
+                document.getElementById('24Div').style.display = 'block';
+            }
+            else {
+                document.getElementById('24Div').style.display = 'none';
+                document.getElementById('23Div').style.display = 'none';
+            }
+        }
+
+    </script>
+</head>
+
+<body style="background-color: #EFEFEF; ">
+    <div class="page-hd" style="padding-top: 5px; padding-bottom: 5px; background-color: #E7E8ED; ">
+        <h1 class="page-hd-title" style="color: #1ea0fa; font-weight: bold; margin: 0; padding: 0; text-align: center; padding-bottom: 2px;">
+            同心理咨询预约登记表
+        </h1>
+        <p class="page-hd-desc">
+            您好！为方便及时了解您的信息和咨询意愿，更好地为您匹配合适的咨询师，请填写以下内容。预约登记结束后，会有助理与您联系，以便为您安排接下来的咨询。
+        </p>
+        <p class="page-hd-desc">
+            我们向您承诺，以下有关您的个人信息，都将严格的为您保密。
+        </p>
+    </div>
+
+    <div class="weui-cells">
+        <input type="text" id="gId" name="gId" class="layui-input" hidden value="@RegistrationForm.gId">
+        <label class="weui-label weui-start">1. 您是否是本人咨询 ：[单选题] </label>
+        <div class="weui-form" style="padding: 0px 0px;">
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="isSelf" id="isSelf1" value="是" type="radio" @(RegistrationForm.isSelf == "是" ? "checked" : "") onclick="document.getElementById('relationshipDiv').style.display='none';">
+                <label for="isSelf1">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>是</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="isSelf" id="isSelf2" value="否" type="radio" @(RegistrationForm.isSelf == "否" ? "checked" : "") onclick="document.getElementById('relationshipDiv').style.display = 'block';">
+                <label for="isSelf2">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>否</p></div>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <div class="weui-cells" id="relationshipDiv">
+        <label class="weui-label weui-start">2. 您是来访的：[单选题] </label>
+        <div class="weui-form" style="padding: 0px 0px;">
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="relationship" id="relationship1" value="父母" type="radio" @(RegistrationForm.relationship == "父母" ? "checked" : "")>
+                <label for="relationship1">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>父母</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="relationship" id="relationship2" value="子女" type="radio" @(RegistrationForm.relationship == "子女" ? "checked" : "")>
+                <label for="relationship2">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>子女</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="relationship" id="relationship3" value="亲戚" type="radio" @(RegistrationForm.relationship == "亲戚" ? "checked" : "")>
+                <label for="relationship3">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>亲戚</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="relationship" id="relationship4" value="朋友" type="radio" @(RegistrationForm.relationship == "朋友" ? "checked" : "")>
+                <label for="relationship4">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>朋友</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="relationship" id="relationship5" value="其他" type="radio" @(RegistrationForm.relationship == "其他" ? "checked" : "")>
+                <label for="relationship5">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>其他</p></div>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <div class="weui-cells">
+        <div class="weui-cell weui-start" style="padding-left: 0;">
+            <div class="weui-cell__hd "><label class="weui-label weui-labelz4" style="width:78px;text-align:right;">3. 姓名：</label></div>
+            <div class="weui-cell__bd">
+                <input class="weui-input border-radius" name="name" id="name" type="text" value="@RegistrationForm.name">
+            </div>
+        </div>
+        <div class="weui-cell weui-start" style="padding-left: 0;">
+            <div class="weui-cell__hd"><label class="weui-label weui-labelz4">性别：</label></div>
+            <div class="weui-cell__bd">
+                <input class="weui-input border-radius" name="gender" id="gender" type="text" value="@RegistrationForm.gender">
+            </div>
+        </div>
+        <div class="weui-cell weui-start" style="padding-left: 0;">
+            <div class="weui-cell__hd "><label class="weui-label weui-labelz4">年龄：</label></div>
+            <div class="weui-cell__bd">
+                <input class="weui-input border-radius" name="age" id="age" type="number" value="@RegistrationForm.age">
+            </div>
+        </div>
+        <div class="weui-cell weui-start" style="padding-left: 0;">
+            <div class="weui-cell__hd"><label class="weui-label weui-labelz4">民族：</label></div>
+            <div class="weui-cell__bd">
+                <input class="weui-input border-radius" name="nation" id="nation" type="text" value="@RegistrationForm.nation">
+            </div>
+        </div>
+    </div>
+
+    <div class="weui-cells">
+        <div class="weui-cell__hd ">
+            <label class="weui-label weui-start">4. 请输入您的手机号码： [填空题] </label>
+        </div>
+        <div class="weui-cell__bd weui-cell__bd_z1">
+            <input class="weui-input border-radius" name="mobile" id="mobile" type="text" value="@RegistrationForm.mobile">
+        </div>
+    </div>
+
+    <div class="weui-cells">
+        <div class="weui-cell__hd ">
+            <label class="weui-label weui-start">5. 与同心理联系的微信号 ：[填空题] </label>
+        </div>
+        <div class="weui-cell__bd weui-cell__bd_z1">
+            <input class="weui-input border-radius" name="wechat" id="wechat" type="text" value="@RegistrationForm.wechat">
+        </div>
+    </div>
+
+    <div class="weui-cells">
+        <div class="weui-cell__hd ">
+            <label class="weui-label weui-start">6. 职业： [填空题] </label>
+        </div>
+        <div class="weui-cell__bd weui-cell__bd_z1">
+            <input class="weui-input border-radius" name="career" id="career" type="text" value="@RegistrationForm.career">
+        </div>
+    </div>
+
+    <div class="weui-cells">
+        <label class="weui-label weui-start">7. 婚姻状况： [单选题] </label>
+        <div class="weui-form" style="padding: 0px 0px;">
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="maritalStatus" id="maritalStatus1" value="未婚" type="radio" @(RegistrationForm.maritalStatus == "未婚" ? "checked" : "")>
+                <label for="maritalStatus1">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>未婚</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="maritalStatus" id="maritalStatus2" value="已婚未育" type="radio" @(RegistrationForm.maritalStatus == "已婚未育" ? "checked" : "")>
+                <label for="maritalStatus2">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>已婚未育</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="maritalStatus" id="maritalStatus3" value="已婚已育" type="radio" @(RegistrationForm.maritalStatus == "已婚已育" ? "checked" : "")>
+                <label for="maritalStatus3">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>已婚已育</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="maritalStatus" id="maritalStatus4" value="离异" type="radio" @(RegistrationForm.maritalStatus == "离异" ? "checked" : "")>
+                <label for="maritalStatus4">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>离异</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="maritalStatus" id="maritalStatus5" value="丧偶" type="radio" @(RegistrationForm.maritalStatus == "丧偶" ? "checked" : "")>
+                <label for="maritalStatus5">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>丧偶</p></div>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <div class="weui-cells">
+        <label class="weui-label weui-start">8. 文化程度 ：[单选题] </label>
+        <div class="weui-form" style="padding: 0px 0px;">
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="educationalLevel" id="educationalLevel1" value="小学" type="radio" @(RegistrationForm.educationalLevel == "小学" ? "checked" : "")>
+                <label for="educationalLevel1">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>小学</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="educationalLevel" id="educationalLevel2" value="初中" type="radio" @(RegistrationForm.educationalLevel == "初中" ? "checked" : "")>
+                <label for="educationalLevel2">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>初中</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="educationalLevel" id="educationalLevel3" value="高中" type="radio" @(RegistrationForm.educationalLevel == "高中" ? "checked" : "")>
+                <label for="educationalLevel3">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>高中</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="educationalLevel" id="educationalLevel4" value="大专" type="radio" @(RegistrationForm.educationalLevel == "大专" ? "checked" : "")>
+                <label for="educationalLevel4">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>大专</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="educationalLevel" id="educationalLevel5" value="本科" type="radio" @(RegistrationForm.educationalLevel == "本科" ? "checked" : "")>
+                <label for="educationalLevel5">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>本科</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="educationalLevel" id="educationalLevel6" value="研究生及以上" type="radio" @(RegistrationForm.educationalLevel == "研究生及以上" ? "checked" : "")>
+                <label for="educationalLevel6">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>研究生及以上</p></div>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <div class="weui-cells">
+        <div class="weui-cell__hd ">
+            <label class="weui-label weui-start">9. 宗教信仰： [填空题] </label>
+        </div>
+        <div class="weui-cell__bd weui-cell__bd_z1">
+            <input class="weui-input border-radius" name="religion" id="religion" type="text" value="@RegistrationForm.religion">
+        </div>
+    </div>
+
+    <div class="weui-cells">
+        <div class="weui-cell__hd ">
+            <label class="weui-label weui-start">10. 现居住城市；[填空题] </label>
+        </div>
+        <div class="weui-cell__bd weui-cell__bd_z1">
+            <input class="weui-input border-radius" name="city" id="city" type="text" value="@RegistrationForm.city">
+        </div>
+    </div>
+
+    <div class="weui-cells">
+        <label class="weui-label weui-start">11. 和谁同住 ：[单选题] </label>
+        <div class="weui-form" style="padding: 0px 0px;">
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="cohabit" id="cohabit1" value="家人" type="radio" @(RegistrationForm.cohabit == "家人" ? "checked" : "")>
+                <label for="cohabit1">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>家人</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="cohabit" id="cohabit2" value="恋人" type="radio" @(RegistrationForm.cohabit == "恋人" ? "checked" : "")>
+                <label for="cohabit2">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>恋人</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="cohabit" id="cohabit3" value="合租" type="radio" @(RegistrationForm.cohabit == "合租" ? "checked" : "")>
+                <label for="cohabit3">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>合租</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="cohabit" id="cohabit4" value="寝室室友" type="radio" @(RegistrationForm.cohabit == "寝室室友" ? "checked" : "")>
+                <label for="cohabit4">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>寝室室友</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="cohabit" id="cohabit5" value="独居" type="radio" @(RegistrationForm.cohabit == "独居" ? "checked" : "")>
+                <label for="cohabit5">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>独居</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="cohabit" id="cohabit6" value="其他" type="radio" @(RegistrationForm.cohabit == "其他" ? "checked" : "")>
+                <label for="cohabit6">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>其他</p></div>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <div class="weui-cells">
+        <label class="weui-label weui-start">12. 了解途径 ：[单选题] </label>
+        <div class="weui-form" style="padding: 0px 0px;">
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="gateway" id="gateway1" value="医生推荐" type="radio" @(RegistrationForm.gateway == "医生推荐" ? "checked" : "")>
+                <label for="gateway1">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>医生推荐</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="gateway" id="gateway2" value="咨询师推荐" type="radio" @(RegistrationForm.gateway == "咨询师推荐" ? "checked" : "")>
+                <label for="gateway2">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>咨询师推荐</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="gateway" id="gateway3" value="微信公众号" type="radio" @(RegistrationForm.gateway == "微信公众号" ? "checked" : "")>
+                <label for="gateway3">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>微信公众号</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="gateway" id="gateway4" value="微信视频号" type="radio" @(RegistrationForm.gateway == "微信视频号" ? "checked" : "")>
+                <label for="gateway4">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>微信视频号</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="gateway" id="gateway5" value="美团/大众点评" type="radio" @(RegistrationForm.gateway == "美团/大众点评" ? "checked" : "")>
+                <label for="gateway5">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>美团/大众点评</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="gateway" id="gateway6" value="直播" type="radio" @(RegistrationForm.gateway == "直播" ? "checked" : "")>
+                <label for="gateway6">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>直播</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="gateway" id="gateway7" value="团体活动" type="radio" @(RegistrationForm.gateway == "团体活动" ? "checked" : "")>
+                <label for="gateway7">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>团体活动</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="gateway" id="gateway8" value="小红书" type="radio" @(RegistrationForm.gateway == "小红书" ? "checked" : "")>
+                <label for="gateway8">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>小红书</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="gateway" id="gateway9" value="政府活动/民非" type="radio" @(RegistrationForm.gateway == "政府活动/民非" ? "checked" : "")>
+                <label for="gateway9">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>政府活动/民非</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="gateway" id="gateway10" value="济心理课程" type="radio" @(RegistrationForm.gateway == "济心理课程" ? "checked" : "")>
+                <label for="gateway10">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>济心理课程</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="gateway" id="gateway11" value="朋友介绍" type="radio" @(RegistrationForm.gateway == "朋友介绍" ? "checked" : "")>
+                <label for="gateway11">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>朋友介绍</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="gateway" id="gateway12" value="其他" type="radio" @(RegistrationForm.gateway == "其他" ? "checked" : "")>
+                <label for="gateway12" style="float: left;">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>其他</p></div>
+                </label>
+                <div class="weui-cell__bd" style="float: left;">
+                    <input class="weui-input border-radius" name="gatewayQT" id="gatewayQT" type="text" value="@RegistrationForm.gateway">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="weui-cells">
+        <label class="weui-label weui-start">13. 咨询主题： [选择题]  </label>
+        <div class="weui-cell weui-form" style="padding: 0px 0px;">
+            <table style="width: 98%;">
+                <tbody>
+                    @foreach (T_Field item in Fieldlist.Where(o => o.FieldID == 0).ToArray())
+                    {
+                        <tr>
+                            <td>
+                                <div class="weui-form-li iblock weui-form-li-z2">
+                                    <input class="weui-form-checkbox" name="subject" id="subject @item.ID" value="@item.Name" type="checkbox" @(RegistrationForm.subject.Contains(item.Name) ? "checked" : "")>
+                                    <label for="subject @item.ID">
+                                        <i class="weui-icon-checkbox"></i>
+                                        <div class="weui-form-text" style="margin-right: 0px;"><p>@item.Name</p></div>
+                                    </label>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="layui-input-block" style="margin-left:10px;">
+                                    @foreach (T_Field item2 in Fieldlist.Where(o => o.FieldID == item.ID).ToArray())
+                                    {
+                                        <div class="weui-form-li iblock weui-form-li-z2">
+                                            <input class="weui-form-checkbox" name="subject" id="subject @item2.ID" value="@item2.Name" type="checkbox" @(RegistrationForm.subject.Contains(item2.Name) ? "checked" : "")>
+                                            <label for="subject @item2.ID">
+                                                <i class="weui-icon-checkbox"></i>
+                                                <div class="weui-form-text"><p>@item2.Name</p></div>
+                                            </label>
+                                        </div>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                    <tr>
+                        <td>
+                            <div class="weui-form-li iblock weui-form-li-z2">
+                                <input class="weui-form-checkbox" name="subject" id="subjectQTO" value="其他" type="checkbox" @(RegistrationForm.subject.Contains("其他") ? "checked" : "")>
+                                <label for="subjectQTO">
+                                    <i class="weui-icon-checkbox"></i>
+                                    <div class="weui-form-text" style="margin-right: 0px;"><p>其他</p></div>
+                                </label>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="layui-input-block" style="margin-left:10px;">
+
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+
+        </div>
+
+    </div>
+
+    <div class="weui-cells">
+        <label class="weui-label weui-start">14. 是否经医院诊断： [单选题]  </label>
+        <div class="weui-form" style="padding: 0px 0px;">
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="diagnosis" id="diagnosis1" value="否" type="radio" @(RegistrationForm.diagnosis == "否" ? "checked" : "")>
+                <label for="diagnosis1">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>否</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="diagnosis" id="diagnosis2" value="其他" type="radio" @(RegistrationForm.diagnosis == "是" ? "checked" : "")>
+                <label for="diagnosis2" style="float: left;">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>是，请填写诊断结果</p></div>
+                </label>
+                <div class="weui-cell__bd" style="float: left; width: 100%;">
+                    <input class="weui-input border-radius" name="diagnosisQT" id="diagnosisQT" type="text" value="@RegistrationForm.diagnosis">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="weui-cells">
+        <label class="weui-label weui-start">15. 是否在服药： [单选题]   </label>
+        <div class="weui-form" style="padding: 0px 0px;">
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="takeMedicine" id="takeMedicine1" value="否" type="radio" @(RegistrationForm.takeMedicine == "否" ? "checked" : "")>
+                <label for="takeMedicine1">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>否</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="takeMedicine" id="takeMedicine2" value="其他" type="radio" @(RegistrationForm.takeMedicine == "是" ? "checked" : "")>
+                <label for="takeMedicine2" style="float: left;">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>是，请填写服用的药物</p></div>
+                </label>
+                <div class="weui-cell__bd" style="float: left; width: 100%;">
+                    <input class="weui-input border-radius" name="takeMedicineQT" id="takeMedicineQT" type="text" value="@RegistrationForm.takeMedicine">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="weui-cells">
+        <label class="weui-label weui-start">16. 困扰持续的时间 ：[单选题]  </label>
+        <div class="weui-form" style="padding: 0px 0px;">
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="troubledTime" id="troubledTime1" value="2周以内" type="radio" @(RegistrationForm.troubledTime == "2周以内" ? "checked" : "")>
+                <label for="troubledTime1">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>2周以内</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="troubledTime" id="troubledTime2" value="2周-3个月" type="radio" @(RegistrationForm.troubledTime == "2周-3个月" ? "checked" : "")>
+                <label for="troubledTime2">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>2周-3个月</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="troubledTime" id="troubledTime3" value="3-6个月" type="radio" @(RegistrationForm.troubledTime == "3-6个月" ? "checked" : "")>
+                <label for="troubledTime3">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>3-6个月</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="troubledTime" id="troubledTime4" value="6个月-1年" type="radio" @(RegistrationForm.troubledTime == "6个月-1年" ? "checked" : "")>
+                <label for="troubledTime4">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>6个月-1年</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="troubledTime" id="troubledTime5" value="1年以上" type="radio" @(RegistrationForm.troubledTime == "1年以上" ? "checked" : "")>
+                <label for="troubledTime5">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>1年以上</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="troubledTime" id="troubledTime6" value="其他" type="radio" @(RegistrationForm.troubledTime == "其他" ? "checked" : "")>
+                <label for="troubledTime6" style="float: left;">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>其他</p></div>
+                </label>
+                <div class="weui-cell__bd" style="float: left;">
+                    <input class="weui-input border-radius" name="troubledTimeQT" id="troubledTimeQT" type="text" value="@RegistrationForm.troubledTime">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="weui-cells">
+        <label class="weui-label weui-start">17. 近期遭遇事件： [多选题]  </label>
+        <div class="weui-form" style="padding: 0px 0px;">
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="recentEvents" id="recentEvents1" value="无" type="checkbox" @(RegistrationForm.recentEvents.Contains("无") ? "checked" : "")>
+                <label for="recentEvents1">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>无</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="recentEvents" id="recentEvents2" value="亲友疾病/亲友亡故" type="checkbox" @(RegistrationForm.recentEvents.Contains("亲友疾病/亲友亡故") ? "checked" : "")>
+                <label for="recentEvents2">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>亲友疾病/亲友亡故</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="recentEvents" id="recentEvents3" value="失恋/分居/离异" type="checkbox" @(RegistrationForm.recentEvents.Contains("失恋/分居/离异") ? "checked" : "")>
+                <label for="recentEvents3">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>失恋/分居/离异</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="recentEvents" id="recentEvents4" value="重大挫折" type="checkbox" @(RegistrationForm.recentEvents.Contains("重大挫折") ? "checked" : "")>
+                <label for="recentEvents4">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>重大挫折</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="recentEvents" id="recentEvents5" value="家人失业" type="checkbox" @(RegistrationForm.recentEvents.Contains("家人失业") ? "checked" : "")>
+                <label for="recentEvents5">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>家人失业</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="recentEvents" id="recentEvents6" value="（本人或恋人配偶）意外怀孕或流产" type="checkbox" @(RegistrationForm.recentEvents.Contains("（本人或恋人配偶）意外怀孕或流产") ? "checked" : "")>
+                <label for="recentEvents6">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>（本人或恋人配偶）意外怀孕或流产</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="recentEvents" id="recentEvents7" value="激烈的人际冲突" type="checkbox" @(RegistrationForm.recentEvents.Contains("激烈的人际冲突") ? "checked" : "")>
+                <label for="recentEvents7">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>激烈的人际冲突</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="recentEvents" id="recentEvents8" value="人身遭受侵犯" type="checkbox" @(RegistrationForm.recentEvents.Contains("人身遭受侵犯") ? "checked" : "")>
+                <label for="recentEvents8">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>人身遭受侵犯</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="recentEvents" id="recentEvents9" value="较大财物损失" type="checkbox" @(RegistrationForm.recentEvents.Contains("较大财物损失") ? "checked" : "")>
+                <label for="recentEvents9">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>较大财物损失</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="recentEvents" id="recentEvents10" value="遭遇车祸或其他意外" type="checkbox" @(RegistrationForm.recentEvents.Contains("遭遇车祸或其他意外") ? "checked" : "")>
+                <label for="recentEvents10">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>遭遇车祸或其他意外</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="recentEvents" id="recentEvents11" value="严重生理疾病" type="checkbox" @(RegistrationForm.recentEvents.Contains("严重生理疾病") ? "checked" : "")>
+                <label for="recentEvents11">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>严重生理疾病</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="recentEvents" id="recentEvents12" value="自杀未遂" type="checkbox" @(RegistrationForm.recentEvents.Contains("自杀未遂") ? "checked" : "")>
+                <label for="recentEvents12">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>自杀未遂</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="recentEvents" id="recentEvents13" value="法律诉讼" type="checkbox" @(RegistrationForm.recentEvents.Contains("法律诉讼") ? "checked" : "")>
+                <label for="recentEvents13">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>法律诉讼</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="recentEvents" id="recentEvents14" value="其他重大压力事件" type="checkbox" @(RegistrationForm.recentEvents.Contains("其他重大压力事件") ? "checked" : "")>
+                <label for="recentEvents14">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>其他重大压力事件</p></div>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <div class="weui-cells">
+        <label class="weui-label weui-start">18. 心理咨询经历：[多选题] </label>
+        <div class="weui-form" style="padding: 0px 0px;">
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="experience" id="experience1" value="参加过团体辅导" type="checkbox" @(RegistrationForm.experience.Contains("参加过团体辅导") ? "checked" : "")>
+                <label for="experience1">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>参加过团体辅导</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="experience" id="experience2" value="做过短期咨询（半年以下）" type="checkbox" @(RegistrationForm.experience.Contains("做过短期咨询（半年以下）") ? "checked" : "")>
+                <label for="experience2">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>做过短期咨询（半年以下）</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="experience" id="experience3" value="做过长期咨询（半年以上）" type="checkbox" @(RegistrationForm.experience.Contains("做过长期咨询（半年以上）") ? "checked" : "")>
+                <label for="experience3">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>做过长期咨询（半年以上）</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="experience" id="experience4" value="看过精神科医生，仅服药未咨询" type="checkbox" @(RegistrationForm.experience.Contains("看过精神科医生，仅服药未咨询") ? "checked" : "")>
+                <label for="experience4">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>看过精神科医生，仅服药未咨询</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="experience" id="experience5" value="无" type="checkbox" @(RegistrationForm.experience.Contains("无") ? "checked" : "")>
+                <label for="experience5">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>无</p></div>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <div class="weui-cells">
+        <label class="weui-label weui-start">19. 情绪状态 [多选题] </label>
+        <div class="weui-form" style="padding: 0px 0px;">
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="emotionalState" id="emotionalState1" value="正常" type="checkbox" @(RegistrationForm.emotionalState == "正常" ? "checked" : "")>
+                <label for="emotionalState1">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>无</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="emotionalState" id="emotionalState2" value="抑郁" type="checkbox" @(RegistrationForm.emotionalState == "抑郁" ? "checked" : "")>
+                <label for="emotionalState2">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>抑郁</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="emotionalState" id="emotionalState3" value="高涨" type="checkbox" @(RegistrationForm.emotionalState == "高涨" ? "checked" : "")>
+                <label for="emotionalState3">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>高涨</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="emotionalState" id="emotionalState4" value="焦虑" type="checkbox" @(RegistrationForm.emotionalState.Contains("焦虑") ? "checked" : "")>
+                <label for="emotionalState4">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>焦虑</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="emotionalState" id="emotionalState5" value="淡漠" type="checkbox" @(RegistrationForm.emotionalState.Contains("淡漠") ? "checked" : "")>
+                <label for="emotionalState5">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>淡漠</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="emotionalState" id="emotionalState6" value="其他" type="checkbox" @(RegistrationForm.emotionalState.Contains("其他") ? "checked" : "")>
+                <label for="emotionalState6" style="float: left;">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>其他</p></div>
+                </label>
+                <div class="weui-cell__bd" style="float: left;">
+                    <input class="weui-input border-radius" name="emotionalStateQT" id="emotionalStateQT" type="text" value="@RegistrationForm.emotionalState">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="weui-cells">
+        <label class="weui-label weui-start">20. 意志行为 [多选题] </label>
+        <div class="weui-form" style="padding: 0px 0px;">
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="acOfWill" id="acOfWill1" value="正常" type="checkbox" @(RegistrationForm.acOfWill.Contains("正常") ? "checked" : "")>
+                <label for="acOfWill1">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>正常</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="acOfWill" id="acOfWill2" value="主动咨询" type="checkbox" @(RegistrationForm.acOfWill.Contains("主动咨询") ? "checked" : "")>
+                <label for="acOfWill2">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>主动咨询</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="acOfWill" id="acOfWill3" value="行为减退" type="checkbox" @(RegistrationForm.acOfWill.Contains("行为减退") ? "checked" : "")>
+                <label for="acOfWill3">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>行为减退</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="acOfWill" id="acOfWill4" value="强迫行为" type="checkbox" @(RegistrationForm.acOfWill.Contains("强迫行为") ? "checked" : "")>
+                <label for="acOfWill4">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>强迫行为</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="acOfWill" id="acOfWill5" value="上班上学困难" type="checkbox" @(RegistrationForm.acOfWill.Contains("上班上学困难") ? "checked" : "")>
+                <label for="acOfWill5">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>上班上学困难</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="acOfWill" id="acOfWill8" value="攻击行为" type="checkbox" @(RegistrationForm.acOfWill.Contains("攻击行为") ? "checked" : "")>
+                <label for="acOfWill8">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>攻击行为</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="acOfWill" id="acOfWill9" value="其他" type="checkbox" @(RegistrationForm.acOfWill.Contains("其他") ? "checked" : "")>
+                <label for="acOfWill9" style="float: left;">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>其他</p></div>
+                </label>
+                <div class="weui-cell__bd" style="float: left;">
+                    <input class="weui-input border-radius" name="acOfWillQT" id="acOfWillQT" type="text" value="@RegistrationForm.acOfWill">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="weui-cells">
+        <label class="weui-label weui-start">21. 躯体表现 [多选题] </label>
+        <div class="weui-form" style="padding: 0px 0px;">
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="manifestations" id="manifestations1" value="正常" type="checkbox" @(RegistrationForm.manifestations.Contains("正常") ? "checked" : "")>
+                <label for="manifestations1">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>正常</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="manifestations" id="manifestations2" value="失眠" type="checkbox" @(RegistrationForm.manifestations.Contains("失眠") ? "checked" : "")>
+                <label for="manifestations2">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>失眠</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="manifestations" id="manifestations3" value="睡眠增多" type="checkbox" @(RegistrationForm.manifestations.Contains("睡眠增多") ? "checked" : "")>
+                <label for="manifestations3">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>睡眠增多</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="manifestations" id="manifestations4" value="进食增多" type="checkbox" @(RegistrationForm.manifestations.Contains("进食增多") ? "checked" : "")>
+                <label for="manifestations4">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>进食增多</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="manifestations" id="manifestations5" value="进食减少" type="checkbox" @(RegistrationForm.manifestations.Contains("进食减少") ? "checked" : "")>
+                <label for="manifestations5">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>进食减少</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="manifestations" id="manifestations8" value="肠胃不适" type="checkbox" @(RegistrationForm.manifestations.Contains("肠胃不适") ? "checked" : "")>
+                <label for="manifestations8">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>肠胃不适</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="manifestations" id="manifestations9" value="其他" type="checkbox" @(RegistrationForm.manifestations.Contains("其他") ? "checked" : "")>
+                <label for="manifestations9" style="float: left;">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>其他</p></div>
+                </label>
+                <div class="weui-cell__bd" style="float: left;">
+                    <input class="weui-input border-radius" name="manifestationsQT" id="manifestationsQT" type="text" value="@RegistrationForm.manifestations">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="weui-cells">
+        <label class="weui-label weui-start">22. 紧急程度：为了更针对性地协助您，请阅读一下表述，选择符合您情况的选项，根据您选择的情况填写接下来两道题。 [单选题] </label>
+        <div class="weui-form" style="padding: 0px 0px;">
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="urgency0" id="urgency01" value="我目前的情况不太紧急" type="radio" @(RegistrationForm.urgency == "我目前的情况不太紧急" ? "checked" : "") onclick="document.getElementById('24Div').style.display = 'none'; document.getElementById('23Div').style.display = 'block';">
+                <label for="urgency01">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>我目前的情况不太紧急（转入23题）</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="urgency0" id="urgency02" value="我目前的情况比较紧急" type="radio" @(RegistrationForm.urgency == "我目前的情况比较紧急" ? "checked" : "") onclick="document.getElementById('23Div').style.display = 'none'; document.getElementById('24Div').style.display = 'block';">
+                <label for="urgency02">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>我目前的情况比较紧急（转入24题）</p></div>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <div class="weui-cells" id="23Div">
+        <label class="weui-label weui-start">23. 我目前的情况不太紧急： [多选题] </label>
+        <div class="weui-form" style="padding: 0px 0px;">
+            <div class="weui-form-li">
+                <input class="weui-form-checkbox" name="urgency1" id="urgency11" value="我曾经有过自伤、自杀行为" type="checkbox" @(RegistrationForm.urgency1.Contains("我曾经有过自伤、自杀行为") ? "checked" : "")>
+                <label for="urgency11">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>我曾经有过自伤、自杀行为</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li">
+                <input class="weui-form-checkbox" name="urgency1" id="urgency12" value="我认为咨询1次就够了" type="checkbox" @(RegistrationForm.urgency1.Contains("我认为咨询1次就够了") ? "checked" : "")>
+                <label for="urgency12">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>我认为咨询1次就够了</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li">
+                <input class="weui-form-checkbox" name="urgency1" id="urgency13" value="我想找人交谈，进行几次咨询" type="checkbox" @(RegistrationForm.urgency1.Contains("我想找人交谈，进行几次咨询") ? "checked" : "")>
+                <label for="urgency13">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>我想找人交谈，进行几次咨询</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li">
+                <input class="weui-form-checkbox" name="urgency1" id="urgency14" value="我希望较长（6次及以上）的个人心理咨询" type="checkbox" @(RegistrationForm.urgency1.Contains("我希望较长（6次及以上）的个人心理咨询") ? "checked" : "")>
+                <label for="urgency14">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>我希望较长（6次及以上）的个人心理咨询</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li">
+                <input class="weui-form-checkbox" name="urgency1" id="urgency15" value="我还不清楚需要咨询的类型" type="checkbox" @(RegistrationForm.urgency1.Contains("我还不清楚需要咨询的类型") ? "checked" : "")>
+                <label for="urgency15">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>我还不清楚需要咨询的类型</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li">
+                <input class="weui-form-checkbox" name="urgency1" id="urgency16" value="我不需要咨询，但愿意获取一些相关信息" type="checkbox" @(RegistrationForm.urgency1.Contains("我不需要咨询，但愿意获取一些相关信息") ? "checked" : "")>
+                <label for="urgency16">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>我不需要咨询，但愿意获取一些相关信息</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li">
+                <input class="weui-form-checkbox" name="urgency1" id="urgency17" value="我很担忧其他人（朋友、家属等）" type="checkbox" @(RegistrationForm.urgency1.Contains("我很担忧其他人（朋友、家属等）") ? "checked" : "")>
+                <label for="urgency17">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>我很担忧其他人（朋友、家属等）</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li">
+                <input class="weui-form-checkbox" name="urgency1" id="urgency18" value="有人推荐我接受心理咨询" type="checkbox" @(RegistrationForm.urgency1.Contains("有人推荐我接受心理咨询") ? "checked" : "")>
+                <label for="urgency18">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>有人推荐我接受心理咨询</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li">
+                <input class="weui-form-checkbox" name="urgency1" id="urgency19" value="其他" type="checkbox" @(RegistrationForm.urgency1.Contains("其他") ? "checked" : "")>
+                <label for="urgency19" style="float: left;">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="width: calc(100% - 30px); margin-right: 0px;"><p>其他：以上所有情况都与我不符，但是我仍想要与心理咨询服务人员交流</p></div>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <div class="weui-cells" id="24Div">
+        <label class="weui-label weui-start">24. 我目前的情况比较紧急 ：[多选题] </label>
+        <div class="weui-form" style="padding: 0px 0px;">
+            <div class="weui-form-li">
+                <input class="weui-form-checkbox" name="urgency2" id="urgency21" value="我有自伤、自杀的念头" type="checkbox" @(RegistrationForm.urgency2.Contains("我有自伤、自杀的念头") ? "checked" : "")>
+                <label for="urgency21">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>我有自伤、自杀的念头</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li">
+                <input class="weui-form-checkbox" name="urgency2" id="urgency22" value="我已经计划好要试图自伤、自杀" type="checkbox" @(RegistrationForm.urgency2.Contains("我已经计划好要试图自伤、自杀") ? "checked" : "")>
+                <label for="urgency22">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>我已经计划好要试图自伤、自杀</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li">
+                <input class="weui-form-checkbox" name="urgency2" id="urgency23" value="我最近一直有伤害自己的行为" type="checkbox" @(RegistrationForm.urgency2.Contains("我最近一直有伤害自己的行为") ? "checked" : "")>
+                <label for="urgency23">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>我最近一直有伤害自己的行为</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li">
+                <input class="weui-form-checkbox" name="urgency2" id="urgency24" value="我有亲友患有严重疾病或半年内刚去世" type="checkbox" @(RegistrationForm.urgency2.Contains("我有亲友患有严重疾病或半年内刚去世") ? "checked" : "")>
+                <label for="urgency24">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>我有亲友患有严重疾病或半年内刚去世</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li">
+                <input class="weui-form-checkbox" name="urgency2" id="urgency25" value="我已经2天（及以上）没睡好觉了" type="checkbox" @(RegistrationForm.urgency2.Contains("我已经2天（及以上）没睡好觉了") ? "checked" : "")>
+                <label for="urgency25">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>我已经2天（及以上）没睡好觉了</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li">
+                <input class="weui-form-checkbox" name="urgency2" id="urgency26" value="我有一些不寻常体验比如听到或看到别人听不到或看不到的东西" type="checkbox" @(RegistrationForm.urgency2.Contains("我有一些不寻常体验比如听到或看到别人听不到或看不到的东西") ? "checked" : "")>
+                <label for="urgency26">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="width: calc(100% - 30px); margin-right: 0px;"><p>我有一些不寻常体验比如听到或看到别人听不到或看不到的东西</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li">
+                <input class="weui-form-checkbox" name="urgency2" id="urgency27" value="我最近受到了人身伤害或性侵犯" type="checkbox" @(RegistrationForm.urgency2.Contains("我最近受到了人身伤害或性侵犯") ? "checked" : "")>
+                <label for="urgency27">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>我最近受到了人身伤害或性侵犯</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li">
+                <input class="weui-form-checkbox" name="urgency2" id="urgency28" value="未来2-3天我将对我的人生做重大决定" type="checkbox" @(RegistrationForm.urgency2.Contains("未来2-3天我将对我的人生做重大决定") ? "checked" : "")>
+                <label for="urgency28">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>未来2-3天我将对我的人生做重大决定</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li">
+                <input class="weui-form-checkbox" name="urgency2" id="urgency29" value="有人强烈建议我寻求心理咨询的帮助" type="checkbox" @(RegistrationForm.urgency2.Contains("有人强烈建议我寻求心理咨询的帮助") ? "checked" : "")>
+                <label for="urgency29">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>有人强烈建议我寻求心理咨询的帮助</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li">
+                <input class="weui-form-checkbox" name="urgency2" id="urgency210" value="其他" type="checkbox" @(RegistrationForm.urgency2.Contains("其他") ? "checked" : "")>
+                <label for="urgency210">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="width: calc(100% - 30px); margin-right: 0px;"><p>其他：以上所有情况都与我不符，但是我仍想要与心理咨询服务人员交流</p></div>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <div class="weui-cells">
+        <label class="weui-label weui-start">25. 我在最近三个月曾经听到或看到别人听不到或看不到的人或事 ：[单选题]</label>
+        <div class="weui-form" style="padding: 0px 0px;">
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="Item25" id="Item251" value="是" type="radio" @(RegistrationForm.Item25 == "是" ? "checked" : "")>
+                <label for="Item251">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>是</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="Item25" id="Item252" value="否" type="radio" @(RegistrationForm.Item25 == "否" ? "checked" : "")>
+                <label for="Item252">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>否</p></div>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <div class="weui-cells">
+        <label class="weui-label weui-start">26. 我感到有人或者组织想要伤害我，我处在危险中： [单选题]  </label>
+        <div class="weui-form" style="padding: 0px 0px;">
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="Item26" id="Item261" value="是" type="radio" @(RegistrationForm.Item26 == "是" ? "checked" : "")>
+                <label for="Item261">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>是</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="Item26" id="Item262" value="否" type="radio" @(RegistrationForm.Item26 == "否" ? "checked" : "")>
+                <label for="Item262">
+                    <i class="weui-icon-radio"></i>
+                    <div class="weui-form-text"><p>否</p></div>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <div class="weui-cells">
+        <label class="weui-label weui-start">27. 您方便的服务形式： [多选题] </label>
+        <div class="weui-form" style="padding: 0px 0px;">
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="serviceForm" id="serviceForm1" value="地面咨询【杨浦同济科技大厦】" type="checkbox" @(RegistrationForm.serviceForm.Contains("地面咨询【杨浦同济科技大厦】") ? "checked" : "")>
+                <label for="serviceForm1">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>地面咨询【杨浦同济科技大厦】</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="serviceForm" id="serviceForm2" value="地面咨询【浦东陆家嘴永华大厦】" type="checkbox" @(RegistrationForm.serviceForm.Contains("地面咨询【浦东陆家嘴永华大厦】") ? "checked" : "")>
+                <label for="serviceForm2">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>地面咨询【浦东陆家嘴永华大厦】</p></div>
+                </label>
+            </div>
+            <div class="weui-form-li iblock">
+                <input class="weui-form-checkbox" name="serviceForm" id="serviceForm3" value="远程视频咨询【腾讯会议】" type="checkbox" @(RegistrationForm.serviceForm.Contains("远程视频咨询【腾讯会议】") ? "checked" : "")>
+                <label for="serviceForm3">
+                    <i class="weui-icon-checkbox"></i>
+                    <div class="weui-form-text" style="margin-right: 0px;"><p>远程视频咨询【腾讯会议】</p></div>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    @*<div class="weui-cells">
+            <label class="weui-label weui-start">28. 您期待的咨费区间 ：[选择题] </label>
+            <div class="weui-form-text" style="margin-left: 28px;"><p>我们的咨询咨费为400元-1200元（50分钟），告知我们此项信息，有助于助理为你推荐合适价位的咨询师。</p></div>
+            <div class="weui-form" style="padding: 0px 0px;">
+                <div class="weui-form-li iblock">
+                    <input class="weui-form-checkbox" name="feeRange" id="feeRange1" value="普通咨询师：400-500元（50分钟）" type="radio" @(RegistrationForm.feeRange == "普通咨询师：400-500元（50分钟）" ? "checked" : "")>
+                    <label for="feeRange1">
+                        <i class="weui-icon-radio"></i>
+                        <div class="weui-form-text"><p>普通咨询师：400-500元（50分钟）</p></div>
+                    </label>
+                </div>
+                <div class="weui-form-li iblock">
+                    <input class="weui-form-checkbox" name="feeRange" id="feeRange2" value="成熟咨询师：600-800元（50分钟）" type="radio" @(RegistrationForm.feeRange == "成熟咨询师：600-800元（50分钟）" ? "checked" : "")>
+                    <label for="feeRange2">
+                        <i class="weui-icon-radio"></i>
+                        <div class="weui-form-text"><p>成熟咨询师：600-800元（50分钟）</p></div>
+                    </label>
+                </div>
+                <div class="weui-form-li iblock">
+                    <input class="weui-form-checkbox" name="feeRange" id="feeRange3" value="资深咨询师：1000元以上（50分钟）" type="radio" @(RegistrationForm.feeRange == "资深咨询师：1000元以上（50分钟）" ? "checked" : "")>
+                    <label for="feeRange3">
+                        <i class="weui-icon-radio"></i>
+                        <div class="weui-form-text"><p>资深咨询师：1000元以上（50分钟）</p></div>
+                    </label>
+                </div>
+            </div>
+        </div>*@
+
+    <div class="weui-cells">
+        <div class="weui-cell__hd ">
+            <label class="weui-label weui-start">28. 其他您还想告知我们的信息： [填空题] </label>
+        </div>
+        <div class="weui-cell__bd weui-cell__bd_z1">
+            @*<input class="weui-input border-radius" name="otherMsg" id="otherMsg" type="text" value="@RegistrationForm.otherMsg">*@
+            <div class="weui-cell__bd">
+                <textarea class="weui-textarea" placeholder="请输入文本" rows="4" onkeyup="textarea(this);" id="otherMsg" name="otherMsg">@RegistrationForm.otherMsg</textarea>
+            </div>
+            <i class="weui-icon-clear" onclick="cleararea(this)"></i>
+        </div>
+    </div>
+
+
+    <div class="weui-cells">
+        <div class="weui-form-text"><p>贴心提示：由于心理健康问题的多样性和复杂性，通常不会在一次咨询会议中得到全面解决。咨询的次数往往是根据来访者面临的具体问题和问题的严重程度而定的，因此咨询的频次并不固定。建议在进行至少3次咨询后，与您的咨询师共同讨论和确定未来的咨询计划。</p></div>
+        <div class="weui-form-text"><p>此外，来访者的自愿参与同样至关重要。如果您是为您的亲人或朋友预约咨询，请务必在预约前了解并尊重他们的意愿和想法，确保他们是主动寻求帮助。当来访者更主动地投入和合作时，才能更充分体验到咨询带来的益处。</p></div>
+        <p style="height:30px;">  &nbsp; </p>
+    </div>
+
+    <br>
+    <br>
+</body>
+</html>

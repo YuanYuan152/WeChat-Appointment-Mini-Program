@@ -1,0 +1,1135 @@
+body,ul,li,p,h1,h2,h3,h4,h5,h6,dl,dt,dd{
+	margin: 0;
+	padding: 0;
+}
+body{
+	color: #313439;
+	background-color: #f2f4f7;
+}
+li{
+	list-style: none;
+}
+a{
+	text-decoration: none;
+	color: #313439;
+	transition: .3s;
+}
+a:hover{
+	color: #003171;
+}
+img{
+	border:0;
+	max-width: 100%;
+}
+.clearfix{
+	*zoom:1;
+}
+.clearfix:after{
+	content: "";
+	display: table;
+	clear: both;
+}
+.header{
+	background:#fff url(../img/header-bg.jpg) top center no-repeat;
+	background-size: 100%;
+}
+.container{
+	max-width: 1200px;
+	margin: 0 auto;
+}
+.nav ul{
+	padding: 20px 0;
+}
+.nav li{
+	width: 14.285%;
+	float: left;
+	text-align: center;
+}
+.nav li a{
+	position: relative;
+	display: block;
+	padding-top: 35px;
+	color: #fff;
+	font-size: 18px;
+}
+.nav li a:hover{
+	color: #f4454a;
+}
+
+.nav li a.active{
+	color: #f4454a;
+	font-weight: bold;
+}
+.nav li a.active:after{
+	position: absolute;
+	bottom: -30px;
+	left: 39%;
+	content: "";
+	width: 40px;
+	height: 3px;
+	border-radius: 10px;
+	background: #f4454a;
+}
+.nav-btn{
+	display: none;
+	position: absolute;
+	top: 0;
+	right: 0;
+}
+.nav-btn .btn-hamburg{
+	float: right;
+	margin-top: 30px;
+	margin-right: 20px;
+}
+.nav-btn .btn-hamburg span{
+	display: block;
+	width: 20px;
+	height: 3px;
+	background-color: #fff;
+	margin-bottom: 5px;
+}
+.mobile-logo{
+	padding-top: 10px;
+	display: none;
+	text-align: center;
+}
+.mobile-logo img{
+	height: 70px;
+}
+
+
+.banner-slider{
+	margin-top: 20px;
+}
+.banner-slider .item .title-border{
+	padding-left: 20px;
+	margin-left: 15px;
+	margin-bottom: 10px;
+	border-left: 5px solid #fff;
+}
+.banner-slider .item .title-border p{
+	font-size: 22px;
+}
+.banner-slider .item .title-border span{
+	font-size: 14px;
+	opacity: 0.6;
+	font-weight: normal;
+}
+.banner-slider .owl-controls{
+	margin: 0;
+}
+.banner-slider .owl-nav{
+	opacity: 0;
+	position: absolute;
+	top: 40%;
+	width: 100%;
+	z-index: 2;
+	transition: 0.3s;
+}
+.banner-slider:hover .owl-nav{
+	opacity: 1;
+}
+.banner-slider .owl-nav .owl-prev{
+	position: absolute;
+	left: 0;
+}
+.banner-slider .owl-nav .owl-next{
+	position: absolute;
+	right: 0;
+}
+.banner-slider .owl-dots{
+	position: absolute;
+	right: 10px;
+	bottom: 20px;
+}
+
+
+.big-icon{
+	background: #fff;
+	padding: 40px 0;
+}
+.big-icon li{
+	width: 14.285%;
+	float: left;
+	text-align: center;
+}
+.big-icon li a{
+	font-size: 18px;
+	font-weight: bold;
+	color: #003171;
+}
+.big-icon li a i{
+	width: 120px;
+	height: 120px;
+	display: block;
+	margin: 15px auto;
+	background-size: 100%!important;
+	transition: .3s;
+}
+.big-icon li a i.icon1{
+	background: url(../img/icon1.png) no-repeat;
+}
+.big-icon li a:hover i.icon1{
+	background: url(../img/icon1-hover.png) no-repeat;
+}
+.big-icon li a i.icon2{
+	background: url(../img/icon2.png) no-repeat;
+}
+.big-icon li a:hover i.icon2{
+	background: url(../img/icon2-hover.png) no-repeat;
+}
+.big-icon li a i.icon3{
+	background: url(../img/icon3.png) no-repeat;
+}
+.big-icon li a:hover i.icon3{
+	background: url(../img/icon3-hover.png) no-repeat;
+}
+.big-icon li a i.icon4{
+	background: url(../img/icon4.png) no-repeat;
+}
+.big-icon li a:hover i.icon4{
+	background: url(../img/icon4-hover.png) no-repeat;
+}
+.big-icon li a i.icon5{
+	background: url(../img/icon5.png) no-repeat;
+}
+.big-icon li a:hover i.icon5{
+	background: url(../img/icon5-hover.png) no-repeat;
+}
+.big-icon li a i.icon6{
+	background: url(../img/icon6.png) no-repeat;
+}
+.big-icon li a:hover i.icon6{
+	background: url(../img/icon6-hover.png) no-repeat;
+}
+.big-icon li a i.icon7{
+	background: url(../img/icon7.png) no-repeat;
+}
+.big-icon li a:hover i.icon7{
+	background: url(../img/icon7-hover.png) no-repeat;
+}
+
+
+.news{
+	float: left;
+	width: 49%;
+}
+.main{
+	padding-top: 20px;
+}
+.main-title{
+	margin: 30px 0;
+}
+.main-title h2{
+	float: left;
+	padding-left: 15px;
+	border-left: 4px solid #f4454a;
+	font-size: 24px;
+	line-height: 24px;
+	font-weight: bold;
+	color: #003171;
+}
+.main-title a{
+	float: right;
+	font-size: 16px;
+	font-weight: bold;
+	color: #003171;
+}
+.main-title a:hover{
+	color: #f4454a;
+}
+
+.panel{
+	padding: 20px;
+	background-color: #fff;
+}
+
+.news-headlines{
+	margin-bottom: 10px;
+}
+.news-headlines dt{
+	float: left;
+	width: 38%;
+	margin-right: 20px;
+}
+.news-headlines dd h3{
+	padding-top: 10px;
+	margin-bottom: 30px;
+	font-size: 18px;
+	line-height: 30px;
+	font-weight: bold;
+}
+.news-headlines dd p{
+	font-size: 14px;
+	color: #999;
+}
+.news-list li{
+	position: relative;
+	display: block;
+	padding: 15px 0 15px 20px;
+}
+.news-list li:before{
+	content: "";
+	position: absolute;
+	left: 0;
+	margin-top: 5px;
+	width: 5px;
+	height: 5px;
+	border:2px solid #f4454a;
+	border-radius: 10px;
+}
+
+.news-list li a{
+	margin-right: 70px;
+	display: block;
+	font-size: 16px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	overflow: hidden;
+}
+.news-list li span{
+	position: absolute;
+	top: 17px;
+	right: 0;
+	font-size: 14px;
+	color: #999;
+}
+
+.competition{
+	float: right;
+	width: 47%;
+}
+
+.activity-item{
+	padding-top: 20px;
+	position: relative;
+	border-bottom: 1px dashed #ddd;
+}
+.activity-item h3{
+	position: relative;
+	font-size: 18px;
+	padding-left: 20px;
+	margin-bottom: 10px;
+}
+.activity-item h3:before{
+	content: "";
+	position: absolute;
+	left: 0;
+	margin-top: 8px;
+	width: 5px;
+	height: 5px;
+	border:2px solid #f4454a;
+	border-radius: 10px;
+}
+.activity-item p{
+	margin-bottom: 20px;
+	font-size: 14px;
+	color: #717275;
+}
+.activity-item p img{
+	float: left;
+	margin: 2px 5px 0 20px;
+}
+
+.activity-item .join-btn{
+	position: absolute;
+	right: 0;
+	top: 30px;
+	padding: 5px 15px;
+	font-size: 14px;
+	color: #fff;
+	background: #003171;
+	border-radius: 3px;
+}
+.activity-item .join-btn:hover{
+	background-color: #f4454a;
+}
+.activity .panel{
+	padding: 5px 20px;
+}
+.activity .activity-item:last-child{
+	border-bottom: 0;
+}
+
+.integral ul{
+	padding: 12px 0;
+}
+.integral li{
+	float: left;
+	width: 33.333%;
+	text-align: center;
+	color: #313439;
+}
+.integral li p{
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	overflow: hidden;
+	font-weight: bold;
+	font-size: 16px;
+	margin-bottom: 15px;
+}
+.integral li a{
+	background-color: #f4454a;
+	color: #fff;
+	font-size: 14px;
+	padding: 4px 12px;
+	border-radius: 5px;
+}
+
+.topic{
+	padding-top: 170px;
+	background: url(../img/ztss-bg.jpg) top center no-repeat;
+}
+.topic-line{
+	text-align: center;
+}
+.topic h2{
+	padding: 15px 0;
+	text-align: center;
+	font-size: 56px;
+	font-weight: bold;
+	color: #fff;
+}
+
+.tab-nav{
+	overflow: hidden;
+	text-align: center;
+}
+.tab-nav li{
+	margin: 0 8px;
+	position: relative;
+	display: inline-block;
+	font-size: 18px;
+	font-weight: bold;
+	color: #003171;
+	cursor: pointer;
+}
+.tab-nav li:after{
+	content: "";
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 47px;
+	background: #fff;
+	transform: skew(-30deg);
+}
+.tab-nav li span{
+	display: block;
+	padding: 10px 20px;
+	position: relative;
+	z-index: 2;
+}
+.tab-nav li.selectActive{
+	color: #fff;
+}
+.tab-nav li.selectActive:after{
+	background-color: #f4454a;
+}
+
+
+
+.topic-content{
+	display: none;
+}
+.topic-content img{
+	display: block;
+}
+.topic-tab .tab-btn{
+	margin-top: 35px;
+	text-align: center;
+}
+.topic-tab .tab-btn li{
+	display: inline-block;
+	padding: 8px 20px;
+	cursor: pointer;
+	transition: .7s;
+	border-radius: 50px;
+}
+.topic-tab .tab-btn li:hover{
+	color: #e10000;
+}
+.topic-tab .tab-btn li.selectActive{
+	background: #e10000;
+	background: -webkit-linear-gradient(left, #e10000 , #ff8840);
+    background: -o-linear-gradient(right, #e10000, #ff8840);
+    background: -moz-linear-gradient(right, #e10000, #ff8840);
+    background: linear-gradient(to right, #e10000 , #ff8840);
+    color: #fff;
+}
+.topic-tab .tab-btn li.selectActive:hover{
+	box-shadow: 0 8px 20px -2px rgba(225,0,0,.3);
+	transform:scale(1.06,1.06);
+}
+.topic-small{
+	overflow: hidden;
+}
+.topic-small a{
+	width: 50%;
+	box-sizing: border-box;
+}
+
+.topic-small a:first-child{
+	float: left;
+}
+.topic-small a:last-child{
+	float:right;
+}
+.topic-content{
+	overflow: hidden;
+	margin-top: 50px;
+}
+.topic-content a{
+	position: relative;
+	display: block;
+	overflow: hidden;
+}
+.topic-content a:hover .topic-text{
+	opacity: 1;
+	top: 0;
+}
+.topic-content a img{
+	width: 100%;
+	transition: .3s;
+	margin: 0 1px;
+}
+.topic-content a:hover img{
+	transform:scale(1.06,1.06);
+}
+
+.topic-content .topic-col50:first-child{
+	float: left;
+}
+.topic-content .topic-col50:first-child .topic-small{
+	margin-bottom: 1px;
+}
+.topic-content .topic-col50:last-child{
+	float: right;
+}
+.topic-content .topic-col50:last-child .topic-small{
+	margin-top: 1px;
+}
+.topic-col50{
+	width: 50%;
+	box-sizing: border-box;
+}
+
+.topic-text{
+	transition: .3s;
+	opacity: 0;
+	position: absolute;
+	top: -100%;
+	z-index: 2;
+	width: 100%;
+	height: 100%;
+	text-align: center;
+	color: #fff;
+	background: rgba(11,87,179,.6);
+}
+.topic-text h4{
+	margin-left: 10px;
+	margin-right: 10px;
+	margin-top: 20%;
+	color: #fff;
+	font-size: 28px;
+	font-weight: 400;
+	margin-bottom: 15px;
+}
+
+.topic-text p{
+	color: #fff;
+	opacity: .65;
+	margin-bottom: 20px;
+	text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+}
+.topic-text span{
+	display: inline-block;
+	width: 56px;
+	height: 56px;
+	line-height: 56px;
+	border-radius: 100px;
+	border:1px solid rgba(255,255,255,.5);
+}
+.topic-text span i img{
+	width: 20px;
+	display: block;
+	margin: 17px auto;
+}
+
+.topic .more{
+	text-align: center;
+}
+.topic .more a{
+	display: inline-block;
+	margin-top: 60px;
+	background: #e10000;
+	background: -webkit-linear-gradient(left, #e10000 , #ff8840);
+    background: -o-linear-gradient(right, #e10000, #ff8840);
+    background: -moz-linear-gradient(right, #e10000, #ff8840);
+    background: linear-gradient(to right, #e10000 , #ff8840);
+    color: #fff;
+	padding: 8px 40px;
+    border-radius: 50px;
+    transition: .7s;
+}
+.topic .more a:hover{
+	box-shadow: 0 8px 20px -2px rgba(225,0,0,.3);
+	transform:scale(1.06,1.06);
+}
+
+
+.link{
+	padding: 30px 0;
+}
+.link h2{
+	margin-top: 60px;
+	padding-left: 15px;
+	font-size: 24px;
+	line-height: 24px;
+	float: left;
+	border-left: 4px solid #f4454a;
+	color: #003171;
+}
+.link ul{
+	float: right;
+	width: 80%;
+	overflow: hidden;
+}
+.link ul li{
+	width: 20%;
+	float: left;
+}
+.link ul li a{
+	margin: 10px;
+	border:1px solid #eee;
+	display: block;
+}
+.link ul li a img{
+	display: block;
+}
+
+.footer{
+	padding: 30px 0;
+	background: #003171;
+	text-align: center;
+	font-size: 14px;
+	line-height: 34px;
+	color: #fff;
+}
+
+.inside-header{
+	background: #003171;
+}
+
+.inside-banner{
+	padding-top: 84px;
+	height: 210px;
+	background: url(../img/inside-banner.jpg) top center no-repeat;
+}
+
+.inside-banner h2{
+	margin-bottom: 25px;
+	font-size: 32px;
+	color: #003171;
+}
+.crumbs a{
+	margin:0 5px;
+}
+.crumbs span{
+	margin:0 5px;
+	color: #003171;
+}
+.crumbs .home-icon{
+	float: left;
+	margin-top: 2px;
+}
+.search{
+	padding-top: 40px;
+	padding-bottom: 40px;
+	margin-top: -70px;
+	background: #fff;
+}
+.search-item{
+	padding: 0 20px;
+	float: left;
+}
+.search-item label{
+	padding: 0 10px;
+	font-size: 16px;
+	color: #313439;
+}
+.search-item input{
+	width: 230px;
+	padding: 0 5px;
+	height: 45px;
+	border:1px solid #ddd;
+	box-sizing: border-box;
+}
+.search-item select{
+	padding: 0 10px;
+	width: 180px;
+	height: 45px;
+	border:1px solid #ddd;
+	box-sizing: border-box;
+}
+
+.search-btn{
+	float: left;
+	background: #003171;
+	font-size: 18px;
+} 
+.search-btn a{
+	display: block;
+	width: 118px;
+	height: 45px;
+	line-height: 45px;
+	color: #fff;
+	text-align: center;
+}
+.competition-list{
+	margin: 0 -1.5%;
+}
+.competition-panel{
+	float: left;
+	width: 30.333%;
+	margin: 25px 1.5% 0;
+}
+.competition-panel img{
+	display: block;
+}
+.competition-info{
+	padding: 20px;
+	background: #fff;
+}
+.competition-info h4{
+	font-size: 16px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	overflow: hidden;
+}
+.competition-info p{
+	margin: 5px 0 10px ;
+	font-size: 14px;
+	color: #999;
+}
+.competition-info a{
+	padding: 5px 10px;
+	background-color: #f4454a;
+	color: #fff;
+	border-radius: 3px;
+	font-size: 14px;
+}
+.page{
+	padding: 40px 0;
+	text-align: center;
+}
+.page a{
+	margin-bottom: 10px;
+	padding: 8px 20px;
+	display: inline-block;
+	background: #fff;
+}
+.page a:hover,
+.page a.active{
+	color: #fff;
+	background-color: #003171;
+}
+
+
+.inside-panel{
+	margin: 30px 0;
+	background: #fff;
+	padding: 30px;
+}
+.inside-panel .main-title{
+	margin-top: 0;
+}
+.inside-panel .season{
+	float: right;
+	color: #003171;
+	font-weight: bold;
+}
+
+.table table{
+	width: 100%;
+	border:1px solid #eee;
+	border-spacing: 0;
+    border-collapse: collapse;
+}
+.table table th,
+.table table td{
+	padding: 20px 5px;
+	text-align: center;
+	border-bottom: 1px solid #eee;
+}
+.table th{
+	background: #f2f4f7;
+}
+.table td{
+	font-size: 14px;
+}
+.table tbody tr:hover{
+	background-color: #f7f8fa;
+}
+.table tr a{
+	padding: 4px 10px;
+	background-color: #f4454a;
+	color: #fff;
+	border-radius: 3px;
+	font-size: 14px;
+}
+.athletes-search label{
+	width: 40%;
+	float: left;
+	padding: 0;
+	text-align: center;
+	padding-top: 12px;
+}
+.athletes-search .search-item{
+	width: 22%;
+	padding: 0;	
+}
+.athletes-search input,
+.athletes-search select{
+	width: 60%;
+}
+.athletes-search .search-btn{
+	width: 8%;
+	float: right;
+	margin-right: 2%;
+}
+.athletes-search .search-btn a{
+	width: auto;
+}
+.athletes-info{
+	overflow: hidden;
+	margin-bottom: 20px;
+}
+.athletes-info dt{
+	float: left;
+	margin-right: 20px;
+}
+.athletes-info dd{
+	padding: 5px 0;
+	font-size: 16px;
+	font-weight: bold;
+	color: #003171;
+}
+
+@media (max-width: 1440px){
+	.topic-text h4{
+		margin-top: 15%;
+		font-size: 24px;
+	}
+}
+
+@media (max-width: 1200px){
+	.container{
+		margin: 0 15px;
+	}
+	.big-icon li a i{
+		width: 100px;
+		height: 100px;
+	}
+	.topic-text span{
+		display: none;
+	}
+	.topic-text h4{
+		font-size: 18px;
+	}
+	.table{
+		width: 100%;
+		overflow-x: auto;
+	}
+	.table table{
+		width: 1000px;
+	}
+}
+
+@media (max-width: 768px){
+	.header{
+		background-size: 130%;
+	}
+	.main-nav{
+		display: none;
+	}
+	.mobile-logo,.nav-btn{
+		display: block;
+	}
+	.banner-slider .item .title-border p{
+		font-size: 16px;
+	}
+	.main-nav{
+		margin-top: 20px;
+		width: 100%;
+		position: absolute;
+		left: 0;
+		z-index: 3;
+		background: rgba(0, 0, 0, .8);
+	}
+	.inside-header .main-nav{
+		margin-top: 0;
+	}
+	.nav ul{
+		padding: 0 0 25px;
+	}
+	.main-nav li{
+		display: block;
+		width: 100%;
+		float: none;
+	}
+	.main-nav li.logo{
+		display: none;
+	}
+	.nav li a.active:after{
+		left: 50%;
+		margin-left: -20px;
+		bottom: -15px;
+	}
+	.big-icon{
+		padding: 20px 0 30px;
+	}
+	.big-icon li a i{
+		width: 60px;
+		height: 60px;
+	}
+	.big-icon li a{
+		font-size: 14px;
+	}
+	.news,.competition{
+		float: none;
+		width: auto;
+	}
+	.topic{
+		padding-top: 180px;
+	}
+	.topic .title h2{
+		font-size: 28px;
+	}
+	.topic-tab .tab-btn li{
+		margin-bottom: 20px;
+	}
+	.topic-tab .tab-btn{
+		margin-top: 20px;
+	}
+	.topic-content{
+		margin-top: 20px;
+	}
+	.topic .more a{
+		margin-top: 0;
+	}
+	.topic-col50{
+		width: auto;
+		margin-bottom: 25px;
+	}
+	.topic .more{
+		padding: 0 10px;
+	}
+	.topic .more a{
+		width: 100%;
+		padding: 7px 0;
+	}
+	.topic-img{
+		width: 50%;
+	}
+	.topic h2{
+		font-size: 34px;
+	}
+	.tab-nav li{
+		margin-bottom: 10px;
+	}
+	.link{
+		padding-top: 0;
+	}
+	.link h2{
+		margin-top: 0;
+		margin-bottom: 10px;
+	}
+	.link ul{
+		width: auto;
+	}
+	.link ul li{
+		width: 25%;
+	}
+	.search-item{
+		width: 50%;
+		box-sizing: border-box;
+		margin-bottom: 10px;
+	}
+	.search-item label{
+		width: 30%;
+		padding-top: 12px;
+		box-sizing: border-box;
+		float: left;
+	}
+
+	.search-item input{
+		width: 70%;
+		box-sizing: border-box;
+		float: left;
+	}
+	.search-item select{
+		width: 70%;
+	}
+	.search-btn{
+		margin-left: 30px;
+	}
+	.competition-panel{
+		width: 47%;
+	}
+	.athletes-search .search-item{
+		width: 48%;
+	}
+	.athletes-search .search-btn{
+		width: auto;
+		margin: 0 4%;
+		float: none;
+		clear: both;
+		margin-top: 125px;
+	}
+	.athletes-search .search-item{
+		width: auto;
+		float: none;
+		overflow: hidden;
+		padding: 0 20px;
+		box-sizing: border-box;
+	}
+	.athletes-search .search-btn{
+		margin-top: 20px;
+	}
+
+}
+@media (max-width: 550px){
+	.big-icon li{
+		width: 25%;
+	}
+	.big-icon li a i{
+		margin-bottom: 5px;
+	}
+	.news-headlines dd h3{
+		font-size: 14px;
+		line-height: 22px;
+	}
+	.news-list li a{
+		font-size: 14px;
+	}
+	.activity-item h3{
+		font-size: 14px;
+	}
+	.link ul li a{
+		margin: 5px;
+	}
+	.competition-info{
+		padding: 15px;
+	}
+	.main-title h2{
+		margin-bottom: 20px;
+	}
+	.main-title h2,.inside-panel .season{
+		float: none;
+	}
+
+}
+@media (max-width: 480px){
+	.banner-slider .item .title-border{
+		border-left: 0;
+		padding-left: 0;
+		margin-left: 0;
+		margin-bottom: 0;
+	}
+	.banner-slider .item .title-border p{
+		margin-right: 70px;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		overflow: hidden;
+	}
+	.banner-slider .item .title-border span{
+		display: none;
+	}
+	.banner-slider .owl-dots{
+		bottom: 5px;
+	}
+	.owl-dots .owl-dot span{
+		margin: 5px 4px;
+	}
+	.owl-controls .owl-nav .owl-prev:before,
+	.owl-controls .owl-nav .owl-next:before{
+		width: 24px;
+		height: 24px;
+		background-size: 100%;
+	}
+	.integral li{
+		padding: 20px 0;
+		float: none; 
+		width: auto;
+		border-bottom: 1px dashed #eee;
+	}
+	.integral li:last-child{
+		border-bottom: 0;
+	}
+	.integral .panel{
+		padding: 0;
+	}
+	.topic-text h4{
+		font-size: 18px;
+	}
+	.topic-text p{
+		font-size: 14px;
+	}
+	.topic-img{
+		width: auto;
+	}
+	.topic-info{
+		padding: 30px 0;
+	}
+	.topic-info h2{
+		font-size: 20px;
+	}
+	.topic-info p{
+		font-size: 16px;
+	}
+	.topic-slide-text{
+		position: initial;
+	}
+	.tab-nav li{
+		display: block;
+		margin: 10px 30px;
+	}
+	.topic-col50{
+		margin-bottom: 2px;
+	}
+	.link{
+		padding-top: 20px;
+	}
+	.link ul li{
+		width: 33.333%;
+	}
+	.search{
+		padding: 20px 0;
+	}
+	.search-item{
+		width: auto;
+		float: none;
+		margin-bottom: 10px;
+		overflow: hidden;
+	}
+	.search-btn{
+		width: auto;
+		float: none;
+		margin: 20px 20px 0;
+	}
+	.search-btn a{
+		width: auto;
+	}
+	.competition-info h4{
+		font-size: 14px;
+	}
+	.inside-panel{
+		padding: 30px 15px;
+	}
+	.search-item label{
+		font-size: 14px;
+	}
+}

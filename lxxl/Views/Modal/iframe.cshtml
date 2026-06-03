@@ -1,0 +1,16 @@
+﻿@{
+    string url = ViewBag.url;
+    Layout = null;
+}
+
+<!DOCTYPE html>
+
+<html>
+<head>
+    <meta name="viewport" content="width=device-width" />
+    <title>iframe</title>
+</head>
+<body>
+    <iframe src="@url" style="width:100%; min-height:600px;"></iframe>
+</body>
+</html>

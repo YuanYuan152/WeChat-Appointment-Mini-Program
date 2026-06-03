@@ -1,0 +1,145 @@
+﻿@using lxxl.Models
+@{
+    Layout = null;
+    List<T_Menu> MenuList = (Session["Menu"] as List<T_Menu>).Where(o => !o.IsDelete && o.Show).ToList();
+}
+
+<!DOCTYPE html>
+
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>@ViewBag.Title</title>
+    <link rel="stylesheet" type="text/css" href="/Content/index/css/bootstrap.css">
+    <link rel="stylesheet" type="text/css" href="/Content/index/css/site.css">
+    <link rel="stylesheet" type="text/css" href="/Content/index/css/index.css">
+    <script src="/Content/index/js/jquery-1.12.3.js"></script>
+    <script src="/Content/index/js/bootstrap.js"></script>
+    <script src="/Content/index/js/twitter-bootstrap-hover-dropdown.js"></script>
+    <script type="text/javascript">
+        $(function () {
+            $('.dropdown-toggle').dropdownHover();
+        })
+    </script>
+</head>
+<body style="min-width:70em;">
+    <div id="myCarousel" class="carousel slide" data-ride="carousel" data-interval="5000" style=" height:260px;">
+        <div style="position:absolute; width:100%; height:260px;">
+            <div style="width:100%; height:100px;padding:20px 100px 20px 100px;">
+                <div class="logo" style="width:70%;float:left;">
+                    <img src="/Content/index/images/logo.png">
+                    <img src="/Content/index/images/logotext.png">
+                </div>
+                <div style="width:20%;float:right;">
+                    <form id="searchform" action="@Url.Action("Search","Home")" class="row">
+                        <div class="col-xs-10">
+                            <input type="text" name="keyword" class="form-control input-xs" placeholder="搜索" style="background-color:#C7CBCD; border-radius:50px;" />
+                        </div>
+                        <span class="btn col-xs-2"><img src="/Content/index/images/searchico.png" onclick="$('#searchform').submit()" /></span>
+                    </form>
+                </div>
+            </div>
+            <div class="navbar navbar-inverse navbar-fixed-top">
+                <div class="col-md-1"></div>
+                <div class="">
+                    <div class="navbar-collapse collapse" role="navigation">
+                        <ul class="nav navbar-nav" style="font-weight:600;">
+                            <li><a href="@Url.Action("Index", "Home")">首页</a></li>
+                            @foreach (var Menu in MenuList.Where(o => o.MenuID == 0 && o.Show))
+                            {
+                                if (MenuList.Where(o => o.MenuID == Menu.ID && o.MenuID != 0).Count() > 0)
+                                {
+                                    int index = 0;
+                                    <li class="dropdown">
+                                        <a href="@Url.Action("Menu", "Home", new { ID = Menu.ID })" class="dropdown-toggle" data-toggle="dropdown">
+                                            @Menu.MenuName
+                                            <b class="caret"></b>
+                                        </a>
+                                        <ul class="dropdown-menu">
+                                            @foreach (var menu in MenuList.Where(o => o.MenuID == Menu.ID && o.MenuID != 0 && o.Show))
+                                            {
+                                                if (index++ != 0)
+                                                {
+                                                    <li class="divider"></li>
+                                                }
+                                                <li><a href="@Url.Action("Menu", "Home", new { ID = menu.ID })">@menu.MenuName</a></li>
+                                            }
+                                        </ul>
+                                    </li>
+                                }
+                                else
+                                {
+                                    <li><a href="@Url.Action("Menu", "Home", new { ID = Menu.ID })">@Menu.MenuName</a></li>
+                                }
+                            }
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="container">
+        @RenderBody()
+    </div>
+    <footer class="main-footer copyright">
+        <div class="container">
+            <div class="row">
+                <div class="col-sm-3 col-xs-6">
+                    <div class="widget">
+                        <h4 class="title">关于我们</h4>
+                        <div class="content friend-links">
+                            <a href="javascript:">工作地址</a>
+                            <a href="javascript:">联系方式</a>
+                            <a href="javascript:">组织架构</a>
+                            <a href="javascript:">交流合作</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-sm-3 col-xs-6">
+                    <div class="widget">
+                        <h4 class="title">服务信息</h4>
+                        <div class="content friend-links">
+                            <a href="javascript:">展览资讯</a>
+                            <a href="javascript:">会员注册</a>
+                            <a href="javascript:">科研交流</a>
+                            <a href="javascript:">展览回顾</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-sm-3 col-xs-6">
+                    <div class="widget">
+                        <h4 class="title">学术资讯</h4>
+                        <div class="content friend-links">
+                            <a href="javascript:">讲座</a>
+                            <a href="javascript:">艺术教育长廊</a>
+                            <a href="javascript:">艺术活动</a>
+                            <a href="javascript:">学术成果</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-sm-3 col-xs-6">
+                    <div class="widget">
+                        <h4 class="title">教育教学</h4>
+                        <div class="content friend-links">
+                            <a href="javascript:">课程简介</a>
+                            <a href="javascript:">教师简介</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </footer>
+    <div class="copyright" style="background-color:#982626; color:#FFF;">
+        <div class="container">
+            <div class="row">
+                <div class="col-sm-12">
+                    <div class="col-sm-4">地址:上海市徐汇区东安路8号青松城三楼</div>
+                    <div class="col-sm-2">邮编:200032</div>
+                    <div class="col-sm-3">联系电话:64433888-2807</div>
+                    <div class="col-sm-3"><span><a href="http://www.miibeian.gov.cn/" target="_blank" style="color:#FFF;">沪ICP备08012383号-16</a></span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

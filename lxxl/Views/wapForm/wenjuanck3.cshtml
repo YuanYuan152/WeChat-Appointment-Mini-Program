@@ -1,0 +1,425 @@
+﻿@{
+    Layout = null;
+    T_User pat = Session["patient"] as T_User;
+    T_SubUser subuser = ViewBag.SubUser;
+    T_Form Form = ViewBag.Form;
+    List<T_SubUserData> SubUserDataList = subuser.SubFormData.ToList();
+    int number = 0;
+}
+@using lxxl.Models;
+<!DOCTYPE html>
+
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=0.0, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0" />
+    <link rel="stylesheet" type="text/css" href="/Content/wx/css/style.css" />
+    <link rel="stylesheet" href="/Content/wx/css/weui.css" />
+    <link rel="stylesheet" href="/Content/wx/css/example.css" />
+    @*<link rel="stylesheet" type="text/css" href="/Content/wx/css/bootstrap.css">*@
+
+    @*<link href="~/Content/assets/css/ace.min.css" rel="stylesheet" />*@
+    <link rel="stylesheet" href="/Content/assets/css/font-awesome.min.css" />
+    <link href="~/Content/css/wenjuan.css" rel="stylesheet" />
+    <script src="~/Content/js/jquery-1.8.2.js"></script>
+    @*<script src="/Content/wx/js/jquery-1.10.2.js"></script>*@
+    <title>@Form.Name</title>
+</head>
+<body>
+    <div id="header" class="head">
+        <div class="wrap">
+            <a href="javascript:history.back(-1);"><i class="glyphicon" style="top:18px;left:0; color:#FFF; font-size:15px;">返回</i></a>
+            <div class="title">
+                <span class="title_d"><p>编辑 @Form.Name</p></span>
+                <div class="clear"></div>
+            </div>
+            <a href="@Url.Action("Index", "Patient", new { SourceID = (Session["SourceID"] == null ? "1" : Session["SourceID"]) })"><i class="glyphicon" style="top:18px;right:0; color:#FFF; font-size:15px;">主页</i></a>
+        </div>
+    </div>
+    <div id="container">
+        <div id="content">
+            <div class="bd" id="divQuestion">
+                <input type="hidden" class="actionid" value="1" />
+                <div class="weui_cells_title">请填 @Form.Name</div>
+                <div class="weui_cells weui_cells_form">
+                    @foreach (var Item in Form.Item.Where(o => !o.IsDelete).OrderBy(o => o.Order))
+                    {
+                        number++;
+                        if (Item.ItemType.Pag == "select")
+                        {
+                            <div class="weui_cell weui_cell_select weui_select_after field1" itemid="@Item.ID" type="1">
+                                <div class="weui_cell_hd">
+                                    <label for="" class="weui_label">@number.@Item.Name</label>
+                                </div>
+                                <div class="weui_cell_bd weui_cell_primary">
+                                    <select name="@Item.ID" class="weui_select" name="select2">
+                                        @foreach (var option in Item.Option.OrderBy(o => o.Order))
+                                        {
+                                            if (SubUserDataList.Where(o => o.OptionID == option.ID).Count() > 0)
+                                            {
+                                                <option value="@option.ID">@option.Name</option>
+                                                @SubUserDataList.Remove(SubUserDataList.Where(o => o.OptionID == option.ID).FirstOrDefault())
+                                            }
+                                            else
+                                            {
+                                                <option value="@option.ID">@option.Name</option>
+                                            }
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+                        }
+                        else if (Item.ItemType.Pag == "checkinfo")
+                        {
+
+                            <div class="field1" itemid="@Item.ID" type="2">
+                                <div class="weui_cells_title" style="font-size: 17px; color: #333333; ">@number.@Item.Name</div>
+                                <div class="weui_cells weui_cells_checkbox">
+                                    @foreach (var option in Item.Option.OrderBy(o => o.Order))
+                                    {
+                                        T_SubUserData SubUserData = SubUserDataList.Where(o => o.OptionID == option.ID && !o.IsDelete).FirstOrDefault();
+                                        <label class="weui_cell weui_check_label" for="s@(option.ID)">
+                                            <div class="weui_cell_hd">
+                                                @if (SubUserData != null)
+                                                {
+                                                    <input type="checkbox" class="weui_check" name="@option.ID" id="s@(option.ID)" checked="checked">
+                                                }
+                                                else
+                                                {
+                                                    <input type="checkbox" class="weui_check" name="@option.ID" id="s@(option.ID)">
+                                                }
+                                                <i class="weui_icon_checked"></i>
+                                            </div>
+                                            <div class="weui_cell_bd weui_cell_primary">
+                                                <p>@option.Name</p>
+                                            </div>
+                                            @if (option.IsCustom)
+                                            {
+                                                <input type="text" class="next1 weui_input" style="width:60%" value="@(SubUserData != null ? SubUserData.Content : "")" placeholder="请输入@(option.Name)" />
+                                            }
+                                        </label>
+                                    }
+
+                                </div>
+                            </div>
+                            @*<div class="form-group field1" itemid="@Item.ID" type="2">
+                                    <label class="col-sm-3 control-label no-padding-right" for="form-field-1">@number.@Item.Name</label>
+                                    <div class="col-sm-9">
+                                        @foreach (var option in Item.Option.OrderBy(o => o.Order))
+                                        {
+                                            T_SubUserData SubUserData = SubUserDataList.Where(o => o.OptionID == option.ID && !o.IsDelete).FirstOrDefault();
+                                            <div class="col-xs-12 col-sm-12">
+                                                <div class="widget-box">
+                                                    @if (SubUserData != null)
+                                                    {
+                                                        <div class="widget-header">
+                                                            <div class="checkbox">
+                                                                <label>
+                                                                    <input name="@option.ID" type="checkbox" checked class="ace">
+                                                                    <span class="lbl">@option.Name</span>
+                                                                </label>
+                                                            </div>
+                                                        </div>
+
+                                                        <div class="widget-body next1">
+                                                            <textarea class=" form-control next2" placeholder="@option.Custom">@(SubUserData.Content)</textarea>
+                                                        </div>
+                                                    }
+                                                    else
+                                                    {
+                                                        <div class="widget-header">
+                                                            <div class="checkbox">
+                                                                <label>
+                                                                    <input name="@option.ID" type="checkbox" class="ace">
+                                                                    <span class="lbl">@option.Name</span>
+                                                                </label>
+                                                            </div>
+                                                        </div>
+
+                                                        <div class="widget-body next1">
+                                                            <textarea class="form-control next2" placeholder="@option.Custom"></textarea>
+                                                        </div>
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>*@
+                        }
+                        else if (Item.ItemType.Pag == "text")
+                        {
+                            T_Option option = Item.Option.FirstOrDefault();
+                            T_SubUserData SubUserData = SubUserDataList.Where(o => o.OptionID == option.ID && !o.IsDelete).FirstOrDefault();
+
+                            <div class="weui_cell field1" itemid="@Item.ID" type="3">
+                                <div class="weui_cell_hd"><label class="weui_label">@number.@Item.Name</label></div>
+                                <div class="weui_cell_bd weui_cell_primary next1">
+                                    <input class="weui_input" type="text" name="@Item.Option.FirstOrDefault().ID" value="@(SubUserData != null ? SubUserData.Content : "")">
+                                </div>
+                            </div>
+                        }
+                        else if (Item.ItemType.Pag == "textarea")
+                        {
+                            T_Option option = Item.Option.FirstOrDefault();
+                            T_SubUserData SubUserData = SubUserDataList.Where(o => o.OptionID == option.ID && !o.IsDelete).FirstOrDefault();
+                            <div class="field1" itemid="@Item.ID" type="4">
+                                <div class="weui_cells_title" style="font-size: 17px; color: #333333; ">@number.@Item.Name</div>
+                                <div class="weui_cells weui_cells_form next1">
+                                    <div class="weui_cell">
+                                        <div class="weui_cell_bd weui_cell_primary">
+                                            <textarea class="weui_textarea next2" rows="3" name="@Item.Option.FirstOrDefault().ID">@(SubUserData != null ? SubUserData.Content : "")</textarea>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                        else if (Item.ItemType.Pag == "checkbox")
+                        {
+                            <div class="field1" itemid="@Item.ID" type="5">
+                                <div class="weui_cells_title" style="font-size: 17px; color: #333333; ">@number.@Item.Name</div>
+                                <div class="weui_cells weui_cells_checkbox">
+                                    @foreach (var option in Item.Option.OrderBy(o => o.Order))
+                                    {
+                                        T_SubUserData SubUserData = SubUserDataList.Where(o => o.OptionID == option.ID && !o.IsDelete).FirstOrDefault();
+                                        <label class="weui_cell weui_check_label" for="s@(option.ID)">
+                                            <div class="weui_cell_hd">
+                                                @if (SubUserData != null)
+                                                {
+                                                    <input type="checkbox" class="weui_check" name="@option.ID" id="s@(option.ID)" checked="checked">
+                                                }
+                                                else
+                                                {
+                                                    <input type="checkbox" class="weui_check" name="@option.ID" id="s@(option.ID)">
+                                                }
+                                                <i class="weui_icon_checked"></i>
+                                            </div>
+                                            <div class="weui_cell_bd weui_cell_primary">
+                                                <p>@option.Name</p>
+                                            </div>
+                                            @if (option.IsCustom)
+                                            {
+                                                <input type="text" class="next1 weui_input" style="width:60%" value="@(SubUserData != null ? SubUserData.Content : "")" placeholder="请输入@(option.Name)" />
+                                            }
+                                        </label>
+                                    }
+
+                                </div>
+                            </div>
+                        }
+
+                        else if (Item.ItemType.Pag == "radio")
+                        {
+                            <div class="field1" itemid="@Item.ID" type="6">
+                                <div class="weui_cells_title" style="font-size: 17px; color: #333333; ">@number.@Item.Name</div>
+                                <div class="weui_cells weui_cells_checkbox">
+                                    @foreach (var option in Item.Option.OrderBy(o => o.Order))
+                                    {
+                                        T_SubUserData SubUserData = SubUserDataList.Where(o => o.OptionID == option.ID && !o.IsDelete).FirstOrDefault();
+                                        <label class="weui_cell weui_check_label" for="x@(option.ID)">
+                                            <div class="weui_cell_hd">
+                                                @if (SubUserData != null)
+                                                {
+                                                    <input type="radio" class="weui_check" name="s@(Item.ID)" id="x@(option.ID)" checked="checked" value="@option.ID">
+                                                }
+                                                else
+                                                {
+                                                    <input type="radio" class="weui_check" name="s@(Item.ID)" id="x@(option.ID)" value="@option.ID">
+                                                }
+                                                <i class="weui_icon_checked"></i>
+                                            </div>
+                                            <div class="weui_cell_bd weui_cell_primary">
+                                                <p>@option.Name</p>
+                                            </div>
+                                            @if (option.IsCustom)
+                                            {
+                                                <input type="text" class="next1 weui_input" style="width:60%" value="@(SubUserData != null ? SubUserData.Content : "")" placeholder="请输入@(option.Name)" />
+                                            }
+                                        </label>
+                                    }
+                                </div>
+                            </div>
+                        }
+                        else if (Item.ItemType.Pag == "number")
+                        {
+                            T_Option option = Item.Option.FirstOrDefault();
+                            T_SubUserData SubUserData = SubUserDataList.Where(o => o.OptionID == option.ID && !o.IsDelete).FirstOrDefault();
+                            <div class="weui_cell field1" itemid="@Item.ID" type="7">
+                                <div class="weui_cell_hd"><label class="weui_label">@number.@Item.Name</label></div>
+                                <div class="weui_cell_bd weui_cell_primary next1">
+                                    <input class="weui_input" type="number" name="@Item.Option.FirstOrDefault().ID" value="@(SubUserData != null ? SubUserData.Content : "")">
+                                </div>
+                            </div>
+                        }
+                        else if (Item.ItemType.Pag == "info")
+                        {
+                            <div class="weui_cells_title" style="font-size: 17px; color: #333333; ">@number.@Item.Name</div>
+                        }
+                        else if (Item.ItemType.Pag == "data")
+                        {
+                            T_Option option = Item.Option.FirstOrDefault();
+                            T_SubUserData SubUserData = SubUserDataList.Where(o => o.OptionID == option.ID && !o.IsDelete).FirstOrDefault();
+                            <div class="weui_cell field1" itemid="@Item.ID" type="8">
+                                <div class="weui_cell_hd"><label for="" class="weui_label">@number.@Item.Name</label></div>
+                                <div class="weui_cell_bd weui_cell_primary next1">
+                                    <input class="weui_input" type="date" name="@Item.Option.FirstOrDefault().ID" value="@(SubUserData != null ? SubUserData.Content : "")">
+                                </div>
+                            </div>
+                        }
+                        else if (Item.ItemType.Pag == "file")
+                        {
+                            T_Option option = Item.Option.FirstOrDefault();
+                            T_SubUserData SubUserData = SubUserDataList.Where(o => o.OptionID == option.ID && !o.IsDelete).FirstOrDefault();
+
+                            <div class="weui_cell field1" itemid="@Item.ID" type="9">
+                                <div class="weui_cell_hd"><label for="" class="weui_label">@number.@Item.Name</label></div>
+                                <div class="weui_cell_bd weui_cell_primary next1">
+                                    <form id="form1">
+                                        <input type="hidden" class="wenjian" />
+                                        <input type="file" name="fileUp" tiid="@Item.Option.FirstOrDefault().ID" class="weui_input fileUp" id="fileUp" value="@(SubUserData != null ? SubUserData.Content : "")" />
+                                    </form>
+
+                                </div>
+                            </div>
+                        }
+                    }
+                    <input type="submit" class="weui_btn weui_btn_primary tijiao" value="提交" />
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+
+<script type="text/javascript">
+    $('.next1').click(function () {
+        $(this).parent().find("input[type=radio]").eq(0).attr('checked', 'checked');
+        $(this).parent().find("input[type=checkbox]").eq(0).attr('checked', true);
+    })
+</script>
+<script src="~/Content/js/MyAjaxForm.js"></script>
+<script type="text/javascript">
+    $(function () {
+        $('#fileUp').change(function () {
+
+            $("#form1").ajaxSubmit({
+                type: "post",
+                url: "/Patient/UpdateFile",
+                //date: { fileUp: $('#fileUp').val() },
+                success: function (data) {
+                    if (data.split(":")[0] == "ok") {
+                        alert("文件上传成功！");
+                        $('.wenjian').val(data.split(":")[1]);
+                    } else {
+                        alert($('#fileUp').val());
+                        alert(data.split(":")[1]);
+                    }
+                },
+                error: function () {
+                    alert("服务器无反应，提交失败");
+                }
+            })
+
+        })
+
+
+        $('.tijiao').click(function () {
+            var Arr = [];
+            var actionid = $('.actionid').val();
+            $("#divQuestion .field1").each(function () {
+                //alert($(this).html());
+                var item = [];
+                var value = "";
+                var content = "";
+                if ($(this).attr("type") == 1) {//下拉框
+                    value = $(this).find(".abc option:selected").val();
+                    content = "";
+                    item.push({ "value": value, "content": content });
+                }
+                else if ($(this).attr("type") == 2) {//多选带说明
+                    //$(this).find("input[type=checkbox]:checked").each(function () {
+                    //    value = $(this).attr("name");
+                    //    content = "";
+                    //    if ($(this).parent().parent().parent().parent().find('.next1').find('.next2').length == 1) {
+                    //        content = $(this).parent().parent().parent().parent().find('.next1').find('.next2').eq(0).val();
+                    //    }
+                    //    item.push({ "value": value, "content": content });
+                    //})
+                    $(this).find("input[type=checkbox]:checked").each(function () {
+                        value = $(this).attr("name");
+                        content = "";
+                        if ($(this).parent().parent().find('.next1').length == 1) {
+                            content = $(this).parent().parent().find('.next1').eq(0).val();
+                        }
+                        item.push({ "value": value, "content": content });
+                    })
+                }
+                else if ($(this).attr("type") == 3) {//文本框
+                    //value = $(this).find(".ui-input-text input[type=hidden]").eq(0).val();
+                    value = $(this).find('.next1').find("input[type=text]").attr('name');
+                    content = $(this).find('.next1').find("input[type=text]").eq(0).val();
+                    item.push({ "value": value, "content": content });
+                }
+                else if ($(this).attr("type") == 4) {//多行文本
+                    value = $(this).find('.next1').find(".next2").attr('name');
+                    content = $(this).find('.next1').find(".next2").eq(0).val();
+                    //alert();
+                    item.push({ "value": value, "content": content });
+                }
+                else if ($(this).attr("type") == 5) {//多选
+                    $(this).find("input[type=checkbox]:checked").each(function () {
+                        value = $(this).attr("name");
+                        content = "";
+                        if ($(this).parent().parent().find('.next1').length == 1) {
+                            content = $(this).parent().parent().find('.next1').eq(0).val();
+                        }
+                        item.push({ "value": value, "content": content });
+                    })
+                }
+                else if ($(this).attr("type") == 6) {//单选
+                    var $check = $(this).find("input[type=radio]:checked");
+                    value = $check.attr("value");
+                    if ($check.parent().parent().find('.next1').length == 1) {
+                        content = $check.parent().parent().find("input[type=text]").eq(0).val();
+                    }
+                    item.push({ "value": value, "content": content });
+                }
+                else if ($(this).attr("type") == 7) {//数字
+                    value = $(this).find('.next1').find("input[type=number]").attr('name');
+                    content = $(this).find('.next1').find("input[type=number]").eq(0).val();
+                    item.push({ "value": value, "content": content });
+                }
+                else if ($(this).attr("type") == 8) {//时间
+                    value = $(this).find('.next1').find("input[type=date]").attr('name');
+                    content = $(this).find('.next1').find("input[type=date]").eq(0).val();
+                    item.push({ "value": value, "content": content });
+                }
+                else if ($(this).attr("type") == 9) {//文件
+                    value = $(this).find('.next1').find("input[type=file]").attr('tiid');
+                    content = $(this).find('.next1').find(".wenjian").val();
+                    item.push({ "value": value, "content": content });
+                }
+                Arr.push({ "id": actionid, "item": item });
+            })
+            var ss = JSON.stringify(Arr);
+            console.log(ss);
+            //return false;
+            $.ajax({
+                type: "post",
+                url: "/wapForm/Submit",
+                data: { "jsonText": ss },
+                success: function (data) {
+                    if (data.split(":")[0] == "ok") {
+                        alert(data.split(":")[1]);
+                    } else {
+                        alert(data.split(":")[1]);
+                    }
+                },
+                error: function () {
+                    alert("服务器无反应，提交失败");
+                }
+            })
+
+        })
+    })
+
+</script>

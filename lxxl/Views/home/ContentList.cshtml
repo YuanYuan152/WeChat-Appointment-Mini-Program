@@ -1,0 +1,88 @@
+﻿@using lxxl.Models
+@{
+    List<T_Content> ContentList = ViewBag.ContentList;
+    long MenuID = ViewBag.urlcode;
+    T_Menu Menu = (Session["Menu"] as List<T_Menu>).Where(o => o.ID == MenuID).FirstOrDefault();
+    ViewBag.Title = Menu.MenuName;
+    Layout = "~/Views/Shared/_LayoutIndex.cshtml";
+    List<T_Menu> MenuList = (Session["Menu"] as List<T_Menu>).Where(o => (Menu.MenuID == 0 && (o.MenuID == Menu.ID || o.ID == Menu.ID)) || (Menu.MenuID != 0 && (o.MenuID == Menu.MenuID || o.ID == Menu.MenuID))).ToList();
+}
+<link rel="stylesheet" type="text/css" href="/Content/index/css/page.css">
+<script src="/Content/index/js/jquery.page.js"></script>
+
+<div class="row contentmain">
+    <div class="col-xs-3 menu">
+        <div class="item yiji">
+            @if (MenuList.Where(o => o.MenuID == 0).Count() == 1)
+            {
+                T_Menu menu = MenuList.Where(o => o.MenuID == 0).FirstOrDefault();
+                <a href="@Url.Action("Menu", "home", new { ID=menu.ID})">
+                    @menu.MenuName
+                </a>
+            }
+        </div>
+        @foreach (var menu in MenuList.Where(o => o.MenuID != 0))
+        {
+            if (Menu.ID == menu.ID)
+            {
+                <div class="item active">
+                    <a href="@Url.Action("Menu", "home", new { ID=menu.ID})">
+                        @menu.MenuName
+                    </a>
+                </div>
+            }
+            else
+            {
+                <div class="item">
+                    <a href="@Url.Action("Menu", "home", new { ID = menu.ID })">
+                        @menu.MenuName
+                    </a>
+                </div>
+            }
+        }
+    </div>
+    <blockquote class="col-xs-9" style="margin-top:20px;font-size:16px;min-height:600px;font-family:微软雅黑;">
+        <div style="height:40px;border-bottom:#EFEFEF solid 3px; ">
+            您所在的位置 : 首页 > @(Menu.MenuID == 0 ? Menu.MenuName  : (MenuList.Where(o => o.ID == Menu.MenuID).FirstOrDefault().MenuName + " > " + Menu.MenuName))
+        </div>
+        <div style="line-height:26px;padding:30px;padding-bottom:20px;">
+            @foreach (var content in ContentList)
+            { 
+                <div class="item" style="border-bottom:solid 2px #EEEEEE;height:60px;padding-top:15px;">
+                    <a href="@Url.Action("Content", "home", new { ID = content.ID })" style="color:#666;">
+                        <div class="title" style="width:80%; float:left;word-break:keep-all;white-space:nowrap; overflow:hidden;text-overflow:ellipsis;">
+                            @content.Title
+
+                        </div>
+                        <div class="time" style="width:20%; float:right; text-align:right;">
+                            @content.ModifyTime.ToString("yyyy-MM-dd")
+                        </div>
+                    </a>
+                </div>
+            }
+            <div class="tcdPageCode">
+            </div>
+        </div>
+    </blockquote>
+</div>
+<input type="hidden" id="urlcode" value="@MenuID" />
+<script type="text/javascript">
+    $(function () {
+        var ContentCount=parseInt(@ViewBag.Count);
+        var pagesize=parseInt(@ViewBag.Pagesize);
+        if( ContentCount>pagesize){
+            var pagecount=0;
+            if(ContentCount%pagesize==0)
+                pagecount=ContentCount/pagesize;
+            else
+                pagecount=parseInt(ContentCount/pagesize)+1;
+            $(".tcdPageCode").createPage({
+                pageCount: pagecount, //总页数
+                current: @ViewBag.ThisPage, //当前页
+                backFn: function (p) {
+                    location.href="/home/Menu?page="+p+"&ID="+$("#urlcode").val();
+                }
+            });
+        }
+    })
+</script>

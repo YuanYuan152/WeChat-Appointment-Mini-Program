@@ -1,0 +1,435 @@
+﻿@{
+    ViewBag.Title = "improvement";
+    Layout = "~/Views/Shared/_LayoutWap.cshtml";
+}
+<style type="text/css">
+    .poster-item {
+        padding: initial;
+        background-color: white;
+        cursor: pointer;
+    }
+
+    .advan {
+        background-color: rgb(166,196,207);
+        margin: 0 auto;
+        padding-top: 5rem;
+        padding-bottom: 5rem;
+    }
+
+    .ad_show {
+        margin-top: 3.4rem;
+        width: 80%;
+        display: flex;
+        justify-content: center;
+        margin: 20px auto;
+    }
+
+    .ad-item {
+        width: 20%;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.1s;
+        font-size: 0.14rem;
+        z-index: 1;
+        margin: 20px;
+        background-color: #fff;
+    }
+
+        .ad-item .item1 {
+            color: rgb(73,129,188);
+            padding-bottom: 20px;
+        }
+
+            .ad-item .item1 h5 {
+                font-size: 14px;
+            }
+
+            .ad-item .item1 span {
+                font-size: 40px;
+            }
+
+        .ad-item .item2 {
+            height: 80px;
+            text-align: center;
+            align-content: center;
+            background-color: rgb(73,129,188);
+            font-size: 30px;
+            color: #fff;
+            align-items: center;
+            display: flex;
+        }
+            .ad-item .item2 p {
+                margin: 0 auto;
+            }
+
+        .ad-item .item3 {
+            height: 200px;
+        }
+
+            .ad-item .item3 p {
+                margin: 10px;
+                color: rgb(166,196,207);
+                font-size: 14px;
+            }
+
+        .ad-item > img {
+            height: 100%;
+            width: 100%;
+            display: block;
+        }
+
+        .ad-item.on {
+            z-index: 3;
+            box-shadow: 0 0 10px #0c0b0b;
+            transform: scale(1.2);
+            transition: all 0.5s;
+            background-color: #fff;
+        }
+
+     .ad-item .item1.on {
+            background-color: rgb(73,129,188);
+            color: #fff;
+        }
+
+    .ad-item .item2.on {
+            background-color: rgb(147,178,196);
+        }
+
+
+    .ad_list {
+        height: 0.2rem;
+        width: 100%;
+        margin-top: 0.4rem;
+        text-align: center;
+    }
+
+        .ad_list > span {
+            height: 0.1rem;
+            width: 0.1rem;
+            border-radius: 50%;
+            -webkit-border-radius: 50%;
+            -moz-border-radius: 50%;
+            -ms-border-radius: 50%;
+            -o-border-radius: 50%;
+            background: #BBBBBB;
+            display: inline-block;
+            margin: 0 0.1rem;
+        }
+
+            .ad_list > span.on {
+                background: #3784FF !important;
+                width: 24px;
+                border-radius: 5px;
+                transform: all 0.5s;
+            }
+
+</style>
+<div class="con">
+    <section>
+        <div class="banner-box">
+            <div class="home_banner bannerx">
+                <div class="ban-con">
+                    <div class="img"><img id="domain_img" src="/Public/upload/ad/2019/5d41477ee4763.png"></div>
+                    <div class="text">
+                        <h3 class="wow fadeInRight" id="domain_name">连心心理·上海</h3>
+                        <p class="none wow fadeInRight" id="domain_description">上海市杨浦区同济科技大厦</p>
+                        <p class="none wow fadeInRight" id="domain_lecturer"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    <section>
+        <div class="campus">
+            <div class="title fadeInUp wow">
+                <h3>热门竞赛</h3>
+            </div>
+            <div class="advan">
+                <div class="ad_show">
+                    <div class="ad-item">
+                        <div class="item1">
+                            <h5>
+                                <span>60</span>课时
+                            </h5>
+                            <p>
+                                每日一课时
+                            </p>
+                        </div>
+                        <div class="item2">
+                            <p>
+                                数学竞赛
+                            </p>
+                        </div>
+                        <div class="item3">
+                            <p>
+                                连心心理连心心理连心心理连心心理连心心理连心心理连心心理连心心理连心心理连心心理
+                            </p>
+                        </div>
+                    </div>
+                    <div class="ad-item ">
+                        <div class="item1">
+                            <h5>
+                                <span>60</span>课时
+                            </h5>
+                            <p>
+                                每日一课时
+                            </p>
+                        </div>
+                        <div class="item2">
+                            <p>
+                                商科竞赛
+                            </p>
+                        </div>
+                        <div class="item3">
+                            <p>
+                                连心心理连心心理连心心理连心心理连心心理连心心理连心心理连心心理连心心理连心心理
+                            </p>
+                        </div>
+                    </div>
+                    <div class="ad-item on">
+                        <div class="item1 on">
+                            <h5>
+                                <span>60</span>课时
+                            </h5>
+                            <p>
+                                每日一课时
+                            </p>
+                        </div>
+                        <div class="item2 on">
+                            <p>
+                                科学竞赛
+                            </p>
+                        </div>
+                        <div class="item3">
+                            <p>
+                                连心心理连心心理连心心理连心心理连心心理连心心理连心心理连心心理连心心理连心心理
+                            </p>
+                        </div>
+                    </div>
+                    <div class="ad-item ">
+                        <div class="item1">
+                            <h5 >
+                                <span>60</span>课时
+                            </h5>
+                            <p>
+                                每日一课时
+                            </p>
+                        </div>
+                        <div class="item2">
+                            <p>
+                                文科竞赛
+                            </p>
+                        </div>
+                        <div class="item3">
+                            <p>
+                                连心心理连心心理连心心理连心心理连心心理连心心理连心心理连心心理连心心理连心心理
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    <section>
+        <div class="campus">
+            <div class="title fadeInUp wow">
+                <h3>师资团队</h3>
+            </div>
+            <div class="campus-con">
+                <div class="container">
+                    <div class="pictureSlider poster-main">
+                        <div class="poster-btn poster-prev-btn"></div>
+                        <ul id="zturn" class="poster-list" style="height: 300px;padding: 50px 0 0;">
+                            <li class="poster-item  zturn-item wow zoomIn">
+                                <img src="/Public/biyou/examiner/20190725101604.png">
+                            </li>
+                            <li class="poster-item  zturn-item wow zoomIn">
+                                <img src="/Public/biyou/examiner/examinerP1.jpg">
+                            </li>
+                            <li class="poster-item  zturn-item wow zoomIn">
+                                <img src="/Public/biyou/examiner/examinerP2.jpg">
+                            </li>
+                            <li class="poster-item  zturn-item wow zoomIn">
+                                <img src="/Public/biyou/examiner/examinerP3.jpg">
+                            </li>
+                            <li class="poster-item  zturn-item wow zoomIn">
+                                <img src="/Public/biyou/examiner/examinerP4.jpg">
+                            </li>
+                        </ul>
+                        <div style=" width: 90%; height: 200px; margin: 10px auto; text-align: center; font-size: 16px; color: rgb(166,196,207);">
+                            <div class="f-show">
+                                <div class="fshow_a">
+                                    <p>
+                                        师资1
+                                    </p>
+                                    <p>
+                                        师资1
+                                    </p>
+                                </div>
+                                <div class="fshow_a" style="display: none;">
+                                    <p>师资2</p>
+                                    <p>
+                                        师资2
+                                    </p>
+                                </div>
+                                <div class="fshow_a" style="display: none;">
+                                    <p>师资3</p>
+                                    <p>
+                                        师资3
+                                    </p>
+                                </div>
+                                <div class="fshow_a" style="display: none;">
+                                    <p>师资4</p>
+                                    <p>
+                                        师资4
+                                    </p>
+                                </div>
+                                <div class="fshow_a" style="display: none;">
+                                    <p>师资5</p>
+                                    <p>
+                                        师资5
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    <section>
+        <div style="background-color: rgb(233,239,239); margin-top: 15px; margin-bottom: 60px;">
+            <div style="width: 48%; display: inline-block; vertical-align: top; text-align: right;">
+                <img src="/Public/biyou/course/10.png" style="height: 100%; object-fit: none; text-align: right;">
+            </div>
+            <div class="" style="width: 48%; display: inline-block; vertical-align: top; ">
+                <div class="">
+                    @*<img src="/Public/images/20210411183637.png" >*@
+                    <div class="" style="float: left; margin-left: 30px;">
+                        <span style="font-size: 30px; font-weight: bolder; color: rgb(73,129,188); display: inline; line-height: 111px;">毕优国际培训流程</span>
+                    </div>
+                    <div>
+                        <img src="/Public/biyou/tel2.png">
+                    </div>                   
+                </div>
+                <div class="" style="width: 100%;">
+                    <div class="dl-course" style="color: rgb(73,129,188);">
+                        <div style="margin-bottom: 20px;">
+                            <div style="width: 30px; height: 30px; border-radius: 50%; background-color: rgb(73,129,188); float: left; margin-left: -20px; margin-right: 30px; ">
+                            </div>
+                            <div style=" margin: 10px; margin-left: 48px;">
+                                <p style="font-size: 16px; font-weight: bolder;">第一步文案</p>
+                                <p>第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介</p>
+                                <p>第一步文案简介</p>
+                            </div>
+                        </div>
+                        <div style="margin-bottom: 20px;">
+                            <div style="width: 30px; height: 30px; border-radius: 50%; background-color: rgb(73,129,188); float: left; margin-left: -20px; margin-right: 30px; ">
+                            </div>
+                            <div style=" margin: 10px; margin-left: 48px;">
+                                <p style="font-size: 16px; font-weight: bolder;">第二步文案</p>
+                                <p>第二步文案简介简介</p>
+                            </div>
+                        </div>
+                        <div style="margin-bottom: 20px;">
+                            <div style="width: 30px; height: 30px; border-radius: 50%; background-color: rgb(73,129,188); float: left; margin-left: -20px; margin-right: 30px; ">
+                            </div>
+                            <div style=" margin: 10px; margin-left: 48px;">
+                                <p style="font-size: 16px; font-weight: bolder;">第三步文案</p>
+                                <p>第三步文案简介文案简介</p>
+                            </div>
+                        </div>
+                        <div style="margin-bottom: 20px;">
+                            <div style="width: 30px; height: 30px; border-radius: 50%; background-color: rgb(73,129,188); float: left; margin-left: -20px; margin-right: 30px; ">
+                            </div>
+                            <div style=" margin: 10px; margin-left: 48px;">
+                                <p style="font-size: 16px; font-weight: bolder;">第四步文案</p>
+                                <p>第四步文案简介文案简介</p>
+                            </div>
+                        </div>
+                        <div style="margin-bottom: 20px;">
+                            <div style="width: 30px; height: 30px; border-radius: 50%; background-color: rgb(73,129,188); float: left; margin-left: -20px; margin-right: 30px; ">
+                            </div>
+                            <div style=" margin: 10px; margin-left: 48px;">
+                                <p style="font-size: 16px; font-weight: bolder;">第五步文案</p>
+                                <p>第五步文案简介第五步文案简介文案简介</p>
+                            </div>
+                        </div>
+                        <div style="margin-bottom: 20px;">
+                            <div style="width: 30px; height: 30px; border-radius: 50%; background-color: rgb(73,129,188); float: left; margin-left: -20px; margin-right: 30px; ">
+                            </div>
+                            <div style=" margin: 10px; margin-left: 48px;">
+                                <p style="font-size: 16px; font-weight: bolder;">第六步文案</p>
+                                <p>第六步文案简介</p>
+                            </div>
+                        </div>
+                        <div style="margin-bottom: 20px;">
+                            <div style="width: 30px; height: 30px; border-radius: 50%; background-color: rgb(73,129,188); float: left; margin-left: -20px; margin-right: 30px; ">
+                            </div>
+                            <div style=" margin: 10px; margin-left: 48px;">
+                                <p style="font-size: 16px; font-weight: bolder;">第七步文案</p>
+                                <p>第七步文案简介</p>
+                            </div>
+                        </div>
+                        <div style ="margin-bottom: 20px;">
+                            <div style="width: 30px; height: 30px; border-radius: 50%; background-color: rgb(73,129,188); float: left; margin-left: -20px; margin-right: 30px; ">
+                            </div>
+                            <div style=" margin: 10px; margin-left: 48px;">
+                                <p style="font-size: 16px; font-weight: bolder;">第八步文案</p>
+                                <p>第八步文案简介</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+
+<script type="text/javascript">
+    $(function () {
+        localStorage.active = "activeCourse";
+    })
+
+    var aa = new zturn({
+        id: "zturn",
+        opacity: 0.6,
+        width: 235,
+        Awidth: 1024,
+        scale: 0.7,
+    })
+
+    $(document).ready(function () {
+        $('.container-banner').slick({
+            centerMode: true,
+            slidesToShow: 1,
+            arrows: false,
+            centerMode: true,
+            focusOnSelect: true,
+            autoplay: true,
+            autoplaySpeed: 2000,
+            dots: true,
+        });
+
+    });
+    var len = $(".ad-item").length;
+    $(".ad-item").on("mouseover", function () {
+        var index = $(this).index();
+        var indexs = index + 1;
+        $(this).addClass("on").siblings().removeClass("on");
+        for (var i =0; i < len; i++) {
+            $(".ad-item .item1").eq(i).removeClass("on");
+            $(".ad-item .item2").eq(i).removeClass("on");
+            console.log(i)
+        }
+        $(".ad-item .item1").eq(index).addClass("on");
+        $(".ad-item .item2").eq(index).addClass("on");
+    });
+
+    $('.pictureSlider .poster-list li').on('click', function () {
+        var index = $(this).index();
+        //$(this).addClass('select').siblings().removeClass('select');
+        $(".f-show .fshow_a").eq(index).show().siblings().hide();
+        console.log(index);
+    });
+</script>

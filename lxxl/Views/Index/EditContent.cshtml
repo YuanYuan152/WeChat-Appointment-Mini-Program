@@ -1,0 +1,245 @@
+﻿@using lxxl.Models
+@{
+    ViewBag.Title = "编辑文章";
+    Layout = "~/Views/Shared/_LayoutHome.cshtml";
+    T_Content Content = ViewBag.Content;
+    T_Admin Admin = Session["admin"] as T_Admin;
+}
+<link rel="stylesheet" href="~/Content/assets/css/chosen.css" />
+<link rel="stylesheet" href="~/Content/assets/css/ace.min.css" />
+<div class="main-content">
+    <!-- #section:basics/content.breadcrumbs -->
+    <div class="breadcrumbs breadcrumbs-fixed" id="breadcrumbs">
+        <script type="text/javascript">
+            try { ace.settings.check('breadcrumbs', 'fixed') } catch (e) { }
+        </script>
+        <ul class="breadcrumb">
+            <li>
+                <i class="ace-icon fa fa-home home-icon"></i>
+                <a href="@Url.Action("Index", "Index")">
+                    首页
+                </a>
+            </li>
+            <li class="active">文章管理</li>
+            <li class="active">编辑文章</li>
+        </ul>
+        <!-- /.breadcrumb -->
+        <!-- #section:basics/content.searchbox -->
+        <div class="nav-search" id="nav-search" style="display: none">
+            <form action="javascript:alert('开发中')" method="post" class="form-search">
+                <span class="input-icon">
+                    <input type="text" placeholder="Search ..." class="nav-search-input" id="nav-search-input" autocomplete="off" />
+                    <i class="ace-icon fa fa-search nav-search-icon"></i>
+                </span>
+            </form>
+        </div>
+        <!-- /.nav-search -->
+        <!-- /section:basics/content.searchbox -->
+    </div>
+    <!-- /section:basics/content.breadcrumbs -->
+    <div class="page-content">
+        <div class="row">
+            <div class="col-xs-12">
+                <!-- PAGE CONTENT BEGINS -->
+                <div class="row">
+                    @if (Session["alert"] != null)
+                    {
+                        <div class="col-xs-12 col-sm-8 col-sm-offset-2">
+                            <div class="alert alert-warning alert-danger" role="alert">
+                                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                                @Session["alert"]
+                                @(Session["alert"] = null)
+                            </div>
+                        </div>
+                        <div class="col-xs-0 col-sm-2">
+                        </div>
+                    }
+                </div>
+                <div class="row">
+                    <div class="col-xs-12">
+                        <form action="@Url.Action("EditContent", "Index")" method="post" class="form-horizontal" role="form" enctype="multipart/form-data">
+                            <!-- #section:elements.form -->
+                            <div class="col-xs-12" style="padding: 0px;">
+                                <div class="widget-box">
+                                    <div class="widget-header">
+                                        <h4 class="widget-title">编辑文章</h4>
+                                    </div>
+                                    <div class="widget-body">
+                                        <div class="widget-main">
+                                            <div class="form-group">
+                                                <label class="col-sm-3 control-label no-padding-right" for="form-field-1">
+                                                    标题
+                                                </label>
+                                                <div class="col-sm-9">
+                                                    <input type="text" name="Title" datatype="*" nullmsg="请输入标题" placeholder="标题" value="@Content.Title" class="col-xs-10 col-sm-8" />
+                                                </div>
+                                            </div>
+                                            <hr />
+                                            <div class="form-group">
+                                                <label class="col-sm-3 control-label no-padding-right" for="form-field-1">
+                                                    所属菜单
+                                                </label>
+                                                <div class="col-sm-9">
+                                                    @if (Admin.Type == 1)
+                                                    { 
+                                                        <select name="MenuID" datatype="*" nullmsg="请选择所属菜单" class="col-xs-10 col-sm-8 chosen-select" data-placeholder="请选择所属菜单...">
+                                                            <option value="">请选择所属菜单</option>
+                                                            @foreach (var menu in (Session["Menu"] as List<T_Menu>).Where(o => o.Type == 1 || o.Type == 2))
+                                                            {
+                                                                if (Content.MenuID == menu.ID)
+                                                                {
+                                                                    <option value="@menu.ID" selected>@menu.MenuName</option>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <option value="@menu.ID">@menu.MenuName</option>
+                                                                }
+                                                            }
+                                                        </select>
+                                                    }
+                                                    else if (Admin.Type == 2)
+                                                    { 
+                                                        <select name="MenuID" datatype="*" nullmsg="请选择所属菜单" class="col-xs-10 col-sm-8 chosen-select" data-placeholder="请选择所属菜单...">
+                                                            @foreach (var menu in (Session["Menu"] as List<T_Menu>).Where(o => o.ID==Content.MenuID))
+                                                            {
+                                                                <option value="@menu.ID" selected>@menu.MenuName</option>
+                                                            }
+                                                        </select>
+                                                    }
+                                                    
+                                                </div>
+                                            </div>
+                                            <hr />
+                                            <div class="form-group">
+                                                <label class="col-sm-3 control-label no-padding-right" for="form-field-1">
+                                                    来源
+                                                </label>
+                                                <div class="col-sm-9">
+                                                    <input type="text" name="Source" class="col-xs-10 col-sm-8" value="@Content.Source" placeholder="来源" />
+                                                </div>
+                                            </div>
+                                            <hr />
+                                            <div class="form-group">
+                                                <label class="col-sm-3 control-label no-padding-right" for="form-field-1">
+                                                    导语
+                                                </label>
+                                                <div class="col-sm-9">
+                                                    <input type="text" name="Profile" class="col-xs-10 col-sm-8" value="@Content.Profile" placeholder="导语" />
+                                                </div>
+                                            </div>
+                                            <hr />
+                                            <div class="form-group">
+                                                <label class="col-sm-3 control-label no-padding-right" for="form-field-1">
+                                                    文章内容
+                                                </label>
+                                                <div class="col-sm-9">
+                                                    <textarea name="ContentMain" class="col-xs-10 col-sm-8" style="min-height:600px;">@Content.ContentMain</textarea>
+                                                </div>
+                                            </div>
+                                            <hr />
+                                            <div class="form-group">
+                                                <label class="col-sm-3 control-label no-padding-right" for="form-field-1">
+                                                    置顶
+                                                </label>
+                                                <div class="col-sm-9">
+                                                    @if (Content.IsTop)
+                                                    {
+                                                        <input name="IsTop" class="ace ace-switch ace-switch-4 btn-empty" checked type="checkbox" />
+                                                    }
+                                                    else
+                                                    { 
+                                                        <input name="IsTop" class="ace ace-switch ace-switch-4 btn-empty" type="checkbox" />
+                                                    }
+                                                    <span class="lbl"></span>
+                                                </div>
+                                            </div>
+                                            <hr />
+                                            <div class="form-group">
+                                                <label class="col-sm-3 control-label no-padding-right" for="form-field-1">
+                                                    显示时间
+                                                </label>
+                                                <div class="col-sm-9">
+                                                    <input name="ModifyTime" datatype="date" nullmsg="请填写显示时间" errormsg="请输入时间格式" value="@(Content.ModifyTime.ToString("yyyy-MM-dd HH:mm:ss"))" class="col-xs-10 col-sm-8" type="text" />
+                                                    <span class="lbl"></span>
+                                                </div>
+                                            </div>
+                                            <hr />
+                                            <div class="form-group">
+                                                <div class="col-sm-4">
+                                                </div>
+                                                <div class="col-sm-3">
+                                                    <input type="submit" class="btn btn-success" id="savebut" value="保存" style="width: 100%" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                <!-- /.row -->
+            </div>
+            <!-- /.col -->
+        </div>
+        <!-- /.row -->
+    </div>
+    <!-- /.page-content -->
+</div>
+<!--弹出效果-->
+<link href="~/Content/css/dialog.css" rel="stylesheet" />
+<script src="~/Content/js/dialog.js"></script>
+<!--选择效果-->
+<script src="~/Content/assets/js/chosen.jquery.min.js"></script>
+<script type="text/javascript">
+    $(function () {
+        $('.chosen-select').chosen({ allow_single_deselect: true });
+        $(window).on('resize.chosen', function () {
+            var w = $('.chosen-select').parent().width() * (2 / 3.0);
+            $('.chosen-select').next().css({ 'width': w });
+        }).trigger('resize.chosen');
+    })
+</script>
+<!--验证表单-->
+<script src="~/Content/js/Validform_v5.3.2.js"></script>
+<script src="~/Content/js/Validform_Datatype.js"></script>
+<script type="text/javascript">
+    $(function () {
+        $.Tipmsg.r = null;
+        $("form").Validform({
+            tiptype: function (msg) {
+                alert(msg);
+            },
+            tipSweep: true,
+        });
+    })
+</script>
+<!--文本编辑器-->
+<link rel="stylesheet" href="/Content/kindeditor-4.1.7/themes/default/default.css" />
+<script src="/Content/kindeditor-4.1.7/kindeditor-min.js"></script>
+<script type="text/javascript">
+    var editor;
+    KindEditor.ready(function (K) {
+        editor = K.create('textarea[name="ContentMain"]', {
+            langType: "zh_CN",
+            allowFileManager: true,
+            allowUpload: true,                               //是否可以上传
+            fileManagerJson: '/Editor/ProcessRequest',      //浏览文件方法
+            uploadJson: '/Editor/UploadFile',              //上传文件方法  //注意这两个路径
+        });
+    });
+    $(function () {
+        $("#savebut").click(function () {
+            console.log(editor.html());
+            localStorage.content = editor.html();
+            if (editor.isEmpty()) {
+                alert("请输入文章内容");
+                return false;
+            }
+            return true;
+        })
+    })
+</script>
+

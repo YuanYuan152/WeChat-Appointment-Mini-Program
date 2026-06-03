@@ -1,0 +1,867 @@
+﻿@using lxxl.Models;
+@{
+    Layout = null;
+}
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>连心心理</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no">
+    <link rel="stylesheet" href="/Content/weui/css/weui.css" />
+    <link rel="stylesheet" href="/Content/weui/css/weuix.css" />
+    <script type="text/javascript" src="/Public/index/js/jquery.min.js"></script>
+    <script src="/Content/weui/js/zepto.min.js"></script>
+    <script src="/Content/weui/js/zepto.weui.js"></script>
+    <script src="/Content/weui/js/swipe.js"></script>
+
+    <link rel="stylesheet" type="text/css" href="/Public/index/css/slick.css">
+
+    <style>
+        * {
+            margin: 0px;
+            padding: 0px;
+        }
+
+        html,
+        body {
+            height: 100%;
+        }
+
+        #wrap {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        #head {
+            width: 100%;
+            position: fixed;
+            background-color: #E7E8ED;
+            height: 52px;
+            top: 0;
+            z-index: 999;
+        }
+
+        #main {
+            width: 100%;
+            position: absolute;
+            padding-top: 55px;
+            padding-bottom: 55px;
+            font-family: initial;
+        }
+
+        #foot {
+            position: fixed;
+            bottom: 0px;
+            height: 50px;
+            width: 100%;
+            background: #f5eedc;
+        }
+
+        .slide2btn {
+            width: 6.8em;
+            height: 2.6em;
+            line-height: 2.6;
+            font-size: 1em;
+            position: absolute;
+            right: 0.8em;
+            bottom: 0.8em;
+            border-radius: 1em;
+            font-weight: bold;
+            background-color: rgb(243,217,242);
+            color: rgb(217,98,200);
+        }
+
+        .placeholder {
+            margin: 5px;
+            padding: 0 10px;
+            /*background-color: #ebebeb;*/
+            /*height: 2.3em;*/
+            /*line-height: 2.3em;*/
+            text-align: center;
+            color: #cfcfcf;
+        }
+
+        .weui-grid__icon {
+            width: 90%;
+            height: auto;
+            margin: 0 auto;
+        }
+
+        .weui-grid__label {
+            display: block;
+            text-align: center;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+            overflow: hidden;
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+
+        .weui-navbar__item {
+            color: rgb(67,74,118);
+            padding: 4px 0;
+            text-align: center;
+            font-size: 20px;
+            font-weight: bold;
+            letter-spacing: 2px;
+        }
+
+            .weui-navbar__item.tab-green {
+                background: rgba(0, 0, 0, 0) none repeat scroll 0 0;
+                border-bottom: 3px solid rgb(139,86,192);
+                color: rgb(139,86,192);
+                transition: right 0.3s cubic-bezier(0.35, 0, 0.25, 1) 0.09s, left 0.3s cubic-bezier(0.35, 0, 0.25, 1);
+            }
+
+        .weui-news-title {
+            font-size: 18px;
+            font-weight: bold;
+            position: relative;
+            max-width: 100%;
+            color: rgb(67,74,118);
+        }
+
+        .weui-news-p {
+            font-size: 16px;
+            color: rgb(67,74,118);
+        }
+
+        .weui-news-left {
+            margin-left: 0.05rem !important;
+            font-size: 16px !important;
+            color: rgb(255,190,38);
+            font-weight: bold;
+        }
+        /* 轮播定制化  --begin*/
+        /*.storeActivity-list .swiper-slide {
+            width: 90% !important;
+            margin: 0 5%;
+        }
+
+        .swiper-slide-prev {
+            right: -8%;
+        }
+
+        .swiper-slide-next {
+            left: -8%;
+        }*/
+        /* 轮播定制化  --end*/
+        /*#slideZXS > ul > li {
+            width: 33.3%;
+        }*/
+
+        #slide1 .dot {
+            position: absolute;
+            right: 50%;
+            bottom: 10px;
+            z-index: 5;
+            font-size: 0;
+            text-align: center;
+            margin: 0 auto;
+        }
+
+        .tab-bottom a img {
+            width: 40px;
+        }
+
+        .tab-bottom a p {
+            color: rgb(67,74,118);
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        .slidebanbtn {
+            width: 5.5rem;
+            height: 2.2rem;
+            line-height: 2.2rem;
+            font-size: 1rem;
+            position: absolute;
+            right: 0px;
+            bottom: 0px;
+            border-radius: 2rem;
+            font-weight: bold;
+            background-color: rgb(243,217,242);
+            color: rgb(217,98,200);
+            display: inline-block;
+            padding: 0 12px;
+        }
+        .weui-btn_primary:not(.weui-btn_disabled):active {
+            color: rgba(243,217,242, 0.6);
+            background-color: rgb(217,98,200);
+        }
+
+        .ban-con {
+            position: relative;
+            margin-right: 1px;
+            margin-left: 1px;
+        }
+
+            .ban-con .img img {
+                width: 100%;
+            }
+
+            .ban-con .text {
+                position: absolute;
+                left: 50%;
+                -webkit-transform: translate(-50%,0);
+                -moz-transform: translate(-50%,0);
+                -ms-transform: translate(-50%,0);
+                -o-transform: translate(-50%,0);
+                transform: translate(-50%,0);
+                bottom: 9px;
+                width: 92%;
+                height: auto;
+                margin: 0 auto;
+                color: #fff;
+            }
+
+                .ban-con .text p {
+                    position: relative;
+                    font-size: 20px;
+                    font-weight: bold;
+                    letter-spacing: 6px;
+                    text-transform: uppercase;
+                }
+
+                    .ban-con .text p:after {
+                        content: "";
+                        position: absolute;
+                        top: -18px;
+                        left: 0;
+                        width: 52px;
+                        height: 2px;
+                        background: #fff;
+                    }
+
+                .ban-con .text h5 {
+                    font-size: 18px;
+                    font-weight: normal;
+                    margin-top: 36px;
+                }
+
+                .ban-con .text h3 {
+                    font-size: 20px;
+                    font-weight: 500;
+                    margin-top: 10px;
+                    text-transform: uppercase;
+                }
+
+        .dimship {
+            width: 72px;
+            height: 20px;
+            line-height: 20px;
+            font-size: 12px;
+            position: absolute;
+            left: 5px;
+            top: 5px;
+            background-color: rgb(239,253,255);
+            color: rgb(67,74,118);
+            border-radius: 1em;
+            text-align: center;
+        }
+
+        .zxshishu {
+            height: 20px;
+            line-height: 20px;
+            font-size: 12px;
+            position: relative;
+            right: -12px;
+            bottom: 19px;
+            background-color: rgb(105,81,131);
+            color: #ffffff;
+            border-radius: 12px 0 12px 0;
+            text-align: center;
+            transform: scale(0.8);
+        }
+    </style>
+
+    <script>
+        $(function () {
+            //$('#slide2').swipeSlide({
+            //    autoSwipe: true,//自动切换默认是
+            //    speed: 30000,//速度默认4000
+            //    continuousScroll: true,//默认否
+            //    transitionType: 'cubic-bezier(0.22, 0.69, 0.72, 0.88)',//过渡动画linear/ease/ease-in/ease-out/ease-in-out/cubic-bezier
+            //    lazyLoad: true,//懒加载默认否
+            //    slidesPerView: 2,//可见页面3
+            //    centeredSlides: true,//居中
+            //    firstCallback: function (i, sum, me) {
+            //        me.find('.dot').children().first().addClass('cur');
+            //    },
+            //    callback: function (i, sum, me) {
+            //        me.find('.dot').children().eq(i).addClass('cur').siblings().removeClass('cur');
+            //    }
+            //});
+
+            $('#t1').tab({
+                defaultIndex: 0,
+                activeClass: 'tab-green',
+                onToggle: function (index) {
+                    console.log('index' + index);
+                }
+            });
+
+            //$('#slide1').swipeSlide({
+            //    autoSwipe: true,//自动切换默认是
+            //    speed: 300000,//速度默认4000
+            //    continuousScroll: true,//默认否
+            //    transitionType: 'cubic-bezier(0.22, 0.69, 0.72, 0.88)',//过渡动画linear/ease/ease-in/ease-out/ease-in-out/cubic-bezier
+            //    lazyLoad: true,//懒加载默认否
+            //    slidesPerView: 2,//可见页面3
+            //    centeredSlides: true,//居中
+            //    firstCallback: function (i, sum, me) {
+            //        me.find('.dot').children().first().addClass('cur');
+            //    },
+            //    callback: function (i, sum, me) {
+            //        me.find('.dot').children().eq(i).addClass('cur').siblings().removeClass('cur');
+            //    }
+            //});
+        })
+    </script>
+
+</head>
+
+<body style="background-color:rgb(67,74,118)">
+
+    <div id="header">
+    </div>
+
+    <div id="container">
+        <div class="weui-search-bar" style="background-color: transparent; position: initial; padding: 12px 14px;">
+            <input type="search" class="search-input" id='search' placeholder='搜索咨询师' />
+            <button class="weui-btn weui-btn_mini weui-btn_primary"><i class="icon icon-4"></i></button>
+        </div>
+
+        <div class="slide" id="slide2" style="width: 92%;">
+            <ul>
+                <li>
+                    <a href="javascript:;">
+                        <img src='/Public/we/slide11.png' alt="">
+                    </a>
+                    <a href="javascript:;" class="weui-btn weui-btn_mini weui-btn_primary slide2btn" style="width: 6.8em; height: 2.6em; line-height: 2.6; font-size: 1em; position: absolute; right: 0.8em; bottom: 0.8em; border-radius: 2rem;">
+                        预约讲座
+                    </a>
+                </li>
+                <li>
+                    <a href="javascript:;">
+                        <img src='/Public/we/slide11.png' alt="">
+                    </a>
+                    <a href="javascript:;" class="weui-btn weui-btn_mini weui-btn_primary slide2btn" style="width: 6.8em; height: 2.6em; line-height: 2.6; font-size: 1em; position: absolute; right: 0.8em; bottom: 0.8em; border-radius: 2rem;">
+                        预约讲座
+                    </a>
+                </li>
+                <li>
+                    <a href="javascript:;">
+                        <img src='/Public/we/slide11.png' alt="">
+                    </a>
+                    <a href="javascript:;" class="weui-btn weui-btn_mini weui-btn_primary slide2btn" style="width: 6.8em; height: 2.6em; line-height: 2.6; font-size: 1em; position: absolute; right: 0.8em; bottom: 0.8em; border-radius: 2rem;">
+                        预约讲座
+                    </a>
+                </li>
+            </ul>
+            <div class="dot">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        </div>
+
+        <div class="home_banner" style="width: 92%;margin:12px auto;">
+            <div class="ban-con">
+                <div class="img"><img src="/Public/we/slide11.png"></div>
+                <div class="text">
+                    @*<h3 class="wow fadeInRight">Title</h3>
+                    <p class="none wow fadeInRight">Profile</p>*@
+                    <a href="javascript:;" class="weui-btn weui-btn_primary slidebanbtn" >
+                        预约讲座
+                    </a>
+                </div>
+            </div>
+            <div class="ban-con">
+                <div class="img"><img src="/Public/we/slide11.png"></div>
+                <div class="text">
+                    <a href="javascript:;" class="weui-btn weui-btn_primary slidebanbtn">
+                        预约讲座
+                    </a>
+                </div>
+            </div>
+            <div class="ban-con">
+                <div class="img"><img src="/Public/we/slide11.png"></div>
+                <div class="text">
+                    <a href="javascript:;" class="weui-btn weui-btn_primary slidebanbtn">
+                        预约讲座
+                    </a>
+                </div>
+            </div>
+        </div>
+
+
+
+        <div class="weui-flex" style="margin: 0px auto;width: 92%;padding-top: 0.6em;padding-bottom: 0.6em;">
+            <div class="weui-flex__item" style="padding-right:1%;">
+                @*<div class="placeholder" style="background: url('/Public/we/place11.png') no-repeat center; background-size: cover; ">
+                        <a href="javascript:;" class="weui-btn weui-btn_mini weui-btn_primary" style="width:6.8em;height:2.6em;line-height:2.6;font-size:1em;position:absolute;right:0.8em;bottom:0.8em;">
+                            预约讲座
+                        </a>
+                    </div>*@
+                <div style="position: relative;">
+                    <img src='/Public/we/place11.png' alt="" style=" width: 100%; height: 100%; border: none;">
+                    <a href="javascript:;" class="weui-btn weui-btn_mini weui-btn_primary" style="width: 6em; height: 2.2em; line-height: 2.2; font-size: 1em; position: absolute; left: 0.8em; bottom: 1.3em; padding: 0 0.8em; font-weight: bold; background-color: rgb(243,217,242); color: rgb(217,98,200); border-radius: 1em;">
+                        预约咨询
+                    </a>
+                </div>
+                <div>
+                    <img src='/Public/we/place12.png' alt="" style=" width: 100%; height: 100%; border: none;">
+                </div>
+            </div>
+            <div class="weui-flex__item" style="padding-left:1%;">
+                <div>
+                    <img src='/Public/we/place13.png' alt="" style=" width: 100%; height: 100%; border: none;">
+                </div>
+                <div style="position: relative;">
+                    <img src='/Public/we/place14.png' alt="" style=" width: 100%; height: 100%; border: none;">
+                    <a href="javascript:;" class="weui-btn weui-btn_mini weui-btn_primary" style="width: 6em; height: 2.2em; line-height: 2.2; font-size: 1em; position: absolute; left: 0.8em; bottom: 1.3em; padding: 0 0.8em; font-weight: bold; background-color:rgb(239,253,255); color:rgb(80,135,226);border-radius: 1em;">
+                        精彩活动
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="weui-grids grids-small" style="position:initial; width:94%; margin:0px auto;">
+            <a href="javascript:;" class="grid">
+                <div class="weui-grid__icon">
+                    <img src="/Public/we/place21.png" alt="">
+                </div>
+                <p class="weui-grid__label">
+                    往期精华
+                </p>
+            </a>
+            <a href="javascript:;" class="grid">
+                <div class="weui-grid__icon">
+                    <img src="/Public/we/place21.png" alt="">
+                </div>
+                <p class="weui-grid__label">
+                    了解咨询
+                </p>
+            </a>
+            <a href="javascript:;" class="grid">
+                <div class="weui-grid__icon">
+                    <img src="/Public/we/place21.png" alt="">
+                </div>
+                <p class="weui-grid__label">
+                    关于我们
+                </p>
+            </a>
+            <a href="javascript:;" class="grid">
+                <div class="weui-grid__icon">
+                    <img src="/Public/we/place21.png" alt="">
+                </div>
+                <p class="weui-grid__label">
+                    济心理
+                </p>
+            </a>
+        </div>
+
+        <div style="background-color: #ffffff; margin-top: 18px; border-radius: 24px 24px 0 0; ">
+            <div style="height:4px;">
+            </div>
+            <div style="margin:6px; background-color:rgb(245,245,245); border-radius:24px 24px 0 0;">
+                <div class="weui-cell">
+                    <div class="weui-cell__hd">
+                        <img src="/Public/we/ZYZXS.png" alt="" style="width:30px;margin-right:5px;display:block">
+                    </div>
+                    <div class="weui-cell__bd weui-cell_primary">
+                        <p style="color:rgb(66,75,116); font-weight:bold; font-size:20px;">专业咨询师</p>
+                    </div>
+                    <span class="weui-cell__ft" style="font-size:16px;color:rgb(66,75,116);font-weight:bold;">查看更多 ></span>
+                </div>
+
+                @*<div class="slide" id="slide1" style="width: 96%;">
+                    <ul>
+                        <li style="border-radius: 12px; background-color: #ffffff; width:33%">
+                            <div style=" width: 90%; margin: 20px auto; border-radius: 12px;">
+                                <img src="/Public/we/zixunshi11.png" style="position: initial;left: 0;top: 0;width: 100%;height: 100%;border: none;">
+                                <div>地面/视频</div>
+                                <div class="weui-news-text">
+                                    <p class="weui-news-p">咨询时数：500小时+</p>
+                                </div>
+                                <div class="weui-news-title">
+                                    身世琴
+                                    <span>身世琴</span>
+                                    <span>[上海]</span>
+                                    <span class="weui-news-left">免费</span>
+                                </div>
+                                <div class="weui-news-text">
+                                    <p class="weui-news-p">家庭婚姻 | 亲子关系</p>
+                                </div>
+                                <div>
+                                    <span class="weui-news-left">免费</span>
+                                </div>
+                            </div>
+                        </li>
+                        <li>
+                            <a href="javascript:;">
+                                <img src='/Public/we/slide11.png' alt="">
+                            </a>
+                            <a href="javascript:;" class="weui-btn weui-btn_mini weui-btn_primary slide2btn" style="width: 6.8em; height: 2.6em; line-height: 2.6; font-size: 1em; position: absolute; right: 0.8em; bottom: 0.8em; border-radius: 2rem;">
+                                预约讲座
+                            </a>
+                        </li>
+                        <li>
+                            <a href="javascript:;">
+                                <img src='/Public/we/slide11.png' alt="">
+                            </a>
+                            <a href="javascript:;" class="weui-btn weui-btn_mini weui-btn_primary slide2btn" style="width: 6.8em; height: 2.6em; line-height: 2.6; font-size: 1em; position: absolute; right: 0.8em; bottom: 0.8em; border-radius: 2rem;">
+                                预约讲座
+                            </a>
+                        </li>
+                        <li>
+                            <a href="javascript:;">
+                                <img src='/Public/we/slide11.png' alt="">
+                            </a>
+                            <a href="javascript:;" class="weui-btn weui-btn_mini weui-btn_primary slide2btn" style="width: 6.8em; height: 2.6em; line-height: 2.6; font-size: 1em; position: absolute; right: 0.8em; bottom: 0.8em; border-radius: 2rem;">
+                                预约讲座
+                            </a>
+                        </li>
+                        <li>
+                            <a href="javascript:;">
+                                <img src='/Public/we/slide11.png' alt="">
+                            </a>
+                            <a href="javascript:;" class="weui-btn weui-btn_mini weui-btn_primary slide2btn" style="width: 6.8em; height: 2.6em; line-height: 2.6; font-size: 1em; position: absolute; right: 0.8em; bottom: 0.8em; border-radius: 2rem;">
+                                预约讲座
+                            </a>
+                        </li>
+                    </ul>
+                    <div class="dot">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                </div>*@
+                <div style="height:16px;">
+                </div>
+
+                <div class="course-team" id="wrapZ">
+                    <div class="cou-teambaner" style="margin: 20px auto 40px;">
+                        <div class="img wow zoomIn" style="position: relative; background-color: #ffffff;">
+                            <div style="margin:4px; ">
+                                <div style="width: 94%; margin:8px auto; background-color: #ffffff;">
+                                    <div>
+                                        <img class="img-responsive" src="/Public/we/zixunshi11.png" alt="item.Title" title="Title" />
+                                        <div class="dimship">地面/视频</div>
+                                        <div class="zxshishu">咨询时数：500小时+</div>
+                                    </div>
+                                    <div style="margin-top: -16px; font-size: 12px !important; ">
+                                        <span style="color:rgb(67,74,118); font-weight:bold;">沈世琴</span>
+                                        <span style="color: rgb(67,74,118);">[上海]</span>
+                                        <span style="color: rgb(139,86,192); float: right;">从业9年</span>
+                                    </div>
+                                    <div>
+                                        <span style="color: rgb(67,74,118); font-size: 12px !important; background-color: rgb(245,245,245);">家庭婚姻 | 亲子关系</span>
+                                    </div>
+                                    <div style="text-align: right; font-size: 13px !important; color: rgb(255,190,38);">
+                                        <span>￥600/50分钟</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="img wow zoomIn" style="position: relative;">
+                            <a class="tmd" href="#" target="_blank" title="item.Title">
+                                <img class="img-responsive" src="" alt="item.Title" title="Title" />
+                                <div class="lijibaoming">
+                                    <span style="line-height: 22px;">立即报名</span>
+                                </div>
+                                <div class="institution-butmmy22">
+                                    <p style="font-size: 16px; margin: 6px; line-height: 32px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; ">tem.Title</p>
+                                </div>
+                            </a>
+                        </div>
+                        <div class="img wow zoomIn" style="position: relative;">
+                            <a class="tmd" href="#" target="_blank" title="item.Title">
+                                <img class="img-responsive" src="" alt="item.Title" title="Title" />
+                                <div class="lijibaoming">
+                                    <span style="line-height: 22px;">立即报名</span>
+                                </div>
+                                <div class="institution-butmmy22">
+                                    <p style="font-size: 16px; margin: 6px; line-height: 32px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; ">tem.Title</p>
+                                </div>
+                            </a>
+                        </div>
+                        <div class="img wow zoomIn" style="position: relative;">
+                            <a class="tmd" href="#" target="_blank" title="item.Title">
+                                <img class="img-responsive" src="" alt="item.Title" title="Title" />
+                                <div class="lijibaoming">
+                                    <span style="line-height: 22px;">立即报名</span>
+                                </div>
+                                <div class="institution-butmmy22">
+                                    <p style="font-size: 16px; margin: 6px; line-height: 32px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; ">tem.Title</p>
+                                </div>
+                            </a>
+                        </div>
+                        <div class="img wow zoomIn" style="position: relative;">
+                            <a class="tmd" href="#" target="_blank" title="item.Title">
+                                <img class="img-responsive" src="" alt="item.Title" title="Title" />
+                                <div class="lijibaoming">
+                                    <span style="line-height: 22px;">立即报名</span>
+                                </div>
+                                <div class="institution-butmmy22">
+                                    <p style="font-size: 16px; margin: 6px; line-height: 32px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; ">tem.Title</p>
+                                </div>
+                            </a>
+                        </div>
+                        <div class="img wow zoomIn" style="position: relative;">
+                            <a class="tmd" href="#" target="_blank" title="item.Title">
+                                <img class="img-responsive" src="" alt="item.Title" title="Title" />
+                                <div class="lijibaoming">
+                                    <span style="line-height: 22px;">立即报名</span>
+                                </div>
+                                <div class="institution-butmmy22">
+                                    <p style="font-size: 16px; margin: 6px; line-height: 32px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; ">tem.Title</p>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+            <div style="height:2px;">
+            </div>
+        </div>
+
+        <div style="background-color: #ffffff; margin-bottom:18px; border-radius:0 0 24px 24px;">
+            <div class="weui-tab" id="t1" style="height:auto; width:92%; margin:0px auto;">
+                <div class="weui-navbar" style="background-color:#ffffff; padding-top:10px;">
+                    <div class="weui-navbar__item">
+                        <img src='/Public/we/tab11.png' alt="" style="width: 38px; vertical-align: middle;">
+                        <span>活动招募</span>
+                    </div>
+                    <div class="weui-navbar__item">
+                        <img src='/Public/we/tab12.png' alt="" style="width: 38px; vertical-align: middle;">直播预告
+                    </div>
+                </div>
+                <div class="weui-tab__panel" style="padding-top: 72px; padding-bottom: 22px;">
+                    <div id="s0" class="weui-tab__content">
+                        <div class="weui-news">
+                            <ul class="weui-news-list">
+                                <li class="weui-news-item">
+                                    <div class="weui-news-inner">
+                                        <div class="weui-news-media">
+                                            <img src="/Public/we/huodong11.png">
+                                        </div>
+                                        <div class="weui-news-inners">
+                                            <div class="weui-news-title">益家之言论坛</div>
+                                            <div class="weui-news-text">
+                                                <p class="weui-news-p">家庭热点问题系列公益论坛</p>
+                                            </div>
+                                            <div class="weui-news-info">
+                                                <div class="weui-news-infoitem">
+                                                    <span class="weui-news-left">免费</span>
+                                                </div>
+                                                <div class="weui-news-infoitem">
+                                                    <a href="javascript:;" class="weui-btn weui-btn_mini weui-btn_primary" style="width: 4rem; height: 1.8rem; line-height: 1.8rem; font-size: 0.8rem; font-weight: bold; background-color: rgb(94,144,239); color: #ffffff; border-radius: 1em; ">
+                                                        加入
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </li>
+
+                                <li class="weui-news-item">
+                                    <div class="weui-news-inner">
+                                        <div class="weui-news-media">
+                                            <img src="/Public/we/huodong11.png">
+                                        </div>
+                                        <div class="weui-news-inners">
+                                            <div class="weui-news-title">系列读书会【第二期火热招募中】</div>
+                                            <div class="weui-news-text">
+                                                <p class="weui-news-p">让阅读成为一种习惯</p>
+                                            </div>
+                                            <div class="weui-news-info">
+                                                <div class="weui-news-infoitem">
+                                                    <span class="weui-news-left">免费</span>
+                                                </div>
+                                                <div class="weui-news-infoitem">
+                                                    <a href="javascript:;" class="weui-btn weui-btn_mini weui-btn_primary" style="width: 4rem; height: 1.8rem; line-height: 1.8rem; font-size: 0.8rem; font-weight: bold; background-color: rgb(94,144,239); color: #ffffff; border-radius: 1em; ">
+                                                        加入
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </li>
+
+                                <li class="weui-news-item">
+                                    <div class="weui-news-inner">
+                                        <div class="weui-news-media">
+                                            <img src="/Public/we/huodong11.png">
+                                        </div>
+                                        <div class="weui-news-inners">
+                                            <div class="weui-news-title">系列读书会【第二期火热招募中】</div>
+                                            <div class="weui-news-text">
+                                                <p class="weui-news-p">让阅读成为一种习惯</p>
+                                            </div>
+                                            <div class="weui-news-info">
+                                                <div class="weui-news-infoitem">
+                                                    <span class="weui-news-left">免费</span>
+                                                </div>
+
+                                                <div class="weui-news-infoitem">
+                                                    <a href="javascript:;" class="weui-btn weui-btn_mini weui-btn_primary" style="width:4rem; height: 1.8rem; line-height: 1.8rem; font-size: 0.8rem; font-weight: bold; background-color: rgb(94,144,239); color: #ffffff; border-radius: 1em; ">
+                                                        加入
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div id="s1" class="weui-tab__content">
+                        <div class="weui-news">
+                            <ul class="weui-news-list">
+                                <li class="weui-news-item">
+                                    <div class="weui-news-inner">
+                                        <div class="weui-news-media">
+                                            <img src="/Public/we/huodong11.png">
+                                        </div>
+                                        <div class="weui-news-inners">
+                                            <div class="weui-news-title">益家之言论坛直播预告</div>
+                                            <div class="weui-news-text">
+                                                <p class="weui-news-p">家庭热点问题系列公益论坛</p>
+                                            </div>
+                                            <div class="weui-news-info">
+                                                <div class="weui-news-infoitem">
+                                                    <span class="weui-news-left">免费</span>
+                                                </div>
+                                                <div class="weui-news-infoitem">
+                                                    <a href="javascript:;" class="weui-btn weui-btn_mini weui-btn_primary" style="width: 4rem; height: 1.8rem; line-height: 1.8rem; font-size: 0.8rem; font-weight: bold; background-color: rgb(94,144,239); color: #ffffff; border-radius: 1em; ">
+                                                        加入
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </li>
+
+                                <li class="weui-news-item">
+                                    <div class="weui-news-inner">
+                                        <div class="weui-news-media">
+                                            <img src="/Public/we/huodong11.png">
+                                        </div>
+                                        <div class="weui-news-inners">
+                                            <div class="weui-news-title">系列读书会直播预告</div>
+                                            <div class="weui-news-text">
+                                                <p class="weui-news-p">让阅读成为一种习惯</p>
+                                            </div>
+                                            <div class="weui-news-info">
+                                                <div class="weui-news-infoitem">
+                                                    <span class="weui-news-left">免费</span>
+                                                </div>
+                                                <div class="weui-news-infoitem">
+                                                    <a href="javascript:;" class="weui-btn weui-btn_mini weui-btn_primary" style="width: 4rem; height: 1.8rem; line-height: 1.8rem; font-size: 0.8rem; font-weight: bold; background-color: rgb(94,144,239); color: #ffffff; border-radius: 1em; ">
+                                                        加入
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </li>
+
+                                <li class="weui-news-item">
+                                    <div class="weui-news-inner">
+                                        <div class="weui-news-media">
+                                            <img src="/Public/we/huodong11.png">
+                                        </div>
+                                        <div class="weui-news-inners">
+                                            <div class="weui-news-title">系列读书会直播预告</div>
+                                            <div class="weui-news-text">
+                                                <p class="weui-news-p">让阅读成为一种习惯</p>
+                                            </div>
+                                            <div class="weui-news-info">
+                                                <div class="weui-news-infoitem">
+                                                    <span class="weui-news-left">免费</span>
+                                                </div>
+
+                                                <div class="weui-news-infoitem">
+                                                    <a href="javascript:;" class="weui-btn weui-btn_mini weui-btn_primary" style="width:4rem; height: 1.8rem; line-height: 1.8rem; font-size: 0.8rem; font-weight: bold; background-color: rgb(94,144,239); color: #ffffff; border-radius: 1em; ">
+                                                        加入
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div style="height:72px; text-align: center;">
+                <a href="#" target="_blank" style="color: rgb(67,74,118); font-weight: bold;">
+                    查看更多
+                </a>
+            </div>
+        </div>
+
+        <div style="height:70px; text-align: center;">
+            @*<img src="/Public/we/bottom5.png" alt="">*@
+        </div>
+
+        <div class="weui-tabbar tab-bottom" style="background-color: #ffffff; border-radius: 12px 12px 0 0;">
+            <a href="javascript:;" class="weui-tabbar__item">
+                <img src="/Public/we/bottom1.png" alt="">
+                <p class="weui-tabbar__label f-green">首页</p>
+            </a>
+            <a href="javascript:;" class="weui-tabbar__item">
+                <img src="/Public/we/bottom2.png" alt="">
+                <p class="weui-tabbar__label">活动招募</p>
+            </a>
+
+            <a href="javascript:;" class="weui-tabbar__item ">
+                @*<img src="/Public/we/bottom5.png" alt="">*@
+
+                <img src="/Public/we/bottom10.png" alt="" style="position: absolute; bottom:35px; left: 0px; width: 100%;">
+                <p class="weui-tabbar__label" style="margin-top: 40px;">心理咨询</p>
+            </a>
+            <a href="javascript:;" class="weui-tabbar__item">
+                <img src="/Public/we/bottom3.png" alt="">
+                <p class="weui-tabbar__label">主题月</p>
+            </a>
+            <a href="javascript:;" class="weui-tabbar__item ">
+                <img src="/Public/we/bottom4.png" alt="">
+                <p class="weui-tabbar__label">我的</p>
+            </a>
+        </div>
+
+    </div>
+
+    <script type="text/javascript" src="/Public/index/js/slick.min.js"></script>
+    <script type="text/javascript" src="/Public/index/js/zturn.js"></script>
+    <script type="text/javascript">
+
+        $(document).ready(function () {
+            $('.home_banner').slick({
+                arrows: false,
+                autoplay: true,
+                autoplaySpeed: 3000,
+                dots: false,
+            });
+            $('.cou-teambaner').slick({
+                arrows: false,
+                slidesToShow: 3,
+                slidesToScroll: 1,
+                autoplay: true,
+                autoplaySpeed: 3000000,
+            });
+
+        });
+    </script>
+</body>
+
+</html>

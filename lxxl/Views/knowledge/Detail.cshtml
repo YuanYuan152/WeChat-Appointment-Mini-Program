@@ -1,0 +1,220 @@
+﻿@using lxxl.Models
+@{
+    ViewBag.Title = "newsDetail";
+    Layout = "~/Views/Shared/_LayoutWap.cshtml";
+    T_Content Content = ViewBag.Content;
+}
+
+@*<link href="/Content/vide7.1.0/css/video-js.min.css" rel="stylesheet">*@
+<style>
+    /*<!-- 隐藏设置-- > 
+    .hide {
+        display: none;
+    }
+    <!-- 遮罩层样式-- > 
+    .shade {
+        position: fixed;
+        top: 0;
+        right: 0;
+        left: 0;
+        bottom: 0;
+        background: black;
+        opacity: 60%;
+        z-index: 100;
+    }
+    <!-- 弹出层样式-- > 
+    .add_modal {
+        position: fixed;
+        height: 300px;
+        width: 400px;
+        top: 100px;
+        left: 50%;
+        z-index: 101;
+        border: 1px solid red;
+        background: white;
+        margin-left: -200px;
+    }*/
+    .m {
+        width: 960px;
+        height: 400px;
+        margin-left: auto;
+        margin-right: auto;
+        margin-top: 100px;
+    }
+</style>
+
+
+
+<div class="con">
+    <section>
+        <div class="news-data">
+            <div class="news-title">
+                <h3 class="section_tit" style="margin:10px 0 10px 0; padding-left: 10px; border-left: #c00 5px solid; font-size: 24px; ">
+                    付费知识
+                </h3>
+                <div class="list-crumb" style="background-color: #e9e9e9;padding: 8px 15px;margin-top: 15px;margin-bottom: 10px;list-style: none;border-radius: 4px;">
+                    <span>您当前的位置：</span> <a href="/home/Index">首页</a> -> 付费知识 -> 付费阅读
+                </div>
+            </div>
+            <div class="news-box" style="padding:40px 52px;">
+                <div class="news-top">
+                    <h3 style="margin-bottom:30px;">@Content.Title</h3>
+                    <div class="but">
+                        <div>
+                            <p>发布时间:<span> @Content.CreateTime</span></p>
+                            <p>来源/作者：<span>@Content.Source</span></p>
+                            <p>浏览次数 :<span>@Content.Views</span></p>
+                        </div>
+                    </div>
+                </div>
+                <div class="con hide" id="ContentMain" style="margin-top:30px;">
+                    <div class="con hide" id="ContentMain2" style=" margin-top:30px;">
+
+                    </div>
+                    <div class="hide" id="Contentvideo">
+                        <video id="myvideo" src="" controls autoplay controlslist="nodownload" width="100%" poster="@Content.url"></video>
+                    </div>
+
+                    @*<video id="my-video" class="video-js" controls preload="auto" width="960" height="400" poster="/Content/vide7.1.0/m.jpg" data-setup="{}">
+                <source src="/Upload/video/IPT20230305.mp4" type="video/mp4">
+            </video>*@
+                </div>
+            </div>
+        </div>
+
+
+    </section>
+
+    <div class="shade" style="position: fixed;top: 0;right: 0;left: 0;bottom: 0;background: black;opacity: 60%;z-index: 100;">
+    </div>
+    <div class="add_modal" style="position: fixed;height:500px;width:500px;top:200px;left: 50%;z-index: 101;border: 1px solid red;background: white;margin-left: -250px;">
+        <div class="weui_panel_bd" style="margin-top: 50px;width: 300px; margin-left: 100px;">
+            <form method="post" id="QrPay" action="QrPay">
+                <center>
+                    <span style="font-size: 1.5em;margin: 14px;">付费阅读，请扫描支付￥@Content.Money</span></br>
+                    <div id="code" style="margin-top:10px;"><img id="codeImg" width="300" alt="" /></div>
+                </center>
+            </form>
+        </div>
+    </div>
+</div>
+<script type="text/javascript">
+    $(function () {
+        localStorage.active = "activeNewsList";
+    })
+
+    
+    var user = null;
+    $(document).ready(function () {
+        $.get('/knowledge/GetQRImg2', { ID: '@Content.ID' }, function (res) {
+            console.log(res);
+            if (res.code == 1) {
+                $('.shade,.add_modal').addClass('hide');
+                $('#ContentMain').removeClass('hide');
+                console.log(res.Content);
+                if (res.Content.video != "") {
+                    console.log(res.Content.video);
+                    $('#Contentvideo').removeClass('hide');
+                    document.getElementById("myvideo").src = res.Content.video;
+                }
+                if (res.Content.ContentMain != "") {
+                    console.log(res.Content.ContentMain);
+                    $('#ContentMain2').removeClass('hide');
+                    document.getElementById("ContentMain2").innerHTML = res.Content.ContentMain;
+                }
+            }
+            else if (res.code == 0) {
+                $('.shade,.add_modal').removeClass('hide');
+                $('#ContentMain').addClass('hide');
+                console.log(res.img);
+                document.getElementById("codeImg").src = "data:image/png;base64," + res.img;
+
+                //定时查询支付状态
+                //var timer = new System.Windows.Forms.Timer();
+                //timer.Interval = 5000;//间隔5秒 
+                //timer.Tick += (sender2, e2) =>
+                //{
+                //    var dataQueryOrder = new Senparc.Weixin.MP.TenPayLibV3.TenPayV3OrderQueryRequestData(WeChetConfig.AppId, WeChetConfig.MchId, null, TenPayV3Util.GetNoncestr(), WeChetConfig.OutTradeNo, WeChetConfig.PayKey);
+                //var queryResult = TenPayV3.OrderQuery(dataQueryOrder);
+                //if (queryResult.trade_state == "SUCCESS")//支付成功
+                //{
+                //    //这里写自己的数据库逻辑
+                //}
+                //else if (queryResult.trade_state == "CLOSED")//已关闭
+                //{
+                //    MessageBox.Show("该订单已关闭，请重新扫码支付");
+                //    WeChatCode();//重新调用生成方法
+                //    timer.Stop();
+                //    timer.Dispose();
+                //}
+                //else if (queryResult.trade_state == "PAYERROR")//支付失败（其他原因，如银行返回失败）
+                //{
+                //    CacelRequest(queryResult);
+                //}
+                //};
+                //timer.Start();
+                let timess = 0;
+                let timer = setInterval(function () {
+                    if (timess == 1000) {
+                        return;
+                    }
+                    else if (timess <= 150) {
+                        $.ajax({
+                            url: '/wx/WxOrderQuery',
+                            type: 'POST',
+                            data: {
+                                out_trade_no: res.ordergId
+                            },
+                            success: function (result) {
+                                timess = timess + 1;
+                                if (result.code !== 0) {
+                                    return;
+                                }
+                                layer.msg('付款成功！');
+                                $('.shade,.add_modal').addClass('hide');
+                                $('#ContentMain').removeClass('hide');
+                                timess = 1000;
+                                console.log(result.Content);
+                                if (result.Content.video != "") {
+                                    console.log(result.Content.video);
+                                    $('#Contentvideo').removeClass('hide');
+                                    document.getElementById("myvideo").src = result.Content.video;
+                                }
+                                if (result.Content.ContentMain != "") {
+                                    console.log(result.Content.ContentMain);
+                                    $('#ContentMain2').removeClass('hide');
+                                    document.getElementById("ContentMain2").innerHTML = result.Content.ContentMain;
+                                }
+                            }
+                        })
+                    } else {
+                        layer.msg("用户付款超时，本次交易结束！");
+                        window.opener = null;
+                        window.open('', '_self');
+                        window.close();
+                    }
+                }, 2000)
+            }
+            else {
+                $('.shade,.add_modal').removeClass('hide');
+                $('#ContentMain').addClass('hide');
+                alert(res.msg);
+            }
+        });
+    });
+</script>
+
+@*<script src="/Content/vide7.1.0/js/video.min.js"></script>
+<script src="http://vjs.zencdn.net/5.19/lang/zh-CN.js"></script>
+<script type="text/javascript">
+    var myPlayer = videojs('my-video');
+    videojs("my-video").ready(function () {
+        var myPlayer = this;
+        myPlayer.play();
+    });
+
+</script>*@ 
+
+
+
+

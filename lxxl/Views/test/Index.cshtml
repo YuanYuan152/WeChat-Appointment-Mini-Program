@@ -1,0 +1,589 @@
+﻿@using lxxl.Models
+@{
+    ViewBag.Title = "Index";
+    Layout = null;
+    List<T_SystemSettings> roomList = ViewBag.roomList;
+    List<T_Doctor> DoctorList = ViewBag.DoctorList;
+}
+
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+    <meta charset='utf-8' />
+    <title>日历日程表联动</title>
+    <meta name="renderer" content="webkit">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="format-detection" content="telephone=no">
+
+    <link rel="stylesheet" href='/Content/erp/fullcalendar/core/main.css' rel='stylesheet' />
+    <link rel="stylesheet" href='/Content/erp/fullcalendar/daygrid/main.css' rel='stylesheet' />
+    <link rel="stylesheet" href='/Content/erp/fullcalendar/timegrid/main.css' rel='stylesheet' />
+    <link rel="stylesheet" href="/Content/erp/assets/libs/layui/css/layui.css" media="all">
+    <link rel="stylesheet" href="/Content/erp/assets/common.css" media="all">
+
+    <style>
+        #calendar {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        #external-events {
+            float: left;
+            width: 150px;
+            padding: 0 10px;
+            border: 1px solid #ccc;
+            background: #eee;
+            text-align: left;
+        }
+
+            #external-events h4 span {
+                font-size: 16px;
+                margin-top: 0;
+                padding-top: 1em;
+            }
+
+        .external-event { /* try to mimick the look of a real event */
+            margin: 10px 0;
+            padding: 2px 4px;
+            background: #3366CC;
+            color: #fff;
+            font-size: .85em;
+            cursor: pointer;
+        }
+
+        #Doctor-events {
+            float: left;
+            width: 150px;
+            padding: 0 10px;
+            border: 1px solid #ccc;
+            background: #eee;
+            text-align: left;
+            margin-top: 12px;
+        }
+
+            #Doctor-events h4 span {
+                font-size: 16px;
+                margin-top: 0;
+                padding-top: 1em;
+            }
+
+        .Doctor-event { /* try to mimick the look of a real event */
+            margin: 10px 0;
+            padding: 2px 4px;
+            background: #3366CC;
+            color: #fff;
+            font-size: .85em;
+            cursor: pointer;
+        }
+
+        /*日期控件*/
+        .layui-laydate-content > .layui-laydate-list {
+            padding-bottom: 0px;
+            overflow: hidden;
+        }
+
+            .layui-laydate-content > .layui-laydate-list > li {
+                width: 50%;
+            }
+
+        /* pop */
+        .popper,
+        .tooltip {
+            position: absolute;
+            z-index: 9999;
+            background: #FFC107;
+            color: black;
+            width: 200px;
+            border-radius: 3px;
+            box-shadow: 0 0 2px rgba(0,0,0,0.5);
+            padding: 10px;
+            text-align: center;
+        }
+
+        .style5 .tooltip {
+            background: #1E252B;
+            color: #FFFFFF;
+            max-width: 200px;
+            width: auto;
+            font-size: .8rem;
+            padding: .5em 1em;
+        }
+
+        .popper .popper__arrow,
+        .tooltip .tooltip-arrow {
+            width: 0;
+            height: 0;
+            border-style: solid;
+            position: absolute;
+            margin: 5px;
+        }
+
+        .tooltip .tooltip-arrow,
+        .popper .popper__arrow {
+            border-color: #FFC107;
+        }
+
+        .style5 .tooltip .tooltip-arrow {
+            border-color: #1E252B;
+        }
+
+        .popper[x-placement^="top"],
+        .tooltip[x-placement^="top"] {
+            margin-bottom: 5px;
+        }
+
+            .popper[x-placement^="top"] .popper__arrow,
+            .tooltip[x-placement^="top"] .tooltip-arrow {
+                border-width: 5px 5px 0 5px;
+                border-left-color: transparent;
+                border-right-color: transparent;
+                border-bottom-color: transparent;
+                bottom: -5px;
+                left: calc(50% - 5px);
+                margin-top: 0;
+                margin-bottom: 0;
+            }
+
+        .popper[x-placement^="bottom"],
+        .tooltip[x-placement^="bottom"] {
+            margin-top: 5px;
+        }
+
+            .tooltip[x-placement^="bottom"] .tooltip-arrow,
+            .popper[x-placement^="bottom"] .popper__arrow {
+                border-width: 0 5px 5px 5px;
+                border-left-color: transparent;
+                border-right-color: transparent;
+                border-top-color: transparent;
+                top: -5px;
+                left: calc(50% - 5px);
+                margin-top: 0;
+                margin-bottom: 0;
+            }
+
+        .tooltip[x-placement^="right"],
+        .popper[x-placement^="right"] {
+            margin-left: 5px;
+        }
+
+            .popper[x-placement^="right"] .popper__arrow,
+            .tooltip[x-placement^="right"] .tooltip-arrow {
+                border-width: 5px 5px 5px 0;
+                border-left-color: transparent;
+                border-top-color: transparent;
+                border-bottom-color: transparent;
+                left: -5px;
+                top: calc(50% - 5px);
+                margin-left: 0;
+                margin-right: 0;
+            }
+
+        .popper[x-placement^="left"],
+        .tooltip[x-placement^="left"] {
+            margin-right: 5px;
+        }
+
+            .popper[x-placement^="left"] .popper__arrow,
+            .tooltip[x-placement^="left"] .tooltip-arrow {
+                border-width: 5px 0 5px 5px;
+                border-top-color: transparent;
+                border-right-color: transparent;
+                border-bottom-color: transparent;
+                right: -5px;
+                top: calc(50% - 5px);
+                margin-left: 0;
+                margin-right: 0;
+            }
+    </style>
+</head>
+<body>
+
+    <div class="layui-fluid">
+        <div class="layui-card" style="padding-top: 5px; margin-bottom: 8px;">
+            <div class="layui-row layui-col-space15">
+                <div class="layui-col-xs12 layui-col-md2">
+                    <div id='external-events'>
+                        <h4>咨询室<div class="external-event" id="room-0" roomid="" onclick="changeRoom('room-0')">全部</div></h4>
+                        @*<list roomlist as room>
+                            <div class="external-event" id="room${room.id}" roomid="${room.id}" onclick="changeRoom(this.id)">${room.name}</div>
+                        </list>*@
+                        @foreach (T_SystemSettings item in roomList)
+                        {
+                            <div class="external-event" id="room-@item.id" roomid="@item.content1" onclick="changeRoom('room-@item.id')">@item.content1</div>
+                        }
+                        @*<div class="external-event" id="1" roomid="1" onclick="changeRoom(1)">会议室1</div>
+                        <div class="external-event" id="2" roomid="2" onclick="changeRoom(2)">会议室2</div>
+                        <div class="external-event" id="3" roomid="3" onclick="changeRoom(3)">会议室3</div>
+                        <div class="external-event" id="4" roomid="4" onclick="changeRoom(4)">会议室4</div>*@
+                    </div>
+                    <br>
+                    <div id='Doctor-events'>
+                        <h4>咨询师<div class="Doctor-event" id="doctor-0" doctorid="0" onclick="changeDoctor('doctor-0')">全部</div></h4>
+                        @foreach (T_Doctor item in DoctorList)
+                        {
+                            <div class="Doctor-event" id="doctor-@item.ID" doctorid="@item.ID" onclick="changeDoctor('doctor-@item.ID')">@item.name</div>
+                        }
+                    </div>
+                </div>
+                <div class="layui-col-xs12 layui-col-md10">
+                    <div id='calendar'></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- 表单弹框 -->
+    <script type="text/html" id="calendarForm">
+        <form lay-filter="calendarForm" class="layui-form model-form">
+            <input name="id" id="id" type="hidden" />
+            <div class="layui-form-item">
+                <label class="layui-form-label">预约主题</label>
+                <div class="layui-input-block">
+                    <input name="appointTheme" placeholder="请输入会议主题" type="text" class="layui-input" maxlength="50" lay-verify="required" required />
+                </div>
+            </div>
+            <div class="layui-form-item">
+                <label class="layui-form-label">预约开始时间</label>
+                <div class="layui-input-inline">
+                    <input type="text" class="layui-input" id="stime" name="stime" placeholder="HH:mm" lay-verify="required" required>
+                </div>
+            </div>
+            <div class="layui-form-item">
+                <label class="layui-form-label">预约结束时间</label>
+                <div class="layui-input-inline">
+                    <input type="text" class="layui-input" id="etime" name="etime" placeholder="HH:mm" lay-verify="required" required>
+                </div>
+            </div>
+            <div class="layui-form-item">
+                <label class="layui-form-label">预约人</label>
+                <div class="layui-input-block">
+
+                    <input name="appointPerson" value="><#if currentuser.name!=''>${currentUser.name}<#else>${currentUser.loginName}</#if>" type="text" class="layui-input" maxlength="50" readonly />
+                </div>
+            </div>
+            <div class="layui-form-item">
+                <label class="layui-form-label">联系方式</label>
+                <div class="layui-input-block">
+                    <input name="tel" value="><#if currentuser.phone??>${currentUser.phone}</#if>" type="text" class="layui-input" maxlength="20" readonly />
+                </div>
+            </div>
+            <div class="layui-form-item text-right">
+                <button class="layui-btn layui-btn-primary" type="button" ew-event="closeDialog">取消</button>
+                <button class="layui-btn" lay-filter="formSubmit" lay-submit>保存</button>
+                <button class="layui-btn" type="button" id="delEdit" onclick="del()">删除</button>
+            </div>
+        </form>
+    </script>
+
+    <!-- js部分 -->
+    <script src='/Content/erp/fullcalendar/core/main.js'></script>
+    <script src='/Content/erp/fullcalendar/core/locales-all.js'></script>
+    <script src='/Content/erp/fullcalendar/daygrid/main.js'></script>
+    <script src='/Content/erp/fullcalendar/interaction/main.js'></script>
+    <script src='/Content/erp/fullcalendar/timegrid/main.js'></script>
+    <script src='/Content/erp/fullcalendar/core/locales/zh-cn.js'></script>
+    <script src="/Content/erp/assets/libs/jquery/jquery-3.2.1.min.js"></script>
+    <script src='/Content/erp/fullcalendar/popper.min.js'></script>
+    <script src='/Content/erp/fullcalendar/tooltip.min.js'></script>
+    <script type="text/javascript" src="/Content/erp/assets/libs/layui/layui.all.js"></script>
+    @*<script type="text/javascript" src="/Content/erp/assets/js/calendar/index.js"></script>*@
+
+
+    <script>
+        var addIndex;
+        var room = '';
+        var doctoeID = 0;
+        var calendar;
+        var $ = layui.jquery;
+        var layer = layui.layer;
+        var form = layui.form;
+        var laydate = layui.laydate;
+
+        //roomId = $("#room1").attr("roomId");
+        $("#room-0").css("backgroundColor", "#003399");
+        $("#doctor-0").css("backgroundColor", "#003399");
+
+        document.addEventListener('DOMContentLoaded', function () {
+            var calendarEl = document.getElementById('calendar');
+
+            calendar = new FullCalendar.Calendar(calendarEl, {
+                plugins: ['interaction', 'dayGrid', 'timeGrid'],
+                defaultView: 'dayGridMonth',
+                // defaultDate: '2019-05-07',
+                selectable: true, // dataClick生效
+                locale: 'zh-cn', // 设置中文
+                eventLimit: 6, // 显示更多
+                displayEventEnd: true, // 显示结束时间
+                header: {
+                    left: 'prev,next today',
+                    center: 'title',
+                    right: 'dayGridMonth,timeGridWeek,timeGridDay'
+                },
+                events: function (info, successCallback, failureCallback) {
+                    // roomId: roomId, sTime: info.start.valueOf(), eTime: info.end.valueOf()
+                    
+                    ; $.get("/mapi/listevents", { room: room, doctoeID: doctoeID, startDate: info.startStr, endDate: info.endStr }, function (res) {
+                        if (res.code == 200) {
+                            successCallback(res.data);
+                        } else {
+                            failureCallback(res.msg);
+                        }
+                    });
+                }
+                , eventClick: function (info) {
+                    console.log('eventClick ' + info);
+                    //openEditLayer(info);
+                }
+                , dateClick: function (info) {
+                    console.log('dateClick ' + info.dateStr);
+                    //openLayer(info);
+                }
+                , eventRender: function (info) {
+                    
+                    console.log(info);
+                    var tooltip = new Tooltip(info.el, {
+                        title: popContent(info.event.title, info.event.extendedProps.appointPerson, info.event.start, info.event.end, info.event.extendedProps.room),
+                        placement: 'top',
+                        trigger: 'hover',
+                        container: 'body',
+                        html: true
+                    });
+                }
+            });
+
+            calendar.render();
+        });
+
+        function popContent(title, appointPerson, stime, etime, tel) {
+            var sDate = new Date(stime);
+            var s = sDate.getHours() + '点' + sDate.getMinutes() + '分';
+            var eDate = new Date(etime);
+            var e = eDate.getHours() + '点' + eDate.getMinutes() + '分';
+            var str = '<div style="font-weight: bold;">' + title + '</div>';
+            str += '<div style="height: 1px;background-color: black;"></div>'
+            str += '<div style="text-align: left;">预约人：' + appointPerson + '</div>';
+            str += '<div style="text-align: left;">预约时间：' + s + ' -  ' + e + '</div>';
+            str += '<div style="text-align: left;">咨询室：' + tel + '</div>'
+            return str;
+        }
+
+        $(document).ready(function () {
+
+        });
+
+        function initDateCtrl() {
+            //日期时间选择器
+            laydate.render({
+                elem: '#stime' //指定元素
+                , type: 'time'
+                , format: 'HH:mm'
+                , done: function (value, date) {
+                    var etime = $("#etime").val();
+                    var ehour = parseInt(etime.split(":")[0]);
+                    var eminute = parseInt(etime.split(":")[1]);
+                    var hour = date.hours;
+                    var minute = date.minutes;
+                    if (ehour < hour) {
+                        $("#finishtime").val(value);
+                    } else {
+                        if (eminute < minute) {
+                            $("#etime").val(value);
+                        }
+                    }
+                }
+            });
+
+            //日期时间选择器
+            laydate.render({
+                elem: '#etime' //指定元素
+                , type: 'time'
+                , format: 'HH:mm'
+                , done: function (value, date) {
+                    var stime = $("#stime").val();
+                    var shour = parseInt(stime.split(":")[0]);
+                    var sminute = parseInt(stime.split(":")[1]);
+                    var hour = date.hours;
+                    var minute = date.minutes;
+                    if (shour > hour) {
+                        $("#stime").val(value);
+                    } else {
+                        if (sminute > minute) {
+                            $("#stime").val(value);
+                        }
+                    }
+                }
+            });
+        }
+
+        function openEditLayer(info) {
+            addIndex = layer.open({
+                title: '<i class="fa fa-plus"></i>&nbsp;编辑日程',
+                type: 1,
+                fix: false,
+                skin: 'layui-layer-rim',
+                // 加上边框
+                area: ['470px', '450px'],
+                // 宽高
+                content: $('#calendarForm').html(),
+                success: function (layero, index) {
+                    initDateCtrl();
+                    $("#delEdit").show();
+
+                    var data = {};
+                    data.id = info.event.id;
+                    var sDate = new Date(info.event.start);
+                    data.stime = sDate.getHours() + ':' + sDate.getMinutes();
+                    var eDate = new Date(info.event.end);
+                    data.etime = eDate.getHours() + ':' + eDate.getMinutes();
+                    data.appointTheme = info.event.title;
+                    data.appointPerson = info.event.extendedProps.appointPerson;
+                    data.tel = info.event.extendedProps.tel;
+                    form.val('calendarForm', data);
+
+                    // 表单提交事件
+                    form.on('submit(formSubmit)', function (d) {
+                        var dataStr = sDate.getFullYear() + '-' + (sDate.getMonth() + 1) + '-' + sDate.getDate();
+                        d.field.roomId = roomId;
+                        d.field.stime = dataStr + " " + d.field.stime + ":00";
+                        d.field.etime = dataStr + " " + d.field.etime + ":00";
+                        $.ajax({
+                            type: 'POST',
+                            url: '/erpcalendartask/update',//发送请求
+                            contentType: "application/json; charset=utf-8",
+                            async: true,
+                            data: JSON.stringify(d.field),
+                            dataType: "json",
+                            success: function (res) {
+                                layer.closeAll("loading");
+                                if (res.code == 200) {
+                                    // layer.msg("添加成功！", {icon: 1});
+                                    calendar.refetchEvents();
+                                    layer.closeAll('page');
+                                } else {
+                                    layer.msg(res.msg, { icon: 2 });
+                                }
+                            }
+                        });
+
+                        return false;
+                    });
+                }
+            });
+        }
+
+        function openLayer(info) {
+            addIndex = layer.open({
+                title: '<i class="fa fa-plus"></i>&nbsp;新增日程',
+                type: 1,
+                fix: false,
+                skin: 'layui-layer-rim',
+                // 加上边框
+                area: ['470px', '450px'],
+                // 宽高
+                content: $('#calendarForm').html(),
+                success: function (layero, index) {
+                    initDateCtrl();
+                    $("#delEdit").hide();
+                    // 表单提交事件
+                    form.on('submit(formSubmit)', function (d) {
+                        d.field.roomId = roomId;
+                        d.field.stime = info.dateStr + " " + d.field.stime + ":00";
+                        d.field.etime = info.dateStr + " " + d.field.etime + ":00";
+
+                        $.ajax({
+                            type: 'POST',
+                            url: '/erpcalendartask/create',//发送请求
+                            contentType: "application/json; charset=utf-8",
+                            async: true,
+                            data: JSON.stringify(d.field),
+                            dataType: "json",
+                            success: function (res) {
+                                layer.closeAll("loading");
+                                if (res.code == 200) {
+                                    // layer.msg("添加成功！", {icon: 1});
+                                    calendar.refetchEvents();
+                                    layer.closeAll('page');
+                                } else {
+                                    layer.msg(res.msg, { icon: 2 });
+                                }
+                            }
+                        });
+
+
+                        return false;
+                    });
+                }
+            });
+        }
+
+        function changeRoom(id) {
+            $(".external-event").each(function (i) {
+                if (this.id == id) {
+                    $(this).css("backgroundColor", "#003399");
+                    room = $(this).attr("roomid");
+                } else {
+                    $(this).css("backgroundColor", "#3366CC");
+                }
+            });
+            calendar.refetchEvents();
+        } 
+
+
+        function changeDoctor(id) {
+            console.log(id)
+            $(".Doctor-event").each(function (i) {
+                console.log(this.id)
+                if (this.id == id) {
+
+                    console.log(1111)
+                    $(this).css("backgroundColor", "#003399");
+                    doctoeID = $(this).attr("doctorid");
+                } else {
+                    $(this).css("backgroundColor", "#3366CC");
+                }
+            });
+            calendar.refetchEvents();
+        }
+
+        function del() {
+            var id = $("#id").val();
+            layer.confirm('确定要删除吗？', {
+                offset: '65px',
+                title: '提示'
+            }, function (i) {
+                layer.close(i);
+                layer.load(2);
+                $.post("/erpcalendartask/deleteByID", { id: id }, function (res) {
+                    layer.closeAll('loading');
+                    if (res.code == 200) {
+                        // layer.msg("删除成功");
+                        calendar.refetchEvents();
+                        layer.closeAll('page');
+                    } else {
+                        layer.msg(res.message);
+                    }
+                });
+            });
+        }
+
+        // 所有ew-event
+        $('body').on('click', '*[ew-event]', function () {
+            var event = $(this).attr('ew-event');
+            if (event == 'closeDialog') {
+                var id = $(this).parents('.layui-layer').attr('id').substring(11);
+                layer.close(id);
+            }
+        });
+
+
+    </script>
+
+
+</body>
+</html>
+
+

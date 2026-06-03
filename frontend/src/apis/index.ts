@@ -1,0 +1,192 @@
+import { http, httpV2 } from '@/utils/http'
+import type { ApiResponse, Banner, Doctor, Activity, LiveStream, Feature, HomeData } from '@/types'
+import { API_ENDPOINTS } from '@/config/api'
+
+const ok = <T>(data: T, msg = '请求成功'): ApiResponse<T> => ({ code: 0, msg, data })
+
+const mapDoctor = (item: any): Doctor => ({
+    id: Number(item.id || item.Id || item.accountId || 0),
+    name: item.name || item.Name || item.nickname || '咨询师',
+    avatar: item.avatarUrl || item.AvatarUrl || item.avatar || '/static/images/tc59.png',
+    specialty: item.specialty || item.Specialty || item.field || item.Field || '心理咨询',
+    experience: `${item.workYears || item.WorkYears || 0}年经验`,
+    rating: item.rating || 5,
+    province: item.province || item.Province || item.city || item.City || '线上',
+    description: item.introduce || item.Introduce || item.description || '暂无介绍',
+    price: Math.round(Number(item.billing || item.Billing || 0) / 100) || item.price || 500,
+})
+
+const mapActivity = (item: any): Activity => ({
+    id: Number(item.id || item.Id || 0),
+    title: item.title || item.Title || '活动',
+    description: item.summary || item.Content || item.content || '',
+    image: item.coverUrl || item.CoverUrl || item.image || '/static/images/huodong11.png',
+    date: item.startAt || item.StartAt || item.createdAt || item.CreatedAt || '',
+    status: item.IsActive === false || item.isActive === false ? '已结束' : '进行中',
+})
+
+const mapBanner = (item: any): Banner => ({
+    id: Number(item.id || item.Id || 0),
+    title: item.title || item.Title || '',
+    image: item.imageUrl || item.ImageUrl || '/static/images/slide11.png',
+    buttonText: '查看详情',
+    date: '',
+})
+
+// 首页相关API
+export const homeApi = {
+    getIndexData: async () => {
+        const [bannerRes, doctorRes, activityRes] = await Promise.all([
+            httpV2.get<any[]>(API_ENDPOINTS.common.banners),
+            httpV2.get<any>(API_ENDPOINTS.common.counselors, { page: 1, page_size: 8 }),
+            httpV2.get<any[]>(API_ENDPOINTS.ops.activities),
+        ])
+        const data: HomeData = {
+            banners: (bannerRes.data || []).map(mapBanner),
+            features: [],
+            doctors: ((doctorRes.data as any)?.items || []).map(mapDoctor),
+            activities: (activityRes.data || []).map(mapActivity),
+            liveStreams: [],
+        }
+        return ok(data)
+    },
+
+    getBanners: async () => {
+        const res = await httpV2.get<any[]>(API_ENDPOINTS.common.banners)
+        return ok((res.data || []).map(mapBanner))
+    },
+
+    getRecommendedDoctors: async () => {
+        const res = await httpV2.get<any>(API_ENDPOINTS.common.counselors, { page: 1, page_size: 8 })
+        return ok(((res.data as any)?.items || []).map(mapDoctor))
+    },
+
+    getActivities: async () => {
+        const res = await httpV2.get<any[]>(API_ENDPOINTS.ops.activities)
+        return ok((res.data || []).map(mapActivity))
+    },
+
+    getLiveStreams: () => {
+        return http.get<ApiResponse<LiveStream[]>>(API_ENDPOINTS.HOME.LIVE_STREAMS)
+    }
+}
+
+// 咨询师相关API
+export const doctorApi = {
+    getList: (params?: {
+        keyword?: string
+        province?: string
+        specialty?: string
+        page?: number
+        pageSize?: number
+        /** 仅 VITE_USE_BOOKING_MOCK 时使用，不会发给真实 GetDoctorList */
+        priceRange?: string
+        sort?: string
+        gender?: string
+        consultMethod?: string
+    }) => {
+        const { priceRange: _pr, sort: _so, gender: _ge, consultMethod: _cm, ...apiParams } = params || {}
+        return httpV2.get<any>(API_ENDPOINTS.common.counselors, {
+            keyword: apiParams.keyword,
+            page: apiParams.page || 1,
+            page_size: apiParams.pageSize || 20,
+        }).then((res) => {
+            const payload = res.data || { items: [], total: 0, page: 1, pageSize: 20 }
+            return ok({
+                list: (payload.items || []).map(mapDoctor),
+                total: payload.total || 0,
+                page: payload.page || 1,
+                pageSize: payload.pageSize || payload.page_size || 20,
+                totalPages: Math.ceil((payload.total || 0) / (payload.pageSize || payload.page_size || 20)),
+            })
+        })
+    },
+
+    getDetail: (id: string | number) => {
+        return httpV2.get<any>(API_ENDPOINTS.common.counselorDetail(id))
+    },
+
+    search: (keyword: string) => {
+        return httpV2.get<any>(API_ENDPOINTS.common.search, { q: keyword, type: 'counselor' })
+            .then((res) => ok(((res.data as any)?.counselors || []).map(mapDoctor)))
+    }
+}
+
+// 活动相关API
+export const activityApi = {
+    getList: (params?: { page?: number; pageSize?: number }) => {
+        return httpV2.get<any[]>(API_ENDPOINTS.ops.activities, params).then((res) => ok((res.data || []).map(mapActivity)))
+    },
+
+    getDetail: (id: string | number) => {
+        return http.get<ApiResponse<Activity>>(API_ENDPOINTS.ACTIVITIES.DETAIL.replace(':id', String(id)))
+    },
+
+    join: (id: string | number) => {
+        return http.post<ApiResponse<any>>(API_ENDPOINTS.ACTIVITIES.JOIN.replace(':id', String(id)))
+    }
+}
+
+// 直播相关API
+export const liveApi = {
+    getList: (params?: { page?: number; pageSize?: number }) => {
+        return http.get<ApiResponse<LiveStream[]>>(API_ENDPOINTS.LIVE_STREAMS.LIST, { params })
+    },
+
+    getDetail: (id: string | number) => {
+        return http.get<ApiResponse<LiveStream>>(API_ENDPOINTS.LIVE_STREAMS.DETAIL.replace(':id', String(id)))
+    },
+
+    reserve: (id: string | number) => {
+        return http.post<ApiResponse<any>>(API_ENDPOINTS.LIVE_STREAMS.RESERVE.replace(':id', String(id)))
+    }
+}
+
+// 用户相关API
+export const userApi = {
+    login: (data: { username: string; password: string }) => {
+        return http.post<ApiResponse<{ token: string }>>(API_ENDPOINTS.USER.LOGIN, data)
+    },
+
+    getInfo: () => {
+        return http.get<ApiResponse<any>>(API_ENDPOINTS.USER.INFO)
+    },
+
+    updateInfo: (data: any) => {
+        return http.put<ApiResponse<any>>(API_ENDPOINTS.USER.UPDATE, data)
+    }
+}
+
+// 搜索相关API
+export const searchApi = {
+    globalSearch: (keyword: string) => {
+        return httpV2.get<any>(API_ENDPOINTS.common.search, { q: keyword }).then((res) => ok({
+            doctors: ((res.data as any)?.counselors || []).map(mapDoctor),
+            activities: ((res.data as any)?.activities || []).map(mapActivity),
+            liveStreams: [],
+        } as {
+            doctors: Doctor[]
+            activities: Activity[]
+            liveStreams: LiveStream[]
+        }))
+    },
+
+    getHotSearch: () => {
+        return http.get<ApiResponse<string[]>>(API_ENDPOINTS.SEARCH.HOT)
+    },
+
+    getSuggestions: (keyword: string) => {
+        return http.get<ApiResponse<string[]>>(API_ENDPOINTS.SEARCH.SUGGESTIONS, { params: { keyword } })
+    }
+}
+
+// 测试相关API
+export const testApi = {
+    test: () => {
+        return http.get<ApiResponse<any>>(API_ENDPOINTS.TEST.TEST)
+    },
+
+    health: () => {
+        return http.get<ApiResponse<any>>(API_ENDPOINTS.TEST.HEALTH)
+    }
+} 

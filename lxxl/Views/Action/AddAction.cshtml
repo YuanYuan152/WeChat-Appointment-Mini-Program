@@ -1,0 +1,269 @@
+﻿@using lxxl.Models;
+@{
+    Layout = "~/Views/Shared/_LayoutHome.cshtml";
+    List<T_FormL> FormList = ViewBag.FormList;
+    T_Action Action = ViewBag.Action;
+    ViewBag.Title = (Action == null || Action.CreateTime == null ? "新增活动" : "活动编辑");
+}
+<link rel="stylesheet" href="~/Content/assets/css/bootstrap-datetimepicker.css" />
+<link rel="stylesheet" href="~/Content/assets/css/chosen.css" />
+<link rel="stylesheet" href="~/Content/assets/css/ace.min.css" />
+<script src="~/Content/assets/js/ace-extra.min.js"></script>
+<div class="main-content">
+    <!-- #section:basics/content.breadcrumbs -->
+    <div class="breadcrumbs" id="breadcrumbs">
+        <script type="text/javascript">
+            try { ace.settings.check('breadcrumbs', 'fixed') } catch (e) { }
+        </script>
+        <ul class="breadcrumb">
+            <li><i class="ace-icon fa fa-home home-icon"></i>活动管理 </li>
+            <li class="active">@(Action == null || Action.CreateTime == null ? "新增活动" : Action.Name)</li>
+        </ul>
+        <!-- /.breadcrumb -->
+        <!-- #section:basics/content.searchbox -->
+        <div class="nav-search" id="nav-search" style="display: none">
+            <form action="javascript:alert('开发中')" method="post" class="form-search">
+                <span class="input-icon">
+                    <input type="text" placeholder="Search ..." class="nav-search-input" id="nav-search-input"
+                           autocomplete="off" />
+                    <i class="ace-icon fa fa-search nav-search-icon"></i>
+                </span>
+            </form>
+        </div>
+        <!-- /.nav-search -->
+        <!-- /section:basics/content.searchbox -->
+    </div>
+    <!-- /section:basics/content.breadcrumbs -->
+    <div class="page-content">
+        <div class="row">
+            <div class="col-xs-12">
+                <!-- PAGE CONTENT BEGINS -->
+                <div class="row">
+                    @if (Session["alert"] != null)
+                    {
+                        <div class="col-xs-12 col-sm-8 col-sm-offset-2">
+                            <div class="alert alert-warning alert-danger" role="alert">
+                                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                                @Session["alert"]
+                                @(Session["alert"] = null)
+                            </div>
+                        </div>
+                        <div class="col-xs-0 col-sm-2">
+                        </div>
+                    }
+                </div>
+                <div class="row">
+                    <div class="col-xs-12">
+                        <!-- PAGE CONTENT BEGINS -->
+                        <form action="@Url.Action("SaveAction","Action")" method="post" class="form-horizontal" role="form" enctype="multipart/form-data">
+                            <div class="col-xs-12" style="padding: 0px;">
+                                <div class="widget-box">
+                                    <div class="widget-header">
+                                        <h4 class="widget-title">@(Action == null || Action.CreateTime == null ? "新增活动" : "活动编辑")</h4>
+                                    </div>
+                                    <div class="widget-body">
+                                        <div class="widget-main">
+                                            <!-- #section:elements.form -->
+                                            <input type="hidden" name="ID" value="@(Action!=null&&Action.ID!=null?Action.ID.ToString():"")" />
+                                            <div class="form-group">
+                                                <label class="col-sm-3 control-label no-padding-right" for="form-field-1">活动名称</label>
+                                                <div class="col-sm-9">
+                                                    <input type="text" name="Name" value="@(Action==null?"":Action.Name)" placeholder="活动名称" class="col-xs-10 col-sm-8" />
+                                                </div>
+                                            </div>
+                                            <hr />
+                                            <div class="form-group">
+                                                <label class="col-sm-3 control-label no-padding-right" for="form-field-1">活动报名表单</label>
+                                                <div class="col-sm-9">
+                                                    <!-- #section:plugins/input.chosen -->
+                                                    <select class="chosen-select col-xs-10 col-sm-8" name="FormID" data-placeholder="请选择报名表单...">
+                                                        <option value="">  </option>
+                                                        @if (Action == null)
+                                                        {
+                                                            foreach (var form in FormList)
+                                                            {
+                                                                <option value="@form.gId">@form.Name</option>
+                                                            }
+                                                        }
+                                                        else
+                                                        {
+                                                            foreach (var form in FormList)
+                                                            {
+                                                                if (Action.FormID == form.gId)
+                                                                {
+                                                                    <option value="@form.gId" selected>@form.Name</option>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <option value="@form.gId">@form.Name</option>
+                                                                }
+                                                            }
+                                                        }
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <hr />
+                                            <div class="form-group">
+                                                <label class="col-sm-3 control-label no-padding-right" for="form-field-1">举办单位</label>
+                                                <div class="col-sm-9">
+                                                    <input type="text" name="CompanyName" placeholder="举办单位" class="col-xs-10 col-sm-8" value="@(Action == null ? "" : Action.CompanyName)" />
+                                                </div>
+                                            </div>
+                                            <hr />
+                                            <div class="form-group">
+                                                <label class="col-sm-3 control-label no-padding-right" for="form-field-1">联系人</label>
+                                                <div class="col-sm-9">
+                                                    <input type="text" name="ContactName" placeholder="联系人" class="col-xs-10 col-sm-8" value="@(Action == null ? "" : Action.ContactName)" />
+                                                </div>
+                                            </div>
+                                            <hr />
+                                            <div class="form-group">
+                                                <label class="col-sm-3 control-label no-padding-right" for="form-field-1">联系电话</label>
+                                                <div class="col-sm-9">
+                                                    <input type="text" name="Tel" placeholder="联系电话" class="col-xs-10 col-sm-8" value="@(Action == null ? "" : Action.Tel)" />
+                                                </div>
+                                            </div>
+                                            <hr />
+                                            @*<div class="form-group">
+                                                <label class="col-sm-3 control-label no-padding-right" for="form-field-1">活动场地</label>
+                                                <div class="col-sm-9">
+                                                    <input type="text" name="Place" placeholder="活动场地" class="col-xs-10 col-sm-8" value="@(Action == null ? "" : Action.Place)" />
+                                                </div>
+                                            </div>
+                                            <hr />*@
+                                            <div class="form-group">
+                                                <label class="col-sm-3 control-label no-padding-right" for="form-field-1">活动开始时间</label>
+                                                <div class="col-sm-9">
+                                                    <div class="input-group col-xs-10 col-sm-8 date form_datetime" data-date="" data-date-format="yyyy MM dd HH:ii p" data-link-field="StateTime">
+                                                        <input class="form-control" size="16" type="text" value="@(Action != null ? Action.StateTime.ToString() : "")" placeholder="活动开始时间" readonly>
+                                                        <span class="input-group-addon"><span class="glyphicon glyphicon-remove"></span></span>
+                                                        <span class="input-group-addon"><span class="glyphicon glyphicon-th"></span></span>
+                                                    </div>
+                                                    <input type="hidden" id="StateTime" name="StateTime" value="@(Action != null ? Action.StateTime.ToString() : "")" /><br />
+                                                </div>
+                                            </div>
+                                            <hr />
+                                            <div class="form-group">
+                                                <label class="col-sm-3 control-label no-padding-right" for="form-field-1">活动结束时间</label>
+                                                <div class="col-sm-9">
+                                                    <div class="input-group col-xs-10 col-sm-8 date form_datetime" data-date="" data-date-format="yyyy MM dd HH:ii p" data-link-field="EndTime">
+                                                        <input class="form-control" size="16" type="text" value="@(Action != null ? Action.EndTime.ToString() : "")" placeholder="活动结束时间" readonly>
+                                                        <span class="input-group-addon"><span class="glyphicon glyphicon-remove"></span></span>
+                                                        <span class="input-group-addon"><span class="glyphicon glyphicon-th"></span></span>
+                                                    </div>
+                                                    <input type="hidden" id="EndTime" name="EndTime" value="@(Action != null ? Action.EndTime.ToString() : "")" /><br />
+                                                </div>
+                                            </div>
+                                            <hr />
+                                            @*<div class="form-group">
+                                                <label class="col-sm-3 control-label no-padding-right" for="form-field-1">报名开始时间</label>
+                                                <div class="col-sm-9">
+                                                    <div class="input-group col-xs-10 col-sm-8 date form_datetime" data-date="" data-date-format="yyyy MM dd HH:ii p" data-link-field="StateSignTime">
+                                                        <input class="form-control" size="16" type="text" value="@(Action != null ?Action.StateSignTime.ToString():"")" placeholder="报名开始时间" readonly>
+                                                        <span class="input-group-addon"><span class="glyphicon glyphicon-remove"></span></span>
+                                                        <span class="input-group-addon"><span class="glyphicon glyphicon-th"></span></span>
+                                                    </div>
+                                                    <input type="hidden" id="StateSignTime" name="StateSignTime" value="@(Action != null ?Action.StateSignTime.ToString():"")" /><br />
+                                                </div>
+                                            </div>
+                                            <hr />
+                                            <div class="form-group">
+                                                <label class="col-sm-3 control-label no-padding-right" for="form-field-1">报名截止时间</label>
+                                                <div class="col-sm-9">
+                                                    <div class="input-group col-xs-10 col-sm-8 date form_datetime" data-date="" data-date-format="yyyy MM dd HH:ii p" data-link-field="EndSignTime">
+                                                        <input class="form-control" size="16" type="text" value="@(Action != null ? Action.EndSignTime.ToString() : "")" placeholder="报名截止时间" readonly>
+                                                        <span class="input-group-addon"><span class="glyphicon glyphicon-remove"></span></span>
+                                                        <span class="input-group-addon"><span class="glyphicon glyphicon-th"></span></span>
+                                                    </div>
+                                                    <input type="hidden" id="EndSignTime" name="EndSignTime" value="@(Action != null ? Action.EndSignTime.ToString() : "")" /><br />
+                                                </div>
+                                            </div>
+                                            <hr />*@
+                                            <div class="form-group">
+                                                <label class="col-sm-3 control-label no-padding-right" for="form-field-1">最多报名人数</label>
+                                                <div class="col-sm-9">
+                                                    <input type="number" name="Number" placeholder="最多报名人数" class="col-xs-10 col-sm-8" value="@(Action == null ? "" : Action.Number.ToString())" />
+                                                </div>
+                                            </div>
+                                            <hr />
+
+                                            <div class="form-group">
+                                                <label class="col-sm-3 control-label no-padding-right" for="form-field-1">宣传图</label>
+                                                <div class="col-sm-9">
+                                                    <input type="hidden" name="Img" value="@(Action == null ? "" : Action.Img.ToString())" />
+                                                    <input type="file" name="fileimg" />
+                                                    @if (Action != null&&Action.Img!=null)
+                                                    { 
+                                                        <a href="@Action.Img" target="_blank">查看图片</a>
+                                                    }
+                                                </div>
+                                            </div>
+                                            <hr />
+
+                                            <div class="form-group">
+                                                <label class="col-sm-3 control-label no-padding-right" for="form-field-1">活动简介</label>
+                                                <div class="col-sm-9">
+                                                    <textarea name="Info" placeholder="请输入活动的简介" class="col-xs-10 col-sm-8">@(Action == null ? "" : Action.Info)</textarea>
+                                                </div>
+                                            </div>
+                                            <hr />
+                                            @*<div class="form-group">
+                                                <label class="col-sm-3 control-label no-padding-right" for="form-field-1">活动内容</label>
+                                                <div class="col-sm-9">
+                                                    <textarea name="Content" placeholder="请输入活动的内容" class="col-xs-10 col-sm-8">@(Action == null ? "" : Action.Content)</textarea>
+                                                </div>
+                                            </div>
+                                            <hr />*@
+                                            <div class="form-group">
+                                                <div class="col-sm-4">
+                                                </div>
+                                                <div class="col-sm-3">
+                                                    <input type="submit" class="btn btn-success" value="保存" style="width: 100%">
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </form>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+
+<script src="~/Content/assets/js/chosen.jquery.min.js"></script>
+<script src="~/Content/assets/js/fuelux/fuelux.spinner.min.js"></script>
+<script src="~/Content/assets/js/date-time/bootstrap-datetimepicker1.js"></script>
+<script src="~/Content/assets/js/date-time/locales/bootstrap-datetimepicker.zh-CN.js"></script>
+
+<script type="text/javascript">
+    $(function () {
+        
+        //$('.date-timepicker1').datetimepicker({ language: 'zh-CN'}).next().on(ace.click_event, function () {
+        //    $(this).prev().focus();
+        //});
+        $('.form_datetime').datetimepicker({
+            language: 'zh-CN',
+            weekStart: 1,
+            todayBtn: 1,
+            autoclose: 1,
+            todayHighlight: 1,
+            startView: 2,
+            forceParse: 0,
+            showMeridian: 1
+        });
+        $('.chosen-select').chosen({ allow_single_deselect: true });
+        //resize the chosen on window resize
+        $(window).on('resize.chosen', function () {
+            var w = $('.chosen-select').parent().width()*(2/3.0);
+            $('.chosen-select').next().css({ 'width': w });
+        }).trigger('resize.chosen');
+    })
+</script>

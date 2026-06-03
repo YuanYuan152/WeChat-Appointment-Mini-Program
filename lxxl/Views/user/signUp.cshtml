@@ -1,0 +1,516 @@
+﻿@{
+    Layout = null;
+    ViewBag.Title = "signUp";
+}
+<html lang="zh-CN" data-n-head="lang">
+<head>
+    <title>连心心理</title>
+    <meta data-n-head="ssr" charset="utf-8">
+    <meta data-n-head="ssr" name="viewport" content="width=device-width, viewport-fit=cover, initial-scale=1.0, user-scalable=0">
+    <style>
+        body, html {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+
+        *, :after, :before {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: rgba(0,0,0,0);
+            outline: none;
+        }
+
+        body, button, input, select, textarea {
+            font-size: 14px;
+            line-height: 1.5;
+            font-family: PingFangSC-Regular,PingFangSC-Medium,Helvetica Neue,Hiragino Sans GB,Segoe UI,Microsoft Yahei,Tahoma,Arial,STHeiti,sans-serif;
+        }
+
+        .view {
+            width: 100%;
+        }
+
+        .login_pc {
+            position: fixed;
+            left: 0;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            height: 100vh;
+            z-index: 1;
+            background: url(//jdxl-img.jdxlt.com/uploads/7948bf7….png) 50% no-repeat;
+            height: 100%;
+            width: 100%;
+            background-size: cover;
+        }
+
+        .left-hair {
+            width: 380px;
+            height: 270px;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        .right-hair {
+            width: 300px;
+            height: 290px;
+            position: absolute;
+            right: 0;
+            bottom: 0;
+        }
+
+        img {
+            max-width: 100%;
+            vertical-align: middle;
+        }
+
+        .login_pc_fixed {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%,-50%);
+        }
+
+        .logo_v2 {
+            width: 123px;
+            margin: 0 auto 20px;
+        }
+
+        .fixed-wrap {
+            padding: 30px;
+            background: #fff;
+            border: 1px solid rgba(0,0,0,.1);
+            border-radius: 4px;
+            width: 360px;
+            margin: 0 auto;
+            text-align: center;
+            box-sizing: content-box;
+            max-height: 620px;
+            z-index: 10;
+            height: 520px;
+        }
+
+        .logo_v2 img {
+            display: block;
+            width: 100%;
+        }
+
+        .login_pc_fixed .tab {
+            display: flex;
+            justify-content: flex-start;
+            margin-bottom: 22px;
+        }
+
+            .login_pc_fixed .tab span:first-child {
+                margin-right: 40px;
+            }
+
+            .login_pc_fixed .tab .activetab {
+                color: #242424;
+                font-weight: 700;
+            }
+
+            .login_pc_fixed .tab span {
+                font-size: 16px;
+                color: grey;
+                font-weight: 400;
+                position: relative;
+                padding-bottom: 12px;
+                font-family: PingFangSC-Regular,PingFang SC;
+                cursor: pointer;
+            }
+
+        .tab_content {
+            height: 150px;
+        }
+
+        .login_pc_fixed .desktop_item {
+            display: flex;
+            align-items: center;
+            height: 38px;
+            border-bottom: 1px solid #f1f1f1;
+            margin-bottom: 8px;
+            padding-top: 20px;
+            box-sizing: content-box;
+        }
+
+        .select_phone {
+            position: relative;
+            justify-content: space-between;
+        }
+
+        .select_phone_left, .select_phone_right {
+            display: flex;
+            align-items: center;
+        }
+
+        .select_phone_left {
+            flex: 1;
+        }
+
+        .login_pc_fixed .desktop_item .icon {
+            height: 20px;
+            margin-right: 16px;
+        }
+
+        .select_phone_left .select {
+            cursor: pointer;
+        }
+
+        .select_phone .select span {
+            font-size: 14px;
+            color: #19191a;
+            font-family: PingFangSC-Regular,PingFang SC;
+            font-weight: 400;
+        }
+
+        .select_phone .select img {
+            height: 10px;
+            margin: 0 4px 0 2px;
+            vertical-align: baseline;
+        }
+
+        .login_pc_fixed input {
+            outline: none;
+            border: none;
+            font-size: 14px;
+            font-family: PingFangSC-Regular,PingFang SC;
+            font-weight: 400;
+            color: #242424;
+        }
+
+        .select_phone_left, .select_phone_right {
+            display: flex;
+            align-items: center;
+        }
+
+        .login_pc_fixed .desktop_item {
+            display: flex;
+            align-items: center;
+            height: 38px;
+            border-bottom: 1px solid #f1f1f1;
+            margin-bottom: 8px;
+            padding-top: 20px;
+            box-sizing: content-box;
+        }
+
+        .countdown_code .left {
+            font-size: 0;
+            display: flex;
+            align-items: center;
+        }
+
+        .countdown_code .right {
+            display: flex;
+            align-items: center;
+        }
+
+        .countdown_code .delete {
+            height: 12px;
+            margin-right: 20px;
+        }
+
+        .login_pc_fixed .countdown_code .send_code {
+            font-size: 14px;
+            font-family: PingFangSC-Regular,PingFang SC;
+            font-weight: 400;
+            color: #4972af;
+        }
+
+        .countdown_code .send_code {
+            font-size: 16px;
+            color: #39bfb7;
+            cursor: pointer;
+        }
+
+        .prompt {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+            .prompt .error_code {
+                font-size: 12px;
+                color: #f04134;
+            }
+
+            .prompt .not_received {
+                color: grey;
+                cursor: pointer;
+                font-size: 12px;
+                font-family: PingFangSC-Regular,PingFang SC;
+                font-weight: 400;
+            }
+
+        .login_pc_fixed .desktop_item {
+            display: flex;
+            align-items: center;
+            height: 38px;
+            border-bottom: 1px solid #f1f1f1;
+            margin-bottom: 8px;
+            padding-top: 20px;
+            box-sizing: content-box;
+        }
+
+        .select_phone_left, .select_phone_right {
+            display: flex;
+            align-items: center;
+        }
+
+        .select_phone_left {
+            flex: 1;
+        }
+
+        .login_pc_fixed .desktop_item .icon {
+            height: 20px;
+            margin-right: 16px;
+        }
+
+        .select_phone_left .select {
+            cursor: pointer;
+        }
+
+        .select_phone_left, .select_phone_right {
+            display: flex;
+            align-items: center;
+        }
+
+        .login_pc_fixed .desktop_item {
+            display: flex;
+            align-items: center;
+            height: 38px;
+            border-bottom: 1px solid #f1f1f1;
+            margin-bottom: 8px;
+            padding-top: 20px;
+            box-sizing: content-box;
+        }
+
+        .desktop_password {
+            justify-content: space-between;
+            align-items: center;
+        }
+
+            .desktop_password .left {
+                font-size: 0;
+                display: flex;
+                align-items: center;
+            }
+
+            .desktop_password .disc {
+                -webkit-text-security: disc;
+            }
+
+            .desktop_password .delete {
+                height: 12px;
+            }
+
+            .desktop_password .display {
+                height: 20px;
+                margin-left: 20px;
+                cursor: pointer;
+            }
+
+        .login_pc_fixed .j-button.j-button-primary[disabled] {
+            border-color: hsla(0,0%,100%,.6);
+            color: hsla(0,0%,100%,.4);
+            margin-top: 43px;
+        }
+
+        .j-button.j-button-primary[disabled] {
+            border-color: hsla(0,0%,100%,.6) !important;
+        }
+
+        .login_pc_fixed .j-button.j-button-primary {
+            background: #191919;
+            color: #fff;
+            border-color: #191919;
+            font-weight: 400;
+            margin-top: 43px;
+        }
+
+        .j-button.j-button-primary {
+            background: #39bfb7;
+            color: #fff;
+            border-color: #39bfb7;
+        }
+
+        .j-button.j-button-large {
+            font-size: 16px;
+            padding: 8px 15px 10px;
+        }
+
+        .j-button.j-button-long {
+            display: block;
+            width: 100%;
+        }
+
+        .j-button[disabled] {
+            cursor: not-allowed;
+        }
+
+        .login_bottom .btn {
+            font-size: 14px;
+        }
+
+        .j-button {
+            position: relative;
+            display: inline-block;
+            vertical-align: middle;
+            background: transparent;
+            font-size: 16px;
+            text-align: center;
+            color: #40434c;
+            padding: 6px 15px 7px;
+            border: 1px solid #969cb2;
+            border-radius: 4px;
+            white-space: nowrap;
+            outline: none;
+            margin: 0;
+            transition: all .1s ease-in-out;
+            cursor: pointer;
+            overflow: hidden;
+        }
+
+        .login_pc_fixed .j-button .slot {
+            vertical-align: middle;
+        }
+
+        .login_bottom .texts {
+            width: 100%;
+            text-align: center;
+            margin-top: 8px;
+        }
+
+            .login_bottom .texts span {
+                font-size: 12px;
+                color: grey;
+                cursor: pointer;
+            }
+
+        .thirdpart_login {
+            position: relative;
+            margin-top: 64px;
+        }
+
+            .thirdpart_login .border {
+                border-bottom: 1px solid #f1f1f1;
+                margin-top: 20px;
+            }
+
+            .thirdpart_login .text {
+                font-size: 12px;
+                color: grey;
+                width: 120px;
+                background: #fff;
+                position: absolute;
+                left: 50%;
+                top: -10px;
+                margin-left: -60px;
+            }
+
+            .thirdpart_login .images {
+                margin: 26px 100px 0;
+                display: flex;
+                justify-content: space-between;
+            }
+
+                .thirdpart_login .images .img {
+                    cursor: pointer;
+                    position: relative;
+                }
+
+                    .thirdpart_login .images .img img {
+                        height: 34px;
+                    }
+
+            .thirdpart_login .agreement {
+                margin-top: 19px;
+                font-size: 12px;
+                color: #969cb2;
+            }
+
+                .thirdpart_login .agreement span {
+                    color: #4972af;
+                }
+
+            .thirdpart_login .customer_phone {
+                font-size: 12px;
+                color: #bfbfbf;
+                margin-top: 10px;
+                font-weight: 400;
+            }
+    </style>
+</head>
+<body class=" windows chrome desktop">
+    <div id="__nuxt">
+        <div id="__layout">
+            <div>
+                <div class="view">
+                    <div>
+                        <div class="login_pc">
+                            <img src="//jdxl-img.jdxlt.com/uploads/3cd83a5391fc4af1b70415ae1c0c18d6.png" alt="" class="left-hair"> <img src="//jdxl-img.jdxlt.com/uploads/c087a86568ad400386df9671bd35f6c8.png" alt="" class="right-hair"> <div class="login_pc_fixed">
+                                <div class="logo_v2"><img src="//jdxl-img.jdxlt.com/uploads/d4ddfcc7bf364e24ab1718280f010599.png" alt=""></div> <div class="fixed-wrap">
+                                    <div log_action_id="password_login" log_item_type="user" class="tab"><span class="activetab">手机号登录</span> <span class="">密码登录</span></div> <div class="tab_content">
+                                        <div style="">
+                                            <div class="select_phone desktop_item">
+                                            <div class="select_phone_left"><img src="//jdxl-img.jdxlt.com/uploads/d9b30ae35a204b1f8d7dba2e070d0763.png" class="icon">
+                                                <div class="select" style="display:;"><span>+86</span> <img src="//jdxl-img.jdxlt.com/uploads/1458d400847b4bb29437cc9ad71a7f04.png" class=""></div>
+                                                <input type="text" placeholder="请输入手机号" maxlength="13" style="width:50%;">
+                                                </div> 
+                                            <div class="select_phone_right"><!----> <!----></div> <!----></div>
+                             <div class="countdown_code desktop_item">
+                                                <div class="left" data-v-4bd07623=""><img src="//jdxl-img.jdxlt.com/uploads/05cb4956d7af457ba89822ccc01f60f0.png" class="icon" data-v-4bd07623=""> <input type="text" placeholder="请输入验证码" maxlength="4" ></div> <div class="right" >
+                                                    <img src="//jdxl-img.jdxlt.com/uploads/e92de7a7e8984ecfb6d574d9da4e1d3a.png" class="delete" style="display:none;" data-v-4bd07623=""> <div >
+                                                        <div log_action_id="captcha_phone" log_item_type="user" class="send_code" >
+                                                            获取验证码
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div> <div class="prompt">
+                                                <div class="error_code" style="opacity:0;">
+                                                    手机号或验证码错误，请重新输入
+                                                </div> <div log_action_id="no_captcha" log_item_type="user" class="not_received">
+                                                    未收到验证码？
+                                                </div>
+                                            </div>
+                                        </div> <div style="display: none;">
+                                            <div class="select_phone desktop_item">
+                                                <div class="select_phone_left"><img src="//jdxl-img.jdxlt.com/uploads/d9b30ae35a204b1f8d7dba2e070d0763.png" class="icon"> <div class="select" style=""><span>+86</span> <img src="//jdxl-img.jdxlt.com/uploads/1458d400847b4bb29437cc9ad71a7f04.png" class=""></div> <input type="text" placeholder="请输入手机号" maxlength="13" style="width: 50%;"></div> <div class="select_phone_right">
+                                                    <!----> <div log_action_id="tab_email" log_item_type="user" class="text">
+                                                        切换为邮箱
+                                                    </div>
+                                                </div> <!---->
+                                            </div> <div password="" class="desktop_password desktop_item" ><div class="left" data-v-de69759a=""><img src="//jdxl-img.jdxlt.com/uploads/7388ffae81dc4e498840b382d01afe8a.png" class="icon" data-v-de69759a=""> <input type="text" placeholder="请输入密码 6-20位字符" maxlength="20" class="disc" data-v-de69759a=""></div> <div data-v-de69759a=""><img src="//jdxl-img.jdxlt.com/uploads/e92de7a7e8984ecfb6d574d9da4e1d3a.png" class="delete" style="display:none;" data-v-de69759a=""> <img src="//jdxl-img.jdxlt.com/uploads/0134f48901a0455ebdc3e00f76fee845.png" class="display" data-v-de69759a=""></div></div>
+                                        </div>
+                                    </div> <div class="login_bottom">
+                                        <button disabled="disabled" type="button" class="btn j-button j-button-primary j-button-large j-button-long" style="">
+                                            <!----> <span class="slot">
+                                                登 录
+                                            </span>
+                                        </button> <button disabled="disabled" type="button" class="btn btn_pass j-button j-button-primary j-button-large j-button-long" style="display: none;">
+                                            <!----> <span class="slot">
+                                                登 录
+                                            </span>
+                                        </button> <div class="texts">
+                                            <span class="text2">
+                                                未注册手机号验证后自动创建账号登录
+                                            </span> <!---->
+                                        </div>
+                                    </div> <div class="thirdpart_login">
+                                        <div class="border"></div> <div class="text">第三方登录</div> <div class="images"><div log_action_id="wechat_login" log_item_type="user" class="img"><img src="//jdxl-img.jdxlt.com/uploads/20be140488f0413a99b00b5c58f1447e.png"></div> <div log_action_id="weibo_login" log_item_type="user" class="img"><img src="//jdxl-img.jdxlt.com/uploads/d97d3a783c9144288531fb15e6df9254.png"></div></div> <div class="agreement">
+                                            登录代表您已同意简单心理的<span>《用户服务协议》</span>和<span>《隐私协议》</span>
+                                        </div> <div class="customer_phone">客服电话：400-650-1005</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+</body>
+</html>

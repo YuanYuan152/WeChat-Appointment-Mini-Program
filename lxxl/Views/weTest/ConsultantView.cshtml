@@ -1,0 +1,708 @@
+﻿@using lxxl.Models;
+@{
+    Layout = "~/Views/Shared/_LayoutWe2.cshtml";
+    ViewBag.Title = "ConsultantView";
+    T_Doctor Doctor = ViewBag.Doctor;
+    //List<T_DoctorSchedule> listdb = ViewBag.listdb;
+    var idx = -1;
+}
+
+
+<script src="/Content/weui/js/iscroll-lite.js"></script>
+<script src="~/Content/js/vue.js"></script>
+<script>
+    $(function () {
+        st = $(window).scrollTop(); //滚动条高度
+        stickeyI0 = $("#tagnavI0").offset().top;
+        stickeyI1 = $("#tagnavI1").offset().top;
+        stickeyI2 = $("#tagnavI2").offset().top;
+        $('#tagnav').tab({
+            defaultIndex: 0,
+            activeClass: 'tab-green',
+            onToggle: function (index) {
+                //console.log('indexhh' + index);
+                //var valOfScroll = $("#tagnavI" + index).offset().top - 170;
+                //console.log('valOfScroll' + valOfScroll);
+                //st = $(window).scrollTop(); //滚动条高度
+                //$("html,body").animate({ scrollTop: valOfScroll }, 600);
+
+                //console.log(valOfScroll);
+                window.location.hash = "#tagnavI" + index;
+            }
+        });
+    });
+</script>
+
+<style>
+
+    .weui-navigator.weui-navigator-wrapper {
+        position: fixed;
+    }
+    #tagnav {
+        overflow: hidden;
+        /*position: fixed;*/
+        z-index: 99;
+        width: 100%;
+        left: 0;
+        top: 46px;
+    }
+    .weui-navbar__item {
+        padding: 8px 0;
+    }
+    img {
+        border-radius: 8px;
+    }
+</style>
+
+<div id="rrapp" class="" style="margin-top:46px;">
+
+    <div class="weui-tab" id="tagnav" style=" height: auto;">
+        <div class="weui-navbar" style="position:fixed;top:46px;">
+            <div class="weui-navbar__item">
+                个人介绍
+            </div>
+            <div class="weui-navbar__item">
+                咨询过程
+            </div>
+            <div class="weui-navbar__item">
+                可约时间
+            </div>
+        </div>
+    </div>
+
+    <div id="tagnavIVal" class="tagnavIVal" style="background-color: white;padding-left: 5%;padding-right: 5%;padding-bottom: 16px;">
+        @*<div id="">
+                <div class="weui-c-inner" style="height:60px;">
+                </div>
+            </div>*@
+        <div id="tagnavI0" style="padding-top: 100px; margin-top: -50px;">
+            @*<div class="weui-cells">
+                    <div class="weui-cell">
+                        <div class="weui-cell__bd">
+                            <h2 class="weui-c-title">@Doctor.name</h2>
+                        </div>
+                        <div class="weui-cell__ft">收费标准：500元/小时</div>
+                        <div class="weui-news-media" style="width: 80%;margin-left: 10%;padding: 0;">
+                            <img class="img-responsive" src="@(Doctor.url == "" ? "/Public/we/tc59.png" : Doctor.url)" alt="@Doctor.name" title="@Doctor.name" />
+                            <div class="dimship">地面/视频</div>
+                        </div>
+                    </div>
+                    <div class="weui-cell">
+                        <div class="weui-news-media" style="width: 80%;margin-left: 10%;padding: 0;">
+                            <img class="img-responsive" src="@(Doctor.url == "" ? "/Public/we/tc59.png" : Doctor.url)" alt="@Doctor.name" title="@Doctor.name" />
+                            <div class="dimship">地面/视频</div>
+                        </div>
+                    </div>
+                </div>*@
+            <div class="weui-c-inner">
+                <div class="weui-c-content">
+                    <div class="weui-c-meta" style="margin-bottom: 6px;">
+                        <div style="margin-left: 6%; margin-right: 6%; margin-top: 4px;">
+                            <h2 class="weui-c-title" style="margin-bottom:8px;">@Doctor.name<span style="font-size: 14px; float: right; margin-top: 4px; ">收费标准：@Doctor.Billing 元/50分钟</span></h2>
+                        </div>
+                        <div class="weui-news-media" style="width: 90%;margin-left: 5%;padding: 0;">
+                            <img class="img-responsive" src="@(Doctor.url == "" ? "/Public/we/tc59.png" : Doctor.url)" alt="@Doctor.name" title="@Doctor.name" />
+                            <div class="dimship">地面/视频</div>
+                        </div>
+                    </div>
+                    @*<div class="weui-c-article">
+                            从业年限
+                            <span style="font-size: 14px; float: right; margin-top: 4px; ">@Doctor.WorkYears 年以上</span>
+                        </div>
+                        <div class="weui-c-article">
+                            <h2 class="weui-c-title">咨询时数</h2>
+                            @Html.Raw(Doctor.introduce)
+                        </div>
+                        <div class="weui-c-article">
+                            <h2 class="weui-c-title">个人简介</h2>
+                            @Html.Raw(Doctor.introduce)
+                        </div>
+                        <div class="weui-c-article">
+                            <h2 class="weui-c-title">个人简介</h2>
+                            @Html.Raw(Doctor.introduce)
+                        </div>*@
+                </div>
+            </div>
+
+            <div class="weui-news">
+                <ul class="weui-news-list" style="margin-left: 2%; margin-right: 2%; margin-top: 4px;">
+                    <li class="weui-news-item" style="padding-top:0px; padding-bottom:2px;">
+                        <div class="weui-news-inners">
+                            <div class="weui-news-title">
+                                <span class="weui-news-left" style="color: rgb(67,74,118); font-weight: bold; width: 22rem;">从业年限</span>
+                                <span style="color: rgb(139,86,192); float: right; font-size: 14px; margin-top: 2px; margin-bottom: 4px;"> @Doctor.WorkYears 年以上</span>
+                            </div>
+                            <div class="weui-news-title">
+                                <span class="weui-news-left" style="color: rgb(67,74,118); font-weight: bold; width: 22rem;">咨询时数</span>
+                                <span style="color: rgb(139,86,192); float: right; font-size: 14px; margin-top: 2px; margin-bottom: 4px;"> @Doctor.ConsultHours 小时+</span>
+                            </div>
+                            <div class="weui-news-title" style="border-bottom: 1px solid #dbdbdb;">
+                                <span class="weui-news-left" style="color: rgb(67,74,118); font-weight: bold; width: 22rem;">咨询费用</span>
+                                <span style="color: rgb(139,86,192); float: right; font-size: 14px; margin-top: 2px; margin-bottom: 6px;"> ￥@Doctor.Billing 元/小时</span>
+                            </div>
+                            <div style="border-bottom: 1px solid #dbdbdb; padding-top: 6px;">
+                                <span class="weui-news-left" style="color: rgb(67,74,118); font-weight: bold; width: 22rem;">简介</span>
+                                <p class="my-news-p" style="margin-bottom: 4px;">@Doctor.Profile</p>
+                            </div>
+                            <div style="border-bottom: 1px solid #dbdbdb; padding-top: 6px;">
+                                <span class="weui-news-left" style="color: rgb(67,74,118); font-weight: bold; width: 22rem;">个人介绍</span>
+                                <div style="margin-bottom: 4px;">
+                                    @Html.Raw(Doctor.introduce)
+                                </div>
+                            </div>
+                            <div style="border-bottom: 1px solid #dbdbdb; padding-top: 6px;">
+                                <span class="weui-news-left" style="color: rgb(67,74,118); font-weight: bold; width: 22rem;">资质</span>
+                                <p class="weui-news-p" style="margin-bottom: 4px;">@Doctor.Qualification</p>
+                            </div>
+                            <div style="border-bottom: 1px solid #dbdbdb; padding-top: 6px;">
+                                <div class="weui-news-infoitem">
+                                    <span class="weui-news-left" style="color:rgb(67,74,118); font-size:13px !important; background-color:rgb(245,245,245);">@Doctor.Field.Replace(","," | ")</span>
+                                </div>
+                                <div style="margin-bottom: 4px;">
+                                </div>
+                            </div>
+                            <div style="border-bottom: 1px solid #dbdbdb; padding-top: 6px;">
+                                <div class="weui-news-infoitem">
+                                    <span class="weui-news-left" style="color:rgb(67,74,118); font-size:13px !important; background-color:rgb(245,245,245);">@Doctor.TargetGroup</span>
+                                </div>
+                                <div style="margin-bottom: 4px;">
+                                </div>
+                            </div>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+        </div>
+        <div id="tagnavI1" style="padding-top: 100px; margin-top: -80px; ">
+            <h2 class="weui-c-title">咨询过程</h2>
+            <div class="weui-c-article">
+                精神分析取向：
+                <br />
+                若选择此流派，当前困扰的缓解可能需时间沉淀。通过逐步深入的对话，你将获得自我认知、接纳与自尊的深层蜕变，提升关系质量与内在动力。过程中或触及复杂情绪，但我们会共同探讨、陪伴经历。每次50分钟，前3-4次为初始访谈，每周1-2次（可调整）。咨询时长：短程15-30次，中长程50-100次，长程超100次。
+                <br />
+                人本主义聚焦疗法：
+                <br />
+                从身体感受切入，通过觉察身体信号理解情绪根源，逐步增强自主应对能力。每次50分钟，每周1-2次，包含聚焦练习与讨论。
+                <br />
+                其他流派：
+                <br />
+                如认知行为、叙事疗法等，同样以过程为导向，每次50分钟，每周1-2次，聚焦具体问题与成长目标。
+                <br />
+                伴侣/家庭咨询：
+                <br />
+                针对关系问题，每次90分钟，每周1次，通过互动模式探索促进理解与改变。
+                <br />
+                共同核心：
+                无论选择何种流派：
+                <br />
+                目标非速成，过程即疗愈；
+                <br />
+                时间积累带来持久改变；
+                <br />
+                安全关系中共同面对挑战；
+                <br />
+                节奏灵活适配个人需求。
+                <br />
+                改变需要耐心，让我陪你一步步向前。
+                <br />
+
+                @*咨询是以精神分析取向的心理咨询，这意味着当前状况的缓解可能不是一个很快的过程，但是你会通过这样一个逐步展开的咨询得到一个更深入的转变，无论是自我认识，还是自我的接纳和自尊的改善，以及生活的关系中的动力和快乐。
+                <br />
+                但是可能也会在咨询的过程中体验到许多未曾感受的情感，这些也许会让你感觉到有一些难以耐受，但是所有这些我们可以去讨论，我也会和你在一起来经历这些。
+                每次50分钟。前面的3-4次为初始访谈，每周的频率在1-2次，有些可以是3-4次。一个个短程的咨询在15-30次，中长程持续50-100次，长程在100次以上。
+                如果你不喜欢精神分析，也可以采用人本主义聚焦疗法的方式，是从身体的感受入手来工作。所以需要通过一点点地增加对自己的身体的理解，来帮助自己解决困扰，增强自己对于自己的情绪及反应的领悟。会有一个更加自主性的过程。每次也是50分钟，频率一周1-2次。每次会包括聚焦和讨论。
+                <br />
+                目前面询与视频都可以工作。*@
+            </div>
+        </div>
+        <div id="tagnavI2" style="padding-top:100px; margin-top: -80px;">
+            <h2 class="weui-c-title">可约时间</h2>
+            <div class="weui-cells weui-cells_radio" style="font-size:16px;">
+                @*@foreach (T_DoctorSchedule item in listdb)
+    {
+        idx++;
+        <label class="weui-cell weui-check__label" for="r_@item.ID" onclick="clickRadio(@idx);">
+            <input class="weui-form-checkbox" name="radio11" id="r_@item.ID" value="@item.ID" type="radio">
+            <label>
+                <i class="weui-icon-radio"></i>
+                <div class="weui-form-text"><p>@item.startTime.ToString("yyyy-MM-dd") &nbsp; @item.getWeek()  &emsp; 金额:<span style="color:red;">￥@item.Price</span> </p></div>
+            </label>
+        </label>
+    }*@
+                <label class="weui-cell weui-check__label" v-for="(item,i) in doctorScheduleList" v-bind:for="item.ID" v-on:click="clickRadioID=i" style="width:100%;">
+                    <input class="weui-form-checkbox" name="radio11" v-bind:id="item.ID" v-bind:value="item.ID" type="radio">
+                    <label style="width:100%;">
+                        <i class="weui-icon-radio"></i>
+                        <div class="weui-form-text" style="width:80%;">
+                            <p>{{item.startTime}}-{{item.endHH}}</p>
+                            <p>{{item.week}}&nbsp; <span style="float: right;">金额:<span style="color:red;">￥{{item.Price}}</span> </span> </p>
+                        </div>
+                    </label>
+                </label>
+                <label class="weui-cell">                    
+                </label>
+            </div>
+            <p style="height:20px;"></p>
+        </div>
+
+        <div id="tagnavE" style="padding-top:100px; ">
+            <p style="height:1px;"></p>
+        </div>
+
+    </div>
+
+    <div class="weui-tabbar tab-bottom" id="spinner" style="background-color: #ffffff; border-radius:12px 12px 0 0; ">
+        <a href="javascript:;" class="weui-tabbar__item " style="padding: 0; height:60px;">
+            <p class="weui-btn weui-btn_primary" style=" line-height: 60px; height: 60px;" onclick="vm.myopendiv();">预约</p>
+        </a>
+    </div>
+    <br>
+    <div id="approveLayer" class="approveLayer" style="display:none;">
+        <div class="weui-pay">
+            <h1 class="weui-payselect-title">咨询费</h1>
+            <p class="weui-pay-num">￥{{doctorSchedule.Price}}</p>
+            <ul class="weui-pay-u" style="width:92%;padding-left:4%;">
+                <li>
+                    <span class="title">咨询师</span>
+                    <span class="content">{{doctor.name}}</span>
+                </li>
+                <li>
+                    <span class="title">预约日期</span>
+                    <span class="content">{{doctorSchedule.startDate}}</span>
+                </li>
+                <li>
+                    <span class="title">预约时间</span>
+                    <span class="content">{{doctorSchedule.startHH}}-{{doctorSchedule.endHH}}</span>
+                </li>
+                <li>
+                    <span class="title">咨询时长</span>
+                    <span class="content">{{doctorSchedule.time}}</span>
+                </li>
+                <li>
+                    <span class="content">预约成功后请在15分钟内付款</span>
+                </li>
+            </ul>
+            <div class="pay-div">
+                <a href="javascript:;" class="weui-btn weui-btn_primary" id="pay" onclick="vm.onpay();">确认预约，并支付相应金额</a>
+            </div>
+        </div>
+    </div>
+    @*<div id="approveLayer" class="approveLayer">
+            <div class="modal-header">
+                <div id="myModalLabel">请选择</div>
+                <div class="weui-search-bar" id="searchBar" style="margin-top: 10px;padding:0">
+                    <form class="weui-search-bar__form">
+                        <div class="weui-search-bar__box">
+                            <i class="weui-icon-search"></i>
+                            <input type="search" class="weui-search-bar__input" id="searchcoms" data-filter="true" placeholder="搜索"
+                                   required="" autocomplete="off">
+                            <a href="javascript:" class="weui-icon-clear" id="searchClear"></a>
+                        </div>
+                        <label class="weui-search-bar__label" id="searchText" style="transform-origin: 0px 0px 0px; opacity: 1; transform: scale(1, 1);">
+                            <i class="weui-icon-search"></i>
+                            <span>搜索</span>
+                        </label>
+                    </form>
+                    <a href="javascript:" class="weui-search-bar__cancel-btn" id="searchCancel">确认</a>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div class="weui-cells weui-cells_access resultlist" style="top:-20px" id="datas">
+                    <ul></ul>
+                </div>
+            </div>
+        </div>*@
+</div>
+
+<script type="text/javascript">
+    $.getParam = function (name) {
+        var reg = new RegExp("(^|&)" + name + "=([^&]*)(&|$)"); //构造一个含有目标参数的正则表达式对象
+        var r = window.location.search.substr(1).match(reg);  //匹配目标参数
+        if (r != null) return unescape(r[2]); return null; //返回参数值
+    }
+</script>
+<script src="http://res.wx.qq.com/open/js/jweixin-1.0.0.js"> </script>
+<script type="text/javascript">
+        //var clickRadioID = 0;
+        //var listdb;
+        $(document).ready(function () {
+            $('#spinner').hide();
+            saction();
+            //listdb = "@ViewBag.listdb";
+        });
+
+        $(window).scroll(function () {
+            saction();
+        });
+
+        function saction() {
+            console.log(11);
+            st = $(window).scrollTop(); //滚动条高度
+            stickeyI0 = $("#tagnavI0").offset().top;
+            stickeyI1 = $("#tagnavI1").offset().top;
+            stickeyI2 = $("#tagnavI2").offset().top;
+            stickeyE = $("#tagnavE").offset().top;
+
+            bh = window.innerHeight;
+            console.log(st);
+            console.log(stickeyI0);
+            console.log(stickeyI1);
+            console.log(stickeyI2);
+            console.log(stickeyE);
+            console.log(bh);
+
+            topVal = 200;
+            if (bh + st > stickeyE - 100) {
+                $(".weui-navbar__item").eq(2).addClass('tab-green').siblings().removeClass('tab-green');
+                $('#spinner').show();
+            }
+            else if (st < stickeyI1 - 300) {
+                //$("#tagnavIVal div").eq(0).removeClass('weui-tab__content').siblings().addClass('weui-tab__content');
+                $(".weui-navbar__item").eq(0).addClass('tab-green').siblings().removeClass('tab-green');
+                $('#spinner').hide();
+            } else if (st < stickeyI2 - bh + 300) {
+                $(".weui-navbar__item").eq(1).addClass('tab-green').siblings().removeClass('tab-green');
+                $('#spinner').hide();
+            } else {
+                $(".weui-navbar__item").eq(2).addClass('tab-green').siblings().removeClass('tab-green');
+                $('#spinner').show();
+            }
+        };
+
+        function clickRadio(value) {
+            console.log(value);
+            if (value > 0) { clickRadioID = value; }
+            $('#spinner').show();
+            //$.actions({
+            //    actions: [
+            //        {
+            //            text: "信息",
+            //            className: "bg-primary",
+            //            onClick: function() {
+            //                $.alert("你选择了预约" + value);
+            //            }
+            //        }
+            //    ]
+            //});
+        };
+
+        //弹窗
+        //function myopendiv() {
+        //    if (clickRadioID < 0) {
+        //        layer.msg('请选择需要预约的时间');
+        //        return;
+        //    }
+
+        //    var ds = listdb[clickRadioID];
+        //    console.log(ds);
+        //    var index = layer.open({
+        //        type: 1,//Layer提供了5种层类型。可传入的值有：0（信息框，默认）1（页面层）2（iframe层）3（加载层）4（tips层）,
+        //        skin: 'layui-layer-rim',//layui-layer-rim//layui-layer-molv
+        //        title: "",
+        //        offset: "3px",
+        //        area: ['100%', '360px'],
+        //        shadeClose: true,
+        //        closeBtn: 2,
+        //        offset: 'auto',
+        //        content: jQuery("#approveLayer"),
+        //        btn: ['取消'],
+        //        cancel: function (index, layero) {
+        //        },
+        //        btn2: function () {
+        //        }
+        //    });
+        //    //layer.full(index);
+        //    //$('body').css('overflow', 'hidden');
+        //    //document.getElementById('modal-backdrop').style.display = 'block';
+        //    //document.getElementById('myModal').style.display = 'block';
+        //    //$('#searchcoms').val("");
+        //    //$('.resultlist li').show();
+        //}
+
+        function myclosediv(strVlues, str) {
+            document.getElementById('modal-backdrop').style.display = 'none';
+            document.getElementById('myModal').style.display = 'none';
+            if (strVlues != 'F') {
+                document.getElementById('cm').value = strVlues;
+                document.getElementById('comsstr').value = str;
+            } else {
+                $('body').css('overflow', 'inherit');
+                $('.resultlist li').show();
+            }
+        }
+</script>
+
+<script>
+    $.ajax({
+        url: "/WeixinCurrency/getJsToken",
+        type: "POST",
+        success: function (data) {
+            if (data.errcode == 0) {
+                wx.config({
+                    debug: false,
+                    appId: data.weixin.appId, // 必填，公众号的唯一标识
+                    timestamp: data.weixin.timestamp, // 必填，生成签名的时间戳
+                    nonceStr: data.weixin.nonceStr, // 必填，生成签名的随机串
+                    signature: data.weixin.signature, // 必填，签名，见附录1
+                    jsApiList: [
+                    'checkJsApi',
+                    'openLocation',
+                    'getLocation',
+                    'chooseWXPay'
+                    ]
+                });
+            } else {
+                alert("获取签名失败");
+            }
+        },
+        error: function () {
+            alert("获取签名失败");
+        }
+    })
+
+</script>
+<script>
+        var vm = new Vue({
+            el: '#rrapp',
+            data: {
+                doctorScheduleList: [],
+                doctorSchedule: {},
+                doctor: {},
+                doctorID: 0,
+                clickRadioID: -1,
+                xyID:0,
+            },
+            created: function () {
+                this.doctorID = '@(ViewBag.doctorID)';
+                //var id = $.getParam("id");
+                console.log(this.doctorID);
+                this.getIni(this.doctorID);
+
+            },
+            methods: {
+                getIni: function (id) {
+                    var that = this;
+                    $.ajaxSettings.async = false;
+                    $.get("/we/getDoctor/" + id, function (r) {
+                        that.doctor = r.doctor;
+                        console.log(that.doctor);
+                        that.getInfo(that.doctor.ID);
+                    });
+                },
+                getInfo: function (id) {
+                    var that = this
+                    $.ajaxSettings.async = false;
+                    $.get("/we/getDoctorSchedule/" + id, function (r) {
+                        console.log(r);
+                        that.doctorScheduleList = r.doctorScheduleList;
+                    });
+                },
+                //myopendiv: function () {
+                //    var index = layer.open({
+                //        type: 1,//Layer提供了5种层类型。可传入的值有：0（信息框，默认）1（页面层）2（iframe层）3（加载层）4（tips层）,
+                //        skin: 'layui-layer-rim',//layui-layer-rim//layui-layer-molv
+                //        title: "",
+                //        offset: "3px",
+                //        area: ['100%', '360px'],
+                //        shadeClose: true,
+                //        closeBtn: 2,
+                //        offset: 'auto',
+                //        content: jQuery("#approveLayer"),
+                //        btn: ['取消'],
+                //        cancel: function (index, layero) {
+                //        },
+                //        btn2: function () {
+                //        }
+                //    });
+                //},
+                clickRadio: function (value) {
+                    if (value > 0) { vm.clickRadioID = value; }
+                    console.log(vm.clickRadioID);
+                    $('#spinner').show();
+                },
+                myopendiv: function (value) {
+                    if (vm.clickRadioID < 0) {
+                        layer.msg('请选择需要预约的时间');
+                        return;
+                    }
+                    var that = this;
+
+                    $.ajax({
+                        url: '/we/getPatient',
+                        data: { doctorID: that.doctorID },
+                        type: 'post',
+                        success: function (data) {
+                            if (data.code == 0) { 
+                                if(data.csum>0)
+                                {
+                                    vm.doctorSchedule = vm.doctorScheduleList[vm.clickRadioID];
+                                    var index = layer.open({
+                                        type: 1,//Layer提供了5种层类型。可传入的值有：0（信息框，默认）1（页面层）2（iframe层）3（加载层）4（tips层）,
+                                        skin: 'layui-layer-rim',//layui-layer-rim//layui-layer-molv
+                                        title: "",
+                                        offset: "3px",
+                                        area: ['90%', '360px'],
+                                        shadeClose: true,
+                                        closeBtn: 1,
+                                        offset: 'auto',
+                                        content: jQuery("#approveLayer"),
+                                        cancel: function (index, layero) {
+                                        },
+                                        btn2: function () {
+                                        }
+                                    });
+                                }
+                                else
+                                {
+                                    if (data.formGid === '') {                                        
+                                        vm.layeropenForm(data.patient.Name,that.doctor.name);
+                                    }
+                                    else {
+                                        layer.confirm('请确认是否成年？', {
+                                            title: '提示',
+                                            btn: ['是', '否', '取消']
+                                              , btn3: function (index, layero) {
+                                              }
+                                        }, function (index, layero) {
+                                            layer.close(index);
+                                             vm.layeropenXY(2, data.patient.Name, vm.doctorScheduleList[vm.clickRadioID].Price, that.doctor.name);
+                                        }, function (index) {
+                                            layer.close(index);
+                                             vm.layeropenXY(1, data.patient.Name, vm.doctorScheduleList[vm.clickRadioID].Price, that.doctor.name);
+                                        });
+                                    }
+                                }
+                            }
+                            else {
+                                layer.msg(data.msg + "，请去注册！", {
+                                    time: 5000,
+                                    shade: 0.3,
+                                    btn: ['确认', '取消'],
+                                    yes: function () {
+                                        window.location.href = data.url;
+                                    }                                    
+                                });
+                                return;
+                            }
+                        }
+                    });
+                },
+
+
+                layeropenForm: function (patientName, doctorname) {
+                    var index0 = layer.open({
+                        type: 2,//Layer提供了5种层类型。可传入的值有：0（信息框，默认）1（页面层）2（iframe层）3（加载层）4（tips层）,
+                        skin: 'layui-layer-rim',//layui-layer-rim//layui-layer-molv
+                        title: "",
+                        offset: "3px",
+                        area: ['98%', '100%'],
+                        shadeClose: true,
+                        closeBtn: 1,
+                        offset: 'auto',
+                        content: '/wapForm/register',
+                        btn: ['提交', '取消'],
+                        cancel: function (index, layero) {
+                        },
+                        btn1: function (index, layero) {
+                            var obj = $(layero).find("iframe")[0].contentWindow;
+                            var resXY = obj.tijiao();
+                            layer.close(index);
+                            console.log(resXY);
+                            if (resXY > 0) {
+                                layer.confirm('请确认是否成年？', {
+                                    title: '提示',
+                                    btn: ['是', '否', '取消']
+                                              , btn3: function (index, layero) {
+                                                  console.log(1);
+                                              }
+                                }, function (index, layero) {
+                                    console.log(2);
+                                    layer.close(index);
+                                    vm.layeropenXY(2, patientName, vm.doctorScheduleList[vm.clickRadioID].Price, doctorname);
+                                }, function (index) {
+                                    console.log(3);
+                                    layer.close(index);
+                                    vm.layeropenXY(1, patientName, vm.doctorScheduleList[vm.clickRadioID].Price, doctorname);
+                                });
+                            }
+                        },
+                        btn2: function (index, layero) {
+                            layer.close(index);
+                        }
+                    });
+                },
+                layeropenXY: function (type,name,money,doctor) {
+                    var index0 = layer.open({
+                        type: 2,//Layer提供了5种层类型。可传入的值有：0（信息框，默认）1（页面层）2（iframe层）3（加载层）4（tips层）,
+                        skin: 'layui-layer-rim',//layui-layer-rim//layui-layer-molv
+                        title: "",
+                        offset: "3px",
+                        area: ['98%', '100%'],
+                        shadeClose: true,
+                        closeBtn: 1,
+                        offset: 'auto',
+                        content: '/we/xy?type=' + type + '&name=' + name + '&money=' + money + '&doctor=' + doctor,
+                        btn: ['确定', '取消'],
+                        cancel: function (index, layero) {
+                        },
+                        btn1: function (index, layero) {
+                            var obj = $(layero).find("iframe")[0].contentWindow;
+                            var resXY = obj.tijiao();
+                            if (resXY > 0) {
+                                vm.xyID = resXY;
+                                layer.close(index);
+                                vm.doctorSchedule = vm.doctorScheduleList[vm.clickRadioID];
+                                console.log(vm.doctorSchedule);
+                                var index = layer.open({
+                                    type: 1,//Layer提供了5种层类型。可传入的值有：0（信息框，默认）1（页面层）2（iframe层）3（加载层）4（tips层）,
+                                    skin: 'layui-layer-rim',//layui-layer-rim//layui-layer-molv
+                                    title: "",
+                                    offset: "3px",
+                                    area: ['90%', '360px'],
+                                    shadeClose: true,
+                                    closeBtn: 1,
+                                    offset: 'auto',
+                                    content: jQuery("#approveLayer"),
+                                    cancel: function (index, layero) {
+                                    },
+                                    btn2: function () {
+                                    }
+                                });
+                            }
+                        },
+                        btn2: function (index, layero) {
+                            layer.close(index);
+                        }
+                    });
+                },
+
+                onpay: function () {
+                    if (vm.clickRadioID < 0) {
+                        layer.msg('请选择需要预约的时间');
+                        return;
+                    }
+
+                    var that = this;
+                    $.ajax({
+                        url: '/we/appointment',
+                        data: { doctorScheduleID: vm.doctorSchedule.ID, xyID: vm.xyID },
+                        type: 'post',
+                        success: function (data) {
+                            layer.msg(data.msg);
+                            if (data.code == 0) {
+                                window.location = data.url;
+                            }
+                            else {
+                                window.location.reload();
+                            }
+                        }
+                    })
+                },
+            }
+        })
+</script>
+
+
+
+
+

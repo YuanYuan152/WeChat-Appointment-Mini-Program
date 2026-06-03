@@ -1,0 +1,247 @@
+﻿@{
+    ViewBag.Title = "choice";
+    Layout = "~/Views/Shared/_LayoutWap.cshtml";
+}
+<style type="text/css">
+    .campus .campus-box {
+        width: 33.33%;
+        padding: 0 40px;
+    }
+
+    .nav-course dl dd {
+        border-bottom: 1px solid #a3a1a1;
+        height: 130px;
+    }
+
+        .nav-course dl dd a {
+            width: 100%;
+            height: auto;
+            line-height: 100px;
+            font-size: 32px;
+            margin-left: 27px;
+            color: rgb(74,131,184);
+            margin-top: 4%;
+        }
+
+    .nav-course .dl-course .select {
+        background: #ffffff;
+        /*border: hidden;*/
+    }
+
+    .f-show {
+        height: 100px;
+        width: 85%;
+        margin-left: 10%;
+        height: 94%;
+    }
+
+        .f-show .fshow_a h3 {
+            color: rgb(249,156,60);
+            font-size: 30px;
+        }
+
+        .f-show .fshow_a h5 {
+            color: rgb(249,156,60);
+            font-size: 24px;
+        }
+    .parentDiv {
+        position: relative;
+        width: 70%;
+        height: 600px;
+        margin: 20px 15%;
+        margin-bottom: 100px;
+    }
+
+    .div1 {
+        position: absolute;
+        z-index: 1;
+        background-color: rgb(242,242,242);
+        width: 55%;
+        height: 500px;
+    }
+
+    .div2 {
+        position: absolute;
+        top: 100px;
+        z-index: 2;
+        left: 45%;
+        background-color: rgb(204,204,204);
+        width: 50%;
+        height: 500px;
+        text-align: center;
+    }
+
+
+    /*.nav-course dl dd:hover {
+            background: #ffffff;
+            color: rgb(74,131,184);
+        }*/
+</style>
+<div class="con">
+    <section>
+        <div class="banner-box">
+            <div class="home_banner bannerx">
+                <div class="ban-con">
+                    <div class="img"><img id="domain_img" src="/Public/upload/ad/2019/5d41477ee4763.png"></div>
+                    <div class="text">
+                        <h3 class="wow fadeInRight" id="domain_name">连心心理·上海</h3>
+                        <p class="none wow fadeInRight" id="domain_description">上海市杨浦区同济科技大厦</p>
+                        <p class="none wow fadeInRight" id="domain_lecturer"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section>
+        <div class="title fadeInUp wow" style="margin-bottom: 50px;">
+            <h3>英文阅读与写作课程</h3>
+        </div>
+        <div style="width:70%;height:390px;margin:20px 15%;">
+            <div style="width: 50%; height: 390px; float: left;">
+                <div class="f-show">
+                    <div class="fshow_a">
+                        <img src="/Public/biyou/course/choice1001.png" style="max-height: 230px;">
+                        <p style="font-size: 26px; font-weight: bolder; color: rgb(72,131,191); padding-top: 15px; ">文案文案1</p>
+                        <p style="color: rgb(166,196,207); margin-top: 5px; width: 93%;">第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介文案简介文案简介文案简介</p>
+                        <input type="button" class="sendD" value="MORE+" style="color: #fff; width: 90px; height: 24px; background: rgb(237,154,60); line-height: 24px; font-size: 13px; border: 0; border-radius: 30px; margin-bottom: 15px; margin-top: 20px; ">
+                    </div>
+                    <div class="fshow_a" style="display: none;">
+                        <img src="/Public/biyou/course/choice1001.png" style="max-height: 230px;">
+                        <p style="font-size: 26px; font-weight: bolder; color: rgb(72,131,191); padding-top: 15px; ">文案文案2</p>
+                        <p style="color: rgb(166,196,207); margin-top: 5px; width: 93%;">2文案简介第2文案简介第2文案简介第2文案简介第2文案简介第2文案简介第2文案简介第2文案简介文案简介文案简介文案简介</p>
+                        <input type="button" class="sendD" value="MORE+" style="color: #fff; width: 90px; height: 24px; background: rgb(237,154,60); line-height: 24px; font-size: 13px; border: 0; border-radius: 30px; margin-bottom: 15px; margin-top: 20px; ">
+                    </div>
+                    <div class="fshow_a" style="display: none;">
+                        <img src="/Public/biyou/course/choice1001.png" style="max-height: 230px;">
+                        <p style="font-size: 26px; font-weight: bolder; color: rgb(72,131,191); padding-top: 15px; ">文案文案3</p>
+                        <p style="color: rgb(166,196,207); margin-top: 5px; width: 93%;">3文案简介3文案简介3文案简介3文案简介3文案简介3文案简介3文案简介3文案简介文案简介文案简介文案简介</p>
+                        <input type="button" class="sendD" value="MORE+" style="color: #fff; width: 90px; height: 24px; background: rgb(237,154,60); line-height: 24px; font-size: 13px; border: 0; border-radius: 30px; margin-bottom: 15px; margin-top: 20px; ">
+                    </div>
+                </div>
+            </div>
+            <div style="width: 50%; height: 390px; float: right;cursor: pointer; ">
+                <div class="nav-course" style="height: auto; ">
+                    <dl class="dl-course">
+                        <dd class="select">
+                            <div style="margin-bottom: 20px;">
+                                <div style=" width: 80px; height: 130px; float: left; text-align: center;">
+                                    <p style="font-size: 48px; font-weight: bolder; color: rgb(72,131,191);">01</p>
+                                    <p>文案文案</p>
+                                </div>
+                                <div style=" margin: 10px; margin-left: 95px; width: 70%;">
+                                    <p style="font-size: 26px; font-weight: bolder; color: rgb(72,131,191); padding-top: 5px; ">文案文案1</p>
+                                    <p style="color: rgb(166,196,207); margin-top: 5px;">第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介文案简介文案简介文案简介</p>
+                                </div>
+                            </div>
+                        </dd>
+                        <dd >
+                            <div style="margin-bottom: 20px;">
+                                <div style=" width: 80px; height: 130px; float: left; text-align: center;">
+                                    <p style="font-size: 48px; font-weight: bolder; color: rgb(72,131,191);">02</p>
+                                    <p>文案文案</p>
+                                </div>
+                                <div style=" margin: 10px; margin-left: 95px; width: 70%;">
+                                    <p style="font-size: 26px; font-weight: bolder; color: rgb(72,131,191); padding-top: 5px; ">文案文案2</p>
+                                    <p style="color: rgb(166,196,207); margin-top: 5px;">2文案简介第2文案简介第2文案简介第2文案简介第2文案简介第2文案简介第2文案简介第2文案简介文案简介文案简介文案简介</p>
+                                </div>
+                            </div>
+                        </dd>
+                        <dd>
+                            <div style="margin-bottom: 20px;">
+                                <div style=" width: 80px; height: 130px; float: left; text-align: center;">
+                                    <p style="font-size: 48px; font-weight: bolder; color: rgb(72,131,191);">03</p>
+                                    <p>文案文案</p>
+                                </div>
+                                <div style=" margin: 10px; margin-left: 95px; width: 70%;">
+                                    <p style="font-size: 26px; font-weight: bolder; color: rgb(72,131,191); padding-top: 5px; ">文案文案3</p>
+                                    <p style="color: rgb(166,196,207); margin-top: 5px;">3文案简介3文案简介3文案简介3文案简介3文案简介3文案简介3文案简介3文案简介文案简介文案简介文案简介</p>
+                                </div>
+                            </div>
+                        </dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+    </section>
+    <section>
+        <div class="title fadeInUp wow" style="margin-bottom: 50px;">
+            <h3>国际择校数学培训</h3>
+        </div>
+        <div style="width:70%;height:300px;margin:20px 15%;">
+            <div style="width: 60%; height: 300px; float: left;">
+                <div>
+                    <div class="">
+                        <p style="font-size: 26px; font-weight: bolder; color: rgb(72,131,191); padding-top: 10px; border-bottom: 1px solid #a3a1a1; width: 200px; height: 58px; margin-bottom: 10px; ">文案文案1</p>
+                        <p style="color: rgb(166,196,207); margin-top: 5px; width: 93%;">第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介文案简介文案简介文案简介</p>
+                        <p style="color: rgb(166,196,207); margin-top: 5px; width: 93%;">第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介文案简介文案简介文案简介</p>
+                        <p style="color: rgb(166,196,207); margin-top: 5px; width: 93%;">第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介文案简介文案简介文案简介</p>
+                        <input type="button" class="sendD" value="MORE+" style="color: #fff; width: 90px; height: 24px; background: rgb(237,154,60); line-height: 24px; font-size: 13px; border: 0; border-radius: 30px; margin-bottom: 15px; margin-top: 20px; ">
+                    </div>
+                </div>
+            </div>
+            <div style="width: 40%; height: 300px; float: right;">
+                <div class="nav-course" style="height: auto; ">
+                    <img src="/Public/biyou/course/choice2001.png" style="max-height: 230px;">
+                </div>
+            </div>
+        </div>
+    </section>
+    <section>
+        <div class="title fadeInUp wow" style="margin-bottom: 50px;">
+            <h3>个人展示和演讲能力培训</h3>
+        </div>
+        <div style="width:70%;height:500px;margin:20px 15%;">
+            <div style="width:37%; height: 500px; float: left; ">
+                <div class="nav-course" style="height: auto; ">
+                    <img src="/Public/biyou/course/choice3001.png" style="height: 500px;">
+                </div>
+            </div>
+            <div style="width: 60%; height: 500px; float: right;">
+                <div style="padding-left：200px;">
+                    <p style="font-size: 26px; font-weight: bolder; color: rgb(72,131,191); height: 40px; margin-bottom: 10px; ">文案文案1</p>
+                    <p style="color: rgb(72,131,191); margin-top: 5px; width: 93%; font-size: 16px;font-weight:bolder;">第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介文案简介文案简介文案简介</p>
+                    <p style="color: rgb(72,131,191); margin-top: 5px; width: 93%; border-bottom: 1px solid #a3a1a1; height: 30px; "></p>
+                    <p style="color: rgb(166,196,207); margin-top: 5px; width: 93%; font-size: 16px; ">第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介文案简介文案简介文案简介</p>
+                    <p style="color: rgb(166,196,207); margin-top: 5px; width: 93%; font-size: 16px;">第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介文案简介文案简介文案简介</p>
+                    <input type="button" class="sendD" value="MORE+" style="color: #fff; width: 90px; height: 24px; background: rgb(237,154,60); line-height: 24px; font-size: 13px; border: 0; border-radius: 30px; margin-bottom: 15px; margin-top: 20px; ">
+                </div>
+            </div>
+        </div>
+    </section>
+    <section>
+        <div class="title fadeInUp wow" style="margin-bottom: 50px;">
+            <h3>背景提升竞赛类课程</h3>
+        </div>
+        <div class="parentDiv">
+            <div class="div1">
+                <div style="width: 70%; margin-left: 5%;">
+                    <p style="font-size: 26px; font-weight: bolder; color: rgb(72,131,191); padding-top: 30px; text-align:center; margin-bottom: 30px; ">文案文案1</p>
+                    <p style="color: rgb(166,196,207); margin-top: 5px; ">第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介文案简介文案简介文案简介</p>
+                    <p style="color: rgb(166,196,207); margin-top: 5px;">第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介文案简介文案简介文案简介</p>
+                    <p style="color: rgb(166,196,207); margin-top: 5px; ">第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介文案简介文案简介文案简介</p>
+                </div>
+            </div>
+            <div class="div2">
+                <div style="width: 90%; margin-left: 5%;">
+                    <img src="/Public/biyou/course/choice1001.png" style="max-height: 230px; width: 100%;">
+                    <p style="font-size: 26px; font-weight: bolder; color: rgb(72,131,191); padding-top:30px; margin-bottom: 10px; ">文案文案1</p>
+                    <p style="color: rgb(72,131,191); margin-top: 15px; ">第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介第一步文案简介文案简介文案简介文案简介</p>
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+<script type="text/javascript">
+    $(function () {
+        localStorage.active = "activeCourse";
+    })
+
+    $('.nav-course .dl-course dd').on('click', function () {
+        var index = $(this).index();
+        //$(this).parent().siblings().children('.bot-con').css('left', '-' + index * 100 + '%');
+        $(this).addClass('select').siblings().removeClass('select');
+        $(".f-show .fshow_a").eq(index).show().siblings().hide();
+        console.log($(this).eq(index));
+    });
+</script>

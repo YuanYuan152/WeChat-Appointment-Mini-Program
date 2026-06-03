@@ -1,0 +1,361 @@
+﻿@using lxxl.Models
+@{
+    ViewBag.Title = "报名详情";
+    Layout = "~/Views/Shared/_LayoutHome.cshtml";
+    T_SubUser SubForm = ViewBag.SubForm;    
+    T_Action Action =ViewBag.Action;   
+    T_User patient = ViewBag.patient;
+    T_Form Form = ViewBag.Form;
+    List<T_SubUserData> SubFormDataList = ViewBag.SubFormDataList;
+}
+<div class="main-content">
+    <!-- #section:basics/content.breadcrumbs -->
+    <div class="breadcrumbs" id="breadcrumbs">
+        <script type="text/javascript">
+            try { ace.settings.check('breadcrumbs', 'fixed') } catch (e) { }
+        </script>
+        <ul class="breadcrumb">
+            <li><i class="ace-icon fa fa-home home-icon"></i>活动管理 </li>
+            <li class="active">@Action.Name</li>
+            <li class="active">@(patient.UserName+"报名信息")</li>
+        </ul>
+        <!-- /.breadcrumb -->
+        <!-- #section:basics/content.searchbox -->
+        <div class="nav-search" id="nav-search" style="display: none">
+            <form action="javascript:alert('开发中')" method="post" class="form-search">
+                <span class="input-icon">
+                    <input type="text" placeholder="Search ..." class="nav-search-input" id="nav-search-input"
+                           autocomplete="off" />
+                    <i class="ace-icon fa fa-search nav-search-icon"></i>
+                </span>
+            </form>
+        </div>
+        <!-- /.nav-search -->
+        <!-- /section:basics/content.searchbox -->
+    </div>
+    <!-- /section:basics/content.breadcrumbs -->
+    <div class="page-content">
+        <div class="row">
+            <div class="col-xs-12">
+                <!-- PAGE CONTENT BEGINS -->
+                <div class="row">
+                    @if (Session["alert"] != null)
+                    {
+                        <div class="col-xs-12 col-sm-8 col-sm-offset-2">
+                            <div class="alert alert-warning alert-danger" role="alert">
+                                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                                @Session["alert"]
+                                @(Session["alert"] = null)
+                            </div>
+                        </div>
+                        <div class="col-xs-0 col-sm-2">
+                        </div>
+                    }
+                </div>
+                <div class="row">
+                    <div class="col-xs-12">
+                        <!-- PAGE CONTENT BEGINS -->
+                        <form action="" method="post" class="form-horizontal" role="form" enctype="multipart/form-data">
+                            <div class="col-xs-12" style="padding: 0px;">
+                                <div class="widget-box">
+                                    <div class="widget-header">
+                                        <h4 class="widget-title">@Action.Name</h4>
+                                    </div>
+                                    <div class="widget-body">
+                                        <form class="widget-main">
+                                            <hr />
+                                            @foreach (var Item in Form.Item.OrderBy(o => o.Order))
+                                            {
+                                                if (Item.ItemType.Pag == "select")
+                                                {
+                                                    <div class="form-group">
+                                                        <label class="col-sm-3 control-label no-padding-right" for="form-field-1">@Item.Name</label>
+                                                        <div class="col-sm-9">
+                                                            <select name="@Item.ID" class="col-xs-10 col-sm-8">
+                                                                @foreach (var option in Item.Option.Where(o=>!o.IsDelete).OrderBy(o => o.Order))
+                                                                {
+                                                                    if (SubFormDataList.Where(o => o.OptionID == option.ID).Count() > 0)
+                                                                    {
+                                                                        <option value="@option.ID" selected>@option.Name</option>
+                                                                        @SubFormDataList.Remove(SubFormDataList.Where(o => o.OptionID == option.ID).FirstOrDefault())
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <option value="@option.ID">@option.Name</option>
+                                                                    }
+                                                                }
+                                                            </select>
+                                                        </div>
+                                                    </div>
+                                                    <hr />
+                                                }
+                                                else if (Item.ItemType.Pag == "checkinfo")
+                                                {
+                                                    <div class="form-group">
+                                                        <label class="col-sm-3 control-label no-padding-right" for="form-field-1">@Item.Name</label>
+                                                        <div class="col-sm-9">
+                                                            @foreach (var option in Item.Option.Where(o => !o.IsDelete).OrderBy(o => o.Order))
+                                                            {
+                                                                T_SubUserData SubFormData = SubFormDataList.Where(o => o.OptionID == option.ID).FirstOrDefault();
+                                                                <div class="col-xs-12 col-sm-6">
+                                                                    <div class="widget-box">
+                                                                        @if (SubFormData != null)
+                                                                        {
+                                                                            <div class="widget-header">
+                                                                                <div class="checkbox">
+                                                                                    <label>
+                                                                                        <input name="@option.ID" type="checkbox" checked class="ace">
+                                                                                        <span class="lbl">@option.Name</span>
+                                                                                        <span class="lbl" style="color: red;">@option.Name</span>
+                                                                                    </label>
+                                                                                </div>
+                                                                            </div>
+
+                                                                            <div class="widget-body">
+                                                                                <textarea class="form-control" placeholder="@option.Custom">@(SubFormData.Content)</textarea>
+                                                                            </div>
+                                                                        }
+                                                                        else
+                                                                        {
+                                                                            <div class="widget-header">
+                                                                                <div class="checkbox">
+                                                                                    <label>
+                                                                                        <input name="@option.ID" type="checkbox" class="ace">
+                                                                                        <span class="lbl">@option.Name</span>
+                                                                                    </label>
+                                                                                </div>
+                                                                            </div>
+
+                                                                            <div class="widget-body">
+                                                                                <textarea class="form-control" placeholder="@option.Custom"></textarea>
+                                                                            </div>
+                                                                        }
+                                                                    </div>
+                                                                </div>
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                    <hr />
+                                                }
+                                                else if (Item.ItemType.Pag == "checkselect")
+                                                {
+                                                    <div class="form-group">
+                                                        <label class="col-sm-3 control-label no-padding-right" for="form-field-1">@Item.Name</label>
+                                                        <div class="col-sm-9">
+                                                            @foreach (var option in Item.Option.Where(o => !o.IsDelete).OrderBy(o => o.Order))
+                                                            {
+                                                                T_SubUserData SubFormData = SubFormDataList.Where(o => o.OptionID == option.ID).FirstOrDefault();
+                                                                <div class="col-xs-12 col-sm-3">
+                                                                    <div class="widget-box">
+                                                                        @if (SubFormData != null)
+                                                                        {
+                                                                            <div class="widget-header">
+                                                                                <div class="checkbox">
+                                                                                    <label>
+                                                                                        <input name="@option.ID" type="checkbox" checked class="ace">
+                                                                                        <span class="lbl" style="color: red;">@option.Name</span>
+                                                                                    </label>
+                                                                                </div>
+                                                                            </div>
+                                                                        }
+                                                                        else
+                                                                        {
+                                                                            <div class="widget-header">
+                                                                                <div class="checkbox">
+                                                                                    <label>
+                                                                                        <input name="@option.ID" type="checkbox" class="ace">
+                                                                                        <span class="lbl">@option.Name</span>
+                                                                                    </label>
+                                                                                </div>
+                                                                            </div>
+                                                                        }
+                                                                    </div>
+                                                                </div>
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                    <hr />
+                                                }
+                                                else if (Item.ItemType.Pag == "selectinfo")
+                                                {
+                                                    <div class="form-group">
+                                                        <label class="col-sm-3 control-label no-padding-right" for="form-field-1">@Item.Name</label>
+                                                        <div class="col-sm-9">
+                                                            @foreach (var option in Item.Option.Where(o => !o.IsDelete).OrderBy(o => o.Order))
+                                                            {
+                                                                T_SubUserData SubFormData = SubFormDataList.Where(o => o.OptionID == option.ID).FirstOrDefault();
+                                                                <div class="col-xs-12 col-sm-3">
+                                                                    <div class="widget-box">
+                                                                        @if (SubFormData != null)
+                                                                        {
+                                                                            <div class="widget-header">
+                                                                                <div class="checkbox">
+                                                                                    <label>
+                                                                                        <input name="@option.ID" type="checkbox" checked class="ace">
+                                                                                        <span class="lbl">@option.Name</span>
+                                                                                        <span class="lbl">@SubFormData.Content</span>
+                                                                                    </label>
+                                                                                </div>
+                                                                            </div>
+                                                                        }
+                                                                        else
+                                                                        {
+                                                                            <div class="widget-header">
+                                                                                <div class="checkbox">
+                                                                                    <label>
+                                                                                        <input name="@option.ID" type="checkbox" class="ace">
+                                                                                        <span class="lbl">@option.Name</span>
+                                                                                    </label>
+                                                                                </div>
+                                                                            </div>
+                                                                        }
+                                                                    </div>
+                                                                </div>
+                                                            }
+
+                                                        </div>
+                                                    </div>
+                                                    <hr />
+                                                }                                                
+                                                else if (Item.ItemType.Pag == "text")
+                                                {
+                                                    T_Option option = Item.Option.FirstOrDefault();
+                                                    T_SubUserData SubFormData = SubFormDataList.Where(o => o.OptionID == option.ID).FirstOrDefault();
+                                                    <div class="form-group">
+                                                        <label class="col-sm-3 control-label no-padding-right" for="form-field-1">@Item.Name</label>
+                                                        <div class="col-sm-9">
+                                                            <input type="text" name="@option.ID" class="col-xs-10 col-sm-8" value="@(SubFormData!=null?SubFormData.Content:"")">
+                                                        </div>
+                                                    </div>
+                                                    <hr />
+                                                }
+                                                else if (Item.ItemType.Pag == "textarea")
+                                                {
+                                                    T_Option option = Item.Option.FirstOrDefault();
+                                                    T_SubUserData SubFormData = SubFormDataList.Where(o => o.OptionID == option.ID).FirstOrDefault();
+                                                    <div class="form-group">
+                                                        <label class="col-sm-3 control-label no-padding-right" for="form-field-1">@Item.Name</label>
+                                                        <div class="col-sm-9">
+                                                            <textarea name="@Item.Option.FirstOrDefault().ID" class="col-xs-10 col-sm-8">@(SubFormData != null ? SubFormData.Content : "")</textarea>
+                                                        </div>
+                                                    </div>
+                                                    <hr />
+                                                }
+                                                else if (Item.ItemType.Pag == "checkbox")
+                                                {
+                                                    <div class="form-group">
+                                                        <label class="col-sm-3 control-label no-padding-right" for="form-field-1">@Item.Name</label>
+                                                        <div class="col-sm-9">
+                                                            @foreach (var option in Item.Option.Where(o => !o.IsDelete).OrderBy(o => o.Order))
+                                                            {
+                                                                T_SubUserData SubFormData = SubFormDataList.Where(o => o.OptionID == option.ID).FirstOrDefault();
+                                                                <div class="checkbox">
+                                                                    <label>
+                                                                        @if (SubFormData != null)
+                                                                        {
+                                                                            <input name="@option.ID" checked type="checkbox" class="ace">
+                                                                        }
+                                                                        else
+                                                                        {
+                                                                            <input name="@option.ID" type="checkbox" class="ace">
+                                                                        }
+                                                                        <span class="lbl">@option.Name</span>
+                                                                    </label>
+                                                                </div>
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                    <hr />
+                                                }           
+                                                else if (Item.ItemType.Pag == "radio")
+                                                {
+                                                    <div class="form-group">
+                                                        <label class="col-sm-3 control-label no-padding-right" for="form-field-1">@Item.Name </label>
+                                                        <div class="col-sm-9">
+                                                            @foreach (var option in Item.Option.OrderBy(o => o.Order))
+                                                            {
+                                                                if (!option.IsCustom)
+                                                                {
+                                                                    <div class="radio">
+                                                                        <label>
+                                                                            <input name="@Item.ID" type="radio" class="ace" value="@option.ID">
+                                                                            <span class="lbl">@option.Name @(!string.IsNullOrEmpty(option.Remark) ? "(结论：" + option.Remark + ")" : "") </span>
+                                                                        </label>
+                                                                    </div>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <div class="radio radio1">
+                                                                        <label>
+                                                                            <input name="@Item.ID" type="radio" class="ace" value="@option.ID">
+                                                                            <span class="lbl">@option.Name @(!string.IsNullOrEmpty(option.Remark) ? "(结论：" + option.Remark + ")" : "") </span>
+                                                                            <input type="text" name="check@(option.ID)" placeholder="@option.Custom" />
+                                                                        </label>
+                                                                    </div>
+
+                                                                }
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                    <hr />
+                                                }                                    
+                                                else if (Item.ItemType.Pag == "number")
+                                                {
+                                                    T_Option option = Item.Option.FirstOrDefault();
+                                                    T_SubUserData SubFormData = SubFormDataList.Where(o => o.OptionID == option.ID).FirstOrDefault();
+                                                    <div class="form-group">
+                                                        <label class="col-sm-3 control-label no-padding-right" for="form-field-1">@Item.Name</label>
+                                                        <div class="col-sm-9">
+                                                            <input type="number" name="@Item.Option.FirstOrDefault().ID" class="col-xs-10 col-sm-8" value="@(SubFormData!=null?SubFormData.Content:"")">
+                                                        </div>
+                                                    </div>
+                                                    <hr />
+                                                }
+                                                else if (Item.ItemType.Pag == "info")
+                                                {
+                                                    <div class="badge-info" style="height:40px; padding:10px; color:#fff">
+                                                        @Item.Name
+                                                    </div>
+                                                    <hr />
+                                                }
+                                                else if (Item.ItemType.Pag == "data")
+                                                {
+                                                    T_Option option = Item.Option.FirstOrDefault();
+                                                    T_SubUserData SubFormData = SubFormDataList.Where(o => o.OptionID == option.ID).FirstOrDefault();
+                                                    <div class="form-group">
+                                                        <label class="col-sm-3 control-label no-padding-right" for="form-field-1">@Item.Name</label>
+                                                        <div class="col-sm-9">
+                                                            <input type="date" name="@Item.Option.FirstOrDefault().ID" value="@(SubFormData!=null?SubFormData.Content:"")" class="col-xs-10 col-sm-8" />
+                                                        </div>
+                                                    </div>
+                                                    <hr />
+                                                }
+                                                else if (Item.ItemType.Pag == "file")
+                                                {
+                                                    T_Option option = Item.Option.FirstOrDefault();
+                                                    T_SubUserData SubFormData = SubFormDataList.Where(o => o.OptionID == option.ID).FirstOrDefault();
+                                                    <div class="form-group">
+                                                        <label class="col-sm-3 control-label no-padding-right" for="form-field-1">@Item.Name</label>
+                                                        <div class="col-sm-9">
+                                                            @Html.Raw(SubFormData != null ? "<a onclick=\"window.open('" + SubFormData.Content + "')\">下载文件</a>" : "无文件")
+                                                        </div>
+                                                    </div>
+                                                    <hr />
+                                                }
+                                            }
+                                    </div>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+
+

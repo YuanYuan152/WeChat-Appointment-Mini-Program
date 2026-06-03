@@ -1,0 +1,375 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <title>咨询预约登记</title>
+    <script src="https://cdn.bootcss.com/vue/2.5.17-beta.0/vue.min.js"></script>
+    <script src="https://cdn.bootcss.com/axios/0.18.0/axios.min.js"></script>
+    <script src="https://cdn.bootcss.com/bluebird/3.5.1/bluebird.min.js"></script>
+
+    <style type="text/css">
+        *{margin: 0;padding: 0;tap-highlight-color: transparent;-webkit-tap-highlight-color: transparent;box-sizing: border-box;-webkit-box-sizing: border-box;}
+        html{font-size: 20px;}
+        html , body , #app{height: 100%;position: relative;}
+        .content{position: absolute;left: 0;top: 2.2rem;bottom: 2rem;width: 100%;overflow: auto;-webkit-overflow-scrolling: touch;overflow-scrolling: touch;}
+        body{background: #fff;font: 0.7rem/1.5 Microsoft YaHei,Arial,Helvetica,sans-serif;color: #888;}
+        @@media only screen and (min-width: 400px) {html {font-size: 21.33333333px !important;}}
+        @@media only screen and (min-width: 414px) {html {font-size: 22.08px !important;}}
+        @@media only screen and (min-width: 480px) {html {font-size: 25.6px !important;}}
+        h2{line-height: 2.2rem;background: #fff;text-align: center;font-size: 0.7rem;border-bottom: 1px solid #e9e5e3;}
+        input , textarea{outline: none;border: none;text-indent: 1rem;width: 100%;background: #f5f5f5;border-radius: .2rem;-webkit-border-radius: .2rem;font-size: .7rem;padding: .3rem 0;color: #333;}
+        input[type="date"]{text-indent: 0.5rem;font-family: Microsoft YaHei,Arial,Helvetica,sans-serif;color: #888;}
+        .formList{border-top: 0.5rem solid #f5f5f5;padding: 0.5rem;}
+        .formList input{height: 2rem;line-height: 1.4rem;}
+        input::-webkit-input-placeholder , textarea::-webkit-input-placeholder{color: #999;font-family: Microsoft YaHei;}
+        textarea{height: 6rem;padding: 0.5rem;text-indent: 0;resize: none;font-family: Microsoft YaHei,Arial,Helvetica,sans-serif;}
+        .formList li{border-bottom: 1px solid #e9e5e3;}
+        .formList li:last-child{border-bottom: none;}
+        .formList > li > div{margin-bottom: 0.5rem;padding-top: 1rem;}
+        .formList p{margin-bottom: 0.5rem;color: #333;font-size: 0.8rem;}
+        .imgDls dd{display: inline-block;width: 3rem;position: relative;height: 3rem;vertical-align: middle;background-position: center;background-size: cover;background-repeat: no-repeat;margin-right: 0.25rem;margin-bottom: 0.5rem;}
+        .imgDls dd:last-child{background-image: url(https://file.jiaoxin-tech.cn/feiyu/assets/icon/add.svg);}
+        .imgDls dt{margin-bottom: 0.25rem;}
+        .imgDls dd span{position: absolute;top: 0;right: 0;display: inline-block;width: 1rem;height: 1rem;line-height:1rem;border-radius: 50%;-webkit-border-radius: 50%;background-color: #0bc886;color: #fff;text-align: center;}
+        .danXuan dd{display: inline-block;margin-right: 1rem;margin-bottom: 1rem;}
+        .danXuan dd span{width: 1rem;height: 1rem;vertical-align: middle;border: 1px solid #5f646e;display: inline-block;margin-right: 0.25rem;border-radius: 50%;-webkit-border-radius: 50%;}
+        .danXuan dd.active span{background: #0bc886;border-color: #999;}
+        .duoXuan dd span{border-radius: 0;-webkit-border-radius: 0;}
+        .imgDls dd:last-child input{display: inline-block;width: 100%;width: 3rem;height: 3rem;opacity: 0;}
+        .commit{display: block;height: 2rem;line-height: 2rem;width: 100%;background-color: #0bc886;color: #fff;text-align: center;font-size: 0.8rem;position: absolute;left: 0;bottom: 0;}
+        #SucTips{position: fixed;left: 0;top: 30%;width: 100%;z-index: 9999;height: 0;text-align: center;}
+        #SucTips span{display: inline-block;background: rgba(0,0,0,0.7);color: #fff;padding: 0.3rem 1rem;font-size: 0.6rem;border-radius: 1rem;}
+    </style>
+</head>
+<body>
+    <div id="app">
+        <h2>{{d.Action.Name}}</h2>
+        <div class="content">
+            <ul class="formList">
+                <li v-for="(item , index) in d.Item">
+
+                    <!--说明-->
+                    <div v-if="item.ItemType.Name=='说明'">
+                        <p style="font-weight:bolder;">{{item.Name}}</p>
+                    </div>
+
+                    <!--普通文本框-->
+                    <div v-if="item.ItemType.Name=='普通文本框'">
+                        <p>{{item.Name}}：</p>
+                        <input type="text" v-bind:placeholder="'请输入' + item.Name" v-model="d.Item[index].content" />
+                    </div>
+
+                    <!--数字-->
+                    <div v-if="item.ItemType.Name=='数字'">
+                        <p>{{item.Name}}：</p>
+                        <input type="number" v-bind:placeholder="'请输入' + item.Name" v-model="d.Item[index].content" />
+                    </div>
+
+                    <!--日历-->
+                    <div v-if="item.ItemType.Name=='日历'">
+                        <p>{{item.Name}}：</p>
+                        <input type="date" v-model="d.Item[index].content" style="width: 220px;" />
+                    </div>
+
+                    <!--单选-->
+                    <div class="danXuan" v-if="item.ItemType.Name=='单选'">
+                        <p>{{item.Name}}</p>
+                        <dl>
+                            <dd v-for="list in item.Option" @@click="d.Item[index].value=list.ID" v-bind:class="{active: d.Item[index].value==list.ID}"><span></span>{{list.Name}}</dd>
+                        </dl>
+                    </div>
+
+                    <!--单选带说明-->
+                    <div class="danXuan" v-if="item.ItemType.Name=='单选带说明'">
+                        <p>{{item.Name}}</p>
+                        <dl>
+                            <dd v-for="list in item.Option" @@click="d.Item[index].value=list.ID" v-bind:class="{active: d.Item[index].value==list.ID}"><span></span>{{list.Name}}
+                                @*<input type="text" placeholder="请输入说明" v-if="list.IsCustom" style="width:220px;" />*@ 
+                            </dd>
+                        </dl>
+                        <input type="text" placeholder="请输入说明" v-model="d.Item[index].content" />
+                    </div>
+
+                    <!--下拉选择-->
+                    <div class="danXuan" v-if="item.ItemType.Name=='下拉选择'">
+                        <p>{{item.Name}}</p>
+                        <dl>
+                            <dd v-for="list in item.Option" @@click="d.Item[index].value=list.ID" v-bind:class="{active: d.Item[index].value==list.ID}"><span></span>{{list.Name}}</dd>
+                        </dl>
+                    </div>
+
+                    <!--多选-->
+                    <div class="danXuan duoXuan" v-if="item.ItemType.Name=='多选'">
+                        <p>{{item.Name}}</p>
+                        <dl>
+                            <dd v-for="list in item.Option"
+                                @@click="d.Item[index].value.indexOf(list.ID) >= 0 ? d.Item[index].value.splice(d.Item[index].value.indexOf(list.ID) , 1) : d.Item[index].value.push(list.ID)"
+                                v-bind:class="{active: d.Item[index].value.indexOf(list.ID) >= 0}"><span></span>{{list.Name}}
+                                @*<input type="text" placeholder="请输入说明" v-if="list.IsCustom" style="width:220px;"/>*@ 
+                            </dd>
+                        </dl>
+                    </div>
+
+                    <!--多选带说明-->
+                    <div class="danXuan duoXuan" v-if="item.ItemType.Name=='多选带说明'">
+                        <p>{{item.Name}}</p>
+                        <dl>
+                            <dd v-for="list in item.Option"
+                                @@click="d.Item[index].value.indexOf(list.ID) >= 0 ? d.Item[index].value.splice(d.Item[index].value.indexOf(list.ID) , 1) : d.Item[index].value.push(list.ID)"
+                                v-bind:class="{active: d.Item[index].value.indexOf(list.ID) >= 0}"><span></span>{{list.Name}}
+                                @*<input type="text" placeholder="请输入说明" v-if="list.IsCustom" style="width:220px;" />*@                        
+                            </dd>
+                        </dl>
+                        <input type="text" placeholder="请输入说明" v-model="d.Item[index].content" />
+                    </div>
+
+                    <!--多行文本-->
+                    <div v-if="item.ItemType.Name=='多行文本'"><p>{{item.Name}}：</p><textarea placeholder="请输入" v-model="d.Item[index].content"></textarea></div>
+
+                    <!--图片上传-->
+                    <div class="imgDls" v-if="item.ItemType.Name=='文件'">
+                        <dl>
+                            <dt>图片上传</dt>
+                            <dd v-for="(list , i) in item.content" v-bind:style="{backgroundImage : 'url(' + list + ')'}"><span @@click="deleteImg(index,i)">X</span></dd>
+                            <dd><input type="file" id="fileIpt" name="fileIpt" @@change="uploadImg(index)" /></dd>
+                        </dl>
+                    </div>
+
+                </li>
+            </ul>
+        </div>
+        <a class="commit" @@click="commit">提交</a>
+    </div>
+</body>
+<script src="https://cdn.bootcss.com/jquery/2.2.1/jquery.js"></script>
+<script src="/Content/js/wap/common.js"></script>
+<script type="text/javascript">
+    new Vue({
+        el: '#app',
+        gId: "",
+        data: function(){
+            return{
+                d:{Action:{},Form:{},Item:[]}
+            }
+        },
+        mounted: function(){
+            this.ActionInfo();
+        },
+        methods:{
+            /*
+            * 展示提示信息
+            * tips: 提示信息
+            * */
+            showTips: function (tips){
+                if(document.getElementById('SucTips')) return;
+                var div = document.createElement('div');
+                div.id = 'SucTips';
+                div.innerHTML = '<span>' + tips + '</span>';
+                document.getElementById('app').appendChild(div);
+                var timer = setTimeout(function(){
+                    document.getElementById('SucTips').parentNode.removeChild(document.getElementById('SucTips'));
+                clearTimeout(timer);
+                },4000);
+            },
+            /*
+            * 处理请求参数
+            * */
+            getParams: function(o){
+                var params = new URLSearchParams();
+                for(var i in o){ params.append(i , o[i]);}
+                return  params;
+            },
+            /*
+            * 获取需要填写的表单
+            * */
+            ActionInfo: function(){
+                var self = this;
+                var gId = $.getParam("gId");
+                self.gId = gId;
+                axios({
+                    url: '/wapForm/ActionInfo',
+                    method: 'post',
+                    params: self.getParams({ ID: gId })
+                }).then(function(res){
+                    var data = res.data.data;
+                    /*
+                    * 处理提交数据
+                    * */
+                    data.Item.forEach(function (item, index) {
+                        //console.log(item);
+                        switch (item.ItemType.Name){
+                            case '单选':
+                                data.Item[index].value = item.Option[0].ID;
+                                break;
+                            case '单选带说明':
+                                data.Item[index].value = item.Option[0].ID;
+                                data.Item[index].content = '';
+                                break;
+                            case '下拉选择':
+                                data.Item[index].value = item.Option[0].ID;
+                                break;
+                            case '多选':
+                                data.Item[index].value = [];
+                                break;
+                            case '多选带说明':
+                                data.Item[index].value = [];
+                                data.Item[index].content = '';
+                                break;
+                            case '普通文本框':
+                                data.Item[index].value = item.Option[0].ID;
+                                data.Item[index].content = '';
+                                break;
+                            case '数字':
+                                data.Item[index].value = item.Option[0].ID;
+                                data.Item[index].content = '';
+                                break;
+                            case '多行文本':
+                                data.Item[index].value = item.Option[0].ID;
+                                data.Item[index].content = '';
+                                break;
+                            case '文件':
+                                data.Item[index].value = item.Option[0].ID;
+                                data.Item[index].content = [];
+                                break;
+                            case '日历':
+                                data.Item[index].value = item.Option[0].ID;
+                                data.Item[index].content = '';
+                                break;
+                            default: //do something
+                        }
+                    });
+                    self.d = data;
+                }).catch(function(err){
+                    self.showTips(JSON.stringify(err));
+                });
+            },
+            /*
+            * 图片上传
+            * */
+            upload: function(that , ele , fn){
+                var file = document.getElementById(ele).files[0];
+                if(!file) return;
+                var upLoad = new Upyun({
+                    bucket: 'topman-upyun',
+                    operator: 'admin',
+                    getSignatureUrl: '/Api/upyun/index',
+                    opts: {
+                        'notify-url': '/Api/test/upyun' ,
+                        'x-gmkerl-thumb':'/quality/75',
+                    }
+                }).upload({
+                    localPath: file,
+                    remotePath: 'testProject/{filemd5}{.suffix}',
+                    success:function(res){
+                        fn.call(that , res);
+                    },
+                    error:function(err){
+                        that.showTips(JSON.stringify(err));
+                    }
+                })
+            },
+            /*
+            * 调用图片上传
+            * */
+            uploadImg:function(index){
+                this.upload(this , 'fileIpt' , function(res){
+                    var src = res.url;
+                    this.d.Item[index].content.push(src);
+                });
+            },
+            /*
+            * 删除已经上传的图片
+            * */
+            deleteImg:function(index , i){
+               this.d.Item[index].content.splice(i , 1);
+            },
+            /*
+            * 处理数据
+            * */
+            handData:function(value, content){
+                return {
+                    id: this.d.Action.ID ,
+                    item: [{
+                        value: value,
+                        content: content
+                    }]
+                }
+            },
+            /*
+            * 提交填写的表单
+            * */
+            commit:function(){
+                var params = [] , self = this , flag = false;
+                this.d.Item.forEach(function(item){
+                    switch (item.ItemType.Name){
+                        case '单选':
+                            params.push(self.handData(item.value ,""));
+                            break;
+                        case '单选带说明':
+                            params.push(self.handData(item.value, item.content));
+                            break;
+                        case '下拉选择':
+                            params.push(self.handData(item.value ,""));
+                            break;
+                        case '多选':
+                            item.value.forEach(function(list){
+                                params.push(self.handData(list,""));
+                            });
+                            if(!item.value.length) flag = true;
+                            break;
+                        case '多选带说明':
+                            item.value.forEach(function(list){
+                                params.push(self.handData(list, item.content));
+                            });
+                            if(!item.value.length) flag = true;
+                            break;
+                        case '普通文本框':
+                            params.push(self.handData(item.value ,item.content));
+                            if(!item.content) flag = true;
+                            break;
+                        case '数字':
+                            params.push(self.handData(item.value ,item.content));
+                            if(!item.content) flag = true;
+                            break;
+                        case '多行文本':
+                            params.push(self.handData(item.value ,item.content));
+                            if(!item.content) flag = true;
+                            break;
+                        case '文件':
+                            item.content.forEach(function(list){
+                                params.push(self.handData(item.value, list));
+                            });
+                            //if(!item.content.length) flag = true;
+                            break;
+                        case '日历':
+                            params.push(self.handData(item.value ,item.content));
+                            if(!item.content) flag = true;
+                            break;
+                        default: //do something
+                    }
+                });
+                if(flag){
+                    this.showTips('请检查是否填写完成~')
+                    return;
+                }
+                var ss = JSON.stringify(params);
+                $.ajax({
+                    url: "/wapForm/Submit",
+                    data: { "jsonText": ss },
+                    type: "POST",
+                    success: function (data) {
+                        alert(data.msg);
+                        if (data.code == 1) {
+                            window.location.href = "Index";
+                        }
+                    },
+                    error: function () {
+                        alert("服务器无反应，提交失败");
+                    }
+                });
+            }
+        }
+    })
+</script>
+</html>

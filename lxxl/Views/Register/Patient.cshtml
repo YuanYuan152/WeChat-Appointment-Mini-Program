@@ -1,0 +1,928 @@
+﻿@using lxxl.Models
+@{
+    Layout = null;
+    var Obj = ViewBag.Obj;
+}
+
+<!DOCTYPE html>
+
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=0.0, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0" />
+    <link rel="stylesheet" type="text/css" href="/Content/wx/css/style.css" />
+    <link rel="stylesheet" href="/Content/wx/css/weui.css" />
+    <link rel="stylesheet" href="/Content/wx/css/example.css" />
+    <link rel="stylesheet" type="text/css" href="/Content/wx/css/bootstrap.css">
+    <script src="/Content/wx/js/jquery-1.10.2.js"></script>
+    <script type="text/javascript">$(function () { $.getScript("/Content/wx/js/script.js"); })</script>
+    <title>用户注册</title>
+    <style type="text/css">
+        #reg_index1 {
+            width: 100%;
+            min-height: 100%;
+            background: #fff;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 9999;
+            overflow-x: hidden;
+            overflow-y: auto;
+            padding-bottom: 20px;
+            display: none;
+        }
+
+        #reg_index1 {
+            -webkit-transform: translate3d(0px,100%,0px);
+            -moz-transform: translate3d(0px,100%,0px);
+            transform: translate3d(0px,100%,0px);
+            -webkit-transition: background 0.3s ease-out,-webkit-transform 0.3s cubic-bezier(0.55,0.055,0.675,0.19);
+            -moz-transition: background 0.3s ease-out,-moz-transform 0.3s cubic-bezier(0.55,0.055,0.675,0.19);
+            -o-transition: background 0.3s ease-out,-o-transform 0.3s cubic-bezier(0.55,0.055,0.675,0.19);
+            transition: background 0.3s ease-out,transform 0.3s cubic-bezier(0.55,0.055,0.675,0.19);
+        }
+
+            #reg_index1.show {
+                -webkit-transform: translate3d(0px,0%,0px);
+                -moz-transform: translate3d(0px,0%,0px);
+                transform: translate3d(0px,0%,0px);
+                -webkit-transition: background 0.3s ease-out,-webkit-transform 0.3s cubic-bezier(0.165,0.84,0.44,1);
+                -moz-transition: background 0.3s ease-out,-moz-transform 0.3s cubic-bezier(0.165,0.84,0.44,1);
+                -o-transition: background 0.3s ease-out,-o-transform 0.3s cubic-bezier(0.165,0.84,0.44,1);
+                transition: background 0.3s ease-out,transform 0.3s cubic-bezier(0.165,0.84,0.44,1);
+            }
+
+        .login_input1 {
+            overflow-y: scroll;
+        }
+
+        .content_wrapper a {
+            color: #5EA4D4;
+        }
+
+        .content_wrapper1 {
+            display: none;
+        }
+        .content_wrapper2 {
+            display: none;
+        }
+
+        /*#reg_index2 {
+            width: 100%;
+            min-height: 100%;
+            background: #fff;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 9999;
+            overflow-x: hidden;
+            overflow-y: auto;
+            padding-bottom: 20px;
+            display: none;
+        }*/
+
+        /*#reg_index2 {
+            -webkit-transform: translate3d(0px,100%,0px);
+            -moz-transform: translate3d(0px,100%,0px);
+            transform: translate3d(0px,100%,0px);
+            -webkit-transition: background 0.3s ease-out,-webkit-transform 0.3s cubic-bezier(0.55,0.055,0.675,0.19);
+            -moz-transition: background 0.3s ease-out,-moz-transform 0.3s cubic-bezier(0.55,0.055,0.675,0.19);
+            -o-transition: background 0.3s ease-out,-o-transform 0.3s cubic-bezier(0.55,0.055,0.675,0.19);
+            transition: background 0.3s ease-out,transform 0.3s cubic-bezier(0.55,0.055,0.675,0.19);
+        }
+
+            #reg_index2.show {
+                -webkit-transform: translate3d(0px,0%,0px);
+                -moz-transform: translate3d(0px,0%,0px);
+                transform: translate3d(0px,0%,0px);
+                -webkit-transition: background 0.3s ease-out,-webkit-transform 0.3s cubic-bezier(0.165,0.84,0.44,1);
+                -moz-transition: background 0.3s ease-out,-moz-transform 0.3s cubic-bezier(0.165,0.84,0.44,1);
+                -o-transition: background 0.3s ease-out,-o-transform 0.3s cubic-bezier(0.165,0.84,0.44,1);
+                transition: background 0.3s ease-out,transform 0.3s cubic-bezier(0.165,0.84,0.44,1);
+            }*/
+
+    </style>
+</head>
+<body style="overflow:auto">
+
+    <div id="reg_index2">
+        <div class="reg_bar">
+            <div class="wrap">
+                <span class="fl"><i></i>用户注册</span>
+            </div>
+        </div>
+        <div id="container">
+            <div id="content" style="margin-bottom:5em;">
+                <div class="weui_cells weui_cells_access">
+                    @*<a class="weui_cell" href="javascript:" style="height:6em;">
+                        <div class="usertop" style="height:100%; width:30%; min-width:7em;">
+                            <img src="@(Obj["headimgurl"])" style="height:100%; border:solid #E3E0D5 0.8px; border-radius:5px;">
+                        </div>
+                        <div class="weui_cell_bd weui_cell_primary">
+                            <div style="font-size:1.3em; line-height:2.3em;">@(Obj["nickname"])</div>
+                            <div style="font-size:1em;line-height:2.3em;">@(Convert.ToInt64(Obj["sex"]) == 1 ? "男" : "女")</div>
+                        </div>
+                    </a>*@
+                </div>
+                <div class="weui_panel_bd">
+                    <form method="post" id="patient" action="Patient">
+                        <div class="weui_cells weui_cells_form">
+                            <div class="weui_cell">
+                                <div class="weui_cell_hd"><label for="" class="weui_label">手机号</label></div>
+                                <div class="weui_cell_bd weui_cell_primary">
+                                    <input class="weui_input" type="text" id="txtUser1" datatype="m" nullmsg="请输入手机号" errormsg="请输入手机号" name="Tel" value="" placeholder="手机号/账号" />
+                                </div>
+                            </div>
+                            <div class="weui_cell  weui_vcode">
+                                <div class="weui_cell_hd"><label for="" class="weui_label">验证码</label></div>
+                                <div class="weui_cell_bd weui_cell_primary">
+                                    <input type="text" class="weui_input " id="imgcode" name="imgcode" placeholder="验证码" />
+                                </div>
+                                <div class="weui_cell_ft">
+                                    <a id="sendMobileCode" href="javascript:void(0);">
+                                        <span id="zphone" class="weui_btn weui_btn_default"
+                                              onclick="get_mobile_code();">获取验证码</span>
+                                    </a>
+                                </div>
+                            </div>
+                            <div class="weui_cell">
+                                <div class="weui_cell_hd"><label for="" class="weui_label">密码</label></div>
+                                <div class="weui_cell_bd weui_cell_primary">
+                                    <input class="weui_input" type="password" datatype="s6-18" nullmsg="密码不能为空" errormsg="密码为6到18位字符!" name="PassWord" value="" placeholder="密码" />
+                                </div>
+                            </div>
+                            <div class="weui_cell">
+                                <div class="weui_cell_hd"><label for="" class="weui_label">姓名</label></div>
+                                <div class="weui_cell_bd weui_cell_primary">
+                                    <input class="weui_input" type="text" datatype="*" nullmsg="姓名不能为空" name="Name" value="" placeholder="请输入姓名" />
+                                </div>
+                            </div>
+                            <div class="weui_cell">
+                                <div class="weui_cell_hd"><label for="" class="weui_label">年龄</label></div>
+                                <div class="weui_cell_bd weui_cell_primary">
+                                    <input class="weui_input" type="number" datatype="n" nullmsg="年龄不能为空" errormsg="年龄格式不正确" name="Age" value="" placeholder="年龄" />
+                                </div>
+                            </div>
+                        </div>
+                        <input type="hidden" name="userdata" value="@ViewBag.userdata" />
+                        <div class="weui_cell" style="text-align:center;width:100%">
+                            @*<a id="reg_now2" href="javascript:" style="color:black">《隐私协议》</a>*@
+                            <label><input type="checkbox" class="surebtn" style="margin-top:5px;margin-bottom:0px;" />已阅读并同意<a id="reg_now1" href="javascript:" style="color:black">《用户协议》</a><a id="reg_now2" href="javascript:" style="color:black">《隐私协议》</a></label>
+                        </div>
+                        <div class="weui_btn_area">
+                            <input type="submit" class="weui_btn weui_btn_primary yesbtn" disabled style="background-color: #3A87AD;" value="注册" />
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    @*<div id="reg_index1">
+        <div class="reg_bar">
+            <div class="wrap">
+                <span class="fl"><i></i>心理咨询服务协议</span> <i class="reg_bar_close fr"></i>
+                <div class="clear"></div>
+            </div>
+        </div>
+        <div class="wrap reg_ct1">
+            <div class="pd10">
+                <div class="login_b_i">
+                    <div class="login_input">
+                        <p>重要提示：</p>
+                        <p>
+                            本服务协议是您与上海连心心理咨询有限公司（以下或简称“本公司”）之间就心理咨询服务等相关事宜所订立的协议，具有法律效力。您（以下或简称“来访者”）在使用本公司提供的各项服务（以下简称“本服务”）之前，请您务必审慎阅读、充分理解各条款内容，特别是免除或限制责任的条款。免除或限制责任的条款将以粗体标识，请重点阅读。
+                        </p>
+                        <p>
+                            如来访者对协议内容有任何疑问，请不要进行后续操作。
+                        </p>
+                        <p>
+                            若来访者为未成年人，应由来访者的监护人阅读本协议并向来访者解释说明。来访者的监护人需与来访者一同签署本协议。
+                        </p>
+                        <p>
+                            甲方（来访者）：____________________
+                        </p>
+                        <p>
+                            乙方（咨询机构）：上海连心心理咨询有限公司
+                        </p><p>
+                                第一条 服务目的
+                        </p> <p>
+                                 甲方主动寻求心理咨询与治疗的专业帮助，乙方从事专业心理咨询工作，乙方运用专业的咨询技术与方法帮助甲方，为甲方提供咨询。
+                        </p> <p>
+                                 第二条 服务内容
+                        </p>
+                        <p>
+                            乙方指定咨询师______为甲方提供咨询服务，甲方对此予以认可并接受。双方应遵循本合同的约定，以实现相关服务的提供。
+                        </p> <p>
+                                 第三条 服务时间及与预约
+                        </p> <p>
+                                 1. 服务时间一般____分钟起，具体服务时间可由甲方与咨询师预约确定。
+                        </p> <p>
+                                 2. 甲方应至少提前48小时预约咨询服务。甲方需要更改预约（包括咨询时间、咨询方式、取消预约等），需要在预约开始前至少24小时提出。
+
+                        </p> <p>
+                                 3. 若甲方超出前述可更改时间后提出更改要求的，更改无效，即使甲方缺席，乙方仍按照预约收取费用。除非双方另行协商一致。
+                        </p> <p>
+                                 4. 若甲方迟到，乙方提供的咨询服务仍在原定时间开始及结束，除非双方另行协商一致。若乙方咨询师迟到，咨询服务时间顺延。
+                        </p> <p>
+                                 第四条 服务费用及支付
+                        </p> <p>
+                                 1. 本协议项下心理咨询服务的收费标准为________元/分钟（大写：人民币________/分钟）。具体计费方式为：每次咨询以50分钟为一节，超过50分钟以10分钟为时间单位计费；在1小时咨询时间中，包含10-15分钟咨询师做记录的时间，故每节实际咨询时间为45-50分钟。
+                        </p> <p>
+                                 2. 咨询的计时方式为：自乙方咨询师与甲方交流开始至双方交流结束离开咨询室。
+                        </p> <p>
+                                 3. 甲方最迟应于咨询开始前一天支付相应的咨询费用。
+                        </p> <p>
+                                 第五条 甲方权利义务
+                        </p> <p>
+                                 1. 甲方确认，在接受乙方提供的服务时甲方具备完全民事权利能力。若甲方系未成年人，保证在接受乙方提供的服务前已取得监护人的同意。
+                        </p> <p>
+                                 2. 甲方在咨询期间不得有自杀、严重自伤行为。如有此类想法，甲方或者甲方监护人应当及时告知，寻求乙方帮助。
+                        </p> <p>
+                                 3. 甲方必须遵守中华人民共和国相关法律法规的规定，不得有违法犯罪行为，不得将乙方提供的服务用于任何违法或不正当或不道德的活动。
+                             </p> <p>
+                                      4. 甲方应提供真实、正确、完整及最新的资料，特别是紧急联系人与紧急联系电话。
+                        </p> <p>
+                             5. 甲方有义务提供与心理咨询有关的真实资料，有义务提供专业医疗机构作出的精神疾病相关诊断，不得隐瞒精神病史，有义务按照乙方要求到专业医疗机构进行精神疾病鉴别诊断，在精神科医生指导下通过心理咨询进行辅助治疗。
+                        </p> <p>
+                                 6. 甲方有权更换本协议内指定的咨询师。
+                        </p> <p>
+                                 7. 甲方应当根据本协议的约定按时足额向乙方支付相应的服务费用。如甲方迟延支付或者未支付乙方相应的服务费用，乙方有权拒绝提供本协议约定的相关服务。
+                        </p> <p>
+                                 8. 甲方不得对心理咨询会谈进行录音录像。为保障服务质量，提升专业胜任力，咨询师如需录音录像需要和甲方另签知情同意协议。
+                        </p> <p>
+                                 第六条 乙方权利义务
+                        </p> <p>
+                                 1. 乙方承诺向甲方提供心理咨询服务的工作人员系取得相应资质的咨询师。未经甲方同意，乙方不得更换本协议内指定的咨询师。
+                                 </p> <p>
+                                          2. 乙方及乙方咨询师应遵守职业道德，遵守国家有关法律法规。
+                        </p> <p>3. 乙方及乙方咨询师应严格遵守保密原则。
+                            </p> <p>4. 乙方及乙方咨询师本着对甲方负责的态度，有权提出转介、中止或终止咨询服务。
+                        </p> <p>5. 乙方有权按照本协议的约定向甲方收取相应的服务费用。
+                            </p> <p>6. 乙方不得对心理咨询会谈进行录音录像。为保障服务质量，提升专业胜任力，咨询师如需录音录像需要和甲方另签知情同意协议。
+                                     第七条 免责条款
+                        </p> <p>
+                                 1. 在咨询过程中，甲方因自身原因而突发疾病或意外死亡，或因自身原因造成情绪失控而发生自伤、自残、自杀等后果，乙方及乙方咨询师尽可能采取措施控制事态发展，防止事态恶化，必要时与相关部门取得联系。由此造成的损害后果，乙方不承担责任。
+                        </p> <p>
+                                 2. 甲方在咨询期间不得有自杀与严重自伤行为。甲方仅有轻微自杀自伤意念前来咨询时，乙方会尽量为甲方提供帮助，必要时提供转介途径，终止咨询。如甲方最终选择自杀或对自己、对他人造成伤害的，责任及后果由甲方全部承担，乙方不承担责任。
+                        </p> <p>
+                                 3. 乙方提供的心理咨询服务不属于疾病诊断或治疗活动，不属于开展诊疗活动，不属于医疗机构。若甲方对本条款不同意或不理解，请立即停止后续操作，乙方将立即终止服务。
+                        </p> <p>
+                                 4. 甲方理解并同意，心理咨询的效果取决于甲方与咨询师双方配合作用的结果。无论乙方提供何种咨询方式，乙方并不保证甲方接受乙方的咨询服务后一定能达到某种效果。
+                        </p> <p>
+                                 5. 甲方理解并同意：若接受乙方咨询服务后达不到甲方心理预期的心理咨询效果，不属于服务质量问题，甲方不应以此为由要求乙方退款，且乙方不承担任何责任。
+                        </p> <p>
+                                 5. 甲方在接受乙方提供的咨询服务前，应提供与其心理状态有关的真实资料；若甲方故意隐瞒、虚构资料而造成的不良后果由甲方自身承担。
+                        </p> <p>
+                                 6. 为保障甲方权益，甲方应在乙方提供的咨询服务范围内接受服务，任何未经乙方知晓并同意私下与咨询师达成的交易而产生纠纷与乙方无关。
+                        </p> <p>
+                                 第八条 保密条款
+                        </p> <p>
+                                 1. 乙方将采取合理的安全手段保护甲方提供的个人信息，除下述信息披露条款外，在未得到甲方许可之前，乙方不会将甲方的任何个人信息提供给任何第三方：
+                        </p> <p>
+                                 （1）经甲方事先同意，向第三方披露；
+                        </p> <p>
+                                 （2）如甲方出现自杀、严重自伤或伤害他人行为或风险，必要时乙方会与相关部门取得联系并提供甲方的相关个人信息；
+                        </p> <p>
+                                 （3）如甲方违反中国有关法律法规，行政或司法机构依法要求调查时，乙方会依法向行政或司法机构披露；
+                        </p> <p>
+                                 （4）乙方在研讨会、课堂或学术作品中引用经过修饰的案例材料，在引用时，乙方将删除所有能够识别出个人的信息，以保证甲方的匿名身份；
+                        </p> <p>
+                                 （5）为维护甲方合法权益等其他必要情况。
+                        </p> <p>
+                                 2. 乙方不允许任何第三方以任何手段收集、编辑、出售或无偿传播甲方的个人信息。
+                        </p> <p>
+                                 3. 咨询服务的终止不影响本保密条款的效力，本条款始终有效。
+                        </p> <p>
+                            
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>*@
+
+    <div id="reg_index1">
+        <div class="reg_bar" style="background-color: #004982;">
+            <div class="wrap">
+                <span class="fl" id="f1nr">心理咨询服务协议</span> <i class="reg_bar_close fr"></i>
+                <div class="clear"></div>
+            </div>
+        </div>
+        <div class="wrap reg_ct1">
+            <div id="content_wrapper1" class="content_wrapper">
+                <h1 class="common-detail-article__title">连心心理用户服务协议</h1><div class="common-detail-article__main js-license">
+                    @*<span style="font-size:11pt">
+                        <span style="background:white">
+                            <span style="line-height:19.5pt">
+                                <span style="font-family:Times New Roman;">
+                                    <span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">欢迎您使用连心心理。</span></span></span></span><br>
+                                    &nbsp;
+                                </span>
+                            </span>
+                        </span>
+                    </span><br>*@
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><b><span style="font-size:13.5pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">协议说明</span></span></span></span></b></span></span></span></span><br>
+                    <span style="font-size:11pt">
+                        <span style="background:white">
+                            <span style="line-height:19.5pt">
+                                <span style="font-family:Times New Roman;">
+                                    <span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">前言</span></span></span></span><br>
+                                    &nbsp;
+                                </span>
+                            </span>
+                        </span>
+                    </span><br>
+                    <span style="font-size:11pt">
+                        <span style="background:white">
+                            <span style="line-height:19.5pt">
+                                <span style="font-family:Times New Roman;">
+                                    <span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">在完成注册程序或以任何方式使用连心心理服务前，请用户务必仔细阅读并透彻理解本连心心理服务协议（下称“<b>本协议</b>”），特别是限制或免除责任的相应条款。如用户未满18周岁，或以其他形式属于限制民事行为能力人，请在监护人或法定代理人的陪同下阅读本协议。在确认充分理解后选择接受或不接受本服务协议；一旦用户完成“同意协议并注册”或开始以其他方式使用连心心理服务，即表明用户已阅读并同意受本服务协议的约束。如用户不同意本服务协议或其中任何条款约定，用户应不再进行下一步或停止注册程序。</span></span></span></span><br>
+                                    &nbsp;
+                                </span>
+                            </span>
+                        </span>
+                    </span><br>
+                    <span style="font-size:11pt">
+                        <span style="background:white">
+                            <span style="line-height:19.5pt">
+                                <span style="font-family:Times New Roman;">
+                                    <span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">连心心理再次提示用户审慎阅读、充分理解各条款内容，特别是限制或免除责任的相应条款。</span></span></span></span><br>
+                                    &nbsp;
+                                </span>
+                            </span>
+                        </span>
+                    </span><br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><b><span style="font-size:13.5pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">协议生效</span></span></span></span></b></span></span></span></span><br>
+                    <span style="font-size:11pt">
+                        <span style="background:white">
+                            <span style="line-height:19.5pt">
+                                <span style="font-family:Times New Roman;">
+                                    <span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">当您按照注册页面提示填写信息、阅读并同意本协议且完成全部注册程序后，即表示您已充分阅读、理解并接受本协议的全部内容，并与连心心理达成一致，成为连心心理在线平台用户。您的注册行为将被认为是对本协议全部条款无保留的接受和遵守。</span></span></span></span><br>
+                                    &nbsp;
+                                </span>
+                            </span>
+                        </span>
+                    </span><br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><b><span style="font-size:13.5pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">定义</span></span></span></span></b></span></span></span></span><br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">连心心理：指上海连心心理咨询有限公司所运营的连心心理网络平台、APP平台以及微信服务号。</span></span></span></span></span></span></span></span><br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">用户：指阅读并同意本协议内容，经过连心心理注册流程成为连心心理在线各项服务使用者的个人。</span></span></span></span></span></span></span></span><br>
+                    <br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><b><span style="font-size:13.5pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">一、注册</span></span></span></span></b></span></span></span></span><br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">1</span></span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、连心心理提供用户注册。用户的帐号和密码由您自行保管；用户应当对以您的帐号进行的所有活动和事件负法律责任。</span></span></span></span></span></span></span></span><br>
+                    <br>
+                    <span style="font-size:11pt">
+                        <span style="background:white">
+                            <span style="line-height:19.5pt">
+                                <span style="font-family:Times New Roman;">
+                                    <span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">2</span></span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、用户注册时，在账号名称、头像和简介等注册信息中不得出现违法和不良信息。<u><strong>用户在注册、使用及管理账号时提供的身份信息及其他信息应为真实信息。连心心理有权基于用户提交的注册信息中的移动电话号码、身份证件号码或者统一社会信用代码等对用户进行真实身份信息核验与认证，如发现用户的注册信息违反本条约定的</strong>，</u>连心心理有权暂停、中断或终止用户使用部分或全部服务。在此情况下,连心心理不承担任何责任,并且用户同意承担因此所产生的直接或间接的任何支出或损失。</span></span></span></span><br>
+                                    &nbsp;
+                                </span>
+                            </span>
+                        </span>
+                    </span><br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><b><span style="font-size:13.5pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">二、服务</span></span></span></span></b></span></span></span></span><br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">1</span></span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、连心心理将在服务过程中不断优化创新，努力提升和改进技术，增强用户使用服务的体验。用户认知并同意连心心理提供的服务的形式和本质可不经事先通知用户而不时变换，连心心理保留随时变更、中断或终止部分或全部网络服务的权利。</span></span></span></span></span></span></span></span><br>
+                    <br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">2</span></span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、连心心理在提供服务时，可能会对部分服务收取一定费用，连心心理将会对收费服务给予明确的提示。</span></span></span></span></span></span></span></span><br>
+                    <br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">3</span></span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、用户认知并同意，如果连心心理禁用对用户的账户的访问权，则用户可能被阻止获得服务、用户的账户资料或包含在用户账户中的任何文件或其他内容。</span></span></span></span></span></span></span></span><br>
+                    <br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">4</span></span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、<u><strong>用户认知并同意，连心心理有权获取用户账号的互联网协议（IP）地址归属地信息，并在用户的个人信息页面进行合理展示，以便于公众为公共利益实施监督。</strong></u></span></span></span></span></span></span></span></span><br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;">&nbsp;</span></span></span></span><br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><b><span style="font-size:13.5pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">三、用户的权利和责任</span></span></span></span></b></span></span></span></span><br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">1</span></span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、<strong><u>在用户完成连心心理账号注册后，意味着用户已获得该账号的使用权，且该账号仅限用户本人使用。用户同意在使用账号时，连心心理有权对用户的账号信息进行动态核验，如发现任何违反法律、行政法规或本协议约定的，连心心理有权采取警示提醒、限期改正、限制账号功能、暂停使用、关闭账号、禁止重新注册等处置措施，情况特别严重时，连心心理有权保存有关记录，并向网信办等主管部门报告，用户将独立承担由此产生的全部责任。</u></strong></span></span></span></span></span></span></span></span><br>
+                    <br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">2</span></span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、用户应妥善保管用户的账号和密码，通过用户的账号和密码操作或实施的行为，将视为用户本人的行为，由用户本人承担相应的责任和后果。用户不得以任何形式转让或授权他人使用自己的连心心理账号，亦不得盗用他人账号。如果用户未保管好自己的账号和密码而对用户、连心心理或第三方造成的损害，用户将负全部责任。<u><strong>如用户发现账号或密码遗失、被他人盗用或其他安全漏洞的，请立即通知连心心理。</strong></u></span></span></span></span></span></span></span></span><br>
+                    <br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">3</span></span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、用户须遵守国家关于<strong><u>互联网管理及互联网信息发布的相关法律法规</u></strong>，用户对自己在连心心理上发布的信息承担责任，用户不得发布违法信息，不得恶意评价其他用户。如用户因违反上述规则，导致相应法律后果的发生，用户将以自己的名义独立承担所有法律责任。</span></span></span></span></span></span></span></span><br>
+                    <br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">4</span></span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、用户同意独自就用户在使用服务时创作、传送或展示的任何内容以及用户做出该等行为的后果（包括连心心理可能遭受的任何损失或损害）承担责任（连心心理不对用户或任何第三方承担责任）。</span></span></span></span></span></span></span></span><br>
+                    <br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">5</span></span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、用户通过连心心理向咨询师购买心理咨询服务时，需要在连心心理完成整个咨询服务，不得未经连心心理预约私下与咨询师达成交易。否则，因此与咨询师发生退款等纠纷，用户与咨询师自行承担一切后果，连心心理不负任何责任。</span></span></span></span></span></span></span></span><br>
+                    <br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">6</span></span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、<u><strong>如用户认为连心心理平台中用户上传的内容（包括但不限于文字、图片等）侵犯了用户的合法权益或违反相关法律法规，请向下述联系人进行举报并按照其要求提交相关证明材料。连心心理承诺将根据用户提交的材料，在审查核实后尽快予以处理，以维护用户的合法权益：</strong></u></span></span></span></span></span></span></span></span><br>
+                    <br>
+                    <strong>
+                        <u>
+                            <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">举报联系人：</span></span></span></span></span></span></span></span><br>
+                            <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">举报电话：</span></span></span></span></span></span></span></span>
+                        </u>
+                    </strong><br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><strong><u><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">举报邮箱：</span></span></span></span></u></strong>&nbsp;</span></span></span></span><br>
+                    <br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><b><span style="font-size:13.5pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">四、连心心理的权利和责任</span></span></span></span></b></span></span></span></span><br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">1</span></span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、连心心理有义务在现有技术上维护整个网络平台的正常运行，并努力提升和改进技术，增强用户使用服务的体验。对用户在注册使用服务中所遇到的与服务或注册有关的问题及反映的情况，连心心理有义务及时作出回应。</span></span></span></span></span></span></span></span><br>
+                    <br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">2</span></span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、如存在下列情况，连心心理有权根据不同情况选择保留或删除相关信息或继续、停止对该用户提供服务，并追究相关法律责任：</span></span></span></span></span></span></span></span><br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">①用户或其它第三方通知连心心理，认为某个具体用户、具体行为、具体事项可能存在重大问题；</span></span></span></span></span></span></span></span><br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">②用户或其它第三方向连心心理告知网络平台上有违法或不当行为的，连心心理以普通非专业人员的知识水平标准对相关内容进行判别，可以明显认为这些内容或行为具有违法或不当性质的。</span></span></span></span></span></span></span></span><br>
+                    <br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">3</span></span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、如用户和咨询师未通过连心心理进行心理咨询预约及费用支付，由此产生的任何纠纷属于用户与咨询师的私人纠纷，连心心理不承担任何责任。如连心心理发现用户和咨询师存在私下交易的行为，可即时采取注销账号并拒绝提供服务措施，如给连心心理及其相关方造成损失的，用户和咨询师还应承担相应赔偿责任。</span></span></span></span></span></span></span></span><br>
+                    <br>
+                    <span style="font-size:11pt">
+                        <span style="background:white">
+                            <span style="line-height:19.5pt">
+                                <span style="font-family:Times New Roman;">
+                                    <span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">4</span></span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、连心心理有权对用户的注册数据及活动行为进行查阅，发现注册数据或活动行为中存在任何问题或怀疑，均有权向用户发出询问及要求改正的通知或者直接作出删除等处理。</span></span></span></span><br>
+                                    &nbsp;
+                                </span>
+                            </span>
+                        </span>
+                    </span><br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><b><span style="font-size:13.5pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">五、服务变更、中断或终止</span></span></span></span></b></span></span></span></span><br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">1</span></span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、因系统维护或升级的需要而需暂停网络服务，连心心理将尽可能事先进行通告。</span></span></span></span></span></span></span></span><br>
+                    <br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">2</span></span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、如发生下列任何一种情形，连心心理有权解除本协议，并终止用户的全部服务：</span></span></span></span></span></span></span></span><br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">①用户违反国家有关法律法规或连心心理管理规定，侵害他人合法权益的；</span></span></span></span></span></span></span></span><br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">②用户因在连心心理上的不当行为被行政或司法机构拘留或起诉；</span></span></span></span></span></span></span></span><br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">③用户盗用他人账号、发布违禁信息、骗取他人财物的；</span></span></span></span></span></span></span></span><br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">④用户传播虚假信息，歪曲事实，经查证属实的；</span></span></span></span></span></span></span></span><br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">⑤其它连心心理认为需要终止服务的情况。</span></span></span></span></span></span></span></span><br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">除前款所述情形外，连心心理保留在不事先通知用户的情况下随时中断或终止部分或全部网络服务的权利，对于服务的中断或终止而造成用户的损失的，连心心理不承担任何责任。</span></span></span></span></span></span></span></span><br>
+                    <br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">3</span></span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、服务发生变更、中断、终止后，连心心理仍有以下权利：</span></span></span></span></span></span></span></span><br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">①连心心理有权保留用户的注册数据及以前的行为记录；</span></span></span></span></span></span></span></span><br>
+                    <span style="font-size:11pt">
+                        <span style="background:white">
+                            <span style="line-height:19.5pt">
+                                <span style="font-family:Times New Roman;">
+                                    <span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">②如用户在服务变更、中断、终止前，在连心心理平台上存在违法行为或违反条款的行为，连心心理仍可行使本服务条款所规定的权利。</span></span></span></span><br>
+                                    &nbsp;
+                                </span>
+                            </span>
+                        </span>
+                    </span><br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><b><span style="font-size:13.5pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">六、隐私声明</span></span></span></span></b></span></span></span></span><br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">1</span></span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、适用范围</span></span></span></span></span></span></span></span><br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">①用户注册连心心理时，根据网站要求提供的个人信息。</span></span></span></span></span></span></span></span><br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">②用户使用连心心理时，上传的非公开的申请单资料等文字、图片、数据信息。</span></span></span></span></span></span></span></span><br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">③连心心理通过合法途径从其他途径取得的用户的个人资料。</span></span></span></span></span></span></span></span><br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">④用户认为不宜公开的其他内容。</span></span></span></span></span></span></span></span><br>
+                    <br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">2</span></span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、信息保密</span></span></span></span></span></span></span></span><br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">保护用户的隐私是连心心理的一项基本政策，连心心理保证不对外公开或向第三方提供用户的注册资料及用户在使用网络服务时存储的非公开内容，但下列情况除外：事先获得用户的明确授权；根据有关的法律法规要求；按照相关政府主管部门的要求；为维护社会公众的利益；为维护连心心理的合法权益。</span></span></span></span></span></span></span></span><br>
+                    <br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">3</span></span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、信息使用</span></span></span></span></span></span></span></span><br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">①为服务用户的目的，连心心理可能通过使用用户的个人信息向用户提供服务，包括但不限于向用户发出活动和服务信息等。</span></span></span></span></span></span></span></span><br>
+                    <span style="font-size:11pt">
+                        <span style="background:white">
+                            <span style="line-height:19.5pt">
+                                <span style="font-family:Times New Roman;">
+                                    <span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">②用户知悉并认可：连心心理可能会与第三方合作向用户提供相关的网络服务，在此情况下，如该第三方同意承担与本网站同等的保护用户隐私的责任，则连心心理有权将用户的注册资料等提供给该第三方。另外，在不透露单个用户隐私资料的前提下，连心心理有权对整个用户数据库进行分析并对用户数据库进行商业上的利用。</span></span></span></span><br>
+                                    &nbsp;
+                                </span>
+                            </span>
+                        </span>
+                    </span><br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><b><span style="font-size:13.5pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">七、免责声明</span></span></span></span></b></span></span></span></span><br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">1</span></span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、用户理解并同意：若有心理疾病，应寻求专业的心理咨询师予以治疗；而且，心理咨询的效果取决于咨询师与用户双方配合作用的结果。连心心理向用户提供的问答功能、向咨询师发私信功能并不能达到治疗效果。</span></span></span></span></span></span></span></span><br>                    
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">2</span></span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、连心心理不保证咨询师的回答一定能帮助用户解决问题，亦不保证咨询师的回答一定能达到怎样的效果。</span></span></span></span></span></span></span></span><br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">3</span></span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、用户理解并同意：达不到来访者心理预期的心理咨询效果，不属于服务质量问题，连心心理对此不承担任何担保责任或其他法律责任。</span></span></span></span></span></span></span></span><br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">4</span></span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、用户因在使用连心心理的功能中因自身原因而突发疾病或意外死亡，或因自身原因造成情绪失控而发生自伤、自残、自杀、对他人的人身或财产进行损害等后果，连心心理尽可能采取措施控制事态恶化，必要时与相关部门取得联系。由此造成的损害后果，连心心理不承担责任。</span></span></span></span></span></span></span></span><br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">5</span></span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、有自杀倾向或自杀未遂行为的用户应寻求医生专业的心理治疗服务。用户同意并理解：在连心心理的心理咨询服务中，并不能达到心理治疗效果。如用户最终选择自杀或自伤等责任及后果将由用户本人全部承担，与连心心理及咨询师无关。</span></span></span></span></span></span></span></span><br>
+                                                                            <br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><b><span style="font-size:13.5pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">八、有限责任</span></span></span></span></b></span></span></span></span><br>
+                    <span style="font-size:11pt">
+                        <span style="background:white">
+                            <span style="line-height:19.5pt">
+                                <span style="font-family:Times New Roman;">
+                                    <span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">不论在何种情况下，连心心理均不对由于Internet连接故障，电脑，通讯或其他系统的故障，电力故障，罢工，劳动争议，暴乱，起义，骚乱，生产力或生产资料不足，火灾，洪水，风暴，爆炸，不可抗力，战争，政府行为，国际、国内法院的命令或第三方的不作为而造成的不能服务或延迟服务承担责任。</span></span></span></span><br>
+                                    &nbsp;
+                                </span>
+                            </span>
+                        </span>
+                    </span><br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><b><span style="font-size:13.5pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">九、违约责任</span></span></span></span></b></span></span></span></span><br>
+                    <span style="font-size:11pt">
+                        <span style="background:white">
+                            <span style="line-height:19.5pt">
+                                <span style="font-family:Times New Roman;">
+                                    <span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">用户同意保障和维护连心心理及其他用户的利益，如因用户违反有关法律、法规或连心心理管理规定而给连心心理或任何其他第三人造成损失，用户同意由用户全部承担。</span></span></span></span><br>
+                                    &nbsp;
+                                </span>
+                            </span>
+                        </span>
+                    </span><br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><b><span style="font-size:13.5pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">十、服务条款修改</span></span></span></span></b></span></span></span></span><br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">1</span></span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、连心心理有权根据服务情况变更、终止连心心理管理规定的各项条款，连心心理将会通过适当方式向用户提示修改内容。</span></span></span></span></span></span></span></span><br>
+                    <br>
+                    <span style="font-size:11pt">
+                        <span style="background:white">
+                            <span style="line-height:19.5pt">
+                                <span style="font-family:Times New Roman;">
+                                    <span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">2</span></span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、 如果用户不同意连心心理管理规定的修改，有权停止使用网络服务。如果用户继续使用网络服务，则视为用户接受连心心理对服务条款相关条款所做的修改。</span></span></span></span><br>
+                                    &nbsp;
+                                </span>
+                            </span>
+                        </span>
+                    </span><br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><b><span style="font-size:13.5pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">十一、争议解决</span></span></span></span></b></span></span></span></span><br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">1</span></span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、本协议之解释与适用，以及与本协议有关的争议，均应依照中华人民共和国法律予以处理，并以连心心理所在地的人民法院为第一审管辖法院。</span></span></span></span></span></span></span></span><br>
+                    <br>
+                    <span style="font-size:11pt">
+                        <span style="background:white">
+                            <span style="line-height:19.5pt">
+                                <span style="font-family:Times New Roman;">
+                                    <span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">2</span></span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、如本协议的任何条款被视作无效或无法执行，则上述条款可被分离，其余部分则仍具有法律效力。</span></span></span></span><br>
+                                    &nbsp;
+                                </span>
+                            </span>
+                        </span>
+                    </span><br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><b><span style="font-size:13.5pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">十二、通知送达</span></span></span></span></b></span></span></span></span><br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">1</span></span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、本协议项下连心心理对于用户所有的通知均可通过网页公告、电子邮件、手机短信、微信消息或常规的信件传送等方式进行；该等通知于发送之日视为已送达给用户。</span></span></span></span></span></span></span></span><br>
+                    <br>
+                    <span style="font-size:11pt">
+                        <span style="background:white">
+                            <span style="line-height:19.5pt">
+                                <span style="font-family:Times New Roman;">
+                                    <span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">2</span></span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、用户对于连心心理的通知应当通过连心心理对外正式公布的通信地址、传真号码、电子邮件地址等联系信息进行送达。</span></span></span></span><br>
+                                    &nbsp;
+                                </span>
+                            </span>
+                        </span>
+                    </span><br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><b><span style="font-size:13.5pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">十三、其他规定</span></span></span></span></b></span></span></span></span><br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">1</span></span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、本服务条款构成用户与连心心理对服务条款之约定事项及其他有关事宜的完整协议，除服务条款规定的之外，未赋予服务条款各方其他权利。</span></span></span></span></span></span></span></span><br>
+                    <br>
+                    <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">2</span></span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、如本服务条款中的任何条款无论因何种原因完全或部分无效或不具有执行力，本条款的其余条款仍应有效并且有约束力。</span></span></span></span></span></span></span></span><br>
+                    <br>
+                    <span lang="EN-US" style="font-size:12.0pt"><span style="line-height:107%"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">3</span></span></span></span></span><span style="font-size:12.0pt"><span style="line-height:107%"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、本服务条款中的标题仅为方便而设，在解释本条款时应被忽略。</span></span></span></span></span><br>
+                    <br>
+                    <br>
+                    &nbsp;
+                </div>
+            </div>
+
+            <div id="content_wrapper2" class="content_wrapper">
+                <h1 class="common-detail-article__title">连心心理隐私权政策</h1>
+                <div class="common-detail-article__main js-license">
+                    <p id="ub99b01b1">
+                        <span style="font-size:11pt">
+                            <span style="background:white">
+                                <span style="line-height:19.5pt">
+                                    @*<b style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">生效日期：</span></span></span></span></b><b style="font-family:Times New Roman;"><span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">2021</span></span></span></b><b style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">年</span></span></span></span></b><b style="font-family:Times New Roman;"><span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">12</span></span></span></b><b style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">月</span></span></span></span></b><b style="font-family:Times New Roman;"><span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">29</span></span></span></b><b style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">日</span></span></span></span></b><br>
+                                    <b style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">更新日期：</span></span></span></span></b><b style="font-family:Times New Roman;"><span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">2023</span></span></span></b><b><span style="font-size: 12pt;"><span style="color: black;"><span style="letter-spacing: 0.25pt;"><font face="楷体">年</font><font face="Times New Roman, serif">02</font></span></span></span></b><b><span style="font-size: 12pt;"><span style="color: rgb(13, 13, 13);"><span style="letter-spacing: 0.25pt;"><font face="楷体">月</font><font face="Times New Roman, serif">28</font></span></span></span></b><b style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">日</span></span></span></span></b><br>*@
+                                    <br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">我们深知个人信息对您的重要性，我们将按法律法规要求，采取相应安全保护措施，尽力保护您的个人信息安全可控。鉴于此，上海连心心理咨询有限公司下的连心心理服务提供者制定本《隐私政策》（下称“本政策 /本隐私权政策”）并提醒您:</span></span></span></span><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">本政策适用于连心心理提供的所有产品和服务。我们有可能根据未来信息处理情境的变化更新或修改本政策，在使用连心心理各项产品或服务前，请您务必仔细阅读并透彻理解本政策，在确认充分理解并同意后使用相关产品或服务。一旦您开始使用连心心理各项产品或服务，即表示您已理解并同意本政策。如对本政策内容有任何疑问、意见或建议，您可通过连心心理提供的各种联系方式与我们联系。</span></span></span></span><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">请在使用我们的产品（或服务）前，仔细阅读并了解本《隐私权政策》。</span></span></span></span><br>
+                                    <br>
+                                    <b style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">本《隐私权政策》将帮助您了解以下内容：</span></span></span></span></b><br>
+                                    <b style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">一、关于我们</span></span></span></span></b><br>
+                                    <b style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">二、我们如何收集和使用您的个人信息</span></span></span></span></b><br>
+                                    <b style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">三、我们如何使用</span></span></span></span></b><b style="font-family:Times New Roman;"><span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt"> Cookie </span></span></span></b><b style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">和同类技术</span></span></span></span></b><br>
+                                    <b style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">四、我们如何保护您的个人信息</span></span></span></span></b><br>
+                                    <b style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">五、您的权利</span></span></span></span></b><br>
+                                    <b style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">六、第三方服务</span></span></span></span></b><br>
+                                    <b style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">七、本隐私权政策如何更新</span></span></span></span></b><br>
+                                    <b style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">八、如何联系我们</span></span></span></span></b><br>
+                                    <br>
+                                    <b style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">一、关于我们</span></span></span></span></b><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">应用名称为“连心心理咨询平台”（以下称“连心心理”），由上海连心心理咨询有限公司提供软件开发、产品运营和服务。</span></span></span></span>
+                                </span>
+                            </span>
+                        </span><br>
+                        <br>
+                        <span style="font-size:11pt">
+                            <span style="background:white">
+                                <span style="line-height:19.5pt">
+                                    <span style="font-family:Times New Roman;">
+                                        <b><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">二、我们如何收集和使用您的个人信息</span></span></span></span></b><br>
+                                        <span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">个人信息是指以电子或者其他方式记录的能够单独或者与其他信息结合识别特定自然人身份或者反映特定自然人活动情况的各种信息。</span></span></span></span><br>
+                                        <span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">我们仅会出于本政策所述的以下目的，收集和使用您的个人信息：</span></span></span></span><br>
+                                        <span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">（一）为您提供网上预约咨询服务</span></span></span></span><br>
+                                        <span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">1</span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、业务功能一：注册成为用户</span></span></span></span><br>
+                                        <span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">为完成创建账号，您需提供以下信息：<b>手机号或电子邮箱地址、创建的用户名和密码</b>。</span></span></span></span><br>
+                                        <span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">在注册过程中，如果您提供以下额外信息，将有助于我们给您提供更好的服务和体验：<b>您的性别、所在地、个人介绍、微信、微博</b>。但如果您不提供这些信息，将不会影响使用本服务的基本功能。</span></span></span></span><br>
+                                        <span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">您提供的上述信息，将在您使用本服务期间持续授权我们使用。</span></span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:#0d0d0d"><span style="letter-spacing:.25pt">您应确保提供的注册信息为真实信息，且不违反国家法律法规的规定。我们有权基于手机号等信息对您进行真实身份信息核验与认证。如发现您提供虚假注册信息的，我们有权拒绝为您提供相关服务。</span></span></span></span><br>
+                                        <span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">2</span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、业务功能二：完成预约咨询。</span></span></span></span><br>
+                                        <span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">为完成预约咨询，您需提供以下信息：<b>您的姓名、紧急联系人姓名及电话</b>。</span></span></span></span><br>
+                                        <span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">在预约咨询过程中，如果您提供以下额外信息，将有助于我们给您提供更好的服务和体验：<b>您的联系方式、性别、年龄、婚姻状态、是否有孩子</b>。但如果您不提供这些信息，将不会影响使用本服务的基本功能。</span></span></span></span><br>
+                                        <span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">您提供的上述信息，仅限您申请的咨询师可查看，且有责任进行保密；如有法律纠纷等特殊情况，可能会被依法使用，以保障您的合法权益。</span></span></span></span><br>
+                                        <span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:#0d0d0d"><span style="letter-spacing:.25pt">您应确保提供信息的真实性，</span></span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">您提供的上述信息，将在您使用本服务期间持续授权我们使用。</span></span></span></span><br>
+                                        <span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">3</span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、图片、文件</span></span></span></span><br>
+                                        <span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">当您在使用<b>编辑头像（照片浏览）、私信（发送图片、发送文件）、提交作业（上传图片、上传文件）功能时，我们会收集您主动提供的上述图片、文件内容信息，同时我们还将为便于您发送图片和文件而经过您的同意后访问您的手机存储权限。</b>同时，您也可以随时通过您的设备系统设置相关功能设置页面开启</span></span></span></span><span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">/</span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">取消该权限。您开启该权限即视为您授权我们可以访问、获取、收集、使用您的该等个人信息；当您取消该授权后，我们将不再收集该信息，也无法再为您提供上述与之对应的服务；但除非您依照法律的规定删除了您的个人信息，否则您的取消行为不会影响我们基于您之前的授权进行的对您个人信息的处理、存储。</span></span></span></span><br>
+                                        <span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">4. </span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">拍摄照片、实时音视频</span></span></span></span><br>
+                                        <span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">当您使用<b>倾诉功能（语音通话）、视频咨询功能（视频通话）、设备相机拍摄照片（编辑头像、发送图片）时，我们将访问您的设备录音（麦克风）或相机相关权限。</b>如您拒绝提供该权限，仅会使您无法使用该功能，但并不影响您正常使用产品与</span></span></span></span><span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">/</span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">或服务的其他功能。同时，您也可以随时通过您的设备系统设置相关功能设置页面开启</span></span></span></span><span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">/</span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">取消该权限。您开启该权限即视为您授权我们可以访问、获取、收集、使用您的该等个人信息；当您取消该授权后，我们将不再收集该信息，也无法再为您提供上述与之对应的服务；但除非您依照法律的规定删除了您的个人信息，否则您的取消行为不会影响我们基于您之前的授权进行的您个人信息的处理、存储。</span></span></span></span><br>
+                                        <span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">5. </span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">城市选择</span></span></span></span><br>
+                                        <b><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">当您进入心理咨询模块：浏览咨询师列表、在咨询师列表中进行城市筛选时，我们将访问您的定位权限，便于为您推荐距您更近的当前城市的心理健康服务。</span></span></span></span></b><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">如您拒绝提供该权限，仅会影响推荐服务的准确度，不会影响该基本功能的使用。同时，您也可以随时通过您的设备系统设置相关功能设置页面开启</span></span></span></span><span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">/</span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">取消该权限。您开启该权限即视为您授权我们可以访问、获取、收集、使用您的该等个人信息；当您取消该授权后，我们将不再收集该信息，也无法再为您提供上述与之对应的服务；但除非您依照法律的规定删除了您的个人信息，否则您的取消行为不会影响我们基于您之前的授权进行的您个人信息的处理、存储。</span></span></span></span><br>
+                                        <span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">（二）开展内部数据分析和研究，第三方</span></span></span></span><span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">统计服务，改善我们的产品或服务【注：示例】</span></span></span></span><br>
+                                        <span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">我们收集数据是根据您与我们的互动和您所做出的选择，包括您的隐私设置以及您使用的产品和功能。我们收集的数据可能包括</span></span></span></span><b><span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">SDK/API/JS</span></span></span></b><b><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">代码版本、浏览器、互联网服务提供商、</span></span></span></span></b><b><span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">IP</span></span></span></b><b><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">地址、平台、时间戳、应用标识符、应用程序版本、应用分发渠道、独立设备标识符、</span></span></span></span></b><b><span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">iOS</span></span></span></b><b><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">广告标识符（</span></span></span></span></b><b><span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">IDFA)</span></span></span></b><b><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、安卓广告主标识符、网卡（</span></span></span></span></b><b><span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">MAC</span></span></span></b><b><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">）地址、国际移动设备识别码（</span></span></span></span></b><b><span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">IMEI</span></span></span></b><b><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">）、设备型号、终端制造厂商、终端设备操作系统版本、会话启动</span></span></span></span></b><b><span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">/</span></span></span></b><b><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">停止时间、语言所在地、时区和网络状态（</span></span></span></span></b><b><span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">WiFi</span></span></span></b><b><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">等）、硬盘、</span></span></span></span></b><b><span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">CPU</span></span></span></b><b><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">和电池使用情况、位置、</span></span></span></span></b><b><span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">AndroidID</span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、设备传感器数据、应用列表、运行中进程信息等</span></span></span></span></b><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">。</span></span></span></span><br>
+                                        <span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">当我们要将信息用于本策略未载明的其它用途时，会事先征求您的同意。</span></span></span></span><br>
+                                        <span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">当我们要将基于特定目的收集而来的信息用于其他目的时，会事先征求您的同意。</span></span></span></span><br>
+                                        <br>
+                                        <b><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">三、我们如何使用</span></span></span></span></b><b><span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt"> Cookie </span></span></span></b><b><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">和同类技术</span></span></span></span></b><br>
+                                        <span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">（一）</span></span></span></span><span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">Cookie</span></span></span><br>
+                                        <span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">为确保网站正常运转，我们会在您的计算机或移动设备上存储名为</span></span></span></span><span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt"> Cookie </span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">的小数据文件。</span></span></span></span><span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">Cookie </span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">通常包含标识符、站点名称以及一些号码和字符。借助于</span></span></span></span><span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt"> Cookie</span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">，网站能够存储您的偏好或购物篮内的商品等数据。</span></span></span></span><br>
+                                        <span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">我们不会将</span></span></span></span><span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt"> Cookie </span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">用于本政策所述目的之外的任何用途。您可根据自己的偏好管理或删除</span></span></span></span><span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt"> Cookie</span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">。您可以清除计算机上保存的所有</span></span></span></span><span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt"> Cookie</span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">，大部分网络浏览器都设有阻止</span></span></span></span><span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt"> Cookie </span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">的功能。但如果您这么做，则需要在每一次访问我们的网站时亲自更改用户设置。如需详细了解如何更改浏览器设置，请访问以下链接：</span></span></span></span><br>
+                                        <span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">·</span></span></span></span>&nbsp;<a href="https://support.microsoft.com/en-gb/help/17442/windows-internet-explorer-delete-manage-cookies" target="_blank"><span style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">Microsoft Internet Explorer</span></span></span></a>&nbsp;
+                                    </span>
+                                </span>
+                            </span>
+                        </span><br>
+                        <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">·</span></span></span></span>&nbsp;<a href="https://privacy.microsoft.com/en-us/windows-10-microsoft-edge-and-privacy" target="_blank"><span style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">Microsoft Edge</span></span></span></a>&nbsp;</span></span></span></span><br>
+                        <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">·</span></span></span></span>&nbsp;<a href="https://support.mozilla.org/en-US/kb/cookies-information-websites-store-on-your-computer" target="_blank"><span style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">Mozilla Firefox</span></span></span></a>&nbsp;</span></span></span></span><br>
+                        <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">·</span></span></span></span>&nbsp;<a href="https://support.google.com/chrome/answer/95647?hl=en" target="_blank"><span style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">Google Chrome</span></span></span></a>&nbsp;</span></span></span></span><br>
+                        <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">·</span></span></span></span>&nbsp;<a href="https://support.apple.com/zh-cn/guide/safari/sfri11471/mac" target="_blank"><span style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">Safari for macOS</span></span></span></a>&nbsp;</span></span></span></span><br>
+                        <span style="font-size:11pt">
+                            <span style="background:white">
+                                <span style="line-height:19.5pt">
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">·</span></span></span></span><font face="Times New Roman, serif">&nbsp;</font><a href="https://support.apple.com/en-gb/HT201265" style="font-family:Times New Roman;" target="_blank"><span style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">Safari for iOS</span></span></span></a><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">（二）网站信标和像素标签</span></span></span></span><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">除</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt"> Cookie </span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">外，我们还会在网站上使用网站信标和像素标签等其他同类技术。例如，我们向您发送的电子邮件可能含有链接至我们网站内容的点击</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt"> URL</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">。如果您点击该链接，我们则会跟踪此次点击，帮助我们了解您的产品或服务偏好并改善客户服务。网站信标通常是一种嵌入到网站或电子邮件中的透明图像。借助于电子邮件中的像素标签，我们能够获知电子邮件是否被打开。如果您不希望自己的活动以这种方式被追踪，则可以随时从我们的寄信名单中退订。</span></span></span></span><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">（三）</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">Do Not Track</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">（请勿追踪）</span></span></span></span><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">很多网络浏览器均设有</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt"> Do Not Track </span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">功能，该功能可向网站发布</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt"> Do Not Track </span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">请求。目前，主要互联网标准组织尚未设立相关政策来规定网站应如何应对此类请求。但如果您的浏览器启用了</span></span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt"> Do Not Track</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">，那么我们的所有网站都会尊重您的选择。</span></span></span></span><br>
+                                    <br>
+                                    <b style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">四、我们如何保护您的个人信息</span></span></span></span></b><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">（一）我们已使用符合业界标准的安全防护措施保护您提供的个人信息，防止数据遭到未经授权访问、公开披露、使用、修改、损坏或丢失。我们会采取一切合理可行的措施，保护您的个人信息。例如，在您的浏览器与“服务”之间交换数据（如信用卡信息）时受</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt"> SSL </span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">加密保护；我们同时对我们网站提供</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt"> https </span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">安全浏览方式；我们会使用加密技术确保数据的保密性；我们会使用受信赖的保护机制防止数据遭到恶意攻击；我们会部署访问控制机制，确保只有授权人员才可访问个人信息；以及我们会举办安全和隐私保护培训课程，加强员工对于保护个人信息重要性的认识。</span></span></span></span><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">（二）我们会采取一切合理可行的措施，确保未收集无关的个人信息。我们只会在达成本政策所述目的所需的期限内保留您的个人信息，除非需要延长保留期或受到法律的允许。</span></span></span></span><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">（三）互联网并非绝对安全的环境，而且电子邮件、即时通讯、及与其他我们用户的交流方式并未加密，我们强烈建议您不要通过此类方式发送个人信息。请使用复杂密码，协助我们保证您的账号安全。</span></span></span></span><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">（四）互联网环境并非百分之百安全，我们将尽力确保或担保您发送给我们的任何信息的安全性。如果我们的物理、技术、或管理防护设施遭到破坏，导致信息被非授权访问、公开披露、篡改、或毁坏，导致您的合法权益受损，我们将承担相应的法律责任。</span></span></span></span><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">（五）在不幸发生个人信息安全事件后，我们将按照法律法规的要求，及时向您告知：安全事件的基本情况和可能的影响、我们已采取或将要采取的处置措施、您可自主防范和降低风险的建议、对您的补救措施等。我们将及时将事件相关情况以邮件、信函、电话、推送通知等方式告知您，难以逐一告知个人信息主体时，我们会采取合理、有效的方式发布公告。</span></span></span></span><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">同时，我们还将按照监管部门要求，主动上报个人信息安全事件的处置情况。</span></span></span></span><br>
+                                    <br>
+                                    <b style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">五、您的权利</span></span></span></span></b><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">按照中国相关的法律、法规、标准，以及其他国家、地区的通行做法，我们保障您对自己的个人信息行使以下权利：</span></span></span></span><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">（一）访问您的个人信息</span></span></span></span><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">您有权访问您的个人信息，法律法规规定的例外情况除外。如果您想行使数据访问权，可以通过以下方式自行访问：</span></span></span></span><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">账号信息——如果您希望访问或编辑您的账号中的个人资料信息和支付信息、更改您的密码、添加安全信息或绑定第三方账号等，您可以通过访问【我的】或【个人中心】执行此类操作。</span></span></span></span><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">如果您无法通过上述链接访问这些个人信息，您可以发送电子邮件至【</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt"></span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">】。我们将在</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">30</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">天内回复您的访问请求。</span></span></span></span><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">（二）更正您的个人信息</span></span></span></span><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">当您发现我们处理的关于您的个人信息有错误时，您有权要求我们做出更正。您可以通过“（一）访问您的个人信息”中罗列的方式提出更正申请。</span></span></span></span><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">如果您无法通过上述链接更正这些个人信息，您可以发送电子邮件至【</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt"></span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">】。我们将在</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">30</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">天内回复您的更正请求。</span></span></span></span><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">（三）删除您的个人信息</span></span></span></span><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">在以下情形中，您可以向我们提出删除个人信息的请求：</span></span></span></span><br>
+                                    <span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">1</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、如果我们处理个人信息的行为违反法律法规；</span></span></span></span><br>
+                                    <span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">2</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、如果我们收集、使用您的个人信息，却未征得您的同意；</span></span></span></span><br>
+                                    <span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">3</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、如果我们处理个人信息的行为违反了与您的约定；</span></span></span></span><br>
+                                    <span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">4</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、如果您注销了连心心理账号时；</span></span></span></span><br>
+                                    <span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">5</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、如果我们终止服务及运营时；</span></span></span></span><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">若我们决定响应您的删除请求，我们还将同时通知从我们获得您的个人信息的实体，要求其及时删除，除非法律法规另有规定，或这些实体获得您的独立授权。</span></span></span></span><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">当您从我们的服务中删除信息后，我们可能不会立即备份系统中删除相应的信息，但会在备份更新时删除这些信息。</span></span></span></span><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">（四）改变您授权同意的范围</span></span></span></span><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">每个业务功能需要一些基本的个人信息才能得以完成（见本策略“第一部分”）。对于额外收集的个人信息的收集和使用，您可以随时给予或收回您的授权同意。</span></span></span></span><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">您可以通过“（一）访问您的个人信息”中罗列的方式自行操作。</span></span></span></span><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">当您收回同意后，我们将不再处理相应的个人信息。但您收回同意的决定，不会影响此前基于您的授权而开展的个人信息处理。</span></span></span></span><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">（五）您有权注销您的账号</span></span></span></span><br>
+                                    <span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">1</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、您可以通过连心心理</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">APP-</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">进入个人中心“我的”</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">-</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">进入“设置”</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">-</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">进入“账号与绑定”</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">-</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">选择“注销”或通过拨打连心心理客服电话</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">17702168106</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">来申请注销您的账号，账号注销的处理期限为</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">5</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">个工作日。</span></span></span></span><br>
+                                    <span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">2</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、当您注销账号后，您将无法再以该账号登录和使用我们的产品与服务；且该账号在连心心理及旗下的其他产品与服务使用期间已产生的但未消耗完毕的权益及未来的逾期利益等全部权益将被清除；该账号下的内容、信息、数据、记录等将会被删除或匿名化处理（但法律法规另有规定或监管部门另有要求的除外，如依据《中华人民共和国网络安全法》规定，您的网络操作日志将至少保留六个月的时间）；连心心理账号注销完成后，将无法恢复。</span></span></span></span><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">如果您在处置您的个人信息时有任何疑问，您可以通过本隐私权政策第八条“联系我们”中公示的联系方式与我们沟通解决。</span></span></span></span><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">（六）约束信息系统自动决策</span></span></span></span><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">在某些业务功能中，我们可能仅依据信息系统、算法等在内的非人工自动决策机制做出决定。如果这些决定显著影响您的合法权益，您有权要求我们做出解释，我们也将提供适当的救济方式。</span></span></span></span><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">（七）响应您的上述请求</span></span></span></span><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">为保障安全，您可能需要提供书面请求，或以其他方式证明您的身份。我们可能会先要求您验证自己的身份，然后再处理您的请求。我们将在三十天内做出答复。</span></span></span></span><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">对于您合理的请求，我们原则上不收取费用，但对多次重复、超出合理限度的请求，我们将视情收取一定成本费用。对于那些无端重复、需要过多技术手段（例如，需要开发新系统或从根本上改变现行惯例）、给他人合法权益带来风险或者非常不切实际（例如，涉及备份磁带上存放的信息）的请求，我们可能会予以拒绝。</span></span></span></span><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">在以下情形中，按照法律法规要求，我们将无法响应您的请求：</span></span></span></span><br>
+                                    <span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">1</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、与国家安全、国防安全有关的；</span></span></span></span><br>
+                                    <span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">2</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、与公共安全、公共卫生、重大公共利益有关的；</span></span></span></span><br>
+                                    <span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">3</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、与犯罪侦查、起诉和审判等有关的；</span></span></span></span><br>
+                                    <span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">4</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、有充分证据表明您存在主观恶意或滥用权利的；</span></span></span></span><br>
+                                    <span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">5</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、响应您的请求将导致您或其他个人、组织的合法权益受到严重损害的。</span></span></span></span><br>
+                                    <br>
+                                    <b style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">六、第三方服务</span></span></span></span></b><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">为保障连心心理</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">App</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">的稳定运行、提供相关服务或实现相关功能，连心心理服务可能链接至第三方提供的社交媒体、软件开发包（</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">）或其他服务（包括网站或其他服务形式）以实现前述目的。在符合相关法律法规的前提下，我们可能会允许接入的第三方收集用户信息，用于向用户提供服务。第三方处理用户信息的情况请参见第三方的隐私政策或服务协议。您有权拒绝第三方在提供服务时收集为提供服务所必须的个人信息，但这将可能导致您无法在连心心理</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">App</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">中使用该第三方服务。具体包括：</span></span></span></span><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">（一）您可利用“分享”键将某些内容分享到第三方平台，或您可利用第三方服务登录连心心理服务。这些功能可能会收集您的个人信息（包括您的日志信息），并可能在您的电脑装置</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">COOKIES</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">，从而正常运行上述功能；</span></span></span></span><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">（二）我们通过广告或我们服务的其他方式向您提供链接，使您可以接入第三方的服务或网站；</span></span></span></span><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">（三）其他接入第三方服务的情形。为实现本政策中声明的目的，我们可能会接入第三方服务商提供的</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">或其他类似的应用程序，并将我们依照本政策收集的您的某些信息共享给该等第三方服务商，以便提供更好的客户服务和用户体验。目前，我们接入的第三方服务商主要包括以下几种类型：</span></span></span></span><br>
+                                    <span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">1、</span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">QQ</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">互联</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">，应用场景：</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">在用户使用QQ分享时使用</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">，收集个人信息的类型：</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">设备标识符（Android如IMEI、Android ID、Serial，iOS如IDFV），MAC地址、WLAN接入点、分享图片或内容</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">，第三方</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">提供方为深圳市腾讯计算机系统有限公司，</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;">
+                                        <span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt"><a href="https://wiki.connect.qq.com/qq%e4%ba%92%e8%81%94sdk%e9%9a%90%e7%a7%81%e4%bf%9d%e6%8a%a4%e5%a3%b0%e6%98%8e">点击查看第三方隐私政策</a></span></span></span><br>
+                                        <span style="color:black"><span style="letter-spacing:.25pt">2、</span></span>
+                                    </span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">微博</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">，应用场景：</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">在用户使用微博登录或者分享时使用</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">，收集个人信息的类型：</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">设备标识符（Android如IMEI、Android ID、Serial，iOS如IDFV），MAC地址、WLAN接入点、分享图片或内容</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">，第三方</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">提供方为北京微梦创科网络技术有限公司，</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;">
+                                        <span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt"><a href="https://open.weibo.com/wiki/index.php/SDK">点击查看第三方隐私政策</a></span></span></span><br>
+                                        <span style="color:black"><span style="letter-spacing:.25pt">3、</span></span>
+                                    </span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">微信</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">，应用场景：</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">在用户使用微信登录或者分享时使用</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">，收集个人信息的类型：</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">设备标识符（Android如IMEI、Android ID、Serial，iOS如IDFV），MAC地址、WLAN接入点、分享图片或内容</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">，第三方</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">提供方为深圳市腾讯计算机系统有限公司，</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt"><a href="https://support.weixin.qq.com/cgi-bin/mmsupportacctnodeweb-bin/pages/RYiYJkLOrQwu0nb8">点击查看第三方隐私政策</a></span></span></span></span><br>
+                                    <span style="font-size: 12pt;"><span style="color: black;"><span style="letter-spacing: 0.25pt;"><font face="Times New Roman, serif">4</font><font face="楷体">、第三方</font></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">“阿里云</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">PUSH</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">”，用于推送相关服务信息，包括手机厂商</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">Push</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">推送，需要获取您手机的</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">IMEI</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">及</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">MAC</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">，第三方</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">提供方为阿里云计算有限公司（此产品的隐私政策条款，可参考</span></span></span></span><font face="Times New Roman, serif">&nbsp;</font><a href="http://terms.aliyun.com/legal-agreement/terms/suit_bu1_ali_cloud/suit_bu1_ali_cloud201902141711_54837.html?spm=5176.19720258.J_9220772140.89.6fa62c4aNiGcxs" style="font-family:Times New Roman;" target="_blank"><span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">阿里云隐私协议</span></span></span></span></a><font face="Times New Roman, serif">&nbsp;</font><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">）；</span></span></span></span><br>
+                                    <span style="font-size: 12pt;"><span style="color: black;"><span style="letter-spacing: 0.25pt;"><font face="Times New Roman, serif">5</font><font face="楷体">、第三方</font></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">“友盟”，服务类型：收集</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">app</span></span></span><span style="font-size: 12pt;"><span style="color: black; font-family: 楷体; letter-spacing: 0.25pt;">的奔溃日志，统计分析；收集运行中进程信息</span>、</span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">收集个人信息类型：设备信息（</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">IMEI/Mac/Android ID/IDFA/OPENUDID/GUID/SIM </span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">卡</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt"> IMSI /</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">地理位置），在后台状态获取ANDROID ID，第三方</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">提供方为友盟同欣（北京）科技有限公司（此产品的隐私政策条款，可参考</span></span></span></span><font face="Times New Roman, serif">&nbsp;</font><a href="https://www.umeng.com/page/policy" style="font-family:Times New Roman;" target="_blank"><span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">友盟平台隐私协议</span></span></span></span></a><font face="Times New Roman, serif">&nbsp;</font><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">）；</span></span></span></span><br>
+                                    <span style="font-size: 12pt;"><span style="color: black;"><span style="letter-spacing: 0.25pt;"><font face="Times New Roman, serif">6</font><font face="楷体">、第三方</font></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">“神策”，主要用于收集</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">app</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">的奔溃日志、用户应用行为统计服务，收集个人信息的类型为：</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">MAC</span></span></span><font face="Times New Roman, serif">&nbsp;</font><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">地址、</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">IMEI</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、网络状态信息、设备信息、获取您的浏览、运行中进程信息、点击等行为数据，在后台状态获取ANDROID ID，第三方</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">提供方为神策网络科技（北京）有限公司（此产品的隐私政策条款，可参考</span></span></span></span><font face="Times New Roman, serif">&nbsp;</font><a href="https://manual.sensorsdata.cn/sa/latest/sdk-22255999.html" style="font-family:Times New Roman;" target="_blank"><span style="color:#1abc9c;"><span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="letter-spacing:.25pt">神策平台隐私协议</span></span></span></span></a><font face="Times New Roman, serif">&nbsp;</font><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">）；</span></span></span></span><br>
+                                    <span style="font-size: 12pt;"><span style="color: black;"><span style="letter-spacing: 0.25pt;"><font face="Times New Roman, serif">7</font><font face="楷体">、第三方</font></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">“网易七鱼”，用于提供在线客服功能的云服务，包括在线沟通、客服等，搜集个人信息类型和用途：采集网络信息（网络状态、</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">wifi</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">信息，</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">IP</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">地址），用于了解设备的网络状态和变化，从而最大程度保持网络连接的稳定性；当开启传感器信息权限后，会收集距离传感器信息，用于感知手机是否被举耳边，提供更好的语音聊天体验。第三方</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">提供方为杭州网易质云科技有限公司（此产品的隐私政策条款，可参考</span></span></span></span><font face="Times New Roman, serif">&nbsp;</font><a href="https://qiyukf.com/termsService?privacy=2" style="font-family:Times New Roman;" target="_blank"><span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">点击查看隐私政策</span></span></span></span></a><font face="Times New Roman, serif">&nbsp;</font><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">）；</span></span></span></span><br>
+                                    <span style="font-size: 12pt;"><span style="color: black;"><span style="letter-spacing: 0.25pt;"><font face="Times New Roman, serif">8</font><font face="楷体">、第三方</font></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">“实时音视频</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">TRTC</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">”，用于语音通话和视频直播，可能会获取用户摄像头和麦克风权限，收集个人信息的类型：</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">Wi-Fi </span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">状态、系统属性、设备型号、操作系统、</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">IP </span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">地址、相机、录音，第三方</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">提供方为腾讯云计算（北京）有限责任公司（此产品的隐私政策条款，可参考</span></span></span></span><font face="Times New Roman, serif">&nbsp;</font><a href="https://cloud.tencent.com/document/product/647/57574" style="font-family:Times New Roman;" target="_blank"><span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">腾讯云音视频隐私协议</span></span></span></span></a><font face="Times New Roman, serif">&nbsp;</font><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">）；</span></span></span></span><br>
+                                    <span style="font-size: 12pt;"><span style="color: black;"><span style="letter-spacing: 0.25pt;"><font face="Times New Roman, serif">9</font><font face="楷体">、第三方</font></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">“腾讯</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">IM</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">”，用于实时通信，包括聊天、会话，收集个人信息的类型：网络连接状态、设备型号、系统版本，第三方</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">提供方为腾讯云计算（北京）有限责任公司（此产品的隐私政策条款，可参考</span></span></span></span><font face="Times New Roman, serif">&nbsp;</font><a href="https://cloud.tencent.com/document/product/269/58094" style="font-family:Times New Roman;" target="_blank"><span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">腾讯云</span></span></span></span><span style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">IM SDK</span></span></span><span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">隐私协议</span></span></span></span></a><font face="Times New Roman, serif">&nbsp;</font><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">）；</span></span></span></span><br>
+                                    <span style="font-size: 12pt;"><span style="color: black;"><span style="letter-spacing: 0.25pt;"><font face="Times New Roman, serif">10</font><font face="楷体">、第三方</font></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">“</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">ping++</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">”，覆盖所有主流支付渠道，用于聚合支付和跨渠道交易管理，第三方</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">提供方为上海简米网络科技有限公司（此产品的隐私政策条款，可参考</span></span></span></span><font face="Times New Roman, serif">&nbsp;</font><a href="https://www.pingxx.com/terms" style="font-family:Times New Roman;" target="_blank"><span style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">ping++</span></span></span><span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">隐私协议</span></span></span></span></a><font face="Times New Roman, serif">&nbsp;</font><span style="font-family:Times New Roman;font-size: 12pt;">
+                                        <span style="font-family:楷体">
+                                            <span style="color:black">
+                                                <span style="letter-spacing:.25pt">
+                                                    ）；<br>
+                                                    11、微信支付SDK，
+                                                </span>
+                                            </span>
+                                        </span>
+                                    </span><span style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">应用场景：根据用户选择，为用户提供第三方支付功能，收集个人信息的类型：设备信息（IMEI、IMSI、MAC地址、AndroidID）、网络信息、微信账号信息，第三方</span></span></span></span><span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">提供方：财付通支付科技有限公司，</span></span></span></span></span><span lang="EN-US" style="font-size:12pt"><span style="font-family:&quot;Times New Roman&quot;, serif"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt"><a href="https://www.tenpay.com/v3/helpcenter/low/privacy.shtml">点击查看第三方隐私政策</a></span></span></span></span></span><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">12、支付宝支付SDK，</span></span></span></span><span style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">应用场景：根据用户选择，为用户提供第三方支付功能，收集个人信息的类型：设备信息（IMEI、IMSI、AndroidID、MAC地址、BSSID、硬件序列号、ICCID）、定位信息、网络类型、设备型号、设备品牌、运营商信息、传感器列表、应用信息，第三方</span></span></span></span><span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">提供方：支付宝（中国）网络技术有限公司，</span></span></span></span></span><span lang="EN-US" style="font-size:12pt"><span style="font-family:&quot;Times New Roman&quot;, serif"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt"><a href="https://render.alipay.com/p/c/k2cx0tg8">点击查看第三方隐私政策</a></span></span></span></span></span><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">13、银联支付SDK，</span></span></span></span><span style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">应用场景：根据用户选择，为用户提供第三方支付功能，收集个人信息的类型：设备信息（硬件序列号、IMEI、IMSI、MAC地址、BSSID）、手机号码、定位信息、设备型号、应用信息（应用名、应用版本号），第三方</span></span></span></span><span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">提供方：中国银联股份有限公司，</span></span></span></span></span><span lang="EN-US" style="font-size:12pt"><span style="font-family:&quot;Times New Roman&quot;, serif"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt"><a href="http://yunshanfu.unionpay.com/privacy/2">点击查看第三方隐私政策</a></span></span></span></span></span><br>
+                                    <span style="font-size: 12pt;"><span style="color: black;"><span style="letter-spacing: 0.25pt;"><font face="Times New Roman, serif">14</font><font face="楷体">、第三方</font></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">“腾讯</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">X5</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">内核”，提供整体浏览服务解决方案，包括腾讯浏览服务浏览增强，整合开发能力，可能会获取您的设备信息（设备型号、操作系统、</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">CPU</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">类型）、位置信息、附近的</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">Wi-Fi</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">CellID、存储权限</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">（存储和读取SD卡内核文件</span></span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">）</span></span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">，第三方</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">提供方为深圳市腾讯计算机系统有限公司（此产品的隐私政策条款，可参考</span></span></span></span><font face="Times New Roman, serif">&nbsp;</font><a href="https://x5.tencent.com/docs/privacy.html" style="font-family:Times New Roman;" target="_blank"><span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">腾讯浏览服务</span></span></span></span><span style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">隐私协议</span></span></span></span></a><font face="Times New Roman, serif">&nbsp;</font><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">）。</span></span></span></span>
+                                </span>
+                            </span>
+                        </span><br>
+                        <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">15</span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、华为推送</span></span></span></span><span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">，应用场景：用于实现对华为品牌手机进行消息推送的功能，收集个人信息的类型：网络状态信息、设备信息、存储信息、位置信息，第三方</span></span></span></span><span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">提供方：华为，</span></span></span></span><span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt"><a href="https://www.huawei.com/cn/privacy-policy"><span lang="EN-US" style="font-family:楷体"><span style="color:black">点击查看第三方隐私政策</span></span></a></span></span></span></span></span></span></span><br>
+                        <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">16</span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、魅族推送</span></span></span></span><span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">，应用场景：用于实现对魅族品牌手机进行消息推送的功能，收集个人信息的类型：网络状态信息、设备信息、存储信息、位置信息，第三方</span></span></span></span><span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">提供方：珠海市魅网科技有限公司，</span></span></span></span><span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt"><a href="https://i.flyme.cn/privacy?lang=zh_CN"><span lang="EN-US" style="font-family:楷体"><span style="color:black">点击查看第三方隐私政策</span></span></a></span></span></span></span></span></span></span><br>
+                        <span style="font-size:11pt"><span style="background:white"><span style="line-height:19.5pt"><span style="font-family:Times New Roman;"><span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">17</span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、小米推送</span></span></span></span><span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">，应用场景：用于实现对小米品牌手机进行消息推送的功能，收集个人信息的类型：网络状态信息、设备信息、存储信息，第三方</span></span></span></span><span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">提供方：小米科技有限责任公司，</span></span></span></span><span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt"><a href="https://dev.mi.com/console/doc/detail?pId=1822"><span lang="EN-US" style="font-family:楷体"><span style="color:black">点击查看第三方隐私政策</span></span></a></span></span></span></span></span></span></span><br>
+                        <span style="font-size:11pt">
+                            <span style="background:white">
+                                <span style="line-height:19.5pt">
+                                    <span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">18</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">Vivo</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">推送</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">，应用场景：用于实现对</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">Vivo</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">品牌手机进行消息推送的功能，收集个人信息的类型：设备信息、存储信息，第三方</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">提供方：广东天宸网络科技有限公司，</span></span></span></span><a href="https://www.vivo.com.cn/about-vivo/privacy-policy" style="font-family:Times New Roman;"><span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">点击查看第三方隐私政策</span></span></span></span></a><br>
+                                    <span lang="EN-US" style="font-size:12pt"><span style="color:black"><span style="letter-spacing:0.25pt"><font face="楷体">19、OPPO推送</font><font face="Times New Roman, serif">SDK</font></span></span></span><span style="font-size:12pt"><span style="font-family:&quot;Times New Roman&quot;, serif"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">，应用场景：</span></span></span></span></span><span style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">用于实现对OPPO品牌手机进行消息推送的功能</span></span></span></span></span><span style="font-size:12pt"><span style="font-family:&quot;Times New Roman&quot;, serif"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">，</span></span></span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">收集个人信息的类型：设备信息、存储信息</span></span></span></span><span style="font-size:12pt"><span style="font-family:&quot;Times New Roman&quot;, serif"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">，</span></span></span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">第三方</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">提供方：</span></span></span></span><span style="font-size:12pt"><span style="font-family:&quot;Times New Roman&quot;, serif"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">广东欢太科技有限公司</span></span></span></span></span>
+                                </span>
+                            </span>
+                        </span><span style="font-size:11pt">
+                            <span style="background:white">
+                                <span style="line-height:19.5pt">
+                                    <span style="font-size:12pt"><span style="font-family:&quot;Times New Roman&quot;, serif"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">，</span></span></span></span></span><span lang="EN-US" style="font-size:12pt"><span style="font-family:&quot;Times New Roman&quot;, serif"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt"><a href="https://open.oppomobile.com/wiki/doc#id=10288">点击查看第三方隐私政策</a></span></span></span></span></span><br>
+                                    <span style="font-size: 12pt;"><span style="color: black;"><span style="letter-spacing: 0.25pt;"><font face="Times New Roman, serif">20</font><font face="楷体">、广点通</font></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">，应用场景：广点通广告转化，收集个人信息的类型：</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">IDFA</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">MAC</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">地址、</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">IMEI</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">IMSI</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">Android ID</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、硬件序列号、</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">MEID、运行中进程信息</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">，第三方</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">提供方：深圳市腾讯计算机系统有限公司，</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt"><a href="https://imgcache.qq.com/qzone/biz/gdt/dmp/user-action/privacy_agreement.pdf"><span lang="EN-US" style="font-family:楷体"><span style="color:black">点击查看第三方隐私政策</span></span></a></span></span></span><br>
+                                    <span style="font-size: 12pt;"><span style="color: black;"><span style="letter-spacing: 0.25pt;"><font face="Times New Roman, serif">21</font><font face="楷体">、百度营销</font></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">，应用场景：百度</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt"> oCPX </span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">转化追踪，收集个人信息的类型：</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">IDFA</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">MAC</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">地址、</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">IMEI</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">IMSI</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">Android ID</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">、硬件序列号、</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">MEID、粘贴板信息</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">，在后台状态获取ANDROID ID、MAC，第三方</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">提供方：北京百度网讯科技有限公司，</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt"><a href="https://ocpx-devcenter.bj.bcebos.com/videoworks/console-upload/%E3%80%90%E7%99%BE%E5%BA%A6oCPX%E5%BA%94%E7%94%A8SDK%E8%BD%AC%E5%8C%96%E8%BF%BD%E8%B8%AA%E5%B7%A5%E5%85%B7%E3%80%91%E9%9A%90%E7%A7%81%E6%94%BF%E7%AD%96.pdf?authorization=bce-auth-v1/e2ea496b5e7f4e20bd0e5d1ce5533588/2022-03-02T07%3A26%3A49Z/-1/host/a457d9fc218b82a94f1a1209ed821931c1f7703ffe40bd220ba25ce5e42f8056"><span lang="EN-US" style="font-family:楷体"><span style="color:black">点击查看第三方隐私政策</span></span></a></span></span></span><br>
+                                    <span style="font-size: 12pt;"><span style="color: black;"><span style="letter-spacing: 0.25pt;"><font face="Times New Roman, serif">22</font><font face="楷体">、腾讯云对象存储</font></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">，应用场景：在用户编辑头像上传图片时使用，收集个人信息的类型：网络状态信息、设备信息、存储信息，上传图片保存到腾讯云服务器，第三方</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">提供方为深圳市腾讯计算机系统有限公司，</span></span></span></span><a href="https://privacy.qq.com/document/priview/bdf936b2477a45ff86da57e3d988bc2b" style="font-family:Times New Roman;"><span lang="EN-US" style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">点击查看第三方隐私政策</span></span></span></span></a><br>
+                                    <span style="font-size: 12pt;"><span style="color: black;"><span style="letter-spacing: 0.25pt;"><font face="Times New Roman, serif">23</font><font face="楷体">、腾讯云一键登录</font></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">，应用场景：用于登录页面手机号码的一键登录，收集个人信息的类型：设备信息、手机号、网络信息，第三方</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">提供方为深圳市腾讯计算机系统有限公司，</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;">
+                                        <span style="font-family:楷体">
+                                            <span style="color:black">
+                                                <span style="letter-spacing:.25pt">
+                                                    <a href="https://privacy.qq.com/document/priview/bdf936b2477a45ff86da57e3d988bc2b">点击查看第三方隐私政策</a><br>
+                                                    24、阿里移动推送SDK，
+                                                </span>
+                                            </span>
+                                        </span>
+                                    </span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">应用场景：阿里推送需要自启动或关联启动来用于识别推送设备，接收推送消息，实现向单个设备推送功能；</span></span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">收集个人信息的类型：</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">设备信息，包括操作系统、设备型号，IP ，运营商信息，获取运行中进程信息，</span></span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">第三方</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">提供方为</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">阿里云计算有限公司，<a href="https://terms.aliyun.com/legal-agreement/terms/suit_bu1_ali_cloud/suit_bu1_ali_cloud202112071754_83380.html">点击查看第三方隐私协议</a></span></span></span></span><br>
+                                    <span style="font-size: 12pt;"><span style="color: black;"><span style="letter-spacing: 0.25pt;"><font face="Times New Roman, serif">25</font><font face="楷体">、阿里热修复</font></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">，应用场景：用于完成补丁功能下发，收集个人信息的类型：设备信息，</span></span></span></span> <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">包括</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">IMEI</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">，</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">Android</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">系统设备标识、运行中进程信息；网络信息，第三方</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">提供方为阿里云计算有限公司，</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;">
+                                        <span style="font-family:楷体">
+                                            <span style="color:black">
+                                                <span style="letter-spacing:.25pt">
+                                                    <a href="https://terms.aliyun.com/legal-agreement/terms/suit_bu1_ali_cloud/suit_bu1_ali_cloud202112071754_83380.html?spm=a2c4g.11186623.0.0.75ad30e5UJRuoA">点击查看第三方隐私政策</a><br>
+                                                    26、巨量引擎转化SDK，应用场景：广告转化追踪，
+                                                </span>
+                                            </span>
+                                        </span>
+                                    </span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">收集个人信息的类型：</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">IDFA、IMEI、Android ID、MAC、OAID、IMSI、UAID、获取运行中进程信息，在后台状态获取ANDROID ID、MAC、IMEI，</span></span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">第三方</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">SDK</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">提供方为</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">北京巨量引擎网络技术有限公司，<a href="https://open.oceanengine.com/labels/7/docs/1708428054592516">点击查看第三方隐私协议</a></span></span></span></span><br>
+                                    <br>
+                                    <b style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">七、本隐私权政策如何更新</span></span></span></span></b><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">我们可能适时会对本隐私权政策进行调整或变更，本隐私权政策的任何更新将以标注更新时间的方式公布在我们网站上，除法律法规或监管规定另有强制性规定外，经调整或变更的内容一经通知或公布后的</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">7</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">日后生效。如您在隐私权政策调整或变更后继续使用我们提供的任一服务或访问我们相关网站的，我们相信这代表您已充分阅读、理解并接受修改后的隐私权政策并受其约束。</span></span></span></span><br>
+                                    <br>
+                                    <b style="font-family:Times New Roman;"><span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">八、如何联系我们</span></span></span></span></b><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">如果您对本隐私政策有任何疑问、意见或建议，通过以下方式与我们联系：</span></span></span></span><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">北京连心心理有限公司</span></span></span></span><br>
+                                    <span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">地址：上海市杨浦区中山北二路1121号同济科技大厦422室</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">1</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">号</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">1</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">号楼</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">14</span></span></span><span style="font-family:Times New Roman;font-size: 12pt;"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">层</span></span></span></span><span lang="EN-US" style="font-family:Times New Roman;font-size: 12pt;"><span style="color:black"><span style="letter-spacing:.25pt">1701</span></span></span>
+                                </span>
+                            </span>
+                        </span><br>
+                        <span style="font-size:11pt">
+                            <span style="background:white">
+                                <span style="line-height:19.5pt">
+                                    <span style="font-family:Times New Roman;">
+                                        <span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">电话：</span></span></span></span><span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt"> 17702168106</span></span></span><br>
+                                        <span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">邮箱：</span></span></span></span><span lang="EN-US" style="font-size:12.0pt"><span style="color:black"><span style="letter-spacing:.25pt">17702168106</span></span></span><br>
+                                        <span style="font-size:12.0pt"><span style="font-family:楷体"><span style="color:black"><span style="letter-spacing:.25pt">一般情况下，我们将在三十天内回复。</span></span></span></span>
+                                    </span>
+                                </span>
+                            </span>
+                        </span><br>
+                        <br>
+                        <br>
+                        &nbsp;
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+   
+</body>
+</html>
+<!--验证表单-->
+<link href="~/Content/css/validform.css" rel="stylesheet" />
+<script src="~/Content/js/Validform_v5.3.2.js"></script>
+<script type="text/javascript">
+    $(function () {
+        $.Tipmsg.r = null;
+        $.Tipmsg.p = null;
+        $("#patient").Validform({
+            tiptype: function (msg, o) {
+                if (msg.length != 0 && msg.indexOf("status") == -1 && msg.indexOf("正在提交数据") == -1)
+                    alert(msg);
+            },
+            ajaxPost: true,
+            callback: function (data) {
+                console.log(data);
+                if (data.responseText.split(":")[0] == "no") {
+                    alert(data.responseText.split(":")[1]);
+                } else if (data.responseText.split(":")[0] == "url") {
+                    alert("注册成功");
+                    location.href = data.responseText.split(":")[1] ;
+                } else {
+                    alert("服务器连接异常,请刷新页面");
+                }
+            },
+            tipSweep: true,
+        });
+    })
+</script>
+<script type="text/javascript">
+    function get_mobile_code() {
+        var myreg = /^(0|86|17951)?(13[0-9]|15[012356789]|17[678]|18[0-9]|14[57])[0-9]{8}$/;
+        if (!myreg.test($("#txtUser1").val())) {
+            alert("请输入正确的手机号码!");
+        }
+        else {
+            $.get('/Register/acRegistered', { tel: $.trim($('#txtUser1').val()), type: 2 }, function (msg) {
+                if (msg == '存在') {
+                    alert("该号码已存在，无法获取验证码");
+                }
+                else if (msg == '不存在') {
+                    $.get('/Register/SendMsgType', { tel: $.trim($('#txtUser1').val()) }, function (msg) {
+                        if (msg == '发送成功') {
+                            alert("获取验证码成功");
+                            RemainTime();
+                            //$('#sjmsg').html('手机验证码发送成功，请打开手机查看');
+                        }
+                        else {
+                            alert("获取验证码失败");
+                        }
+                    });
+                }
+            });
+
+
+        }
+    };
+
+    //RemainTime();
+    var iTime = 59;
+    var Account;
+    function RemainTime() {
+        $("#zphone").removeAttr("onclick");
+        //$("#zphone").attr("class", "weui_btn weui_btn_default");
+        var iSecond, sSecond = "", sTime = "";
+        if (iTime >= 0) {
+            iSecond = parseInt(iTime % 60);
+            iMinute = parseInt(iTime / 60)
+            if (iSecond >= 0) {
+                if (iMinute > 0) {
+                    sSecond = iMinute + "分" + iSecond + "秒";
+                } else {
+                    sSecond = iSecond + "秒";
+                }
+            }
+            sTime = sSecond + "后重新获取";
+            if (iTime == 0) {
+                clearTimeout(Account);
+                sTime = '获取验证码';
+                iTime = 59;
+                $("#zphone").attr("onclick", "get_mobile_code()");
+                //$("#zphone").attr("class", "weui_btn weui_btn_default");
+            } else {
+                Account = setTimeout("RemainTime()", 1000);
+                iTime = iTime - 1;
+
+            }
+        } else {
+            sTime = '没有倒计时';
+        }
+        $('#zphone').html(sTime);
+    }
+</script>
+<script type="text/javascript">
+    $(function () {
+        $('#reg_now1').bind('click', function () {
+            document.getElementById('content_wrapper2').style.display = 'none';
+            document.getElementById('content_wrapper1').style.display = 'block';
+            document.getElementById('f1nr').innerHTML = "连心心理用户服务协议";
+            $('#reg_index1').addClass('show');
+            $(window).unbind('touchmove');
+        });
+        $('#reg_now2').bind('click', function () {
+            document.getElementById('content_wrapper1').style.display = 'none';
+            document.getElementById('content_wrapper2').style.display = 'block';
+            document.getElementById('f1nr').innerHTML = "连心心理隐私权政策";
+            $('#reg_index1').addClass('show');
+            $(window).unbind('touchmove');
+        });
+        $('.reg_bar_close').bind('touchstart touchend click',
+        function (e) {
+            if (e.type == 'touchstart') {
+                $(this).addClass('ton1');
+            } else if (e.type == 'touchend') {
+                $(this).removeClass('ton1');
+            } else {
+                if (document.getElementById('us_panel')) {
+                    $('#reg_index1').removeClass('show');
+                    $(window).bind('touchmove',
+                    function (e) {
+                        e.preventDefault();
+                        e.stopImmediatePropagation();
+                    });
+                } else {
+                    $('#reg_index1').removeClass('show');
+                }
+            }
+        });
+    })
+</script>
+<script type="text/javascript">
+    $(function () {
+        $(".surebtn").change(function () {
+            if ($(this).is(':checked')) {
+                $(".yesbtn").attr("disabled", false);
+                $(".yesbtn").css("background-color", "#3A87AD");
+            }
+            else {
+                $(".yesbtn").attr("disabled", true);
+                $(".yesbtn").css("background-color", "#CCC");
+            }
+        }).change();
+    })
+</script>

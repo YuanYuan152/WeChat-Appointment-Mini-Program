@@ -1,0 +1,75 @@
+﻿@charset "utf-8";
+/* CSS Document */
+.list{ width: 100%; background: #f6f6f6;margin-bottom: 40px; }
+.list-con,.xq-con{ margin: 0 auto;  max-width: 1200px; background: #fff; padding: 0 30px 10px;}
+.list-crumb{ padding-top:20px; }
+.list-crumb,.list-crumb a{ font-size: 14px; color: #333; margin-top: 15px;}
+.list-crumb a:hover,.xq-con .list-crumb a:hover{ color: #f4454a }
+.list-box li{ width: 100%; border-bottom: 1px dashed #e5e5e5; overflow: hidden;padding:12px 0 10px 0;}
+.list-box li:last-child{ border-bottom: 0}
+.list-box-l{ width: 22%; float: left}
+.list-box-l img{max-width: 100%; min-width: 100%;}
+.list-box-r{ width: 76%; float: right}
+.list-box-r h4 {overflow: hidden; font-weight: normal; margin-top: 8px}
+.list-box-r h4 a { float: left; width: 80%;font-size: 18px;color: #333; text-align: left;font-weight: bold;text-overflow: ellipsis;display: -webkit-box;-webkit-line-clamp: 1;-webkit-box-orient: vertical;overflow: hidden}
+.list-box-r h4 em{float: right; width: 20%; text-align: right; font-style: normal;}
+.list-box-r h4 em, .list-box-r p {font-size: 14px;color: #666; }
+.list-box-r p{overflow: hidden;text-overflow: ellipsis;display: -webkit-box;-webkit-line-clamp: 3;-webkit-box-orient: vertical; line-height: 22px; margin-top: 5px}
+.list-page{width:50%; margin: 50px auto 0px; overflow: hidden}
+.list-page li a{ float: left; width: 8%; height: 30px; line-height: 30px; text-align: center; font-size: 14px; color: #868686; border:1px solid #868686; margin: 0 2% }
+.list-page li a.list-cur{background: #f4454a; color: #fff; border: 1px solid #f4454a; }
+.list-page li a.list-next{ width: 14%; height: 30px;}
+.list-page li a:hover{background: #f4454a; color: #fff; border: 1px solid #f4454a;}
+.xq-con .list-crumb,.xq-con .list-crumb a{ font-size: 15px; color: #666; font-weight:normal}
+.xq-title{ font-size: 24px; margin-top: 15px;overflow: hidden; text-overflow: ellipsis;display: -webkit-box;-webkit-line-clamp: 1;-webkit-box-orient: vertical;}
+.xq-time span,.new-r-xq span,.new-r-xq i{display: inline-block;font-size: 14px;color: #868686;text-align: left;margin-top: 15px;}
+.xq-line{ display: block; width: 100%;height: 1px;background: #e7e7e7;margin:20px 0;}
+.xq-l-con p{ font-size: 16px; line-height: 24px; margin-bottom: 15px; text-indent: 32px}
+.xq-l-con img{ display: block; margin:25px auto} 
+.xq-l-con .xq-sm{font-size: 16px; text-align: center; display: block;font-style: normal}
+@media only screen and (max-width: 1024px){.list-page {
+	width: 66%;}}
+@media only screen and (max-width: 768px){
+	.xq-title{ margin-top: 8px}
+	.xq-time span{ margin-top: 8px}
+	.list-con, .xq-con{padding: 0 20px 20px; }
+	.list-box-r h4{ margin-top: 0px}
+	.list-crumb, .list-crumb a{ font-size: 18px;}
+	.list-box-r h4 a{font-size: 16px;}
+	
+} 
+@media only screen and (max-width: 730px){
+	.list-box-l{ width: 24%}
+	.list-box-r{ width: 73%}
+	
+}
+@media only screen and (max-width: 650px){
+	.list-page {width:100%;}
+	.list-page li a{width:9.5%; margin: 0 0.5% }
+	.list-page li a.list-next{ width: 20%;}
+	
+}
+
+@media only screen and (max-width: 550px){
+	
+	.list-box-l{ width: 28%}
+	.list-box-r{ width:69%}
+	.list-box-r h4 a{ float: none; width: 100%}
+	.list-box-r h4 em{ float: none; width: 100%; text-align: left; margin-top: 8px}
+	.list-box-r p {overflow: hidden;text-overflow: ellipsis;display: -webkit-box;-webkit-line-clamp: 2; -webkit-box-orient: vertical;line-height: 22px;margin-top: 1px;}
+}
+@media only screen and (max-width: 530px){
+	.list-box-r p {overflow: hidden;text-overflow: ellipsis;display: -webkit-box;-webkit-line-clamp: 1; -webkit-box-orient: vertical;line-height: 22px;margin-top: 0px;}
+	.list-box-r h4 a{ font-size: 15px}.list-box-r h4 em{ font-size: 13px}
+}
+
+
+
+
+
+
+
+
+
+
+

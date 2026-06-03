@@ -1,0 +1,16 @@
+﻿@using lxxl.Models
+@{
+    T_Content Content = ViewBag.Content;
+    ViewBag.Title = Content.Title;
+    Layout = "~/Views/Shared/_LayoutIndex.cshtml";
+    T_Menu Menu = (Session["Menu"] as List<T_Menu>).Where(o => o.ID == Content.MenuID).FirstOrDefault();
+    List<T_Menu> MenuList = (Session["Menu"] as List<T_Menu>).Where(o => (Menu.MenuID == 0 && (o.MenuID == Menu.ID || o.ID == Menu.ID)) || (Menu.MenuID != 0 && (o.MenuID == Menu.MenuID || o.ID == Menu.MenuID))).ToList();
+}
+
+<div class="container">
+    <div class="row">
+        <div style="font-family: 微软雅黑; padding: 20px; padding-bottom: 100px; line-height:2em; font-size:1.2em; ">
+            @Html.Raw(Content.ContentMain)
+        </div>
+    </div>
+</div>

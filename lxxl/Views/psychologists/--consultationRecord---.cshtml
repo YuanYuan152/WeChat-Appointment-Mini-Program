@@ -1,0 +1,515 @@
+﻿@{
+    Layout = null;
+    T_Consultation consultation = ViewBag.consultation;
+    //string[] alist = ViewBag.alist;
+}
+@using lxxl.Models
+
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>咨询服务结果填报</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=0">
+    <link rel="stylesheet" href="/Content/weui/css/weui.css" />
+    <link rel="stylesheet" href="/Content/weui/css/weuix.css" />
+    <script src="/Content/weui/js/zepto.min.js"></script>
+    <script src="/Content/weui/js/zepto.weui.js"></script>
+    <script src="/Content/weui/js/picker.city.js"></script>
+    <script>
+        $(function () {
+
+            $(document).on("click", "#btn", function () {
+                var PIteam = $("#PIteam").val();
+                if (PIteam == "") {
+                    $.toptip("PI团队不能为空");
+                    return false;
+                }
+                var projectName = $("#projectName").val();
+                if (projectName == "") {
+                    $.toptip("项目名称不能为空");
+                    return false;
+                }
+                var idd = 1;
+                var content = "";
+                var obj = document.getElementsByName("f3");
+                var check_val = [];
+                for (k in obj) {
+                    if (obj[k].checked)
+                        if (obj[k].checked && idd == 1) {
+                            content = obj[k].value;
+                            idd = 2;
+                        } else {
+                            content = content + "," + obj[k].value;
+                        }
+                }
+                if (content == "") {
+                    $.toptip("请选择项目来源");
+                    return false;
+                }
+                var cTime = $("#years-monthes").val();
+                if (cTime == "") {
+                    $.toptip("咨询时间不能为空");
+                    return false;
+                }
+                var duration = $("#duration").val();
+                if (duration == "") {
+                    $.toptip("咨询时长不能为空");
+                    return false;
+                }
+                var expert = $("#expert").val();
+                if (expert == "") {
+                    $.toptip("咨询专家不能为空");
+                    return false;
+                }
+                else if (expert == "其他") {
+                    var qitaexpert = $("#qitaexpert").val();
+                    if (qitaexpert == "") {
+                        $.toptip("其他咨询专家不能为空");
+                        return false;
+                    }
+                    else if (qitaexpert.length <= 2) {
+                        $.toptip("咨询专家需大于2位");
+                        return false;
+                    }
+                    expert = qitaexpert;
+                }
+                var record = $("#record").val();
+                if (record == "") {
+                    $.toptip("咨询记录不能为空");
+                    return false;
+                }
+                var imgsrc = "";
+                $(".imgID").each(function(){
+                    if(imgsrc != "")
+                    {
+                        imgsrc = imgsrc +","+ $(this).attr("imgsrc");
+                    }
+                    else
+                    {
+                        imgsrc = $(this).attr("imgsrc");
+                    }
+                });
+                var intention = $("#intention").val();
+                var isSend = document.getElementsByName("isSend")[0];
+                var gid = $("#gid").val();
+                $.showLoading("数据提交中");
+                setTimeout(function() {
+                    $.hideLoading();
+                }, 3000);
+                //, "isSend": isSend.checked
+                //alert(PIteam+ projectName+content+cTime+ duration+ expert+record+ upfile+ intention);
+                $.ajax({
+                    url: "/wapig/postConsultationRecord",
+                    data: { "gid": gid, "PIteam": PIteam , "projectName": projectName, "projectSource": content, "cTime": cTime, "duration": duration,"expert": expert, "record": record, "upfile": imgsrc, "intention": intention},
+                    //data: { "gid": gid, "PIteam": "" , "projectName": "", "projectSource": "", "cTime": "", "duration": "","expert": "", "record": "", "upfile": "", "intention": ""},
+                    type: "post",
+                    dataType: "text",
+                    success: function (data) {
+                        var result = JSON.parse(data);
+                        if (result.code == 0) {
+                            abcd = 1
+                            $.alert("咨询数据提交成功。", "提交成功提示", function () {
+                                //WeixinJSBridge.call('closeWindow');
+                                var index = parent.layer.getFrameIndex(window.name); // 获取当前页面的索引
+                                parent.layer.close(index); // 关闭当前页面
+                            });
+                        }
+                        else {
+                            abcd = 1
+                            $.alert(result.msg,"提示",function(){
+
+                            });
+                        }
+                    },
+                    error: function () {
+                        abcd = 1
+                        $.alert("服务器连接失败。","提示",function(){
+
+                        });
+                    }
+                })
+                //$.alert("提交成功", "提交成功提示", function () {
+                //    //window.opener = null;
+                //    //window.open('', '_self');
+                //    //window.close();
+                //    WeixinJSBridge.call('closeWindow');
+                //});
+            });
+            //解决表单控件不能回弹 只有微信ios有这个问题
+            //    $("input,select,textarea").blur(function(){
+            //        setTimeout(() => {
+            //            const scrollHeight = document.documentElement.scrollTop || document.body.scrollTop || 0;
+            //        window.scrollTo(0, Math.max(scrollHeight - 1, 0));
+            //    }, 100);
+            //})
+            function isValidEmailAddress(emailAddress) {
+                var pattern = /^\w+((-\w+)|(\.\w+))*\@@[A-Za-z0-9]+((\.|-)[A-Za-z0-9]+)*\.[A-Za-z0-9]+$/;
+                return pattern.test(emailAddress);
+            };
+
+        });
+
+        function textarea(input) {
+            var content = $(input);
+            var max = content.next().find('i').text();
+            var value = content.val();
+            if (value.length > 0) {
+
+                value = value.replace(/\n|\r/gi, "");
+                var len = value.length;
+                content.next().find('span').text(len);
+                if (len > max) {
+                    content.next().addClass('f-red');
+                } else {
+                    content.next().removeClass('f-red');
+                }
+            }
+        }
+
+        function cleartxt(obj) {
+            $(obj).prev().find('.weui-input').val("");
+            return false;
+        }
+
+        function cleararea(obj) {
+            $(obj).prev().find('.weui-textarea').val("").next().find("span").text(0);
+            return false;
+        }
+
+    </script>
+</head>
+
+<body style="background-color: #EFEFEF; ">
+    <div class="page-hd" style="padding-top: 5px; padding-bottom: 5px; background-color: #E7E8ED; ">
+        <h1 class="page-hd-title" style="color: #1ea0fa; font-weight: bold; margin: 0; padding: 0; text-align: center; padding-bottom: 2px;">
+            咨询结果填报
+            <a href="/wapgl/ConsultationLst" style="white-space: nowrap; float: right; margin-left: -25px;"><i class="glyphicon" style="right:0; font-size:15px;">咨询记录</i></a>
+        </h1>
+        <p class="page-hd-desc"></p>
+    </div>
+
+    <div class="weui-cells weui-cells_form" style="padding: 10px 15px;">
+        <div class="weui-cell">
+            <div class="weui-cell__hd">
+                <label class="weui-label">来访者</label>
+            </div>
+            <div class="weui-cell__bd">
+                <input type="text" id="gid" class="layui-input" hidden value="@consultation.gId">
+                <input hidden type="text" id="name">
+                @consultation.doctor.name
+            </div>
+        </div>
+        <div class="weui-cell">
+            <div class="weui-cell__hd">
+                <label class="weui-label">联系方式</label>
+            </div>
+            <div class="weui-cell__bd">
+                @consultation.doctor.tel
+            </div>
+        </div>
+        <div class="weui-cell">
+            <div class="weui-cell__hd">
+                <label class="weui-label">邮箱</label>
+            </div>
+            <div class="weui-cell__bd">
+                @consultation.doctor.email
+            </div>
+        </div>
+        <div class="weui-cell">
+            <div class="weui-cell__hd">
+                <label class="weui-label">单位</label>
+            </div>
+            <div class="weui-cell__bd">
+                @consultation.doctor.hospitalName
+            </div>
+        </div>
+        <div class="weui-cell">
+            <div class="weui-cell__hd">
+                <label class="weui-label">科室或专业</label>
+            </div>
+            <div class="weui-cell__bd">
+                @consultation.doctor.departmentName
+            </div>
+        </div>
+        <div class="weui-cell">
+            <div class="weui-cell__hd">
+                <label class="weui-label">职称/职务</label>
+            </div>
+            <div class="weui-cell__bd">
+                @consultation.doctor.position
+            </div>
+        </div>
+        <div class="weui-cell">
+            <div class="weui-cell__hd">
+                <label class="weui-label">疾病领域</label>
+            </div>
+            <div class="weui-cell__bd">
+            </div>
+        </div>
+        <div class="weui-cell">
+            <div class="weui-cell__hd">
+                <label class="weui-label">咨询内容</label>
+            </div>
+            <div class="weui-cell__bd">
+                @consultation.content1
+            </div>
+        </div>
+        <div class="weui-cell">
+            <div class="weui-cell__hd">
+                <label class="weui-label">具体问题</label>
+            </div>
+            <div class="weui-cell__bd">
+                @consultation.problems
+            </div>
+        </div>
+        <div class="weui-cell">
+            <div class="weui-cell__hd">
+                <label class="weui-label">备注</label>
+            </div>
+            <div class="weui-cell__bd">
+                @consultation.remark
+            </div>
+        </div>
+        <div class="weui-cell">
+            <label class="weui-label  weui-start">PI团队</label>
+            <div class="weui-cell__bd" style="padding-top: 4px;">
+                <input class="weui-input border-radius" placeholder="请输入PI团队" required type="text" id="PIteam">
+            </div>
+        </div>
+        <div class="weui-cell">
+            <label class="weui-label weui-start">项目名称</label>
+            <div class="weui-cell__bd">
+                <input class="weui-input border-radius" placeholder="请输入项目名称" required type="text" id="projectName">
+            </div>
+        </div>
+        <div class="weui-cells weui-cells_checkbox" style="margin-top: 0px;">
+            <div class="weui-cell" style="padding-bottom: 2px;">
+                <label class="weui-label weui-start" style="width: 100%;">项目来源<span class="f-green">[可多选]</span></label>
+            </div>
+            <div class="weui-form" style="margin-bottom: 10px;">
+                <div class="weui-form-li iblock" style="width: 35%; margin: 1px 18px;">
+                    <input class="weui-form-checkbox" name="f3" id="h1" value="双百人" type="checkbox">
+                    <label for="h1">
+                        <i class="weui-icon-checkbox"></i>
+                        <div class="weui-form-text"><p>双百人</p></div>
+                    </label>
+                </div>
+
+                <div class="weui-form-li iblock" style="margin: 1px 5px;">
+                    <input class="weui-form-checkbox" name="f3" id="h2" value="多中心" type="checkbox">
+                    <label for="h2">
+                        <i class="weui-icon-checkbox"></i>
+                        <div class="weui-form-text"><p>多中心</p></div>
+                    </label>
+                </div>
+                <div class="weui-form-li iblock" style="width: 35%; margin: 1px 18px;">
+                    <input class="weui-form-checkbox" name="f3" id="h3" value="申康" type="checkbox">
+                    <label for="h3">
+                        <i class="weui-icon-checkbox"></i>
+                        <div class="weui-form-text"><p>申康</p></div>
+                    </label>
+                </div>
+                <div class="weui-form-li iblock" style="margin: 1px 5px;">
+                    <input class="weui-form-checkbox" name="f3" id="h4" value="卫计委" type="checkbox">
+                    <label for="h4">
+                        <i class="weui-icon-checkbox"></i>
+                        <div class="weui-form-text"><p>卫计委</p></div>
+                    </label>
+                </div>
+                <div class="weui-form-li iblock" style="width: 35%; margin: 1px 18px;">
+                    <input class="weui-form-checkbox" name="f3" id="h5" value="国自然" type="checkbox">
+                    <label for="h5">
+                        <i class="weui-icon-checkbox"></i>
+                        <div class="weui-form-text"><p>国自然</p></div>
+                    </label>
+                </div>
+                <div class="weui-form-li iblock" style="margin: 1px 5px;">
+                    <input class="weui-form-checkbox" name="f3" id="h6" value="公卫重点项目" type="checkbox">
+                    <label for="h6">
+                        <i class="weui-icon-checkbox"></i>
+                        <div class="weui-form-text"><p>公卫重点项目</p></div>
+                    </label>
+                </div>
+                <div class="weui-form-li iblock" style="width: 35%; margin: 1px 18px;">
+                    <input class="weui-form-checkbox" name="f3" id="h7" value="医工交叉" type="checkbox">
+                    <label for="h7">
+                        <i class="weui-icon-checkbox"></i>
+                        <div class="weui-form-text"><p>医工交叉</p></div>
+                    </label>
+                </div>
+                <div class="weui-form-li iblock" style="margin: 1px 5px;">
+                    <input class="weui-form-checkbox" name="f3" id="h8" value="院内项目" type="checkbox">
+                    <label for="h8">
+                        <i class="weui-icon-checkbox"></i>
+                        <div class="weui-form-text"><p>院内项目</p></div>
+                    </label>
+                </div>
+                <div class="weui-form-li iblock" style="width: 35%; margin: 1px 18px;">
+                    <input class="weui-form-checkbox" name="f3" id="h9" value="其他" type="checkbox">
+                    <label for="h9">
+                        <i class="weui-icon-checkbox"></i>
+                        <div class="weui-form-text"><p>其他</p></div>
+                    </label>
+                </div>
+                <div class="weui-form-li iblock" style="margin: 1px 5px;">
+                    <input class="weui-form-checkbox" name="f3" id="h10" value="自选" type="checkbox">
+                    <label for="h10">
+                        <i class="weui-icon-checkbox"></i>
+                        <div class="weui-form-text"><p>自选</p></div>
+                    </label>
+                </div>
+            </div>
+        </div>
+        <div class="weui-cell">
+            <div class="weui-cell__hd "><label for="time-format" class="weui-label weui-start">咨询时间</label></div>
+            <div class="weui-cell__bd">
+                <input class="weui-input border-radius" id="years-monthes" type="text" value="@consultation.appointmentTime">
+            </div>
+        </div>
+        <div class="weui-cell">
+            <div class="weui-cell__hd"><label for="time-format" class="weui-label weui-start">咨询时长</label></div>
+            <div class="weui-cell__bd">
+                <input class="weui-input border-radius" pattern="[0-9]*" placeholder="请输入咨询时长" required type="number" id="duration" value="@consultation.duration" style="width: 85px;">小时
+            </div>
+        </div>
+        <div class="weui-cells" style="margin-top: 0px;">
+            <div class="weui-cell" style="padding-bottom: 5px;">
+                <div class="weui-cell__hd"><label for="time-format" class="weui-label weui-start">咨询专家</label></div>
+                <input class="weui-input  border-radius" id="expert" placeholder="请选择咨询专家" required type="text" value="">
+            </div>
+            <div class="weui-cell__bd" style="padding-left: 120px; padding-right: 15px; padding-bottom: 10px; ">
+                <input class="weui-input border-radius" placeholder="请输入其他咨询专家" type="text" id="qitaexpert" style="display:none">
+            </div>
+        </div>
+
+        <div class="weui-cells weui-cells_form" style="margin-top: 0px; padding-left: 15px; padding-bottom: 10px; ">
+            <label class="weui-label weui-start" style="width: 100%; margin-top: 8px; padding-bottom: 5px;">咨询记录</label>
+            <div class="weui-cell" style="padding: 0px 0px;">
+                <div class="weui-cell__bd">
+                    <textarea class="weui-textarea border-radius" placeholder="请输入咨询记录" rows="3" required id="record"></textarea>
+                </div>
+                <i class="weui-icon-clear" onclick="cleararea(this)"></i>
+            </div>
+        </div>
+        @*<div class="weui-cells" style="margin-top: 0px; padding-left: 15px; padding-bottom: 10px; ">
+                <label class="weui-label" style="width: 100%; margin-top: 8px; padding-bottom: 5px;">上传文件</label>
+                <div class="weui_cell_bd">
+                    <input type="text" class="weui_input" readonly name="Img" style="width:180px;" id="upfile">
+                    <input type="button" id="uploadButton" class="btn btn-sm btn-default" value="点击上传" />
+                </div>
+            </div>*@
+        <div class="weui-cells" style="margin-top: 0px; padding-left: 15px; padding-bottom: 10px; ">
+            <div style="width: 100%; margin-top: 8px; padding-bottom: 5px; float: left">
+                <label class="weui-label" style=" float:left">上传文件</label>
+                <input type="button" id="uploadButton" class="btn btn-sm btn-default" value="点击上传" />
+            </div>
+            <div id="img" style="width:100%;"></div>
+        </div>
+        <div class="weui-cell">
+            <label class="weui-label">合作意图</label>
+            <div class="weui-cell__bd">
+                <input class="weui-input border-radius" placeholder="请输入合作意图" required type="text" id="intention">
+            </div>
+        </div>
+        <div class="weui-cell">
+            <label class="weui-label" style="width: 60%; ">是否发立项申请表</label>
+            <div class="weui-cell__ft">
+                <input class="weui-switch" type="checkbox" id="isSend" name="isSend">
+            </div>
+        </div>
+        <div class="weui-cell">
+        </div>
+
+        <div class="weui-btn-area">
+            <a class="weui-btn weui-btn_primary" href="javascript:" id="btn">确定</a>
+        </div>
+        <!--上传文件-->
+        <link href="~/Content/kindeditor-4.1.7/themes/default/default.css" rel="stylesheet" />
+        <script src="~/Content/kindeditor-4.1.7/kindeditor-min.js"></script>
+        <script type="text/javascript">
+            KindEditor.ready(function (K) {
+                var uploadbutton = K.uploadbutton({
+                    button: K('#uploadButton'),
+                    fieldName: 'imgFile',
+                    url: '/Editor/UploadFile',
+                    afterUpload: function (data) {
+                        if (data.error === 0) {
+                            var url = K.formatUrl(data.url, 'absolute');
+                            if(data.bimg === 1)
+                            {
+                                $("#img").append('<div><img src="' + url + '" style="max-width: 80%;"/><input imgsrc="' + url + '" class="imgID" type="button" value="删除"/><br /></div>');
+                            }
+                            else
+                            {
+                                $("#img").append('<div><span style="font-size:12px;margin-right:10px;">' + url + '</span><input imgsrc="' + url + '" class="imgID" type="button" value="删除"/><br /></div>');
+                            }
+                            alert("上传成功");
+                        } else {
+                            alert(data.message);
+                        }
+                    },
+                    afterError: function (str) {
+                        alert('自定义错误信息: ' + str);
+                    }
+                });
+                uploadbutton.fileBox.change(function (e) {
+                    uploadbutton.submit();
+                });
+            });
+            $('body').on('click', '.imgID', function () {
+                $(this).parent().remove();
+            })
+        </script>
+
+        <script>
+            $("#years-monthes").datetimePicker({
+                title: '选择咨询时间',
+                years: [2020,2021],
+                onChange: function (picker, values, displayValues) {
+                    console.log(values);
+                }
+            });
+
+            var imageArray = @Html.Raw(Json.Encode(ViewBag.alist));
+            $("#expert").select({
+                title: "咨询专家",
+                items: imageArray,
+                //items: ['张维拓',
+                //    '谢丽',
+                //    '冯铁男',
+                //    '王炳顺',
+                //    '陈晓晨',
+                //    '张莉娜',
+                //    '其他',
+                //],
+                onChange: function (d) {
+                    if (d.values == '其他') {
+                        $("#qitaexpert").show();
+                    }
+                    else {
+                        $("#qitaexpert").hide();
+                    }
+                },
+                onClose: function () {
+                },
+                onOpen: function () {
+                },
+            });
+        </script>
+
+
+        <div class="weui-cells weui-cells_form">
+        </div>
+        <br>
+        <br>
+
+        <div class="weui-footer weui-footer_fixed-bottom">
+            <p class="weui-footer__links">
+                <a href="#" class="weui-footer__link">上海交通大学医学院临床研究中心</a>
+            </p>
+            <p class="weui-footer__text" style="color: #586C94; font-size: 12px;"> 若有问题，请联系我们，电话：021-63230736</p>
+            <p class="weui-footer__text" style="font-size: 12px;">Support By  上海策溯科技有限公司</p>
+        </div>
+</body>
+</html>

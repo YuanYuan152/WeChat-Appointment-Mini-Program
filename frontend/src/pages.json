@@ -1,0 +1,489 @@
+{
+    "pages": [
+        {
+            "path": "pages/index/index",
+            "style": {
+                "navigationBarTitleText": "连心心理",
+                "navigationBarBackgroundColor": "#ffffff",
+                "navigationBarTextStyle": "black",
+                "backgroundColor": "#F9FAFB"
+            }
+        },
+        {
+            "path": "pages/auth/login",
+            "style": {
+                "navigationBarTitleText": "登录注册",
+                "navigationBarBackgroundColor": "#0D9488",
+                "navigationBarTextStyle": "white",
+                "backgroundColor": "#0D9488",
+                "navigationStyle": "custom"
+            }
+        },
+        {
+            "path": "pages/workbench/index",
+            "style": {
+                "navigationBarTitleText": "工作台",
+                "navigationBarBackgroundColor": "#ffffff",
+                "navigationBarTextStyle": "black"
+            }
+        },
+        {
+            "path": "pages/search/index",
+            "style": {
+                "navigationBarTitleText": "搜索",
+                "navigationBarBackgroundColor": "#ffffff",
+                "navigationBarTextStyle": "black"
+            }
+        },
+        {
+            "path": "pages/consultant/list",
+            "style": {
+                "navigationBarTitleText": "咨询师",
+                "navigationBarBackgroundColor": "#0D9488",
+                "navigationBarTextStyle": "white",
+                "navigationStyle": "custom"
+            }
+        },
+        {
+            "path": "pages/consultant/detail",
+            "style": {
+                "navigationBarTitleText": "咨询师详情",
+                "navigationBarBackgroundColor": "#ffffff",
+                "navigationBarTextStyle": "black",
+                "navigationStyle": "custom"
+            }
+        },
+        {
+            "path": "pages/user/profile",
+            "style": {
+                "navigationBarTitleText": "个人中心",
+                "navigationBarBackgroundColor": "#ffffff",
+                "navigationBarTextStyle": "black"
+            }
+        },
+        {
+            "path": "pages/activity/list",
+            "style": {
+                "navigationBarTitleText": "活动招募",
+                "navigationBarBackgroundColor": "#ffffff",
+                "navigationBarTextStyle": "black"
+            }
+        },
+        {
+            "path": "pages/theme/index",
+            "style": {
+                "navigationBarTitleText": "主题月",
+                "navigationBarBackgroundColor": "#ffffff",
+                "navigationBarTextStyle": "black"
+            }
+        },
+        {
+            "path": "pages/test/api-test",
+            "style": {
+                "navigationBarTitleText": "API测试",
+                "navigationBarBackgroundColor": "#ffffff",
+                "navigationBarTextStyle": "black"
+            }
+        },
+        {
+            "path": "pages/article/detail",
+            "style": {
+                "navigationBarTitleText": "文章详情",
+                "navigationBarBackgroundColor": "#ffffff",
+                "navigationBarTextStyle": "black"
+            }
+        },
+        {
+            "path": "pages/legal/agreement",
+            "style": {
+                "navigationBarTitleText": "用户协议",
+                "navigationBarBackgroundColor": "#ffffff",
+                "navigationBarTextStyle": "black"
+            }
+        },
+        {
+            "path": "pages/legal/privacy",
+            "style": {
+                "navigationBarTitleText": "隐私政策",
+                "navigationBarBackgroundColor": "#ffffff",
+                "navigationBarTextStyle": "black"
+            }
+        }
+    ],
+    "subPackages": [
+        {
+            "root": "pages/patient",
+            "name": "patient",
+            "pages": [
+                {
+                    "path": "orders/list",
+                    "style": {
+                        "navigationBarTitleText": "我的订单",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                },
+                {
+                    "path": "orders/detail",
+                    "style": {
+                        "navigationBarTitleText": "订单详情",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                },
+                {
+                    "path": "records/list",
+                    "style": {
+                        "navigationBarTitleText": "咨询记录",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                },
+                {
+                    "path": "registration/edit",
+                    "style": {
+                        "navigationBarTitleText": "心理登记表",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                },
+                {
+                    "path": "profile/edit",
+                    "style": {
+                        "navigationBarTitleText": "编辑资料",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                },
+                {
+                    "path": "messages/index",
+                    "style": {
+                        "navigationBarTitleText": "消息中心",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                }
+            ]
+        },
+        {
+            "root": "pages/ops",
+            "name": "ops",
+            "pages": [
+                {
+                    "path": "index/index",
+                    "style": {
+                        "navigationBarTitleText": "运营工作台",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                },
+                {
+                    "path": "banner/index",
+                    "style": {
+                        "navigationBarTitleText": "Banner 管理",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                },
+                {
+                    "path": "articles/index",
+                    "style": {
+                        "navigationBarTitleText": "文章管理",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                },
+                {
+                    "path": "activities/index",
+                    "style": {
+                        "navigationBarTitleText": "活动管理",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                },
+                {
+                    "path": "themes/index",
+                    "style": {
+                        "navigationBarTitleText": "主题月管理",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                },
+                {
+                    "path": "dashboard/index",
+                    "style": {
+                        "navigationBarTitleText": "运营看板",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                },
+                {
+                    "path": "admin/index",
+                    "style": {
+                        "navigationBarTitleText": "运营后台",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                },
+                {
+                    "path": "admin-roles/index",
+                    "style": {
+                        "navigationBarTitleText": "角色管理",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                }
+            ]
+        },
+        {
+            "root": "pages/assistant",
+            "name": "assistant",
+            "pages": [
+                {
+                    "path": "workbench/index",
+                    "style": {
+                        "navigationBarTitleText": "助理工作台",
+                        "navigationBarBackgroundColor": "#7C3AED",
+                        "navigationBarTextStyle": "white"
+                    }
+                },
+                {
+                    "path": "tasks/index",
+                    "style": {
+                        "navigationBarTitleText": "待处理任务",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                },
+                {
+                    "path": "risk/index",
+                    "style": {
+                        "navigationBarTitleText": "风险提醒",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                },
+                {
+                    "path": "schedule/index",
+                    "style": {
+                        "navigationBarTitleText": "排期协调",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                },
+                {
+                    "path": "contact/index",
+                    "style": {
+                        "navigationBarTitleText": "联系记录",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                }
+            ]
+        },
+        {
+            "root": "pages/consultation",
+            "name": "consultation",
+            "pages": [
+                {
+                    "path": "booking/create",
+                    "style": {
+                        "navigationBarTitleText": "预约咨询",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                },
+                {
+                    "path": "payment-result",
+                    "style": {
+                        "navigationBarTitleText": "支付结果",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                },
+                {
+                    "path": "agreement/xy1",
+                    "style": {
+                        "navigationBarTitleText": "咨询协议",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                },
+                {
+                    "path": "agreement/xy2",
+                    "style": {
+                        "navigationBarTitleText": "信息确认",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                }
+            ]
+        },
+        {
+            "root": "pages/admin-webview",
+            "name": "admin-webview",
+            "pages": [
+                {
+                    "path": "index",
+                    "style": {
+                        "navigationBarTitleText": "Web 重后台",
+                        "navigationBarBackgroundColor": "#1F2937",
+                        "navigationBarTextStyle": "white"
+                    }
+                }
+            ]
+        },
+        {
+            "root": "pages/counselor",
+            "name": "counselor",
+            "pages": [
+                {
+                    "path": "workbench/index",
+                    "style": {
+                        "navigationBarTitleText": "咨询师工作台",
+                        "navigationBarBackgroundColor": "#0D9488",
+                        "navigationBarTextStyle": "white"
+                    }
+                },
+                {
+                    "path": "schedule/index",
+                    "style": {
+                        "navigationBarTitleText": "排班管理",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                },
+                {
+                    "path": "consultations/index",
+                    "style": {
+                        "navigationBarTitleText": "咨询单",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                },
+                {
+                    "path": "case-record/edit",
+                    "style": {
+                        "navigationBarTitleText": "个案记录",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                },
+                {
+                    "path": "profile/edit",
+                    "style": {
+                        "navigationBarTitleText": "咨询师资料",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                },
+                {
+                    "path": "stats/index",
+                    "style": {
+                        "navigationBarTitleText": "统计看板",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                }
+            ]
+        }
+    ],
+    "preloadRule": {
+        "pages/index/index": {
+            "network": "all",
+            "packages": ["patient"]
+        }
+    },
+    "globalStyle": {
+        "navigationBarTextStyle": "black",
+        "navigationBarTitleText": "连心心理",
+        "navigationBarBackgroundColor": "#ffffff",
+        "backgroundColor": "#F9FAFB",
+        "app-plus": {
+            "background": "#F9FAFB"
+        }
+    },
+    "tabBar": {
+        "color": "#64748B",
+        "selectedColor": "#0D9488",
+        "borderStyle": "white",
+        "backgroundColor": "#ffffff",
+        "height": "70px",
+        "fontSize": "12px",
+        "iconWidth": "28px",
+        "iconHeight": "28px",
+        "list": [
+            {
+                "pagePath": "pages/index/index",
+                "iconPath": "static/images/bottom1.png",
+                "selectedIconPath": "static/images/bottom1.png",
+                "text": "首页"
+            },
+            {
+                "pagePath": "pages/activity/list",
+                "iconPath": "static/images/bottom2.png",
+                "selectedIconPath": "static/images/bottom2.png",
+                "text": "活动"
+            },
+            {
+                "pagePath": "pages/consultant/list",
+                "iconPath": "static/images/bottom10.png",
+                "selectedIconPath": "static/images/bottom10.png",
+                "text": "咨询"
+            },
+            {
+                "pagePath": "pages/workbench/index",
+                "iconPath": "static/images/bottom3.png",
+                "selectedIconPath": "static/images/bottom3.png",
+                "text": "工作台"
+            },
+            {
+                "pagePath": "pages/user/profile",
+                "iconPath": "static/images/bottom4.png",
+                "selectedIconPath": "static/images/bottom4.png",
+                "text": "我的"
+            }
+        ]
+    },
+    "condition": {
+        "current": 0,
+        "list": [
+            {
+                "name": "首页",
+                "path": "pages/index/index"
+            },
+            {
+                "name": "登录注册",
+                "path": "pages/auth/login"
+            },
+            {
+                "name": "工作台",
+                "path": "pages/workbench/index"
+            },
+            {
+                "name": "搜索",
+                "path": "pages/search/index"
+            },
+            {
+                "name": "咨询师列表",
+                "path": "pages/consultant/list"
+            },
+            {
+                "name": "咨询师详情",
+                "path": "pages/consultant/detail"
+            },
+            {
+                "name": "预约创建",
+                "path": "pages/consultation/booking/create"
+            },
+            {
+                "name": "个人中心",
+                "path": "pages/user/profile"
+            },
+            {
+                "name": "我的订单",
+                "path": "pages/patient/orders/list"
+            }
+        ]
+    }
+}

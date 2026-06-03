@@ -1,0 +1,699 @@
+﻿@using lxxl.Models;
+@{
+    ViewBag.Title = "Index";
+    Layout = "~/Views/Shared/_LayoutHome.cshtml";
+    List<T_ItemType> ItemTypeList = ViewBag.ItemTypeList;
+}
+
+<div class="main-content">
+    <!-- #section:basics/content.breadcrumbs -->
+    <div class="breadcrumbs" id="breadcrumbs">
+        <script type="text/javascript">
+            try { ace.settings.check('breadcrumbs', 'fixed') } catch (e) { }
+        </script>
+        <ul class="breadcrumb">
+            <li><i class="ace-icon fa fa-home home-icon"></i>首页 </li>
+        </ul>
+        <!-- /.breadcrumb -->
+        <!-- #section:basics/content.searchbox -->
+        <div class="nav-search" id="nav-search" style="display: none">
+            <form action="javascript:alert('开发中')" method="post" class="form-search">
+                <span class="input-icon">
+                    <input type="text" placeholder="Search ..." class="nav-search-input" id="nav-search-input"
+                           autocomplete="off" />
+                    <i class="ace-icon fa fa-search nav-search-icon"></i>
+                </span>
+            </form>
+        </div>
+        <!-- /.nav-search -->
+        <!-- /section:basics/content.searchbox -->
+    </div>
+    <!-- /section:basics/content.breadcrumbs -->
+    <div class="page-content">
+        <div class="row">
+            <div class="col-xs-12">
+                <!-- PAGE CONTENT BEGINS -->
+                <div class="row">
+                    @if (Session["alert"] != null)
+                    {
+                        <div class="col-xs-12 col-sm-8 col-sm-offset-2">
+                            <div class="alert alert-warning alert-danger" role="alert">
+                                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                                @Session["alert"]
+                                @(Session["alert"] = null)
+                            </div>
+                        </div>
+                        <div class="col-xs-0 col-sm-2">
+                        </div>
+                    }
+                </div>
+                <div class="page-header">
+                    <a href="javascript:" class="btn btn-bold" id="addform">添加表单</a>
+                </div>
+                <div class="row">
+                    <div class="col-xs-12">
+                        <!-- PAGE CONTENT BEGINS -->
+                        <!-- #section:plugins/fuelux.treeview -->
+                        <div class="row">
+                            <div class="col-sm-12">
+                                <div class="widget-box widget-color-blue2">
+                                    <div class="widget-header">
+                                        <h4 class="widget-title lighter smaller">表单管理</h4>
+                                        <!-- #section:custom/widget-box.toolbar -->
+                                        <div class="widget-toolbar">
+
+
+                                            <a href="#" data-action="fullscreen" class="orange2">
+                                                <i class="ace-icon fa fa-expand"></i>
+                                            </a>
+
+                                            <a href="javascript:location.reload()">
+                                                <i class="ace-icon fa fa-refresh" style="color:white"></i>
+                                            </a>
+                                        </div>
+
+                                        <!-- /section:custom/widget-box.toolbar -->
+                                    </div>
+
+                                    <div class="widget-body">
+                                        <div class="widget-main padding-8">
+                                            @for (int n = 1; n < ViewBag.Count + 1; n++)
+                                            {
+                                                string id = "tree" + n;
+                                                <div id="@id" class="tree"></div>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                                <div style="text-align:center;">
+                                    @for (int n = 1; n < ViewBag.Count + 1; n++)
+                                    {
+                                        <a href="javascript:" class="page" page="@n">第@(n)页</a>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div><!-- /.col -->
+                </div><!-- /.row -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<input type="button" id="btnmyModal1" style="display:none" data-toggle="modal" data-target="#myModal1" value="添加表单" />
+<div class="modal fade" id="myModal1" tabindex="-1" role="dialog" aria-labelledby="myModalLabel">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                <h4 class="modal-title">添加表单</h4>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" value="" id="setid">
+                <div class="row">
+                    <form id="form">
+                        <input type="hidden" name="ID" value="" />
+                        <div class="form-group" style="padding-bottom:50px;">
+                            <label class="col-sm-2 control-label">表单名称</label>
+                            <div class="col-sm-10">
+                                <input type="text" class="form-control" name="Name" placeholder="表单名称">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-2 control-label">表单说明</label>
+                            <div class="col-sm-10">
+                                <input type="text" class="form-control" name="Info" placeholder="表单说明">
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">关闭</button>
+                <button type="button" class="btn btn-primary save">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<input type="button" id="btnmyModal2" style="display:none" data-toggle="modal" data-target="#myModal2" value="添加表单" />
+<div class="modal fade" id="myModal2" tabindex="-1" role="dialog" aria-labelledby="myModalLabel">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                <h4 class="modal-title">添加选项组</h4>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" value="" id="setid">
+                <div class="row">
+                    <form id="form">
+                        <input type="hidden" value="" name="FormID" />
+                        <input type="hidden" value="" name="ID">
+                        <div class="form-group" style="padding-bottom:50px;">
+                            <label class="col-sm-2 control-label">类型</label>
+                            <div class="col-sm-10">
+                                <select name="ItemTypeID" class="form-control">
+                                    @foreach (var itemtype in ItemTypeList)
+                                    {
+                                        <option value="@itemtype.ID">@itemtype.Name</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group" style="padding-bottom:50px;">
+                            <label class="col-sm-2 control-label">名称</label>
+                            <div class="col-sm-10">
+                                <input type="text" class="form-control" name="Name" placeholder="名称">
+                            </div>
+                        </div>
+                        <div class="form-group" style="padding-bottom:50px;">
+                            <label class="col-sm-2 control-label">排序号</label>
+                            <div class="col-sm-10">
+                                <input type="number" class="form-control" name="Order" placeholder="排序号">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="col-sm-2 control-label">说明</label>
+                            <div class="col-sm-10">
+                                <input type="text" class="form-control" name="Info" placeholder="说明">
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">关闭</button>
+                <button type="button" class="btn btn-primary save">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+
+
+<input type="button" id="btnmyModal3" style="display:none" data-toggle="modal" data-target="#myModal3" value="添加表单" />
+<div class="modal fade" id="myModal3" tabindex="-1" role="dialog" aria-labelledby="myModalLabel">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                <h4 class="modal-title">添加选项</h4>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" value="" id="setid">
+                <div class="row">
+                    <form id="form">
+                        <input type="hidden" value="" name="ID" />
+                        <input type="hidden" value="" name="ItemID" />
+                        <div class="form-group" style="padding-bottom:50px;">
+                            <label class="col-sm-2 control-label">名称</label>
+                            <div class="col-sm-10">
+                                <input type="text" class="form-control" name="Name" placeholder="名称">
+                            </div>
+                        </div>
+                        <div class="form-group" style="padding-bottom:50px;">
+                            <label class="col-sm-2 control-label">排序号</label>
+                            <div class="col-sm-10">
+                                <input type="number" class="form-control" name="Order" placeholder="排序号">
+                            </div>
+                        </div>
+                        <div class="form-group" style="padding-bottom:50px;">
+                            <label class="col-sm-2 control-label">可自定义</label>
+                            <div class="col-sm-10">
+                                <input name="IsCustom" id="IsCustom" class="ace ace-switch ace-switch-4 btn-empty" type="checkbox" />
+                                <span class="lbl"></span>
+                            </div>
+                        </div>
+                        <div class="form-group Custom" style="display:none;">
+                            <label class="col-sm-2 control-label">自定义内容</label>
+                            <div class="col-sm-10">
+                                <input type="text" class="form-control" name="Custom" placeholder="自定义内容">
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">关闭</button>
+                <button type="button" class="btn btn-primary save">保存</button>
+
+            </div>
+        </div>
+    </div>
+</div>
+<script src="/Content/assets/js/fuelux/data/fuelux.tree-sample-demo-data.js"></script>
+<script src="/Content/assets/js/fuelux/fuelux.tree.min.js"></script>
+<script type="text/javascript">
+    jQuery(function ($) {
+        //初始化数据
+        var tree_forms = new Object();
+        var page = 1;
+        var locationhref = location.href;
+        var code = locationhref.split("#/")[1];
+        if (code != null) {
+            $(code.split("&")).each(function () {
+                var thiss = this;
+                if (thiss.split("=")[0] == "page") {
+                    page = thiss.split("=")[1];
+                }
+            })
+        }
+        getjson(page);//初始化当前页
+        changecan("page", page);
+        function changecan(name, value) {
+            var locationhref = location.href;
+            var newhref = locationhref.split("#/")[0] + "#/";
+            var ishave = false;
+            var n = 0;
+            if (locationhref.split("#/")[1] != null) {
+                $(locationhref.split("#/")[1].split('&')).each(function () {
+                    var thiss = this;
+                    if (name == thiss.split("=")[0]) {
+                        thiss = name + "=" + value;
+                        ishave = true;
+                    }
+                    if (n == 0) {
+                        newhref += thiss;
+                    } else {
+                        newhref += "&" + thiss;
+                    }
+                    n++;
+                })
+            } if (!ishave) {
+                if (n == 0) {
+                    newhref += name + "=" + value;
+                } else {
+                    newhref += "&" + name + "=" + value;
+                }
+            }
+            location.href = newhref;
+        }
+        ////
+        function getjson(p) {
+            $.ajax({
+                type: "POST",//请求方式
+                url: "/Form/GetJson",//地址，就是action请求路径
+                data: { "page": p },//数据类型text xml json  script  jsonp
+                success: function (msg) {//返回的参数就是 action里面所有的有get和set方法的参数
+                    var dataObj = eval("(" + msg + ")");
+                    console.log(dataObj);
+                    $(dataObj).each(function () {
+                        //this表示表单
+                        var Form = this;
+                        //第一层开始
+                        tree_form = new Object();
+                        tree_form["name"] = this.Name + '<i id="' + this.ID + '" class="form"></i><div style=\"width:30%;float:right;text-align:right\"><button class=" btn-info copyform" formid="' + this.ID + '" title="拷贝">拷贝</button><button class=" btn-info editform" formid="' + this.ID + '" title="编辑">编辑</button><button class=" btn-danger delform" formid="' + Form.ID + '" title="删除">删除</button><button class="btn-success additem" formid=' + Form.ID + ' title="新增">新增表单项</button><a target="_Blank" href="/Form/Show/' + Form.ID + '" class="btn btn-xs btn-warning">预览</a></div><div style="float:right;width:30%;">' + Form.Item.length + '表单项</div>';
+                        //alert((this.Item.IsDelete == false).length);
+                        if (Form.Item.length != 0) {
+                            tree_form["type"] = "folder";
+                        } else {
+                            tree_form["type"] = "item";
+                        }
+                        tree_forms[this.ID] = tree_form;
+                        //第一层结束
+                        //第二层开始
+                        var tree_items = new Object();
+                        console.log(this.Item);
+                        $(this.Item).each(function () {
+                            //this表示选项组
+                            var Item = this;
+                            console.log(Item.ItemType);
+                            var tree_item = new Object();
+                            if (!Item.ItemType.IsOne) {
+                                console.log(this.ID);
+                                tree_item["name"] = Item.Name + '<i id=' + Item.ID + '></i><div style=\"width:30%;float:right;text-align:right\"><button class="btn-info edititem" itemid="' + Item.ID + '" title="编辑">编辑</button><button class="btn-danger delitem" itemid=' + Item.ID + ' title="删除">删除</button><button class=" btn-success addoption" itemid=' + Item.ID + ' title="新增">新增选项</button></div><div style="float:right;width:30%;">' + Item.ItemType.Name + '(' + Item.Option.length + '项)</div>';
+                            } else {
+
+                                tree_item["name"] = Item.Name + '<i id=' + Item.ID + '></i><div style=\"width:30%;float:right;text-align:right\"><button class="btn-info edititem" itemid="' + Item.ID + '" title="编辑">编辑</button><button class="btn-danger delitem" itemid="' + Item.ID + '" title="删除">删除</button></div><div style="float:right;width:30%;">' + Item.ItemType.Name + '</div>';
+                            }
+                            if (Item.Option.length != 0 && !Item.ItemType.IsOne) {
+                                tree_item["type"] = "folder";
+                            } else {
+                                tree_item["type"] = "item";
+                            }
+                            tree_items[Item.ID] = tree_item;
+                        })
+                        var obj1 = new Object();
+                        obj1["children"] = tree_items;
+                        tree_forms[Form.ID]['additionalParameters'] = obj1;
+                        //第二层结束
+                        //第三层开始
+                        $(this.Item).each(function () {
+                            //this表示选项组
+                            var Item = this;
+                            var tree_options = new Object();
+                            $(Item.Option).each(function () {
+                                var Option = this;
+                                var tree_option = new Object();
+                                tree_option["name"] = Option.Name + '<div style=\"width:30%;float:right;text-align:right\"><button class="btn-info editoption" optionid="' + Option.ID + '" title="编辑">编辑</button><button class="btn-danger deloption" optionid="' + Option.ID + '" title="删除">删除</button>';
+                                tree_option["type"] = "item";
+                                tree_options[Option.ID] = tree_option;
+                            })
+                            var obj2 = new Object();
+                            obj2["children"] = tree_options;
+                            tree_forms[Form.ID]['additionalParameters']["children"][Item.ID]["additionalParameters"] = obj2;
+                        })
+                        //第三层结束
+                    })
+                    console.log(tree_forms);
+                    var treeData = new DataSourceTree({ data: tree_forms });
+                    $('#tree' + p).ace_tree({
+                        dataSource: treeData,
+                        multiSelect: true,
+                        loadingHTML: '<div class="tree-loading"><i class="ace-icon fa fa-refresh fa-spin blue"></i></div>',
+                        'open-icon': 'ace-icon tree-minus',
+                        'close-icon': 'ace-icon tree-plus',
+                        'selectable': true,
+                        'selected-icon': 'ace-icon fa fa-check',
+                        'unselected-icon': 'ace-icon fa'
+                    });
+                    var locationhref = location.href;
+                    var code = locationhref.split("#/")[1];
+                    $(code.split("&")).each(function () {
+                        var thiss = this;
+                        if (thiss.split("=")[0] == "code") {
+                            $('#tree' + p + ' #' + thiss.split("=")[1]).click();
+                        }
+                    })
+                },
+                error: function () {
+                    alert("获取数据失败");
+                }
+            });
+        }
+        //切换页
+        $(".page").click(function () {
+            var thispage = $(this).attr("page");
+            $(".tree").css("display", "none");
+            $("#tree" + thispage).css("display", "black");
+            if (!isNaN($("#tree" + thispage).html())) {
+                $("#tree" + thispage).html("");
+                tree_forms = {};
+                getjson(thispage);
+            }
+            changecan("page", thispage);
+        })
+
+        //弹出新增表单
+        $("#addform").on("click", function () {
+            $("#myModal1 input").attr("value", "");
+            $('#btnmyModal1').click();
+        });
+
+        //弹出新增表单项
+        $("body").on("click", ".additem", function (e) {
+            $("#myModal2 input").attr("value", "");
+            $("#myModal2 select option").eq(0).prop("selected", true);
+            $("#myModal2 [name='FormID']").attr("value", $(this).attr("formid"));
+            $('#btnmyModal2').click();
+            changecan("code", $(this).attr("formid"));
+        })
+
+        //弹出新增选项
+        $("body").on("click", ".addoption", function () {
+            $("#myModal3 input").attr("value", "");
+            $("#myModal3 [name='ItemID']").attr("value", $(this).attr("itemid"));
+            $("#myModal3 [name='IsCustom']").prop("checked", false);
+            $("#myModal3 .Custom").css("display", "none");
+            $('#btnmyModal3').click();
+            changecan("code", $(this).parent().parent().parent().parent().parent().parent().find(".form").attr("id"));
+        })
+
+        //弹出编辑表单
+        $("body").on("click", ".editform", function () {
+            var $this = $(this);
+            $("#myModal1 [name='ID']").attr("value", $this.attr("formid"));
+            $.ajax({
+                type: "POST",//请求方式
+                url: "/Form/GetForm",//地址，就是action请求路径
+                data: { "ID": $this.attr("formid") },
+                success: function (msg) {//返回的参数就是 action里面所有的有get和set方法的参数
+                    if (msg.split(':')[0] == "no") {
+                        alert(msg.split(':')[1]);
+                    } else {
+                        var dataObj = eval("(" + msg + ")");
+                        //alert(dataObj.Name);
+                        $("#myModal1 [name='Name']").val(dataObj.Name);
+                        $("#myModal1 [name='Info']").val(dataObj.Info);
+                    }
+                    changecan("code", $this.attr("formid"));
+                },
+                error: function () {
+                    alert("服务器无响应");
+                }
+            });
+            $('#btnmyModal1').click();
+        })
+
+        //弹出编辑表单项
+        $("body").on("click", ".edititem", function () {
+            var $this = $(this);
+            $("#myModal2 [name='ID']").attr("value", $this.attr("itemid"));
+            $.ajax({
+                type: "POST",
+                url: "/Form/GetItem",
+                data: { "ID": $this.attr("itemid") },
+                success: function (msg) {
+                    if (msg.split(':')[0] == "no") {
+                        alert(msg.split(':')[1]);
+                    } else {
+                        var dataObj = eval("(" + msg + ")");
+                        $("#myModal2 [name='Name']").val(dataObj.Name);
+                        $("#myModal2 [name='Order']").val(dataObj.Order);
+                        $("#myModal2 [name='Info']").val(dataObj.Info);
+                        $("#myModal2 select option[value='" + dataObj.ItemTypeID + "']").prop("selected", true);
+                    }
+                    changecan("code", $this.parent().parent().parent().parent().parent().parent().find(".form").attr("id"));
+                },
+                error: function () {
+                    alert("服务器无响应");
+                }
+            });
+            $('#btnmyModal2').click();
+        })
+
+        //弹出编辑选项
+        $("body").on("click", ".editoption", function () {
+            var $this = $(this);
+            $("#myModal3 [name='ID']").attr("value", $this.attr("optionid"));
+            $.ajax({
+                type: "POST",
+                url: "/Form/GetOption",
+                data: { "ID": $this.attr("optionid") },
+                success: function (msg) {
+                    if (msg.split(':')[0] == "no") {
+                        alert(msg.split(':')[1]);
+                    } else {
+                        var dataObj = eval("(" + msg + ")");
+                        $("#myModal3 [name='Name']").val(dataObj.Name);
+                        $("#myModal3 [name='Order']").val(dataObj.Order);
+                        if (dataObj.IsCustom) {
+                            $("#myModal3 #IsCustom").prop("checked", true);
+                            $("#myModal3 [name='Custom']").prop("value", dataObj.Custom);
+                            $("#myModal3 .Custom").show();
+
+                        } else {
+                            $("#myModal3 #IsCustom").prop("checked", false);
+                            $("#myModal3 [name='Custom']").prop("value", "");
+                            $("#myModal3 .Custom").hide();
+                        }
+                    }
+                    changecan("code", $this.parent().parent().parent().parent().parent().parent().parent().find(".form").attr("id"));
+                },
+                error: function () {
+                    alert("服务器无响应");
+                }
+            });
+            $('#btnmyModal3').click();
+        })
+
+        //保存表单
+        $("#myModal1 .save").click(function () {
+            var id = $("#myModal1 [name='ID']").val();
+            var name = $("#myModal1 [name='Name']").val();
+            var info = $("#myModal1 [name='Info']").val();
+            if (name.length <= 0) {
+                alert("请输入表单名称");
+            } else {
+                $.ajax({
+                    type: "POST",//请求方式
+                    url: "/Form/AddForm",//地址，就是action请求路径
+                    data: { "ID": id, "Name": name, "Info": info },
+                    success: function (msg) {//返回的参数就是 action里面所有的有get和set方法的参数
+                        if (msg.split(':')[0] == "ok") {
+                            alert(msg.split(':')[1]);
+                            location.reload();
+                        } else {
+                            alert(msg.split(':')[1]);
+                        }
+                    },
+                    error: function () {
+                        alert("服务器无响应");
+                    }
+                });
+            }
+        })
+        //保存Item
+        $("#myModal2 .save").click(function () {
+            var id = $("#myModal2 [name='ID']").val();
+            var formid = $("#myModal2 [name='FormID']").val();
+            var itemtypeid = $("#myModal2 [name='ItemTypeID']").val();
+            var name = $("#myModal2 [name='Name']").val();
+            var order = $("#myModal2 [name='Order']").val();
+            var info = $("#myModal2 [name='Info']").val();
+            if (name.length <= 0) {
+                alert("请输入表单项名称");
+            } else if (order == 0) {
+                alert("请输入排序号");
+            } else {
+                $.ajax({
+                    type: "POST",
+                    url: "/Form/AddItem",
+                    data: { "FormID": formid, "ItemTypeID": itemtypeid, "Name": name, "Order": order, "Info": info, "ID": id },
+                    success: function (msg) {
+                        if (msg.split(':')[0] == "ok") {
+                            alert(msg.split(':')[1]);
+                            location.reload();
+                        } else {
+                            alert(msg.split(':')[1]);
+                        }
+                    },
+                    error: function () {
+                        alert("服务器无响应");
+                    }
+                });
+            }
+        })
+        //保存Option
+        $("#myModal3 .save").click(function () {
+            var itemid = $("#myModal3 [name='ItemID']").val();
+            var name = $("#myModal3 [name='Name']").val();
+            var order = $("#myModal3 [name='Order']").val();
+            var iscustom = $("#myModal3 [name='IsCustom']").prop("checked");
+            var custom = $("#myModal3 [name='Custom']").val();
+            var optionid = $("#myModal3 [name='ID']").val();
+            if (name.length <= 0) {
+                alert("请输入名称");
+            } else if (order == 0) {
+                alert("请输入排序号");
+            } else {
+                $.ajax({
+                    type: "POST",
+                    url: "/Form/AddOption",
+                    data: { "ID": optionid, "ItemID": itemid, "Name": name, "Order": order, "IsCustom": iscustom, "Custom": custom },
+                    success: function (msg) {
+                        if (msg.split(':')[0] == "ok") {
+                            alert(msg.split(':')[1]);
+                            //location.reload();
+                        } else {
+                            alert(msg.split(':')[1]);
+                        }
+                    },
+                    error: function () {
+                        alert("服务器无响应");
+                    }
+                });
+            }
+        })
+        //删除Form
+        $("body").on("click", ".delform", function () {
+            var $this = $(this);
+            if (confirm('是否确认删除该表单?')) {
+                $.ajax({
+                    type: "POST",
+                    url: "/Form/DelForm",
+                    data: { "ID": $this.attr("formid") },
+                    success: function (msg) {
+                        if (msg.split(':')[0] == "ok") {
+                            alert(msg.split(':')[1]);
+                            location.reload();
+                            //$this.parent().parent().parent().remove();
+                        } else {
+                            alert(msg.split(':')[1]);
+                        }
+                    },
+                    error: function () {
+                        alert("服务器无响应");
+                    }
+                });
+            }
+        })
+        //删除Item
+        $("body").on("click", ".delitem", function () {
+            var $this = $(this);
+            if (confirm('是否确认删除该表单项?')) {
+                changecan("code", $(this).parent().parent().parent().parent().parent().parent().find(".form").attr("id"));
+                $.ajax({
+                    type: "POST",
+                    url: "/Form/DelItem",
+                    data: { "ID": $this.attr("itemid") },
+                    success: function (msg) {
+                        if (msg.split(':')[0] == "ok") {
+                            alert(msg.split(':')[1]);
+                            $this.parent().parent().parent().parent().remove();
+                        } else {
+                            alert(msg.split(':')[1]);
+                        }
+                    },
+                    error: function () {
+                        alert("服务器无响应");
+                    }
+                });
+            }
+        })
+        //删除Option
+        $("body").on("click", ".deloption", function () {
+            var $this = $(this);
+            if (confirm('是否确认删除该选项?')) {
+                changecan("code", $(this).parent().parent().parent().parent().parent().parent().parent().find(".form").attr("id"));
+                $.ajax({
+                    type: "POST",
+                    url: "/Form/DelOption",
+                    data: { "ID": $this.attr("optionid") },
+                    success: function (msg) {
+                        if (msg.split(':')[0] == "ok") {
+                            alert(msg.split(':')[1]);
+                            $this.parent().parent().parent().remove();
+                        } else {
+                            alert(msg.split(':')[1]);
+                        }
+                    },
+                    error: function () {
+                        alert("服务器无响应");
+                    }
+                });
+            }
+        })
+
+        //拷贝Form
+        $("body").on("click", ".copyform", function () {
+            var $this = $(this);
+            $.ajax({
+                type: "POST",//请求方式
+                url: "/Form/CopyForm",//地址，就是action请求路径
+                data: { "ID": $this.attr("formid") },
+                success: function (msg) {//返回的参数就是 action里面所有的有get和set方法的参数
+                    if (msg.split(":")[0] == "ok") {
+                        location.reload();
+                    }
+                },
+                error: function () {
+                    alert("服务器无响应");
+                }
+            });
+        })
+
+        //切换Option中是否可自定义
+        $("#myModal3 [name='IsCustom']").click(function () {
+            if ($(this).is(':checked')) {
+                $('#myModal3 .Custom').css("display", "block");
+            } else {
+                $('#myModal3 .Custom').css("display", "none");
+            }
+        })
+    })
+</script>

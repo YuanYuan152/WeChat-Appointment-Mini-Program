@@ -1,0 +1,315 @@
+﻿@using lxxl.Models
+
+@{
+    Layout = null;
+    T_Doctor user = Session["psyD"] as T_Doctor;
+}
+
+<!doctype html>
+<html class="x-admin-sm">
+<head>
+    <meta charset="UTF-8">
+    <title>连心心理后台管理系统</title>
+    <meta name="renderer" content="webkit|ie-comp|ie-stand">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta http-equiv="Cache-Control" content="no-siteapp" />
+    <link rel="stylesheet" href="/Content/mhome/css/font.css">
+    <link rel="stylesheet" href="/Content/mhome/css/index.css">
+    <link rel="stylesheet" href="/Content/mhome/css/iconfont.css">
+    <script src="/Content/mhome/js/jquery.min.js"></script>
+    <script src="/Content/mhome/lib/layui/layui.js" charset="utf-8"></script>
+    <script type="text/javascript" src="/Content/mhome/js/index.js?rnd=20240329"></script>
+    <style>
+        .show_list {
+            display: block !important;
+        }
+
+        .hide_lits {
+            display: none;
+        }
+    </style>
+
+</head>
+<body class="index">
+    <!-- 顶部开始 -->
+    <div class="container">
+        <div class="logo">
+            <a href="#">连心心理后台管理系统</a>
+        </div>
+        <div class="left_open">
+            <a><i title="展开左侧栏" class="iconfont">&#xe699;</i></a>
+        </div>
+
+        @*<ul class="layui-nav left fast-add" lay-filter="">
+                <li class="layui-nav-item daohang" ids="#table1">
+                    <a href="javascript:;">官网设置</a>
+                </li>
+                <li class="layui-nav-item daohang" ids="#table2">
+                    <a href="javascript:;">系统设置</a>
+
+                </li>
+            </ul>*@
+
+        <ul class="layui-nav right" lay-filter="">
+            <li class="layui-nav-item">
+                <a href="javascript:;">@user.name</a>
+                <dl class="layui-nav-child">
+                    <!-- 二级菜单 -->
+                    <dd>
+                        <a onclick="xadmin.open('个人信息','one_set.html')">个人信息</a>
+                    </dd>
+                    @*<dd>
+                            <a onclick="xadmin.open('切换帐号','http://www.baidu.com')">切换帐号</a>
+                        </dd>*@
+                    <dd>
+                        <a href="@Url.Action("UserExit", "psyLogin")">退出</a>
+                    </dd>
+                </dl>
+            </li>
+            <li class="layui-nav-item to-index">
+                <a href="#" onclick="window.open('/home/Index');">前台首页</a>
+            </li>
+        </ul>
+
+    </div>
+    <!-- 顶部结束 -->
+    <!-- 中部开始 -->
+    <!-- 左侧菜单开始 -->
+    <div class="left-nav show_list" id="table1">
+        <div id="side-nav">
+            <ul id="nav">
+                <li>
+                    <a onclick="xadmin.add_tab('我的信息', '/psychologists/EditDoctor')">
+                        <i class="iconfont  left-nav-li icon-shangpinguanli"></i>
+                        <cite>我的信息</cite>
+                    </a>
+                </li>
+                <li>
+                    <a onclick="xadmin.add_tab('咨询列表', '/psychologists/ConsultationLst')">
+                        <i class="iconfont left-nav-li icon-shangpinguanli"></i>
+                        <cite>咨询列表</cite>
+                    </a>
+                </li>
+                <li>
+                    <a onclick="xadmin.add_tab('来访者列表', '/psychologists/MyConsultationRecordLst')">
+                        <i class="iconfont left-nav-li icon-shangpinguanli"></i>
+                        <cite>来访者列表</cite>
+                    </a>
+                </li>
+                <li>
+                    <a onclick="xadmin.add_tab('可预约时间', '/psychologists/MyScheduleLst')">
+                        <i class="iconfont left-nav-li icon-shangpinguanli"></i>
+                        <cite>可预约时间</cite>
+                    </a>
+                </li>
+                <li>
+                    <a onclick="xadmin.add_tab('日历', '/psychologists/MyDateCalendar')">
+                        <i class="iconfont left-nav-li icon-shangpinguanli"></i>
+                        <cite>日历</cite>
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- 左侧菜单结束 -->
+    <!-- 右侧主体开始 -->
+    <div class="page-content">
+        <div class="layui-tab tab" lay-filter="xbs_tab" lay-allowclose="false">
+            <ul class="layui-tab-title">
+                <li class="home">
+                    <i class="layui-icon">&#xe68e;</i>我的桌面
+                </li>
+            </ul>
+            <div class="layui-unselect layui-form-select layui-form-selected" id="tab_right">
+                <dl>
+                    <dd data-type="this">关闭当前</dd>
+                    <dd data-type="other">关闭其它</dd>
+                    <dd data-type="all">关闭全部</dd>
+                </dl>
+            </div>
+            <div class="layui-tab-content">
+                <div class="layui-tab-item layui-show">
+                    @*<iframe src='/main/welcome' frameborder="0" scrolling="yes" class="x-iframe"></iframe>*@
+                    <div class="layui-fluid">
+                        <div class="layui-row layui-col-space15">
+                            <div class="layui-col-md12">
+                                <div class="layui-card">
+                                    <div class="layui-card-body ">
+                                        <blockquote class="layui-elem-quote">
+                                            欢迎：
+                                            <span class="x-red">@user.name</span>
+                                            &nbsp;
+                                            <span id="time"></span>
+                                        </blockquote>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="layui-col-md12">
+                                <div class="layui-card">
+                                    <div class="layui-card-header">数据统计</div>
+                                    <div class="layui-card-body ">
+                                        <ul class="layui-row layui-col-space10 layui-this x-admin-carousel x-admin-backlog">
+                                            <li class="layui-col-md2 layui-col-xs6">
+                                                <a href="javascript:;" class="x-admin-backlog-body">
+                                                    <h3>用户</h3>
+                                                    <p>
+                                                        <cite>@ViewBag.Record 人</cite>
+                                                    </p>
+                                                </a>
+                                            </li>
+                                            <li class="layui-col-md2 layui-col-xs6">
+                                                <a href="javascript:;" class="x-admin-backlog-body">
+                                                    <h3>留言</h3>
+                                                    <p>
+                                                        <cite>@ViewBag.MessageRecord 条</cite>
+                                                    </p>
+                                                </a>
+                                            </li>
+                                            <li class="layui-col-md2 layui-col-xs6">
+                                                <a href="javascript:;" class="x-admin-backlog-body">
+                                                    <h3>已完成订单</h3>
+                                                    <p>
+                                                        <cite> @ViewBag.Consultation 笔</cite>
+                                                    </p>
+                                                </a>
+                                            </li>
+                                            <li class="layui-col-md2 layui-col-xs6">
+                                                <a href="javascript:;" class="x-admin-backlog-body">
+                                                    <h3>未完成</h3>
+                                                    <p>
+                                                        <cite> @ViewBag.ConsultationWWC 笔</cite>
+                                                    </p>
+                                                </a>
+                                            </li>
+                                            @*<li class="layui-col-md2 layui-col-xs6">
+                                                <a href="javascript:;" class="x-admin-backlog-body">
+                                                    <h3>通知</h3>
+                                                    <p>
+                                                        <cite>12条</cite>
+                                                    </p>
+                                                </a>
+                                            </li>*@
+                                            <li class="layui-col-md2 layui-col-xs6">
+                                                <a href="javascript:;" class="x-admin-backlog-body">
+                                                    <h3>待处理</h3>
+                                                    <p>
+                                                        <cite> @ViewBag.dclRecord 条</cite>
+                                                    </p>
+                                                </a>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+
+
+                            <div class="layui-col-md12">
+                                <div class="layui-card">
+                                    <div class="layui-card-header">我的信息</div>
+                                    <div class="layui-card-body ">
+                                        <a href="#" onclick="xadmin.add_tab('我的信息', '/psychologists/EditDoctor')">查看我的信息</a>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div id="tab_show"></div>
+        </div>
+    </div>
+    <div class="page-content-bg"></div>
+    <style id="theme_style"></style>
+    <!-- 右侧主体结束 -->
+    <!-- 中部结束 -->
+
+    <style>
+        .copyrights {
+            text-indent: -9999px;
+            height: 0;
+            line-height: 0;
+            font-size: 0;
+            overflow: hidden;
+        }
+    </style>
+    <div class="copyrights" id="links20210126">
+        Copyright &copy; 2022 连心心理 -Support By
+        <a href="https://www.ji-psy.com" style="color: #C7C7C7;">连心心理</a>
+    </div>
+</body>
+
+</html>
+
+<script>
+    //$(".daohang").click(function () {
+    //    var table = $(this).attr("ids");
+    //    var ids = $(".show_list").attr("id");
+    //    $("#" + ids + "").addClass("hide_lits");
+    //    $("#" + ids + "").removeClass("show_list");
+    //    $("" + table + "").removeClass("hide_lits");
+    //    $("" + table + "").addClass("show_list");
+    //})
+
+    window.onload = function () {
+        //var click = document.getElementById('new-nav');
+        //var news = document.getElementById('news');
+        //click.addEventListener('mousemove', function () {
+        //    news.style.display = 'block';
+        //});
+        //click.addEventListener('mouseout', function () {
+        //    news.style.display = 'none';
+        //});
+    }
+
+    function wdxx(ID) {
+        xadmin.open('编辑咨询师', '/main/EditDoctor/' + ID, 850, 650);
+    }
+
+</script>
+<script src="/Content/mhome/js/echarts.min.js"></script>
+<script type="text/javascript">
+    $(function () {
+        $('.myscroll').myScroll({
+            speed: 60, //数值越大，速度越慢
+            rowHeight: 38 //li的高度
+        });
+
+    });
+
+    layui.use('layer', function () {
+        var layer = layui.layer;
+        var remember = '';
+
+    });
+
+    function getTime() {
+        var myDate = new Date();
+        var myYear = myDate.getFullYear(); //获取完整的年份(4位,1970-????)
+        var myMonth = myDate.getMonth() + 1; //获取当前月份(0-11,0代表1月)
+        var myToday = myDate.getDate(); //获取当前日(1-31)
+        var myDay = myDate.getDay(); //获取当前星期X(0-6,0代表星期天)
+        var myHour = myDate.getHours(); //获取当前小时数(0-23)
+        var myMinute = myDate.getMinutes(); //获取当前分钟数(0-59)
+        var mySecond = myDate.getSeconds(); //获取当前秒数(0-59)
+        var week = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+        var nowTime;
+
+        nowTime = myYear + '-' + fillZero(myMonth) + '-' + fillZero(myToday) + '&nbsp;&nbsp;' + fillZero(myHour) + ':' + fillZero(myMinute) + ':' + fillZero(mySecond) + '&nbsp;&nbsp;' + week[myDay] + '&nbsp;&nbsp;';
+        //console.log(nowTime);
+        $('#time').html(nowTime);
+    };
+    function fillZero(str) {
+        var realNum;
+        if (str < 10) {
+            realNum = '0' + str;
+        } else {
+            realNum = str;
+        }
+        return realNum;
+    }
+    setInterval(getTime, 1000);
+</script>
+<script src="/Content/mhome/js/fontscroll.js"></script>

@@ -1,0 +1,1013 @@
+<template>
+  <view class="page-consultant-list">
+    <!-- 顶部固定区域 (包含导航栏和搜索栏) -->
+    <view class="header-fixed-area">
+      <!-- 自定义导航栏 -->
+      <view class="custom-navbar">
+        <view class="navbar-content">
+          <view class="nav-left" @click="goBack">
+            <text class="nav-icon">‹</text>
+          </view>
+          <view class="nav-title">找咨询师</view>
+          <view class="nav-right"></view>
+        </view>
+      </view>
+
+      <!-- 搜索栏 -->
+      <view class="search-section">
+        <view class="search-bar-modern">
+          <image src="/static/images/seI.png" class="search-icon" mode="aspectFit" />
+          <input 
+            class="search-input" 
+            placeholder="搜索咨询师姓名、地区、专业" 
+            placeholder-class="search-placeholder"
+            v-model="searchKeyword"
+            @confirm="handleSearch"
+          />
+          <view v-if="searchKeyword" class="clear-icon" @click="clearSearch">×</view>
+        </view>
+      </view>
+
+      <!-- 筛选栏 -->
+      <view class="filter-section">
+        <view class="filter-bar">
+          <view 
+            class="filter-item" 
+            :class="{ active: activeFilter === 'sort' }"
+            @click="toggleFilter('sort')"
+          >
+            <text class="filter-text">{{ currentSortLabel }}</text>
+            <text class="filter-arrow" :class="{ up: activeFilter === 'sort' }">▾</text>
+          </view>
+          <view 
+            class="filter-item" 
+            :class="{ active: activeFilter === 'city' }"
+            @click="toggleFilter('city')"
+          >
+            <text class="filter-text">{{ currentCityLabel }}</text>
+            <text class="filter-arrow" :class="{ up: activeFilter === 'city' }">▾</text>
+          </view>
+          <view 
+            class="filter-item" 
+            :class="{ active: activeFilter === 'price' }"
+            @click="toggleFilter('price')"
+          >
+            <text class="filter-text">{{ currentPriceLabel }}</text>
+            <text class="filter-arrow" :class="{ up: activeFilter === 'price' }">▾</text>
+          </view>
+          <view 
+            class="filter-item" 
+            :class="{ active: activeFilter === 'more' }"
+            @click="toggleFilter('more')"
+          >
+            <text class="filter-text">筛选</text>
+            <text class="filter-icon-img">▼</text>
+          </view>
+        </view>
+
+        <!-- 筛选下拉面板 -->
+        <view v-if="activeFilter" class="filter-dropdown-mask" @click="closeFilter"></view>
+        <view class="filter-dropdown" :class="{ show: activeFilter }">
+          <!-- 综合排序 -->
+          <view v-if="activeFilter === 'sort'" class="dropdown-list">
+            <view 
+              class="dropdown-item" 
+              v-for="(item, index) in sortOptions" 
+              :key="index"
+              :class="{ selected: currentSort === item.value }"
+              @click="selectSort(item)"
+            >
+              <text>{{ item.label }}</text>
+              <text v-if="currentSort === item.value" class="check-icon">✓</text>
+            </view>
+          </view>
+
+          <!-- 城市选择 -->
+          <view v-if="activeFilter === 'city'" class="dropdown-list">
+            <view 
+              class="dropdown-item" 
+              v-for="(item, index) in cityOptions" 
+              :key="index"
+              :class="{ selected: currentCity === item.value }"
+              @click="selectCity(item)"
+            >
+              <text>{{ item.label }}</text>
+              <text v-if="currentCity === item.value" class="check-icon">✓</text>
+            </view>
+          </view>
+
+          <!-- 价格区间 -->
+          <view v-if="activeFilter === 'price'" class="dropdown-list">
+            <view 
+              class="dropdown-item" 
+              v-for="(item, index) in priceOptions" 
+              :key="index"
+              :class="{ selected: currentPrice === item.value }"
+              @click="selectPrice(item)"
+            >
+              <text>{{ item.label }}</text>
+              <text v-if="currentPrice === item.value" class="check-icon">✓</text>
+            </view>
+          </view>
+
+          <!-- 更多筛选 -->
+          <view v-if="activeFilter === 'more'" class="dropdown-panel">
+            <view class="panel-group">
+              <text class="panel-title">咨询方式</text>
+              <view class="panel-tags">
+                <view 
+                  class="panel-tag" 
+                  v-for="(item, index) in methodOptions" 
+                  :key="index"
+                  :class="{ active: currentMethod === item.value }"
+                  @click="currentMethod = item.value"
+                >
+                  {{ item.label }}
+                </view>
+              </view>
+            </view>
+            <view class="panel-group">
+              <text class="panel-title">咨询师性别</text>
+              <view class="panel-tags">
+                <view 
+                  class="panel-tag" 
+                  v-for="(item, index) in genderOptions" 
+                  :key="index"
+                  :class="{ active: currentGender === item.value }"
+                  @click="currentGender = item.value"
+                >
+                  {{ item.label }}
+                </view>
+              </view>
+            </view>
+            <view class="panel-actions">
+              <button class="btn-reset" @click="resetMoreFilter">重置</button>
+              <button class="btn-confirm" @click="confirmMoreFilter">确定</button>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 占位符，防止内容被固定头部遮挡 -->
+    <view class="header-placeholder"></view>
+
+    <!-- 咨询师列表 -->
+    <scroll-view 
+      class="list-scroll" 
+      scroll-y 
+      @scrolltolower="loadMore"
+      :refresher-enabled="true"
+      :refresher-triggered="isRefreshing"
+      @refresherrefresh="onRefresh"
+    >
+      <view class="doctor-list-modern">
+        <view 
+          class="doc-card" 
+          v-for="doctor in doctors" 
+          :key="doctor.id"
+          @click="goToDetail(doctor.id)"
+        >
+          <view class="doc-card-top">
+            <view class="doc-avatar-wrap">
+              <image 
+                :src="doctor.avatar || '/static/images/tc59.png'" 
+                class="doc-avatar" 
+                mode="aspectFill" 
+                @error="handleImageError"
+              />
+              <view class="doc-status" :class="doctor.status === '可预约' ? 'online' : 'busy'"></view>
+            </view>
+            
+            <view class="doc-info">
+              <view class="doc-name-row">
+                <text class="doc-name">{{ doctor.name }}</text>
+                <text class="doc-title">{{ doctor.title || '心理咨询师' }}</text>
+              </view>
+              
+              <view class="doc-stats">
+                <text class="stat-text">从业{{ doctor.experience || doctor.workYears || 5 }}年</text>
+                <text class="stat-dot">·</text>
+                <text class="stat-text">{{ doctor.consultHours || 1000 }}小时+</text>
+                <text class="stat-dot">·</text>
+                <text class="stat-text">{{ doctor.province || '上海' }}</text>
+              </view>
+              
+              <view class="doc-tags">
+                <text class="doc-tag" v-for="(tag, idx) in getSpecialties(doctor.specialty)" :key="idx">
+                  {{ tag }}
+                </text>
+              </view>
+            </view>
+          </view>
+          
+          <view class="doc-card-bottom">
+            <view class="doc-price-box">
+              <text class="price-symbol">￥</text>
+              <text class="price-num">{{ doctor.price || 500 }}</text>
+              <text class="price-unit">/50分钟</text>
+            </view>
+            <button class="book-btn" @click.stop="goToDetail(doctor.id)">立即预约</button>
+          </view>
+        </view>
+
+        <!-- 加载状态 -->
+        <view class="loading-state">
+          <text v-if="loading">加载中...</text>
+          <text v-else-if="!hasMore && doctors.length > 0">没有更多了</text>
+          <view v-else-if="doctors.length === 0 && !loading" class="empty-box">
+            <image src="/static/images/place12.png" class="empty-img" mode="aspectFit" />
+            <text class="empty-text">暂无符合条件的咨询师</text>
+          </view>
+        </view>
+      </view>
+    </scroll-view>
+  </view>
+</template>
+
+<script setup lang="ts">
+import { ref, onMounted, computed, nextTick } from 'vue'
+import { doctorApi } from '@/apis/index'
+import { API_CONFIG } from '@/config/api'
+import type { Doctor } from '@/types'
+import { getMockConsultantFilterMetaResponse } from '@/mocks/bookingDemo'
+
+// 咨询师数据接口扩展
+interface Consultant extends Omit<Doctor, 'province'> {
+  consultationType?: string
+  yearsOfExperience?: number
+  consultationHours?: number
+  province?: string
+  description?: string
+  price?: number
+}
+
+// 响应式数据
+const consultants = ref<Consultant[]>([])
+const loading = ref(false)
+const hasMore = ref(true)
+const searchKeyword = ref('')
+const listHeight = ref(0)
+const isRefreshing = ref(false)
+
+// 筛选栏（选项在 mock 时来自 getMockConsultantFilterMetaResponse；非 mock 用同结构默认项）
+const activeFilter = ref<'sort' | 'city' | 'price' | 'more' | ''>('')
+const sortOptions = ref<{ label: string; value: string }[]>([])
+const cityOptions = ref<{ label: string; value: string }[]>([])
+const priceOptions = ref<{ label: string; value: string }[]>([])
+const methodOptions = ref<{ label: string; value: string }[]>([])
+const genderOptions = ref<{ label: string; value: string }[]>([])
+
+const currentSort = ref('default')
+const currentCity = ref('')
+const currentPrice = ref('')
+const currentMethod = ref('')
+const currentGender = ref('')
+
+const currentSortLabel = computed(() => {
+  const hit = sortOptions.value.find((o) => o.value === currentSort.value)
+  return hit?.label || '综合排序'
+})
+const currentCityLabel = computed(() => {
+  const hit = cityOptions.value.find((o) => o.value === currentCity.value)
+  return hit?.label || '城市'
+})
+const currentPriceLabel = computed(() => {
+  const hit = priceOptions.value.find((o) => o.value === currentPrice.value)
+  return hit?.label || '价格'
+})
+
+function initFilterOptionsFromMeta() {
+  const meta = getMockConsultantFilterMetaResponse().data!
+  sortOptions.value = meta.sortOptions
+  cityOptions.value = meta.provinces
+  priceOptions.value = meta.priceRanges
+  methodOptions.value = meta.consultationMethods
+  genderOptions.value = meta.genders
+}
+
+const toggleFilter = (key: 'sort' | 'city' | 'price' | 'more') => {
+  activeFilter.value = activeFilter.value === key ? '' : key
+}
+const closeFilter = () => {
+  activeFilter.value = ''
+}
+const selectSort = (item: { label: string; value: string }) => {
+  currentSort.value = item.value
+  closeFilter()
+  fetchConsultants()
+}
+const selectCity = (item: { label: string; value: string }) => {
+  currentCity.value = item.value
+  closeFilter()
+  fetchConsultants()
+}
+const selectPrice = (item: { label: string; value: string }) => {
+  currentPrice.value = item.value
+  closeFilter()
+  fetchConsultants()
+}
+const resetMoreFilter = () => {
+  currentMethod.value = ''
+  currentGender.value = ''
+}
+const confirmMoreFilter = () => {
+  closeFilter()
+  fetchConsultants()
+}
+
+const handleSearch = () => {
+  fetchConsultants()
+}
+const clearSearch = () => {
+  searchKeyword.value = ''
+  fetchConsultants()
+}
+
+const onRefresh = async () => {
+  isRefreshing.value = true
+  try {
+    await fetchConsultants()
+  } finally {
+    isRefreshing.value = false
+  }
+}
+
+function getSpecialties(specialty: string | undefined) {
+  if (!specialty) return []
+  return specialty.split(/[|｜,，]/).map((s) => s.trim()).filter(Boolean)
+}
+
+// 计算属性：过滤后的咨询师列表
+const filteredConsultants = computed(() => {
+  if (!searchKeyword.value.trim()) {
+    return consultants.value
+  }
+  
+  const keyword = searchKeyword.value.toLowerCase()
+  return consultants.value.filter(consultant => 
+    consultant.name.toLowerCase().includes(keyword) ||
+    consultant.specialty.toLowerCase().includes(keyword) ||
+    consultant.description?.toLowerCase().includes(keyword) ||
+    consultant.province?.toLowerCase().includes(keyword)
+  )
+})
+
+// 与模板中 v-for="doctor in doctors" 对齐
+const doctors = computed(() => filteredConsultants.value)
+
+// 获取咨询师列表
+const fetchConsultants = async () => {
+  try {
+    loading.value = true
+
+    const response = await doctorApi.getList({
+      keyword: searchKeyword.value.trim() || undefined,
+      province: currentCity.value || undefined,
+      page: 1,
+      pageSize: 50,
+      priceRange: currentPrice.value || undefined,
+      sort: currentSort.value || undefined,
+      gender: currentGender.value || undefined,
+      consultMethod: currentMethod.value || undefined
+    })
+    
+    if (response.code === 0) {
+      // 转换数据格式，添加默认值
+      const doctorsList = response.data ? ((response.data as any).doctors || (response.data as any).list || []) : []
+      
+      if (!doctorsList || doctorsList.length === 0) {
+        consultants.value = []
+        return
+      }
+      
+      const consultantData = doctorsList.map((item: any) => {
+        // 处理头像URL，拼接基础URL
+        let avatarUrl = ''
+        
+        if (item.avatar) {
+          // 本地静态资源不要拼 API 域名
+          if (item.avatar.startsWith('/static/')) {
+            avatarUrl = item.avatar
+          } else if (item.avatar.startsWith('/')) {
+            avatarUrl = `${API_CONFIG.baseURL}${item.avatar}`
+          } else {
+            avatarUrl = item.avatar
+          }
+        } else if (item.avatarUrl) {
+          if (item.avatarUrl.startsWith('/static/')) {
+            avatarUrl = item.avatarUrl
+          } else if (item.avatarUrl.startsWith('/')) {
+            avatarUrl = `${API_CONFIG.baseURL}${item.avatarUrl}`
+          } else {
+            avatarUrl = item.avatarUrl
+          }
+        } else if (item.image) {
+          if (item.image.startsWith('/static/')) {
+            avatarUrl = item.image
+          } else if (item.image.startsWith('/')) {
+            avatarUrl = `${API_CONFIG.baseURL}${item.image}`
+          } else {
+            avatarUrl = item.image
+          }
+        }
+        
+        return {
+          id: item.id,
+          name: item.name,
+          avatar: avatarUrl,
+          specialty: item.specialty,
+          experience: item.experience,
+          rating: item.rating || 5,
+          province: item.province || '上海',
+          description: item.description || '暂无介绍',
+          price: item.price || 500,
+          consultationType: '地面/视频',
+          yearsOfExperience: item.yearsOfExperience || Math.floor(Math.random() * 10) + 1,
+          consultationHours: item.consultationHours || Math.floor(Math.random() * 1000) + 100
+        }
+      })
+      
+      consultants.value = consultantData
+    } else {
+      // 如果接口没有数据，设置为空数组
+      consultants.value = []
+    }
+  } catch (error) {
+    console.error('获取咨询师列表失败:', error)
+    // 接口调用失败，设置为空数组
+    consultants.value = []
+  } finally {
+    loading.value = false
+  }
+}
+
+
+
+// 搜索输入处理
+const onSearchInput = () => {
+  // 实时搜索，这里可以根据需要添加防抖
+}
+
+// 加载更多
+const loadMore = () => {
+  if (loading.value || !hasMore.value) return
+  // 这里可以实现分页加载更多
+  hasMore.value = false
+}
+
+// 跳转到详情页（模板传入 doctor.id）
+const goToDetail = (id: number | string) => {
+  uni.navigateTo({
+    url: `/pages/consultant/detail?id=${id}`
+  })
+}
+
+// 返回上一页
+const goBack = () => {
+  uni.navigateBack()
+}
+
+// 跳转到首页
+const goHome = () => {
+  uni.switchTab({
+    url: '/pages/index/index'
+  })
+}
+
+// 图片加载错误处理
+const handleImageError = (e: any) => {
+  console.error('图片加载失败:', e)
+  console.log('图片路径:', e.target?.src)
+  console.log('图片元素:', e.target)
+  
+  // 可以在这里设置默认头像
+  if (e.target) {
+    e.target.src = '/static/images/default-doctor.png'
+  }
+}
+
+// 图片加载成功处理
+const handleImageLoad = (e: any) => {
+  console.log('图片加载成功:', e.target?.src)
+}
+
+
+
+// 计算列表高度
+const calculateListHeight = () => {
+  const systemInfo = uni.getSystemInfoSync()
+  const statusBarHeight = systemInfo.statusBarHeight || 0
+  const navbarHeight = 44 // 自定义导航栏高度
+  const searchHeight = 80 // 搜索栏高度
+  const safeAreaBottom = systemInfo.safeAreaInsets?.bottom || 0
+  
+  listHeight.value = systemInfo.windowHeight - statusBarHeight - navbarHeight - searchHeight - safeAreaBottom
+}
+
+// 生命周期
+onMounted(() => {
+  initFilterOptionsFromMeta()
+  calculateListHeight()
+  fetchConsultants()
+  
+  // 监听屏幕旋转
+  uni.onWindowResize(() => {
+    nextTick(() => {
+      calculateListHeight()
+    })
+  })
+})
+</script>
+
+<style>
+/* 顶级设计系统变量与重置 */
+.page-consultant-list {
+  min-height: 100vh;
+  background-color: #F4F6F8;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 顶部固定区域 */
+.header-fixed-area {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  background: #ffffff;
+  box-shadow: 0 4rpx 24rpx rgba(0, 0, 0, 0.04);
+}
+
+/* 自定义导航栏 */
+.custom-navbar {
+  background: #0D9488;
+  padding-top: var(--status-bar-height, 0px);
+}
+
+.navbar-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 88rpx;
+  padding: 0 32rpx;
+}
+
+.nav-left, .nav-right {
+  width: 80rpx;
+  display: flex;
+  align-items: center;
+}
+
+.nav-right {
+  justify-content: flex-end;
+}
+
+.nav-icon {
+  font-size: 64rpx;
+  color: #ffffff;
+  line-height: 1;
+  margin-top: -8rpx;
+}
+
+.nav-title {
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+/* 搜索栏 */
+.search-section {
+  background: #0D9488;
+  padding: 16rpx 32rpx 32rpx;
+}
+
+.search-bar-modern {
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.95);
+  height: 76rpx;
+  border-radius: 100rpx;
+  padding: 0 24rpx;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.1);
+}
+
+.search-icon {
+  width: 32rpx;
+  height: 32rpx;
+  margin-right: 16rpx;
+  opacity: 0.5;
+}
+
+.search-input {
+  flex: 1;
+  height: 100%;
+  font-size: 28rpx;
+  color: #1F2937;
+}
+
+.search-placeholder {
+  color: #9CA3AF;
+}
+
+.clear-icon {
+  width: 40rpx;
+  height: 40rpx;
+  background: #E5E7EB;
+  color: #6B7280;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28rpx;
+  line-height: 1;
+  margin-left: 16rpx;
+}
+
+/* 筛选栏 */
+.filter-section {
+  position: relative;
+  background: #ffffff;
+}
+
+.filter-bar {
+  display: flex;
+  height: 88rpx;
+  border-bottom: 1px solid #F3F4F6;
+}
+
+.filter-item {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
+}
+
+.filter-text {
+  font-size: 28rpx;
+  color: #4B5563;
+  font-weight: 500;
+  transition: color 0.2s;
+}
+
+.filter-arrow {
+  font-size: 24rpx;
+  color: #9CA3AF;
+  transition: transform 0.3s;
+}
+
+.filter-arrow.up {
+  transform: rotate(180deg);
+}
+
+.filter-icon-img {
+  width: 24rpx;
+  height: 24rpx;
+  opacity: 0.6;
+}
+
+.filter-item.active .filter-text,
+.filter-item.active .filter-arrow {
+  color: #0D9488;
+}
+
+.filter-item.active .filter-icon-img {
+  opacity: 1;
+  filter: sepia(1) hue-rotate(150deg) saturate(300%);
+}
+
+/* 筛选下拉面板 */
+.filter-dropdown-mask {
+  position: fixed;
+  top: calc(88rpx + 124rpx + 88rpx + var(--status-bar-height, 0px));
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 90;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.filter-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: #ffffff;
+  z-index: 95;
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 0 0 32rpx 32rpx;
+}
+
+.filter-dropdown.show {
+  max-height: 800rpx;
+  box-shadow: 0 16rpx 32rpx rgba(0, 0, 0, 0.08);
+}
+
+.dropdown-list {
+  padding: 16rpx 0;
+}
+
+.dropdown-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24rpx 40rpx;
+  font-size: 28rpx;
+  color: #4B5563;
+  border-bottom: 1px solid #F9FAFB;
+}
+
+.dropdown-item:last-child {
+  border-bottom: none;
+}
+
+.dropdown-item.selected {
+  color: #0D9488;
+  font-weight: 600;
+  background: #F0FDFA;
+}
+
+.check-icon {
+  color: #0D9488;
+  font-size: 32rpx;
+  font-weight: bold;
+}
+
+.dropdown-panel {
+  padding: 32rpx 40rpx;
+}
+
+.panel-group {
+  margin-bottom: 40rpx;
+}
+
+.panel-title {
+  display: block;
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #1F2937;
+  margin-bottom: 24rpx;
+}
+
+.panel-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20rpx;
+}
+
+.panel-tag {
+  padding: 12rpx 32rpx;
+  background: #F3F4F6;
+  color: #4B5563;
+  border-radius: 100rpx;
+  font-size: 26rpx;
+  border: 1px solid transparent;
+  transition: all 0.2s;
+}
+
+.panel-tag.active {
+  background: #F0FDFA;
+  color: #0D9488;
+  border-color: #0D9488;
+  font-weight: 600;
+}
+
+.panel-actions {
+  display: flex;
+  gap: 24rpx;
+  margin-top: 16rpx;
+}
+
+.btn-reset {
+  flex: 1;
+  height: 80rpx;
+  line-height: 80rpx;
+  background: #F3F4F6;
+  color: #4B5563;
+  font-size: 30rpx;
+  font-weight: 600;
+  border-radius: 100rpx;
+  border: none;
+}
+
+.btn-confirm {
+  flex: 1;
+  height: 80rpx;
+  line-height: 80rpx;
+  background: #0D9488;
+  color: #ffffff;
+  font-size: 30rpx;
+  font-weight: 600;
+  border-radius: 100rpx;
+  border: none;
+}
+
+/* 占位符 */
+.header-placeholder {
+  height: calc(88rpx + 124rpx + 88rpx + var(--status-bar-height, 0px));
+}
+
+/* 列表区域 */
+.list-scroll {
+  flex: 1;
+  height: 0;
+}
+
+.doctor-list-modern {
+  padding: 24rpx 32rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 24rpx;
+}
+
+.doc-card {
+  background: #ffffff;
+  border-radius: 32rpx;
+  padding: 32rpx;
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.03);
+  transition: transform 0.2s;
+}
+
+.doc-card:active {
+  transform: scale(0.98);
+}
+
+.doc-card-top {
+  display: flex;
+  gap: 24rpx;
+  margin-bottom: 24rpx;
+}
+
+.doc-avatar-wrap {
+  position: relative;
+  width: 140rpx;
+  height: 140rpx;
+  flex-shrink: 0;
+}
+
+.doc-avatar {
+  width: 100%;
+  height: 100%;
+  border-radius: 24rpx;
+  background: #F3F4F6;
+  object-fit: cover;
+}
+
+.doc-status {
+  position: absolute;
+  right: -6rpx;
+  bottom: -6rpx;
+  width: 28rpx;
+  height: 28rpx;
+  border-radius: 50%;
+  border: 4rpx solid #ffffff;
+}
+
+.doc-status.online { background: #10B981; }
+.doc-status.busy { background: #F59E0B; }
+
+.doc-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.doc-name-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 16rpx;
+  margin-bottom: 12rpx;
+}
+
+.doc-name {
+  font-size: 34rpx;
+  font-weight: 800;
+  color: #1F2937;
+}
+
+.doc-title {
+  font-size: 24rpx;
+  color: #6B7280;
+  background: #F3F4F6;
+  padding: 4rpx 12rpx;
+  border-radius: 8rpx;
+}
+
+.doc-stats {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 16rpx;
+}
+
+.stat-text {
+  font-size: 24rpx;
+  color: #6B7280;
+}
+
+.stat-dot {
+  font-size: 24rpx;
+  color: #D1D5DB;
+  margin: 0 8rpx;
+}
+
+.doc-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+
+.doc-tag {
+  font-size: 22rpx;
+  color: #0D9488;
+  background: #F0FDFA;
+  padding: 6rpx 16rpx;
+  border-radius: 100rpx;
+}
+
+.doc-card-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 24rpx;
+  border-top: 1px dashed #E5E7EB;
+}
+
+.doc-price-box {
+  display: flex;
+  align-items: baseline;
+}
+
+.price-symbol {
+  font-size: 24rpx;
+  color: #F59E0B;
+  font-weight: 700;
+}
+
+.price-num {
+  font-size: 40rpx;
+  color: #F59E0B;
+  font-weight: 800;
+}
+
+.price-unit {
+  font-size: 22rpx;
+  color: #9CA3AF;
+  margin-left: 4rpx;
+}
+
+.book-btn {
+  background: #0D9488;
+  color: #ffffff;
+  font-size: 26rpx;
+  font-weight: 600;
+  height: 64rpx;
+  line-height: 64rpx;
+  padding: 0 40rpx;
+  border-radius: 100rpx;
+  margin: 0;
+  box-shadow: 0 4rpx 12rpx rgba(13, 148, 136, 0.2);
+}
+
+/* 加载状态 */
+.loading-state {
+  padding: 40rpx 0;
+  text-align: center;
+}
+
+.loading-state text {
+  font-size: 26rpx;
+  color: #9CA3AF;
+}
+
+.empty-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 80rpx 0;
+}
+
+.empty-img {
+  width: 240rpx;
+  height: 240rpx;
+  margin-bottom: 24rpx;
+  opacity: 0.6;
+}
+
+.empty-text {
+  font-size: 28rpx;
+  color: #6B7280;
+}
+</style>

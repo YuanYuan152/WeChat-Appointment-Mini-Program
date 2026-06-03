@@ -1,0 +1,508 @@
+﻿@using lxxl.Models
+@{
+    ViewBag.Title = "Index";
+    Layout = "~/Views/Shared/_LayoutJiXinLi.cshtml";
+}
+<style>
+    a:link, a:visited {
+        text-decoration: none;
+        outline: none;
+        color: #fff;
+    }
+
+    .cou-teambaner .slick-slide .img div {
+        position: absolute;
+        left: 0;
+        bottom: -100%;
+        padding: 18px;
+        height: 100%;
+        width: 100%;
+        color: #fff;
+        font-size: 14px;
+        background: rgba(27, 94, 143, 0.78);
+        transition: all .5s cubic-bezier(0.6, 0.23, 0.46, 1.02);
+    }
+
+    .cou-teambaner .slick-slide .img div {
+        overflow: scroll;
+    }
+
+        .cou-teambaner .slick-slide .img div::-webkit-scrollbar {
+            width: 6px;
+            height: 1px;
+        }
+
+        .cou-teambaner .slick-slide .img div::-webkit-scrollbar-thumb {
+            border-radius: 10px;
+            -webkit-box-shadow: inset 0 0 5px rgba(0,0,0,0.2);
+            background: #1b5e8f;
+        }
+
+        .cou-teambaner .slick-slide .img div::-webkit-scrollbar-track {
+            -webkit-box-shadow: inset 0 0 5px rgba(0,0,0,0.2);
+            border-radius: 10px;
+            background: rgba(237, 237, 237, 0.64);
+        }
+
+    .cou-teambaner .slick-slide:hover .img div {
+        bottom: 0;
+    }
+
+    .course-butmmy {
+        text-align: center;
+    }
+
+        .course-butmmy a:nth-child(1) {
+            background: #fff;
+            color: #1b5e8f;
+        }
+
+        .course-butmmy a {
+            display: inline-block;
+            width: 80px;
+            height: 21px;
+            text-align: center;
+            line-height: 21px;
+            font-size: 10px;
+            border-radius: 25px;
+            margin: 10px 5px;
+            box-shadow: 0 0 10px rgba(204,204,223,0.5);
+        }
+
+    .institution-con ul li .img div {
+        position: absolute;
+        left: 0;
+        bottom: 0;
+        color: #ffffff;
+        font-size: 12px;
+        background: rgba(249, 213, 153, 0.7);
+        transition: all .5s cubic-bezier(0.6, 0.23, 0.46, 1.02);
+        text-align: center;
+        width: 176px;
+        height: 0;
+    }
+
+    /*.institution-con ul li .img:hover div {
+        bottom: 0;
+    }*/
+    /*.institution-con ul li:hover .img {
+        background: url(../images/course-icon04-1.png) no-repeat center center;
+    }*/
+
+    .institution-con ul li:hover .img div {
+        bottom: 0;
+        position: absolute;
+        height: 32px;
+    }
+
+    .institution-con ul li {
+        margin-top: 15px;
+    }
+</style>
+<div class="con">
+    <section>
+        <div class="banner-box">
+            <div class="home_banner">
+                @foreach (T_Banner item in ViewBag.BannerLst)
+                {
+                    <div class="ban-con">
+                        <a href="javascript:void(0);">
+                            <div class="img"><img src="@item.url"></div>
+                            <div class="text ">
+                                <h3 class="wow fadeInRight">@item.Title</h3>
+                                @*<p class="none wow fadeInRight">@item.Profile</p>*@
+                            </div>
+                        </a>
+                    </div>
+                }
+            </div>
+            <!--head start-->
+            <div class="ban-appointment wow zoomIn" style="width: 420px;padding: 2em 0;margin: auto;text-align: center;background-color: rgba(0,0,0,0.4);border-radius: 10px;float: right;">
+                <h5 class="fadeInDown wow" data-wow-delay=".3s" style="font-size: 1.8em;color: #fff;line-height: 1.6;margin-top: 1em;font-weight: normal;">国内专业心理服务平台</h5>
+                <p style=" margin: 1em 0 3em; color: #fff;">严选Top1%的心理咨询师，只提供高质量的心理服务</p>
+                <div class="actions" style="overflow: hidden;width: 100%;text-align: center;padding-bottom: 0;">
+                    <a class="button button--filled--red zixun" href="javascript:void(0);" style="margin: 0 1em 0; display: inline-block; width: 40%; text-decoration: none; text-align: center; padding: 0.8em; border-radius: 4px; margin-bottom: 1em; box-sizing: border-box; opacity: 0.9; background-color: #F16272;">心理咨询</a>
+                    <a class="button button--filled--green" href="/psychiatrists" style="margin: 0 1em 0; display: inline-block; width: 40%; text-decoration: none; text-align: center; padding: 0.8em; border-radius: 4px; margin-bottom: 1em; box-sizing: border-box; opacity: 0.9; background-color: #129994; ">精神科顾问</a>
+                </div>
+            </div>
+            <!--head end-->
+        </div>
+    </section>
+    <section>
+        <div class="course-team">
+            <div class="title fadeInUp wow">
+                <h3>心理服务</h3>
+                <p>Main Business</p>
+                <br>
+                高品质、信息化的专业心理服务平台，结合最新技术，提供系统的心理健康服务和优质的学习课程。旨在提升大众心理健康水平、促进心理行业发展。
+            </div>
+            <div class="cou-teambaner" style="margin: 32px auto 16px; ">
+                <div class="wow zoomIn">
+                    <div class="img">
+                        <img src="/Public/jixinli/Business1.png">
+                        <div class="course-butmmy">
+                            <h3><span style=" padding-bottom: 3px; border-bottom: 3px solid rgb(221,155,79);">心理</span>咨询</h3>
+                            <br><span style="font-size: 10px;">心理咨询（个人、家庭和团体）</span><br>
+                            <a class="wow zoomIn" href="/home/course" rel="nofollow" style="color: #fff;background-color: rgb(239, 167, 45);">MORE+</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="wow zoomIn">
+                    <div class="img">
+                        <img src="/Public/jixinli/Business2.png">
+                        <div class="course-butmmy">
+                            <h3><span style=" padding-bottom: 3px; border-bottom: 3px solid rgb(221,155,79);">心理</span>课程</h3>
+                            <br><span style="font-size: 10px;">心理咨询理论与实践讲座、课程</span><br>
+                            <a class="wow zoomIn" href="/home/course" rel="nofollow" style="color: #fff;background-color: rgb(239, 167, 45);">MORE+</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="wow zoomIn">
+                    <div class="img">
+                        <img src="/Public/jixinli/Business1.png">
+                        <div class="course-butmmy">
+                            <h3>Alevel<span style=" padding-bottom: 3px; border-bottom: 3px solid rgb(221,155,79);">前沿</span>研讨</h3>
+                            <br><span style="font-size: 10px;">心理学和心理咨询前沿研讨</span><br>
+                            <a class="wow zoomIn" href="/home/course" rel="nofollow" style="color: #fff;background-color: rgb(239, 167, 45);">MORE+</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="wow zoomIn">
+                    <div class="img">
+                        <img src="/Public/jixinli/Business2.png">
+                        <div class="course-butmmy">
+                            <h3>IGCSE<span style=" padding-bottom: 3px; border-bottom: 3px solid rgb(221,155,79);">信息</span>系统</h3>
+                            <br><span style="font-size: 10px;">心理咨询信息系统设计、建立和运用</span><br>
+                            <a class="wow zoomIn" href="/home/course" rel="nofollow" style="color: #fff;background-color: rgb(239, 167, 45);">MORE+</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="course-data">
+            <ul>
+                <li>
+                    <h5><span class="tit" id="myTargetElement4">0</span><span>+</span></h5>
+                    <p>讲座、课程</p>
+                </li>
+                <li>
+                    <h5><span class="tit" id="myTargetElement5">0</span><span>+</span></h5>
+                    <p>心理咨询师</p>
+                </li>
+                <li>
+                    <h5><span class="tit" id="myTargetElement6">0</span><span>+</span></h5>
+                    <p>前沿研讨</p>
+                </li>
+                <li>
+                    <h5><span class="tit" id="myTargetElement7">0</span><span>+</span></h5>
+                    <p>咨询用户</p>
+                </li>
+            </ul>
+        </div>
+    </section>
+    <section>
+        <div class="box course">
+            <div class="title fadeInUp wow">
+                <h3>课程简介</h3>
+                <p>Course introduction</p>
+            </div>
+            <div class="course-con">
+                <ul>
+                    <li>
+                        <a href="/course_read.html">
+                            <div class="img wow zoomIn"><!-- <img src="/Public/index/images/course-icon01.png"> --></div>
+                            <div class="text fadeInUp wow" data-wow-delay=".5s">
+                                <h5>亲子教育</h5>
+                                <p>专业的心理测试量表，<br />帮你了解自己的心理状态</p>
+                            </div>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/course_public.html">
+                            <div class="img wow zoomIn"><!-- <img src="/Public/index/images/course-icon02.png"> --></div>
+                            <div class="text fadeInUp wow" data-wow-delay=".5s">
+                                <h5>心理测试</h5>
+                                <p>专业的心理测试量表，<br />帮你了解自己的心理状态</p>
+                            </div>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/course_learning.html">
+                            <div class="img wow zoomIn"><!-- <img src="/Public/index/images/course-icon03.png"> --></div>
+                            <div class="text fadeInUp wow" data-wow-delay=".5s">
+                                <h5>心理咨询</h5>
+                                <p>多种方式预约、<br />适合你的心理咨询</p>
+                            </div>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/course_perform.html">
+                            <div class="img wow zoomIn"><!-- <img src="/Public/index/images/course-icon04.png"> --></div>
+                            <div class="text fadeInUp wow" data-wow-delay=".5s">
+                                <h5>心理问答</h5>
+                                <p>遇到了心理方面的问题和困惑？<br />点击这里在线提问吧</p>
+                            </div>
+                        </a>
+                    </li>
+                </ul>
+                <div class="course-but">
+                    @*<a class="wow zoomIn" href="/school.html" rel="nofollow">查看课表</a>*@
+                    <a class="wow zoomIn zixun" href="javascript:void(0);" rel="nofollow">预约咨询</a>
+                </div>
+            </div>
+        </div>
+    </section>
+    <section class="achieve-bg">
+        <div class="achieve">
+            <div class="title fadeInUp wow">
+                <h3>合作项目</h3>
+                <p>International faculty</p>
+            </div>
+            <div class="achieve-con clearfix">
+                <div class="achieve-le f-l">
+                    <img src="/Public/biyou/teacher/20210418095158.png" style="width: 32%;">
+                    <img src="/Public/biyou/teacher/20210418095206.png" style="width: 61%; margin-left: -4px;">
+                </div>
+            </div>
+        </div>
+    </section>
+    <section>
+        <div class="course-team">
+            <div class="title fadeInUp wow">
+                <h3>专业咨询师</h3>
+                <p>只有约10%的申请咨询师能够通过面试考核，最终入驻连心心理；并在平台持续监管下提供服务。<br>他们接受过2年以上的专业系统训练，平均个案经验2000小时以上，是国内Top1%的心理咨询师。</p>
+            </div>
+            <div class="cou-teambaner">
+                <div class="wow zoomIn">
+                    <div class="img">
+                        <img src="/Public/counselor/zhanglujia.jpg">
+                        <p>曾就职美国纽约州精神健康中心所属的曼哈顿精神医学中心ManhattanPsychiatric Center，拥有15年丰富的临床心理治疗经验，累计个案治疗超过10,000小时，团体治疗8,000小时提供中、英文两种语言的个体，夫妻，家庭及团体心理治疗。</p>
+                    </div>
+                    <div class="text">
+                        <h5>张露佳</h5>
+                        <p><span>18000+小时经验 15年从业 视频/面询咨询</span><span>心理治疗师（中国卫健委）</span><span>康复心理咨询师 (CRC／美国／加拿大)</span><span>注册心理督导师（D-021-063／中国心理学会)</span><span>IPT人际关系疗法(中国地区)临床及培训中心负责人</span></p>
+                    </div>
+                </div>
+                <div class="wow zoomIn">
+                    <div class="img">
+                        <img src="/Public/counselor/xuedandan.jpg">
+                        <p>2010年起专职从事心理咨询工作，具有丰富的个人及家庭咨询临床经验。咨询风格：秉持理解、尊重、开放与接纳的态度，呈现不同的视角帮助来访者提升对自己、对事物的理解与觉察，从而可以更好的面对生活。</p>
+                    </div>
+                    <div class="text">
+                        <h5>薛丹丹</h5>
+                        <p><span>3000+小时经验  11年从业  视频/面询咨询</span><span>二级心理咨询师；</span><span>上海某三甲医院心理咨询师</span><span>高校兼职资深心理咨询师；</span><span>企业EAP心理咨询师；</span></p>
+                    </div>
+                </div>
+                <div class="wow zoomIn">
+                    <div class="img">
+                        <img src="/Public/counselor/xiewei.jpg">
+                        <p>中科院心理所硕士班结业（医学心理学与心理咨询治疗专业）咨询风格真诚亲切，理解关怀。</p>
+                    </div>
+                    <div class="text">
+                        <h5>谢伟</h5>
+                        <p><span>3500+小时经验  10年从业  视频/面询咨询</span><span>国家二级心理咨询师</span><span>上海浦东心理咨询师协会会员</span><span></span><span></span></p>
+                    </div>
+                </div>
+                <div class="wow zoomIn">
+                    <div class="img">
+                        <img src="/Public/counselor/shenhongxin.jpg">
+                        <p>上海某高校心理健康教育与咨询中心兼职咨询师。2009年开始临床咨询，持续接受督导达1000小时。咨询风格亲切，接纳。</p>
+                    </div>
+                    <div class="text">
+                        <h5>沈红心</h5>
+                        <p><span>1000+小时经验  10年从业  视频/面询咨询</span><span>国家二级心理咨询师</span><span>CPS注册系统注册心理师（注册号: X-21-025）</span><span>浙江大学理学硕士  副教授</span><span>上海高校心理咨询协会会员</span></p>
+                    </div>
+                </div>
+                <div class="wow zoomIn">
+                    <div class="img">
+                        <img src="/Public/counselor/xujing.jpg">
+                        <p>持续接受中德完形治疗连续培训、中美加速体验性动力学心理治疗AEDP培训、麻省大学正念中心正念减压课程、结构式家庭治疗培训、精神分析等专业培训。</p>
+                    </div>
+                    <div class="text">
+                        <h5>徐静</h5>
+                        <p><span>1500+小时经验  12年从业  视频/面询咨询</span><span>国家二级心理咨询师</span><span>上海某综合医院心理科心理咨询师</span><span></span><span></span></p>
+                    </div>
+                </div>
+                <div class="wow zoomIn">
+                    <div class="img">
+                        <img src="/Public/counselor/fangyuan.jpg">
+                        <p>长期与少年儿童及其家庭工作，积累了大量相关咨询临床经验。擅长青少年抑郁症、焦虑症、双相情感障碍和成人强迫症。同时对特殊儿童的养育及其家庭支持系统有所研究。 </p>
+                    </div>
+                    <div class="text">
+                        <h5>方圆</h5>
+                        <p><span>1000+小时经验  6年从业  视频/面询咨询</span><span>二级心理咨询师</span><span>上海某三甲医院临床心理科心理咨询师</span><span>上海12355 青少年公共服务中心讲师、心理咨询师</span><span></span></p>
+                    </div>
+                </div>
+                <div class="wow zoomIn">
+                    <div class="img">
+                        <img src="/Public/counselor/lijingyun.jpg">
+                        <p>方向：个人情感、人际关系、家庭关系、儿童和青少年成长性问题等。</p>
+                    </div>
+                    <div class="text">
+                        <h5>李静云</h5>
+                        <p><span>500+小时经验  6年从业  视频/面询咨询</span><span>国家二级心理咨询师</span><span>APPC少儿心理咨询师</span><span></span><span></span></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    <section class="advantage-box3bg">
+        <div class="title fadeInUp wow">
+            <h3>公司介绍</h3>
+            <p>Bridge University Introdution</p>
+        </div>
+        <div class="advantage-box3">
+            <div>
+                <div class="text wow fadeInRight" style="width: 510px;">
+                    <h3>上海连心心理咨询有限公司</h3>
+                    <p>
+                        高品质、有深度的专业心理服务平台。同济大学“卓越计划”联盟单位。
+                        公司依托高校理论研究和三甲医院临床心理优势，与美国、法国等建立多方国际合作，打造一支基本功扎实、经验丰富的团队，结合信息技术，提供有效的心理健康咨询和优质的心理学习内容，旨在促进家庭和谐、提升个人幸福感。
+                    </p><p>
+                        公司现有“济心理”、“同心理”两个品牌。
+                    </p>
+                    <div style="margin-top: 25px;">
+                        <a class="wow zoomIn" href="/about" rel="nofollow" style="display: inline-block; width: 100px; height: 26px; text-align: center; line-height: 24px; font-size: 12px; border-radius: 25px; margin: 0 5px; box-shadow: 0 0 10px #ddd; background-color: rgb(239, 167, 45); ">查看更多</a>
+                    </div>
+                </div>
+                <div class="img wow zoomIn"><img src="/Public/images/20210824185821.jpg" style="width: 650px;"></div>
+
+            </div>
+
+        </div>
+    </section>
+</div>
+<script type="text/javascript">
+    $(function () {
+        localStorage.active = "activeindex";
+    })
+</script>
+<!--Include Js-->
+<script type="text/javascript">
+    $(document).ready(function () {
+        $('.home_banner').slick({
+            arrows: false,
+            autoplay: true,
+            autoplaySpeed: 3000,
+            dots: true,
+        });
+
+    });
+
+    $(document).ready(function () {
+        $('.cou-teambaner').slick({
+            slidesToShow: 4,
+            slidesToScroll: 1,
+            autoplay: false,
+            autoplaySpeed: 200000,
+        });
+
+    });
+
+
+    $(document).ready(function () {
+        $('.achieve-baner').slick({
+            arrows: true,
+            slidesToShow: 2.5,
+            slidesToScroll: 1,
+            autoplay: true,
+            autoplaySpeed: 2000,
+        });
+
+    });
+    // $('.campus-con').slick({
+    //   slidesToShow: 4,
+    //   slidesToScroll: 1,
+    //   dots: true,
+    //   centerMode: true,
+    //   focusOnSelect: true
+    // });
+    var aa = new zturn({
+        id: "zturn",
+        opacity: 0.6,
+        width: 235,
+        Awidth: 1024,
+        scale: 0.9,
+    })
+    $(document).ready(function () {
+
+        $('.news-conle').slick({
+            arrows: false,
+            dots: true,
+            slidesToShow: 1,
+            slidesToScroll: 1,
+            autoplay: true,
+            autoplaySpeed: 2000,
+        });
+
+    });
+    $(document).ready(function () {
+
+        $('.coope-baner').slick({
+            arrows: false,
+            dots: true,
+            slidesToShow: 3,
+            slidesToScroll: 1,
+            autoplay: true,
+            autoplaySpeed: 2000,
+        });
+
+    });
+    $(document).ready(function () {
+
+        $('.container-banner').slick({
+            centerMode: true,
+            slidesToShow: 1,
+            arrows: false,
+            centerMode: true,
+            focusOnSelect: true,
+            autoplay: true,
+            autoplaySpeed: 2000,
+            dots: true,
+        });
+
+    });
+
+    if (!(/msie [6|7|8|9]/i.test(navigator.userAgent))) {
+        new WOW().init();
+    };
+
+</script>
+
+<script type="text/javascript">
+    var options = {
+        useEasing: true,
+        useGrouping: true,
+        separator: ',',
+        decimal: '.',
+        prefix: '',
+        suffix: ''
+    };
+    var demoh = $(window).height();
+    //var demo = new CountUp("myTargetElement", 0, 542, 0, 2.5, options);
+    //var demo2 = new CountUp("myTargetElement2", 0, 2059, 0, 2.5, options);
+    //var demo3 = new CountUp("myTargetElement3", 0, 162, 0, 2.5, options);
+    var demo4 = new CountUp("myTargetElement4", 0, 180, 0, 2.5, options);
+    var demo5 = new CountUp("myTargetElement5", 0, 120, 0, 2.5, options);
+    var demo6 = new CountUp("myTargetElement6", 0, 20, 0, 2.5, options);
+    var demo7 = new CountUp("myTargetElement7", 0, 350, 0, 2.5, options);
+    //$(window).scroll(function () {
+    //    if ($(window).scrollTop() >= $("#myTargetElement").offset().top - demoh / 2) {
+    //        demo.start();
+    //        demo2.start();
+    //        demo3.start();
+    //    }
+    //})
+    $(window).scroll(function () {
+        if ($(window).scrollTop() >= $("#myTargetElement4").offset().top - demoh / 2) {
+            demo4.start();
+            demo5.start();
+            demo6.start();
+            demo7.start();
+        }
+    })
+
+</script>
+
+
+

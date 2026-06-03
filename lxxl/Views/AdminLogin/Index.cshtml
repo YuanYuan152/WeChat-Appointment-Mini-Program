@@ -1,0 +1,62 @@
+﻿@{
+    Layout = null;
+}
+
+<!DOCTYPE html>
+
+<html>
+<head>
+    <meta name="viewport" content="width=device-width" />
+    <title>登录</title>
+    <link rel="shortcut icon" href="/Content/favicon.ico" />
+    <link href="/Content/css/login.css" rel="stylesheet" type="text/css" />
+    <script src="/Content/js/jquery-1.8.2.js" type="text/javascript"></script>
+    <script src="/Content/js/jquery.unobtrusive-ajax.js" type="text/javascript"></script>
+
+    <script type="text/javascript">
+        function changeCheckCode() {
+            $("#img").attr("src", $("#img").attr("src") + 1);
+        }
+        function afterLogin(data) {
+            var serverdata = data.split(":");
+            if (serverdata[0] == "ok") {
+                window.location.href = "/main/Index";
+            } else if (serverdata[0] == "no") {
+                $("#errorMsg").text(serverdata[1]);
+                $("#img").attr("src", $("#img").attr("src") + 1);
+                $("input[name='vCode']").attr("value", "");
+                $(".btn").attr("value", "登录");
+            } else {
+                $("#errorMsg").text("系统繁忙");
+            }
+        }
+        function Loding() {
+            $(function () {
+                $(".btn").attr("value", "登录中......");
+            })
+        }
+    </script>
+</head>
+
+<body style=" background:#F2F2F2">
+    @using (Ajax.BeginForm("UserLogin","AdminLogin", new { }, new AjaxOptions() { HttpMethod = "post", OnSuccess = "afterLogin", OnBegin = "Loding" }, new { id = "login" }))
+    {
+        <h1>登录</h1>
+        <fieldset id="inputs">
+            <input name="LoginCode" type="text" placeholder="账号" autofocus required>
+            <input name="LoginPwd" type="password" placeholder="密码" required>
+            <input name="vCode" type="text" placeholder="验证码" required style=" width:140px; float:left">
+            <img id="img" src="/AdminLogin/ShowValidateCode/?id=1" style="float: left; height: 34px; padding-top:10px; padding-left:20px;" />
+            <div style="float: left; margin-left: 5px; margin-top: 30px;">
+                <a href="javascript:void(0)" onclick="changeCheckCode();return false;">看不清，换一张</a>
+            </div>
+        </fieldset>
+        <fieldset id="actions">
+            <input type="submit" id="submit" class="btn" value="登录" style=" float:left;" />
+            <div id="errorMsg" style=" width:180px; padding:10px;float:left; color:Red; text-align:center;"></div>
+            <a href="javascript:void(0)" style=" float:left;">联系管理员</a>
+        </fieldset>
+    }
+    <br><br>
+</body>
+</html>

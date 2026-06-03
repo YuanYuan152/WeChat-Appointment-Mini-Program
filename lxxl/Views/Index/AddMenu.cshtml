@@ -1,0 +1,201 @@
+﻿@using lxxl.Models
+@{
+    ViewBag.Title = "新增菜单";
+    Layout = "~/Views/Shared/_LayoutHome.cshtml";
+    long menuid = ViewBag.menuid;
+    List<T_Menu> Menu = (Session["Menu"] as List<T_Menu>).Where(o=>o.MenuID==0&&!o.IsDelete).ToList();
+}
+
+<div class="main-content">
+    <!-- #section:basics/content.breadcrumbs -->
+    <div class="breadcrumbs breadcrumbs-fixed" id="breadcrumbs">
+        <script type="text/javascript">
+            try { ace.settings.check('breadcrumbs', 'fixed') } catch (e) { }
+        </script>
+        <ul class="breadcrumb">
+            <li>
+                <i class="ace-icon fa fa-home home-icon"></i>
+                <a href="@Url.Action("Index", "Index")">
+                    首页
+                </a>
+            </li>
+            <li class="active">菜单管理</li>
+            <li class="active">新增菜单</li>
+        </ul>
+        <!-- /.breadcrumb -->
+        <!-- #section:basics/content.searchbox -->
+        <div class="nav-search" id="nav-search" style="display: none">
+            <form action="javascript:alert('开发中')" method="post" class="form-search">
+                <span class="input-icon">
+                    <input type="text" placeholder="Search ..." class="nav-search-input" id="nav-search-input" autocomplete="off" />
+                    <i class="ace-icon fa fa-search nav-search-icon"></i>
+                </span>
+            </form>
+        </div>
+        <!-- /.nav-search -->
+        <!-- /section:basics/content.searchbox -->
+    </div>
+    <!-- /section:basics/content.breadcrumbs -->
+    <div class="page-content">
+        <div class="row">
+            <div class="col-xs-12">
+                <!-- PAGE CONTENT BEGINS -->
+                <div class="row">
+                    @if (Session["alert"] != null)
+                    {
+                        <div class="col-xs-12 col-sm-8 col-sm-offset-2">
+                            <div class="alert alert-warning alert-danger" role="alert">
+                                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                                @Session["alert"]
+                                @(Session["alert"] = null)
+                            </div>
+                        </div>
+                        <div class="col-xs-0 col-sm-2">
+                        </div>
+                    }
+                </div>
+                <div class="row">
+                    <div class="col-xs-12">
+                        <form action="@Url.Action("AddMenu", "Index")" method="post" class="form-horizontal" role="form" enctype="multipart/form-data">
+                            <!-- #section:elements.form -->
+                            <div class="col-xs-12" style="padding: 0px;">
+                                <div class="widget-box">
+                                    <div class="widget-header">
+                                        <h4 class="widget-title">新增菜单</h4>
+                                    </div>
+                                    <div class="widget-body">
+                                        <div class="widget-main">
+                                            <div class="form-group">
+                                                <label class="col-sm-3 control-label no-padding-right" for="form-field-1">
+                                                    名称
+                                                </label>
+                                                <div class="col-sm-9">
+                                                    <input type="text" name="MenuName" datatype="*" nullmsg="请输入菜单名称" placeholder="名称" value="" class="col-xs-10 col-sm-8" />
+                                                </div>
+                                            </div>
+                                            <hr />
+                                            <div class="form-group">
+                                                <label class="col-sm-3 control-label no-padding-right" for="form-field-1">
+                                                    所属菜单
+                                                </label>
+                                                <div class="col-sm-9">
+                                                    <select class="col-xs-10 col-sm-8" name="MenuID">
+                                                        @if (menuid == 0)
+                                                        {
+                                                            <option value="0">一级菜单</option>
+                                                        }
+                                                        else
+                                                        {
+                                                            foreach (var menu in Menu)
+                                                            {
+                                                                if (menu.ID == menuid)
+                                                                {
+                                                                    <option value="@menu.ID" selected>@menu.MenuName</option>
+                                                                }
+                                                                else
+                                                                { 
+                                                                    <option value="@menu.ID">@menu.MenuName</option>
+                                                                }
+                                                            }
+                                                        }
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <hr />
+                                            <div class="form-group">
+                                                <label class="col-sm-3 control-label no-padding-right" for="form-field-1">
+                                                    菜单类型
+                                                </label>
+                                                <div class="col-sm-9">
+                                                    <select name="Type" class="col-xs-10 col-sm-8">
+                                                        <option value="1">文章列表</option>
+                                                        <option value="2">直接跳转首文章</option>
+                                                        <option value="3">跳转链接</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <hr />
+                                            <div id="hideurl" style="display:none;">
+                                                <div class="form-group">
+                                                    <label class="col-sm-3 control-label no-padding-right" for="form-field-1">
+                                                        跳转链接
+                                                    </label>
+                                                    <div class="col-sm-9">
+                                                        <input type="text" name="URL" placeholder="跳转链接" value="" class="col-xs-10 col-sm-8" />
+                                                    </div>
+                                                </div>
+                                                <hr />
+                                            </div>
+                                            <div class="form-group">
+                                                <label class="col-sm-3 control-label no-padding-right" for="form-field-1">
+                                                    排序
+                                                </label>
+                                                <div class="col-sm-9">
+                                                    <input type="number" name="OrderTag" datatype="n" nullmsg="请输入排序号" errormsg="排序号请输入数字" placeholder="排序号" value="" class="col-xs-10 col-sm-8" />
+                                                </div>
+                                            </div>
+                                            <hr/>
+                                            <div class="form-group">
+                                                <label class="col-sm-3 control-label no-padding-right" for="form-field-1">
+                                                    是否显示
+                                                </label>
+                                                <div class="col-sm-9">
+                                                    <input name="Show" class="ace ace-switch ace-switch-4 btn-empty" type="checkbox" />
+                                                    <span class="lbl"></span>
+                                                </div>
+                                            </div>
+                                            <hr />
+                                            <div class="form-group">
+                                                <div class="col-sm-4">
+                                                </div>
+                                                <div class="col-sm-3">
+                                                    <input type="submit" class="btn btn-success" value="保存" style="width: 100%" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                <!-- /.row -->
+            </div>
+            <!-- /.col -->
+        </div>
+        <!-- /.row -->
+    </div>
+    <!-- /.page-content -->
+</div>
+<!--弹出效果-->
+<link href="~/Content/css/dialog.css" rel="stylesheet" />
+<script src="~/Content/js/dialog.js"></script>
+<!--验证表单-->
+<script src="~/Content/js/Validform_v5.3.2.js"></script>
+<script type="text/javascript">
+    $(function () {
+        $.Tipmsg.r = null;
+        $("form").Validform({
+            tiptype: function (msg) {
+                alert(msg);
+            },
+            tipSweep: true,
+        });
+    })
+</script>
+<script type="text/javascript">
+    $(function () {
+        $("select[name=Type]").change(function () {
+            if ($(this).val() == 3) {
+                $("#hideurl input[name=URL]").attr("datatype", "url").attr("nullmsg", "请输入跳转链接").attr("errormsg", "请输入正确的链接");
+                $("#hideurl").show();
+            } else {
+                $("#hideurl input[name=URL]").removeAttr("datatype", "url").removeAttr("nullmsg", "请输入跳转链接").removeAttr("errormsg", "请输入正确的链接");
+                $("#hideurl").hide();
+            }
+        })
+    })
+</script>
+

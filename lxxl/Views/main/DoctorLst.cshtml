@@ -1,0 +1,235 @@
+﻿@{
+    Layout = null;
+    ViewBag.Title = "Doctor";
+}
+<!DOCTYPE html>
+<html class="x-admin-sm">
+<head>
+    <meta charset="UTF-8">
+    <title>咨询师列表</title>
+    <meta name="renderer" content="webkit">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    
+    <link rel="stylesheet" href="/Content/mhome/css/font.css">
+    <link rel="stylesheet" href="/Content/mhome/css/index.css">
+    <script src="/Content/mhome/lib/layui/layui.js" charset="utf-8"></script>
+    <script type="text/javascript" src="/Content/mhome/js/index.js"></script>
+    <style type="text/css">
+        .layui-table-cell {
+            height: auto !important;
+            white-space: normal;
+        }
+
+        .layui-table img {
+            max-width: 300px;
+        }
+    </style>
+</head>
+<body>
+    <div class="x-nav">
+        <span class="layui-breadcrumb">
+            <a href="">首页</a>
+            <a>
+                <cite>咨询师列表</cite>
+            </a>
+        </span>
+        <a class="layui-btn layui-btn-small" style="line-height:1.6em;margin-top:3px;float:right" onclick="location.reload()" title="刷新">
+            <i class="layui-icon layui-icon-refresh" style="line-height:30px"></i>
+        </a>
+    </div>
+    <div class="layui-fluid">
+        <div class="layui-row layui-col-space15">
+            <div class="layui-col-md12">
+                <div class="layui-card">
+                    <div class="layui-card-body ">
+                        <table class="layui-hide" id="test" lay-filter="test" style="max-height:95%;"></table>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+    <script type="text/html" id="toolbarDemo">
+        <div class="layui-inline layui-show-xs-block">
+            <form class="layui-form layui-col-space5">
+                <div class="layui-inline layui-show-xs-block">
+                    <input class="layui-input" autocomplete="off" placeholder="姓名、手机号" name="searchName" id="searchName" lay-key="1">
+                </div>
+                <div class="layui-inline layui-show-xs-block">
+                    <button class="layui-btn layui-btn-sm" lay-event="reload" style="margin-left:10px;"><i class="layui-icon">查询</i></button>
+                </div>
+            </form>
+        </div>
+        <div class="layui-inline layui-show-xs-block">
+            <button class="layui-btn" onclick="xadmin.open('添加咨询师', '/main/AddDoctor', 850, 650)"><i class="layui-icon"></i>添加</button>
+        </div>
+    </script>
+    <script type="text/html" id="barDemo">
+        <a class="layui-btn layui-btn-xs" lay-event="editCS" style="margin:5px;">排期设置</a>
+        <a class="layui-btn layui-btn-xs" lay-event="editSL" style="margin:5px;">查看排期</a>
+        <a class="layui-btn layui-btn-xs" lay-event="edit" style="margin:5px;">编辑</a>
+        <a class="layui-btn layui-btn-warm layui-btn-xs" lay-event="sendLink" style="margin:5px;">发送链接</a>
+        <a class="layui-btn layui-btn-danger layui-btn-xs" lay-event="del" style="margin:5px;">删除</a>
+    </script>
+    <script type="text/html" id="imgtmp">
+        <img src="{{ d.url }}">
+    </script>
+    <script type="text/html" id="checkboxTpl">
+        {{#  if(d.IsShow){ }}
+        <input type="checkbox" name="lock" value="{{d.ID}}" title="显示" lay-filter="lockDemo" checked>
+        {{#  } else  { }}
+        <input type="checkbox" name="lock" value="{{d.ID}}" title="显示" lay-filter="lockDemo">
+        {{#  }
+        }}
+    </script>
+    <script>
+        layui.use('table', function () {
+            var table = layui.table
+            , form = layui.form;
+
+            table.render({
+                elem: '#test'
+               , height: 'full-120'
+              , url: '/main/GetDoctorList'
+              , where: { keyword: '' }
+               , toolbar: true
+              , toolbar: '#toolbarDemo' //开启头部工具栏，并为其绑定左侧模板
+              , title: '咨询师表'
+              , totalRow: false
+              , cols: [[
+                { type: 'checkbox', width: 40 }
+                //, { field: 'ID', title: 'ID', width: 80, unresize: true, sort: true}
+                , { field: 'name', title: '姓名' }
+                , { field: 'tel', title: '电话', width: 120 }
+                //, { field: 'Profile', title: '导语' }
+                //, { field: 'url', title: '图片', templet: "#imgtmp" }
+                //, { field: 'introduce', title: '介绍', }
+                , { field: 'number', title: '顺序号', width: 80 }
+                , {
+                    field: 'IsShow', title: '是否显示', width: 120, templet: '#checkboxTpl', unresize: true
+                }
+                , { field: 'time', title: '创建时间', width: 160, sort: true }
+                , { fixed: 'right', title: '操作', toolbar: '#barDemo', width: 290 }
+              ]]
+              , page: true
+              , limits: [10, 15, 20, 1000]
+              , limit: 15 //每页默认显示的数量
+            });
+
+            //头工具栏事件
+            table.on('toolbar(test)', function (obj) {
+                var checkStatus = table.checkStatus(obj.config.id);
+                //layer.alert(obj.event);
+                switch (obj.event) {
+                    case 'getCheckData':
+                        //var data = checkStatus.data;
+                        //layer.alert(JSON.stringify(data));
+                        layer.open({
+                            type: 2
+                            , content: '/main/AddDoctor'
+                            , area: ['450px', '450px']
+                            , maxmin: true
+                            , title: "添加咨询师"
+                        });
+                        break;
+                    case 'getCheckLength':
+                        var data = checkStatus.data;
+                        layer.msg('选中了：' + data.length + ' 个');
+                        break;
+                    case 'isAll':
+                        layer.msg(checkStatus.isAll ? '全选' : '未全选');
+                        break;
+
+                        //自定义头工具栏右侧图标 - 提示
+                    case 'LAYTABLE_TIPS':
+                        layer.alert('帮助');
+                        break;
+                    case 'reload':
+                        var searchName = $('#searchName').val();
+                        table.reload('test', {
+                            url: '/main/GetDoctorList'
+                            , where: { keyword: searchName }
+                            , page: 1
+                        }, 'data');
+                        $('#searchName').val(searchName);
+                        break;
+                };
+            });
+
+            //监听行工具事件
+            table.on('tool(test)', function (obj) {
+                var data0 = obj.data;
+                console.log(obj)
+                if (obj.event === 'del') {
+                    layer.confirm('真的删除' + data0.Name + '么', function (index) {
+                        $.post("/main/DelDoctor", { id: data0.ID }, function (data) {
+                            if (data.code == 0) {
+                                obj.del();
+                                layer.msg(data.msg);
+                                layer.close(index);
+                                //location.reload();
+                            } else {
+                                layer.alert(data.msg);
+                            }
+                        });
+                    });
+                } else if (obj.event === 'edit') {
+                    xadmin.open('编辑咨询师', '/main/EditDoctor/' + data0.ID, 850, 650);
+                }
+                else if (obj.event === 'editCS') {
+                    xadmin.open('咨询师排期设置', '/main/ClassScheduleLst/' + data0.ID,null,null, true);
+                    //layer.open({
+                    //    type: 2,
+                    //    area: ['850px', '650px'],
+                    //    fix: false, //不固定
+                    //    maxmin: true,
+                    //    shadeClose: true,
+                    //    shade: 0.4,
+                    //    title: '咨询师排期设置',
+                    //    content: '/main/ClassScheduleLst/' + data0.ID
+                    //});
+                }
+                else if (obj.event === 'editSL') {
+                    xadmin.open('咨询师排期列表', '/main/ScheduleLst/' + data0.ID, null, null, true);
+                }
+                else if (obj.event === 'sendLink') {
+                    layer.confirm('确定要发送咨询师【' + data0.name + '】的链接吗？<br/>链接将发送到咨询师的微信。', {
+                        title: '发送咨询师链接',
+                        btn: ['发送', '复制链接', '取消']
+                    }, function (index) {
+                        // 发送链接到咨询师微信
+                        $.post("/main/SendDoctorLink", { id: data0.ID }, function (data) {
+                            layer.close(index);
+                            if (data.code == 0) {
+                                layer.msg(data.msg, { icon: 1 });
+                            } else {
+                                layer.alert(data.msg, { icon: 2 });
+                            }
+                        });
+                    }, function (index) {
+                        // 复制链接到剪贴板
+                        var link = window.location.origin + '/we/ConsultantView/' + data0.gId;
+                        var tempInput = document.createElement('input');
+                        tempInput.value = link;
+                        document.body.appendChild(tempInput);
+                        tempInput.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(tempInput);
+                        layer.msg('链接已复制: ' + link, { icon: 1, time: 3000 });
+                    });
+                }
+            });
+
+            //监听锁定操作
+            form.on('checkbox(lockDemo)', function (obj) {
+
+                $.post("/main/ShowDoctor", { id: this.value, isShow: obj.elem.checked }, function (data) {
+
+                });
+            });
+        });
+
+    </script>
+</body>
+
+</html>

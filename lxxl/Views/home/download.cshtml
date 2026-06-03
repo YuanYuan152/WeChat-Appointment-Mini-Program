@@ -1,0 +1,89 @@
+﻿@{
+    ViewBag.Title = "about";
+    Layout = "~/Views/Shared/_LayoutWap.cshtml";
+}
+<style type="text/css">
+    .campus .campus-box {
+        width: 33.33%;
+        padding: 0 40px;
+    }
+</style>
+<div class="con">
+    <section>
+        <div class="banner-box">
+            <div class="home_banner bannerx">
+                <div class="ban-con">
+                    <div class="img"><img id="domain_img" src="/Public/upload/ad/2019/5d41477ee4763.png"></div>
+                    <div class="text">
+                        <h3 class="wow fadeInRight" id="domain_name">连心心理·上海</h3>
+                        <p class="none wow fadeInRight" id="domain_description">上海市杨浦区同济科技大厦</p>
+                        <p class="none wow fadeInRight" id="domain_lecturer"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    <section style="background-color: rgb(233,239,239);">
+        <div class="campus" style="margin: auto;max-width: 1000px;">
+            <div style="float: left; padding-left: 30px; text-align: left; width: 100%; margin-top: 30px;">
+                <h3 style=" font-size: 40px; color: #1b5e8f; text-align: center;">真题下载</h3>
+                <p style="position: inherit; margin-top: 10px; margin-bottom: 20px; "> </p>
+             
+            </div>
+            <div class="download-con" style="margin: auto; max-width: 1000px; ">
+                <div class="form" style="float: left; padding-left: 30px; text-align: left; width: 100%; margin-bottom: 20px;">
+                    <form action="http://www.baidu.com" method="get">
+                        <select class="yued" name="nation" style="background: url(/Public/images/w-xiala01.png) no-repeat 95% center; background-color: #dbe7f0; width: 30%; height: 40px; padding: 0 20px; line-height: 40px; font-size: 18px; border: 0; margin-bottom: 10px;">
+                            <option value="1">真题分类1</option>
+                            <option value="2">真题分类2</option>
+                            <option value="3">真题分类3</option>
+                            <option value="4">真题分类4</option>
+                            <option value="5">真题分类5</option>
+                        </select>
+                        <label><input type="text" placeholder="关键字" name="keyword" style="width: 30%; height: 40px; color: #666; background: #dbe7f0; padding: 0 20px; line-height: 40px; font-size: 18px; border: 0; /* border-radius: 30px; */ margin-bottom: 10px;"></label>
+                        <label><input type="button" class="sendf" value="搜索" style="font-weight: bold; color: #fff; margin-top: 14px; width: 100px; height: 40px; background: rgb(237,154,60); padding: 0 20px; line-height: 40px; font-size: 18px; border: 0; margin-bottom: 10px; "></label>
+
+                    </form>
+                </div>
+                <ul style="margin-top:-5px;">
+                    @for (int i = 0; i < 20; i++)
+                    {
+                        <li>
+                            <div class="img wow zoomIn" style="position: relative; width: 93%;">
+                                <div style="position: absolute; left: 0; padding: 18px; height: 100%; width: 100%; font-size: 14px; color: rgba(27, 94, 143, 0.78); transition: all .5s cubic-bezier(0.6, 0.23, 0.46, 1.02); text-align: center; ">
+                                    <h3 style="font-size: 1.5em; font-weight: initial; margin-top: 1em; ">AP MATH/数学</h3>
+                                    <br><span style="font-size: 10px;">AP MATH/数学AP MATH/数学AP MATH/数学...</span><br>
+                                    <div style="position: absolute; left: 0; width: 100%; bottom: 0; text-align: center; ">
+                                        <input type="button" class="sendD" onclick="window.open('/Public/download/英语课程1.doc') " value="下载" style="color: #fff;width: 90px; height: 24px; background: rgb(237,154,60); line-height: 24px; font-size: 13px; border: 0; border-radius: 30px; margin-bottom: 15px; ">
+                                    </div>
+                                </div>
+                            </div>
+                        </li>
+                    }
+
+                </ul>
+                <div class='dataTables_paginate paging_simple_numbers'>
+                    <ul class='pagination'> 
+                        <li id="example1_previous" class="paginate_button previous disabled phone-2" style="width: 42px; height: 42px; margin: 5px;">
+                            <a class="prev" href="/home/download/1" style="border-radius: 30px;background: white;"><</a></li>
+                        <li class="paginate_button" style="width: 42px; height: 42px; margin: 5px;"><a class="num" href="/home/download/1" style="border-radius: 30px;background: white;">1</a></li>
+                        <li class="paginate_button active" style="width: 42px; height: 42px; margin: 5px;"><a tabindex="0" data-dt-idx="1" aria-controls="example1" href="#" style="border-radius: 30px; background: rgb(237,154,60); color: white;">2</a></li>
+                        <li class="paginate_button" style="width: 42px; height: 42px; margin: 5px;"><a class="num" href="/home/download/1" style="border-radius: 30px;background: white;">3</a></li>
+                        <li class="paginate_button" style="width: 42px; height: 42px; margin: 5px;"><a class="num" href="/home/download/1" style="border-radius: 30px;background: white;">4</a></li>
+                        <li class="paginate_button" style="width: 42px; height: 42px; margin: 5px;"><a class="num" href="/home/download/1" style="border-radius: 30px;background: white;">5</a></li>
+                        <li id="example1_next" class="paginate_button next phone-2" style="width: 42px; height: 42px; margin: 5px;"><a class="next" href="/home/download/5" style="border-radius: 30px;background: white;">></a></li> 
+                    </ul>
+                </div>
+                <br>
+                <br>
+                <br>
+                <br>
+            </div>
+        </div>
+    </section>
+</div>
+<script type="text/javascript">
+    $(function () {
+        localStorage.active = "activedownload";
+    })
+</script>

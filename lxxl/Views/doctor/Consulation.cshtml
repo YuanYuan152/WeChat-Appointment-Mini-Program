@@ -1,0 +1,105 @@
+﻿@using lxxl.Models;
+@{
+    Layout = "~/Views/Shared/_LayoutDoctor.cshtml";
+    T_Consultation consultation = ViewBag.Consultation;
+}
+
+<div id="container" class="page-bd" style="top: 46px; padding-top: 46px; background-color: #F8F8F8; ">
+
+    <div class="weui-panel weui-panel_access">
+        <div class="weui-panel__hd">咨询师信息</div>
+        <div class="weui-panel__ft">
+            <a href="javascript:void(0);" class="weui-media-box weui-media-box_appmsg">
+                <div class="weui-media-box__hd weui-avatar-circle">
+                    <img class="weui-media-box__thumb" src="@consultation.doctor.url" alt="" style="height:60px;">
+                </div>
+                <div class="weui-media-box__bd">
+                    <h4 class="weui-media-box__title">@consultation.doctor.name</h4>
+                    <p class="weui-media-box__desc">从业年限: @consultation.doctor.WorkYears 年以上</p>
+                    <p class="weui-media-box__desc">咨询时数: @consultation.doctor.ConsultHours 小时+</p>
+                </div>
+            </a>
+            @*<div class="weui-media-box weui-media-box__bd">
+                    <p class="weui-media-box__desc" style="-webkit-line-clamp: initial;">@Consultation.doctor.Profile</p>
+                </div>*@
+        </div>
+    </div>
+
+
+    <div class="weui-panel" style="padding-bottom:20px;">
+        <div class="weui-panel__hd">我的预约详情</div>
+        <div class="weui-panel__bd">
+            <div class="weui-media-box weui-media-box_small-appmsg">
+                <div class="weui-cells">
+                    <a class="weui-cell weui-cell_access" href="#">
+                        <div class="weui-cell__hd"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAC4AAAAuCAMAAABgZ9sFAAAAVFBMVEXx8fHMzMzr6+vn5+fv7+/t7e3d3d2+vr7W1tbHx8eysrKdnZ3p6enk5OTR0dG7u7u3t7ejo6PY2Njh4eHf39/T09PExMSvr6+goKCqqqqnp6e4uLgcLY/OAAAAnklEQVRIx+3RSRLDIAxE0QYhAbGZPNu5/z0zrXHiqiz5W72FqhqtVuuXAl3iOV7iPV/iSsAqZa9BS7YOmMXnNNX4TWGxRMn3R6SxRNgy0bzXOW8EBO8SAClsPdB3psqlvG+Lw7ONXg/pTld52BjgSSkA3PV2OOemjIDcZQWgVvONw60q7sIpR38EnHPSMDQ4MjDjLPozhAkGrVbr/z0ANjAF4AcbXmYAAAAASUVORK5CYII=" alt="" style="width:20px;margin-right:5px;display:block"></div>
+                        <div class="weui-cell__bd weui-cell_primary">
+                            <p class="weui-media-box__desc">来访者：@consultation.name </p>
+                        </div>
+                    </a>
+                    <a class="weui-cell weui-cell_access" href="#">
+                        <div class="weui-cell__hd"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAC4AAAAuCAMAAABgZ9sFAAAAVFBMVEXx8fHMzMzr6+vn5+fv7+/t7e3d3d2+vr7W1tbHx8eysrKdnZ3p6enk5OTR0dG7u7u3t7ejo6PY2Njh4eHf39/T09PExMSvr6+goKCqqqqnp6e4uLgcLY/OAAAAnklEQVRIx+3RSRLDIAxE0QYhAbGZPNu5/z0zrXHiqiz5W72FqhqtVuuXAl3iOV7iPV/iSsAqZa9BS7YOmMXnNNX4TWGxRMn3R6SxRNgy0bzXOW8EBO8SAClsPdB3psqlvG+Lw7ONXg/pTld52BjgSSkA3PV2OOemjIDcZQWgVvONw60q7sIpR38EnHPSMDQ4MjDjLPozhAkGrVbr/z0ANjAF4AcbXmYAAAAASUVORK5CYII=" alt="" style="width:20px;margin-right:5px;display:block"></div>
+                        <div class="weui-cell__bd weui-cell_primary">
+                            <p class="weui-media-box__desc">预约时间：@consultation.appointmentTime.ToString("yyyy-MM-dd") @consultation.expectedTime </p>
+                        </div>
+                        <span class="weui-cell__ft">
+
+                        </span>
+                    </a>
+                </div>
+
+
+                <div class="weui-btn-area">
+                    @if (consultation.State == 0)
+                    {
+                        <div style="color:red; margin-bottom:5px;">
+                            <label>用户未付款</label>
+                        </div>
+                        <a class="weui-btn weui-btn_primary" href="javascript:">确定</a>
+                    }
+                    else if (consultation.State == 1)
+                    {
+                        <div style="color:red; margin-bottom:5px;">
+                            <label>请确认预约时间，点击确定后发送给用户确定</label>
+                        </div>
+                        <a class="weui-btn weui-btn_primary" href="javascript:" id="btn">确定</a>
+                    }
+                    else if (consultation.State == 2)
+                    {
+                        <div style="color:red; margin-bottom:5px;">
+                            <label>已确认预约时间并发送给用户确定</label>
+                        </div>
+                        <a class="weui-btn weui-btn_primary" href="javascript:" id="btn">确定</a>
+                    }
+                    else if (consultation.State == 3)
+                    {
+                        <div style="color:red; margin-bottom:5px;">
+                            <label>用户已确认预约时间，等待咨询</label>
+                        </div>
+                    }
+                    else
+                    {
+                        <div style="color:red; margin-bottom:5px;">
+                            <label>
+                                预约咨询已完成
+                            </label>
+                        </div>
+                    }
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<link href="~/Content/css/validform.css" rel="stylesheet" />
+<script src="~/Content/js/Validform_v5.3.2.js"></script>
+<script>
+    $(document).ready(function () {
+        document.getElementById("headerTitle").innerHTML = "预约详情";
+        document.getElementsByClassName("weui-tabbar__item")[2].classList.remove("tabbarActive"); // 删除之前已选中tab的样式
+        document.getElementsByClassName("weui-tabbar__item")[4].classList.add("tabbarActive");
+    });
+
+</script>

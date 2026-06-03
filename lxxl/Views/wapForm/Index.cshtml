@@ -1,0 +1,92 @@
+﻿
+@{
+    Layout = null;
+    var actionLst= (JArray)JsonConvert.DeserializeObject(ViewBag.actionLst);
+}
+
+<!DOCTYPE html>
+@using Newtonsoft.Json;
+@using Newtonsoft.Json.Linq;
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>问卷列表</title>
+    <link rel="stylesheet" href="~/Content/ddf/css/mui.min.css">
+    <script src="~/Content/ddf/js/jquery-3.2.1.min.js"></script>
+    <script src="~/Content/ddf/js/mui.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1,maximum-scale=1, user-scalable=no">
+    <style>
+        .mereon_01 {
+            width: 100%;
+        }
+
+        .gtcd_02 {
+            font-size: 1.4rem;
+        }
+
+        .gtcd_03 {
+            margin-top: -1%;
+            margin-left: 3%;
+        }
+
+        .main_bottom {
+            width: 100%;
+            overflow: hidden;
+            position: fixed;
+            bottom: 0;
+            background: #fff;
+            height: 5rem;
+            border-top: 1px solid #cccccc;
+            margin-top: 5rem;
+        }
+
+        .mnbm_d1 {
+            width: 33.3%;
+            float: left;
+            margin-top: 1%;
+        }
+
+        .mnbm_i1 {
+            width: 20%;
+            display: block;
+            margin: 0 auto;
+            margin-top: 2%;
+        }
+
+        .mnbm_s1 {
+            font-size: 1.4rem;
+            display: block;
+            text-align: center;
+            color: #bfbfbf;
+        }
+
+        body {
+            background: #fafafa;
+        }
+    </style>
+</head>
+<body>
+    <div class="mereon_01">
+        <ul class="mui-table-view">
+@foreach (var action in actionLst)
+{
+    <li class="mui-table-view-cell mui-media">
+        <a class="mui-navigate-right" href="/wap/wenjuan?gId=@action["ID"]">
+            <img class=" mui-pull-left" style="height:80px;width: 30%; float:left;margin-right: 2%" src="@action["Img"]">
+            <div class="mui-media-body" style="margin-right: 5%">
+                <div style="overflow: hidden;margin-bottom: 8%">
+                    <span class="gtcd_02">@action["Name"]</span><span class="gtcd_03 mui-badge mui-badge-danger"></span>
+                </div>
+                <p class='mui-ellipsis'>@action["Info"]</p>
+                @if (action["SignNumber"].ToString() != "0") {  <p class='mui-ellipsis' style="color:red;">已提交</p>}
+            </div>
+        </a>
+    </li>
+}            
+        </ul>
+    </div>
+</body>
+
+</html>
+
+<script src="~/Content/ddf/js/zishiying.js"></script>

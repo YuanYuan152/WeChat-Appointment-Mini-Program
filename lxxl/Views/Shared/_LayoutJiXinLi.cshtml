@@ -1,0 +1,362 @@
+﻿@{
+    Layout = null;
+}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>连心心理|心理咨询|心理团体活动|心理团体活动|心理相关知识讲座、培训|心理相关会议及研讨班|心理咨询信息系统</title>
+    <meta name="keywords" content="连心心理,心理咨询,心理团体活动,心理团体活动,心理相关知识讲座、培训,心理相关会议及研讨班,心理咨询信息系统" />
+    <meta name="description" content="高品质、信息化的专业心理服务平台，结合最新技术，提供系统的心理健康服务和优质的学习课程。旨在提升大众心理健康水平、促进心理行业发展。" />
+    <link rel="shortcut icon" href="/Public/favicon.ico">
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+    <link rel="stylesheet" type="text/css" href="/Public/index/css/public.css">
+    <link rel="stylesheet" type="text/css" href="/Public/index/css/animate.css">
+    <link rel="stylesheet" type="text/css" href="/Public/index/css/slick.css">
+    <link rel="stylesheet" type="text/css" href="/Public/index/css/style.css">
+    <script type="text/javascript" src="/Public/index/js/jquery.min.js"></script>
+    <script type="text/javascript" src="/Public/index/js/wow.min.js"></script>
+    <script type="text/javascript" src="/Public/index/js/slick.min.js"></script>
+    <script type="text/javascript" src="/Public/index/js/public.js"></script>
+    <script type="text/javascript" src="/Public/index/js/zturn.js"></script>
+    <script type="text/javascript" src="/Public/index/js/countUp.min.js"></script>
+</head>
+<body>
+    <!--header start-->
+
+    <header id="top">
+        <div class="top">
+            <div class="nav clearfix">
+                <div class="logo f-l"><a href="/"><img src="/Public/tongxinli/tongxinli.jpg" style="width:100px;"></a></div>
+                <div class="nav-con f-l">
+                    <ul class="nav-list">
+                        <li id="activeindex" class="">
+                            <a href="/jixinli/Index">
+                                <span>首页</span>
+                            </a>
+                        </li>
+                        <li id="activeCourse" class="">
+                            <a href="#"><span> 心理课程</span></a>
+                        </li>
+                        @*<li id="activeExaminer" class="">
+                            <a href="/jixinli/index">
+                                <span> 心理咨询</span>
+                            </a>
+                        </li>*@
+                        <li id="activedownload" class="">
+                            <a href="#">
+                                <span> 知识</span>
+                            </a>
+                        </li>
+                        <li id="activedownload" class="">
+                            <a href="#">
+                                <span> 济心理</span>
+                            </a>
+                        </li>
+                        <li id="activeabout" class="">
+                            <a href="/home/about">
+                                <span> 关于我们</span>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+                <div class="nav-contact f-r">
+                    <div class="contact-wx">
+                        <a href="" rel="nofollow"><em><img class="vcenter" src="/Public/index/images/nav-wx.png"></em><span>关注微信</span></a>
+                        <div><img src="/Public/jixinli/jierweima.png"></div>
+                    </div>
+                    <div class="contact-dh">
+                        <a href="tel:" rel="nofollow"><em><img class="vcenter" src="/Public/index/images/nav-dh.png"></em><span></span></a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+    <!--header end-->
+    <div >
+        @RenderBody()
+    </div>
+
+    <!--footer-->
+    @*<div class="bot-fixed" >
+        <div class="con clearfix">
+            <div class="img f-l">预约咨询</div>
+            <form class="f-r" id="from1">
+                <label><input type="text" name="name" placeholder="姓名" required="required" maxlength="8"></label>
+                <select class="diqu" name="bazaar">
+                    <option value="上海">上海</option>
+                    <option value="北京">北京</option>
+                    <option value="杭州">杭州</option>
+                    <option value="深圳">深圳</option>
+                    <option value="南京">南京</option>
+                    <option value="成都">成都</option>
+                    <option value="广州">广州</option>
+                    <option value="无锡">无锡</option>
+                    <option value="宁波">宁波</option>
+                    <option value="西安">西安</option>
+                </select>       
+                <select class="leixing" name="record">
+                    <option value="情绪困扰">情绪困扰</option>
+                    <option value="婚姻恋爱">婚姻恋爱</option>
+                    <option value="人际关系">人际关系</option>
+                    <option value="家庭困扰">家庭困扰</option>
+                    <option value="个人成长">个人成长</option>
+                    <option value="学业职场">学业职场</option>
+                    <option value="亲子教育">亲子教育</option>
+                    <option value="心理健康">心理健康</option>  
+                    <option value="其他">其他</option>
+                </select>
+                <label><input type="text" placeholder="手机号" name="mobile" class="phone" required="required" maxlength="11" autofocus="autofocus" autocomplete="off" oninput="if(value.length>11)value=value.slice(0,11)" onkeyup="this.value=this.value.replace(/\D/g,'')"></label>
+                <label class="sub"><input type="button" from_id="from1" class="sendf" value="立即提交" required="required" rel="nofollow"></label>
+                <input type="hidden" name="__hash__" value="6666cd76f96956469e7be39d750cc7d9_a33976313acb09883dc7c2d4f486f7aa">
+            </form>
+        </div>
+    </div>*@
+
+    <footer>
+        <div class="bottom">
+            <div class="bottom-con">
+                @*<div class="bottom-top clearfix">
+                    <div class="img"><img class="vcenter" src="/Public/index/images/bottom-dh.png"></div>
+                    <h5>全国热线</h5>
+                    <p></p>
+                </div>*@
+                <div class="bottom-box clearfix">
+                    <div class="botbox-le f-l">
+                        <ul>
+                            <li><a href="#" rel="nofollow"> W </a></li>
+                            <li><a href="/jixinli/index" rel="nofollow">首页</a></li>
+                            <li><a href="/jixinli/index" rel="nofollow">心理课程</a></li>
+                            <li><a href="/jixinli/index" rel="nofollow">心理咨询</a></li>
+                            <li><a href="/jixinli/index" rel="nofollow">知识</a></li>
+                            <li><a href="/home/index" rel="nofollow">同心理</a></li>
+                            <li><a href="/home/about" rel="nofollow">关于我们</a></li>
+                        </ul>
+                        <ul style="width: 220px;">
+                            <li><a href="#" rel="nofollow">17702168106</a></li>
+                            <li><a href="#" rel="nofollow">https://www.ji-psy.com/</a></li>
+                            <li><a href="#" rel="nofollow">上海市杨浦区同济科技大厦</a></li>
+                        </ul>
+                    </div>
+                    <div class="botbox-ri f-r">
+                        <div class="img f-r"><img src="/Public/jixinli/jierweima.png" style="width: 180px;"></div>
+                        <div>
+                            <p>扫码关注微信公众号</p>
+                        </div>
+
+                    </div>
+                </div>
+                <div class="bottom-bot"><p>Copyright © 2022 <a href="https://beian.miit.gov.cn" style="color: #fff;">沪ICP备2022028778号-1</a> 
+                    <a><img src="http://www.beian.gov.cn/img/new/gongan.png" style="margin-left: 5px; margin-right: 2px; width: 14px; color: #fff;">沪公网安备 31011002006015号</a>  
+                    上海连心心理咨询有限公司 版权所有</p></div>
+            </div>
+        </div>
+    </footer>
+    <div class="fixed_right">
+        <div class="right-box">
+            <ul>
+                @*<li>
+                    <a class="zixun" href="javascript:void(0);" rel="nofollow">
+                        <div class="icon">
+                            <img class="vcenter" src="/Public/index/images/fixed_ricon01.png">
+                            <img class="vcenter" src="/Public/index/images/fixed_ricon01-1.png">
+                        </div>
+                        <div class="text"><h5>在线咨询</h5></div>
+                    </a>
+                </li>*@
+                <li>
+                    <a href="javascript:void(0);" rel="nofollow">
+                        <div class="icon">
+                            <img class="vcenter" src="/Public/index/images/fixed_ricon02.png">
+                            <img class="vcenter" src="/Public/index/images/fixed_ricon02-1.png">
+                        </div>
+                        <div class="text"><h5>关注微信</h5></div>
+                        <div class="wximg"><img src="/Public/jixinli/jierweima.png" style="width: 124px;"></div>
+                    </a>
+                </li>
+                @*<li>
+                    <a href="javascript:void(0);" rel="nofollow">
+                        <div class="icon">
+                            <img class="vcenter" src="/Public/index/images/fixed_ricon03.png">
+                            <img class="vcenter" src="/Public/index/images/fixed_ricon03-1.png">
+                        </div>
+                        <div class="text"><h5>热线</h5></div>
+                        <div class="dhtext"><p>17702168106</p></div>
+                    </a>
+                </li>*@
+                <li>
+                    <a href="#top" rel="nofollow">
+                        <div class="icon">
+                            <img class="vcenter" src="/Public/index/images/fixed_ricon05.png">
+                            <img class="vcenter" src="/Public/index/images/fixed_ricon05-1.png">
+                        </div>
+                        <div class="text"><h5>返回顶部</h5></div>
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+
+
+    <div class="twindow">
+        <div class="mtwindow"><img src="/Public/index/images/bot-fiximg.png"></div>
+        <div class="bg"></div>
+        <div class="mbg"></div>
+        <div class="box" style="width:434px; height:450px;">
+            <div class="end"><img src="/Public/index/images/end.png"></div>
+            @*<div class="img"><img src="/Public/index/images/twindowfimgTX.png"></div>*@
+            <div class="form" style="top:60px;right:60px;width:320px;">
+                <div class="tit" style="font-size: 2em; text-align: center; margin-bottom: 18px;">预约咨询</div>
+                @*<img src="/Public/index/images/twindowftitTX.png">*@
+                <form id="from2">
+                    <label><input type="text" name="name" placeholder="姓名" required="required" maxlength="8"></label>
+                    <label><input type="text" placeholder="手机号" name="mobile" class="phone" required="required" maxlength="11" autofocus="autofocus" autocomplete="off" oninput="if(value.length>11)value=value.slice(0,11)" onkeyup="this.value=this.value.replace(/\D/g,'')" required="required" maxlength="11"></label>
+
+                    <select class="" name="bazaar">
+                        <option value="上海">上海</option>
+                        <option value="北京">北京</option>
+                        <option value="杭州">杭州</option>
+                        <option value="深圳">深圳</option>
+                        <option value="南京">南京</option>
+                        <option value="成都">成都</option>
+                        <option value="广州">广州</option>
+                        <option value="无锡">无锡</option>
+                        <option value="宁波">宁波</option>
+                        <option value="西安">西安</option>
+                    </select>  <select class="leixing" name="record">
+                        <option value="情绪困扰">情绪困扰</option>
+                        <option value="婚姻恋爱">婚姻恋爱</option>
+                        <option value="人际关系">人际关系</option>
+                        <option value="家庭困扰">家庭困扰</option>
+                        <option value="个人成长">个人成长</option>
+                        <option value="学业职场">学业职场</option>
+                        <option value="亲子教育">亲子教育</option>
+                        <option value="心理健康">心理健康</option>
+                        <option value="其他">其他</option>
+                    </select>
+                    <label><input type="button" from_id="from2" class="sendf" value="立即提交" rel="nofollow"></label>
+                    <input type="hidden" name="__hash__" value="6666cd76f96956469e7be39d750cc7d9_7205a457c91a6feb42359ff5107edaf2" />
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!--移动端导航开始-->
+    <div class="manv">
+        <div class="moblie_head">
+            <div class="f-l mlogo">
+                <a href="/">
+                    <img src="/Public/jixinli/tongxinli.jpg">
+                </a>
+            </div>
+            <div class="f-r menu">
+                <a href="javascript:;" class="a_js">
+                    <img src="/Public/index/images/menu.png">
+                </a>
+            </div>
+            <div class="clear"></div>
+        </div>
+
+        <div class="a_txt">
+
+            <div class="div1 a_closed"></div>
+
+            <div class="div3">
+                @*<div class="English f-r"><p>CN<a href="http://enreacheducation.com/" target="view_window"> | EN</a></p></div>*@
+                <div class="div2">
+                    <a href="/">
+                        <img src="/Public/biyou/logo2.png">
+                    </a>
+                    <a href="javascript:;" class="a_closed">
+                        <img src="/Public/index/images/Return.png" width="22">
+                    </a>
+                </div>
+                @*<ul>
+                    <li>
+                        <a class="a_js2" href="/home/Index">首页</a>
+                    </li>
+                    <li>
+                        <a class="a_js2" href="/home/examiner">咨询师介绍</a>
+                    </li>
+                    <li>
+                        <a class="a_js2" href="/home/course">国际课程</a>
+                    </li>
+                    <li>
+                        <a class="a_js2" href="/home/guide">名师阅读</a>                  
+                    </li>
+                    <li>
+                        <a class="a_js2" href="//home/case">优秀案例</a>
+                    </li>
+                    <li>
+                        <a class="a_js2" href="/home/download">真题下载</a>
+                    </li>
+                    <li>
+                        <a class="a_js2" href="/home/about">关于我们</a>
+                    </li>
+                    <div class="clear"></div>
+                </ul>*@
+                <div class="mnav-contact">
+                    <a href="#"><img class="vcenter" src="/Public/index/images/nav-wx.png"></a> <a href="tel:400-6666-6666"><img class="vcenter" src="/Public/index/images/nav-dh.png"></a>
+                    <a id="feedback" class="zixun" href="#">预约咨询</a>
+                </div>
+            </div>
+        </div>
+        <!--移动端导航结束-->
+    </div>
+    <script type="text/javascript" src="/Public/js/layer/layer.js"></script>
+    <script type="text/javascript">
+        $(function () {
+            //菜单激活
+            $(".nav-list li").click(function () {
+                $this = $(this);
+                if ($this.attr("id")) {
+                    localStorage.active = $this.attr("id");
+                }
+            })
+            var active = localStorage.active;
+            $("#" + localStorage.active).addClass("active");
+            if (!$(".nav-list").find("#" + active).hasClass('hsub')) {
+                $(".nav-list").find("#" + active).parent().parent().addClass("open").addClass("active");
+                $(".nav-list").find("#" + active).parent().stop().slideDown('normal');
+            }
+        })
+    </script>
+    <script>
+        $('.sendf').click(function () {
+            var from_id = $(this).attr('from_id');
+            console.log(1)
+            $.ajax({
+                url: "/home/PostMessage",
+                type: "post",
+                dataType: "json",
+                data: $('#' + from_id).serialize(),
+                success: function (request) {
+                    if (request.code == 1) {
+                        showErrorMsg(request.msg);
+                        setTimeout(function () {
+                            window.location.reload();
+                            console.log(request)
+                        }, 2000);
+                        return false;
+                    } else {
+                        showErrorMsg(request.msg);
+                        return false;
+                    }
+
+                },
+                error: function (request) {
+                    showErrorMsg("服务器繁忙, 请联系管理员!");
+                    return false;
+                }
+            });
+        });
+        function showErrorMsg(msg) {
+            layer.open({ title: '提示', content: msg });
+        }
+    </script>
+
+</body>
+</html>
+

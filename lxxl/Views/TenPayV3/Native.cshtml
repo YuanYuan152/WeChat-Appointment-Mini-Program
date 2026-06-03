@@ -1,0 +1,40 @@
+﻿@{
+    Layout = "";
+}
+<!DOCTYPE html>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=0.0, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0" />
+<link rel="stylesheet" type="text/css" href="/Content/wx/css/style.css" />
+<link rel="stylesheet" href="/Content/wx/css/weui.css" />
+<link rel="stylesheet" href="/Content/wx/css/example.css" />
+<link rel="stylesheet" type="text/css" href="/Content/wx/css/bootstrap.css">
+<script src="/Content/wx/js/jquery-1.10.2.js"></script>
+<script type="text/javascript">$(function () { $.getScript("/Content/wx/js/script.js"); })</script>
+<title>扫码支付</title>
+<body>
+
+    <div id="header" class="head">
+        <div class="wrap">
+            <div class="title">
+                <span class="title_d"><p>扫码支付</p></span>
+                <div class="clear"></div>
+            </div>
+        </div>
+    </div>
+    <div id="container">
+        <div id="content">
+
+            <div class="weui_panel_bd">
+                <form method="post" id="QrPay" action="QrPay">
+                    <center>
+                        <span style="font-size:1.5em">扫描支付</span></br>
+                        <div id="code"><img src="/TenPayV3/GetQRImg1/@ViewData["sp_billno"]" width="300" alt="" /></div>
+                    </center>
+                </form>
+            </div>
+        </div>
+    </div>
+</body>
+
+
+

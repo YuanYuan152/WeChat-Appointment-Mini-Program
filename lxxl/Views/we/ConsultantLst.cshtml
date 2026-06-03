@@ -1,0 +1,55 @@
+﻿@using lxxl.Models;
+@{
+    Layout = "~/Views/Shared/_LayoutWe1.cshtml";
+    ViewBag.Title = "ConsultantLst";
+    var BannerLst = ViewBag.BannerLst;
+    var DoctorLst = ViewBag.DoctorLst;
+}
+
+<div id="container" style="margin-top: 46px;">
+    <div class="weui-search-bar" style="background-color: transparent; position: initial; padding: 12px 24px 12px 20px;">
+        <input type="search" class="search-input" id='search' placeholder='搜索咨询师' style="background-color: rgb(67, 74, 118); border: 1px solid rgb(104,114,211); border-radius: 30px; color: #ffffff; text-align: center; line-height: 2.2;" />
+        <a style="background-color: transparent; padding: 2px 6px; margin-left: -46px; z-index: 1; ">
+            <img src="/Public/we/seI.png" alt="" style="width:30px;display:block">
+        </a>
+    </div>
+
+    <div class="weui-news">
+        <ul class="weui-news-list">
+            @foreach (T_Doctor item in ViewBag.DoctorLst)
+            {
+                <li class="weui-news-item" style="padding-top:4px; padding-bottom:2px;" >
+                    <a class="weui-news-inner" href="/we/ConsultantView/@item.gId">
+                        <div class="weui-news-media">
+                            <img class="img-responsive" src="@(item.url == "" ? "/Public/we/tc59.png" : item.url)" alt="@item.name" title="Title" />
+                            <div class="dimship">@(item.Mode == "1" ? "面对面" : item.Mode == "2" ? "视频咨询":"面对面/视频")</div>
+                            @*<div class="zxshishu">咨询时数：@item.ConsultHours 小时+</div>*@
+                        </div>
+                        <div class="weui-news-inners">
+                            <div class="weui-news-title">
+                                <span class="weui-news-left" style="color:rgb(67,74,118); font-weight:bold;">@item.name</span>
+                                <span class="weui-news-left" style="color:rgb(67,74,118);">[@item.Province]</span>
+                                <span style="color: rgb(139,86,192); float: right; font-size: 14px;margin-top:2px;">从业 @item.WorkYears 年</span>
+                            </div>
+                            <div class="weui-news-text">
+                                <p class="zxshishu">咨询时数：@item.ConsultHours 小时+</p>
+                            </div>
+                            <div class="weui-news-text">
+                                <p class="weui-news-p my-news-p">@item.Profile</p>
+                            </div>
+                            <div class="weui-news-info">
+                                <div class="weui-news-infoitem" style="width: 64%;">
+                                    <span class="weui-news-left" style="color: rgb(67,74,118); font-size: 12px !important; background-color: rgb(245,245,245); -webkit-line-clamp: 3; display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; ">@item.Specialty</span>
+                                </div>
+                                <div class="weui-news-infoitem" style="display: none;">
+                                    <span>￥@item.Billing /50分钟</span>
+                                </div>
+                            </div>
+                        </div>
+                    </a>
+                </li>
+            }
+        </ul>
+    </div>
+
+</div>

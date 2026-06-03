@@ -1,0 +1,350 @@
+﻿@{
+    ViewBag.Title = "xy";
+    Layout = null;
+}
+
+
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <title>咨询协议</title>
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+    <meta name="viewport" content="width=device-width, minimum-scale=1, maximum-scale=1,user-scalable=no, viewport-fit=cover" />
+        <script src="/Public/wjx/jquery.min.js" type="text/javascript"></script>
+    <script src="https://cdn.staticfile.org/layer/3.5.1/layer.js"></script>
+    <script type="text/javascript">
+        if (!window.layer) {
+            document.write('<script src="/Public/wjx/layer.js"><\/script>');
+        }
+    </script>
+    <style type="text/css">
+        .textEdit {
+            display: inline-block;
+            margin-bottom: 3px;
+        }
+
+            .textEdit .textCont {
+                outline: 0;
+                font-weight: 400;
+                word-break: break-word;
+                user-select: auto;
+                -webkit-user-select: auto;
+                color: #262626;
+                /*text-decoration: underline;*/
+                display: inline-block;
+                margin-left: 10px;
+                margin-right: 10px;
+                height: 24px;
+            }
+
+            .textEdit:before {
+                display: inline;
+                content: "【";
+                margin-right: 4px;
+                color: #e3e3e3;
+            }
+
+            .textEdit:after {
+                display: inline;
+                content: "】";
+                margin-left: 4px;
+                color: #e3e3e3;
+            }
+        .bracket {
+            display: inline-block;
+            color: #262626;
+            border: none !important;
+            width: auto !important;
+            height: 24px;
+            line-height: 24px;
+            margin-bottom: 4px;
+            padding: 0 !important;
+            box-shadow: none !important;
+            max-width: 60%;
+        }
+
+            .bracket select {
+                font-size: 14px;
+                display: none;
+                padding: 0 26px 0 6px;
+                height: 24px !important;
+                background: #fff;
+                border: 1px solid rgba(217,217,217,1);
+                border-radius: 2px;
+            }
+
+        .initStyle {
+            vertical-align: top;
+            padding: 0 3px;
+            display: inline-block;
+            margin: 0 4px 4px;
+            width: auto;
+            min-width: 36px;
+            height: 26px;
+            line-height: 26px;
+            background: #fff;
+            border-bottom: 1px solid #e3e3e3;
+        }
+
+            .initStyle span {
+                margin: 0;
+                max-width: 100%;
+            }
+
+            .initStyle:after, .initStyle:before {
+                display: none;
+            }
+
+        .ui-input-text {
+            border: none !important;
+            margin: 0 !important;
+        }
+
+            .ui-input-text input {
+                padding: 11px 0;
+            }
+
+    </style>
+</head>
+<body class=" ismob">
+
+    <div id="pageDiv">
+        <div id="answerProcess" style="display:none;">
+            <div class="processInner mainBgColor"></div>
+        </div>
+        <div id="headsplitdiv"></div>
+        <div id="tipHeight" style="height:40px;display:none;"></div>
+        <form id="form1" method="post" action="">
+            <div id="toptitle">
+                <h1 class="htitle" id="htitle" style="text-align: center;color: red;">
+                    咨询协议
+                </h1>
+            </div>
+            <div id="divContent" class="divContent">
+                <div id="divQuestion">
+                    <fieldset class='fieldset' pg='1' style='' id='fieldset1'>
+                        <div class='field ui-field-contain' topic='1' id='div1' req='1' gapfill='1' data-role='fieldcontain' type='9'>
+                            <div class='field-label'>
+                                <div>
+                                    <b>
+                                        <span style="color:#000000;font-family:SimSun;">重要提示：</span><span class='req'>*</span><div style='margin-top:8px;'></div>
+                                        <span style="color:#000000;"> </span><span style="color:#000000;font-family:SimSun;"> 本服务协议是您与上海连心心理咨询有限公司（以下或简称“本公司”）之间就心理咨询服务等相关事宜所订立的协议，具有法律效力。您（以下或简称“来访者”）在使用本公司提供的各项服务（以下简称“本服务”）之前，请您务必审慎阅读、充分理解各条款内容，特别是免除或限制责任的条款。免除或限制责任的条款将以粗体标识，请重点阅读。</span><div style='margin-top:8px;'></div>
+                                        <span style="color:#000000;"> </span><span style="color:#000000;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                        <span style="color:#000000;"> </span><span style="color:#000000;font-family:SimSun;"> 如来访者对协议内容有任何疑问，请不要进行后续操作。</span><div style='margin-top:8px;'></div>
+                                        <span style="color:#000000;"> </span><span style="color:#000000;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                        <span style="color:#000000;"> </span><span style="color:#000000;font-family:SimSun;"> 若来访者为未成年人，应由来访者的监护人阅读本协议并向来访者解释说明。来访者的监护人需与来访者一同签署本协议。</span>
+                                    </b><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 甲方（来访者）：<input style=display:none type='text' class='ui-input-text' id='q1_1' name='q1_1' />
+                                    <label class="textEdit initStyle"><span class='textCont' contenteditable="true" id="name">@ViewBag.name</span></label></span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 乙方（咨询机构）：上海连心心理咨询有限公司</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> <span style="color:#000000;">第一条 服务目的</span></span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 甲方主动寻求心理咨询与治疗的专业帮助，乙方从事专业心理咨询工作，乙方运用专业的咨询技术与方法帮助甲方，为甲方提供咨询。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> <span style="color:#000000;">第二条 服务内容</span></span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 乙方指定咨询师<input style=display:none type='text' class='ui-input-text' id='q1_2' name='q1_2' /><label class="textEdit initStyle" style=" text-align: center;"><span class='textCont'>@ViewBag.doctor</span></label>为甲方提供咨询服务，甲方对此予以认可并接受。双方应遵循本合同的约定，以实现相关服务的提供。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> <span style="color:#000000;">第三条 服务时间及与预约</span></span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 1. 服务时长<input style="display:none" type='text' class='ui-input-text' id='q1_3' name='q1_3' /><label class="textEdit initStyle" style="width: 40px; text-align: center;"><span class='textCont'>50</span></label>分钟起，具体服务时间可由甲方与咨询师预约确定。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 2. 甲方应至少提前48小时预约咨询服务。甲方需要变更预约（包括咨询时间、咨询方式、取消预约等），需要在预约服务开始前至少24小时提出，并取得乙方书面同意。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 3. 若甲方未在前述约定期限内提出变更服务的，即使甲方缺席预约咨询服务，乙方仍按照预约服务时长收取服务费用。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 4. 若甲方迟到，乙方提供的咨询服务仍在原定时间开始及结束，除非双方另行协商一致。若乙方咨询师迟到，咨询服务时间顺延。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> <span style="color:#000000;">第四条 服务费用及支付</span></span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 1. 本协议项下心理咨询服务的收费标准为<input style=display:none type='text' class='ui-input-text' id='q1_4' name='q1_4' /><label class="textEdit initStyle" style="text-align: center;"><span class='textCont' id="jinerX" onblur='CjinerX(this);'>@ViewBag.money</span></label>元/50分钟（大写：人民币<input style=display:none type='text' class='ui-input-text' id='q1_5' name='q1_5' /><label class="textEdit initStyle" ><span class='textCont' id="jinerD"></span></label>/伍拾分钟）。具体计费方式为：每次咨询以50分钟为一节，超过50分钟以10分钟为时间单位计费，不足10分钟的按10分钟计算。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 2. 咨询服务的服务时长计算方式为：自乙方咨询师与甲方交流开始起，至双方交流结束离开咨询室／线上会议室止。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 3. 甲方应于咨询服务开始前支付相应的咨询费用，以付费完成为咨询预约确认。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> <span style="color:#000000;">第五条 甲方权利义务</span></span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 1. 甲方确认，在接受乙方提供的服务时甲方具备完全民事权利能力。若甲方系未成年人，保证在接受乙方提供的服务前已取得监护人的同意。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 2. 甲方在咨询期间不得有自杀、严重自伤行为。如有此类想法，甲方或者甲方监护人应当及时告知，寻求乙方帮助。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 3. 甲方必须遵守中华人民共和国相关法律法规的规定，不得有违法犯罪行为，不得将乙方提供的服务用于任何违法或不正当或不道德的活动。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 4. 甲方应提供真实、正确、完整及最新的资料，特别是紧急联系人与紧急联系电话。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 5. 甲方有义务提供与心理咨询有关的真实资料，有义务提供专业医疗机构作出的精神疾病相关诊断，不得隐瞒精神病史，有义务按照乙方要求到专业医疗机构进行精神疾病鉴别诊断，在精神科医生指导下通过心理咨询进行辅助治疗。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 6. 甲方有权更换本协议内指定的咨询师。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 7. 甲方应当根据本协议的约定按时足额向乙方支付相应的服务费用。如甲方迟延支付或者未支付乙方相应的服务费用，乙方有权拒绝提供本协议约定的相关服务。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 8. 甲方不得对心理咨询会谈进行录音录像。为保障服务质量，咨询师如需录音录像，需要和甲方另签知情同意协议。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> <span style="color:#000000;">第六条 乙方权利义务</span></span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 1. 乙方承诺向甲方提供心理咨询服务的工作人员系取得相应资质的咨询师。未经甲方同意，乙方不得更换本协议内指定的咨询师。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 2. 乙方及乙方咨询师应遵守职业道德，遵守国家有关法律法规。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 3. 乙方及乙方咨询师应严格遵守保密原则。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 4. 乙方及乙方咨询师本着对甲方负责的态度，有权提出转介、中止或终止咨询服务。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 5. 乙方有权按照本协议的约定向甲方收取相应的服务费用。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 6. 乙方不得对心理咨询会谈进行录音录像。为保障服务质量，咨询师如需录音录像，需要和甲方另签知情同意协议。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> <span style="color:#000000;">第七条 免责条款</span></span><div style='margin-top:8px;'></div>
+                                    <span style="color:#000000;"> </span><span style="color:#000000;font-family:SimSun;"> 1. 在咨询过程中，甲方因自身原因而突发疾病或意外死亡，或因自身原因造成情绪失控而发生自伤、自残、自杀等后果，乙方及乙方咨询师尽可能采取措施控制事态发展，防止事态恶化，必要时与相关部门取得联系。由此造成的损害后果，乙方不承担责任。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#000000;"> </span><span style="color:#000000;font-family:SimSun;"> 2. 甲方在咨询期间不得有自杀与严重自伤行为。甲方仅有轻微自杀自伤意念前来咨询时，乙方会尽量为甲方提供帮助，必要时提供转介途径，终止咨询。如甲方最终选择自杀或对自己、对他人造成伤害的，责任及后果由甲方全部承担，乙方不承担责任。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#000000;"> </span><span style="color:#000000;font-family:SimSun;"> 3. 乙方提供的心理咨询服务不属于疾病诊断或治疗活动，不属于开展诊疗活动，不属于医疗机构。若甲方对本条款不同意或不理解，请立即停止后续操作，乙方将立即终止服务。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#000000;"> </span><span style="color:#000000;font-family:SimSun;"> 4. 甲方理解并同意，心理咨询的效果取决于甲方与咨询师双方配合作用的结果。无论乙方提供何种咨询方式，乙方并不保证甲方接受乙方的咨询服务后一定能达到某种效果。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#000000;"> </span><span style="color:#000000;font-family:SimSun;"> 5. 甲方理解并同意：若接受乙方咨询服务后达不到甲方心理预期的心理咨询效果，不属于服务质量问题，甲方不应以此为由要求乙方退款，且乙方不承担任何责任。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#000000;font-family:SimSun;">6. 甲方在接受乙方提供的咨询服务前，应提供与其心理状态有关的真实资料；若甲方故意隐瞒、虚构资料而造成的不良后果由甲方自身承担。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#000000;font-family:SimSun;">7. 为保障甲方权益，甲方应在乙方提供的咨询服务范围内接受服务，任何未经乙方知晓并同意私下与咨询师达成的交易而产生纠纷与乙方无关。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> <span style="color:#000000;">第八条 保密条款</span></span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 1. 乙方将采取合理的安全手段保护甲方提供的个人信息，除下述信息披露条款外，在未得到甲方许可之前，乙方不会将甲方的任何个人信息提供给任何第三方：</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> （1）经甲方事先同意，向第三方披露；</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> （2）如甲方出现自杀、严重自伤或伤害他人行为或风险，必要时乙方会与相关部门取得联系并提供甲方的相关个人信息；</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> （3）如甲方违反中国有关法律法规，行政或司法机构依法要求调查时，乙方会依法向行政或司法机构披露；</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> （4）乙方在研讨会、课堂或学术作品中引用经过修饰的案例材料，在引用时，乙方将删除所有能够识别出个人的信息，以保证甲方的匿名身份；</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> （5）为维护甲方合法权益等其他必要情况。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 2. 乙方不允许任何第三方以任何手段收集、编辑、出售或无偿传播甲方的个人信息。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 3. 咨询服务的终止不影响本保密条款的效力，本条款始终有效。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> <span style="color:#000000;">第九条 知识产权</span></span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 1. 乙方提供的服务中包含的任何文件或资料均受版权、商标和/或其它财产所有权法律的保护，乙方享有上述知识产权，但相关权利人依照法律规定应享有的权利除外。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 2. 未经权利人书面同意，甲方均不得将上述资料以及乙方提供咨询服务的过程在任何媒体直接或间接发布、播放、出于播放或发布目的而改写或再发行, 或者被用于其他任何商业目的。所有以上资料或资料的任何部分仅可作为私人和非商业用途保存。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 3. 甲方违反本条约定的，乙方有权要求甲方赔偿乙方全部经济损失。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> <span style="color:#000000;">第十条 服务的终止</span></span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;">甲乙双方之间的咨询关系是自愿建立的。任何一方均可单方面提出终止服务。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> <span style="color:#000000;">第十一条 法律适用及争议解决</span></span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 1. 本协议的订立、效力、解释、履行及争议的解决均适用中华人民共和国法律。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 2. 在本协议履行过程中发生争议，可以通过协商解决；协商不成，双方同意将争议提交至乙方所在地人民法院起诉解决。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 3. 在争议期间，本协议不涉及争议部分的条款仍须履行。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> <span style="color:#000000;">第十二条 合同的效力</span></span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 1. 本合同自双方签字盖章之日起生效。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 2. 本协议未经协议各方一致同意，任何一方无权单方变更、解除本协议。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 3. 本协议的有效性不因部分条款的无效而受影响，部分条款无效，不影响其他条款的有效和履行。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 4. 本协议壹式贰份，双方各执壹份，具有同等法律效力。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> （以下无正文）</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 甲方(签字): 甲方监护人（签字）：</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 日期：<input style="display:none" type='text' class='ui-input-text' id='q1_6' name='q1_6' /><label class="textEdit initStyle" style=""><span class='textCont' >@ViewBag.NowDate</span></label></span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 乙方（盖章）：</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 日期：<input style="display:none" type='text' class='ui-input-text' id='q1_7' name='q1_7' /><label class="textEdit initStyle" style=""><span class='textCont' >@ViewBag.NowDate</span></label></span>
+                                </div>
+                            </div><div class='errorMessage'></div>
+                        </div>
+                        <div class='field ui-field-contain' topic='2' id='div2' req='1' maxsize='4096' maxlength='1' data-role='fieldcontain' type='13'>
+                            <div class='field-label'>甲方签字：<span class='req'>*</span></div>
+                            @*/Public/wjx/uploadqiniu.aspx?activity=148415146&q=2&ms=4096&length=1&ismobile=1&signSize=1&signatureBg=*@
+                            <iframe id='uploadFrame2' name='uploadFrame2' frameborder='0' width='100%' scrolling='no' src='/Public/wjx/signature.html' height='220px'></iframe>
+                            <div class='uploadmsg' style='color:red;'></div><div class='errorMessage'></div>
+                        </div>
+                        <div class='field ui-field-contain' topic='3' id='div3' maxsize='4096' maxlength='1' data-role='fieldcontain' type='13'>
+                            <div class='field-label'>甲方监护人签字</div>
+                            <iframe id='uploadFrame3' name='uploadFrame3' frameborder='0' width='100%' scrolling='no' src='/Public/wjx/signature.html' height='220px'></iframe>
+                            <div class='uploadmsg' style='color:red;'></div><div class='errorMessage'></div>
+                        </div>
+                    </fieldset>
+                </div>                
+                <div class="footer">
+                    <div class="ValError" id="ValError">
+                    </div>@*display: none;*@
+                    <div id="divSubmit" style="padding: 10px 20px;">
+                        @*<div class="voteDiv">
+                            <div>
+                                <div id="ctlNext" class="submitbtn mainBgColor" onclick='tijiao()'>提交</div>
+                                <a href="javascript:;" class="button white ctBack" onclick='history.back()'>返回</a>
+                            </div>
+                        </div>*@
+
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <script type="text/javascript">
+        function CjinerX() {
+            var jiner = document.getElementById("jinerX").innerHTML;
+            if (jiner === "" || jiner == null) {
+                return false;
+            }
+
+            if (isNaN(jiner)) {
+                alert("请填入数字");
+                return true;
+
+            }
+            document.getElementById("jinerD").innerHTML = digitUppercase(jiner);
+        }
+        
+        function digitUppercase(n) {
+            var fraction = ['角', '分'];
+            var digit = [
+                    '零', '壹', '贰', '叁', '肆',
+                    '伍', '陆', '柒', '捌', '玖'
+            ];
+            var unit = [
+                    ['元', '万', '亿'],
+                    ['', '拾', '佰', '仟']
+            ];
+            var head = n < 0 ? '欠' : '';
+            n = Math.abs(n);
+            var s = '';
+            for (var i = 0; i < fraction.length; i++) {
+                s += (digit[Math.floor(n * 10 * Math.pow(10, i)) % 10] + fraction[i]).replace(/零./, '');
+            }
+            s = s || '整';
+            n = Math.floor(n);
+            for (var i = 0; i < unit[0].length && n > 0; i++) {
+                var p = '';
+                for (var j = 0; j < unit[1].length && n > 0; j++) {
+                    p = digit[n % 10] + unit[1][j] + p;
+                    n = Math.floor(n / 10);
+                }
+                s = p.replace(/(零.)*零$/, '').replace(/^$/, '零') + unit[0][i] + s;
+            }
+            return head + s.replace(/(零.)*零元/, '元')
+                    .replace(/(零.)+/g, '零')
+                    .replace(/^整$/, '零元整');
+        };
+
+
+        $(document).ready(function () {
+            CjinerX();
+        });
+
+        function tijiao() {
+            var jiner = document.getElementById("jinerX").innerHTML;
+            if (jiner === "" || jiner == null) {
+                alert("请填入金额");
+                return -1;
+            }
+            var name = document.getElementById("name").innerHTML;
+            if (name === "" || name == null) {
+                alert("请填入姓名");
+                return -1;
+            }
+            if (window.frames["uploadFrame2"].document.getElementById("signature-img").src.substr(0, 5) === 'data:' && window.frames["uploadFrame3"].document.getElementById("signature-img").src.substr(0, 5) === 'data:') {
+                $.ajaxSettings.async = false;
+                var id = 0;
+                $.ajax({
+                    url: '/Patient/EditXY',
+                    data: { jiner: jiner, name: name, doctor: '@ViewBag.doctor', img1: window.frames["uploadFrame2"].document.getElementById("signature-img").src, img2: window.frames["uploadFrame3"].document.getElementById("signature-img").src },
+                    type: 'post',
+                    async: false,
+                    success: function (data) {
+                        if (data.code == 0) {
+                            id = data.id;
+                        }
+                    }
+                })
+                return id;
+            }
+            else {
+                alert("签名异常，请检查");
+                return -1;
+            }
+        }
+    </script>
+
+</body>
+
+
+</html>

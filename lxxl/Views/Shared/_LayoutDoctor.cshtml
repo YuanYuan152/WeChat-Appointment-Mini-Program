@@ -1,0 +1,189 @@
+﻿@{
+    Layout = null;
+}
+
+<!DOCTYPE html>
+<html lang="en"
+<head>
+    <meta charset="utf-8">
+    <meta charset="UTF-8">
+    <title>连心心理|心理咨询|心理团体活动|心理团体活动|心理相关知识讲座、培训|心理相关会议及研讨班|心理咨询信息系统</title>
+    <meta name="keywords" content="连心心理,心理咨询,心理团体活动,心理团体活动,心理相关知识讲座、培训,心理相关会议及研讨班,心理咨询信息系统" />
+    <meta name="description" content="高品质、信息化的专业心理服务平台，结合最新技术，提供系统的心理健康服务和优质的学习课程。旨在提升大众心理健康水平、促进心理行业发展。" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no">
+    <link rel="stylesheet" href="/Content/weui/css/weui.css" />
+    <link rel="stylesheet" href="/Content/weui/css/weuix.css" />
+    <script type="text/javascript" src="/Public/index/js/jquery.min.js"></script>
+    <script src="/Content/weui/js/zepto.min.js"></script>
+    <script src="/Content/weui/js/zepto.weui.js"></script>
+    <script src="/Content/weui/js/swipe.js"></script>
+
+    <link rel="stylesheet" type="text/css" href="/Public/index/css/slick.css">
+
+    <style>
+        * {
+            margin: 2px;
+            padding: 0px;
+        }
+
+        html,
+        body {
+            height: 100%;
+        }
+
+        #wrap {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        #head {
+            width: 100%;
+            position: fixed;
+            background-color: #E7E8ED;
+            height: 52px;
+            top: 0;
+            z-index: 999;
+        }
+
+        #main {
+            width: 100%;
+            position: absolute;
+            padding-top: 55px;
+            padding-bottom: 55px;
+            font-family: initial;
+        }
+
+        #foot {
+            position: fixed;
+            bottom: 0px;
+            height: 50px;
+            width: 100%;
+            background: #f5eedc;
+        }
+
+        .tab-bottom a img {
+            width: 40px;
+        }
+
+        .tab-bottom a p {
+            color: rgb(67,74,118);
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        .weui-news-media {
+            width: 7rem;
+        }
+
+        .weui-news-title {
+            font-size: 18px;
+            font-weight: bold;
+            position: relative;
+            max-width: 100%;
+            color: rgb(67,74,118);
+        }
+
+        .my-news-p {
+            font-size: 14px;
+            color: rgb(67,74,118);
+            -webkit-line-clamp: 3;
+            line-height: 18px;
+            margin-top: 2px;
+        }
+
+        .weui-news-left {
+            margin-left: 0.05rem !important;
+            font-size: 16px !important;
+            color: rgb(255,190,38);
+            font-weight: bold;
+        }
+
+        .dimship {
+            width: 72px;
+            height: 20px;
+            line-height: 20px;
+            font-size: 12px;
+            position: absolute;
+            left: 3px;
+            top: 13px;
+            background-color: rgb(239,253,255);
+            color: rgb(67,74,118);
+            border-radius: 1em;
+            text-align: center;
+        }
+
+        .zxshishu {
+            height: 20px;
+            line-height: 20px;
+            font-size: 12px;
+            padding: 0 8px;
+            position: relative;
+            right: 12px;
+            background-color: rgb(105,81,131);
+            color: #ffffff;
+            border-radius: 12px 0 12px 0;
+            text-align: center;
+            transform: scale(0.8);
+        }
+
+        #header {
+            background-color: #004982;
+            overflow: hidden;
+            position: fixed;
+            z-index: 99;
+            width: 100%;
+            left: 0;
+            top: 0;
+        }
+
+    .tabbarActive p {
+        color:#07c160 !important;
+    }
+    </style>
+</head>
+
+<body style="background-color:rgb(67,74,118)">
+
+    <div id="header" class="weui-header">
+        <div class="weui-header-left"> <a href="javascript:history.back(-1);" style="color: #FFF;">返回</a>  </div>
+        <h1 class="weui-header-title" id="headerTitle" style="color: #FFF;">咨询师</h1>
+        <div class="weui-header-right"><a href="@Url.Action("Index", "we")" style="color: #FFF;">主页</a></div>
+    </div>
+    
+    <div >
+        @RenderBody()
+    </div>
+
+    <div style="height:120px; text-align: center;">
+    </div>
+    <div class="weui-tabbar tab-bottom" style="background-color: #ffffff; border-radius: 12px 12px 0 0;">
+        <a href="/we/Index" class="weui-tabbar__item">
+            <img src="/Public/we/bottom1.png" alt="">
+            <p class="weui-tabbar__label">首页</p>
+        </a>
+        <a href="javascript:;" class="weui-tabbar__item">
+            <img src="/Public/we/bottom2.png" alt="">
+            <p class="weui-tabbar__label">活动招募</p>
+        </a>
+
+        <a href="javascript:;" class="weui-tabbar__item tabbarActive">
+            <img src="/Public/we/bottom10.png" alt="" style="position: absolute; bottom:35px; left: 0px; width: 100%;">
+            <p class="weui-tabbar__label" style="margin-top: 40px;">心理咨询</p>
+        </a>
+        <a href="javascript:;" class="weui-tabbar__item">
+            <img src="/Public/we/bottom3.png" alt="">
+            <p class="weui-tabbar__label">主题月</p>
+        </a>
+        <a href="javascript:;" class="weui-tabbar__item ">
+            <img src="/Public/we/bottom4.png" alt="">
+            <p class="weui-tabbar__label">我的</p>
+        </a>
+    </div>
+
+    <script type="text/javascript" src="/Public/index/js/slick.min.js"></script>
+    <script type="text/javascript" src="/Public/index/js/zturn.js"></script>
+
+</body>
+</html>
+

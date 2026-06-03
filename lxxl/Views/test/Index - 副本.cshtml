@@ -1,0 +1,731 @@
+﻿@{
+    ViewBag.Title = "Index";
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>日历日程表联动</title>
+
+
+    <link rel="stylesheet" href="/Content/calendar/tui.calendar/tui-calendar.css">
+    <link rel="stylesheet" href="/Content/calendar/tui.calendar/tui-date-picker.css">
+    <link rel="stylesheet" href="/Content/calendar/tui.calendar/tui-time-picker.css">
+    <link rel="stylesheet" href="/Content/calendar/layui/css/layui.css">
+
+    <script src="/Content/calendar/jquery-3.3.1.min.js"></script>
+    <script src="/Content/calendar/moment.js"></script>
+    <script src="/Content/calendar/layui/layui.all.js"></script>
+
+
+    <script src="/Content/calendar/tui.calendar/tui-code-snippet.min.js"></script>
+    <script src="/Content/calendar/tui.calendar/tui-date-picker.min.js"></script>
+    <script src="/Content/calendar/tui.calendar/tui-time-picker.min.js"></script>
+    <script src="/Content/calendar/tui.calendar/tui-calendar.js"></script>
+</head>
+<body>
+
+    <style>
+        * {
+            outline: 0;
+            -webkit-box-sizing: border-box;
+            -moz-box-sizing: border-box;
+            box-sizing: border-box;
+        }
+
+        html {
+            font: normal 14px "Microsoft YaHei";
+            -webkit-text-size-adjust: 100%;
+        }
+
+        body {
+            padding: 0;
+            margin: 0 auto;
+            font-size: 14px;
+            color: #333;
+            background-color: #fff;
+            font-family: "Arial","Microsoft YaHei";
+            min-width: 320px;
+            -webkit-text-size-adjust: none;
+            /*取出点击出现半透明的灰色背景*/
+            -webkit-tap-highlight: rgba(0,0,0,0);
+            /*控制内容的可选择性*/
+            -webkit-user-select: none;
+            -ms-user-select: none;
+            -moz-user-select: none;
+            -khtml-user-select: none;
+            user-select: none;
+        }
+
+        input[type="button"],
+        input[type="submit"],
+        input[type="reset"] {
+            -webkit-appearance: none;
+        }
+
+        ul,
+        li,
+        form,
+        dl,
+        dt,
+        dd,
+        div,
+        ol,
+        figure,
+        aside {
+            padding: 0;
+            margin: 0;
+        }
+
+        .ul,
+        .ul li {
+            list-style: none;
+        }
+
+        table {
+            border-collapse: collapse;
+            border-spacing: 0;
+            table-layout: fixed;
+        }
+
+            table td {
+                border-collapse: collapse;
+                font-size: 1px;
+            }
+
+        select, input, textarea {
+            font-size: 14px;
+            color: #333;
+            border-radius: 0;
+            -webkit-border-radius: 0;
+            font-family: "Microsoft YaHei";
+        }
+
+        img {
+            border: none;
+            max-width: 100%;
+            vertical-align: middle;
+        }
+
+        a {
+            color: #333;
+            text-decoration: none;
+            -webkit-tap-highlight-color: rgba(0,0,0,0); /* 去掉链接触摸高亮 */
+        }
+
+            a:hover {
+                color: #0091ff;
+                text-decoration: none;
+            }
+
+            a:focus {
+                color: #333;
+                outline: none;
+                -moz-outline: none;
+            }
+
+            a:active {
+                color: #333;
+            }
+
+        pre {
+            white-space: pre-wrap;
+            white-space: -moz-pre-wrap;
+            white-space: -o-pre-wrap;
+            word-wrap: break-word;
+            margin: 0;
+            font-family: "Microsoft YaHei";
+            text-align: justify;
+            text-justify: inter-ideograph;
+        }
+
+        img, object {
+            border: none;
+            max-width: 100%;
+            border: 0;
+            overflow: hidden;
+            vertical-align: middle;
+        }
+
+        .clear {
+            clear: both;
+            height: 0px;
+            overflow: hidden;
+            zoom: 0;
+        }
+
+        .clearfix {
+            *zoom: 1;
+        }
+            /*IE/7/6*/
+            .clearfix:after {
+                content: "\200B";
+                display: block;
+                height: 0;
+                clear: both;
+            }
+
+        .dot {
+            display: block;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+            overflow: hidden;
+        }
+        /*2行文本省略号*/
+        .dot2 {
+            display: -webkit-box;
+            display: box;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            word-break: break-all;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 2;
+        }
+        /*3行文本省略号*/
+        .dot3 {
+            display: -webkit-box;
+            display: box;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            word-break: break-all;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 3;
+        }
+
+        .ytable {
+            display: table;
+            width: 100%;
+            table-layout: fixed;
+        }
+
+        .ytable-cell {
+            display: table-cell;
+            vertical-align: middle;
+        }
+
+        .bg_cover {
+            background-size: cover;
+            background-position: center center;
+            background-repeat: no-repeat;
+        }
+
+        .bg_contain {
+            background-size: contain;
+            background-position: center center;
+            background-repeat: no-repeat;
+        }
+
+        a {
+            color: #585858;
+            text-decoration: none;
+            -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+        }
+
+            /* 去掉链接触摸高亮 */
+            a:focus {
+                outline: none;
+                -moz-outline: none;
+            }
+
+
+        .container {
+            max-width: 1200px;
+            margin: auto;
+        }
+
+        .schedule-detail {
+            background: #fff;
+            clear: both;
+        }
+
+        .schedule-left {
+            width: 304px;
+            float: left;
+            border-right: 1px solid #ddd;
+            padding: 15px;
+        }
+
+            .schedule-left .layui-laydate {
+                box-shadow: none;
+            }
+
+            .schedule-left .laydate-theme-molv .layui-laydate-content {
+                border: none;
+            }
+
+
+
+        .schedule-right {
+            margin-left: 304px;
+            padding: 15px 0;
+        }
+
+        .schedule-right-header {
+            line-height: 45px;
+            padding: 0 15px;
+        }
+
+            .schedule-right-header::after {
+                content: "";
+                display: block;
+                clear: right;
+            }
+
+        .schedule-right-tab {
+            float: right;
+        }
+
+            .schedule-right-tab .schedule-tab-item {
+                background: #f2f2f2;
+                color: #333;
+                padding: 0 20px;
+                cursor: pointer;
+                float: left;
+            }
+
+                .schedule-right-tab .schedule-tab-item:hover,
+                .schedule-right-tab .schedule-tab-item.active {
+                    background: #309bb6;
+                    color: #fff;
+                }
+
+        .schedule-day-header {
+            border-bottom: 1px solid #ddd;
+            padding: 10px 0;
+            display: none;
+        }
+
+            .schedule-day-header span {
+                display: inline-block;
+                vertical-align: bottom;
+                /*margin-right: 10px;*/
+            }
+
+            .schedule-day-header .time-type {
+                color: #999;
+                width: 80px;
+                text-align: center;
+            }
+
+        .schedule-day-content {
+        }
+
+        .schedule-day-item {
+            position: relative;
+            height: 50px;
+            padding-left: 80px;
+        }
+
+            .schedule-day-item .time {
+                position: absolute;
+                display: inline-block;
+                width: 80px;
+                bottom: 100%;
+                left: 0;
+                text-align: center;
+                transform: translateY(50%);
+            }
+
+            .schedule-day-item .content {
+                height: 100%;
+                border-left: 1px solid #ddd;
+                border-bottom: 1px solid #ddd;
+                position: relative;
+                box-sizing: content-box;
+            }
+
+        .schedule-day-info {
+            position: absolute;
+            width: 100%;
+            box-shadow: 0 0 5px 1px #ccc;
+            background: #fff;
+            padding: 5px;
+            z-index: 5;
+            border-left: 2px solid #309bb6;
+        }
+
+        .schedule-right-arrow {
+            display: inline-block;
+        }
+
+            .schedule-right-arrow .schedule-time-info {
+                margin-right: 20px;
+            }
+
+            .schedule-right-arrow .schedule-prev,
+            .schedule-right-arrow .schedule-next {
+                border-radius: 50%;
+                border: 1px solid #ccc;
+                height: 34px;
+                width: 34px;
+                margin: 8px 0;
+                vertical-align: middle;
+                color: transparent;
+                overflow: hidden;
+                position: relative;
+                background: transparent;
+            }
+
+                .schedule-right-arrow .schedule-prev:after,
+                .schedule-right-arrow .schedule-next:after {
+                    content: "";
+                    display: block;
+                    width: 10px;
+                    height: 10px;
+                    border-left: 2px solid #ccc;
+                    border-bottom: 2px solid #ccc;
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    bottom: 0;
+                    right: 0;
+                    margin: auto;
+                }
+
+                .schedule-right-arrow .schedule-prev:after {
+                    right: -2.5px;
+                    transform: rotate(45deg);
+                }
+
+                .schedule-right-arrow .schedule-next:after {
+                    left: -2.5px;
+                    transform: rotate(-135deg);
+                }
+
+                .schedule-right-arrow .schedule-prev:hover,
+                .schedule-right-arrow .schedule-next:hover {
+                    background: #309bb6;
+                    border-color: #309bb6;
+                }
+
+                    .schedule-right-arrow .schedule-prev:hover::after,
+                    .schedule-right-arrow .schedule-next:hover::after {
+                        border-color: #fff;
+                    }
+
+        .layui-laydate-content td {
+            font-size: 16px;
+        }
+    </style>
+
+
+    <div class="container schedule-detail">
+
+        <div class="schedule-left">
+            <div id="left-schedule-calendar"></div>
+
+
+        </div>
+        <div class="schedule-right">
+
+            <div class="schedule-right-header">
+                <div class="schedule-right-arrow">
+                    <span class="schedule-time-info"></span>
+                    <button class="schedule-prev">上一页</button>
+                    <button class="schedule-next">xiayixie</button>
+                </div>
+                <div class="schedule-right-tab">
+                    <span class="schedule-tab-item" date-type="today" style="margin-right: 15px;">今天</span>
+                    <span class="schedule-tab-item schedule-type-btn" date-type="day">日</span>
+                    <span class="schedule-tab-item schedule-type-btn" date-type="week">周</span>
+                    <span class="schedule-tab-item schedule-type-btn active" date-type="month">月</span>
+                </div>
+
+            </div>
+
+            <div class="schedule-right-content" data-type="day">
+                <div class="schedule-day-header">
+                    <span class="time-type">GMT+08</span>
+                    <span class="time-info">
+                        3月8日，周二<br>
+                        二月初六
+                    </span>
+                </div>
+
+                <div class="schedule-day-content">
+                    <div id="calendar"></div>
+
+                </div>
+            </div>
+
+        </div>
+        <div class="clear"></div>
+
+
+    </div>
+
+    <script>
+        var scheduleSelectDate = null; //当前选中日期
+        var Calendar = tui.Calendar;
+        var calendar = null; //右侧日历对象
+        var laydate = null;
+        var layCalendar = null; //左侧日历对象
+
+        var calendarViewType = 'month'; //日历视图类型
+
+        layui.use('laydate', function () {
+            laydate = layui.laydate;
+            layCalendar = laydate.render({
+                elem: '#left-schedule-calendar',                     //绑定日历控件
+                position: 'static',
+                theme: '#309bb6',                              //主题颜色
+                showBottom: true,
+                btns: ['clear', 'now', 'confirm', 'refresh'],//['clear', 'now', 'confirm'],
+                //range: true,//去掉日历下面的一行按钮
+                calendar: true,
+                 mark: {
+                     '2023-03-04': '生日',
+                     '2024-03-04': '生日',
+                     '2024-01-04': '发了'
+                 },
+                ready: function (date) {
+                    //得到初始的日期时间对象：{year: 2017, month: 8, date: 18, hours: 0, minutes: 0, seconds: 0}
+                    scheduleSelectDate = date;
+                    refreshDaySchedule(scheduleSelectDate);
+                },
+                change: function (value, date) {
+                    console.log('change')
+                    scheduleSelectDate = date;
+                    refreshDaySchedule(scheduleSelectDate);
+
+                    calendar.setDate(new Date(scheduleSelectDate.year + '/' + scheduleSelectDate.month + '/' + scheduleSelectDate.date));
+                    calendar.changeView(calendar.getViewName(), true);
+                }
+
+
+            });
+
+            $(".schedule-left-arrow").click(function () {
+            })
+
+
+            // 日历视图类型切换
+            $(".schedule-right-tab .schedule-tab-item").click(function () {
+                if ($(this).hasClass("schedule-type-btn")) {
+                    $(this).addClass('active').siblings().removeClass('active');
+                    switch ($(this).attr('date-type')) {
+                        case 'day':
+                            calendar.changeView('day', true);
+                            calendarViewType = 'day';
+                            break;
+                        case 'week':
+                            calendar.changeView('week', true);
+                            calendarViewType = 'week'
+                            break;
+                        case 'month':
+                            calendar.changeView('month', true);
+                            calendarViewType = 'month'
+                            break
+                    }
+                } else {
+                    // layCalendar.config.mark= {
+                    //     '0-03-04': '生日'
+                    // }
+                    // 今天
+                    // calendar.changeView('day', true);
+                    calendar.today();
+                    layCalendar.config.value = moment().format("YYYY-MM-DD");
+                    layCalendar.refresh()
+
+                }
+            })
+            // 日历翻页
+            $(".schedule-prev").click(function () {
+                calendar.prev();
+
+                switch (calendarViewType) {
+                    case 'day':
+                        layCalendar.config.value = moment(scheduleSelectDate.year + '/' + scheduleSelectDate.month + '/' + scheduleSelectDate.date).add(-1, 'days').format("YYYY-MM-DD")
+                        layCalendar.refresh()
+                        break;
+                    case 'week':
+                        layCalendar.config.value = moment(scheduleSelectDate.year + '/' + scheduleSelectDate.month + '/' + scheduleSelectDate.date).add(-1, 'weeks').format("YYYY-MM-DD")
+                        layCalendar.refresh()
+                        break;
+                    case 'month':
+                        layCalendar.prevMonth();
+                        break;
+                }
+            })
+            $(".schedule-next").click(function () {
+                calendar.next();
+                switch (calendarViewType) {
+                    case 'day':
+                        layCalendar.config.value = moment(scheduleSelectDate.year + '/' + scheduleSelectDate.month + '/' + scheduleSelectDate.date).add(1, 'days').format("YYYY-MM-DD")
+                        layCalendar.refresh()
+                        break;
+                    case 'week':
+                        layCalendar.config.value = moment(scheduleSelectDate.year + '/' + scheduleSelectDate.month + '/' + scheduleSelectDate.date).add(1, 'weeks').format("YYYY-MM-DD")
+                        layCalendar.refresh()
+                        break;
+                    case 'month':
+                        layCalendar.nextMonth();
+                        break;
+                }
+            })
+
+
+
+            // 更新日历数据
+            function refreshDaySchedule(date) {
+                $(".schedule-day-header .time-info,.schedule-time-info").text(date.year + '年' + date.month + '月' + date.date + '日,' + getWeekDate(new Date(date.year + '/' + date.month + '/' + date.date)))
+            }
+            /**
+             *获取当前星期几
+             */
+            function getWeekDate(date) {
+                var now = date || new Date();
+
+                var day = now.getDay();
+                var weeks = new Array("星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六");
+                var week = weeks[day];
+                return week;
+            }
+            buildDaySchedule();
+            // 创建日历
+            function buildDaySchedule() {
+
+                calendar = new Calendar('#calendar', {
+
+                    // 'day', 'week', 'month'
+                    defaultView: 'month',
+
+                    // shows the milestone and task in weekly, daily view
+                    taskView: false,
+
+                    // shows the all day and time grid in weekly, daily view
+                    scheduleView: ['time'],
+
+                    theme: {
+                        'common.border': '1px solid #e5e5e5',
+                        'common.backgroundColor': 'white',
+                        'common.holiday.color': '#ff4040',
+                        'common.saturday.color': '#333',
+                        'common.dayname.color': '#333',
+                        'common.today.color': '#333',
+                    },
+
+                    // template options
+                    template: {
+                        milestone: function (schedule) {
+                            alert(11);
+                            return '<span style="color:red;"><i class="fa fa-flag"></i> 嘎嘎嘎' + schedule.title + '</span>';
+                        },
+                        milestoneTitle: function () {
+                            alert(11);
+                            return 'Milestone';
+                        },
+                        task: function (schedule) {
+                            alert(11);
+                            return '&nbsp;&nbsp;#' + schedule.title;
+                        },
+                        taskTitle: function () {
+                            alert(11);
+                            return '<label><input type="checkbox" />Task</label>';
+                        },
+                        allday: function (schedule) {
+                            alert(11);
+                            return schedule.title + ' <i class="fa fa-refresh"></i>';
+                        },
+                        alldayTitle: function () {
+                            alert(11);
+                            return 'All Day';
+                        },
+                        time: function (schedule) {
+                            alert(11);
+                            return schedule.title + ' <i class="fa fa-refresh"></i>' + schedule.start;
+                        },
+                        // popupDetailDate: function(isAllDay, start, end) {
+                        // },
+                        popupDetailLocation: function (schedule) {
+                            alert(11);
+                            return 'Location : ' + schedule.location;
+                        },
+                        popupDetailUser: function (schedule) {
+                            alert(11);
+                            return 'User : ' + (schedule.attendees || []).join(', ');
+                        },
+                        popupDetailState: function (schedule) {
+                            alert(11);
+                            return 'State : ' + schedule.state || 'Busy';
+                        },
+                        popupDetailRepeat: function (schedule) {
+                            alert(11);
+                            return 'Repeat : ' + schedule.recurrenceRule;
+                        },
+                        popupDetailBody: function (schedule) {
+                            alert(11);
+                            return 'Body : ' + schedule.body;
+                        },
+                    },
+                    week: {
+                        daynames: ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'],
+                        startDayOfWeek: 1,
+                        narrowWeekend: false,
+                    },
+                    month: {
+                        daynames: ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'],
+                        startDayOfWeek: 1,
+                        narrowWeekend: false
+                    },
+                    timezone: {
+                        zones: [
+                            {
+                                timezoneName: 'Asia/Shanghai',
+                                displayLabel: 'GMT+08:00',
+                                tooltip: 'BeiJing'
+                            },
+                        ],
+                    },
+
+                    // list of Calendars that can be used to add new schedule
+                    calendars: [],
+
+
+                    // whether use default creation popup or not
+                    useCreationPopup: false,
+
+                    // whether use default detail popup or not
+                    useDetailPopup: true,
+
+                });
+                calendar.createSchedules([
+                    {
+                        id: '1',
+                        calendarId: '1',
+                        title: '新的日程啊',
+                        category: 'time',
+                        dueDateClass: '',
+                        start: '2022-03-09 16:20:00',
+                        end: '2022-03-09 17:30:00',
+                        color: '#ffffff',
+                        bgColor: '#309bb6',
+                        dragBgColor: '#309bb6',
+                        borderColor: '#309bb6',
+                        isReadOnly: true    // schedule is read-only
+                    },
+
+                ]);
+                calendar.on('clickSchedule', function (event) {
+                    alert(22)
+                    var schedule = event.schedule;
+
+
+                });
+
+
+
+
+            }
+
+
+
+        })
+
+
+    </script>
+
+</body>
+</html>
+

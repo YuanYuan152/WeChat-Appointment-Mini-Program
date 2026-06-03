@@ -1,0 +1,589 @@
+﻿@{
+    ViewBag.Title = "xy";
+    Layout = null;
+}
+
+
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <title>咨询协议</title>
+    <meta name="renderer" content="webkit" />
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+    <meta name="viewport" content="width=device-width, minimum-scale=1, maximum-scale=1,user-scalable=no, viewport-fit=cover" />
+    <meta name="format-detection" content="telephone=no" />
+    <meta property="og:type" content="article" />
+    <meta property="og:release_date" content="2022-01-28" />
+    <meta property="og:image" content="https://image.wjx.com/images/wlogo.png" />
+    <meta property="og:description" content="我在问卷星上发布了问卷《咨询协议》，请帮忙填写，非常感谢！" />
+    <meta name="applicable-device" content="pc,mobile" />
+    <meta name="google" value="notranslate" />
+
+    <meta name="robots" content="noindex" />
+
+    <link href="//image.wjx.cn/css/viewer.css?v=2877" rel="stylesheet" type="text/css" />
+    <link rel="dns-prefetch" href="//sojump.cn-hangzhou.log.aliyuncs.com" />
+
+    <link rel="stylesheet" href="//image.wjx.cn/joinnew/css/jqmobo.css?v=2877" />
+
+    @*<script type="text/javascript">
+        var maxCheatTimes = 0;
+        function DecodeId(input) {
+            return input ^ 2130030173;
+        }
+        var activityCommonInfo = "";
+        var activityId = 1982663927;
+        activityId = DecodeId(activityId);
+        var CurrentActivityId = activityId;
+        if (window.location.hash) {
+            window.location.hash = "";
+            window.location.href = window.location.href.replace("#", "");
+        }
+        var isWeiXin = 0;
+        var qrCodeUrl = "";
+        var isMobile = 1;
+        var hasBackground = 0;
+        var CDNDomain = "//image.wjx.cn";
+        var JsVersion = "2877";
+        var isEnglish = 0;
+        var testEnv = 0;
+        var partPages = "";
+        var isinterview = 0;
+        var hideSource = 0;
+
+        var duraTime = 0;
+        var answerTime = "";
+        var interviewStartTime = "";
+        var nowTime = "2023-02-14 17:04:18";
+        var isInterview2 = interviewStartTime ? true : false;
+        var validQlist = []; //需要置空的题目列表
+    </script>*@
+
+
+    @*<script src="//image.wjx.cn/joinnew/js/hintinfo.js?v=2877" type="text/javascript"></script>
+
+    <script src="//cdn.staticfile.org/jquery/1.10.2/jquery.min.js" type="text/javascript"></script>
+    <script type="text/javascript">
+        !window.jQuery && document.write('<script src="//image.wjx.cn/js/jquery-1.10.2.min.js"><\/script>');
+    </script>
+
+    <script src="https://cdn.staticfile.org/layer/3.5.1/layer.js"></script>
+    <script type="text/javascript">
+        if (!window.layer) {
+            document.write('<script src="//image.wjx.cn/layer-v3.5.1/layer/layer.js"><\/script>');
+        }
+    </script>*@
+
+    @*<script type="text/javascript" src="//image.wjx.cn/joinnew/js/matchawardinfmobile.js?v=2877"></script>
+
+    <script src="//image.wjx.cn/joinnew/js/jqmobo2.js?v=2877" type="text/javascript"></script>
+
+    <script src="//image.wjx.cn/joinnew/js/wjxsavedata.js?v=2877" type="text/javascript"></script>
+    <script src="//image.wjx.cn/joinnew/js/cktoolnd.js?v=5" type="text/javascript"></script>*@
+
+
+</head>
+<body class=" ismob">
+
+    <div id="pageDiv">
+        <div id="answerProcess" style="display:none;">
+            <div class="processInner mainBgColor"></div>
+        </div>
+        <div id="headsplitdiv"></div>
+        @*<div id="divTip" style="position:absolute;left: 0; right: 0; z-index: 10; display: none; font-size: 14px; color: #ffffff; line-height: 24px; padding: 8px; background-color: #f95b5b;"></div>*@
+        <div id="tipHeight" style="height:40px;display:none;"></div>
+        @*<div style="background: #fff; position: fixed; top: 0px; left: 0px; right: 0px; bottom: 0px; z-index: 2; display: none;" id="divWorkError"></div>*@
+        <form id="form1" method="post" action="https://www.wjx.top/joinnew/processjq.ashx?shortid=tUUyBON">
+            <div class="interviewCount" style="display: none;"><i class="comIcon" style="font-size:18px;color:#005eff">&#xe732;</i> <span class="interviewCountdown">00:00:00</span></div>
+            <div style="position:relative">
+
+            </div>
+            <span id="lblMobile" style="position:absolute; right:20px; top:20px;"></span>
+
+
+            <div id="divLoadAnswer" style="display: none; font-size: 14px;line-height:24px;padding:6px 8px;background-color: #fff9f0;">
+            </div>
+            <div id="toptitle">
+                <h1 class="htitle" id="htitle">
+                    咨询协议
+                </h1>
+            </div>
+
+            <div id="divBackgroundWrap">
+            </div>
+            <div id='divMaxTime' style="display: none; ">
+                <span id="spanTimeTip"></span><span id='spanMaxTime'></span>
+                <span id="recordingTip" style="margin:0 20px;display:none;"><i class="iconfontNew" style="vertical-align:middle;color:#0095ff;margin-right: 2px;">&#xe6b3;</i><span style="vertical-align:middle">录音中...</span></span>
+            </div>
+            <div id="divContent" class="divContent">
+
+                @*<div id="divS" style="background: #000; position: fixed; z-index: 30000; left: 0px; top: 0px; right: 0; bottom: 0; filter: alpha(opacity=61); opacity: 0.61;"></div>*@
+                @*<div id="loadbox" style="position: fixed; top: 50%; left: 50%; margin-left: -90px; margin-top: -50px; font-size: 14px; width: 180px; height: 100px; background-color: #fff; border-radius: 8px; text-align: center; color: #ffffff; z-index: 50000;">
+                    <div style="padding: 20px 0 10px; color: #8c8c8c; text-align: center;">加载中...</div>
+                    <img src="//image.wjx.cn/layer/theme/default/loading-1.gif" width="37" height="37" alt="" onerror="this.src='/layer/theme/default/loading-1.gif';" />
+                </div>*@
+                <div id="divQuestion">
+                    <fieldset class='fieldset' pg='1' style='' id='fieldset1'>
+                        <div class='field ui-field-contain' topic='1' id='div1' req='1' gapfill='1' data-role='fieldcontain' type='9'>
+                            <div class='field-label'>
+                                <div>
+                                    <b>
+                                        <span style="color:#000000;font-family:SimSun;">重要提示：</span><span class='req'>*</span><div style='margin-top:8px;'></div>
+                                        <span style="color:#000000;"> </span><span style="color:#000000;font-family:SimSun;"> 本服务协议是您与上海连心心理咨询有限公司（以下或简称“本公司”）之间就心理咨询服务等相关事宜所订立的协议，具有法律效力。您（以下或简称“来访者”）在使用本公司提供的各项服务（以下简称“本服务”）之前，请您务必审慎阅读、充分理解各条款内容，特别是免除或限制责任的条款。免除或限制责任的条款将以粗体标识，请重点阅读。</span><div style='margin-top:8px;'></div>
+                                        <span style="color:#000000;"> </span><span style="color:#000000;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                        <span style="color:#000000;"> </span><span style="color:#000000;font-family:SimSun;"> 如来访者对协议内容有任何疑问，请不要进行后续操作。</span><div style='margin-top:8px;'></div>
+                                        <span style="color:#000000;"> </span><span style="color:#000000;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                        <span style="color:#000000;"> </span><span style="color:#000000;font-family:SimSun;"> 若来访者为未成年人，应由来访者的监护人阅读本协议并向来访者解释说明。来访者的监护人需与来访者一同签署本协议。</span>
+                                    </b><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 甲方（来访者）：<input style=display:none type='text' class='ui-input-text' id='q1_1' name='q1_1' /><label class="textEdit initStyle" verify=><span class='textCont' contenteditable="true"></span></label></span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 乙方（咨询机构）：上海连心心理咨询有限公司</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> <span style="color:#000000;">第一条 服务目的</span></span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 甲方主动寻求心理咨询与治疗的专业帮助，乙方从事专业心理咨询工作，乙方运用专业的咨询技术与方法帮助甲方，为甲方提供咨询。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> <span style="color:#000000;">第二条 服务内容</span></span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 乙方指定咨询师<input style=display:none type='text' class='ui-input-text' id='q1_2' name='q1_2' /><label class="textEdit initStyle" verify=><span class='textCont' contenteditable="true"></span></label>为甲方提供咨询服务，甲方对此予以认可并接受。双方应遵循本合同的约定，以实现相关服务的提供。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> <span style="color:#000000;">第三条 服务时间及与预约</span></span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 1. 服务时长<input style=display:none type='text' class='ui-input-text' id='q1_3' name='q1_3' /><label class="textEdit initStyle" verify=><span class='textCont' contenteditable="true"></span></label>分钟起，具体服务时间可由甲方与咨询师预约确定。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 2. 甲方应至少提前48小时预约咨询服务。甲方需要变更预约（包括咨询时间、咨询方式、取消预约等），需要在预约服务开始前至少24小时提出，并取得乙方书面同意。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 3. 若甲方未在前述约定期限内提出变更服务的，即使甲方缺席预约咨询服务，乙方仍按照预约服务时长收取服务费用。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 4. 若甲方迟到，乙方提供的咨询服务仍在原定时间开始及结束，除非双方另行协商一致。若乙方咨询师迟到，咨询服务时间顺延。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> <span style="color:#000000;">第四条 服务费用及支付</span></span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 1. 本协议项下心理咨询服务的收费标准为<input style=display:none type='text' class='ui-input-text' id='q1_4' name='q1_4' /><label class="textEdit initStyle" verify=><span class='textCont' contenteditable="true"></span></label>元/50分钟（大写：人民币<input style=display:none type='text' class='ui-input-text' id='q1_5' name='q1_5' /><label class="textEdit initStyle" verify=><span class='textCont' contenteditable="true"></span></label>/伍拾分钟）。具体计费方式为：每次咨询以50分钟为一节，超过50分钟以10分钟为时间单位计费，不足10分钟的按10分钟计算。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 2. 咨询服务的服务时长计算方式为：自乙方咨询师与甲方交流开始起，至双方交流结束离开咨询室／线上会议室止。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 3. 甲方应于咨询服务开始前支付相应的咨询费用，以付费完成为咨询预约确认。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> <span style="color:#000000;">第五条 甲方权利义务</span></span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 1. 甲方确认，在接受乙方提供的服务时甲方具备完全民事权利能力。若甲方系未成年人，保证在接受乙方提供的服务前已取得监护人的同意。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 2. 甲方在咨询期间不得有自杀、严重自伤行为。如有此类想法，甲方或者甲方监护人应当及时告知，寻求乙方帮助。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 3. 甲方必须遵守中华人民共和国相关法律法规的规定，不得有违法犯罪行为，不得将乙方提供的服务用于任何违法或不正当或不道德的活动。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 4. 甲方应提供真实、正确、完整及最新的资料，特别是紧急联系人与紧急联系电话。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 5. 甲方有义务提供与心理咨询有关的真实资料，有义务提供专业医疗机构作出的精神疾病相关诊断，不得隐瞒精神病史，有义务按照乙方要求到专业医疗机构进行精神疾病鉴别诊断，在精神科医生指导下通过心理咨询进行辅助治疗。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 6. 甲方有权更换本协议内指定的咨询师。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 7. 甲方应当根据本协议的约定按时足额向乙方支付相应的服务费用。如甲方迟延支付或者未支付乙方相应的服务费用，乙方有权拒绝提供本协议约定的相关服务。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 8. 甲方不得对心理咨询会谈进行录音录像。为保障服务质量，咨询师如需录音录像，需要和甲方另签知情同意协议。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> <span style="color:#000000;">第六条 乙方权利义务</span></span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 1. 乙方承诺向甲方提供心理咨询服务的工作人员系取得相应资质的咨询师。未经甲方同意，乙方不得更换本协议内指定的咨询师。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 2. 乙方及乙方咨询师应遵守职业道德，遵守国家有关法律法规。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 3. 乙方及乙方咨询师应严格遵守保密原则。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 4. 乙方及乙方咨询师本着对甲方负责的态度，有权提出转介、中止或终止咨询服务。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 5. 乙方有权按照本协议的约定向甲方收取相应的服务费用。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 6. 乙方不得对心理咨询会谈进行录音录像。为保障服务质量，咨询师如需录音录像，需要和甲方另签知情同意协议。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> <span style="color:#000000;">第七条 免责条款</span></span><div style='margin-top:8px;'></div>
+                                    <span style="color:#000000;"> </span><span style="color:#000000;font-family:SimSun;"> 1. 在咨询过程中，甲方因自身原因而突发疾病或意外死亡，或因自身原因造成情绪失控而发生自伤、自残、自杀等后果，乙方及乙方咨询师尽可能采取措施控制事态发展，防止事态恶化，必要时与相关部门取得联系。由此造成的损害后果，乙方不承担责任。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#000000;"> </span><span style="color:#000000;font-family:SimSun;"> 2. 甲方在咨询期间不得有自杀与严重自伤行为。甲方仅有轻微自杀自伤意念前来咨询时，乙方会尽量为甲方提供帮助，必要时提供转介途径，终止咨询。如甲方最终选择自杀或对自己、对他人造成伤害的，责任及后果由甲方全部承担，乙方不承担责任。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#000000;"> </span><span style="color:#000000;font-family:SimSun;"> 3. 乙方提供的心理咨询服务不属于疾病诊断或治疗活动，不属于开展诊疗活动，不属于医疗机构。若甲方对本条款不同意或不理解，请立即停止后续操作，乙方将立即终止服务。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#000000;"> </span><span style="color:#000000;font-family:SimSun;"> 4. 甲方理解并同意，心理咨询的效果取决于甲方与咨询师双方配合作用的结果。无论乙方提供何种咨询方式，乙方并不保证甲方接受乙方的咨询服务后一定能达到某种效果。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#000000;"> </span><span style="color:#000000;font-family:SimSun;"> 5. 甲方理解并同意：若接受乙方咨询服务后达不到甲方心理预期的心理咨询效果，不属于服务质量问题，甲方不应以此为由要求乙方退款，且乙方不承担任何责任。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#000000;font-family:SimSun;">6. 甲方在接受乙方提供的咨询服务前，应提供与其心理状态有关的真实资料；若甲方故意隐瞒、虚构资料而造成的不良后果由甲方自身承担。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#000000;font-family:SimSun;">7. 为保障甲方权益，甲方应在乙方提供的咨询服务范围内接受服务，任何未经乙方知晓并同意私下与咨询师达成的交易而产生纠纷与乙方无关。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> <span style="color:#000000;">第八条 保密条款</span></span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 1. 乙方将采取合理的安全手段保护甲方提供的个人信息，除下述信息披露条款外，在未得到甲方许可之前，乙方不会将甲方的任何个人信息提供给任何第三方：</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> （1）经甲方事先同意，向第三方披露；</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> （2）如甲方出现自杀、严重自伤或伤害他人行为或风险，必要时乙方会与相关部门取得联系并提供甲方的相关个人信息；</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> （3）如甲方违反中国有关法律法规，行政或司法机构依法要求调查时，乙方会依法向行政或司法机构披露；</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> （4）乙方在研讨会、课堂或学术作品中引用经过修饰的案例材料，在引用时，乙方将删除所有能够识别出个人的信息，以保证甲方的匿名身份；</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> （5）为维护甲方合法权益等其他必要情况。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 2. 乙方不允许任何第三方以任何手段收集、编辑、出售或无偿传播甲方的个人信息。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 3. 咨询服务的终止不影响本保密条款的效力，本条款始终有效。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> <span style="color:#000000;">第九条 知识产权</span></span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 1. 乙方提供的服务中包含的任何文件或资料均受版权、商标和/或其它财产所有权法律的保护，乙方享有上述知识产权，但相关权利人依照法律规定应享有的权利除外。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 2. 未经权利人书面同意，甲方均不得将上述资料以及乙方提供咨询服务的过程在任何媒体直接或间接发布、播放、出于播放或发布目的而改写或再发行, 或者被用于其他任何商业目的。所有以上资料或资料的任何部分仅可作为私人和非商业用途保存。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 3. 甲方违反本条约定的，乙方有权要求甲方赔偿乙方全部经济损失。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> <span style="color:#000000;">第十条 服务的终止</span></span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;">甲乙双方之间的咨询关系是自愿建立的。任何一方均可单方面提出终止服务。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> <span style="color:#000000;">第十一条 法律适用及争议解决</span></span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 1. 本协议的订立、效力、解释、履行及争议的解决均适用中华人民共和国法律。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 2. 在本协议履行过程中发生争议，可以通过协商解决；协商不成，双方同意将争议提交至乙方所在地人民法院起诉解决。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 3. 在争议期间，本协议不涉及争议部分的条款仍须履行。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> <span style="color:#000000;">第十二条 合同的效力</span></span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 1. 本合同自双方签字盖章之日起生效。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 2. 本协议未经协议各方一致同意，任何一方无权单方变更、解除本协议。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 3. 本协议的有效性不因部分条款的无效而受影响，部分条款无效，不影响其他条款的有效和履行。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 4. 本协议壹式贰份，双方各执壹份，具有同等法律效力。</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> （以下无正文）</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 甲方(签字): 甲方监护人（签字）：</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 日期：<input style=display:none type='text' class='ui-input-text' id='q1_6' name='q1_6' /><label class="textEdit initStyle" verify=><span class='textCont' contenteditable="true"></span></label></span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 乙方（盖章）：</span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> </span><div style='margin-top:8px;'></div>
+                                    <span style="color:#a7a4a4;font-family:SimSun;"> 日期：<input style=display:none type='text' class='ui-input-text' id='q1_7' name='q1_7' /><label class="textEdit initStyle" verify=><span class='textCont' contenteditable="true"></span></label></span>
+                                </div>
+                            </div><div class='errorMessage'></div>
+                        </div>
+                        <div class='field ui-field-contain' topic='2' id='div2' req='1' maxsize='4096' maxlength='1' data-role='fieldcontain' type='13'>
+                            <div class='field-label'>甲方签字：<span class='req'>*</span></div>
+                            @*/Public/wjx/uploadqiniu.aspx?activity=148415146&q=2&ms=4096&length=1&ismobile=1&signSize=1&signatureBg=*@
+                            <iframe id='uploadFrame2' frameborder='0' width='100%' scrolling='no' src='/Public/wjx/signature.html' height='220px'></iframe>
+                            <div class='uploadmsg' style='color:red;'></div><div class='errorMessage'></div>
+                        </div>
+                        <div class='field ui-field-contain' topic='3' id='div3' maxsize='4096' maxlength='1' data-role='fieldcontain' type='13'>
+                            <div class='field-label'>甲方监护人签字</div>
+                            <iframe id='uploadFrame3' frameborder='0' width='100%' scrolling='no' src='/Public/wjx/signature.html' height='220px'></iframe>
+                            <div class='uploadmsg' style='color:red;'></div><div class='errorMessage'></div>
+                        </div>
+                    </fieldset>
+                </div>
+                <div id="divMatrixRel" style="position: absolute;width: 60%;margin: 0px 20%;border-color: #ccc;top: 240px;left: 0px;display:none;box-shadow: 0 0 3px 1px #e0e0e099;" class="ui-input-text">
+                    <input type="text" placeholder="请注明..." id="matrixinput" style="min-height: 2em; width: 100%; padding: 0.3em 0.6em;" />
+                </div>
+                <div id="isSpeaking" class="speak-style" style="display: none;">
+                </div>
+                <div class="shopcart" id="shopcart" style="display: none;">
+                </div>
+                <div class="count_total_value" id="countValBox" style="display: none; background: #FAFAFA; box-shadow: 0px -3px 0px 0px #0095FF; border-radius: 3px; padding: 20px 24px;">
+                    <p style="font-size: 15px; font-weight: 500; color: #000; line-height: 21px; margin-bottom: 8px;">评价对象得分</p>
+                    <ul id="countTotalValue"></ul>
+                </div>
+
+                <div class="footer">
+                    <div class="ValError" id="ValError">
+                    </div>
+                    <div id="captchaOut">
+                        <div id="captchaWrap">
+                            <span id="captchaTit" style="display:none;color:#42B917;"></span>
+                            <div id="captcha" style="margin: 0 auto;"></div>
+                        </div>
+                    </div>
+
+                    <div id="divSubmit" style="padding: 10px 20px; display: none;">
+
+                        <script>
+                            window.NVC_Opt = {
+                                appkey: 'FFFF00000000016770EE',
+                                scene: 'ic_activity_h5',
+                                renderTo: '#captcha'
+
+                                 , isH5: true
+
+                            }
+                            var smdefaultTxt = "点击按钮开始智能验证";
+                            var smsuccessTxt = "验证成功";
+                            var smscaningTxt = "智能检测中";
+                            var nc_scene = 'ic_activity_h5';
+                            var useAliVerify = 0;
+                        </script>
+                        <div class="voteDiv">
+
+                            <div>
+
+                                <div id="ctlNext" class="submitbtn mainBgColor">提交</div>
+
+                                <a href="javascript:;" class="button white ctBack" style="display:none" onclick='history.back()'>返回</a>
+                            </div>
+                        </div>
+
+                    </div>
+                    <a href="javascript:;" class="lxstartBtn mainBgColor" id="cgstartbutton" style="display: none;">开始答题</a>
+                    @*<div id="divSearch" style="background: #020d15; color: #7c7c7c; font-size: 18px; height: 50px; left: 0; line-height: 50px; position: fixed; text-align: center; bottom: 0; width: 100%; z-index: 100; display: none;">
+                    </div>*@
+                </div>
+            </div>
+            <div class="logofooter bottomDiv" id="reportfooter">
+                <div id="divPowerBy" style="margin: 0 auto;"><div class='wjfooter'><span id='spanPower'><a href='https://www.wjx.cn/' target='_blank' title='问卷星_不止问卷调查/在线考试'>问卷星</a><span>提供技术支持</span></span></div></div>
+                <a href="https://www.wjx.cn/vm/Q0mluca.aspx?q1=tUUyBON&q2=1" class="reportto" target="_blank" rel="nofollow">举报</a>
+            </div>
+
+
+            <div class="result" id="outdiv">
+                <div class="indiv" id="indiv">
+                    <i class="icon_close"></i>
+                    <div id="preView_wrap">
+                        <img class="imgresult" id="bigimg" src="" alt="">
+                    </div>
+                </div>
+            </div>
+
+
+            <input type="hidden" value="2023/2/14 17:04:18" id="starttime" name="starttime" />
+            <input type="hidden" value="directphone" id="source" name="source" />
+        </form>
+    </div>
+
+
+    <div id="divMatrixHeader" class="divMatrixHeader" style="position: absolute; display: none; font-size: 12px; color: #333"></div>
+    <a id='lnkCity' style="display: none;"></a>
+    <div id="divFrameData" style="display:none;"></div>
+    @*<script type="text/javascript">
+        var isYdb = 0;
+        var isPub = 0;
+        var isQywx = 0;
+        var isQywxAnswerChangeUrl = '';
+        var cqType = 7;
+        var ddcorpid = "";
+        var sojumpParm = '';
+        var parmsign = '';
+        var casign = '';
+        var cats = '';
+        var endTs = '';
+        var isEdit = '';
+        var parmkey = 'sojumpParm';
+        var isKaoShi = 0;
+        var lastTopic = 0;
+        var Password = window.Password ? window.Password : "";
+        var PasswordExt = window.PasswordExt ? window.PasswordExt : "";
+        var pwdExt = "";
+        var emailName = "";
+        var displayExt = "";
+        var phoneName = "";
+        var wxNickName = "";
+        var cepingName = "";
+        var guid = "";
+        var udsid = 0; var fromsour = "";
+        var langVer = 0;
+        var divTip = document.getElementById("divTip");
+        var displayPrevPage = "none";
+        var inviteid = ''; var jbkid = '';
+        var access_token = "";
+        var openid = "";
+        var unionId = "";
+        var wxUserId = "";
+        var isQQLogin = 0;
+        var isDingTalkLogin = 0;
+        var ddgroupid = '';
+        var wxthird = 0;
+        var parterts = "";
+        var parterjoiner = "";
+        var partersign = "";
+        var parterrealname = "";
+        var parterextf = "";
+        var parterdept = "";
+        var parterpuser = "";
+        var relusername = "";
+        var relts = "";
+        var relsign = "";
+        var relrealname = "";
+        var reldept = "";
+        var relext = "";
+        var writeuser = "";
+        var formopen = "";
+        var formts = "";
+        var formsign = "";
+        var formnick = "";
+        var nbk = 0;
+        var corpId = "";
+        var flist = 0;
+        var isPvw = 0;
+        var user_token = "";
+        var IsSampleService = 0;
+        var hashb = 0;
+        var sjUser = '';
+        var sjts = '';
+        var sjsign = '';
+        var outuser = '';
+        var sourcelink = '';
+        var outsign = '';
+        var sourceurl = '';
+        var sourcename = "";
+        var isSimple = '';
+        var jiFenBao = 0;
+        var isRunning = 1;
+        var SJBack = ''; var jiFen = "0";
+        var FromSj = 0;
+        var ItemDicData = "";
+        var rndnum = "1926705902.44038012";
+        var totalPage = 1;
+        var totalCut = 0;
+        var cepingCandidate = "";
+        var isZhuanYiName = 0;
+        var allowPart = 0;
+        var showTotalScore = 0;
+        var controlPercent360 = 0;
+        var controlVal360 = 0;
+        var cateGoreyData = '';
+        var OneaTime = 0;
+        var oneDept = 0;
+        var oneneedcontcp = 0
+        var cpid = "";
+        var needSaveJoin = 0;
+        var preserveAnswer = 0;
+        var isChuangGuan = 0;
+        var jqnonce = "8055b40f-a2b3-499e-b40c-348463fcbf8c";
+        var maxCgTime = 0;
+        var maxIncorrectTime = 1;
+        var maxOpTime = 0;
+        var qBeginDate = "1643338111930";
+        var randomMode = 0;
+        var fisrtLoadTime = new Date().getTime();
+        var canAward = 1;
+        var allowAward = 0;
+        var isVip = 1;
+        var isNewQ = 0;
+        var emUserName = "w8YWbLbk6P2JWZZDcKJ7gA==";
+        var LogStoreLocal = 0;
+        var needAddList = 0;
+
+
+        var needLogCompanyId = 0;
+        var needHBAlert = 0;
+        var isPromoteing = 0;
+        var prsjts = "";
+        var prsjsign = "";
+        var cityPeiEQues = "";
+
+        var ishydj = 0;
+        var canEditAnswer = 0;
+        var forbidEditStr = "";
+        var markerText = '';
+        var jumpOrgMinPro = 1;
+        var progressBarType = 1;
+        var isdingtalkFreeUser = 0
+        var themeId = "";
+        var fengmainId = "";
+        var backgroundId = "";
+        var useNewAppearance = "0";
+        var hasTouPiao = 0;
+        var compressPictures = 0;
+        var completeResultType = 1;
+
+        if (needHBAlert && !window.needLogin) {
+            if (needHBAlert == -1) {
+                var hbmsg = $("#spanTip").text();
+                alertNew(hbmsg);
+            }
+            else if (needHBAlert == -2)
+                alertNew("请注意：抽中红" + "包后答卷还需要发布者审核，通过审核后才能发放红" + "包！");
+            else if (needHBAlert == -4) {
+                var hbmsg = $("#spanTip").text();
+                alertNew(hbmsg);
+            }
+            else if (needHBAlert < 0) {
+                alertNew("请注意：每个参与者填完问卷后有" + (needHBAlert * -1) + "%的概率抽中红" + "包");
+            }
+            else
+                alertNew("请注意：每个参与者填完问卷后有1/" + needHBAlert + "的概率抽中红" + "包");
+        }
+        var needAwardAlert = 0;
+        var leftSeconds = 0 - 10;
+        if (needAwardAlert && !window.needLogin) {
+            var divawardalert = document.getElementById("divawardalert");
+            var awt = $.trim($(divawardalert).text());
+            if (awt)
+                alert(awt);
+        }
+        var hasChuangGuanEnd = false;
+        var IsPar = 0;
+        var curProvince = "江苏";
+        var curCity = "无锡";
+        var curIp = "114.225.214.187";
+        var curFuHe = 0;
+        var curCheckResult = 0;
+        var addtoHis = 0;
+        var isForein = 0;
+        var uploadformAction = "https://wjx-z0.qiniup.com";
+        var wxJoinUserMainUrl = '';
+        var isJielongAdminEdit = false;
+        var isJielongQywxEdit = false;
+        var isJielongYHTXEdit = false;
+        var jlViewJoinPageUrl = '';
+        var isJielongAdminHelp = 0;
+        var activityShortUrl = '';
+        var newAward = 0;
+        var awardkeylist = "";
+        var awardkeyNoMatch = "";
+        var awardkeyMatch = "";
+        var needImportWeight = 0;
+        var qukeylist = "";
+        var currJT = 131;
+        var isMobileFile = 1;
+        var keyWordChange = "";
+
+        function jumpAnswerlist() {
+            window.location.href = wxJoinUserMainUrl;
+        }
+
+        $(document).scroll(function () {
+            $(".saveBtn p ,.processBtn p").hide()
+            $(".processBtn,.saveBtn").removeClass("Height82").addClass("Height40")
+            $(document).unbind("scroll")
+        })
+    </script>*@
+
+
+    @*<script src="//image.wjx.cn/js/plugin/jquery-viewer.js?v=2877"></script>
+    <script>
+        var needEnlargeImg = 1;
+    </script>
+
+    <script type="text/javascript">
+        function setCookie(name, value, expires, path, domain, secure) {
+            document.cookie = name + "=" + encodeURIComponent(value) +
+                ((expires) ? "; expires=" + expires : "") +
+                ((path) ? "; path=" + path : "") +
+                ((domain) ? "; domain=" + domain : "") +
+                ((secure) ? "; secure" : "");
+        }
+        function loadLocalRes() {
+            var cdnDomain = "//image.wjx.cn";
+            var cdnfailreload = 2;
+            try {
+                if (typeof initSlider == 'undefined' && cdnDomain) {
+                    if (cdnfailreload == 1) {
+                        var epd = new Date();
+                        epd.setTime(epd.getTime() + (24 * 3600 * 1000));
+                        setCookie("cdnloadfail", 1, epd.toUTCString(), "/", "", null);
+                        var nocdnlink = window.location.href;
+                        if (nocdnlink.indexOf("?") > -1)
+                            nocdnlink = nocdnlink + "&ncdn=1";
+                        else
+                            nocdnlink = nocdnlink + "?ncdn=1";
+                        if (window.location.href.indexOf("ncdn=1") == -1)
+                            window.location.href = nocdnlink;
+                    } else {
+                        var links = document.getElementsByTagName("link");
+                        var linkslength = links.length;
+                        for (var i = 0; i < linkslength; i++) {
+                            if (links[i].href && links[i].href.indexOf(cdnDomain) > -1) {
+                                var newHref = links[i].href.split(cdnDomain)[1];
+                                var newlink = document.createElement('link');
+                                newlink.setAttribute('rel', 'stylesheet');
+                                newlink.setAttribute('type', 'text/css');
+                                newlink.setAttribute('href', newHref);
+                                document.head.appendChild(newlink);
+                            }
+                        }
+                        var scripts = document.getElementsByTagName("script");
+                        var scriptslength = scripts.length;
+                        for (var i = 0; i < scriptslength; i++) {
+                            if (!scripts[i].src) continue;
+                            if (scripts[i].src.indexOf(cdnDomain) == -1) continue;
+                            var newHref = scripts[i].src.split(cdnDomain)[1];
+                            document.write('<script src="' + newHref + '"><\/script>');
+                        }
+                    }
+                    window.hasReloadRes = 1;
+                    var rimg = document.createElement("img");
+                    rimg.src = "//sojump.cn-hangzhou.log.aliyuncs.com/logstores/applog/track.gif?APIVersion=0.6.0&activity=" + activityId + "&action=cdnerror&url=" + encodeURIComponent(window.location.href) + "&ua=" + encodeURIComponent(navigator.userAgent);
+                }
+            }
+            catch (ex) {
+            }
+        }
+        loadLocalRes();
+    </script>
+
+    <div style="display: none;">
+    <script>var _hmt = _hmt || []; (function () { var hm = document.createElement("script"); hm.src = "https://hm.baidu.com/hm.js?21be24c80829bd7a683b2c536fcf520b"; var s = document.getElementsByTagName("script")[0]; s.parentNode.insertBefore(hm, s); })();</script></div>*@
+
+</body>
+
+
+</html>

@@ -1,0 +1,279 @@
+﻿@using lxxl.Models
+@{
+    Layout = "~/Views/Shared/_LayoutHome.cshtml";
+    T_Form Form = ViewBag.Form;
+    ViewBag.Title = "表单预览-" + Form.Name;
+}
+<div class="main-content">
+    <!-- #section:basics/content.breadcrumbs -->
+    <div class="breadcrumbs" id="breadcrumbs">
+        <script type="text/javascript">
+            try { ace.settings.check('breadcrumbs', 'fixed') } catch (e) { }
+        </script>
+        <ul class="breadcrumb">
+            <li><i class="ace-icon fa fa-home home-icon"></i>表单管理 </li>
+            <li class="active">@Form.Name</li>
+            <li class="active">预览</li>
+        </ul>
+        <!-- /.breadcrumb -->
+        <!-- #section:basics/content.searchbox -->
+        <div class="nav-search" id="nav-search" style="display: none">
+            <form action="javascript:alert('开发中')" method="post" class="form-search">
+                <span class="input-icon">
+                    <input type="text" placeholder="Search ..." class="nav-search-input" id="nav-search-input"
+                           autocomplete="off" />
+                    <i class="ace-icon fa fa-search nav-search-icon"></i>
+                </span>
+            </form>
+        </div>
+        <!-- /.nav-search -->
+        <!-- /section:basics/content.searchbox -->
+    </div>
+    <!-- /section:basics/content.breadcrumbs -->
+    <div class="page-content">
+        <div class="row">
+            <div class="col-xs-12">
+                <!-- PAGE CONTENT BEGINS -->
+                <div class="row">
+                    @if (Session["alert"] != null)
+                    {
+                        <div class="col-xs-12 col-sm-8 col-sm-offset-2">
+                            <div class="alert alert-warning alert-danger" role="alert">
+                                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                                @Session["alert"]
+                                @(Session["alert"] = null)
+                            </div>
+                        </div>
+                        <div class="col-xs-0 col-sm-2">
+                        </div>
+                    }
+                </div>
+                <div class="row">
+                    <div class="col-xs-12">
+                        <!-- PAGE CONTENT BEGINS -->
+                        <form action="" method="post" class="form-horizontal" role="form" enctype="multipart/form-data">
+                            <div class="col-xs-12" style="padding: 0px;">
+                                <div class="widget-box">
+                                    <div class="widget-header">
+                                        <h4 class="widget-title">@Form.Name</h4>
+                                    </div>
+                                    <div class="widget-body">
+                                        <form class="widget-main">
+                                            @foreach (var Item in Form.Item.OrderBy(o => o.Order))
+                                            {
+                                                if (Item.ItemType.Pag == "select")
+                                                {
+                                                    <div class="form-group" itemid="@Item.ID">
+                                                        <label class="col-sm-3 control-label no-padding-right" for="form-field-1">@Item.Name</label>
+                                                        <div class="col-sm-9">
+                                                            <select name="@Item.ID" class="col-xs-10 col-sm-8">
+                                                                @foreach (var option in Item.Option.OrderBy(o => o.Order))
+                                                                {
+                                                                    <option value="@option.ID">@option.Name</option>
+                                                                }
+                                                            </select>
+                                                        </div>
+                                                    </div>
+                                                    <hr />
+                                                }
+                                                else if (Item.ItemType.Pag == "checkinfo")
+                                                {
+                                                    <div class="form-group" itemid="@Item.ID">
+                                                        <label class="col-sm-3 control-label no-padding-right" for="form-field-1">@Item.Name</label>
+                                                        <div class="col-sm-6">
+                                                            @foreach (var option in Item.Option.OrderBy(o => o.Order))
+                                                            {
+                                                                <div class="col-xs-12 col-sm-6">
+                                                                    <div class="widget-box">
+                                                                        <div class="widget-header">
+                                                                            <div class="checkbox">
+                                                                                <label>
+                                                                                    <input name="@option.ID" type="checkbox" class="ace">
+                                                                                    <span class="lbl">@option.Name</span>
+                                                                                </label>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        <div class="widget-body">
+                                                                            <textarea class="form-control" placeholder="@option.Custom"></textarea>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                    <hr />
+                                                }
+                                                else if (Item.ItemType.Pag == "text")
+                                                {
+                                                    <div class="form-group" itemid="@Item.ID">
+                                                        <label class="col-sm-3 control-label no-padding-right" for="form-field-1">@Item.Name</label>
+                                                        <div class="col-sm-9">
+                                                            <input type="text" name="@Item.Option.FirstOrDefault().ID" class="col-xs-10 col-sm-8" value="">
+                                                        </div>
+                                                    </div>
+                                                    <hr />
+                                                }
+                                                else if (Item.ItemType.Pag == "textarea")
+                                                {
+                                                    <div class="form-group" itemid="@Item.ID">
+                                                        <label class="col-sm-3 control-label no-padding-right" for="form-field-1">@Item.Name</label>
+                                                        <div class="col-sm-9">
+                                                            <textarea name="@Item.Option.FirstOrDefault().ID" class="col-xs-10 col-sm-8"></textarea>
+                                                        </div>
+                                                    </div>
+                                                    <hr />
+                                                }
+                                                else if (Item.ItemType.Pag == "checkbox")
+                                                {
+                                                    <div class="form-group" itemid="@Item.ID">
+                                                        <label class="col-sm-3 control-label no-padding-right" for="form-field-1">@Item.Name</label>
+                                                        <div class="col-sm-9">
+                                                            @foreach (var option in Item.Option.OrderBy(o => o.Order))
+                                                            {
+                                                                if (!option.IsCustom)
+                                                                {
+                                                                    <div class="checkbox">
+                                                                        <label>
+                                                                            <input name="@option.ID" type="checkbox" class="ace" value="@option.ID">
+                                                                            <span class="lbl">@option.Name</span>
+                                                                        </label>
+                                                                    </div>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <div class="checkbox checkbox1">
+                                                                        <label>
+                                                                            <input name="@option.ID" type="checkbox" class="ace" value="@option.ID">
+                                                                            <span class="lbl">@option.Name</span>
+                                                                            <input type="text" name="check@(option.ID)" />
+                                                                        </label>
+                                                                    </div>
+
+                                                                }
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                    <hr />
+                                                }
+
+                                                else if (Item.ItemType.Pag == "radio")
+                                                {
+                                                    <div class="form-group" itemid="@Item.ID">
+                                                        <label class="col-sm-3 control-label no-padding-right" for="form-field-1">@Item.Name </label>
+                                                        @*<br />性别：@(Item.SexType == 0 ? "不区分" : Item.SexType == 1 ? "仅男性" : "仅女性")*@
+                                                        <div class="col-sm-9">
+                                                            @foreach (var option in Item.Option.OrderBy(o => o.Order))
+                                                            {
+                                                                if (!option.IsCustom)
+                                                                {
+                                                                    <div class="radio">
+                                                                        <label>
+                                                                            <input name="@Item.ID" type="radio" class="ace" value="@option.ID">
+                                                                            <span class="lbl">@option.Name @(!string.IsNullOrEmpty(option.Remark) ? "(结论：" + option.Remark + ")" : "") </span>
+                                                                        </label>
+                                                                    </div>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <div class="radio radio1">
+                                                                        <label>
+                                                                            <input name="@Item.ID" type="radio" class="ace" value="@option.ID">
+                                                                            <span class="lbl">@option.Name @(!string.IsNullOrEmpty(option.Remark) ? "(结论：" + option.Remark + ")" : "") </span>
+                                                                            <input type="text" name="check@(option.ID)" placeholder="@option.Custom" />
+                                                                        </label>
+                                                                    </div>
+
+                                                                }
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                    <hr />
+                                                }
+                                                else if (Item.ItemType.Pag == "number")
+                                                {
+                                                    <div class="form-group" itemid="@Item.ID">
+                                                        <label class="col-sm-3 control-label no-padding-right" for="form-field-1">@Item.Name</label>
+                                                        <div class="col-sm-9">
+                                                            <input type="number" name="@Item.Option.FirstOrDefault().ID" class="col-xs-10 col-sm-8" value="">
+                                                        </div>
+                                                    </div>
+                                                    <hr />
+                                                }
+                                                else if (Item.ItemType.Pag == "info")
+                                                {
+                                                    <div class="badge-info" style="height:40px; padding:10px; color:#fff">
+                                                        @Item.Name
+                                                    </div>
+                                                    <hr />
+                                                }
+                                                else if (Item.ItemType.Pag == "data")
+                                                {
+                                                    <div class="form-group" itemid="@Item.ID">
+                                                        <label class="col-sm-3 control-label no-padding-right" for="form-field-1">@Item.Name</label>
+                                                        <div class="col-sm-9">
+                                                            <input type="date" name="@Item.Option.FirstOrDefault().ID" class="col-xs-10 col-sm-8" />
+                                                        </div>
+                                                    </div>
+                                                    <hr />
+                                                }
+                                                else if (Item.ItemType.Pag == "file")
+                                                {
+                                                    <div class="form-group" itemid="@Item.ID">
+                                                        <label class="col-sm-3 control-label no-padding-right" for="form-field-1">@Item.Name</label>
+                                                        <div class="col-sm-9">
+                                                            <input type="file" name="fileUp" class="col-xs-10 col-sm-8" />
+                                                        </div>
+                                                    </div>
+                                                    <hr />
+                                                }
+                                            }
+                                        </form>
+                                        @*<div class="form-group">
+                                                <div class="col-sm-4">
+                                                </div>
+                                                <div class="col-sm-3">
+                                                    <input type="submit" class="btn btn-success" value="保存" style="width: 100%">
+                                                </div>
+                                            </div>*@
+                                    </div>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+
+<script type="text/javascript">
+    var num = 0;
+    var num1 = 0;
+    $('.radio1').click(function () {
+        if (num == 0) {
+            $(this).find("input[type=radio]").eq(0).attr('checked', 'checked');
+            num = 1;
+        }
+        else {
+            $(this).find("input[type=radio]").eq(0).attr('checked', '');
+            num = 0;
+        }
+    })
+
+    $('.checkbox1').click(function () {
+        //alert($(this).find("input[type=checkbox]").eq(0).is(':checked'));
+        if (!$(this).find("input[type=checkbox]").eq(0).is(':checked')) {
+            $(this).find("input[type=checkbox]").eq(0).attr('checked', 'checked');
+            $(this).find("input[type=text]").eq(0).css('color', 'black');
+        }
+        else {
+            $(this).find("input[type=checkbox]").eq(0).attr('checked', false);
+            $(this).find("input[type=text]").eq(0).css('color', '#FFF');
+        }
+    })
+</script>

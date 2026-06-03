@@ -1,0 +1,204 @@
+﻿@using lxxl.Models;
+@{
+    ViewBag.Title = "活动管理";
+    Layout = "~/Views/Shared/_LayoutHome.cshtml";
+    List<T_Action> ActionList =ViewBag.ActionList;
+    int index = (ViewBag.ThisPage - 1) * 10 + 1;
+}
+<div class="main-content">
+    <!-- #section:basics/content.breadcrumbs -->
+    <div class="breadcrumbs" id="breadcrumbs">
+        <script type="text/javascript">
+            try { ace.settings.check('breadcrumbs', 'fixed') } catch (e) { }
+        </script>
+        <ul class="breadcrumb">
+            <li><i class="ace-icon fa fa-home home-icon"></i>活动管理 </li>
+            <li class="active">活动列表</li>
+        </ul>
+        <!-- /.breadcrumb -->
+        <!-- #section:basics/content.searchbox -->
+        <div class="nav-search" id="nav-search" style="display: none">
+            <form action="javascript:alert('开发中')" method="post" class="form-search">
+                <span class="input-icon">
+                    <input type="text" placeholder="Search ..." class="nav-search-input" id="nav-search-input"
+                           autocomplete="off" />
+                    <i class="ace-icon fa fa-search nav-search-icon"></i>
+                </span>
+            </form>
+        </div>
+        <!-- /.nav-search -->
+        <!-- /section:basics/content.searchbox -->
+    </div>
+    <!-- /section:basics/content.breadcrumbs -->
+    <div class="page-content">
+        <div class="row">
+            <div class="col-xs-12">
+                <!-- PAGE CONTENT BEGINS -->
+                <div class="row">
+                    @if (Session["alert"] != null)
+                    {
+                        <div class="col-xs-12 col-sm-8 col-sm-offset-2">
+                            <div class="alert alert-warning alert-danger" role="alert">
+                                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                                @Session["alert"]
+                                @(Session["alert"] = null)
+                            </div>
+                        </div>
+                        <div class="col-xs-0 col-sm-2">
+                        </div>
+                    }
+                </div>
+                <!-- /section:settings.box -->
+                <div class="page-header">
+                    <h1>
+                        <a href="@Url.Action("AddAction","Action")" class="btn btn-success">新增活动</a>
+                    </h1>
+                </div><!-- /.page-header -->
+                <div class="row">
+                    <div class="col-xs-12">
+                        <!-- PAGE CONTENT BEGINS -->
+                        <div class="row">
+                            <div class="col-xs-12">
+                                <table id="sample-table-1" class="table table-striped table-bordered table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th class="center">
+                                                编号
+                                            </th>
+                                            <th>活动名称</th>
+                                            <th>报名表</th>
+                                            <th class="hidden-480">报名人数</th>
+                                            <th>状态</th>
+                                            <th>
+                                                <i class="ace-icon fa fa-clock-o bigger-110 hidden-480"></i>
+                                                创建时间
+                                            </th>
+                                            <th>
+                                                <i class="ace-icon fa fa-clock-o bigger-110 hidden-480"></i>
+                                                开始时间
+                                            </th>
+                                            <th class="hidden-480">活动简介</th>
+
+                                            <th>操作</th>
+                                        </tr>
+                                    </thead>
+
+                                    <tbody>
+                                        @foreach (var Action in ActionList)
+                                        {
+                                            <tr>
+                                                <td class="center">
+                                                    <label class="position-relative">
+                                                        <span class="label label-sm label-warning">@(index++)</span>
+                                                    </label>
+                                                </td>
+
+                                                <td>
+                                                    @Action.Name
+                                                </td>
+                                                @if(Action.GetForm()!=null)
+                                                {
+                                                    <td><a target="_blank" href="@Url.Action("Show", "Form", new { ID = Action.FormID })">@Action.GetForm().Name</a></td>
+                                                }
+                                               else
+                                                {
+                                                    <td>无表单</td>
+                                                }
+                                                <td class="hidden-480">@Action.SubUser.Count</td>
+                                                <td>
+                                                    @(Action.StateTime > DateTime.Now ? "未开始" : Action.EndTime > DateTime.Now ? "活动中" : Action.StateTime > DateTime.Now && Action.EndSignTime < DateTime.Now ? "活动待举行" : Action.StateTime < DateTime.Now && Action.EndTime > DateTime.Now ? "活动中" : Action.EndTime < DateTime.Now ? "活动结束" : "请检查时间参数是否冲突")
+                                                </td>
+                                                <td>@Action.CreateTime</td>
+                                                <td>@Action.StateTime</td>
+                                                <td class="hidden-480">
+                                                    @Action.Info
+                                                </td>
+
+                                                <td>
+                                                    <div class="hidden-sm hidden-xs btn-group">
+                                                        @if (Action.SignNumber > 0)
+                                                        {
+                                                            <a class="btn btn-xs btn-info" title="编辑" onclick="if (confirm('当前活动已有填写,是否确认修改?')) { } else { return false;};" href="@Url.Action("EditAction", "Action", new { ID=Action.ID})">
+                                                                <i class="ace-icon fa fa-pencil bigger-120"></i>
+                                                            </a>
+
+                                                            <a class="btn btn-xs btn-danger" title="删除" href="javascript:" onclick="alert('当前活动已有填写，不能删除')">
+                                                                <i class="ace-icon fa fa-trash-o bigger-120"></i>
+                                                            </a>
+                                                        }
+                                                        else
+                                                        { 
+                                                            <a class="btn btn-xs btn-info" title="编辑" href="@Url.Action("EditAction", "Action", new { ID=Action.ID})">
+                                                                <i class="ace-icon fa fa-pencil bigger-120"></i>
+                                                            </a>
+
+                                                            <a class="btn btn-xs btn-danger" title="删除" href="@Url.Action("DelAction", "Acton", new { ID=Action.ID})" onclick="return confirm('是否确认删除该活动')">
+                                                                <i class="ace-icon fa fa-trash-o bigger-120"></i>
+                                                            </a>
+                                                        }
+                                                        
+                                                        @*<a class="btn btn-xs btn-group" target="_blank" title="预览" href="@Url.Action("ActionInfo", "Index", new { ID=Action.ID})">
+        预览
+    </a>*@
+                                                        <a class="btn btn-xs btn-group" target="_blank" title="查看填报记录" href="@Url.Action("ActionSign", "Action", new { ID=Action.ID})">
+                                                            查看填报记录
+                                                        </a>
+                                                        <a class="btn btn-xs btn-group" target="_blank" title="下载填报记录" href="@Url.Action("ActionDown", "Action", new { ID=Action.ID})">
+                                                            下载填报记录
+                                                        </a>
+                                                        @if(1==1)
+                                                        {
+                                                        var urll="/QRCodePic/"+@Action.ID+".png";
+                                                        <a class="btn btn-xs btn-group" target="_blank" title="下载二维码" href="@urll" download="@Action.Name">
+                                                            下载二维码
+                                                        </a>
+                                                        }
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div><!-- /.span -->
+                            <div class="tcdPageCode"></div>
+
+                        </div><!-- /.row -->
+                    </div><!-- /.col -->
+                </div><!-- /.row -->
+            </div>
+        </div>
+    </div>
+</div>
+<link href="~/Content/css/page.css" rel="stylesheet" />
+<script src="~/Content/js/jquery.page.js"></script>
+<script type="text/javascript">
+    $(function () {
+        var ContentCount=parseInt(@ViewBag.Count);
+        if( ContentCount>10){
+            var pagecount=0;
+            if(ContentCount%10==0)
+                pagecount=ContentCount/10;
+            else
+                pagecount=parseInt(ContentCount/10)+1;
+            $(".tcdPageCode").createPage({
+                pageCount: pagecount, //总页数
+                current: @ViewBag.ThisPage, //当前页
+                backFn: function (p) {
+                    location.href="/Action/Index?page="+p;
+                }
+            });           
+
+        }
+    })
+
+</script>
+
+
+
+
+
+
+
+
