@@ -102,6 +102,7 @@ def ensure_schedules(db, counselor_id):
     if existing:
         return
 
+    centers = ["center:yangpu", "center:pudong", "center:yangpu"]
     for index, hour in enumerate([10, 14, 19], start=1):
         start = (now + timedelta(days=index)).replace(hour=hour, minute=0, second=0, microsecond=0)
         db.add(
@@ -110,7 +111,7 @@ def ensure_schedules(db, counselor_id):
                 StartTime=start,
                 EndTime=start + timedelta(minutes=50),
                 Status="AVAILABLE",
-                Note="演示可预约时段",
+                Note=centers[index - 1],
             )
         )
 

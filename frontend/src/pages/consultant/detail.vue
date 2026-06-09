@@ -1,12 +1,12 @@
 <template>
   <view class="page-consultant-detail">
     <!-- 自定义导航栏 (透明/毛玻璃) -->
-    <view class="custom-navbar" :class="{ 'navbar-solid': scrollTop > 50 }">
+    <view class="custom-navbar" :class="{ 'navbar-solid': pageScrollTop > 50 }">
       <view class="navbar-content">
         <view class="nav-btn-wrap" @click="goBack">
           <text class="nav-icon">‹</text>
         </view>
-        <view class="nav-title" :style="{ opacity: scrollTop > 50 ? 1 : 0 }">{{ doctor.name || '咨询师' }}</view>
+        <view class="nav-title" :style="{ opacity: pageScrollTop > 50 ? 1 : 0 }">{{ doctor.name || '咨询师' }}</view>
         <view class="nav-btn-wrap" @click="goHome">
           <text class="nav-icon-home">⌂</text>
         </view>
@@ -16,8 +16,7 @@
     <scroll-view 
       class="content-area" 
       scroll-y 
-      :scroll-top="scrollTop"
-      :scroll-into-view="scrollIntoView"
+      :scroll-top="scrollTopBinding"
       scroll-with-animation
       @scroll="onScroll"
       :style="{ height: '100vh' }"
@@ -66,7 +65,7 @@
       </view>
 
       <!-- Tab 导航 (吸顶) -->
-      <view class="tab-nav-modern" :class="{ 'tab-sticky': scrollTop > 280 }">
+      <view class="tab-nav-modern" :class="{ 'tab-sticky': pageScrollTop > 280 }">
         <view 
           class="tab-item" 
           :class="{ active: activeTab === 0 }"
@@ -76,18 +75,16 @@
           class="tab-item" 
           :class="{ active: activeTab === 1 }"
           @click="scrollToSection(1)"
-        >过程</view>
+        >咨询过程</view>
         <view 
           class="tab-item" 
           :class="{ active: activeTab === 2 }"
           @click="scrollToSection(2)"
         >预约</view>
-        <view class="tab-indicator" :style="{ transform: `translateX(${activeTab * 100}%)` }"></view>
       </view>
 
-      <view class="main-content-padding">
-        <!-- 个人介绍区域 -->
-        <view class="content-section" id="section0">
+      <!-- 个人介绍区域（id 须为 scroll-view 直接子节点，滚动定位才生效） -->
+      <view class="content-section main-content-padding" id="section0">
           <view class="info-block">
             <text class="block-title">简介</text>
             <text class="block-text quote-text">"{{ doctor.profile }}"</text>
@@ -116,10 +113,10 @@
               <text v-for="group in doctorTargetGroups" :key="group" class="cloud-tag alt">{{ group }}</text>
             </view>
           </view>
-        </view>
+      </view>
 
-        <!-- 咨询过程区域 -->
-        <view class="content-section" id="section1">
+      <!-- 咨询过程区域 -->
+      <view class="content-section main-content-padding" id="section1">
           <view class="info-block">
             <text class="block-title">咨询过程</text>
             <view class="process-card">
@@ -132,20 +129,48 @@
               </text>
             </view>
           </view>
-        </view>
+      </view>
 
-        <!-- 可约时间区域 -->
-        <view class="content-section" id="section2">
-          <view class="info-block">
-            <view class="block-header">
-              <text class="block-title">可约时间</text>
-              <text class="block-subtitle">请选择您合适的时间段</text>
+      <!-- 预约区域：预约中心 + 可约时间 -->
+      <view class="content-section main-content-padding" id="section2">
+        <view class="booking-section">
+          <text class="block-title block-title--green">预约</text>
+          <text class="booking-hint">请选择您合适的预约中心和时间段</text>
+
+          <!-- 预约中心 -->
+          <view class="booking-module-box">
+            <text class="block-title block-title--orange block-title--sm">预约中心</text>
+            <view class="center-grid">
+              <view
+                v-for="center in appointmentCenters"
+                :key="center.id"
+                class="center-card"
+                :class="{
+                  selected: selectedCenterId === center.id,
+                  unavailable: !counselorWorksAtCenter(center.id)
+                }"
+                @click="selectCenter(center.id)"
+              >
+                <text class="center-name">{{ center.name }}</text>
+                <text v-if="!counselorWorksAtCenter(center.id)" class="center-tip">暂无可约</text>
+              </view>
             </view>
-            
-            <view v-if="timeSlots.length > 0" class="time-grid">
-              <view 
-                v-for="slot in timeSlots" 
-                :key="slot.ID" 
+          </view>
+
+          <!-- 可约时间 -->
+          <view class="booking-module-box" :class="{ 'is-disabled': isTimeModuleDisabled }">
+            <text class="block-title block-title--orange block-title--sm">可约时间</text>
+
+            <view v-if="!selectedCenterId" class="module-placeholder">
+              <text class="module-placeholder-text">请先选择预约中心</text>
+            </view>
+            <view v-else-if="!counselorWorksAtCenter(selectedCenterId)" class="module-placeholder">
+              <text class="module-placeholder-text">该咨询师不在此预约中心，暂不可预约</text>
+            </view>
+            <view v-else-if="filteredTimeSlots.length > 0" class="time-grid">
+              <view
+                v-for="slot in filteredTimeSlots"
+                :key="slot.ID"
                 class="time-card"
                 :class="{ selected: selectedSlotId === slot.ID }"
                 @click="selectTimeSlot(slot)"
@@ -165,20 +190,19 @@
                 </view>
               </view>
             </view>
-            <view v-else class="empty-state">
-              <!-- <image src="/static/images/place12.png" class="empty-img" mode="aspectFit" /> -->
-              <text class="empty-text">咨询师太火爆啦，暂无可预约时间</text>
+            <view v-else class="module-placeholder">
+              <text class="module-placeholder-text">该预约中心暂无可约时间段</text>
             </view>
           </view>
         </view>
-        
-        <!-- 底部留白 -->
-        <view style="height: 120px;"></view>
       </view>
+      
+      <!-- 底部留白 -->
+      <view style="height: 120px;"></view>
     </scroll-view>
 
     <!-- 底部悬浮预约栏 (Glassmorphism) -->
-    <view class="bottom-action-bar" :class="{ 'show': hasAvailableTime && selectedSlotId !== -1 }">
+    <view class="bottom-action-bar" :class="{ 'show': canProceedBooking }">
       <view class="action-info">
         <text class="action-label">合计</text>
         <text class="action-price">￥{{ selectedSlot?.Price || doctor.price }}</text>
@@ -313,17 +337,14 @@ import { ref, onMounted, computed, nextTick } from 'vue'
 import { API_V2_CONFIG } from '@/config/api'
 import { doctorApi } from '@/apis'
 import { isBookingDemoMock, getMockDoctorDetailJson, getMockAppointmentSubmitResponse } from '@/mocks/bookingDemo'
-
-interface TimeSlot {
-  ID: number  // 改为大写，与后端数据匹配
-  startDate: string
-  startHH: string
-  endHH: string
-  week: string
-  Price: number
-  maxSign: number
-  numSign: number
-}
+import { APPOINTMENT_CENTERS } from '@/constants/appointmentCenters'
+import {
+  normalizeBookingTimeSlots,
+  filterSlotsByCenter,
+  counselorWorksAtCenter as slotWorksAtCenter,
+  getCounselorAvailableCenterIds,
+  type BookingTimeSlot,
+} from '@/utils/bookingSlots'
 
 interface Doctor {
   id: number
@@ -343,9 +364,14 @@ interface Doctor {
 }
 
 const activeTab = ref(0)
-const scrollTop = ref(0)
-/** 与 Tab「介绍/过程/预约」联动，用 scroll-into-view 比 createSelectorQuery 在 scroll-view 内更可靠 */
-const scrollIntoView = ref('')
+/** 页面实际滚动位置（用于导航栏/吸顶 Tab 样式） */
+const pageScrollTop = ref(0)
+/** 仅用于编程式滚动，不与 @scroll 双向绑定 */
+const scrollTopBinding = ref(0)
+const sectionOffsets = ref<number[]>([0, 0, 0])
+const isClickScrolling = ref(false)
+/** 吸顶 Tab 高度补偿（px） */
+const STICKY_TAB_OFFSET = 48
 const contentHeight = ref(0)
 const doctor = ref<Doctor>({
   id: 0,
@@ -363,9 +389,13 @@ const doctor = ref<Doctor>({
   workYears: 0,
   mode: ''
 })
-const timeSlots = ref<TimeSlot[]>([])
+const appointmentCenters = APPOINTMENT_CENTERS
+const timeSlots = ref<BookingTimeSlot[]>([])
+const selectedCenterId = ref<string | null>(null)
 const selectedSlotId = ref<number>(-1)
 const hasAvailableTime = ref(false)
+/** 咨询师实际可约中心（API 注入；无则根据 timeSlots 推导） */
+const counselorCenterIds = ref<string[]>([])
 
 // 弹框状态
 const showAgeConfirm = ref(false)
@@ -382,6 +412,49 @@ const hasSignature = ref(false)
 const selectedSlot = computed(() => {
   return timeSlots.value.find(slot => slot.ID === selectedSlotId.value)
 })
+
+const filteredTimeSlots = computed(() =>
+  filterSlotsByCenter(timeSlots.value, selectedCenterId.value)
+)
+
+/** 已选中心但咨询师不在该中心或无可约时段时，可约时间模块灰化且不可点 */
+const isTimeModuleDisabled = computed(() => {
+  if (!selectedCenterId.value) return false
+  if (!counselorWorksAtCenter(selectedCenterId.value)) return true
+  return filteredTimeSlots.value.length === 0
+})
+
+const canProceedBooking = computed(() =>
+  Boolean(
+    selectedCenterId.value &&
+    selectedSlotId.value !== -1 &&
+    selectedSlot.value?.centerId === selectedCenterId.value
+  )
+)
+
+const counselorWorksAtCenter = (centerId: string) =>
+  counselorCenterIds.value.includes(centerId) ||
+  slotWorksAtCenter(timeSlots.value, centerId)
+
+const applyBookingData = (data: {
+  timeSlots?: any[]
+  availableCenterIds?: string[]
+  hasAvailableTime?: boolean
+}) => {
+  timeSlots.value = normalizeBookingTimeSlots(data.timeSlots || [])
+  counselorCenterIds.value =
+    data.availableCenterIds?.length
+      ? data.availableCenterIds
+      : getCounselorAvailableCenterIds(timeSlots.value)
+  hasAvailableTime.value = Boolean(data.hasAvailableTime ?? timeSlots.value.length)
+  selectedCenterId.value = null
+  selectedSlotId.value = -1
+}
+
+const selectCenter = (centerId: string) => {
+  selectedCenterId.value = centerId
+  selectedSlotId.value = -1
+}
 
 // 计算属性
 const doctorFields = computed(() => {
@@ -437,16 +510,16 @@ const getDoctorDetail = async () => {
       const payload = getMockDoctorDetailJson(doctorId) as any
       const data = payload.data
       doctor.value = data.doctor
-      timeSlots.value = data.timeSlots
-      hasAvailableTime.value = data.hasAvailableTime
+      applyBookingData(data)
+      setTimeout(() => updateSectionOffsets(), 300)
       return
     }
 
     const response = await doctorApi.getDetail(doctorId)
     if (response.code === 0 && response.data) {
       doctor.value = mapDoctorDetail(response.data)
-      timeSlots.value = response.data.timeSlots || []
-      hasAvailableTime.value = Boolean(response.data.hasAvailableTime || timeSlots.value.length)
+      applyBookingData(response.data)
+      setTimeout(() => updateSectionOffsets(), 300)
     } else {
       uni.showToast({
         title: response.msg || '获取医生信息失败',
@@ -462,62 +535,85 @@ const getDoctorDetail = async () => {
   }
 }
 
-// 滚动到指定区域（scroll-view 子节点 id：section0 / section1 / section2）
-const scrollToSection = (index: number) => {
+/** 测量各区块在 scroll-view 内的滚动偏移 */
+const updateSectionOffsets = () => {
+  return new Promise<void>((resolve) => {
+    nextTick(() => {
+      const query = uni.createSelectorQuery()
+      query.select('#section0').boundingClientRect()
+      query.select('#section1').boundingClientRect()
+      query.select('#section2').boundingClientRect()
+      query.select('.content-area').boundingClientRect()
+      query.select('.content-area').scrollOffset()
+      query.exec((res) => {
+        if (!res || res.length < 5 || !res[0] || !res[3] || !res[4]) {
+          resolve()
+          return
+        }
+        const scrollViewTop = res[3].top
+        const currentScroll = res[4].scrollTop || 0
+        sectionOffsets.value = [0, 1, 2].map((i) => {
+          const rect = res[i]
+          if (!rect) return 0
+          const offset = currentScroll + rect.top - scrollViewTop
+          return Math.max(0, Math.round(offset - (i === 0 ? 0 : STICKY_TAB_OFFSET)))
+        })
+        resolve()
+      })
+    })
+  })
+}
+
+// 点击 Tab：切换绿色下划线并滚动到对应内容区
+const scrollToSection = async (index: number) => {
   activeTab.value = index
-  scrollIntoView.value = ''
+  isClickScrolling.value = true
+  await updateSectionOffsets()
+  const target = sectionOffsets.value[index] ?? 0
+  scrollTopBinding.value = target === scrollTopBinding.value ? target + 0.01 : target
   nextTick(() => {
-    scrollIntoView.value = `section${index}`
+    scrollTopBinding.value = target
     setTimeout(() => {
-      scrollIntoView.value = ''
+      isClickScrolling.value = false
     }, 450)
   })
 }
 
-// 滚动事件处理
+// 滚动时联动 Tab 下划线（按各区块实际位置判断）
 const onScroll = (e: any) => {
   const scrollTopValue = e.detail.scrollTop
-  const scrollHeight = e.detail.scrollHeight
-  const clientHeight = e.detail.clientHeight
-  
-  // 计算当前滚动位置对应的区域
+  pageScrollTop.value = scrollTopValue
+
+  if (isClickScrolling.value) return
+
+  const offsets = sectionOffsets.value
+  if (offsets.length < 3) return
+
+  const threshold = scrollTopValue + STICKY_TAB_OFFSET + 10
   let currentIndex = 0
-  
-  // 如果滚动到底部，直接设置为最后一个Tab
-  if (scrollTopValue + clientHeight >= scrollHeight - 10) {
+  if (threshold >= offsets[2]) {
     currentIndex = 2
-  } else {
-    // 根据滚动位置计算当前区域
-    const sectionHeight = scrollHeight / 3
-    currentIndex = Math.floor(scrollTopValue / sectionHeight)
-    // 确保索引在有效范围内
-    currentIndex = Math.max(0, Math.min(2, currentIndex))
+  } else if (threshold >= offsets[1]) {
+    currentIndex = 1
   }
-  
-  // 更新当前激活的tab
+
   if (currentIndex !== activeTab.value) {
     activeTab.value = currentIndex
   }
 }
 
-// 选择时间段
-const selectTimeSlot = (slot: TimeSlot) => {
-  // 确保slot.ID存在
-  if (slot.ID === undefined || slot.ID === null) {
-    uni.showToast({
-      title: '时间段数据错误',
-      icon: 'none'
-    })
+// 选择时间段（需已选预约中心且时段属于该中心）
+const selectTimeSlot = (slot: BookingTimeSlot) => {
+  if (isTimeModuleDisabled.value) return
+  if (!selectedCenterId.value || slot.centerId !== selectedCenterId.value) {
+    uni.showToast({ title: '请选择当前预约中心下的时段', icon: 'none' })
     return
   }
-  
-  // 如果点击的是已选中的时间段，则取消选择
-  if (selectedSlotId.value === slot.ID) {
-    selectedSlotId.value = -1
-  } else {
-    // 否则选择新的时间段
-    selectedSlotId.value = slot.ID
+  if (slot.ID === undefined || slot.ID === null) {
+    uni.showToast({ title: '时间段数据错误', icon: 'none' })
+    return
   }
+  selectedSlotId.value = selectedSlotId.value === slot.ID ? -1 : slot.ID
 }
 
 /** 每次发起新的预约流程前清空签名（不沿用上次本地缓存） */
@@ -539,13 +635,18 @@ const resetSignatureForNewBooking = () => {
   })
 }
 
-// 预约
+// 预约：须先选预约中心 → 可约时间 → 协议 → 支付成功
 const makeAppointment = () => {
+  if (!selectedCenterId.value) {
+    uni.showToast({ title: '请选择预约中心', icon: 'none' })
+    return
+  }
+  if (!counselorWorksAtCenter(selectedCenterId.value)) {
+    uni.showToast({ title: '该咨询师不在所选预约中心', icon: 'none' })
+    return
+  }
   if (selectedSlotId.value === -1) {
-    uni.showToast({
-      title: '请选择预约时间',
-      icon: 'none'
-    })
+    uni.showToast({ title: '请选择可约时间', icon: 'none' })
     return
   }
 
@@ -555,6 +656,7 @@ const makeAppointment = () => {
   if (isBookingDemoMock()) {
     const mockReq = {
       doctorScheduleID: selectedSlotId.value,
+      centerId: selectedCenterId.value,
       xyID: '(演示)协议签署后传入的 xy/gId'
     }
     const mockRes = getMockAppointmentSubmitResponse()
@@ -881,6 +983,7 @@ const confirmPayment = async () => {
     const { API_ENDPOINTS } = await import('@/config/api')
     const orderRes = await httpV2.post('/api/payment/wechat/create', {
       slot_id: selectedSlotId.value,
+      center_id: selectedCenterId.value,
       total_fee: Math.round((selectedSlot.value?.Price ?? doctor.value.price ?? 0) * 100),
       description: `心理咨询预约 - ${doctor.value.name}`
     })
@@ -984,39 +1087,39 @@ onMounted(() => {
         mode: '地面/视频'
       }
       
-      timeSlots.value = [
-        {
-          ID: 1,
-          startDate: '2025-01-20',
-          startHH: '09:00',
-          endHH: '10:00',
-          week: '星期一',
-          Price: 600,
-          maxSign: 1,
-          numSign: 0
-        },
-        {
-          ID: 2,
-          startDate: '2025-01-20',
-          startHH: '14:00',
-          endHH: '15:00',
-          week: '星期一',
-          Price: 600,
-          maxSign: 1,
-          numSign: 0
-        }
-      ]
-      
-      // 验证测试数据
-      console.log('测试数据验证:')
-      timeSlots.value.forEach((slot: any, index: number) => {
-        console.log(`测试时间段${index}:`, slot)
-        console.log(`  ID: ${slot.ID} (类型: ${typeof slot.ID})`)
+      applyBookingData({
+        availableCenterIds: ['yangpu', 'pudong'],
+        hasAvailableTime: true,
+        timeSlots: [
+          {
+            ID: 1,
+            centerId: 'yangpu',
+            startDate: '2025-01-20',
+            startHH: '09:00',
+            endHH: '10:00',
+            week: '星期一',
+            Price: 600,
+            maxSign: 1,
+            numSign: 0
+          },
+          {
+            ID: 2,
+            centerId: 'pudong',
+            startDate: '2025-01-20',
+            startHH: '14:00',
+            endHH: '15:00',
+            week: '星期一',
+            Price: 600,
+            maxSign: 1,
+            numSign: 0
+          }
+        ]
       })
-      
-      hasAvailableTime.value = true
+      setTimeout(() => updateSectionOffsets(), 100)
     }
   }, 2000)
+  
+  setTimeout(() => updateSectionOffsets(), 500)
   
   // 计算内容区域高度
   const systemInfo = uni.getSystemInfoSync()
@@ -1286,6 +1389,7 @@ onMounted(() => {
   font-weight: 600;
   color: #9CA3AF;
   padding: 20rpx 0;
+  position: relative;
   transition: color 0.3s;
 }
 
@@ -1293,23 +1397,17 @@ onMounted(() => {
   color: #1F2937;
 }
 
-.tab-indicator {
-  position: absolute;
-  bottom: 0;
-  left: 32rpx;
-  width: calc((100% - 64rpx) / 3);
-  height: 6rpx;
-  display: flex;
-  justify-content: center;
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.tab-indicator::after {
+.tab-item.active::after {
   content: '';
-  width: 40rpx;
-  height: 100%;
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: 48rpx;
+  height: 6rpx;
   background: #0D9488;
   border-radius: 6rpx 6rpx 0 0;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* 内容区域 */
@@ -1358,6 +1456,101 @@ onMounted(() => {
   margin-top: -16rpx;
   margin-bottom: 32rpx;
   padding-left: 24rpx;
+}
+
+/* 预约区域 */
+.booking-section {
+  background: #ffffff;
+  border-radius: 32rpx;
+  padding: 40rpx;
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.02);
+}
+
+.booking-hint {
+  display: block;
+  font-size: 28rpx;
+  color: #4B5563;
+  margin-bottom: 32rpx;
+  padding-left: 24rpx;
+  line-height: 1.5;
+}
+
+.block-title--green::before {
+  background: #0D9488;
+}
+
+.block-title--orange::before {
+  background: #F59E0B;
+}
+
+.block-title--sm {
+  font-size: 30rpx;
+  margin-bottom: 20rpx;
+}
+
+.booking-module-box {
+  background: #F3F4F6;
+  border-radius: 24rpx;
+  padding: 28rpx;
+  margin-bottom: 24rpx;
+}
+
+.booking-module-box.is-disabled {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.booking-module-box.is-disabled .module-placeholder {
+  pointer-events: auto;
+}
+
+.center-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20rpx;
+}
+
+.center-card {
+  background: #FFFFFF;
+  border: 2px solid transparent;
+  border-radius: 24rpx;
+  padding: 28rpx 20rpx;
+  text-align: center;
+  transition: all 0.2s;
+}
+
+.center-card.selected {
+  background: #FFFBEB;
+  border-color: #F59E0B;
+  box-shadow: 0 8rpx 24rpx rgba(245, 158, 11, 0.12);
+}
+
+.center-card.unavailable {
+  opacity: 0.65;
+}
+
+.center-name {
+  display: block;
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #1F2937;
+}
+
+.center-tip {
+  display: block;
+  font-size: 22rpx;
+  color: #9CA3AF;
+  margin-top: 8rpx;
+}
+
+.module-placeholder {
+  padding: 48rpx 24rpx;
+  text-align: center;
+}
+
+.module-placeholder-text {
+  font-size: 26rpx;
+  color: #6B7280;
 }
 
 .block-text {

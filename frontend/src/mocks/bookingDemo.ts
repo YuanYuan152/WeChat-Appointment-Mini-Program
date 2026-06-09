@@ -263,10 +263,13 @@ export function getMockDoctorDetailJson(doctorId: string | number) {
         workYears: years,
         mode: src.consultMethod
       },
+      /** 咨询师可约中心（后续由咨询师端排班 API 注入） */
+      availableCenterIds: ['yangpu', 'pudong'],
       timeSlots: [
         {
           ID: 9000 + src.id,
           gId: `mock-g-${src.id}-1`,
+          centerId: 'yangpu',
           Price: src.price,
           maxSign: 1,
           numSign: 0,
@@ -280,8 +283,25 @@ export function getMockDoctorDetailJson(doctorId: string | number) {
           week: weekOf(tomorrow)
         },
         {
+          ID: 9050 + src.id,
+          gId: `mock-g-${src.id}-1b`,
+          centerId: 'yangpu',
+          Price: src.price,
+          maxSign: 1,
+          numSign: 0,
+          startDate: fmt(d2),
+          startHH: '09:30',
+          endHH: '10:20',
+          startTime: `${fmt(d2)} 09:30`,
+          endTime: `${fmt(d2)} 10:20`,
+          createTime: '2026-01-01 10:00:00',
+          time: '50分钟',
+          week: weekOf(d2)
+        },
+        {
           ID: 9100 + src.id,
           gId: `mock-g-${src.id}-2`,
+          centerId: 'pudong',
           Price: src.price,
           maxSign: 1,
           numSign: 0,

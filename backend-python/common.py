@@ -320,9 +320,24 @@ def common_counselor_detail(
         .limit(20)
         .all()
     )
-    time_slots = [
-        {
+    def _schedule_center_id(note: Optional[str]) -> Optional[str]:
+        """Note 约定 center:yangpu / center:pudong，供咨询师端排班写入。"""
+        if not note:
+            return None
+        text = str(note).strip()
+        if text.lower().startswith("center:"):
+            return text.split(":", 1)[1].strip()
+        return None
+
+    time_slots = []
+    center_ids = set()
+    for s in schedules:
+        center_id = _schedule_center_id(s.Note)
+        if center_id:
+            center_ids.add(center_id)
+        time_slots.append({
             "ID": s.Id,
+            "centerId": center_id,
             "startDate": s.StartTime.strftime("%Y-%m-%d"),
             "startHH": s.StartTime.strftime("%H:%M"),
             "endHH": s.EndTime.strftime("%H:%M"),
@@ -330,9 +345,7 @@ def common_counselor_detail(
             "Price": float(new_rows[0].get("Billing") or 0) / 100,
             "maxSign": 1,
             "numSign": 0,
-        }
-        for s in schedules
-    ]
+        })
     return {
         "id": cid,
         "name": new_rows[0].get("Name"),
@@ -347,6 +360,7 @@ def common_counselor_detail(
         "career": new_rows[0].get("Career"),
         "qualification": new_rows[0].get("Qualification"),
         "timeSlots": time_slots,
+        "availableCenterIds": sorted(center_ids),
         "hasAvailableTime": len(time_slots) > 0,
         "_source": "AppCounselorProfile",
     }
