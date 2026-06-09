@@ -402,6 +402,12 @@ MigrationBackup/
 FodyWeavers.xsd
 /.idea
 
+# Python 虚拟环境与缓存
+backend-python/venv/
+**/__pycache__/
+*.py[cod]
+.Python
+
 # 敏感配置文件（含密钥，不提交）
 lxxl/Web.config
 backend-python/.env

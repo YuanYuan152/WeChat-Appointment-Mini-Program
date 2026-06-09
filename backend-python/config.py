@@ -1,7 +1,10 @@
 import urllib.parse
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+
     # Database configuration
     # 默认使用 Windows 集成认证连接本机 SQLEXPRESS。
     # 如果要使用 SQL Server 用户名密码认证：
