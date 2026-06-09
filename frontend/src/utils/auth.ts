@@ -3,6 +3,24 @@
  */
 
 /**
+ * 获取微信登录 code。
+ * 开发构建固定返回 dev_local，与后端 mock 演示患者账号对齐。
+ */
+export const resolveWxLoginCode = async (): Promise<string> => {
+  if (import.meta.env.DEV) {
+    return 'dev_local'
+  }
+  try {
+    const loginRes: any = await new Promise((resolve, reject) => {
+      uni.login({ provider: 'weixin', success: resolve, fail: reject })
+    })
+    return loginRes?.code || ''
+  } catch {
+    return ''
+  }
+}
+
+/**
  * 检查用户是否已登录
  */
 export const isLoggedIn = (): boolean => {

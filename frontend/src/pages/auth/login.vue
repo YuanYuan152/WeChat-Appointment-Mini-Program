@@ -49,24 +49,13 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { AuthApi } from '@/apis/auth'
-import { isLoggedIn } from '@/utils/auth'
+import { isLoggedIn, resolveWxLoginCode } from '@/utils/auth'
 
 const loading = ref(false)
 
 /** 实际执行微信登录：用 wx.login code 换 JWT */
 const doWxLogin = async () => {
-  let code = ''
-  try {
-    const loginRes: any = await new Promise((resolve, reject) => {
-      uni.login({ provider: 'weixin', success: resolve, fail: reject })
-    })
-    code = loginRes?.code || ''
-  } catch {
-    // 开发者工具未配置 AppID 时 uni.login 会失败，用 dev fallback
-  }
-  if (!code) {
-    code = 'dev_' + Date.now()
-  }
+  const code = (await resolveWxLoginCode()) || 'dev_local'
   return await AuthApi.wxLogin(code)
 }
 

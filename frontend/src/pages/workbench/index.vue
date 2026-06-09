@@ -26,7 +26,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { AuthApi } from '@/apis/auth'
-import { isLoggedIn, setToken } from '@/utils/auth'
+import { isLoggedIn, resolveWxLoginCode } from '@/utils/auth'
 
 const state = ref<'loading' | 'needLogin' | 'error'>('loading')
 const errorMsg = ref('')
@@ -48,15 +48,7 @@ const pickRole = (roles: string[], activeRole?: string) => {
 const goLogin = async () => {
   state.value = 'loading'
   try {
-    let code = ''
-    try {
-      const res: any = await new Promise((resolve, reject) => {
-        uni.login({ provider: 'weixin', success: resolve, fail: reject })
-      })
-      code = res?.code || ''
-    } catch { /* dev fallback */ }
-    if (!code) code = 'dev_' + Date.now()
-
+    const code = (await resolveWxLoginCode()) || 'dev_local'
     await AuthApi.wxLogin(code)
     await routeToWorkbench()
   } catch (e: any) {

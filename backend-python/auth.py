@@ -13,6 +13,23 @@ from config import settings
 
 router = APIRouter(prefix="/api/mini/auth", tags=["Auth"])
 
+# 本地联调固定 code：即使 .env 里填了占位微信凭证，也走 mock 并对齐 seed 演示患者
+DEV_MOCK_CODES = frozenset({"dev_local"})
+_WECHAT_PLACEHOLDER_APPIDS = frozenset({"", "wx_your_appid_here"})
+_WECHAT_PLACEHOLDER_SECRETS = frozenset({"", "your_wechat_secret_here"})
+
+
+def _is_wechat_configured() -> bool:
+    appid = (settings.WECHAT_APPID or "").strip()
+    secret = (settings.WECHAT_SECRET or "").strip()
+    return appid not in _WECHAT_PLACEHOLDER_APPIDS and secret not in _WECHAT_PLACEHOLDER_SECRETS
+
+
+def _mock_openid_for_code(code: str) -> str:
+    if code == "dev_local":
+        return "demo-openid-patient"
+    return f"mock_openid_{code}"
+
 # ---------------------------------------------------------------------------
 # Pydantic schemas
 # ---------------------------------------------------------------------------
@@ -101,7 +118,13 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
       3. 都没有命中再创建新账号。
     """
     unionid: Optional[str] = None
-    if settings.WECHAT_APPID and settings.WECHAT_SECRET:
+    use_mock_login = request.code in DEV_MOCK_CODES or not _is_wechat_configured()
+
+    if use_mock_login:
+        openid = _mock_openid_for_code(request.code)
+        unionid = None
+        session_key = "mock_session_key"
+    else:
         try:
             from wechatpy import WeChatClient
             client = WeChatClient(settings.WECHAT_APPID, settings.WECHAT_SECRET)
@@ -113,11 +136,6 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
                 raise HTTPException(status_code=400, detail="无法获取 openid，请检查 code 是否有效")
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"微信登录失败: {str(e)}")
-    else:
-        # 本地开发 mock
-        openid = f"mock_openid_{request.code}"
-        unionid = None
-        session_key = "mock_session_key"
 
     is_new_user = False
     account: Optional[AppAccount] = (

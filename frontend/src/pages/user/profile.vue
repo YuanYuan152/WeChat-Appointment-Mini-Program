@@ -16,6 +16,7 @@
         </view>
         <view class="user-info" @click="handleUserInfoClick">
           <text class="user-name">{{ isLoggedIn ? (userInfo.name || '已登录') : '未登录用户' }}</text>
+          <text class="user-role" v-if="isLoggedIn && activeRole">{{ roleLabel(activeRole) }}</text>
           <text class="user-phone" v-if="isLoggedIn">{{ formatPhone(userInfo.phone) }}</text>
           <text class="user-phone login-hint" v-else>点击登录/注册</text>
         </view>
@@ -115,12 +116,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import LoginModal from '@/components/LoginModal.vue'
 import { isLoggedIn as checkIsLoggedIn, handleRequireLogin, logout as authLogout, clearToken } from '@/utils/auth'
 import { UserApi } from '@/apis/user'
 import { AuthApi } from '@/apis/auth'
-import type { UserInfo as ApiUserInfo } from '@/apis/user'
+import { httpV2 } from '@/utils/http'
+import { API_ENDPOINTS } from '@/config/api'
 
 interface UserInfo {
   name: string
@@ -131,48 +134,102 @@ interface UserInfo {
   age: number
 }
 
+const emptyUserInfo = (): UserInfo => ({
+  name: '',
+  phone: '',
+  email: '',
+  avatar: '',
+  gender: '',
+  age: 0,
+})
+
 const isLoggedIn = ref(false)
+const activeRole = ref('')
 const profileExpanded = ref(false)
 const showModal = ref(false)
 const loginMode = ref<'login' | 'register'>('login')
+const userInfo = ref<UserInfo>(emptyUserInfo())
+const stats = ref({ appointmentCount: 0, activityCount: 0, favoriteCount: 0 })
 
-const userInfo = ref<UserInfo>({
-  name: '张家健',
-  phone: '13817048675',
-  email: '03123312@163.com',
-  avatar: '',
-  gender: 'male',
-  age: 42
-})
+const ROLE_LABELS: Record<string, string> = {
+  Patient: '患者',
+  Counselor: '咨询师',
+  Assistant: '助理',
+  Ops: '运营',
+  Admin: '管理员',
+}
 
-// 检查登录状态
-onMounted(() => {
-  checkLoginStatus()
-})
+const roleLabel = (role: string) => ROLE_LABELS[role] || role
 
-const checkLoginStatus = () => {
+const resetPageState = () => {
+  userInfo.value = emptyUserInfo()
+  activeRole.value = ''
+  stats.value = { appointmentCount: 0, activityCount: 0, favoriteCount: 0 }
+}
+
+const refreshPage = () => {
   if (checkIsLoggedIn()) {
     isLoggedIn.value = true
     loadUserInfo()
+    loadStats()
+    return
   }
+  isLoggedIn.value = false
+  resetPageState()
 }
+
+// Tab 页切换回来不会重新 onMounted，必须在 onShow 刷新
+onShow(refreshPage)
 
 const loadUserInfo = async () => {
   try {
-    const { AuthApi } = await import('@/apis/auth')
-    const meData = await AuthApi.getMe()
-    if (meData.mobile) {
-      userInfo.value = { ...userInfo.value, phone: meData.mobile }
+    const silent = { showLoading: false, showError: false }
+    const res = await httpV2.get<{
+      nickname?: string
+      mobile?: string
+      avatarUrl?: string
+      roles?: string[]
+      activeRole?: string
+    }>(API_ENDPOINTS.auth.me, undefined, silent)
+
+    if (res.code === 401 || res.code === 403) {
+      clearToken()
+      isLoggedIn.value = false
+      resetPageState()
+      return
     }
-    if (meData.nickname) {
-      userInfo.value = { ...userInfo.value, name: meData.nickname }
+    if (res.code !== 0 || !res.data) return
+
+    const meData = res.data
+    userInfo.value = {
+      ...emptyUserInfo(),
+      name: meData.nickname || '',
+      phone: meData.mobile || '',
+      avatar: meData.avatarUrl || '',
     }
-    if (meData.avatarUrl) {
-      userInfo.value = { ...userInfo.value, avatar: meData.avatarUrl }
+    activeRole.value = meData.activeRole || meData.roles?.[0] || ''
+    if (meData.roles?.length) {
+      uni.setStorageSync('user_roles', JSON.stringify(meData.roles))
     }
   } catch {
-    // token 无效或后端不可用，视为未登录
-    isLoggedIn.value = false
+    // 网络异常时保留登录态，避免误清 token
+  }
+}
+
+const loadStats = async () => {
+  try {
+    const silent = { showLoading: false, showError: false }
+    const [ordersRes, consultRes] = await Promise.all([
+      httpV2.get<any[]>(API_ENDPOINTS.patient.orders, undefined, silent),
+      httpV2.get<any[]>(API_ENDPOINTS.patient.consultations, undefined, silent),
+    ])
+    stats.value = {
+      appointmentCount: Array.isArray(ordersRes.data) ? ordersRes.data.length : 0,
+      activityCount: Array.isArray(consultRes.data) ? consultRes.data.length : 0,
+      favoriteCount: 0,
+    }
+  } catch {
+    stats.value = { appointmentCount: 0, activityCount: 0, favoriteCount: 0 }
   }
 }
 
@@ -253,8 +310,6 @@ const navigateTo = (url: string) => {
   uni.navigateTo({ url })
 }
 
-const stats = ref({ appointmentCount: 0, activityCount: 0, favoriteCount: 0 })
-
 // 模板里的几个未定义方法兜底实现
 const handleAvatarClick = () => {
   if (!isLoggedIn.value) {
@@ -285,7 +340,18 @@ const formatPhone = (phone?: string | number | null) => {
 }
 
 const handleLogout = () => {
-  authLogout()
+  uni.showModal({
+    title: '确认退出',
+    content: '确定要退出登录吗？',
+    success: (res) => {
+      if (!res.confirm) return
+      clearToken()
+      uni.removeStorageSync('user_roles')
+      isLoggedIn.value = false
+      resetPageState()
+      uni.showToast({ title: '已退出登录', icon: 'success' })
+    },
+  })
 }
 
 /**
@@ -417,6 +483,15 @@ const handleDeleteAccount = () => {
 .user-phone {
   font-size: 26rpx;
   color: rgba(255, 255, 255, 0.8);
+}
+
+.user-role {
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.18);
+  align-self: flex-start;
+  padding: 4rpx 16rpx;
+  border-radius: 999rpx;
 }
 
 .settings-btn {
