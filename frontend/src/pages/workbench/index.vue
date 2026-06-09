@@ -4,6 +4,7 @@
     <view v-if="state === 'needLogin'" class="card">
       <text class="title">请先登录</text>
       <text class="desc">登录后将根据您的角色进入对应工作台</text>
+      <DevRolePicker />
       <button class="login-btn" @click="goLogin">微信一键登录</button>
     </view>
 
@@ -26,7 +27,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { AuthApi } from '@/apis/auth'
-import { isLoggedIn, resolveWxLoginCode } from '@/utils/auth'
+import DevRolePicker from '@/components/DevRolePicker.vue'
+import { getDevLoginCode, isLoggedIn, resolveWxLoginCode } from '@/utils/auth'
 
 const state = ref<'loading' | 'needLogin' | 'error'>('loading')
 const errorMsg = ref('')
@@ -48,7 +50,7 @@ const pickRole = (roles: string[], activeRole?: string) => {
 const goLogin = async () => {
   state.value = 'loading'
   try {
-    const code = (await resolveWxLoginCode()) || 'dev_local'
+    const code = (await resolveWxLoginCode()) || getDevLoginCode()
     await AuthApi.wxLogin(code)
     await routeToWorkbench()
   } catch (e: any) {

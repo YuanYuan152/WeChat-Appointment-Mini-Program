@@ -13,8 +13,16 @@ from config import settings
 
 router = APIRouter(prefix="/api/mini/auth", tags=["Auth"])
 
-# 本地联调固定 code：即使 .env 里填了占位微信凭证，也走 mock 并对齐 seed 演示患者
-DEV_MOCK_CODES = frozenset({"dev_local"})
+# 本地联调固定 code → seed 脚本演示账号（即使 .env 填了占位微信凭证也走 mock）
+DEV_MOCK_CODE_OPENIDS = {
+    "dev_local": "demo-openid-patient",    # 兼容旧版
+    "dev_patient": "demo-openid-patient",
+    "dev_counselor": "demo-openid-counselor",
+    "dev_assistant": "demo-openid-assistant",
+    "dev_ops": "demo-openid-ops",
+    "dev_admin": "demo-openid-admin",
+}
+DEV_MOCK_CODES = frozenset(DEV_MOCK_CODE_OPENIDS.keys())
 _WECHAT_PLACEHOLDER_APPIDS = frozenset({"", "wx_your_appid_here"})
 _WECHAT_PLACEHOLDER_SECRETS = frozenset({"", "your_wechat_secret_here"})
 
@@ -26,8 +34,9 @@ def _is_wechat_configured() -> bool:
 
 
 def _mock_openid_for_code(code: str) -> str:
-    if code == "dev_local":
-        return "demo-openid-patient"
+    mapped = DEV_MOCK_CODE_OPENIDS.get(code)
+    if mapped:
+        return mapped
     return f"mock_openid_{code}"
 
 # ---------------------------------------------------------------------------

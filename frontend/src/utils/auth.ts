@@ -2,13 +2,59 @@
  * 认证相关工具函数
  */
 
+/** 开发联调角色（与 backend-python/auth.py DEV_MOCK_CODE_OPENIDS 对齐） */
+export type DevLoginRole = 'patient' | 'counselor' | 'assistant' | 'ops' | 'admin'
+
+export const DEV_LOGIN_ROLE_STORAGE_KEY = 'dev_login_role'
+
+export const DEV_LOGIN_ROLES: {
+  role: DevLoginRole
+  label: string
+  code: string
+  seedHint: string
+}[] = [
+  { role: 'patient', label: '患者', code: 'dev_patient', seedHint: 'seed_demo_counselor.py' },
+  { role: 'counselor', label: '咨询师', code: 'dev_counselor', seedHint: 'seed_demo_counselor.py' },
+  { role: 'assistant', label: '助理', code: 'dev_assistant', seedHint: 'seed_demo_assistant.py' },
+  { role: 'ops', label: '运营', code: 'dev_ops', seedHint: 'seed_demo_ops.py' },
+  { role: 'admin', label: '管理员', code: 'dev_admin', seedHint: 'seed_demo_admin.py' },
+]
+
+const DEV_ROLE_TO_CODE: Record<DevLoginRole, string> = {
+  patient: 'dev_patient',
+  counselor: 'dev_counselor',
+  assistant: 'dev_assistant',
+  ops: 'dev_ops',
+  admin: 'dev_admin',
+}
+
+const isDevLoginRole = (value: string): value is DevLoginRole =>
+  Object.prototype.hasOwnProperty.call(DEV_ROLE_TO_CODE, value)
+
+/** 读取开发联调角色：优先本地 storage，其次环境变量，默认患者 */
+export const getDevLoginRole = (): DevLoginRole => {
+  const stored = String(uni.getStorageSync(DEV_LOGIN_ROLE_STORAGE_KEY) || '').toLowerCase()
+  if (isDevLoginRole(stored)) return stored
+
+  const fromEnv = String(import.meta.env.VITE_DEV_LOGIN_ROLE || 'patient').toLowerCase()
+  if (isDevLoginRole(fromEnv)) return fromEnv
+
+  return 'patient'
+}
+
+export const setDevLoginRole = (role: DevLoginRole): void => {
+  uni.setStorageSync(DEV_LOGIN_ROLE_STORAGE_KEY, role)
+}
+
+export const getDevLoginCode = (): string => DEV_ROLE_TO_CODE[getDevLoginRole()]
+
 /**
  * 获取微信登录 code。
- * 开发构建固定返回 dev_local，与后端 mock 演示患者账号对齐。
+ * 开发构建返回 dev_* mock code，与 seed 演示账号对齐；生产环境走 uni.login。
  */
 export const resolveWxLoginCode = async (): Promise<string> => {
   if (import.meta.env.DEV) {
-    return 'dev_local'
+    return getDevLoginCode()
   }
   try {
     const loginRes: any = await new Promise((resolve, reject) => {

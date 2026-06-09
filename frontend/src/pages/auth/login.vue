@@ -16,6 +16,7 @@
       </view>
 
       <view class="form-container">
+        <DevRolePicker />
         <text class="form-desc">授权登录后即可使用全部功能，我们严格保护您的隐私。</text>
         <button
           class="wx-login-btn"
@@ -49,13 +50,14 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { AuthApi } from '@/apis/auth'
-import { isLoggedIn, resolveWxLoginCode } from '@/utils/auth'
+import DevRolePicker from '@/components/DevRolePicker.vue'
+import { getDevLoginCode, isLoggedIn, resolveWxLoginCode } from '@/utils/auth'
 
 const loading = ref(false)
 
 /** 实际执行微信登录：用 wx.login code 换 JWT */
 const doWxLogin = async () => {
-  const code = (await resolveWxLoginCode()) || 'dev_local'
+  const code = (await resolveWxLoginCode()) || getDevLoginCode()
   return await AuthApi.wxLogin(code)
 }
 
