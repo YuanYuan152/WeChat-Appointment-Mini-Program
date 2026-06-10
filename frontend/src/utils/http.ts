@@ -104,11 +104,37 @@ class HttpRequest {
     }
   }
 
+  private parseResponseBody(raw: any): any {
+    if (raw == null) return raw
+    if (typeof raw === 'string') {
+      try {
+        return JSON.parse(raw)
+      } catch {
+        return raw
+      }
+    }
+    return raw
+  }
+
+  private extractErrorMessage(statusCode: number, data: any): string {
+    const body = this.parseResponseBody(data)
+    if (body && typeof body === 'object') {
+      if (typeof body.detail === 'string') return body.detail
+      if (Array.isArray(body.detail) && body.detail.length) {
+        return body.detail.map((d: any) => d?.msg || JSON.stringify(d)).join('; ')
+      }
+      if (typeof body.msg === 'string') return body.msg
+      if (typeof body.message === 'string') return body.message
+    }
+    return `HTTP错误: ${statusCode}`
+  }
+
   /**
    * 处理响应
    */
   private handleResponse(response: any): ApiResponse {
-    const { statusCode, data } = response
+    const { statusCode, data: rawData } = response
+    const data = this.parseResponseBody(rawData)
 
     // 检查HTTP状态码
     if (statusCode >= 200 && statusCode < 300) {
@@ -123,12 +149,13 @@ class HttpRequest {
             url: data.url
           }
         }
-        // 处理后端返回的 {code, msg, data} 格式
+        // 处理后端返回的 {code, msg, data} 格式（confirm-dev 等）
         else if (data.hasOwnProperty('code') && data.hasOwnProperty('msg')) {
+          const bizCode = typeof data.code === 'number' ? data.code : 0
           return {
-            code: data.code || 0,
+            code: bizCode,
             msg: data.msg || '请求成功',
-            data: data.data || data,
+            data: data.data ?? data,
             url: data.url
           }
         }
@@ -150,10 +177,9 @@ class HttpRequest {
         }
       }
     } else {
-      // HTTP错误
       return {
         code: statusCode,
-        msg: `HTTP错误: ${statusCode}`,
+        msg: this.extractErrorMessage(statusCode, data),
         data: undefined,
         url: undefined
       }

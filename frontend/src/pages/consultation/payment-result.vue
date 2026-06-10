@@ -59,7 +59,7 @@ const statusDesc = computed(() => {
 
 const pollOrderStatus = async (orderId: string) => {
   try {
-    const res = await httpV2.get<any>(`${API_ENDPOINTS.patient.orders}/${orderId}`, undefined, { showLoading: false })
+    const res = await httpV2.get<any>(API_ENDPOINTS.patient.orderDetail(orderId), undefined, { showLoading: false })
     if (res.code === 0 && res.data) {
       orderInfo.value = res.data
       if (res.data.Status === 'PAID') {

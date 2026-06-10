@@ -1,0 +1,64 @@
+"""来访者取消咨询：24 小时规则与排班释放。"""
+from datetime import datetime
+from typing import Optional, Tuple
+
+from sqlalchemy.orm import Session
+
+from models import AppConsultation, AppOrder, AppSchedule
+
+CANCEL_REFUND_HOURS = 24
+
+
+def hours_until_appointment(start_time: Optional[datetime]) -> Optional[float]:
+    if not start_time:
+        return None
+    return (start_time - datetime.utcnow()).total_seconds() / 3600
+
+
+def is_refund_eligible(start_time: Optional[datetime]) -> bool:
+    hours = hours_until_appointment(start_time)
+    if hours is None:
+        return False
+    return hours >= CANCEL_REFUND_HOURS
+
+
+def can_visitor_cancel(status: str) -> bool:
+    return status in ("PENDING", "CONFIRMED", "ONGOING")
+
+
+def cancel_consultation_for_visitor(
+    db: Session,
+    consultation: AppConsultation,
+    *,
+    patient_id: int,
+) -> Tuple[bool, str]:
+    """
+    取消咨询单。返回 (是否退款, 提示文案)。
+    仅本人、待确认/已确认/进行中可取消。
+    """
+    if consultation.PatientId != patient_id:
+        raise PermissionError("无权取消该咨询")
+    if not can_visitor_cancel(consultation.Status):
+        raise ValueError("当前状态不可取消")
+
+    refund = is_refund_eligible(consultation.StartTime)
+    consultation.Status = "CANCELLED"
+    consultation.UpdatedAt = datetime.utcnow()
+
+    if consultation.OrderId:
+        order = db.query(AppOrder).filter(AppOrder.Id == consultation.OrderId).first()
+        if order and order.Status == "PAID":
+            order.Status = "REFUNDED" if refund else "CANCELLED"
+            order.UpdatedAt = datetime.utcnow()
+
+    if consultation.ScheduleId:
+        schedule = db.query(AppSchedule).filter(AppSchedule.Id == consultation.ScheduleId).first()
+        if schedule and schedule.Status == "BOOKED":
+            schedule.Status = "AVAILABLE"
+            schedule.UpdatedAt = datetime.utcnow()
+
+    if refund:
+        msg = "预约已取消，款项将原路退回"
+    else:
+        msg = "预约已取消；距咨询开始不足24小时，不予退款"
+    return refund, msg

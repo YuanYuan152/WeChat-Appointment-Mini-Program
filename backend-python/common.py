@@ -257,6 +257,7 @@ def common_counselors(
             "billing": float(r.get("Billing") or 0),
             "consultHours": int(r.get("ConsultHours") or 0),
             "workYears": int(r.get("WorkYears") or 0),
+            "province": "线下/线上",
             "_source": "AppCounselorProfile",
         }
         for r in new_items
@@ -313,7 +314,7 @@ def common_counselor_detail(
         db.query(AppSchedule)
         .filter(
             AppSchedule.CounselorId == cid,
-            AppSchedule.Status == "AVAILABLE",
+            AppSchedule.Status.in_(["AVAILABLE", "BOOKED"]),
             AppSchedule.StartTime >= datetime.utcnow(),
         )
         .order_by(AppSchedule.StartTime.asc())
@@ -335,6 +336,7 @@ def common_counselor_detail(
         center_id = _schedule_center_id(s.Note)
         if center_id:
             center_ids.add(center_id)
+        is_bookable = s.Status == "AVAILABLE"
         time_slots.append({
             "ID": s.Id,
             "centerId": center_id,
@@ -344,7 +346,9 @@ def common_counselor_detail(
             "week": f"周{'一二三四五六日'[s.StartTime.weekday()]}",
             "Price": float(new_rows[0].get("Billing") or 0) / 100,
             "maxSign": 1,
-            "numSign": 0,
+            "numSign": 0 if is_bookable else 1,
+            "status": s.Status,
+            "isBookable": is_bookable,
         })
     return {
         "id": cid,
@@ -361,7 +365,8 @@ def common_counselor_detail(
         "qualification": new_rows[0].get("Qualification"),
         "timeSlots": time_slots,
         "availableCenterIds": sorted(center_ids),
-        "hasAvailableTime": len(time_slots) > 0,
+        "hasAvailableTime": any(t.get("isBookable") for t in time_slots),
+        "province": "线下/线上",
         "_source": "AppCounselorProfile",
     }
 

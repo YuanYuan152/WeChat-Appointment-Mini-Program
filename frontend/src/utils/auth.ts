@@ -13,7 +13,7 @@ export const DEV_LOGIN_ROLES: {
   code: string
   seedHint: string
 }[] = [
-  { role: 'patient', label: '患者', code: 'dev_patient', seedHint: 'seed_demo_counselor.py' },
+  { role: 'patient', label: '来访者', code: 'dev_patient', seedHint: 'seed_demo_data.py' },
   { role: 'counselor', label: '咨询师', code: 'dev_counselor', seedHint: 'seed_demo_counselor.py' },
   { role: 'assistant', label: '助理', code: 'dev_assistant', seedHint: 'seed_demo_assistant.py' },
   { role: 'ops', label: '运营', code: 'dev_ops', seedHint: 'seed_demo_ops.py' },
@@ -31,7 +31,7 @@ const DEV_ROLE_TO_CODE: Record<DevLoginRole, string> = {
 const isDevLoginRole = (value: string): value is DevLoginRole =>
   Object.prototype.hasOwnProperty.call(DEV_ROLE_TO_CODE, value)
 
-/** 读取开发联调角色：优先本地 storage，其次环境变量，默认患者 */
+/** 读取开发联调角色：优先本地 storage，其次环境变量，默认来访者 */
 export const getDevLoginRole = (): DevLoginRole => {
   const stored = String(uni.getStorageSync(DEV_LOGIN_ROLE_STORAGE_KEY) || '').toLowerCase()
   if (isDevLoginRole(stored)) return stored

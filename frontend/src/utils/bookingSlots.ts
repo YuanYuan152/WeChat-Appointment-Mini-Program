@@ -13,6 +13,8 @@ export interface BookingTimeSlot {
   numSign: number
   /** 所属预约中心，来自 API / 咨询师排班 */
   centerId: string
+  status?: 'AVAILABLE' | 'BOOKED'
+  isBookable?: boolean
   startTime?: string
   endTime?: string
   createTime?: string
@@ -42,6 +44,10 @@ export function normalizeBookingTimeSlots(raw: any[] = []): BookingTimeSlot[] {
       maxSign: Number(slot.maxSign ?? 1),
       numSign: Number(slot.numSign ?? 0),
       centerId: String(centerId),
+      status: slot.status || (Number(slot.numSign ?? 0) >= Number(slot.maxSign ?? 1) ? 'BOOKED' : 'AVAILABLE'),
+      isBookable:
+        slot.isBookable ??
+        (slot.status !== 'BOOKED' && Number(slot.numSign ?? 0) < Number(slot.maxSign ?? 1)),
       startTime: slot.startTime,
       endTime: slot.endTime,
       createTime: slot.createTime,
@@ -62,4 +68,15 @@ export function filterSlotsByCenter(slots: BookingTimeSlot[], centerId: string |
 
 export function counselorWorksAtCenter(slots: BookingTimeSlot[], centerId: string): boolean {
   return slots.some((s) => s.centerId === centerId)
+}
+
+export function isSlotBookable(slot: BookingTimeSlot): boolean {
+  if (slot.isBookable === false) return false
+  if (slot.status === 'BOOKED') return false
+  return (slot.numSign ?? 0) < (slot.maxSign ?? 1)
+}
+
+export function hasBookableSlotsInCenter(slots: BookingTimeSlot[], centerId: string | null): boolean {
+  if (!centerId) return false
+  return slots.some((s) => s.centerId === centerId && isSlotBookable(s))
 }

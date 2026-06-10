@@ -152,7 +152,7 @@ const userInfo = ref<UserInfo>(emptyUserInfo())
 const stats = ref({ appointmentCount: 0, activityCount: 0, favoriteCount: 0 })
 
 const ROLE_LABELS: Record<string, string> = {
-  Patient: '患者',
+  Patient: '来访者',
   Counselor: '咨询师',
   Assistant: '助理',
   Ops: '运营',

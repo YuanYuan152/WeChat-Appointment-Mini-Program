@@ -7,7 +7,7 @@ GET /api/mini/patient/registration  → 获取完整版登记表
 PUT /api/mini/patient/registration  → 保存完整版登记表
 """
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 from pydantic import BaseModel
@@ -15,8 +15,14 @@ from datetime import datetime
 from typing import Optional
 
 from auth import get_current_account, AppAccount
+from consultation_cancel import (
+    can_visitor_cancel,
+    cancel_consultation_for_visitor,
+    is_refund_eligible,
+)
 from database import get_db
-from models import AppOrder, AppRegistrationForm, AppConsultation, AppCounselorProfile
+from models import AppOrder, AppRegistrationForm, AppConsultation, AppCounselorProfile, AppSchedule
+from schedule_meta import center_display_name, parse_center_id
 
 router = APIRouter(prefix="/api/mini/patient", tags=["Patient"])
 
@@ -165,6 +171,15 @@ class ConsultationOut(BaseModel):
     endTime: Optional[datetime] = None
     note: Optional[str] = None
     createdAt: datetime
+    centerId: Optional[str] = None
+    centerName: Optional[str] = None
+    canCancel: bool = False
+    refundEligible: bool = False
+
+
+class CancelConsultationOut(BaseModel):
+    refunded: bool
+    message: str
 
 
 @router.get("/consultations", response_model=List[ConsultationOut], summary="获取当前用户的咨询单列表")
@@ -187,12 +202,27 @@ def get_my_consultations(
 
     accounts = {a.Id: a for a in db.query(AppAccount).filter(AppAccount.Id.in_(counselor_ids)).all()} if counselor_ids else {}
 
+    schedule_ids = [r.ScheduleId for r in rows if r.ScheduleId]
+    schedule_notes: dict[int, Optional[str]] = {}
+    if schedule_ids:
+        for s in db.query(AppSchedule).filter(AppSchedule.Id.in_(schedule_ids)).all():
+            schedule_notes[s.Id] = s.Note
+
     result: List[ConsultationOut] = []
     for r in rows:
         prof = counselor_map.get(r.CounselorId)
         acc = accounts.get(r.CounselorId)
         name = (prof.Name if prof and prof.Name else None) or (acc.Nickname if acc else None) or f"咨询师#{r.CounselorId}"
         avatar = (prof.AvatarUrl if prof and prof.AvatarUrl else None) or (acc.AvatarUrl if acc else None)
+
+        center_note_text = schedule_notes.get(r.ScheduleId) if r.ScheduleId else None
+        if not center_note_text and r.Note:
+            center_note_text = r.Note
+        center_id = parse_center_id(center_note_text)
+        center_name = center_display_name(center_id)
+        cancelable = can_visitor_cancel(r.Status)
+        refund_ok = cancelable and is_refund_eligible(r.StartTime)
+
         result.append(ConsultationOut(
             id=r.Id,
             orderId=r.OrderId,
@@ -205,8 +235,41 @@ def get_my_consultations(
             endTime=r.EndTime,
             note=r.Note,
             createdAt=r.CreatedAt,
+            centerId=center_id,
+            centerName=center_name,
+            canCancel=cancelable,
+            refundEligible=refund_ok,
         ))
     return result
+
+
+@router.post("/consultations/{consultation_id}/cancel", response_model=CancelConsultationOut, summary="取消咨询")
+def cancel_my_consultation(
+    consultation_id: int,
+    current_account: AppAccount = Depends(get_current_account),
+    db: Session = Depends(get_db),
+):
+    """距开始≥24小时取消并退款；不足24小时仅取消不退款。"""
+    row = (
+        db.query(AppConsultation)
+        .filter(
+            AppConsultation.Id == consultation_id,
+            AppConsultation.PatientId == current_account.Id,
+        )
+        .first()
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="咨询记录不存在")
+
+    try:
+        refunded, message = cancel_consultation_for_visitor(db, row, patient_id=current_account.Id)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    db.commit()
+    return CancelConsultationOut(refunded=refunded, message=message)
 
 
 @router.get("/orders", response_model=List[OrderOut], summary="获取当前用户订单列表")
@@ -221,6 +284,22 @@ def get_my_orders(
         .all()
     )
     return orders
+
+
+@router.get("/orders/{order_id}", response_model=OrderOut, summary="获取当前用户单笔订单")
+def get_my_order(
+    order_id: int,
+    current_account: AppAccount = Depends(get_current_account),
+    db: Session = Depends(get_db),
+):
+    order = (
+        db.query(AppOrder)
+        .filter(AppOrder.Id == order_id, AppOrder.AccountId == current_account.Id)
+        .first()
+    )
+    if not order:
+        raise HTTPException(status_code=404, detail="订单不存在")
+    return order
 
 
 @router.get("/me", response_model=PatientProfileOut, summary="获取患者资料")

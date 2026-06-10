@@ -39,7 +39,6 @@
           <view class="hero-info">
             <text class="hero-name">{{ doctor.name }}</text>
             <view class="hero-tags">
-              <text class="hero-tag primary">{{ doctor.mode || '地面/视频' }}</text>
               <text class="hero-tag secondary">从业{{ doctor.workYears }}年</text>
             </view>
           </view>
@@ -172,19 +171,23 @@
                 v-for="slot in filteredTimeSlots"
                 :key="slot.ID"
                 class="time-card"
-                :class="{ selected: selectedSlotId === slot.ID }"
+                :class="{
+                  selected: selectedSlotId === slot.ID && isSlotBookable(slot),
+                  'time-card--booked': !isSlotBookable(slot)
+                }"
                 @click="selectTimeSlot(slot)"
               >
                 <view class="time-card-top">
                   <text class="tc-date">{{ slot.startDate }}</text>
                   <text class="tc-week">{{ slot.week }}</text>
+                  <text v-if="!isSlotBookable(slot)" class="tc-booked-tag">已约满</text>
                 </view>
                 <view class="time-card-mid">
                   <text class="tc-time">{{ slot.startHH }}-{{ slot.endHH }}</text>
                 </view>
                 <view class="time-card-bot">
                   <text class="tc-price">￥{{ slot.Price }}</text>
-                  <view class="tc-radio">
+                  <view v-if="isSlotBookable(slot)" class="tc-radio">
                     <view class="tc-radio-inner" v-if="selectedSlotId === slot.ID"></view>
                   </view>
                 </view>
@@ -315,7 +318,7 @@
             </view>
             <view class="pay-row">
               <text class="pay-label">咨询方式</text>
-              <text class="pay-value">{{ doctor.mode || '地面/视频' }}</text>
+              <text class="pay-value">线上/线下</text>
             </view>
           </view>
           
@@ -334,8 +337,9 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed, nextTick } from 'vue'
-import { API_V2_CONFIG } from '@/config/api'
+import { API_V2_CONFIG, API_ENDPOINTS } from '@/config/api'
 import { doctorApi } from '@/apis'
+import { httpV2 } from '@/utils/http'
 import { isBookingDemoMock, getMockDoctorDetailJson, getMockAppointmentSubmitResponse } from '@/mocks/bookingDemo'
 import { APPOINTMENT_CENTERS } from '@/constants/appointmentCenters'
 import {
@@ -343,6 +347,8 @@ import {
   filterSlotsByCenter,
   counselorWorksAtCenter as slotWorksAtCenter,
   getCounselorAvailableCenterIds,
+  isSlotBookable,
+  hasBookableSlotsInCenter,
   type BookingTimeSlot,
 } from '@/utils/bookingSlots'
 
@@ -421,14 +427,16 @@ const filteredTimeSlots = computed(() =>
 const isTimeModuleDisabled = computed(() => {
   if (!selectedCenterId.value) return false
   if (!counselorWorksAtCenter(selectedCenterId.value)) return true
-  return filteredTimeSlots.value.length === 0
+  return !hasBookableSlotsInCenter(timeSlots.value, selectedCenterId.value)
 })
 
 const canProceedBooking = computed(() =>
   Boolean(
     selectedCenterId.value &&
     selectedSlotId.value !== -1 &&
-    selectedSlot.value?.centerId === selectedCenterId.value
+    selectedSlot.value &&
+    isSlotBookable(selectedSlot.value) &&
+    selectedSlot.value.centerId === selectedCenterId.value
   )
 )
 
@@ -486,7 +494,7 @@ const mapDoctorDetail = (item: any): Doctor => ({
   targetGroup: item.targetGroup || '成人,青少年,亲子家庭',
   consultHours: Number(item.consultHours || 0),
   workYears: Number(item.workYears || 0),
-  mode: item.mode || '地面/视频'
+  mode: item.mode || '线上/线下'
 })
 
 // 获取医生详情
@@ -605,6 +613,10 @@ const onScroll = (e: any) => {
 // 选择时间段（需已选预约中心且时段属于该中心）
 const selectTimeSlot = (slot: BookingTimeSlot) => {
   if (isTimeModuleDisabled.value) return
+  if (!isSlotBookable(slot)) {
+    uni.showToast({ title: '该时段已被预约', icon: 'none' })
+    return
+  }
   if (!selectedCenterId.value || slot.centerId !== selectedCenterId.value) {
     uni.showToast({ title: '请选择当前预约中心下的时段', icon: 'none' })
     return
@@ -957,86 +969,71 @@ const closePayment = () => {
   showPayment.value = false
 }
 
+/** 是否走真实微信支付（上线后在 .env 设置 VITE_ENABLE_REAL_PAY=true） */
+const useRealWechatPay = () => import.meta.env.VITE_ENABLE_REAL_PAY === 'true'
+
 const confirmPayment = async () => {
-  const finishOk = (orderId?: string) => {
+  const finishOk = async (orderId?: string) => {
     closePayment()
+    await getDoctorDetail()
+    uni.showToast({ title: '预约成功！', icon: 'success', duration: 2000 })
     if (orderId) {
-      uni.redirectTo({ url: `/pages/consultation/payment-result?order_id=${orderId}` })
-    } else {
-      uni.showToast({ title: '预约成功！', icon: 'success' })
-      setTimeout(() => { uni.navigateBack() }, 1500)
+      setTimeout(() => {
+        uni.navigateTo({ url: `/pages/consultation/payment-result?order_id=${orderId}` })
+      }, 600)
     }
   }
 
-  if (isBookingDemoMock()) {
-    uni.showToast({ title: '正在提交预约(演示)...', icon: 'loading' })
-    const mockRes = getMockAppointmentSubmitResponse()
-    console.log('[BookingMock] 模拟 POST /we/appointment 返回:', mockRes)
-    setTimeout(() => { uni.hideToast(); finishOk() }, 600)
+  if (selectedSlotId.value <= 0) {
+    uni.showToast({ title: '请先选择可约时间', icon: 'none' })
     return
   }
 
-  // 真实支付：调用 Python 后端下单，再唤起微信支付
+  const payBody = {
+    slot_id: selectedSlotId.value,
+    center_id: selectedCenterId.value,
+    total_fee: Math.round((selectedSlot.value?.Price ?? doctor.value.price ?? 0) * 100),
+    description: `心理咨询预约 - ${doctor.value.name}`,
+  }
+
+  // 默认：一键模拟支付（点击确认即预约成功）
+  if (!useRealWechatPay()) {
+    uni.showLoading({ title: '正在预约...' })
+    try {
+      const res = await httpV2.post<{ order_id: number; out_trade_no: string }>(
+        API_ENDPOINTS.payment.simulatePay,
+        payBody,
+      )
+      uni.hideLoading()
+      if (res.code !== 0) {
+        uni.showToast({ title: res.msg || '预约失败', icon: 'none', duration: 2500 })
+        return
+      }
+      const orderId = String((res.data as any)?.order_id || (res.data as any)?.orderId || '')
+      await finishOk(orderId || undefined)
+    } catch (e: any) {
+      uni.hideLoading()
+      uni.showToast({ title: e?.message || '预约失败', icon: 'none' })
+    }
+    return
+  }
+
+  // 上线真实支付：create → wx.requestPayment → 微信回调到账
   uni.showLoading({ title: '正在下单...' })
   try {
-    const { httpV2 } = await import('@/utils/http')
-    const { API_ENDPOINTS } = await import('@/config/api')
-    const orderRes = await httpV2.post('/api/payment/wechat/create', {
-      slot_id: selectedSlotId.value,
-      center_id: selectedCenterId.value,
-      total_fee: Math.round((selectedSlot.value?.Price ?? doctor.value.price ?? 0) * 100),
-      description: `心理咨询预约 - ${doctor.value.name}`
-    })
-
+    const orderRes = await httpV2.post(API_ENDPOINTS.payment.createOrder, payBody)
     uni.hideLoading()
-
     if (orderRes.code !== 0 || !orderRes.data) {
       uni.showToast({ title: orderRes.msg || '下单失败', icon: 'none' })
       return
     }
-
-    // 下单成功后，先请求"预约成功 / 提醒"订阅授权（升级方案 §7.6）。
-    // 失败/拒绝都不阻断支付流程。
-    try {
-      const tplEvents = ['APPOINTMENT_OK', 'APPOINTMENT_REMIND']
-      const tplRes = await httpV2.get<{ tmplIds: string[] }>(
-        API_ENDPOINTS.message.templates,
-        { event_keys: tplEvents.join(',') }
-      )
-      const tmplIds = (tplRes.code === 0 && tplRes.data?.tmplIds) || []
-      if (tmplIds.length && (uni as any).requestSubscribeMessage) {
-        await new Promise<void>((resolve) => {
-          ;(uni as any).requestSubscribeMessage({
-            tmplIds,
-            success: (subRes: any) => {
-              const accepted = Object.keys(subRes || {}).filter(k => subRes[k] === 'accept')
-              accepted.forEach(tplId => {
-                const evt = tplEvents.find(e =>
-                  (tplRes.data?.tmplIds || []).includes(tplId)
-                ) || 'APPOINTMENT_OK'
-                httpV2.post(API_ENDPOINTS.message.subscribe, {
-                  event_key: evt,
-                  template_id: tplId,
-                  payload: { slotId: selectedSlotId.value, doctorId: doctor.value.id }
-                }).catch(() => {})
-              })
-              resolve()
-            },
-            fail: () => resolve(),
-          })
-        })
-      }
-    } catch (subErr) {
-      console.warn('订阅消息授权阶段异常', subErr)
-    }
-
-    const payParams = orderRes.data.pay_params
-    const orderId = orderRes.data.order_id || orderRes.data.id || ''
-    if ((payParams.appId as string).startsWith('wx_mock')) {
-      finishOk(orderId)
+    const payload = orderRes.data as any
+    const payParams = payload?.pay_params || payload?.payParams
+    const orderId = String(payload?.order_id || payParams?.order_id || '')
+    if (!payParams?.appId) {
+      uni.showToast({ title: '未获取到支付参数', icon: 'none' })
       return
     }
-
     uni.requestPayment({
       provider: 'wxpay',
       timeStamp: payParams.timeStamp,
@@ -1044,11 +1041,8 @@ const confirmPayment = async () => {
       package: payParams.package,
       signType: payParams.signType,
       paySign: payParams.paySign,
-      success: () => finishOk(orderId),
-      fail: (err: any) => {
-        console.error('支付失败', err)
-        uni.showToast({ title: '支付取消或失败', icon: 'none' })
-      }
+      success: () => { finishOk(orderId) },
+      fail: () => uni.showToast({ title: '支付取消或失败', icon: 'none' }),
     } as any)
   } catch (e: any) {
     uni.hideLoading()
@@ -1084,7 +1078,7 @@ onMounted(() => {
         targetGroup: '幼儿&儿童,青少年,伴侣,家庭,成年人',
         consultHours: 1800,
         workYears: 9,
-        mode: '地面/视频'
+        mode: '线上/线下'
       }
       
       applyBookingData({
@@ -1614,6 +1608,25 @@ onMounted(() => {
   background: #F0FDFA;
   border-color: #0D9488;
   box-shadow: 0 8rpx 24rpx rgba(13, 148, 136, 0.1);
+}
+
+.time-card--booked {
+  opacity: 0.48;
+  background: #E5E7EB;
+  filter: grayscale(0.35);
+}
+
+.time-card--booked .tc-time,
+.time-card--booked .tc-price {
+  color: #9CA3AF;
+}
+
+.tc-booked-tag {
+  font-size: 20rpx;
+  color: #9CA3AF;
+  background: #F3F4F6;
+  padding: 4rpx 12rpx;
+  border-radius: 8rpx;
 }
 
 .time-card-top {

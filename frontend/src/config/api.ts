@@ -77,6 +77,9 @@ export const API_ENDPOINTS = {
   // 支付
   payment: {
     createOrder: '/api/payment/wechat/create',
+    /** 开发环境：一键模拟支付到账并完成预约 */
+    simulatePay: '/api/payment/wechat/simulate-pay',
+    confirmDev: '/api/payment/wechat/confirm-dev',
   },
 
   // 上传
@@ -97,7 +100,9 @@ export const API_ENDPOINTS = {
   // 患者
   patient: {
     orders: '/api/mini/patient/orders',
+    orderDetail: (id: number | string) => `/api/mini/patient/orders/${id}`,
     consultations: '/api/mini/patient/consultations',
+    consultationCancel: (id: number | string) => `/api/mini/patient/consultations/${id}/cancel`,
     me: '/api/mini/patient/me',
     registration: '/api/mini/patient/registration',
   },

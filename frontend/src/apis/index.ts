@@ -11,7 +11,7 @@ const mapDoctor = (item: any): Doctor => ({
     specialty: item.specialty || item.Specialty || item.field || item.Field || '心理咨询',
     experience: `${item.workYears || item.WorkYears || 0}年经验`,
     rating: item.rating || 5,
-    province: item.province || item.Province || item.city || item.City || '线上',
+    province: item.province || item.Province || item.city || item.City || '线下/线上',
     description: item.introduce || item.Introduce || item.description || '暂无介绍',
     price: Math.round(Number(item.billing || item.Billing || 0) / 100) || item.price || 500,
 })

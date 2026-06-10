@@ -20,15 +20,30 @@ from sqlalchemy.orm import Session
 
 from auth import get_current_account
 from database import get_db
-from models import AppAccount, AppOrder
+from models import AppAccount, AppOrder, AppSchedule
 from config import settings
+from payment_service import complete_paid_order
 
 router = APIRouter(prefix="/api/payment", tags=["Payment"])
+
+_PAY_PLACEHOLDERS = frozenset({"", "your_mch_id", "your_pay_api_key"})
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _is_real_wechat_pay_configured() -> bool:
+    """占位符视为未配置，本地开发可走 mock + confirm-dev。"""
+    appid = (settings.WECHAT_APPID or "").strip()
+    mch_id = (settings.WECHAT_PAY_MCH_ID or "").strip()
+    pay_key = (settings.WECHAT_PAY_KEY or "").strip()
+    return bool(
+        appid
+        and mch_id not in _PAY_PLACEHOLDERS
+        and pay_key not in _PAY_PLACEHOLDERS
+    )
+
 
 def _random_nonce(length: int = 16) -> str:
     return "".join(random.choices(string.ascii_lowercase + string.digits, k=length))
@@ -57,6 +72,12 @@ class CreateOrderRequest(BaseModel):
     slot_id: int          # 预约时段 ID
     total_fee: int        # 金额（分）
     description: Optional[str] = "心理咨询预约"
+    center_id: Optional[str] = None
+
+
+class ConfirmDevPaymentRequest(BaseModel):
+    out_trade_no: str
+    center_id: Optional[str] = None
 
 
 class CreateOrderResponse(BaseModel):
@@ -68,6 +89,36 @@ class CreateOrderResponse(BaseModel):
 # Routes
 # ---------------------------------------------------------------------------
 
+def _build_order_description(req: CreateOrderRequest) -> str:
+    desc = req.description or "心理咨询预约"
+    if req.center_id:
+        desc = f"{desc}|center:{req.center_id}"
+    return desc
+
+
+def _create_pending_order(
+    db: Session,
+    account: AppAccount,
+    req: CreateOrderRequest,
+    out_trade_no: str,
+) -> tuple[AppOrder, AppSchedule]:
+    schedule = db.query(AppSchedule).filter(AppSchedule.Id == req.slot_id).first()
+    if not schedule or schedule.Status != "AVAILABLE":
+        raise HTTPException(status_code=400, detail="该时段已被预约或不存在")
+
+    order = AppOrder(
+        AccountId=account.Id,
+        SlotId=req.slot_id,
+        OutTradeNo=out_trade_no,
+        TotalFee=req.total_fee,
+        Status="PENDING",
+        Description=_build_order_description(req),
+    )
+    db.add(order)
+    db.flush()
+    return order, schedule
+
+
 @router.post("/wechat/create", response_model=CreateOrderResponse, summary="小程序统一下单")
 def create_order(
     req: CreateOrderRequest,
@@ -75,22 +126,13 @@ def create_order(
     db: Session = Depends(get_db),
 ):
     out_trade_no = f"LXXL{int(time.time())}{random.randint(1000, 9999)}"
-
-    order = AppOrder(
-        AccountId=current_account.Id,
-        SlotId=req.slot_id,
-        OutTradeNo=out_trade_no,
-        TotalFee=req.total_fee,
-        Status="PENDING",
-        Description=req.description,
-    )
-    db.add(order)
+    order, _schedule = _create_pending_order(db, current_account, req, out_trade_no)
     db.commit()
     db.refresh(order)
 
     # 真实环境：调用微信统一下单 API，获取 prepay_id，再签名
     # 本地 mock：直接返回 mock 参数
-    if settings.WECHAT_APPID and settings.WECHAT_PAY_MCH_ID and settings.WECHAT_PAY_KEY:
+    if _is_real_wechat_pay_configured():
         try:
             pay_params = _real_unified_order(
                 out_trade_no=out_trade_no,
@@ -103,7 +145,83 @@ def create_order(
     else:
         pay_params = _mock_pay_params(out_trade_no, req.total_fee)
 
-    return CreateOrderResponse(out_trade_no=out_trade_no, pay_params=pay_params)
+    return CreateOrderResponse(
+        out_trade_no=out_trade_no,
+        pay_params={**pay_params, "order_id": order.Id},
+    )
+
+
+@router.post("/wechat/simulate-pay", summary="开发环境一键模拟支付并预约成功")
+def simulate_pay(
+    req: CreateOrderRequest,
+    current_account: AppAccount = Depends(get_current_account),
+    db: Session = Depends(get_db),
+):
+    """
+    点击「确认支付」即完成：创建订单 → 标记 PAID → 时段 BOOKED → 写入咨询记录。
+    未配置真实微信支付时可用；上线后请改用 create + 微信回调。
+    """
+    if _is_real_wechat_pay_configured():
+        raise HTTPException(status_code=403, detail="已配置真实支付，请使用微信支付流程")
+
+    out_trade_no = f"LXXL{int(time.time())}{random.randint(1000, 9999)}"
+    order, _schedule = _create_pending_order(db, current_account, req, out_trade_no)
+
+    center_id = req.center_id
+    if not center_id and order.Description and "center:" in order.Description:
+        for part in order.Description.split("|"):
+            if part.strip().lower().startswith("center:"):
+                center_id = part.split(":", 1)[1].strip()
+                break
+
+    complete_paid_order(
+        db,
+        order,
+        center_id=center_id,
+        transaction_id=f"SIM_{out_trade_no}",
+    )
+    db.commit()
+    db.refresh(order)
+
+    return {
+        "code": 0,
+        "msg": "预约成功",
+        "data": {
+            "order_id": order.Id,
+            "out_trade_no": out_trade_no,
+            "status": order.Status,
+        },
+    }
+
+
+@router.post("/wechat/confirm-dev", summary="开发环境模拟支付到账")
+def confirm_dev_payment(
+    req: ConfirmDevPaymentRequest,
+    current_account: AppAccount = Depends(get_current_account),
+    db: Session = Depends(get_db),
+):
+    """未配置真实微信支付时，由后端确认到账并 BOOKED 时段（全员置灰）。"""
+    if _is_real_wechat_pay_configured():
+        raise HTTPException(status_code=403, detail="已配置真实支付，不可使用开发确认接口")
+
+    order = (
+        db.query(AppOrder)
+        .filter(AppOrder.OutTradeNo == req.out_trade_no, AppOrder.AccountId == current_account.Id)
+        .first()
+    )
+    if not order:
+        raise HTTPException(status_code=404, detail="订单不存在")
+
+    center_id = req.center_id
+    if not center_id and order.Description and "center:" in order.Description:
+        for part in order.Description.split("|"):
+            if part.strip().lower().startswith("center:"):
+                center_id = part.split(":", 1)[1].strip()
+                break
+
+    complete_paid_order(db, order, center_id=center_id, transaction_id=f"DEV_{req.out_trade_no}")
+    db.commit()
+    return {"code": 0, "msg": "支付确认成功", "order_id": order.Id}
 
 
 @router.post("/wechat/callback", summary="微信支付异步回调", include_in_schema=False)
@@ -126,9 +244,15 @@ async def payment_callback(request: Request, db: Session = Depends(get_db)):
     if return_code == "SUCCESS" and result_code == "SUCCESS" and out_trade_no:
         order = db.query(AppOrder).filter(AppOrder.OutTradeNo == out_trade_no).first()
         if order and order.Status == "PENDING":
-            order.Status = "PAID"
-            order.PaidAt = datetime.utcnow()
-            order.TransactionId = result.get("transaction_id")
+            center_id = None
+            if order.Description and "center:" in order.Description:
+                for part in order.Description.split("|"):
+                    if part.strip().lower().startswith("center:"):
+                        center_id = part.split(":", 1)[1].strip()
+                        break
+            complete_paid_order(
+                db, order, center_id=center_id, transaction_id=result.get("transaction_id")
+            )
             db.commit()
 
     return Response(
