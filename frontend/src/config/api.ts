@@ -120,6 +120,7 @@ export const API_ENDPOINTS = {
   // 咨询师工作台
   counselor: {
     schedules: '/api/mini/counselor/schedules',
+    scheduleCalendar: '/api/mini/counselor/schedules/calendar',
     consultations: '/api/mini/counselor/consultations',
     caseRecords: '/api/mini/counselor/case-records',
     profile: '/api/mini/counselor/profile',

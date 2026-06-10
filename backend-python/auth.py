@@ -17,7 +17,8 @@ router = APIRouter(prefix="/api/mini/auth", tags=["Auth"])
 DEV_MOCK_CODE_OPENIDS = {
     "dev_local": "demo-openid-patient",    # 兼容旧版
     "dev_patient": "demo-openid-patient",
-    "dev_counselor": "demo-openid-counselor",
+    # 与 seed_demo_data.py 中李心怡账号对齐（dev_counselor 登录即该咨询师）
+    "dev_counselor": "demo-counselor-lixinyi",
     "dev_assistant": "demo-openid-assistant",
     "dev_ops": "demo-openid-ops",
     "dev_admin": "demo-openid-admin",

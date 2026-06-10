@@ -16,6 +16,7 @@ from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from database import get_db
 from models import AppBanner, AppActivity, AppArticle, AppSchedule
+from schedule_meta import parse_center_id
 
 router = APIRouter(prefix="/api/mini/common", tags=["Common"])
 
@@ -321,19 +322,10 @@ def common_counselor_detail(
         .limit(20)
         .all()
     )
-    def _schedule_center_id(note: Optional[str]) -> Optional[str]:
-        """Note 约定 center:yangpu / center:pudong，供咨询师端排班写入。"""
-        if not note:
-            return None
-        text = str(note).strip()
-        if text.lower().startswith("center:"):
-            return text.split(":", 1)[1].strip()
-        return None
-
     time_slots = []
     center_ids = set()
     for s in schedules:
-        center_id = _schedule_center_id(s.Note)
+        center_id = parse_center_id(s.Note)
         if center_id:
             center_ids.add(center_id)
         is_bookable = s.Status == "AVAILABLE"

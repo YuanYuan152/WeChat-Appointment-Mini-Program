@@ -60,5 +60,5 @@ def cancel_consultation_for_visitor(
     if refund:
         msg = "预约已取消，款项将原路退回"
     else:
-        msg = "预约已取消；距咨询开始不足24小时，不予退款"
+        msg = "预约已取消；距咨询不足24小时，不予退款"
     return refund, msg

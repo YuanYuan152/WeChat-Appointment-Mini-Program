@@ -29,7 +29,7 @@
       <view class="stats-card">
         <view class="stat-item" @click="navigateTo('/pages/patient/orders/list')">
           <text class="stat-num">{{ stats.appointmentCount || 0 }}</text>
-          <text class="stat-label">我的预约</text>
+          <text class="stat-label">我的订单</text>
         </view>
         <view class="stat-divider"></view>
         <view class="stat-item" @click="navigateTo('/pages/user/activities')">
@@ -58,7 +58,7 @@
           <view class="menu-icon-wrap bg-blue-light">
             <text class="menu-icon text-blue">📋</text>
           </view>
-          <text class="menu-text">咨询记录</text>
+          <text class="menu-text">预约记录</text>
           <text class="menu-arrow">›</text>
         </view>
         <view class="menu-item" @click="navigateTo('/pages/user/wallet')">

@@ -1,7 +1,18 @@
 <template>
   <view class="page-workbench-router">
-    <!-- 未登录状态 -->
-    <view v-if="state === 'needLogin'" class="card">
+    <!-- 来访者：工作台不开放 -->
+    <view v-if="state === 'patientBlocked'" class="card patient-card">
+      <text class="patient-emoji">(｡•́︿•̀｡)</text>
+      <text class="title">当前工作台界面暂时不对来访者开放哦</text>
+      <text class="desc">预约咨询请前往「咨询」页；查看记录请前往「我的」</text>
+      <view class="patient-actions">
+        <button class="ghost-btn" @click="goConsult">去预约咨询</button>
+        <button class="ghost-btn" @click="goProfile">我的中心</button>
+      </view>
+    </view>
+
+    <!-- 未登录 -->
+    <view v-else-if="state === 'needLogin'" class="card">
       <text class="title">请先登录</text>
       <text class="desc">登录后将根据您的角色进入对应工作台</text>
       <DevRolePicker />
@@ -26,11 +37,14 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { AuthApi } from '@/apis/auth'
 import DevRolePicker from '@/components/DevRolePicker.vue'
 import { getDevLoginCode, isLoggedIn, resolveWxLoginCode } from '@/utils/auth'
 
-const state = ref<'loading' | 'needLogin' | 'error'>('loading')
+type RouterState = 'loading' | 'needLogin' | 'error' | 'patientBlocked'
+
+const state = ref<RouterState>('loading')
 const errorMsg = ref('')
 
 const ROLE_ROUTES: Record<string, string> = {
@@ -38,14 +52,20 @@ const ROLE_ROUTES: Record<string, string> = {
   Assistant: '/pages/assistant/workbench/index',
   Ops: '/pages/ops/index/index',
   Admin: '/pages/ops/index/index',
-  Patient: '/pages/user/profile',
 }
 
-const pickRole = (roles: string[], activeRole?: string) => {
-  if (activeRole && ROLE_ROUTES[activeRole]) return activeRole
-  const priority = ['Counselor', 'Assistant', 'Ops', 'Admin', 'Patient']
+const WORKBENCH_ROLES = new Set(['Counselor', 'Assistant', 'Ops', 'Admin'])
+
+const resolveActiveRole = (roles: string[], activeRole?: string) => {
+  // 来访者主动切换为 Patient 时，不再按多角色优先级跳进工作台
+  if (activeRole === 'Patient') return 'Patient'
+  if (activeRole && WORKBENCH_ROLES.has(activeRole)) return activeRole
+  const priority = ['Counselor', 'Assistant', 'Ops', 'Admin']
   return priority.find(role => roles.includes(role)) || 'Patient'
 }
+
+const goConsult = () => uni.switchTab({ url: '/pages/consultant/list' })
+const goProfile = () => uni.switchTab({ url: '/pages/user/profile' })
 
 const goLogin = async () => {
   state.value = 'loading'
@@ -68,38 +88,31 @@ const routeToWorkbench = async () => {
   state.value = 'loading'
   try {
     const me = await AuthApi.getMe()
-    const role = pickRole(me.roles || [], me.activeRole)
-    const target = ROLE_ROUTES[role] || ROLE_ROUTES.Patient
+    const role = resolveActiveRole(me.roles || [], me.activeRole)
+
+    uni.setStorageSync('user_roles', JSON.stringify(me.roles || []))
+
+    if (!WORKBENCH_ROLES.has(role)) {
+      state.value = 'patientBlocked'
+      return
+    }
 
     if (role !== me.activeRole) {
       await AuthApi.switchRole(role)
     }
 
-    uni.setStorageSync('user_roles', JSON.stringify(me.roles || []))
-
-    if (target === '/pages/user/profile') {
-      uni.switchTab({ url: target })
-    } else {
-      uni.redirectTo({ url: target })
-    }
+    const target = ROLE_ROUTES[role]
+    uni.redirectTo({ url: target })
   } catch (e: any) {
     state.value = 'error'
     errorMsg.value = e?.message || '请先登录'
   }
 }
 
-// 每次 Tab 显示时检查
-const onTabShow = () => {
-  if (isLoggedIn()) {
-    routeToWorkbench()
-  } else {
-    state.value = 'needLogin'
-  }
-}
-
-// uni-app 生命周期
-import { onShow } from '@dcloudio/uni-app'
-onShow(onTabShow)
+onShow(() => {
+  if (isLoggedIn()) routeToWorkbench()
+  else state.value = 'needLogin'
+})
 </script>
 
 <style scoped>
@@ -119,6 +132,13 @@ onShow(onTabShow)
   text-align: center;
   box-shadow: 0 10rpx 30rpx rgba(15, 23, 42, 0.08);
 }
+.patient-card { padding-top: 56rpx; }
+.patient-emoji {
+  display: block;
+  font-size: 88rpx;
+  margin-bottom: 24rpx;
+  line-height: 1.2;
+}
 .spinner {
   width: 64rpx; height: 64rpx; border-radius: 50%;
   border: 6rpx solid #D1FAE5; border-top-color: #0D9488;
@@ -126,7 +146,24 @@ onShow(onTabShow)
   animation: spin 0.9s linear infinite;
 }
 .title { display: block; font-size: 34rpx; font-weight: 800; color: #1F2937; }
-.desc { display: block; font-size: 26rpx; color: #6B7280; margin-top: 12rpx; }
+.desc { display: block; font-size: 26rpx; color: #6B7280; margin-top: 12rpx; line-height: 1.6; }
+.patient-actions {
+  display: flex;
+  gap: 20rpx;
+  margin-top: 40rpx;
+  justify-content: center;
+}
+.ghost-btn {
+  flex: 1;
+  max-width: 280rpx;
+  background: #F0FDFA;
+  color: #0D9488;
+  height: 80rpx;
+  line-height: 80rpx;
+  border-radius: 100rpx;
+  font-size: 28rpx;
+  border: none;
+}
 .login-btn {
   margin-top: 48rpx;
   background: #0D9488; color: #fff;

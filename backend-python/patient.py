@@ -203,10 +203,10 @@ def get_my_consultations(
     accounts = {a.Id: a for a in db.query(AppAccount).filter(AppAccount.Id.in_(counselor_ids)).all()} if counselor_ids else {}
 
     schedule_ids = [r.ScheduleId for r in rows if r.ScheduleId]
-    schedule_notes: dict[int, Optional[str]] = {}
+    schedule_map: dict[int, AppSchedule] = {}
     if schedule_ids:
         for s in db.query(AppSchedule).filter(AppSchedule.Id.in_(schedule_ids)).all():
-            schedule_notes[s.Id] = s.Note
+            schedule_map[s.Id] = s
 
     result: List[ConsultationOut] = []
     for r in rows:
@@ -215,13 +215,17 @@ def get_my_consultations(
         name = (prof.Name if prof and prof.Name else None) or (acc.Nickname if acc else None) or f"咨询师#{r.CounselorId}"
         avatar = (prof.AvatarUrl if prof and prof.AvatarUrl else None) or (acc.AvatarUrl if acc else None)
 
-        center_note_text = schedule_notes.get(r.ScheduleId) if r.ScheduleId else None
+        sched = schedule_map.get(r.ScheduleId) if r.ScheduleId else None
+        start_time = r.StartTime or (sched.StartTime if sched else None)
+        end_time = r.EndTime or (sched.EndTime if sched else None)
+
+        center_note_text = sched.Note if sched else None
         if not center_note_text and r.Note:
             center_note_text = r.Note
         center_id = parse_center_id(center_note_text)
         center_name = center_display_name(center_id)
         cancelable = can_visitor_cancel(r.Status)
-        refund_ok = cancelable and is_refund_eligible(r.StartTime)
+        refund_ok = cancelable and is_refund_eligible(start_time)
 
         result.append(ConsultationOut(
             id=r.Id,
@@ -231,8 +235,8 @@ def get_my_consultations(
             counselorAvatar=avatar,
             scheduleId=r.ScheduleId,
             status=r.Status,
-            startTime=r.StartTime,
-            endTime=r.EndTime,
+            startTime=start_time,
+            endTime=end_time,
             note=r.Note,
             createdAt=r.CreatedAt,
             centerId=center_id,

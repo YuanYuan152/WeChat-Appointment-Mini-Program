@@ -2,7 +2,7 @@
   <view class="page-schedule">
     <!-- 新增排班按钮 -->
     <view class="toolbar">
-      <button class="add-btn" @click="showAdd = true">+ 新增排班</button>
+      <button class="add-btn" @tap="openAddModal">+ 新建挂课</button>
     </view>
 
     <!-- 排班列表 -->
@@ -13,7 +13,7 @@
       <view class="sc-main">
         <text class="sc-date">{{ formatDate(s.StartTime) }}</text>
         <text class="sc-time">{{ formatTime(s.StartTime) }} – {{ formatTime(s.EndTime) }}</text>
-        <text class="sc-note" v-if="s.Note">{{ s.Note }}</text>
+        <text class="sc-note" v-if="formatScheduleNote(s.Note)">{{ formatScheduleNote(s.Note) }}</text>
       </view>
       <view class="sc-right">
         <text class="sc-status" :class="s.Status.toLowerCase()">{{ statusLabel(s.Status) }}</text>
@@ -25,10 +25,10 @@
       </view>
     </view>
 
-    <!-- 新增排班弹窗 -->
-    <view v-if="showAdd" class="modal-overlay" @click.self="showAdd = false">
-      <view class="modal-card">
-        <text class="modal-title">新增排班</text>
+    <!-- 勿用遮罩 @click.self 关闭，选完日期后 picker 回调会误关弹窗 -->
+    <view v-if="showAdd" class="modal-overlay" @touchmove.stop.prevent>
+      <view class="modal-card" @tap.stop @touchmove.stop.prevent>
+        <text class="modal-title">新建挂课</text>
 
         <view class="form-item">
           <text class="form-label">开始时间</text>
@@ -59,13 +59,36 @@
         </view>
 
         <view class="form-item">
-          <text class="form-label">备注（选填）</text>
-          <input class="form-input" v-model="form.note" placeholder="备注信息" />
+          <text class="form-label">预约中心</text>
+          <view class="center-row">
+            <view
+              v-for="c in centers"
+              :key="c.id"
+              class="center-chip"
+              :class="{ active: form.centerId === c.id }"
+              @tap="selectCenter(c.id)"
+            >{{ c.name }}</view>
+          </view>
+        </view>
+
+        <view class="form-item">
+          <text class="form-label">咨询室</text>
+          <view class="center-row">
+            <view
+              v-for="room in roomOptions"
+              :key="room.id"
+              class="center-chip"
+              :class="{ active: form.roomId === room.id }"
+              @tap="selectRoom(room.id)"
+            >{{ room.name }}</view>
+          </view>
         </view>
 
         <view class="modal-btns">
-          <button class="modal-btn cancel" @click="showAdd = false">取消</button>
-          <button class="modal-btn confirm" @click="submitSchedule">保存</button>
+          <button class="modal-btn cancel" @tap.stop="showAdd = false">取消</button>
+          <button class="modal-btn confirm" :disabled="submitting" @tap.stop="submitSchedule">
+            {{ submitting ? '保存中...' : '保存' }}
+          </button>
         </view>
       </view>
     </view>
@@ -73,8 +96,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { httpV2 } from '@/utils/http'
+import { API_ENDPOINTS } from '@/config/api'
+import { APPOINTMENT_CENTERS, APPOINTMENT_CENTER_MAP } from '@/constants/appointmentCenters'
+import { getRoomName, getRoomsByCenter } from '@/constants/consultationRooms'
 
 interface Schedule {
   Id: number
@@ -86,9 +112,60 @@ interface Schedule {
 
 const schedules = ref<Schedule[]>([])
 const showAdd = ref(false)
-const form = ref({ startDate: '', startTime: '', endDate: '', endTime: '', note: '' })
+const submitting = ref(false)
+const defaultCenterId = 'yangpu'
+const centers = APPOINTMENT_CENTERS
+const form = ref({
+  startDate: '',
+  startTime: '',
+  endDate: '',
+  endTime: '',
+  centerId: defaultCenterId,
+  roomId: getRoomsByCenter(defaultCenterId)[0]?.id || '',
+})
 
-const statusLabel = (s: string) => ({ AVAILABLE: '空闲', BOOKED: '已预约', CANCELLED: '已取消' }[s] || s)
+const roomOptions = computed(() => getRoomsByCenter(form.value.centerId))
+
+const parseNotePart = (note: string, key: string) => {
+  for (const part of note.split(';')) {
+    const trimmed = part.trim()
+    if (trimmed.toLowerCase().startsWith(`${key}:`)) {
+      return trimmed.split(':').slice(1).join(':').trim()
+    }
+  }
+  return ''
+}
+
+const formatScheduleNote = (note?: string) => {
+  if (!note) return ''
+  const centerId = parseNotePart(note, 'center')
+  const roomId = parseNotePart(note, 'room')
+  const centerName = APPOINTMENT_CENTER_MAP[centerId] || centerId
+  const roomName = centerId && roomId ? getRoomName(centerId, roomId) : ''
+  if (centerName && roomName) return `${centerName} · ${roomName}`
+  return centerName || note
+}
+
+const selectCenter = (id: string) => {
+  form.value.centerId = id
+  const rooms = getRoomsByCenter(id)
+  form.value.roomId = rooms[0]?.id || ''
+}
+
+const selectRoom = (id: string) => {
+  form.value.roomId = id
+}
+
+const formatToday = () => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+const statusLabel = (s: string) => ({
+  AVAILABLE: '已挂课',
+  BOOKED: '已预约',
+  CANCELLED: '已取消',
+}[s] || s)
 const formatDate = (dt: string) => dt ? dt.slice(0, 10) : ''
 const formatTime = (dt: string) => dt ? dt.slice(11, 16) : ''
 
@@ -97,29 +174,70 @@ const onStartTime = (e: any) => { form.value.startTime = e.detail.value }
 const onEndDate = (e: any) => { form.value.endDate = e.detail.value }
 const onEndTime = (e: any) => { form.value.endTime = e.detail.value }
 
+const openAddModal = () => {
+  const today = formatToday()
+  const rooms = getRoomsByCenter(defaultCenterId)
+  form.value = {
+    startDate: today,
+    startTime: '10:00',
+    endDate: today,
+    endTime: '10:50',
+    centerId: defaultCenterId,
+    roomId: rooms[0]?.id || '',
+  }
+  showAdd.value = true
+}
+
 const loadSchedules = async () => {
-  const res = await httpV2.get('/api/mini/counselor/schedules')
+  const res = await httpV2.get(API_ENDPOINTS.counselor.schedules)
   if (res.code === 0 && res.data) schedules.value = res.data
 }
 
 const submitSchedule = async () => {
-  const { startDate, startTime, endDate, endTime, note } = form.value
-  if (!startDate || !startTime || !endDate || !endTime) {
-    uni.showToast({ title: '请填写完整时间', icon: 'none' })
+  if (submitting.value) return
+  const { startDate, startTime, endDate, endTime, centerId, roomId } = form.value
+  if (!startDate || !startTime || !endDate || !endTime || !centerId || !roomId) {
+    uni.showToast({ title: '请选择中心、咨询室并填写时间', icon: 'none' })
     return
   }
-  const res = await httpV2.post('/api/mini/counselor/schedules', {
-    start_time: `${startDate}T${startTime}:00`,
-    end_time: `${endDate}T${endTime}:00`,
-    note: note || null,
-  })
-  if (res.code === 0) {
-    showAdd.value = false
-    form.value = { startDate: '', startTime: '', endDate: '', endTime: '', note: '' }
-    await loadSchedules()
-    uni.showToast({ title: '排班已添加', icon: 'success' })
-  } else {
-    uni.showToast({ title: res.msg || '添加失败', icon: 'none' })
+  const startAt = new Date(`${startDate}T${startTime}:00`)
+  const endAt = new Date(`${endDate}T${endTime}:00`)
+  if (Number.isNaN(startAt.getTime()) || Number.isNaN(endAt.getTime())) {
+    uni.showToast({ title: '时间格式无效', icon: 'none' })
+    return
+  }
+  if (endAt <= startAt) {
+    uni.showToast({ title: '结束时间须晚于开始时间', icon: 'none' })
+    return
+  }
+
+  submitting.value = true
+  try {
+    const res = await httpV2.post(API_ENDPOINTS.counselor.schedules, {
+      start_time: `${startDate}T${startTime}:00`,
+      end_time: `${endDate}T${endTime}:00`,
+      center_id: centerId,
+      room_id: roomId,
+    })
+    if (res.code === 0) {
+      showAdd.value = false
+      form.value = {
+        startDate: '',
+        startTime: '',
+        endDate: '',
+        endTime: '',
+        centerId: defaultCenterId,
+        roomId: getRoomsByCenter(defaultCenterId)[0]?.id || '',
+      }
+      await loadSchedules()
+      uni.showToast({ title: '挂课成功', icon: 'success' })
+    } else {
+      uni.showToast({ title: res.msg || '添加失败', icon: 'none' })
+    }
+  } catch (err: any) {
+    uni.showToast({ title: err?.message || '添加失败', icon: 'none' })
+  } finally {
+    submitting.value = false
   }
 }
 
@@ -228,4 +346,10 @@ onMounted(loadSchedules)
 }
 .modal-btn.cancel { background: #F3F4F6; color: #6B7280; border: none; }
 .modal-btn.confirm { background: #0D9488; color: #fff; border: none; }
+.center-row { display: flex; gap: 16rpx; flex-wrap: wrap; }
+.center-chip {
+  padding: 12rpx 28rpx; border-radius: 100rpx; background: #F3F4F6;
+  font-size: 26rpx; color: #374151;
+}
+.center-chip.active { background: #CCFBF1; color: #0D9488; font-weight: 600; }
 </style>

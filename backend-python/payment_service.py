@@ -5,7 +5,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from models import AppOrder, AppSchedule, AppConsultation
-from schedule_meta import parse_center_id, center_note
+from schedule_meta import parse_center_id, parse_room_id, schedule_note
 
 
 def complete_paid_order(
@@ -31,6 +31,10 @@ def complete_paid_order(
         return
 
     resolved_center = center_id or parse_center_id(schedule.Note)
+    resolved_room = parse_room_id(schedule.Note)
+    consultation_note = (
+        schedule_note(resolved_center, resolved_room) if resolved_center else None
+    )
     if schedule.Status == "AVAILABLE":
         schedule.Status = "BOOKED"
 
@@ -44,8 +48,8 @@ def complete_paid_order(
         .first()
     )
     if existing:
-        if resolved_center and not existing.Note:
-            existing.Note = center_note(resolved_center)
+        if consultation_note and not existing.Note:
+            existing.Note = consultation_note
         return
 
     db.add(
@@ -57,6 +61,6 @@ def complete_paid_order(
             Status="CONFIRMED",
             StartTime=schedule.StartTime,
             EndTime=schedule.EndTime,
-            Note=center_note(resolved_center) if resolved_center else None,
+            Note=consultation_note,
         )
     )

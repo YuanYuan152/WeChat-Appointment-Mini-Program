@@ -123,6 +123,36 @@ def get_or_create_patient(db):
     return account
 
 
+DEV_STAFF_ACCOUNTS = [
+    {"mobile": "13800000004", "open_id": "demo-openid-assistant", "name": "演示助理", "role": "Assistant"},
+    {"mobile": "13800000005", "open_id": "demo-openid-ops", "name": "演示运营", "role": "Ops"},
+    {"mobile": "13800000006", "open_id": "demo-openid-admin", "name": "演示管理员", "role": "Admin"},
+]
+
+
+def get_or_create_staff_account(db, mobile, open_id, nickname, active_role):
+    account = db.query(AppAccount).filter(AppAccount.Mobile == mobile).first()
+    if not account:
+        account = db.query(AppAccount).filter(AppAccount.OpenId == open_id).first()
+    if account:
+        account.OpenId = open_id
+        account.Mobile = mobile
+        account.Nickname = nickname
+        account.RealName = nickname
+        account.ActiveRole = active_role
+        return account
+    account = AppAccount(
+        OpenId=open_id,
+        Mobile=mobile,
+        Nickname=nickname,
+        RealName=nickname,
+        ActiveRole=active_role,
+    )
+    db.add(account)
+    db.flush()
+    return account
+
+
 def get_or_create_counselor_account(db, mobile, open_id, nickname):
     account = db.query(AppAccount).filter(AppAccount.Mobile == mobile).first()
     if account:
@@ -400,6 +430,13 @@ def main():
         if stale:
             stale.IsActive = False
 
+        for cfg in DEV_STAFF_ACCOUNTS:
+            acc = get_or_create_staff_account(
+                db, cfg["mobile"], cfg["open_id"], cfg["name"], cfg["role"]
+            )
+            ensure_role(db, acc.Id, "Patient")
+            ensure_role(db, acc.Id, cfg["role"])
+
         counselor_map = {}
         for cfg in DEMO_COUNSELORS:
             acc = get_or_create_counselor_account(db, cfg["mobile"], cfg["open_id"], cfg["name"])
@@ -422,6 +459,7 @@ def main():
         ensure_patient_consultations(db, patient.Id, counselor_map)
 
         db.commit()
+        print("[OK] 演示助理/运营/管理员账号已写入（dev_assistant / dev_ops / dev_admin）")
         print("[OK] 三位咨询师演示数据已写入")
         print(f"[OK] 来访者: {patient.Mobile} (account_id={patient.Id})")
         for name, acc in counselor_map.items():

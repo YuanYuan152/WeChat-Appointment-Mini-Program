@@ -10,16 +10,24 @@ POST /api/mini/counselor/case-records       新建个案记录
 PUT  /api/mini/counselor/case-records/{id}  更新个案记录
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta, date as date_type, time
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from auth import get_current_account, AppAccount
 from database import get_db
 from models import AppSchedule, AppConsultation, AppCaseRecord, AppRoleBinding, AppCounselorProfile
+from schedule_meta import (
+    center_display_name,
+    parse_center_id,
+    parse_room_id,
+    room_display_name,
+    schedule_note,
+)
+from schedule_display import DISPLAY_LABELS, resolve_schedule_display
 
 router = APIRouter(prefix="/api/mini/counselor", tags=["Counselor"])
 
@@ -49,6 +57,8 @@ class ScheduleCreate(BaseModel):
     start_time: datetime
     end_time: datetime
     note: Optional[str] = None
+    center_id: Optional[str] = None
+    room_id: Optional[str] = None
 
 
 class ScheduleUpdate(BaseModel):
@@ -67,6 +77,28 @@ class ScheduleOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ScheduleCalendarItem(BaseModel):
+    id: int
+    startTime: datetime
+    endTime: datetime
+    status: str
+    displayStatus: str
+    displayLabel: str
+    centerId: Optional[str] = None
+    centerName: Optional[str] = None
+    roomId: Optional[str] = None
+    roomName: Optional[str] = None
+    patientName: Optional[str] = None
+    consultationId: Optional[int] = None
+    consultationStatus: Optional[str] = None
+
+
+class ScheduleCalendarOut(BaseModel):
+    startDate: str
+    days: int
+    slots: List[ScheduleCalendarItem]
 
 
 class ConsultationUpdate(BaseModel):
@@ -138,6 +170,65 @@ class CounselorProfilePayload(BaseModel):
 # 排班接口
 # ---------------------------------------------------------------------------
 
+def _build_schedule_note(body: ScheduleCreate) -> Optional[str]:
+    if body.center_id:
+        return schedule_note(body.center_id, body.room_id)
+    return body.note
+
+
+def _calendar_items_for_schedules(
+    db: Session,
+    schedules: List[AppSchedule],
+) -> List[ScheduleCalendarItem]:
+    if not schedules:
+        return []
+    schedule_ids = [s.Id for s in schedules]
+    consultations = (
+        db.query(AppConsultation)
+        .filter(
+            AppConsultation.ScheduleId.in_(schedule_ids),
+            AppConsultation.Status != "CANCELLED",
+        )
+        .all()
+    )
+    cons_by_schedule = {c.ScheduleId: c for c in consultations if c.ScheduleId}
+
+    patient_ids = {c.PatientId for c in consultations}
+    patients = {
+        a.Id: a
+        for a in db.query(AppAccount).filter(AppAccount.Id.in_(patient_ids)).all()
+    } if patient_ids else {}
+
+    items: List[ScheduleCalendarItem] = []
+    for s in schedules:
+        c = cons_by_schedule.get(s.Id)
+        display = resolve_schedule_display(s, c)
+        center_id = parse_center_id(s.Note)
+        room_id = parse_room_id(s.Note)
+        patient = patients.get(c.PatientId) if c else None
+        patient_name = None
+        if patient:
+            patient_name = patient.RealName or patient.Nickname or f"来访者#{patient.Id}"
+        items.append(
+            ScheduleCalendarItem(
+                id=s.Id,
+                startTime=s.StartTime,
+                endTime=s.EndTime,
+                status=s.Status,
+                displayStatus=display,
+                displayLabel=DISPLAY_LABELS.get(display, display),
+                centerId=center_id,
+                centerName=center_display_name(center_id),
+                roomId=room_id,
+                roomName=room_display_name(center_id, room_id),
+                patientName=patient_name,
+                consultationId=c.Id if c else None,
+                consultationStatus=c.Status if c else None,
+            )
+        )
+    return items
+
+
 @router.get("/schedules", response_model=List[ScheduleOut], summary="获取排班列表")
 def list_schedules(
     counselor: AppAccount = Depends(require_counselor),
@@ -152,7 +243,44 @@ def list_schedules(
     return rows
 
 
-@router.post("/schedules", response_model=ScheduleOut, summary="新增排班")
+@router.get("/schedules/calendar", response_model=ScheduleCalendarOut, summary="未来一周排班日历")
+def schedule_calendar(
+    start: Optional[str] = Query(None, description="起始日期 YYYY-MM-DD，默认今天"),
+    days: int = Query(7, ge=1, le=14),
+    counselor: AppAccount = Depends(require_counselor),
+    db: Session = Depends(get_db),
+):
+    """咨询师工作台周历：已挂课/已预约/已完成/已取消。"""
+    if start:
+        try:
+            start_date = date_type.fromisoformat(start)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="start 格式应为 YYYY-MM-DD")
+    else:
+        start_date = datetime.utcnow().date()
+
+    start_dt = datetime.combine(start_date, time.min)
+    end_dt = start_dt + timedelta(days=days)
+
+    schedules = (
+        db.query(AppSchedule)
+        .filter(
+            AppSchedule.CounselorId == counselor.Id,
+            AppSchedule.StartTime >= start_dt,
+            AppSchedule.StartTime < end_dt,
+        )
+        .order_by(AppSchedule.StartTime.asc())
+        .all()
+    )
+
+    return ScheduleCalendarOut(
+        startDate=start_date.isoformat(),
+        days=days,
+        slots=_calendar_items_for_schedules(db, schedules),
+    )
+
+
+@router.post("/schedules", response_model=ScheduleOut, summary="新增挂课（开放可预约时段）")
 def create_schedule(
     body: ScheduleCreate,
     counselor: AppAccount = Depends(require_counselor),
@@ -160,11 +288,27 @@ def create_schedule(
 ):
     if body.end_time <= body.start_time:
         raise HTTPException(status_code=400, detail="结束时间必须晚于开始时间")
+    if body.center_id and not body.room_id:
+        raise HTTPException(status_code=400, detail="请选择咨询室")
+
+    dup = (
+        db.query(AppSchedule)
+        .filter(
+            AppSchedule.CounselorId == counselor.Id,
+            AppSchedule.StartTime == body.start_time,
+            AppSchedule.Status != "CANCELLED",
+        )
+        .first()
+    )
+    if dup:
+        raise HTTPException(status_code=400, detail="该时段已存在挂课")
+
     schedule = AppSchedule(
         CounselorId=counselor.Id,
         StartTime=body.start_time,
         EndTime=body.end_time,
-        Note=body.note,
+        Status="AVAILABLE",
+        Note=_build_schedule_note(body),
     )
     db.add(schedule)
     db.commit()
@@ -186,6 +330,8 @@ def update_schedule(
     if not schedule:
         raise HTTPException(status_code=404, detail="排班不存在")
     if body.status:
+        if body.status == "CANCELLED" and schedule.Status == "BOOKED":
+            raise HTTPException(status_code=400, detail="已预约时段不可直接取消，请由来访者取消预约")
         schedule.Status = body.status
     if body.note is not None:
         schedule.Note = body.note
@@ -236,6 +382,13 @@ def update_consultation(
         consultation.StartTime = datetime.utcnow()
     if body.status == "DONE" and not consultation.EndTime:
         consultation.EndTime = datetime.utcnow()
+
+    if body.status == "CANCELLED" and consultation.ScheduleId:
+        schedule = db.query(AppSchedule).filter(AppSchedule.Id == consultation.ScheduleId).first()
+        if schedule and schedule.Status == "BOOKED":
+            schedule.Status = "AVAILABLE"
+            schedule.UpdatedAt = datetime.utcnow()
+
     consultation.UpdatedAt = datetime.utcnow()
     db.commit()
     db.refresh(consultation)

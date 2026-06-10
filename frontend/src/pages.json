@@ -182,7 +182,7 @@
                 {
                     "path": "records/list",
                     "style": {
-                        "navigationBarTitleText": "咨询记录",
+                        "navigationBarTitleText": "预约记录",
                         "navigationBarBackgroundColor": "#ffffff",
                         "navigationBarTextStyle": "black"
                     }

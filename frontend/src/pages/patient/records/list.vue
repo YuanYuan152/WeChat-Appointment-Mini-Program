@@ -1,7 +1,7 @@
 <template>
   <view class="page-records">
     <view class="page-header">
-      <text class="page-title">咨询记录</text>
+      <text class="page-title">预约记录</text>
       <view class="filter-bar">
         <view
           v-for="tab in tabs"
@@ -19,7 +19,7 @@
       <text class="empty-text">加载中...</text>
     </view>
     <view v-else-if="records.length === 0" class="empty-state">
-      <text class="empty-text">暂无咨询记录</text>
+      <text class="empty-text">暂无预约记录</text>
     </view>
     <view v-else class="record-list">
       <view
@@ -32,14 +32,14 @@
           <image class="avatar" :src="r.counselorAvatar || '/static/images/tc59.png'" mode="aspectFill" />
           <view class="meta">
             <text class="name">{{ r.counselorName }}</text>
-            <text class="time">{{ formatTime(r.startTime || r.createdAt) }}</text>
+            <text class="time">{{ formatSlotRange(r.startTime, r.endTime) }}</text>
             <text v-if="r.centerName" class="center">{{ r.centerName }}</text>
           </view>
           <text class="status" :class="r.status.toLowerCase()">{{ statusLabel(r.status) }}</text>
         </view>
         <view v-if="r.note && !isCenterNote(r.note)" class="note">{{ r.note }}</view>
         <view v-if="r.canCancel" class="record-actions">
-          <text class="refund-hint">{{ r.refundEligible ? '距开始超过24小时，取消可退款' : '距开始不足24小时，取消不退款' }}</text>
+          <text class="refund-hint">{{ r.refundEligible ? '距咨询超过24小时，取消可退款' : '距咨询不足24小时，取消不退款' }}</text>
           <button class="cancel-btn" :disabled="cancellingId === r.id" @click="handleCancel(r)">
             {{ cancellingId === r.id ? '取消中...' : '取消预约' }}
           </button>
@@ -73,27 +73,41 @@ interface Consultation {
   refundEligible?: boolean
 }
 
-const tabs = [
-  { label: '全部', value: '' },
-  { label: '待确认', value: 'PENDING' },
-  { label: '已确认', value: 'CONFIRMED' },
-  { label: '已完成', value: 'DONE' },
+type RecordTab = 'unfinished' | 'done'
+
+const tabs: { label: string; value: RecordTab }[] = [
+  { label: '未完成', value: 'unfinished' },
+  { label: '已完成', value: 'done' },
 ]
 
-const activeTab = ref<string>('')
+const UNFINISHED_STATUSES = new Set(['PENDING', 'CONFIRMED', 'ONGOING'])
+
+const activeTab = ref<RecordTab>('unfinished')
 const records = ref<Consultation[]>([])
 const loading = ref(true)
 const cancellingId = ref<number | null>(null)
 
-const statusLabel = (s: string) => ({
-  PENDING: '待确认',
-  CONFIRMED: '已确认',
-  ONGOING: '进行中',
-  DONE: '已完成',
-  CANCELLED: '已取消',
-}[s] || s)
+const statusLabel = (s: string) => {
+  if (s === 'DONE') return '已完成'
+  if (UNFINISHED_STATUSES.has(s)) return '未完成'
+  return s
+}
 
-const formatTime = (s?: string) => (s ? s.replace('T', ' ').slice(0, 16) : '')
+/** 预约时段：2026-06-15 10:00 – 10:50 */
+const formatSlotRange = (start?: string, end?: string) => {
+  if (!start) return ''
+  const startNorm = start.replace('T', ' ')
+  const datePart = startNorm.slice(0, 10)
+  const startClock = startNorm.slice(11, 16)
+  if (!end) return `${datePart} ${startClock}`
+  const endNorm = end.replace('T', ' ')
+  const endDate = endNorm.slice(0, 10)
+  const endClock = endNorm.slice(11, 16)
+  if (endDate === datePart) {
+    return `${datePart} ${startClock} – ${endClock}`
+  }
+  return `${startNorm.slice(0, 16)} – ${endNorm.slice(0, 16)}`
+}
 
 const isCenterNote = (note: string) => note.toLowerCase().startsWith('center:')
 
@@ -103,13 +117,19 @@ const cardClass = (r: Consultation) => {
   return ''
 }
 
+const filterByTab = (list: Consultation[], tab: RecordTab) => {
+  if (tab === 'done') {
+    return list.filter(r => r.status === 'DONE')
+  }
+  return list.filter(r => UNFINISHED_STATUSES.has(r.status))
+}
+
 const fetchList = async () => {
   loading.value = true
   try {
-    const params: Record<string, string> = {}
-    if (activeTab.value) params.status = activeTab.value
-    const res = await httpV2.get<Consultation[]>(API_ENDPOINTS.patient.consultations, params)
-    records.value = res.code === 0 && Array.isArray(res.data) ? res.data : []
+    const res = await httpV2.get<Consultation[]>(API_ENDPOINTS.patient.consultations)
+    const all = res.code === 0 && Array.isArray(res.data) ? res.data : []
+    records.value = filterByTab(all, activeTab.value)
   } catch {
     records.value = []
   } finally {
@@ -117,7 +137,7 @@ const fetchList = async () => {
   }
 }
 
-const switchTab = (v: string) => {
+const switchTab = (v: RecordTab) => {
   if (activeTab.value === v) return
   activeTab.value = v
   fetchList()
@@ -125,8 +145,8 @@ const switchTab = (v: string) => {
 
 const handleCancel = (r: Consultation) => {
   const content = r.refundEligible
-    ? '距咨询开始超过24小时，取消后将原路退款。确认取消？'
-    : '距咨询开始不足24小时，取消后不予退款。确认取消？'
+    ? '距咨询超过24小时，取消后将原路退款。确认取消？'
+    : '距咨询不足24小时，取消后不予退款。确认取消？'
   uni.showModal({
     title: '取消预约',
     content,
@@ -192,10 +212,8 @@ onShow(fetchList)
   font-size: 24rpx; font-weight: 600; padding: 4rpx 16rpx; border-radius: 12rpx;
   flex-shrink: 0;
 }
-.status.pending { color: #F59E0B; background: #FEF3C7; }
-.status.confirmed, .status.ongoing { color: #0D9488; background: #CCFBF1; }
+.status.pending, .status.confirmed, .status.ongoing { color: #0D9488; background: #CCFBF1; }
 .status.done { color: #6B7280; background: #E5E7EB; }
-.status.cancelled { color: #6B7280; background: #F3F4F6; }
 .note {
   margin-top: 20rpx; padding-top: 20rpx; border-top: 1rpx dashed #E5E7EB;
   font-size: 26rpx; color: #4B5563; line-height: 1.6;

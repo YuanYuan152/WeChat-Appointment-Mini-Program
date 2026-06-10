@@ -14,10 +14,10 @@ export const DEV_LOGIN_ROLES: {
   seedHint: string
 }[] = [
   { role: 'patient', label: '来访者', code: 'dev_patient', seedHint: 'seed_demo_data.py' },
-  { role: 'counselor', label: '咨询师', code: 'dev_counselor', seedHint: 'seed_demo_counselor.py' },
-  { role: 'assistant', label: '助理', code: 'dev_assistant', seedHint: 'seed_demo_assistant.py' },
-  { role: 'ops', label: '运营', code: 'dev_ops', seedHint: 'seed_demo_ops.py' },
-  { role: 'admin', label: '管理员', code: 'dev_admin', seedHint: 'seed_demo_admin.py' },
+  { role: 'counselor', label: '咨询师', code: 'dev_counselor', seedHint: 'seed_demo_data.py（李心怡）' },
+  { role: 'assistant', label: '助理', code: 'dev_assistant', seedHint: 'seed_demo_data.py' },
+  { role: 'ops', label: '运营', code: 'dev_ops', seedHint: 'seed_demo_data.py' },
+  { role: 'admin', label: '管理员', code: 'dev_admin', seedHint: 'seed_demo_data.py' },
 ]
 
 const DEV_ROLE_TO_CODE: Record<DevLoginRole, string> = {
