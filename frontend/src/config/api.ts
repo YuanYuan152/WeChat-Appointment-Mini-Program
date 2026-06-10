@@ -70,6 +70,7 @@ export const API_ENDPOINTS = {
     login: '/api/mini/auth/login',
     bindMobile: '/api/mini/auth/bind-mobile',
     me: '/api/mini/auth/me',
+    updateMe: '/api/mini/auth/me',
     switchRole: '/api/mini/auth/switch-role',
     deleteAccount: '/api/mini/auth/account',
   },
@@ -146,6 +147,11 @@ export const API_ENDPOINTS = {
   admin: {
     users: '/api/mini/admin/users',
     bindRole: (uid: number | string) => `/api/mini/admin/users/${uid}/roles`,
+  },
+
+  // 意见反馈
+  feedback: {
+    submit: '/api/mini/feedback',
   },
 }
 

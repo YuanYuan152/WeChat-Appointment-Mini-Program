@@ -340,6 +340,18 @@ class AppContactRecord(Base):
     UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
 
 
+class AppFeedback(Base):
+    __tablename__ = "AppFeedback"
+
+    Id = Column(BigInteger, primary_key=True, index=True, autoincrement=True)
+    AccountId = Column(Integer, nullable=False)
+    Category = Column(String(50), nullable=True)
+    Content = Column(UnicodeText, nullable=False)
+    Contact = Column(String(50), nullable=True)
+    Status = Column(String(20), nullable=False, default="OPEN")
+    CreatedAt = Column(DateTime, default=func.now(), nullable=False)
+
+
 class AppLoginSession(Base):
     __tablename__ = "AppLoginSession"
 

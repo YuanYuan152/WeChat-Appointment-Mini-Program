@@ -47,7 +47,7 @@
     <!-- 菜单列表区域 -->
     <view class="menu-section">
       <view class="menu-group">
-        <view class="menu-item" @click="navigateTo('/pages/user/info')">
+        <view class="menu-item" @click="goPersonalInfo">
           <view class="menu-icon-wrap bg-teal-light">
             <text class="menu-icon text-teal">👤</text>
           </view>
@@ -71,7 +71,7 @@
       </view>
 
       <view class="menu-group">
-        <view class="menu-item" @click="navigateTo('/pages/user/feedback')">
+        <view class="menu-item" @click="handleFeedbackClick">
           <view class="menu-icon-wrap bg-purple-light">
             <text class="menu-icon text-purple">✉</text>
           </view>
@@ -159,7 +159,18 @@ const ROLE_LABELS: Record<string, string> = {
   Admin: '管理员',
 }
 
+const PROFILE_EDIT_ROUTES: Record<string, string> = {
+  Patient: '/pages/patient/profile/edit',
+  Counselor: '/pages/counselor/profile/edit',
+  Assistant: '/pages/user/info',
+  Ops: '/pages/user/info',
+  Admin: '/pages/user/info',
+}
+
 const roleLabel = (role: string) => ROLE_LABELS[role] || role
+
+const getProfileEditUrl = () =>
+  PROFILE_EDIT_ROUTES[activeRole.value] || '/pages/user/info'
 
 const resetPageState = () => {
   userInfo.value = emptyUserInfo()
@@ -301,8 +312,15 @@ const clearCache = () => {
 // 处理需要登录的功能点击
 const handleFeedbackClick = () => {
   handleRequireLogin(
-    () => navigateTo('/pages/feedback/index'),
-    '/pages/feedback/index'
+    () => navigateTo('/pages/user/feedback'),
+    '/pages/user/feedback'
+  )
+}
+
+const goPersonalInfo = () => {
+  handleRequireLogin(
+    () => navigateTo(getProfileEditUrl()),
+    getProfileEditUrl()
   )
 }
 
@@ -316,13 +334,15 @@ const handleAvatarClick = () => {
     goLogin()
     return
   }
-  navigateTo('/pages/patient/profile/edit')
+  navigateTo(getProfileEditUrl())
 }
 
 const handleUserInfoClick = () => {
   if (!isLoggedIn.value) {
     goLogin()
+    return
   }
+  navigateTo(getProfileEditUrl())
 }
 
 const goLogin = () => {

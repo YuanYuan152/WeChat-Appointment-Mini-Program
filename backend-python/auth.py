@@ -60,12 +60,21 @@ class UserInfo(BaseModel):
     mobile: Optional[str] = None
     nickname: Optional[str] = None
     avatarUrl: Optional[str] = None
+    realName: Optional[str] = None
+    gender: Optional[str] = None
     roles: list[str] = []
     activeRole: Optional[str] = None
 
 
 class SwitchRoleRequest(BaseModel):
     role: str
+
+
+class ProfileUpdateRequest(BaseModel):
+    nickname: Optional[str] = None
+    avatarUrl: Optional[str] = None
+    realName: Optional[str] = None
+    gender: Optional[str] = None
 
 # ---------------------------------------------------------------------------
 # JWT helpers
@@ -248,9 +257,33 @@ def get_me(
         mobile=current_account.Mobile,
         nickname=current_account.Nickname,
         avatarUrl=current_account.AvatarUrl,
+        realName=current_account.RealName,
+        gender=current_account.Gender,
         roles=roles,
         activeRole=active_role,
     )
+
+
+@router.put("/me", response_model=UserInfo, summary="更新当前用户基本资料")
+def update_me(
+    body: ProfileUpdateRequest,
+    current_account: AppAccount = Depends(get_current_account),
+    db: Session = Depends(get_db),
+):
+    mapping = {
+        "nickname": "Nickname",
+        "avatarUrl": "AvatarUrl",
+        "realName": "RealName",
+        "gender": "Gender",
+    }
+    for src, dst in mapping.items():
+        val = getattr(body, src, None)
+        if val is not None:
+            setattr(current_account, dst, val)
+    current_account.UpdatedAt = datetime.utcnow()
+    db.commit()
+    db.refresh(current_account)
+    return get_me(current_account=current_account, db=db)
 
 
 @router.delete("/account", summary="注销当前账号（软删除，保留业务表追溯）")
