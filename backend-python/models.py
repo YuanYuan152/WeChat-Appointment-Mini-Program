@@ -340,6 +340,20 @@ class AppContactRecord(Base):
     UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
 
 
+class AppRefundExemption(Base):
+    __tablename__ = "AppRefundExemption"
+
+    Id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    ConsultationId = Column(Integer, nullable=False)
+    AccountId = Column(Integer, nullable=False)
+    Amount = Column(Integer, nullable=False)
+    Reason = Column(UnicodeText, nullable=False)
+    ScreenshotUrl = Column(Unicode(500), nullable=True)
+    Status = Column(String(20), nullable=False, default="PENDING")
+    CreatedAt = Column(DateTime, default=func.now(), nullable=False)
+    UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
+
+
 class AppFeedback(Base):
     __tablename__ = "AppFeedback"
 

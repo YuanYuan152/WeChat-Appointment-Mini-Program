@@ -322,13 +322,35 @@
             </view>
           </view>
           
-          <view class="pay-tip">
-            <text class="pay-tip-icon">!</text>
-            <text>预约成功后请在15分钟内完成付款</text>
+          <view class="pay-warm-tips">
+            <view class="pay-tip-title">
+              <text class="pay-tip-icon">!</text>
+              <text class="pay-tip-title-text">温馨提示</text>
+            </view>
+            <view class="pay-rules-list">
+              <text class="pay-rule-item">· 距咨询开始超过24小时可免费取消；</text>
+              <text class="pay-rule-item">· 距咨询开始24小时内取消或爽约，不予退款；</text>
+              <text class="pay-rule-item">· 特殊情况可致电咨询，申请人工豁免；</text>
+              <text class="pay-rule-item">· 迟到15分钟以上视为爽约。</text>
+            </view>
+          </view>
+
+          <view class="pay-agree-row" @tap="togglePayRulesAgreed">
+            <view class="pay-checkbox" :class="{ checked: payRulesAgreed }">
+              <text v-if="payRulesAgreed" class="pay-check-icon">✓</text>
+            </view>
+            <text class="pay-agree-text">
+              我已同意上述规则及
+              <text class="pay-agree-link" @tap.stop="openPrivacyPolicy">《隐私协议》</text>
+            </text>
           </view>
         </view>
         <view class="modal-footer-modern">
-          <button class="btn-fill full-width" @click="confirmPayment">确认支付</button>
+          <button
+            class="btn-fill full-width"
+            :class="{ disabled: !payRulesAgreed }"
+            @click="confirmPayment"
+          >确认支付</button>
         </view>
       </view>
     </view>
@@ -408,6 +430,8 @@ const showAgeConfirm = ref(false)
 const showAgreement = ref(false)
 const showPayment = ref(false)
 const showSignatureCanvas = ref(false)
+/** 确认订单页：是否已勾选同意温馨提示与隐私协议 */
+const payRulesAgreed = ref(false)
 
 // 协议内容
 const currentAgreement = ref('')
@@ -961,18 +985,37 @@ const confirmAgreement = () => {
   }
   
   hideAgreementModal()
+  payRulesAgreed.value = false
   showPayment.value = true
 }
 
 // 支付相关方法
 const closePayment = () => {
   showPayment.value = false
+  payRulesAgreed.value = false
+}
+
+const togglePayRulesAgreed = () => {
+  payRulesAgreed.value = !payRulesAgreed.value
+}
+
+const openPrivacyPolicy = () => {
+  uni.navigateTo({ url: '/pages/legal/privacy' })
 }
 
 /** 是否走真实微信支付（上线后在 .env 设置 VITE_ENABLE_REAL_PAY=true） */
 const useRealWechatPay = () => import.meta.env.VITE_ENABLE_REAL_PAY === 'true'
 
 const confirmPayment = async () => {
+  if (!payRulesAgreed.value) {
+    uni.showToast({
+      title: '请先阅读温馨提示和《隐私协议》并勾选同意',
+      icon: 'none',
+      duration: 2500,
+    })
+    return
+  }
+
   const finishOk = async (orderId?: string) => {
     closePayment()
     await getDoctorDetail()
@@ -2178,15 +2221,25 @@ onMounted(() => {
   color: #0D9488;
 }
 
-.pay-tip {
+.pay-warm-tips {
+  background: #FFFBEB;
+  border: 1rpx solid #FDE68A;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  margin-bottom: 28rpx;
+}
+
+.pay-tip-title {
   display: flex;
   align-items: center;
   gap: 12rpx;
-  background: #FEF3C7;
-  color: #D97706;
-  padding: 20rpx 24rpx;
-  border-radius: 16rpx;
-  font-size: 24rpx;
+  margin-bottom: 16rpx;
+}
+
+.pay-tip-title-text {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #B45309;
 }
 
 .pay-tip-icon {
@@ -2200,5 +2253,61 @@ onMounted(() => {
   justify-content: center;
   font-weight: 800;
   font-size: 20rpx;
+  flex-shrink: 0;
+}
+
+.pay-rules-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+}
+
+.pay-rule-item {
+  font-size: 24rpx;
+  color: #92400E;
+  line-height: 1.6;
+}
+
+.pay-agree-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 16rpx;
+  padding: 8rpx 0 4rpx;
+}
+
+.pay-checkbox {
+  width: 36rpx;
+  height: 36rpx;
+  border: 2rpx solid #D1D5DB;
+  border-radius: 8rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 4rpx;
+  background: #fff;
+}
+
+.pay-checkbox.checked {
+  background: #0D9488;
+  border-color: #0D9488;
+}
+
+.pay-check-icon {
+  color: #fff;
+  font-size: 22rpx;
+  font-weight: 700;
+}
+
+.pay-agree-text {
+  flex: 1;
+  font-size: 26rpx;
+  color: #4B5563;
+  line-height: 1.6;
+}
+
+.pay-agree-link {
+  color: #0D9488;
+  font-weight: 600;
 }
 </style>

@@ -188,6 +188,14 @@
                     }
                 },
                 {
+                    "path": "refund-exemption/apply",
+                    "style": {
+                        "navigationBarTitleText": "申请豁免",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                },
+                {
                     "path": "registration/edit",
                     "style": {
                         "navigationBarTitleText": "心理登记表",

@@ -19,9 +19,17 @@ from consultation_cancel import (
     can_visitor_cancel,
     cancel_consultation_for_visitor,
     is_refund_eligible,
+    refund_ineligible_reason,
 )
 from database import get_db
-from models import AppOrder, AppRegistrationForm, AppConsultation, AppCounselorProfile, AppSchedule
+from models import (
+    AppOrder,
+    AppRegistrationForm,
+    AppConsultation,
+    AppCounselorProfile,
+    AppSchedule,
+    AppRefundExemption,
+)
 from schedule_meta import center_display_name, parse_center_id
 
 router = APIRouter(prefix="/api/mini/patient", tags=["Patient"])
@@ -175,11 +183,29 @@ class ConsultationOut(BaseModel):
     centerName: Optional[str] = None
     canCancel: bool = False
     refundEligible: bool = False
+    orderAmount: Optional[int] = None
+    refundReason: Optional[str] = None
 
 
 class CancelConsultationOut(BaseModel):
     refunded: bool
     message: str
+
+
+class RefundExemptionCreate(BaseModel):
+    amount: int
+    reason: str
+    screenshot_url: Optional[str] = None
+
+
+class RefundExemptionOut(BaseModel):
+    id: int
+    consultationId: int
+    amount: int
+    reason: str
+    screenshotUrl: Optional[str] = None
+    status: str
+    createdAt: datetime
 
 
 @router.get("/consultations", response_model=List[ConsultationOut], summary="获取当前用户的咨询单列表")
@@ -208,6 +234,12 @@ def get_my_consultations(
         for s in db.query(AppSchedule).filter(AppSchedule.Id.in_(schedule_ids)).all():
             schedule_map[s.Id] = s
 
+    order_ids = [r.OrderId for r in rows if r.OrderId]
+    order_map: dict[int, AppOrder] = {}
+    if order_ids:
+        for o in db.query(AppOrder).filter(AppOrder.Id.in_(order_ids)).all():
+            order_map[o.Id] = o
+
     result: List[ConsultationOut] = []
     for r in rows:
         prof = counselor_map.get(r.CounselorId)
@@ -226,6 +258,8 @@ def get_my_consultations(
         center_name = center_display_name(center_id)
         cancelable = can_visitor_cancel(r.Status)
         refund_ok = cancelable and is_refund_eligible(start_time)
+        order = order_map.get(r.OrderId) if r.OrderId else None
+        order_amount = order.TotalFee if order and order.Status == "PAID" else None
 
         result.append(ConsultationOut(
             id=r.Id,
@@ -243,6 +277,8 @@ def get_my_consultations(
             centerName=center_name,
             canCancel=cancelable,
             refundEligible=refund_ok,
+            orderAmount=order_amount,
+            refundReason=None if refund_ok else refund_ineligible_reason(start_time),
         ))
     return result
 
@@ -274,6 +310,70 @@ def cancel_my_consultation(
 
     db.commit()
     return CancelConsultationOut(refunded=refunded, message=message)
+
+
+@router.post(
+    "/consultations/{consultation_id}/refund-exemption",
+    response_model=RefundExemptionOut,
+    summary="提交退款豁免申请",
+)
+def submit_refund_exemption(
+    consultation_id: int,
+    body: RefundExemptionCreate,
+    current_account: AppAccount = Depends(get_current_account),
+    db: Session = Depends(get_db),
+):
+    row = (
+        db.query(AppConsultation)
+        .filter(
+            AppConsultation.Id == consultation_id,
+            AppConsultation.PatientId == current_account.Id,
+        )
+        .first()
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="咨询记录不存在")
+    if not can_visitor_cancel(row.Status):
+        raise HTTPException(status_code=400, detail="当前状态不可申请豁免")
+
+    reason = (body.reason or "").strip()
+    if not reason:
+        raise HTTPException(status_code=400, detail="请填写申请原因")
+    if body.amount <= 0:
+        raise HTTPException(status_code=400, detail="申请金额须大于 0")
+
+    pending = (
+        db.query(AppRefundExemption)
+        .filter(
+            AppRefundExemption.ConsultationId == consultation_id,
+            AppRefundExemption.AccountId == current_account.Id,
+            AppRefundExemption.Status == "PENDING",
+        )
+        .first()
+    )
+    if pending:
+        raise HTTPException(status_code=400, detail="该预约已有待审核的豁免申请")
+
+    exemption = AppRefundExemption(
+        ConsultationId=consultation_id,
+        AccountId=current_account.Id,
+        Amount=body.amount,
+        Reason=reason,
+        ScreenshotUrl=body.screenshot_url,
+        Status="PENDING",
+    )
+    db.add(exemption)
+    db.commit()
+    db.refresh(exemption)
+    return RefundExemptionOut(
+        id=exemption.Id,
+        consultationId=exemption.ConsultationId,
+        amount=exemption.Amount,
+        reason=exemption.Reason,
+        screenshotUrl=exemption.ScreenshotUrl,
+        status=exemption.Status,
+        createdAt=exemption.CreatedAt,
+    )
 
 
 @router.get("/orders", response_model=List[OrderOut], summary="获取当前用户订单列表")

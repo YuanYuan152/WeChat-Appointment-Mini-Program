@@ -104,6 +104,7 @@ export const API_ENDPOINTS = {
     orderDetail: (id: number | string) => `/api/mini/patient/orders/${id}`,
     consultations: '/api/mini/patient/consultations',
     consultationCancel: (id: number | string) => `/api/mini/patient/consultations/${id}/cancel`,
+    refundExemption: (id: number | string) => `/api/mini/patient/consultations/${id}/refund-exemption`,
     me: '/api/mini/patient/me',
     registration: '/api/mini/patient/registration',
   },

@@ -22,6 +22,18 @@ def is_refund_eligible(start_time: Optional[datetime]) -> bool:
     return hours >= CANCEL_REFUND_HOURS
 
 
+def refund_ineligible_reason(start_time: Optional[datetime]) -> Optional[str]:
+    """不可全额退款时的说明文案。"""
+    if is_refund_eligible(start_time):
+        return None
+    hours = hours_until_appointment(start_time)
+    if hours is None:
+        return "咨询开始时间未确定，暂无法全额退款"
+    if hours < 0:
+        return "咨询已开始或已结束，按规定不予全额退款"
+    return f"距咨询开始不足{CANCEL_REFUND_HOURS}小时，按规定不予全额退款"
+
+
 def can_visitor_cancel(status: str) -> bool:
     return status in ("PENDING", "CONFIRMED", "ONGOING")
 
