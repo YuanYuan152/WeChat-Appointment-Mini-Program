@@ -153,6 +153,45 @@
       </view>
     </view>
 
+    <!-- 超过24小时已预约取消：须上传沟通截图 -->
+    <view v-if="showCancelBooked" class="notice-overlay" @touchmove.stop.prevent>
+      <view class="cancel-booked-card" @tap.stop>
+        <text class="notice-title">取消已预约挂课</text>
+        <text class="cancel-booked-tip">
+          距咨询开始超过24小时，取消前请与来访者提前沟通，并上传沟通截图。取消后将通知来访者并协助改约。
+        </text>
+        <view v-if="cancelBookedSlotText" class="detail-block">
+          <text class="detail-label">咨询时段</text>
+          <text class="detail-value">{{ cancelBookedSlotText }}</text>
+        </view>
+        <view v-if="cancelBookedPatient" class="detail-block">
+          <text class="detail-label">来访者</text>
+          <text class="detail-value">{{ cancelBookedPatient }}</text>
+        </view>
+        <view class="upload-section">
+          <text class="detail-label">沟通截图（必填）</text>
+          <view v-if="cancelScreenshotUrl" class="screenshot-preview" @tap="pickCancelScreenshot">
+            <image :src="cancelScreenshotPreview" mode="aspectFit" class="screenshot-img" />
+            <text class="screenshot-repick">点击更换</text>
+          </view>
+          <view v-else class="screenshot-upload" @tap="pickCancelScreenshot">
+            <text class="screenshot-upload-text">
+              {{ cancelScreenshotUploading ? '上传中...' : '+ 上传沟通截图' }}
+            </text>
+          </view>
+        </view>
+        <view class="notice-btns">
+          <button class="notice-btn secondary" @tap="closeCancelBooked">返回</button>
+          <button
+            class="notice-btn primary"
+            :disabled="!cancelScreenshotUrl || cancellingBooked"
+            :loading="cancellingBooked"
+            @tap="confirmCancelBooked"
+          >{{ cancellingBooked ? '取消中...' : '确认取消' }}</button>
+        </view>
+      </view>
+    </view>
+
     <!-- 不足24小时取消提示 -->
     <view v-if="showLeaveNotice" class="notice-overlay" @touchmove.stop.prevent>
       <view class="notice-card" @tap.stop>
@@ -171,6 +210,7 @@
 import { ref, computed } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { httpV2 } from '@/utils/http'
+import { fixImageUrl } from '@/utils/image'
 import { API_ENDPOINTS } from '@/config/api'
 import { APPOINTMENT_CENTERS } from '@/constants/appointmentCenters'
 import { SCHEDULE_DISPLAY_META, type ScheduleDisplayStatus } from '@/constants/scheduleDisplay'
@@ -261,6 +301,13 @@ const leaveDetailPatient = ref('')
 const leaveDetailReason = ref('')
 const leaveDetailSubmittedAt = ref('')
 const leaveDetailStatusLabel = ref('')
+const showCancelBooked = ref(false)
+const cancelBookedSlot = ref<CalendarSlot | null>(null)
+const cancelBookedSlotText = ref('')
+const cancelBookedPatient = ref('')
+const cancelScreenshotUrl = ref('')
+const cancelScreenshotUploading = ref(false)
+const cancellingBooked = ref(false)
 const submitting = ref(false)
 const slotOptionsLoading = ref(false)
 const timeSlotOptions = ref<TimeSlotOpt[]>([])
@@ -288,6 +335,8 @@ const meta = (status: ScheduleDisplayStatus) =>
   SCHEDULE_DISPLAY_META[status] || SCHEDULE_DISPLAY_META.OPEN
 
 const rollingRangeText = computed(() => `${minDate} ~ ${maxDate}`)
+
+const cancelScreenshotPreview = computed(() => fixImageUrl(cancelScreenshotUrl.value))
 
 const formatTime = (iso: string) => (iso ? iso.replace('T', ' ').slice(11, 16) : '')
 
@@ -484,6 +533,64 @@ const confirmLeaveNotice = () => {
   if (slot) goLeaveRequest(slot)
 }
 
+const openCancelBooked = (slot: CalendarSlot) => {
+  cancelBookedSlot.value = slot
+  cancelBookedSlotText.value = `${formatTime(slot.startTime)} – ${formatTime(slot.endTime)}`
+  cancelBookedPatient.value = slot.patientName || ''
+  cancelScreenshotUrl.value = ''
+  showCancelBooked.value = true
+}
+
+const closeCancelBooked = () => {
+  showCancelBooked.value = false
+  cancelBookedSlot.value = null
+  cancelScreenshotUrl.value = ''
+}
+
+const pickCancelScreenshot = () => {
+  if (cancelScreenshotUploading.value) return
+  uni.chooseImage({
+    count: 1,
+    success: async (res) => {
+      cancelScreenshotUploading.value = true
+      try {
+        const uploadRes = await httpV2.upload(API_ENDPOINTS.upload.file, res.tempFilePaths[0], 'file')
+        if (uploadRes.code === 0 && uploadRes.data?.url) {
+          cancelScreenshotUrl.value = uploadRes.data.url
+        } else {
+          uni.showToast({ title: uploadRes.msg || '上传失败', icon: 'none' })
+        }
+      } finally {
+        cancelScreenshotUploading.value = false
+      }
+    },
+  })
+}
+
+const confirmCancelBooked = async () => {
+  const slot = cancelBookedSlot.value
+  if (!slot || !cancelScreenshotUrl.value) {
+    uni.showToast({ title: '请上传沟通截图', icon: 'none' })
+    return
+  }
+  cancellingBooked.value = true
+  try {
+    const r = await httpV2.put(`/api/mini/counselor/schedules/${slot.id}`, {
+      status: 'CANCELLED',
+      communication_screenshot_url: cancelScreenshotUrl.value,
+    })
+    if (r.code === 0) {
+      closeCancelBooked()
+      uni.showToast({ title: '已取消', icon: 'success' })
+      await loadCalendar()
+    } else {
+      uni.showToast({ title: r.msg || '取消失败', icon: 'none' })
+    }
+  } finally {
+    cancellingBooked.value = false
+  }
+}
+
 const handleCancelSlot = (slot: CalendarSlot) => {
   if (slotNeedsLeave(slot)) {
     leaveNoticeSlot.value = slot
@@ -493,13 +600,14 @@ const handleCancelSlot = (slot: CalendarSlot) => {
   }
 
   const bookedOver24h = isBookedSlot(slot) && msUntilStart(slot) >= MS_24H
-  const content = bookedOver24h
-    ? '取消前请与来访者提前沟通。取消后将通知来访者并协助改约。确认取消该挂课？'
-    : (slot.cancelHint || '确认取消该挂课？')
+  if (bookedOver24h) {
+    openCancelBooked(slot)
+    return
+  }
 
   uni.showModal({
     title: '取消挂课',
-    content,
+    content: slot.cancelHint || '确认取消该挂课？',
     success: async (res) => {
       if (!res.confirm) return
       const r = await httpV2.put(`/api/mini/counselor/schedules/${slot.id}`, { status: 'CANCELLED' })
@@ -594,6 +702,26 @@ onShow(loadCalendar)
 .detail-value { display: block; font-size: 28rpx; color: #374151; line-height: 1.6; }
 .detail-reason { white-space: pre-wrap; }
 .detail-close { margin-top: 16rpx; width: 100%; }
+.cancel-booked-card {
+  width: 100%; max-width: 640rpx; background: #fff;
+  border-radius: 32rpx; padding: 48rpx 40rpx 40rpx;
+}
+.cancel-booked-tip {
+  display: block; font-size: 28rpx; color: #4B5563; line-height: 1.6;
+  margin-bottom: 24rpx; text-align: left;
+}
+.upload-section { margin-bottom: 32rpx; text-align: left; }
+.screenshot-upload {
+  margin-top: 12rpx; padding: 48rpx 24rpx; background: #F9FAFB;
+  border: 2rpx dashed #D1D5DB; border-radius: 16rpx; text-align: center;
+}
+.screenshot-upload-text { font-size: 28rpx; color: #0D9488; }
+.screenshot-preview { margin-top: 12rpx; text-align: center; }
+.screenshot-img {
+  width: 100%; max-height: 360rpx; border-radius: 12rpx; background: #F3F4F6;
+}
+.screenshot-repick { display: block; font-size: 24rpx; color: #6B7280; margin-top: 12rpx; }
+.notice-btn[disabled] { opacity: 0.45; }
 .notice-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,0.45);
   display: flex; align-items: center; justify-content: center;

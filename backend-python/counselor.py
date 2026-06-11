@@ -27,6 +27,7 @@ from models import (
     AppCounselorProfile,
     AppLeaveRequest,
     AppOrder,
+    AppScheduleCancelLog,
 )
 from app_time import china_now
 from consultation_cancel import has_appointment_started, is_refund_eligible
@@ -87,6 +88,7 @@ class ScheduleUpdate(BaseModel):
     note: Optional[str] = None
     center_id: Optional[str] = None
     room_id: Optional[str] = None
+    communication_screenshot_url: Optional[str] = None
 
 
 class RoomSlotOption(BaseModel):
@@ -266,7 +268,7 @@ def _cancel_permissions(schedule: AppSchedule, consultation: Optional[AppConsult
             return (
                 True,
                 False,
-                "取消前请与来访者提前沟通。取消后将通知来访者并协助改约。",
+                "取消前请与来访者提前沟通并上传沟通截图。取消后将通知来访者并协助改约。",
             )
         return (
             False,
@@ -282,6 +284,8 @@ def _counselor_cancel_booked(
     db: Session,
     schedule: AppSchedule,
     counselor_id: int,
+    *,
+    communication_screenshot_url: Optional[str] = None,
 ) -> None:
     """距开始≥24h：咨询师取消已预约挂课。"""
     if not is_refund_eligible(schedule.StartTime):
@@ -289,6 +293,9 @@ def _counselor_cancel_booked(
             status_code=400,
             detail="距咨询开始不足24小时，不能直接取消，请提交请假申请",
         )
+    screenshot = (communication_screenshot_url or "").strip()
+    if not screenshot:
+        raise HTTPException(status_code=400, detail="请上传与来访者的沟通截图后再取消")
     consultation = (
         db.query(AppConsultation)
         .filter(
@@ -306,6 +313,14 @@ def _counselor_cancel_booked(
             if order and order.Status == "PAID":
                 order.Status = "REFUNDED" if is_refund_eligible(schedule.StartTime) else "CANCELLED"
                 order.UpdatedAt = datetime.utcnow()
+    db.add(
+        AppScheduleCancelLog(
+            ScheduleId=schedule.Id,
+            CounselorId=counselor_id,
+            ConsultationId=consultation.Id if consultation else None,
+            ScreenshotUrl=screenshot,
+        )
+    )
     schedule.Status = "CANCELLED"
     schedule.UpdatedAt = datetime.utcnow()
 
@@ -593,7 +608,12 @@ def update_schedule(
                         status_code=400,
                         detail="距咨询开始不足24小时，不能直接取消，请走请假流程",
                     )
-                _counselor_cancel_booked(db, schedule, counselor.Id)
+                _counselor_cancel_booked(
+                    db,
+                    schedule,
+                    counselor.Id,
+                    communication_screenshot_url=body.communication_screenshot_url,
+                )
             else:
                 schedule.Status = "CANCELLED"
         elif schedule.Status == "AVAILABLE":

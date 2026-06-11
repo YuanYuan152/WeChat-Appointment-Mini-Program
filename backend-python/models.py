@@ -352,6 +352,18 @@ class AppLeaveRequest(Base):
     UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
 
 
+class AppScheduleCancelLog(Base):
+    """咨询师取消已预约挂课（距开始≥24h）时留存沟通截图凭证。"""
+    __tablename__ = "AppScheduleCancelLog"
+
+    Id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    ScheduleId = Column(Integer, nullable=False)
+    CounselorId = Column(Integer, nullable=False)
+    ConsultationId = Column(Integer, nullable=True)
+    ScreenshotUrl = Column(Unicode(500), nullable=False)
+    CreatedAt = Column(DateTime, default=func.now(), nullable=False)
+
+
 class AppRefundExemption(Base):
     __tablename__ = "AppRefundExemption"
 
