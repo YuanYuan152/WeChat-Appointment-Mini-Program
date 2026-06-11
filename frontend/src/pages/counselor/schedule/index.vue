@@ -97,6 +97,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
 import { APPOINTMENT_CENTERS, APPOINTMENT_CENTER_MAP } from '@/constants/appointmentCenters'
@@ -254,6 +255,7 @@ const cancelSchedule = async (id: number) => {
   })
 }
 
+onShow(loadSchedules)
 onMounted(loadSchedules)
 </script>
 

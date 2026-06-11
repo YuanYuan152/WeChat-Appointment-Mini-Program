@@ -7,9 +7,25 @@
 
     <view class="form-card">
       <text class="form-section">{{ editingId ? '编辑主题月' : '新建主题月' }}</text>
-      <input class="input" v-model="form.title" placeholder="主题月标题（如：5 月 · 情绪管理）" />
-      <input class="input" v-model="form.cover_url" placeholder="封面图 URL（建议绝对地址或 /static/...）" />
-      <textarea class="textarea" v-model="form.content" placeholder="主题月介绍 / 当月议程，支持中文" />
+
+      <view class="form-group">
+        <text class="form-label">主题月标题 *</text>
+        <view class="input-wrap">
+          <input class="input" v-model="form.title" placeholder="如：5 月 · 情绪管理" placeholder-class="input-ph" />
+        </view>
+      </view>
+
+      <view class="form-group">
+        <text class="form-label">封面图 URL</text>
+        <view class="input-wrap">
+          <input class="input" v-model="form.cover_url" placeholder="图片地址" placeholder-class="input-ph" />
+        </view>
+      </view>
+
+      <view class="form-group">
+        <text class="form-label">主题月介绍</text>
+        <textarea class="textarea" v-model="form.content" placeholder="介绍 / 当月议程" placeholder-class="textarea-ph" />
+      </view>
 
       <view class="form-row">
         <view class="form-col">
@@ -29,7 +45,9 @@
       <view class="form-row">
         <view class="form-col">
           <text class="form-label">排序</text>
-          <input class="input small" v-model.number="form.sort_order" type="number" placeholder="0" />
+          <view class="input-wrap small-wrap">
+            <input class="input small" v-model.number="form.sort_order" type="number" placeholder="0" placeholder-class="input-ph" />
+          </view>
         </view>
         <view class="form-col switch-col">
           <text class="form-label">启用</text>
@@ -233,18 +251,31 @@ onMounted(load)
 }
 
 .form-section { display: block; font-size: 30rpx; font-weight: 700; color: #1F2937; margin-bottom: 20rpx; }
-.input, .textarea, .picker {
+.form-group { margin-bottom: 18rpx; }
+.form-label { display: block; font-size: 26rpx; color: #6B7280; margin-bottom: 10rpx; }
+.input-wrap {
   width: 100%; box-sizing: border-box; background: #F9FAFB; border-radius: 16rpx;
-  padding: 20rpx 24rpx; font-size: 28rpx; color: #1F2937; margin-bottom: 18rpx;
+  min-height: 88rpx; padding: 0 24rpx; display: flex; align-items: center;
 }
-.input.small { padding: 16rpx 20rpx; }
+.input-wrap.small-wrap { min-height: 72rpx; padding: 0 20rpx; }
+.input {
+  flex: 1; width: 100%; height: 88rpx; min-height: 88rpx; line-height: 88rpx;
+  font-size: 28rpx; color: #1F2937; background: transparent; padding: 0; margin: 0;
+  box-sizing: border-box;
+}
+.input.small { height: 72rpx; min-height: 72rpx; line-height: 72rpx; }
+.input-ph { color: #9CA3AF; font-size: 28rpx; }
+.textarea, .picker {
+  width: 100%; box-sizing: border-box; background: #F9FAFB; border-radius: 16rpx;
+  padding: 20rpx 24rpx; font-size: 28rpx; color: #1F2937;
+}
+.textarea-ph { color: #9CA3AF; font-size: 28rpx; line-height: 1.6; }
 .textarea { min-height: 180rpx; line-height: 1.6; }
-.picker { color: #374151; }
+.picker { min-height: 88rpx; line-height: 88rpx; color: #374151; padding-top: 0; padding-bottom: 0; }
 
-.form-row { display: flex; gap: 20rpx; }
+.form-row { display: flex; gap: 20rpx; margin-bottom: 18rpx; }
 .form-col { flex: 1; }
 .form-col.switch-col { display: flex; flex-direction: column; }
-.form-label { display: block; font-size: 24rpx; color: #6B7280; margin-bottom: 8rpx; }
 
 .form-actions { display: flex; gap: 16rpx; margin-top: 12rpx; }
 .btn {

@@ -1,6 +1,8 @@
 """预约中心、咨询室与排班 Note 字段解析（与前端 appointmentCenters / consultationRooms 对齐）。"""
 from typing import List, Optional, TypedDict
 
+from sqlalchemy.orm import Session
+
 CENTER_NAMES = {
     "yangpu": "杨浦预约中心",
     "pudong": "浦东预约中心",
@@ -19,6 +21,38 @@ CONSULTATION_ROOMS: dict[str, List[dict[str, str]]] = {
         {"id": "pudong-r3", "name": "咨询室 C"},
     ],
 }
+
+
+def get_consultation_rooms(db: Optional[Session], center_id: str) -> List[dict[str, str]]:
+    """优先读数据库，无记录时回退静态配置。"""
+    if db is not None:
+        try:
+            from models import AppConsultationRoom
+
+            rows = (
+                db.query(AppConsultationRoom)
+                .filter(AppConsultationRoom.CenterId == center_id)
+                .order_by(AppConsultationRoom.SortOrder.asc(), AppConsultationRoom.Id.asc())
+                .all()
+            )
+            if rows:
+                return [
+                    {"id": r.RoomCode, "name": r.Name, "status": r.Status, "dbId": r.Id}
+                    for r in rows
+                ]
+        except Exception:
+            pass
+    return [{**room, "status": "AVAILABLE"} for room in CONSULTATION_ROOMS.get(center_id, [])]
+
+
+def get_all_consultation_rooms(db: Optional[Session]) -> List[dict]:
+    """全部中心的咨询室列表。"""
+    centers = list(CENTER_NAMES.keys())
+    result: List[dict] = []
+    for center_id in centers:
+        for room in get_consultation_rooms(db, center_id):
+            result.append({"centerId": center_id, **room})
+    return result
 
 
 def _note_parts(note: Optional[str]) -> List[str]:
@@ -47,10 +81,10 @@ def center_display_name(center_id: Optional[str]) -> Optional[str]:
     return CENTER_NAMES.get(center_id, center_id)
 
 
-def room_display_name(center_id: Optional[str], room_id: Optional[str]) -> Optional[str]:
+def room_display_name(center_id: Optional[str], room_id: Optional[str], db: Optional[Session] = None) -> Optional[str]:
     if not center_id or not room_id:
         return None
-    for room in CONSULTATION_ROOMS.get(center_id, []):
+    for room in get_consultation_rooms(db, center_id):
         if room["id"] == room_id:
             return room["name"]
     return room_id

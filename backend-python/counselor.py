@@ -16,6 +16,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import ProgrammingError, OperationalError
 
 from auth import get_current_account, AppAccount
 from database import get_db
@@ -34,6 +35,7 @@ from consultation_cancel import has_appointment_started, is_refund_eligible
 from schedule_meta import (
     CONSULTATION_ROOMS,
     center_display_name,
+    get_consultation_rooms,
     parse_center_id,
     parse_room_id,
     room_display_name,
@@ -325,6 +327,30 @@ def _counselor_cancel_booked(
     schedule.UpdatedAt = datetime.utcnow()
 
 
+def _pending_leaves_by_schedule(
+    db: Session,
+    schedule_ids: List[int],
+    counselor_id: int,
+) -> dict[int, AppLeaveRequest]:
+    """查询待审核请假；若 AppLeaveRequest 表尚未建表则返回空（避免日历接口 500）。"""
+    if not schedule_ids:
+        return {}
+    try:
+        rows = (
+            db.query(AppLeaveRequest)
+            .filter(
+                AppLeaveRequest.ScheduleId.in_(schedule_ids),
+                AppLeaveRequest.CounselorId == counselor_id,
+                AppLeaveRequest.Status == "PENDING",
+            )
+            .all()
+        )
+        return {r.ScheduleId: r for r in rows}
+    except (ProgrammingError, OperationalError):
+        db.rollback()
+        return {}
+
+
 def _calendar_items_for_schedules(
     db: Session,
     schedules: List[AppSchedule],
@@ -343,16 +369,7 @@ def _calendar_items_for_schedules(
     )
     cons_by_schedule = {c.ScheduleId: c for c in consultations if c.ScheduleId}
 
-    leave_rows = (
-        db.query(AppLeaveRequest)
-        .filter(
-            AppLeaveRequest.ScheduleId.in_(schedule_ids),
-            AppLeaveRequest.CounselorId == counselor_id,
-            AppLeaveRequest.Status == "PENDING",
-        )
-        .all()
-    )
-    leave_by_schedule = {r.ScheduleId: r for r in leave_rows}
+    leave_by_schedule = _pending_leaves_by_schedule(db, schedule_ids, counselor_id)
 
     patient_ids = {c.PatientId for c in consultations}
     patients = {
@@ -442,7 +459,7 @@ def schedule_slot_options(
         )
 
     now = china_now()
-    rooms = CONSULTATION_ROOMS.get(center_id, [])
+    rooms = get_consultation_rooms(db, center_id)
     if not rooms:
         raise HTTPException(status_code=400, detail="无效的预约中心")
 
@@ -460,7 +477,8 @@ def schedule_slot_options(
             occ = room_occupied_at_center(db, center_id, room["id"], start_dt)
             occupied_by_self = bool(occ and occ.CounselorId == counselor.Id)
             occupied_by_other = bool(occ and occ.CounselorId != counselor.Id)
-            available = not past and occ is None
+            room_ok = room.get("status", "AVAILABLE") == "AVAILABLE"
+            available = not past and occ is None and room_ok
             room_opts.append(
                 RoomSlotOption(
                     roomId=room["id"],
@@ -471,7 +489,9 @@ def schedule_slot_options(
                     otherCounselorId=occ.CounselorId if occupied_by_other and occ else None,
                 )
             )
-        all_rooms_full = bool(room_opts) and all(not r.available for r in room_opts)
+        all_rooms_full = self_row is not None or (
+            bool(room_opts) and all(not r.available for r in room_opts)
+        )
         options.append(
             TimeSlotOption(
                 key=key,

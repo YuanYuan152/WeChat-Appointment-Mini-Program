@@ -141,10 +141,15 @@ export const API_ENDPOINTS = {
   // 运营
   ops: {
     banners: '/api/mini/ops/banners',
+    bannersManage: '/api/mini/ops/banners/manage',
     activities: '/api/mini/ops/activities',
     articles: '/api/mini/ops/articles',
     users: '/api/mini/ops/users',
     dashboard: '/api/mini/ops/dashboard',
+    schedulesOverview: '/api/mini/ops/schedules/overview',
+    rooms: '/api/mini/ops/rooms',
+    roomsStatus: '/api/mini/ops/rooms/status',
+    roomDetail: (id: number | string) => `/api/mini/ops/rooms/${id}`,
   },
 
   // 管理员

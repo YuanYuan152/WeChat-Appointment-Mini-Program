@@ -288,6 +288,30 @@
                         "navigationBarBackgroundColor": "#ffffff",
                         "navigationBarTextStyle": "black"
                     }
+                },
+                {
+                    "path": "schedules/index",
+                    "style": {
+                        "navigationBarTitleText": "挂课情况",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                },
+                {
+                    "path": "rooms/index",
+                    "style": {
+                        "navigationBarTitleText": "咨询室情况",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                },
+                {
+                    "path": "rooms/detail",
+                    "style": {
+                        "navigationBarTitleText": "咨询室详情",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
                 }
             ]
         },

@@ -19,26 +19,26 @@
         </view>
       </view>
       <view class="banner-actions">
-        <text class="action-edit" @click="openModal(item)">编辑</text>
-        <text class="action-delete" @click="deleteBanner(item.Id)">删除</text>
+        <text class="action-edit" @tap.stop="openModal(item)">编辑</text>
+        <text class="action-delete" @tap.stop="deleteBanner(item.Id)">删除</text>
       </view>
     </view>
 
-    <!-- 新增/编辑弹窗 -->
-    <view v-if="showModal" class="modal-overlay" @click.self="showModal = false">
-      <view class="modal-card">
+    <!-- 新增/编辑弹窗（勿用 @click.self，小程序点击输入框会误触关闭） -->
+    <view v-if="showModal" class="modal-overlay" @touchmove.stop.prevent>
+      <view class="modal-card" @tap.stop @touchmove.stop.prevent>
         <text class="modal-title">{{ form.Id ? '编辑 Banner' : '新增 Banner' }}</text>
 
-        <view class="form-group">
+        <view class="form-group" @tap.stop>
           <text class="form-label">标题 *</text>
           <input class="form-input" v-model="form.title" placeholder="Banner 标题" />
         </view>
 
-        <view class="form-group">
+        <view class="form-group" @tap.stop>
           <text class="form-label">图片 URL *</text>
           <view class="upload-row">
             <input class="form-input" v-model="form.image_url" placeholder="输入或上传图片" />
-            <button class="upload-btn" @click="pickImage">上传</button>
+            <button class="upload-btn" @tap.stop="pickImage">上传</button>
           </view>
           <image v-if="form.image_url" class="preview-img" :src="form.image_url" mode="aspectFill" />
         </view>
@@ -49,17 +49,22 @@
             <view
               v-for="lt in linkTypes" :key="lt.value"
               class="radio-item" :class="{ active: form.link_type === lt.value }"
-              @click="form.link_type = lt.value"
+              @tap.stop="form.link_type = lt.value"
             >{{ lt.label }}</view>
           </view>
         </view>
 
-        <view class="form-group" v-if="form.link_type !== 'NONE'">
+        <view class="form-group" @tap.stop>
           <text class="form-label">跳转地址</text>
-          <input class="form-input" v-model="form.link_value" placeholder="页面路径或外链 URL" />
+          <input
+            v-if="form.link_type !== 'NONE'"
+            class="form-input"
+            v-model="form.link_value"
+            placeholder="页面路径或外链 URL"
+          />
         </view>
 
-        <view class="form-group">
+        <view class="form-group" @tap.stop>
           <text class="form-label">排序（数字越小越靠前）</text>
           <input class="form-input" type="number" v-model.number="form.sort_order" placeholder="0" />
         </view>
@@ -70,8 +75,8 @@
         </view>
 
         <view class="modal-btns">
-          <button class="modal-btn cancel" @click="showModal = false">取消</button>
-          <button class="modal-btn confirm" :loading="saving" @click="saveBanner">保存</button>
+          <button class="modal-btn cancel" @tap.stop="showModal = false">取消</button>
+          <button class="modal-btn confirm" :loading="saving" @tap.stop="saveBanner">保存</button>
         </view>
       </view>
     </view>
@@ -114,7 +119,7 @@ const linkTypes = [
 ]
 
 const load = async () => {
-  const res = await httpV2.get('/api/mini/ops/banners')
+  const res = await httpV2.get('/api/mini/ops/banners/manage')
   if (res.code === 0 && res.data) list.value = res.data
 }
 

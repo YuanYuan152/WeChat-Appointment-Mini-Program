@@ -390,6 +390,20 @@ class AppFeedback(Base):
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
 
 
+class AppConsultationRoom(Base):
+    """咨询室配置（管理员可增删改状态）。"""
+    __tablename__ = "AppConsultationRoom"
+
+    Id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    CenterId = Column(String(50), nullable=False)
+    RoomCode = Column(String(50), nullable=False)
+    Name = Column(Unicode(100), nullable=False)
+    Status = Column(String(20), nullable=False, default="AVAILABLE")
+    SortOrder = Column(Integer, nullable=False, default=0)
+    CreatedAt = Column(DateTime, default=func.now(), nullable=False)
+    UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
+
+
 class AppLoginSession(Base):
     __tablename__ = "AppLoginSession"
 

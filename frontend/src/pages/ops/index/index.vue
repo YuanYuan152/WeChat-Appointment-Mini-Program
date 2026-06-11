@@ -2,7 +2,7 @@
   <view class="page-ops-home">
     <view class="hero">
       <text class="hero-title">运营工作台</text>
-      <text class="hero-subtitle">管理首页 Banner、活动、主题月、文章与用户</text>
+      <text class="hero-subtitle">管理挂课、咨询室、Banner、活动、主题月、文章与用户</text>
     </view>
 
     <view class="grid">
@@ -28,6 +28,8 @@
 
 <script setup lang="ts">
 const entries = [
+  { title: '挂课情况', desc: '各咨询师当日挂课与预约', icon: '📋', color: 'linear-gradient(135deg,#14B8A6,#0D9488)', path: '/pages/ops/schedules/index' },
+  { title: '咨询室情况', desc: '咨询室占用与管理', icon: '🏢', color: 'linear-gradient(135deg,#0891B2,#0284C7)', path: '/pages/ops/rooms/index' },
   { title: 'Banner 管理', desc: '首页轮播图位与跳转链路', icon: '🎨', color: 'linear-gradient(135deg,#0EA5E9,#3B82F6)', path: '/pages/ops/banner/index' },
   { title: '活动管理', desc: '招募 / 公告 / 主题活动', icon: '🎯', color: 'linear-gradient(135deg,#F59E0B,#F97316)', path: '/pages/ops/activities/index' },
   { title: '主题月管理', desc: '按月发布主题内容', icon: '📅', color: 'linear-gradient(135deg,#0D9488,#10B981)', path: '/pages/ops/themes/index' },

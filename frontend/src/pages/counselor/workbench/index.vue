@@ -89,10 +89,10 @@
               class="slot-chip"
               :class="{
                 active: form.slotKey === ts.key,
-                disabled: ts.past || ts.allRoomsFull,
+                disabled: ts.past || ts.allRoomsFull || ts.counselorOccupied,
               }"
               @tap="selectTimeSlot(ts)"
-            >{{ ts.label }}</view>
+            >{{ ts.label }}{{ ts.counselorOccupied ? '（已挂）' : '' }}</view>
           </view>
         </view>
 
@@ -214,7 +214,7 @@ import { fixImageUrl } from '@/utils/image'
 import { API_ENDPOINTS } from '@/config/api'
 import { APPOINTMENT_CENTERS } from '@/constants/appointmentCenters'
 import { SCHEDULE_DISPLAY_META, type ScheduleDisplayStatus } from '@/constants/scheduleDisplay'
-import { formatDateLocal, rollingMaxDate, ROLLING_WINDOW_DAYS } from '@/constants/scheduleSlots'
+import { formatDateLocal, ROLLING_WINDOW_DAYS, addDays } from '@/constants/scheduleSlots'
 
 interface RoomOpt {
   roomId: string
@@ -313,8 +313,10 @@ const slotOptionsLoading = ref(false)
 const timeSlotOptions = ref<TimeSlotOpt[]>([])
 const centers = APPOINTMENT_CENTERS
 const defaultCenterId = 'yangpu'
-const minDate = formatDateLocal()
-const maxDate = rollingMaxDate()
+
+/** 滚动窗口须每次按当前日期计算，避免 Tab 页常驻导致日期过期、日历加载失败 */
+const minDate = computed(() => formatDateLocal())
+const maxDate = computed(() => addDays(minDate.value, ROLLING_WINDOW_DAYS - 1))
 
 const form = ref({
   centerId: defaultCenterId,
@@ -334,7 +336,7 @@ const legend = Object.entries(SCHEDULE_DISPLAY_META).map(([key, v]) => ({
 const meta = (status: ScheduleDisplayStatus) =>
   SCHEDULE_DISPLAY_META[status] || SCHEDULE_DISPLAY_META.OPEN
 
-const rollingRangeText = computed(() => `${minDate} ~ ${maxDate}`)
+const rollingRangeText = computed(() => `${minDate.value} ~ ${maxDate.value}`)
 
 const cancelScreenshotPreview = computed(() => fixImageUrl(cancelScreenshotUrl.value))
 
@@ -381,15 +383,17 @@ const weekdayLabel = (dateStr: string) => {
 }
 
 const groupedDays = computed(() => {
+  const today = minDate.value
   const byDate = new Map<string, CalendarSlot[]>()
   for (const s of slots.value) {
+    if (s.displayStatus === 'CANCELLED') continue
     const date = s.startTime.slice(0, 10)
     if (!byDate.has(date)) byDate.set(date, [])
     byDate.get(date)!.push(s)
   }
   const days: { date: string; label: string; slots: CalendarSlot[] }[] = []
   for (let i = 0; i < ROLLING_WINDOW_DAYS; i++) {
-    const d = new Date(`${minDate}T00:00:00`)
+    const d = new Date(`${today}T00:00:00`)
     d.setDate(d.getDate() + i)
     const y = d.getFullYear()
     const m = String(d.getMonth() + 1).padStart(2, '0')
@@ -412,12 +416,18 @@ const loadCalendar = async () => {
   try {
     const res = await httpV2.get<{ slots: CalendarSlot[] }>(
       API_ENDPOINTS.counselor.scheduleCalendar,
-      { start: minDate, days: ROLLING_WINDOW_DAYS },
-      { showLoading: false },
+      { start: minDate.value, days: ROLLING_WINDOW_DAYS },
+      { showLoading: false, showError: false },
     )
-    slots.value = res.code === 0 && res.data ? res.data.slots || [] : []
+    if (res.code === 0 && res.data) {
+      slots.value = res.data.slots || []
+    } else {
+      slots.value = []
+      uni.showToast({ title: res.msg || '加载排班失败', icon: 'none' })
+    }
   } catch {
     slots.value = []
+    uni.showToast({ title: '加载排班失败，请检查后端服务', icon: 'none' })
   } finally {
     loading.value = false
   }
@@ -436,7 +446,7 @@ const loadSlotOptions = async () => {
     timeSlotOptions.value = res.code === 0 && res.data ? res.data.slots || [] : []
     if (form.value.slotKey) {
       const still = timeSlotOptions.value.find(t => t.key === form.value.slotKey)
-      if (!still || still.past || still.allRoomsFull) {
+      if (!still || still.past || still.allRoomsFull || still.counselorOccupied) {
         form.value.slotKey = ''
         form.value.roomId = ''
       }
@@ -502,7 +512,7 @@ const selectRoom = (room: RoomOpt) => {
 const openAddModal = async () => {
   form.value = {
     centerId: defaultCenterId,
-    date: minDate,
+    date: minDate.value,
     slotKey: '',
     roomId: '',
     startTime: '',
@@ -641,6 +651,7 @@ const submitSlot = async () => {
       showAdd.value = false
       uni.showToast({ title: '挂课成功', icon: 'success' })
       await loadCalendar()
+      await loadSlotOptions()
     } else {
       uni.showToast({ title: res.msg || '挂课失败', icon: 'none' })
     }
