@@ -6,7 +6,7 @@
 - search       统一搜索（咨询师 / 文章 / 活动 三类聚合返回）
 """
 
-from datetime import datetime
+from datetime import datetime, time, timedelta
 from typing import List, Optional, Any, Dict
 
 from fastapi import APIRouter, Depends, Query, HTTPException
@@ -15,8 +15,11 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from database import get_db
+from app_time import china_now
+from consultation_cancel import has_appointment_started
 from models import AppBanner, AppActivity, AppArticle, AppSchedule
 from schedule_meta import parse_center_id
+from schedule_slots import rolling_window_end
 
 router = APIRouter(prefix="/api/mini/common", tags=["Common"])
 
@@ -311,15 +314,21 @@ def common_counselor_detail(
     )
     if not new_rows:
         return common_counselor_detail(cid=cid, source="T_Doctor", db=db)
+    now = china_now()
+    today = now.date()
+    window_end = rolling_window_end(today)
+    start_bound = datetime.combine(today, time.min)
+    end_bound = datetime.combine(window_end + timedelta(days=1), time.min)
     schedules = (
         db.query(AppSchedule)
         .filter(
             AppSchedule.CounselorId == cid,
             AppSchedule.Status.in_(["AVAILABLE", "BOOKED"]),
-            AppSchedule.StartTime >= datetime.utcnow(),
+            AppSchedule.StartTime >= start_bound,
+            AppSchedule.StartTime < end_bound,
         )
         .order_by(AppSchedule.StartTime.asc())
-        .limit(20)
+        .limit(50)
         .all()
     )
     time_slots = []
@@ -328,7 +337,18 @@ def common_counselor_detail(
         center_id = parse_center_id(s.Note)
         if center_id:
             center_ids.add(center_id)
-        is_bookable = s.Status == "AVAILABLE"
+        expired = has_appointment_started(s.StartTime)
+        if s.Status == "BOOKED":
+            if expired:
+                continue
+            slot_status = "BOOKED"
+            is_bookable = False
+        elif expired:
+            slot_status = "EXPIRED"
+            is_bookable = False
+        else:
+            slot_status = "AVAILABLE"
+            is_bookable = True
         time_slots.append({
             "ID": s.Id,
             "centerId": center_id,
@@ -339,7 +359,7 @@ def common_counselor_detail(
             "Price": float(new_rows[0].get("Billing") or 0) / 100,
             "maxSign": 1,
             "numSign": 0 if is_bookable else 1,
-            "status": s.Status,
+            "status": slot_status,
             "isBookable": is_bookable,
         })
     return {

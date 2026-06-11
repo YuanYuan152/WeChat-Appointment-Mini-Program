@@ -180,7 +180,7 @@
                 <view class="time-card-top">
                   <text class="tc-date">{{ slot.startDate }}</text>
                   <text class="tc-week">{{ slot.week }}</text>
-                  <text v-if="!isSlotBookable(slot)" class="tc-booked-tag">已约满</text>
+                  <text v-if="!isSlotBookable(slot)" class="tc-booked-tag">{{ slotUnavailableLabel(slot) }}</text>
                 </view>
                 <view class="time-card-mid">
                   <text class="tc-time">{{ slot.startHH }}-{{ slot.endHH }}</text>
@@ -370,6 +370,7 @@ import {
   counselorWorksAtCenter as slotWorksAtCenter,
   getCounselorAvailableCenterIds,
   isSlotBookable,
+  slotUnavailableLabel,
   hasBookableSlotsInCenter,
   type BookingTimeSlot,
 } from '@/utils/bookingSlots'

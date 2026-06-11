@@ -4,15 +4,22 @@ from typing import Optional, Tuple
 
 from sqlalchemy.orm import Session
 
+from app_time import china_now, hours_until as _hours_until
 from models import AppConsultation, AppOrder, AppSchedule
 
 CANCEL_REFUND_HOURS = 24
 
 
 def hours_until_appointment(start_time: Optional[datetime]) -> Optional[float]:
-    if not start_time:
-        return None
-    return (start_time - datetime.utcnow()).total_seconds() / 3600
+    return _hours_until(start_time)
+
+
+def has_appointment_started(start_time: Optional[datetime]) -> bool:
+    """当前时间是否已到或超过咨询开始时间。"""
+    hours = hours_until_appointment(start_time)
+    if hours is None:
+        return True
+    return hours <= 0
 
 
 def is_refund_eligible(start_time: Optional[datetime]) -> bool:

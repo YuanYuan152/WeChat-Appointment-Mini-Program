@@ -33,6 +33,7 @@ from models import (
     AppSchedule,
     AppSubscribeTemplate,
 )
+from app_time import china_now
 from schedule_meta import center_note
 
 DEMO_COUNSELORS = [
@@ -268,7 +269,7 @@ def _slot_start_from_offset(now: datetime, offset: timedelta) -> datetime:
 
 def ensure_patient_consultations(db, patient_id: int, counselor_map: dict):
     """为演示来访者写入咨询记录、订单与已约排班。"""
-    now = datetime.utcnow()
+    now = china_now()
     for cfg in DEMO_PATIENT_CONSULTATIONS:
         counselor = counselor_map.get(cfg["counselor"])
         if not counselor:
@@ -349,7 +350,7 @@ def ensure_patient_consultations(db, patient_id: int, counselor_map: dict):
 
 
 def ensure_counselor_slots(db, counselor_id, slots):
-    now = datetime.utcnow()
+    now = china_now()
     for cfg in slots:
         start = (now + timedelta(days=cfg["days"])).replace(
             hour=cfg["hour"], minute=0, second=0, microsecond=0

@@ -122,6 +122,8 @@ export const API_ENDPOINTS = {
   counselor: {
     schedules: '/api/mini/counselor/schedules',
     scheduleCalendar: '/api/mini/counselor/schedules/calendar',
+    scheduleSlotOptions: '/api/mini/counselor/schedules/slot-options',
+    scheduleLeaveRequest: (id: number | string) => `/api/mini/counselor/schedules/${id}/leave-request`,
     consultations: '/api/mini/counselor/consultations',
     caseRecords: '/api/mini/counselor/case-records',
     profile: '/api/mini/counselor/profile',

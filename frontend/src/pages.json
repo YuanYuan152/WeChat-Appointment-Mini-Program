@@ -410,6 +410,14 @@
                     }
                 },
                 {
+                    "path": "leave-request/apply",
+                    "style": {
+                        "navigationBarTitleText": "请假申请",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                },
+                {
                     "path": "schedule/index",
                     "style": {
                         "navigationBarTitleText": "排班管理",
