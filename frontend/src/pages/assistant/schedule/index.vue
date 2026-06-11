@@ -129,8 +129,8 @@ onMounted(load)
 .status-badge {
   padding: 6rpx 16rpx; border-radius: 20rpx; font-size: 22rpx; font-weight: 500;
 }
-.status-badge.available { background: #D1FAE5; color: #065F46; }
-.status-badge.booked { background: #DBEAFE; color: #1E40AF; }
+.status-badge.available { background: #EDE4D4; color: #7A5C3A; }
+.status-badge.booked { background: #B8D4C8; color: #1F4034; }
 .status-badge.cancelled { background: #F3F4F6; color: #6B7280; }
 .card-body { margin-bottom: 12rpx; }
 .time-row { display: flex; gap: 16rpx; padding: 8rpx 0; }

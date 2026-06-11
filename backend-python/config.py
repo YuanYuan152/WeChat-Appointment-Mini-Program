@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     DB_DRIVER: str = "ODBC Driver 17 for SQL Server"
     DB_TRUSTED_CONNECTION: bool = False
     DB_TRUST_SERVER_CERTIFICATE: bool = True
+    DB_CONNECT_TIMEOUT: int = 5
+    # 开发环境建议 true：跳过 T_Doctor 等旧表查询，避免连接超时拖慢接口
+    SKIP_LEGACY_QUERIES: bool = True
     
     # Wechat configuration (placeholders for now)
     WECHAT_APPID: str = ""
@@ -61,6 +64,8 @@ class Settings(BaseSettings):
 
         if self.DB_TRUST_SERVER_CERTIFICATE:
             conn += "TrustServerCertificate=yes;"
+
+        conn += f"Connection Timeout={self.DB_CONNECT_TIMEOUT};"
 
         params = urllib.parse.quote_plus(conn)
         return f"mssql+pyodbc:///?odbc_connect={params}"

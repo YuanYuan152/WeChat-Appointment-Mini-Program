@@ -17,7 +17,7 @@
 
 <script setup lang="ts">
 const goToConsultantList = () => {
-  uni.switchTab({ url: '/pages/consultant/list' })
+  uni.navigateTo({ url: '/pages/consultant/list' })
 }
 
 const goBack = () => {

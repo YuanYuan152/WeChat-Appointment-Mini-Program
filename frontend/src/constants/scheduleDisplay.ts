@@ -5,8 +5,8 @@ export const SCHEDULE_DISPLAY_META: Record<
   ScheduleDisplayStatus,
   { label: string; icon: string; color: string; bg: string }
 > = {
-  OPEN: { label: '已挂课', icon: '🟢', color: '#065F46', bg: '#D1FAE5' },
-  BOOKED: { label: '已预约', icon: '🔵', color: '#1E40AF', bg: '#DBEAFE' },
+  OPEN: { label: '已挂课', icon: '🟤', color: '#7A5C3A', bg: '#EDE4D4' },
+  BOOKED: { label: '已预约', icon: '🟢', color: '#1F4034', bg: '#B8D4C8' },
   ON_LEAVE: { label: '已请假', icon: '🟠', color: '#C2410C', bg: '#FFEDD5' },
   DONE: { label: '已完成', icon: '✅', color: '#6B7280', bg: '#F3F4F6' },
   EXPIRED: { label: '已过期', icon: '⏱️', color: '#9CA3AF', bg: '#F3F4F6' },

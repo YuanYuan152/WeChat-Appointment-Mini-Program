@@ -15,9 +15,10 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from database import get_db
+from config import settings
 from app_time import china_now
 from consultation_cancel import has_appointment_started
-from models import AppBanner, AppActivity, AppArticle, AppSchedule
+from models import AppBanner, AppActivity, AppArticle, AppSchedule, AppCounselorProfile
 from schedule_meta import parse_center_id
 from schedule_slots import rolling_window_end
 
@@ -220,6 +221,44 @@ def _legacy_doctor_to_dict(row: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _counselor_profile_dict(r: AppCounselorProfile) -> Dict[str, Any]:
+    return {
+        "id": int(r.AccountId or r.Id or 0),
+        "name": r.Name,
+        "avatarUrl": r.AvatarUrl,
+        "title": r.Title,
+        "specialty": r.Specialty,
+        "field": r.Field,
+        "introduce": r.Introduce,
+        "billing": float(r.Billing or 0),
+        "consultHours": int(r.ConsultHours or 0),
+        "workYears": int(r.WorkYears or 0),
+        "province": "线下/线上",
+        "_source": "AppCounselorProfile",
+    }
+
+
+def _query_counselor_profiles(db: Session, keyword: Optional[str] = None) -> List[Dict[str, Any]]:
+    """AppCounselorProfile 列表，支持姓名/擅长/领域/简介关键词搜索。"""
+    try:
+        q = db.query(AppCounselorProfile).filter(AppCounselorProfile.IsActive == True)
+        if keyword:
+            kw = f"%{keyword.strip()}%"
+            q = q.filter(
+                or_(
+                    AppCounselorProfile.Name.like(kw),
+                    AppCounselorProfile.Specialty.like(kw),
+                    AppCounselorProfile.Field.like(kw),
+                    AppCounselorProfile.Introduce.like(kw),
+                    AppCounselorProfile.Title.like(kw),
+                )
+            )
+        rows = q.order_by(AppCounselorProfile.WorkYears.desc(), AppCounselorProfile.Id.desc()).all()
+        return [_counselor_profile_dict(r) for r in rows]
+    except Exception:
+        return []
+
+
 @router.get("/counselors", summary="咨询师公开列表（双源：AppCounselorProfile + T_Doctor）")
 def common_counselors(
     keyword: Optional[str] = Query(None, description="搜索姓名/擅长"),
@@ -227,45 +266,29 @@ def common_counselors(
     page_size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
-    # 旧表 T_Doctor 兜底（lxxlBuild 没有时返回空）
-    where = "isDelete = 0 AND IsShow = 1"
-    params = {}
-    if keyword:
-        where += " AND (name LIKE :kw OR Specialty LIKE :kw OR Field LIKE :kw)"
-        params["kw"] = f"%{keyword}%"
+    if keyword is not None:
+        keyword = keyword.strip()
+        if not keyword or keyword.lower() == "undefined":
+            keyword = None
 
-    legacy_rows = _safe_legacy_query(
-        db,
-        f"SELECT TOP 200 ID, name, nickName, topUrl, url, position, Specialty, Field, "
-        f"introduce, Billing, FaceBilling, ConsultHours, WorkYears "
-        f"FROM T_Doctor WHERE {where} ORDER BY IsTop DESC, number ASC",
-        **params,
-    )
-    legacy_items = [_legacy_doctor_to_dict(r) for r in legacy_rows]
+    new_dicts = _query_counselor_profiles(db, keyword)
 
-    # AppCounselorProfile 表会在 Batch D 创建。这里先尝试合并，失败兜空。
-    new_items = _safe_legacy_query(
-        db,
-        "SELECT Id, AccountId, Name, AvatarUrl, Title, Specialty, Field, Introduce, "
-        "Billing, ConsultHours, WorkYears FROM AppCounselorProfile WHERE IsActive = 1",
-    )
-    new_dicts = [
-        {
-            "id": int(r.get("AccountId") or r.get("Id") or 0),
-            "name": r.get("Name"),
-            "avatarUrl": r.get("AvatarUrl"),
-            "title": r.get("Title"),
-            "specialty": r.get("Specialty"),
-            "field": r.get("Field"),
-            "introduce": r.get("Introduce"),
-            "billing": float(r.get("Billing") or 0),
-            "consultHours": int(r.get("ConsultHours") or 0),
-            "workYears": int(r.get("WorkYears") or 0),
-            "province": "线下/线上",
-            "_source": "AppCounselorProfile",
-        }
-        for r in new_items
-    ]
+    legacy_items: List[Dict[str, Any]] = []
+    if not settings.SKIP_LEGACY_QUERIES:
+        where = "isDelete = 0 AND IsShow = 1"
+        params: Dict[str, Any] = {}
+        if keyword:
+            where += " AND (name LIKE :kw OR Specialty LIKE :kw OR Field LIKE :kw OR introduce LIKE :kw)"
+            params["kw"] = f"%{keyword.strip()}%"
+
+        legacy_rows = _safe_legacy_query(
+            db,
+            f"SELECT TOP 200 ID, name, nickName, topUrl, url, position, Specialty, Field, "
+            f"introduce, Billing, FaceBilling, ConsultHours, WorkYears "
+            f"FROM T_Doctor WHERE {where} ORDER BY IsTop DESC, number ASC",
+            **params,
+        )
+        legacy_items = [_legacy_doctor_to_dict(r) for r in legacy_rows]
 
     merged = new_dicts + legacy_items
     total = len(merged)
@@ -397,7 +420,9 @@ def common_search(
     result: Dict[str, Any] = {"keyword": q, "counselors": [], "articles": [], "activities": []}
 
     if type in (None, "counselor"):
-        result["counselors"] = common_counselors(keyword=q, page=1, page_size=10, db=db)["items"]
+        result["counselors"] = common_counselors(
+            keyword=q.strip(), page=1, page_size=20, db=db
+        )["items"]
 
     if type in (None, "article"):
         rows = (

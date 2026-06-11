@@ -64,7 +64,7 @@ const resolveActiveRole = (roles: string[], activeRole?: string) => {
   return priority.find(role => roles.includes(role)) || 'Patient'
 }
 
-const goConsult = () => uni.switchTab({ url: '/pages/consultant/list' })
+const goConsult = () => uni.navigateTo({ url: '/pages/consultant/list' })
 const goProfile = () => uni.switchTab({ url: '/pages/user/profile' })
 
 const goLogin = async () => {
@@ -118,7 +118,7 @@ onShow(() => {
 <style scoped>
 .page-workbench-router {
   min-height: 100vh;
-  background: #F4F6F8;
+  background: #F7F5F2;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -127,10 +127,10 @@ onShow(() => {
 .card {
   width: 100%;
   background: #fff;
-  border-radius: 32rpx;
+  border-radius: 24rpx;
   padding: 72rpx 40rpx;
   text-align: center;
-  box-shadow: 0 10rpx 30rpx rgba(15, 23, 42, 0.08);
+  box-shadow: 0 8rpx 32rpx rgba(0, 0, 0, 0.04);
 }
 .patient-card { padding-top: 56rpx; }
 .patient-emoji {
@@ -141,12 +141,12 @@ onShow(() => {
 }
 .spinner {
   width: 64rpx; height: 64rpx; border-radius: 50%;
-  border: 6rpx solid #D1FAE5; border-top-color: #0D9488;
+  border: 6rpx solid #E8E4DE; border-top-color: #3D5A4E;
   margin: 0 auto 32rpx;
   animation: spin 0.9s linear infinite;
 }
-.title { display: block; font-size: 34rpx; font-weight: 800; color: #1F2937; }
-.desc { display: block; font-size: 26rpx; color: #6B7280; margin-top: 12rpx; line-height: 1.6; }
+.title { display: block; font-size: 34rpx; font-weight: 600; color: #2C2C2C; }
+.desc { display: block; font-size: 26rpx; color: #8A8A8A; margin-top: 12rpx; line-height: 1.6; }
 .patient-actions {
   display: flex;
   gap: 20rpx;
@@ -156,19 +156,19 @@ onShow(() => {
 .ghost-btn {
   flex: 1;
   max-width: 280rpx;
-  background: #F0FDFA;
-  color: #0D9488;
+  background: #F0EDE8;
+  color: #3D5A4E;
   height: 80rpx;
   line-height: 80rpx;
-  border-radius: 100rpx;
+  border-radius: 12rpx;
   font-size: 28rpx;
   border: none;
 }
 .login-btn {
   margin-top: 48rpx;
-  background: #0D9488; color: #fff;
+  background: #3D5A4E; color: #fff;
   height: 88rpx; line-height: 88rpx;
-  border-radius: 100rpx; font-size: 30rpx; font-weight: 600; border: none;
+  border-radius: 12rpx; font-size: 30rpx; font-weight: 600; border: none;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 </style>

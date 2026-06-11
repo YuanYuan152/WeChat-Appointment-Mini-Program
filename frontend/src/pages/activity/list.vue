@@ -201,7 +201,7 @@ const getMonth = (dateStr: string) => {
 /* 顶级设计系统变量与重置 */
 .page-activity-list {
   min-height: 100vh;
-  background-color: #F4F6F8;
+  background-color: #F7F5F2;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   display: flex;
   flex-direction: column;
@@ -214,7 +214,7 @@ const getMonth = (dateStr: string) => {
   left: 0;
   right: 0;
   z-index: 100;
-  background: #0D9488;
+  background: #3D5A4E;
   padding-top: var(--status-bar-height, 0px);
 }
 
@@ -277,7 +277,7 @@ const getMonth = (dateStr: string) => {
 }
 
 .tab-item.active {
-  color: #0D9488;
+  color: #3D5A4E;
 }
 
 .tab-item.active::after {
@@ -288,7 +288,7 @@ const getMonth = (dateStr: string) => {
   transform: translateX(-50%);
   width: 40rpx;
   height: 6rpx;
-  background: #0D9488;
+  background: #3D5A4E;
   border-radius: 6rpx 6rpx 0 0;
 }
 
@@ -372,7 +372,7 @@ const getMonth = (dateStr: string) => {
 .date-day {
   font-size: 36rpx;
   font-weight: 800;
-  color: #0D9488;
+  color: #3D5A4E;
   line-height: 1;
   margin-bottom: 4rpx;
 }
@@ -461,7 +461,7 @@ const getMonth = (dateStr: string) => {
 }
 
 .act-btn {
-  background: #0D9488;
+  background: #3D5A4E;
   color: #ffffff;
   font-size: 26rpx;
   font-weight: 600;

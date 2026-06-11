@@ -143,8 +143,8 @@ onMounted(() => {
   align-self: flex-start; padding: 4rpx 14rpx; border-radius: 100rpx;
   font-size: 22rpx; font-weight: 600;
 }
-.badge.available { background: #D1FAE5; color: #065F46; }
-.badge.booked { background: #DBEAFE; color: #1E40AF; }
+.badge.available { background: #EDE4D4; color: #7A5C3A; }
+.badge.booked { background: #B8D4C8; color: #1F4034; }
 .badge.other { background: #F3F4F6; color: #6B7280; }
 .loc, .patient { font-size: 24rpx; color: #6B7280; }
 </style>

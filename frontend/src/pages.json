@@ -6,7 +6,8 @@
                 "navigationBarTitleText": "连心心理",
                 "navigationBarBackgroundColor": "#ffffff",
                 "navigationBarTextStyle": "black",
-                "backgroundColor": "#F9FAFB"
+                "backgroundColor": "#F7F5F2",
+                "navigationStyle": "custom"
             }
         },
         {
@@ -24,7 +25,8 @@
             "style": {
                 "navigationBarTitleText": "工作台",
                 "navigationBarBackgroundColor": "#ffffff",
-                "navigationBarTextStyle": "black"
+                "navigationBarTextStyle": "black",
+                "backgroundColor": "#F7F5F2"
             }
         },
         {
@@ -41,7 +43,9 @@
                 "navigationBarTitleText": "咨询师",
                 "navigationBarBackgroundColor": "#0D9488",
                 "navigationBarTextStyle": "white",
-                "navigationStyle": "custom"
+                "navigationStyle": "custom",
+                "enablePullDownRefresh": true,
+                "backgroundTextStyle": "dark"
             }
         },
         {
@@ -230,7 +234,8 @@
                     "style": {
                         "navigationBarTitleText": "运营工作台",
                         "navigationBarBackgroundColor": "#ffffff",
-                        "navigationBarTextStyle": "black"
+                        "navigationBarTextStyle": "black",
+                        "backgroundColor": "#F7F5F2"
                     }
                 },
                 {
@@ -323,7 +328,7 @@
                     "path": "workbench/index",
                     "style": {
                         "navigationBarTitleText": "助理工作台",
-                        "navigationBarBackgroundColor": "#7C3AED",
+                        "navigationBarBackgroundColor": "#3D5A4E",
                         "navigationBarTextStyle": "white"
                     }
                 },
@@ -429,7 +434,7 @@
                     "path": "workbench/index",
                     "style": {
                         "navigationBarTitleText": "咨询师工作台",
-                        "navigationBarBackgroundColor": "#0D9488",
+                        "navigationBarBackgroundColor": "#3D5A4E",
                         "navigationBarTextStyle": "white"
                     }
                 },
@@ -500,14 +505,10 @@
         }
     },
     "tabBar": {
-        "color": "#64748B",
-        "selectedColor": "#0D9488",
+        "color": "#A8A8A8",
+        "selectedColor": "#3D5A4E",
         "borderStyle": "white",
         "backgroundColor": "#ffffff",
-        "height": "70px",
-        "fontSize": "12px",
-        "iconWidth": "28px",
-        "iconHeight": "28px",
         "list": [
             {
                 "pagePath": "pages/index/index",
@@ -520,12 +521,6 @@
                 "iconPath": "static/images/bottom2.png",
                 "selectedIconPath": "static/images/bottom2.png",
                 "text": "活动"
-            },
-            {
-                "pagePath": "pages/consultant/list",
-                "iconPath": "static/images/bottom10.png",
-                "selectedIconPath": "static/images/bottom10.png",
-                "text": "咨询"
             },
             {
                 "pagePath": "pages/workbench/index",

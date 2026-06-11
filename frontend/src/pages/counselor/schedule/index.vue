@@ -298,10 +298,14 @@ onMounted(loadSchedules)
   padding: 6rpx 20rpx;
   border-radius: 100rpx;
 }
-.sc-status.available { background: #D1FAE5; color: #065F46; }
-.sc-status.booked { background: #DBEAFE; color: #1E40AF; }
+.sc-status.available { background: #EDE4D4; color: #7A5C3A; }
+.sc-status.booked { background: #B8D4C8; color: #1F4034; }
 .sc-status.cancelled { background: #F3F4F6; color: #9CA3AF; }
-.sc-cancel { font-size: 24rpx; color: #EF4444; }
+.sc-cancel {
+  font-size: 24rpx; color: #8A7560;
+  padding: 6rpx 16rpx; border-radius: 8rpx;
+  border: 1rpx solid #D4C4B0; background: #FAF7F3;
+}
 
 /* 弹窗 */
 .modal-overlay {

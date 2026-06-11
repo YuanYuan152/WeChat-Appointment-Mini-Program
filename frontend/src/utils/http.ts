@@ -41,7 +41,7 @@ class HttpRequest {
    * 发送请求
    */
   async request<T = any>(config: RequestConfig): Promise<ApiResponse<T>> {
-    const { url, method = 'GET', data, params, headers = {}, showLoading = true, showError = true } = config
+    const { url, method = 'GET', data, params, headers = {}, showLoading = true, showError = true, timeout } = config
 
     // 显示加载提示
     if (showLoading) {
@@ -52,12 +52,15 @@ class HttpRequest {
       // 构建完整URL - 如果是相对路径，拼接baseURL
       let fullUrl = url.startsWith('http') ? url : `${this.baseURL}${url}`
       
-      // 添加查询参数
+      // 添加查询参数（跳过 undefined / null，避免被序列化成 "undefined"）
       if (params && Object.keys(params).length > 0) {
         const queryString = Object.keys(params)
+          .filter((key) => params[key] !== undefined && params[key] !== null && params[key] !== '')
           .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(params[key])}`)
           .join('&')
-        fullUrl += `?${queryString}`
+        if (queryString) {
+          fullUrl += `?${queryString}`
+        }
       }
 
       // 合并请求头
@@ -83,7 +86,7 @@ class HttpRequest {
         method,
         data,
         header: finalHeaders,
-        timeout: this.timeout
+        timeout: timeout ?? this.timeout
       })
 
       // 隐藏加载提示

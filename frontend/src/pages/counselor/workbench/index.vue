@@ -666,28 +666,30 @@ onShow(loadCalendar)
 </script>
 
 <style scoped>
-.page-workbench { padding: 32rpx; background: #F4F6F8; min-height: 100vh; padding-bottom: 48rpx; }
+.page-workbench { padding: 32rpx; background: #F7F5F2; min-height: 100vh; padding-bottom: 48rpx; }
 .header-card {
-  background: linear-gradient(135deg, #0D9488, #0F766E);
-  border-radius: 32rpx; padding: 40rpx; margin-bottom: 24rpx;
+  background: linear-gradient(135deg, #3D5A4E, #2F4A40);
+  border-radius: 24rpx; padding: 40rpx; margin-bottom: 24rpx;
+  box-shadow: 0 8rpx 32rpx rgba(61, 90, 78, 0.15);
 }
-.greeting { display: block; font-size: 36rpx; font-weight: 800; color: #fff; }
-.date-text { font-size: 24rpx; color: rgba(255,255,255,0.85); margin-top: 8rpx; }
+.greeting { display: block; font-size: 36rpx; font-weight: 600; color: #fff; letter-spacing: 2rpx; }
+.date-text { font-size: 24rpx; color: rgba(255,255,255,0.8); margin-top: 8rpx; }
 .legend-card {
   display: flex; flex-wrap: wrap; gap: 16rpx 24rpx;
   background: #fff; border-radius: 20rpx; padding: 24rpx; margin-bottom: 24rpx;
+  box-shadow: 0 4rpx 20rpx rgba(0,0,0,0.03);
 }
 .legend-item { display: flex; align-items: center; gap: 8rpx; }
 .legend-icon { font-size: 28rpx; }
-.legend-text { font-size: 22rpx; color: #4B5563; }
+.legend-text { font-size: 22rpx; color: #5A5A5A; }
 .toolbar { margin-bottom: 24rpx; }
 .add-btn {
-  width: 100%; background: #0D9488; color: #fff;
-  border-radius: 100rpx; height: 84rpx; line-height: 84rpx; font-size: 30rpx; border: none;
+  width: 100%; background: #3D5A4E; color: #fff;
+  border-radius: 12rpx; height: 84rpx; line-height: 84rpx; font-size: 30rpx; border: none;
 }
-.toolbar-tip { display: block; font-size: 22rpx; color: #9CA3AF; margin-top: 12rpx; text-align: center; line-height: 1.5; }
+.toolbar-tip { display: block; font-size: 22rpx; color: #8A8A8A; margin-top: 12rpx; text-align: center; line-height: 1.5; }
 .day-section { margin-bottom: 28rpx; }
-.day-title { display: block; font-size: 28rpx; font-weight: 700; color: #374151; margin-bottom: 12rpx; }
+.day-title { display: block; font-size: 28rpx; font-weight: 600; color: #2C2C2C; margin-bottom: 12rpx; }
 .slot-card {
   border-radius: 20rpx; padding: 24rpx; margin-bottom: 12rpx;
   display: flex; justify-content: space-between; align-items: center;
@@ -702,7 +704,11 @@ onShow(loadCalendar)
   flex-shrink: 0; min-width: 120rpx;
 }
 .slot-status { font-size: 24rpx; font-weight: 700; }
-.slot-cancel { font-size: 22rpx; color: #EF4444; }
+.slot-cancel {
+  font-size: 22rpx; color: #8A7560;
+  padding: 6rpx 16rpx; border-radius: 8rpx;
+  border: 1rpx solid #D4C4B0; background: #FAF7F3;
+}
 .slot-detail-hint { font-size: 20rpx; color: #C2410C; }
 .detail-card {
   width: 100%; max-width: 640rpx; background: #fff;
@@ -726,7 +732,7 @@ onShow(loadCalendar)
   margin-top: 12rpx; padding: 48rpx 24rpx; background: #F9FAFB;
   border: 2rpx dashed #D1D5DB; border-radius: 16rpx; text-align: center;
 }
-.screenshot-upload-text { font-size: 28rpx; color: #0D9488; }
+.screenshot-upload-text { font-size: 28rpx; color: #3D5A4E; }
 .screenshot-preview { margin-top: 12rpx; text-align: center; }
 .screenshot-img {
   width: 100%; max-height: 360rpx; border-radius: 12rpx; background: #F3F4F6;
@@ -749,7 +755,7 @@ onShow(loadCalendar)
   flex: 1; height: 84rpx; line-height: 84rpx;
   border-radius: 100rpx; font-size: 28rpx; border: none;
 }
-.notice-btn.primary { background: #0D9488; color: #fff; }
+.notice-btn.primary { background: #3D5A4E; color: #fff; }
 .notice-btn.secondary { background: #F3F4F6; color: #6B7280; }
 .empty-slot-row {
   display: flex; align-items: center; gap: 12rpx;
@@ -777,7 +783,7 @@ onShow(loadCalendar)
   padding: 12rpx 28rpx; border-radius: 100rpx; background: #F3F4F6;
   font-size: 26rpx; color: #374151;
 }
-.center-chip.active, .slot-chip.active { background: #CCFBF1; color: #0D9488; font-weight: 600; }
+.center-chip.active, .slot-chip.active { background: #E8E4DE; color: #3D5A4E; font-weight: 600; }
 .center-chip.disabled, .slot-chip.disabled { opacity: 0.45; }
 .slot-grid { display: flex; flex-wrap: wrap; gap: 12rpx; }
 .picker-row {
@@ -786,5 +792,5 @@ onShow(loadCalendar)
 .modal-btns { display: flex; gap: 20rpx; margin-top: 16rpx; }
 .modal-btn { flex: 1; height: 84rpx; line-height: 84rpx; border-radius: 100rpx; font-size: 28rpx; }
 .modal-btn.cancel { background: #F3F4F6; color: #6B7280; }
-.modal-btn.confirm { background: #0D9488; color: #fff; }
+.modal-btn.confirm { background: #3D5A4E; color: #fff; }
 </style>

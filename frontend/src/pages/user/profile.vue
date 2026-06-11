@@ -418,7 +418,7 @@ const handleDeleteAccount = () => {
 /* 顶级设计系统变量与重置 */
 .page-profile {
   min-height: 100vh;
-  background-color: #F4F6F8;
+  background-color: #F7F5F2;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   padding-bottom: 60rpx;
 }
@@ -437,7 +437,7 @@ const handleDeleteAccount = () => {
   left: 0;
   right: 0;
   height: 400rpx;
-  background: linear-gradient(135deg, #0D9488 0%, #14B8A6 100%);
+  background: linear-gradient(135deg, #3D5A4E 0%, #4A6B5D 100%);
   border-radius: 0 0 60rpx 60rpx;
   z-index: 0;
 }
@@ -483,7 +483,7 @@ const handleDeleteAccount = () => {
 
 .edit-icon {
   font-size: 24rpx;
-  color: #0D9488;
+  color: #3D5A4E;
 }
 
 .user-info {
@@ -609,8 +609,8 @@ const handleDeleteAccount = () => {
   margin-right: 24rpx;
 }
 
-.bg-teal-light { background: #F0FDFA; }
-.text-teal { color: #0D9488; }
+.bg-teal-light { background: #F0EDE8; }
+.text-teal { color: #3D5A4E; }
 
 .bg-blue-light { background: #EFF6FF; }
 .text-blue { color: #3B82F6; }
@@ -647,7 +647,7 @@ const handleDeleteAccount = () => {
 }
 
 .login-btn {
-  background: #0D9488;
+  background: #3D5A4E;
   color: #ffffff;
   font-size: 32rpx;
   font-weight: 600;
@@ -659,11 +659,11 @@ const handleDeleteAccount = () => {
 }
 
 .login-btn:active {
-  background: #0F766E;
+  background: #2F4A40;
 }
 
 .login-hint {
-  color: #0D9488;
+  color: #3D5A4E;
 }
 
 /* 退出登录 */

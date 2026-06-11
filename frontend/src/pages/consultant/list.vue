@@ -3,7 +3,7 @@
     <!-- 顶部固定区域 (包含导航栏和搜索栏) -->
     <view class="header-fixed-area">
       <!-- 自定义导航栏 -->
-      <view class="custom-navbar">
+      <view class="custom-navbar" :style="{ paddingTop: statusBarPx + 'px' }">
         <view class="navbar-content">
           <view class="nav-left" @click="goBack">
             <text class="nav-icon">‹</text>
@@ -150,17 +150,10 @@
     </view>
 
     <!-- 占位符，防止内容被固定头部遮挡 -->
-    <view class="header-placeholder"></view>
+    <view class="header-placeholder" :style="{ height: headerPlaceholderPx + 'px' }"></view>
 
-    <!-- 咨询师列表 -->
-    <scroll-view 
-      class="list-scroll" 
-      scroll-y 
-      @scrolltolower="loadMore"
-      :refresher-enabled="true"
-      :refresher-triggered="isRefreshing"
-      @refresherrefresh="onRefresh"
-    >
+    <!-- 咨询师列表（页面级滚动，避免 scroll-view 高度问题） -->
+    <view class="list-scroll">
       <view class="doctor-list-modern">
         <view 
           class="doc-card" 
@@ -186,7 +179,7 @@
               </view>
               
               <view class="doc-stats">
-                <text class="stat-text">从业{{ doctor.experience || doctor.workYears || 5 }}年</text>
+                <text class="stat-text">从业{{ doctor.workYears || 0 }}年</text>
                 <text class="stat-dot">·</text>
                 <text class="stat-text">{{ doctor.consultHours || 1000 }}小时+</text>
                 <text class="stat-dot">·</text>
@@ -221,34 +214,38 @@
           </view>
         </view>
       </view>
-    </scroll-view>
+    </view>
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, nextTick } from 'vue'
+import { ref, onMounted, computed } from 'vue'
+import { onShow, onReachBottom, onPullDownRefresh } from '@dcloudio/uni-app'
 import { doctorApi } from '@/apis/index'
-import { API_CONFIG } from '@/config/api'
 import type { Doctor } from '@/types'
+import { fixImageUrl } from '@/utils/image'
 import { getMockConsultantFilterMetaResponse } from '@/mocks/bookingDemo'
 
 // 咨询师数据接口扩展
 interface Consultant extends Omit<Doctor, 'province'> {
+  title?: string
+  workYears?: number
+  consultHours?: number
   consultationType?: string
-  yearsOfExperience?: number
-  consultationHours?: number
   province?: string
   description?: string
   price?: number
+  _source?: string
 }
 
 // 响应式数据
+const _sys = uni.getSystemInfoSync()
 const consultants = ref<Consultant[]>([])
 const loading = ref(false)
 const hasMore = ref(true)
 const searchKeyword = ref('')
-const listHeight = ref(0)
-const isRefreshing = ref(false)
+const statusBarPx = ref(_sys.statusBarHeight || 0)
+const headerPlaceholderPx = ref((_sys.statusBarHeight || 0) + uni.upx2px(88 + 124 + 88))
 
 // 筛选栏（选项在 mock 时来自 getMockConsultantFilterMetaResponse；非 mock 用同结构默认项）
 const activeFilter = ref<'sort' | 'city' | 'price' | 'more' | ''>('')
@@ -324,15 +321,6 @@ const clearSearch = () => {
   fetchConsultants()
 }
 
-const onRefresh = async () => {
-  isRefreshing.value = true
-  try {
-    await fetchConsultants()
-  } finally {
-    isRefreshing.value = false
-  }
-}
-
 function getSpecialties(specialty: string | undefined) {
   if (!specialty) return []
   return specialty.split(/[|｜,，]/).map((s) => s.trim()).filter(Boolean)
@@ -347,7 +335,7 @@ const filteredConsultants = computed(() => {
   const keyword = searchKeyword.value.toLowerCase()
   return consultants.value.filter(consultant => 
     consultant.name.toLowerCase().includes(keyword) ||
-    consultant.specialty.toLowerCase().includes(keyword) ||
+    (consultant.specialty || '').toLowerCase().includes(keyword) ||
     consultant.description?.toLowerCase().includes(keyword) ||
     consultant.province?.toLowerCase().includes(keyword)
   )
@@ -356,90 +344,64 @@ const filteredConsultants = computed(() => {
 // 与模板中 v-for="doctor in doctors" 对齐
 const doctors = computed(() => filteredConsultants.value)
 
+function parseWorkYears(item: { workYears?: number; experience?: string }) {
+  if (item.workYears != null) return item.workYears
+  const m = String(item.experience || '').match(/\d+/)
+  return m ? Number(m[0]) : 0
+}
+
+function normalizeConsultant(item: Consultant): Consultant {
+  return {
+    ...item,
+    avatar: fixImageUrl(item.avatar || '/static/images/tc59.png'),
+    title: item.title || '心理咨询师',
+    workYears: parseWorkYears(item),
+    consultHours: item.consultHours ?? 0,
+    province: item.province || '线下/线上',
+    description: item.description || '暂无介绍',
+    price: item.price || 500,
+  }
+}
+
 // 获取咨询师列表
 const fetchConsultants = async () => {
+  loading.value = true
   try {
-    loading.value = true
+    const response = await doctorApi.getList(
+      {
+        keyword: searchKeyword.value.trim() || undefined,
+        province: currentCity.value || undefined,
+        page: 1,
+        pageSize: 50,
+        priceRange: currentPrice.value || undefined,
+        sort: currentSort.value || undefined,
+        gender: currentGender.value || undefined,
+        consultMethod: currentMethod.value || undefined,
+      },
+      { showLoading: false, showError: false, timeout: 20000 },
+    )
 
-    const response = await doctorApi.getList({
-      keyword: searchKeyword.value.trim() || undefined,
-      province: currentCity.value || undefined,
-      page: 1,
-      pageSize: 50,
-      priceRange: currentPrice.value || undefined,
-      sort: currentSort.value || undefined,
-      gender: currentGender.value || undefined,
-      consultMethod: currentMethod.value || undefined
-    })
-    
-    if (response.code === 0) {
-      // 转换数据格式，添加默认值
-      const doctorsList = response.data ? ((response.data as any).doctors || (response.data as any).list || []) : []
-      
-      if (!doctorsList || doctorsList.length === 0) {
-        consultants.value = []
-        return
-      }
-      
-      const consultantData = doctorsList.map((item: any) => {
-        // 处理头像URL，拼接基础URL
-        let avatarUrl = ''
-        
-        if (item.avatar) {
-          // 本地静态资源不要拼 API 域名
-          if (item.avatar.startsWith('/static/')) {
-            avatarUrl = item.avatar
-          } else if (item.avatar.startsWith('/')) {
-            avatarUrl = `${API_CONFIG.baseURL}${item.avatar}`
-          } else {
-            avatarUrl = item.avatar
-          }
-        } else if (item.avatarUrl) {
-          if (item.avatarUrl.startsWith('/static/')) {
-            avatarUrl = item.avatarUrl
-          } else if (item.avatarUrl.startsWith('/')) {
-            avatarUrl = `${API_CONFIG.baseURL}${item.avatarUrl}`
-          } else {
-            avatarUrl = item.avatarUrl
-          }
-        } else if (item.image) {
-          if (item.image.startsWith('/static/')) {
-            avatarUrl = item.image
-          } else if (item.image.startsWith('/')) {
-            avatarUrl = `${API_CONFIG.baseURL}${item.image}`
-          } else {
-            avatarUrl = item.image
-          }
-        }
-        
-        return {
-          id: item.id,
-          name: item.name,
-          avatar: avatarUrl,
-          specialty: item.specialty,
-          experience: item.experience,
-          rating: item.rating || 5,
-          province: item.province || '上海',
-          description: item.description || '暂无介绍',
-          price: item.price || 500,
-          consultationType: '地面/视频',
-          yearsOfExperience: item.yearsOfExperience || Math.floor(Math.random() * 10) + 1,
-          consultationHours: item.consultationHours || Math.floor(Math.random() * 1000) + 100
-        }
-      })
-      
-      consultants.value = consultantData
-    } else {
-      // 如果接口没有数据，设置为空数组
-      consultants.value = []
+    if (response.code !== 0) {
+      throw new Error(response.msg || '加载失败')
     }
+
+    const doctorsList = response.data?.list || []
+    consultants.value = doctorsList.map((item) => normalizeConsultant(item))
+    hasMore.value = doctorsList.length >= 50
   } catch (error) {
     console.error('获取咨询师列表失败:', error)
-    // 接口调用失败，设置为空数组
     consultants.value = []
+    uni.showToast({ title: '加载失败，请确认后端已启动', icon: 'none' })
   } finally {
     loading.value = false
   }
+}
+
+function initPageLayout() {
+  const systemInfo = uni.getSystemInfoSync()
+  const sb = systemInfo.statusBarHeight || 0
+  statusBarPx.value = sb
+  headerPlaceholderPx.value = sb + uni.upx2px(88 + 124 + 88)
 }
 
 
@@ -458,8 +420,10 @@ const loadMore = () => {
 
 // 跳转到详情页（模板传入 doctor.id）
 const goToDetail = (id: number | string) => {
+  const doctor = consultants.value.find((d) => d.id === id)
+  const source = doctor?._source ? `&source=${encodeURIComponent(doctor._source)}` : ''
   uni.navigateTo({
-    url: `/pages/consultant/detail?id=${id}`
+    url: `/pages/consultant/detail?id=${id}${source}`
   })
 }
 
@@ -494,29 +458,22 @@ const handleImageLoad = (e: any) => {
 
 
 
-// 计算列表高度
-const calculateListHeight = () => {
-  const systemInfo = uni.getSystemInfoSync()
-  const statusBarHeight = systemInfo.statusBarHeight || 0
-  const navbarHeight = 44 // 自定义导航栏高度
-  const searchHeight = 80 // 搜索栏高度
-  const safeAreaBottom = systemInfo.safeAreaInsets?.bottom || 0
-  
-  listHeight.value = systemInfo.windowHeight - statusBarHeight - navbarHeight - searchHeight - safeAreaBottom
-}
-
 // 生命周期
 onMounted(() => {
+  initPageLayout()
   initFilterOptionsFromMeta()
-  calculateListHeight()
+})
+
+onShow(() => {
+  initPageLayout()
   fetchConsultants()
-  
-  // 监听屏幕旋转
-  uni.onWindowResize(() => {
-    nextTick(() => {
-      calculateListHeight()
-    })
-  })
+})
+
+onReachBottom(loadMore)
+
+onPullDownRefresh(async () => {
+  await fetchConsultants()
+  uni.stopPullDownRefresh()
 })
 </script>
 
@@ -526,8 +483,7 @@ onMounted(() => {
   min-height: 100vh;
   background-color: #F4F6F8;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  display: flex;
-  flex-direction: column;
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 /* 顶部固定区域 */
@@ -544,7 +500,6 @@ onMounted(() => {
 /* 自定义导航栏 */
 .custom-navbar {
   background: #0D9488;
-  padding-top: var(--status-bar-height, 0px);
 }
 
 .navbar-content {
@@ -813,15 +768,14 @@ onMounted(() => {
   border: none;
 }
 
-/* 占位符 */
+/* 占位符高度由 headerPlaceholderPx 动态设置 */
 .header-placeholder {
-  height: calc(88rpx + 124rpx + 88rpx + var(--status-bar-height, 0px));
+  width: 100%;
 }
 
 /* 列表区域 */
 .list-scroll {
-  flex: 1;
-  height: 0;
+  width: 100%;
 }
 
 .doctor-list-modern {

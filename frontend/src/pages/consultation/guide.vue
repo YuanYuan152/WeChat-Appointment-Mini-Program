@@ -57,7 +57,7 @@ const openGuide = (id: string) => {
 }
 
 const goBooking = () => {
-  uni.switchTab({ url: '/pages/consultant/list' })
+  uni.navigateTo({ url: '/pages/consultant/list' })
 }
 </script>
 

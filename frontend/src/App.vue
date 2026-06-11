@@ -32,15 +32,14 @@ const initApp = () => {
 </script>
 
 <style>
-/* 全局样式重置与规范 */
+/* 全局样式 — 亚朵风简约高级 */
 page {
-  background-color: #F9FAFB; /* 暖灰背景，减少视觉疲劳 */
-  color: #1F2937; /* 深灰文字，避免纯黑的压迫感 */
+  background-color: #F7F5F2;
+  color: #2C2C2C;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
   font-size: 14px;
-  line-height: 1.5;
+  line-height: 1.6;
 }
 
 #app {
