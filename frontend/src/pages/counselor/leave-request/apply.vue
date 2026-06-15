@@ -2,7 +2,7 @@
   <view class="page-leave">
     <view class="info-card">
       <text class="info-title">请假申请</text>
-      <text class="info-line">距咨询开始不足24小时，需提交请假申请后方可处理。</text>
+      <text class="info-line">请返回咨询师工作台，在对应已预约时段点击「请假」，上传与来访者的沟通截图后确认取消。</text>
       <text v-if="slotText" class="info-line">时段：{{ slotText }}</text>
       <text v-if="centerRoom" class="info-line">地点：{{ centerRoom }}</text>
     </view>

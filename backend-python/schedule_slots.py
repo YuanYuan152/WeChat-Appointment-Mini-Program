@@ -24,8 +24,38 @@ def all_slot_bounds_for_date(d: date) -> List[Tuple[datetime, datetime]]:
     return [slot_bounds_for_date(d, h) for h in SLOT_START_HOURS]
 
 
+def standard_slot_start_containing(at_time: datetime) -> Optional[datetime]:
+    """返回 at_time 所在标准时段的起始时刻。"""
+    for start, end in all_slot_bounds_for_date(at_time.date()):
+        if start <= at_time < end:
+            return start
+    return None
+
+
+def standard_slot_start_for_status(at_time: datetime) -> datetime:
+    """查询咨询室时段状态时对齐的标准时段起点。"""
+    hit = standard_slot_start_containing(at_time)
+    if hit:
+        return hit
+    day_starts = [slot_bounds_for_date(at_time.date(), h)[0] for h in SLOT_START_HOURS]
+    future = [s for s in day_starts if s > at_time]
+    if future:
+        return future[0]
+    return day_starts[-1] if day_starts else at_time.replace(second=0, microsecond=0)
+
+
 def rolling_window_end(today: date) -> date:
     return today + timedelta(days=ROLLING_WINDOW_DAYS - 1)
+
+
+def rolling_window_datetime_bounds(
+    today: Optional[date] = None,
+) -> Tuple[datetime, datetime]:
+    """滚动 7 天时间窗（含起止边界），咨询师日历与来访者预约共用。"""
+    ref = today or china_now().date()
+    start_bound = datetime.combine(ref, time.min)
+    end_bound = datetime.combine(rolling_window_end(ref) + timedelta(days=1), time.min)
+    return start_bound, end_bound
 
 
 def validate_slot_in_rolling_window(start: datetime, now: Optional[datetime] = None) -> None:
@@ -67,6 +97,13 @@ def counselor_has_slot(db: Session, counselor_id: int, start_time: datetime, exc
     return any(r.CounselorId == counselor_id for r in rows)
 
 
+def _assigned_room_id(schedule: AppSchedule) -> Optional[str]:
+    """仅付款占用（BOOKED + room:）才算咨询室被占用。"""
+    if schedule.Status != "BOOKED":
+        return None
+    return parse_room_id(schedule.Note)
+
+
 def room_occupied(
     db: Session,
     room_id: str,
@@ -74,7 +111,7 @@ def room_occupied(
     exclude_id: Optional[int] = None,
 ) -> Optional[AppSchedule]:
     for row in active_schedules_at(db, start_time, exclude_id=exclude_id):
-        if parse_room_id(row.Note) == room_id:
+        if _assigned_room_id(row) == room_id:
             return row
     return None
 
@@ -86,10 +123,43 @@ def room_occupied_at_center(
     start_time: datetime,
     exclude_id: Optional[int] = None,
 ) -> Optional[AppSchedule]:
-    """指定预约中心 + 咨询室 + 时段是否已被占用（含其他咨询师挂课/来访者已约）。"""
+    """指定预约中心 + 咨询室 + 时段是否已被付款占用。"""
     for row in active_schedules_at(db, start_time, exclude_id=exclude_id):
         if parse_center_id(row.Note) != center_id:
             continue
-        if parse_room_id(row.Note) == room_id:
+        if _assigned_room_id(row) == room_id:
             return row
     return None
+
+
+def paid_occupied_rooms_at_center(
+    db: Session,
+    center_id: str,
+    start_time: datetime,
+    *,
+    exclude_id: Optional[int] = None,
+) -> set[str]:
+    """某中心某时段已被付款占用的咨询室集合。"""
+    occupied: set[str] = set()
+    for row in active_schedules_at(db, start_time, exclude_id=exclude_id):
+        if parse_center_id(row.Note) != center_id:
+            continue
+        room = _assigned_room_id(row)
+        if room:
+            occupied.add(room)
+    return occupied
+
+
+def has_available_room_at_center(
+    db: Session,
+    center_id: str,
+    start_time: datetime,
+    available_room_ids: List[str],
+    *,
+    exclude_id: Optional[int] = None,
+) -> bool:
+    """该中心该时段是否仍有可分配的咨询室（用于挂课时段可选判断）。"""
+    occupied = paid_occupied_rooms_at_center(
+        db, center_id, start_time, exclude_id=exclude_id,
+    )
+    return any(rid not in occupied for rid in available_room_ids)

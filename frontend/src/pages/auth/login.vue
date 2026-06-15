@@ -16,19 +16,23 @@
       </view>
 
       <view class="form-container">
-        <DevRolePicker />
-        <text class="form-desc">授权登录后即可使用全部功能，我们严格保护您的隐私。</text>
+        <DevRolePicker @change="onDevRoleChange" />
+        <text class="form-desc">
+          {{ mockLogin ? '测试版请先选择上方角色，再点击下方按钮登录对应演示账号。' : '授权登录后即可使用全部功能，我们严格保护您的隐私。' }}
+        </text>
         <button
           class="wx-login-btn"
           :loading="loading"
           :disabled="loading"
-          open-type="getPhoneNumber"
+          :open-type="mockLogin ? undefined : 'getPhoneNumber'"
           @getphonenumber="handlePhoneAuth"
           @click="handleWxLoginOnly"
         >
-          <text class="wx-btn-text">微信一键登录</text>
+          <text class="wx-btn-text">{{ loginBtnText }}</text>
         </button>
-        <text class="form-tip">点击后将先完成微信登录，再请求绑定手机号。</text>
+        <text class="form-tip">
+          {{ mockLogin ? `将以「${loginRoleLabel}」身份登录（对接 seed_demo_data.py）` : '点击后将先完成微信登录，再请求绑定手机号。' }}
+        </text>
       </view>
 
       <view class="footer-section">
@@ -48,12 +52,32 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { AuthApi } from '@/apis/auth'
 import DevRolePicker from '@/components/DevRolePicker.vue'
-import { getDevLoginCode, isLoggedIn, resolveWxLoginCode } from '@/utils/auth'
+import {
+  DEV_LOGIN_ROLES,
+  getDevLoginCode,
+  getDevLoginRole,
+  isLoggedIn,
+  isMockLoginEnabled,
+  resolveWxLoginCode,
+  type DevLoginRole,
+} from '@/utils/auth'
 
 const loading = ref(false)
+const mockLogin = isMockLoginEnabled()
+const loginRoleLabel = ref(
+  DEV_LOGIN_ROLES.find(r => r.role === getDevLoginRole())?.label || '来访·小美',
+)
+const loginBtnText = computed(() =>
+  mockLogin ? `微信一键登录（${loginRoleLabel.value}）` : '微信一键登录',
+)
+
+const onDevRoleChange = (role: DevLoginRole) => {
+  const item = DEV_LOGIN_ROLES.find(r => r.role === role)
+  loginRoleLabel.value = item?.label || '来访·小美'
+}
 
 /** 实际执行微信登录：用 wx.login code 换 JWT */
 const doWxLogin = async () => {
@@ -141,7 +165,8 @@ const openLegal = (kind: 'agreement' | 'privacy') => {
 }
 
 onMounted(() => {
-  if (isLoggedIn()) goBack()
+  // 测试/开发联调保留登录页，便于切换演示角色后重新登录
+  if (!mockLogin && isLoggedIn()) goBack()
 })
 </script>
 

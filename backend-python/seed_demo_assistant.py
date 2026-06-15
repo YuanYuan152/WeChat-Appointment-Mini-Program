@@ -1,11 +1,14 @@
 """
-咨询助理角色演示数据注入。
+咨询助理角色演示数据注入（隔离测试，会清空所有 App 表）。
+
+推荐日常使用: python seed_demo_data.py
 
 用法: python seed_demo_assistant.py
 
-会先清空所有 App 表，再写入：
-  - 演示患者 / 咨询师（供排期总览与跟进关联）
-  - 助理账号 + 待办任务 + 风险提醒 + 联系记录
+写入（与 auth.py 对齐）:
+  - 来访者林小美、咨询师李心怡（排期总览）
+  - 助理账号 demo-openid-assistant（13800000004）
+  - 待办任务 + 风险提醒 + 联系记录
 """
 
 from seed_base import bind_role, clear_all_tables, create_account, days_from_now, utc_now
@@ -17,6 +20,24 @@ from models import (
     AppSchedule,
     AppTask,
 )
+from seed_demo_common import demo_schedule_note
+
+LI_XINYI = {
+    "mobile": "13800000001",
+    "open_id": "demo-counselor-lixinyi",
+    "name": "李心怡",
+}
+XIAOMEI = {
+    "mobile": "13800000010",
+    "open_id": "demo-openid-patient-xiaomei",
+    "nickname": "来访·小美",
+    "real_name": "林小美",
+}
+ASSISTANT = {
+    "mobile": "13800000004",
+    "open_id": "demo-openid-assistant",
+    "nickname": "演示助理",
+}
 
 
 def seed(db):
@@ -24,22 +45,22 @@ def seed(db):
 
     patient = create_account(
         db,
-        mobile="13800000000",
-        open_id="demo-openid-patient",
-        nickname="王芳",
+        mobile=XIAOMEI["mobile"],
+        open_id=XIAOMEI["open_id"],
+        nickname=XIAOMEI["nickname"],
         active_role="Patient",
-        real_name="王芳",
+        real_name=XIAOMEI["real_name"],
         gender="女",
     )
     bind_role(db, patient.Id, "Patient")
 
     counselor = create_account(
         db,
-        mobile="13800000001",
-        open_id="demo-openid-counselor-ref",
-        nickname="李心怡",
+        mobile=LI_XINYI["mobile"],
+        open_id=LI_XINYI["open_id"],
+        nickname=LI_XINYI["name"],
         active_role="Counselor",
-        real_name="李心怡",
+        real_name=LI_XINYI["name"],
         gender="女",
         avatar_url="/static/images/zixunshi11.png",
     )
@@ -48,7 +69,7 @@ def seed(db):
     db.add(
         AppCounselorProfile(
             AccountId=counselor.Id,
-            Name="李心怡",
+            Name=LI_XINYI["name"],
             AvatarUrl="/static/images/zixunshi11.png",
             Title="国家二级心理咨询师",
             Specialty="情绪压力管理",
@@ -61,7 +82,7 @@ def seed(db):
         )
     )
 
-    for index, hour in enumerate([9, 13, 16], start=1):
+    for index, hour, center in [(1, 9, "yangpu"), (2, 13, "pudong"), (3, 16, "pudong")]:
         start = days_from_now(index, hour=hour)
         db.add(
             AppSchedule(
@@ -69,17 +90,17 @@ def seed(db):
                 StartTime=start,
                 EndTime=start.replace(minute=50),
                 Status="AVAILABLE",
-                Note="排期总览演示",
+                Note=demo_schedule_note(center, status="AVAILABLE"),
             )
         )
 
     assistant = create_account(
         db,
-        mobile="13800000002",
-        open_id="demo-openid-assistant",
-        nickname="赵助理",
+        mobile=ASSISTANT["mobile"],
+        open_id=ASSISTANT["open_id"],
+        nickname=ASSISTANT["nickname"],
         active_role="Assistant",
-        real_name="赵助理",
+        real_name=ASSISTANT["nickname"],
         gender="女",
     )
     bind_role(db, assistant.Id, "Assistant")
@@ -91,7 +112,7 @@ def seed(db):
             AppTask(
                 AssistantId=assistant.Id,
                 Type="FOLLOW_UP",
-                Title="跟进王芳首次咨询前登记",
+                Title="跟进林小美首次咨询前登记",
                 Content="确认登记表已填写，提醒携带既往心理测评报告。",
                 RelatedId=patient.Id,
                 Priority="HIGH",
@@ -169,8 +190,8 @@ def main():
         assistant, patient, counselor = seed(db)
         db.commit()
         print("[OK] assistant demo data seeded")
-        print(f"[OK] assistant mobile: {assistant.Mobile}, account_id: {assistant.Id}")
-        print(f"[OK] patient mobile: {patient.Mobile}, account_id: {patient.Id}")
+        print(f"[OK] assistant mobile: {assistant.Mobile}, open_id: {assistant.OpenId}")
+        print(f"[OK] patient mobile: {patient.Mobile}, open_id: {patient.OpenId}")
         print(f"[OK] counselor account_id: {counselor.Id}")
     except Exception:
         db.rollback()

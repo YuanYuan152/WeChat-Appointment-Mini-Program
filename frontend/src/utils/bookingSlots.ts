@@ -1,5 +1,3 @@
-import { APPOINTMENT_CENTERS } from '@/constants/appointmentCenters'
-
 /** 用户预约页时间段；centerId 与咨询师排班数据联动 */
 export interface BookingTimeSlot {
   ID: number
@@ -26,34 +24,35 @@ export interface BookingTimeSlot {
  * 后端未下发 centerId 时，演示环境按序号分配到各中心，便于联调。
  */
 export function normalizeBookingTimeSlots(raw: any[] = []): BookingTimeSlot[] {
-  const centerIds = APPOINTMENT_CENTERS.map((c) => c.id)
-  return raw.map((slot, index) => {
-    const centerId =
-      slot.centerId ||
-      slot.center_id ||
-      slot.CenterId ||
-      centerIds[index % centerIds.length]
-    return {
-      ID: Number(slot.ID ?? slot.Id ?? slot.id ?? 0),
-      gId: slot.gId,
-      startDate: slot.startDate || '',
-      startHH: slot.startHH || '',
-      endHH: slot.endHH || '',
-      week: slot.week || '',
-      Price: Number(slot.Price ?? slot.price ?? 0),
-      maxSign: Number(slot.maxSign ?? 1),
-      numSign: Number(slot.numSign ?? 0),
-      centerId: String(centerId),
-      status: slot.status || (Number(slot.numSign ?? 0) >= Number(slot.maxSign ?? 1) ? 'BOOKED' : 'AVAILABLE'),
-      isBookable:
-        slot.isBookable ??
-        (slot.status !== 'BOOKED' && Number(slot.numSign ?? 0) < Number(slot.maxSign ?? 1)),
-      startTime: slot.startTime,
-      endTime: slot.endTime,
-      createTime: slot.createTime,
-      time: slot.time,
-    }
-  })
+  return raw
+    .map((slot) => {
+      const centerId =
+        slot.centerId ||
+        slot.center_id ||
+        slot.CenterId ||
+        ''
+      return {
+        ID: Number(slot.ID ?? slot.Id ?? slot.id ?? 0),
+        gId: slot.gId,
+        startDate: slot.startDate || '',
+        startHH: slot.startHH || '',
+        endHH: slot.endHH || '',
+        week: slot.week || '',
+        Price: Number(slot.Price ?? slot.price ?? 0),
+        maxSign: Number(slot.maxSign ?? 1),
+        numSign: Number(slot.numSign ?? 0),
+        centerId: String(centerId),
+        status: slot.status || (Number(slot.numSign ?? 0) >= Number(slot.maxSign ?? 1) ? 'BOOKED' : 'AVAILABLE'),
+        isBookable:
+          slot.isBookable ??
+          (slot.status !== 'BOOKED' && slot.status !== 'EXPIRED' && Number(slot.numSign ?? 0) < Number(slot.maxSign ?? 1)),
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+        createTime: slot.createTime,
+        time: slot.time,
+      }
+    })
+    .filter((slot) => Boolean(slot.centerId) && Boolean(slot.ID))
 }
 
 /** 咨询师在哪些预约中心有可约时段（供用户端展示与禁用逻辑） */

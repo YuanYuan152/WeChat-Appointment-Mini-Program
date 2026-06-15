@@ -3,9 +3,32 @@
  */
 
 /** 开发联调角色（与 backend-python/auth.py DEV_MOCK_CODE_OPENIDS 对齐） */
-export type DevLoginRole = 'patient' | 'counselor' | 'assistant' | 'ops' | 'admin'
+export type DevLoginRole =
+  | 'patient'
+  | 'patient_gang'
+  | 'patient_li'
+  | 'counselor'
+  | 'counselor_zhang'
+  | 'counselor_wang'
+  | 'counselor_chen'
+  | 'assistant'
+  | 'ops'
+  | 'admin'
 
 export const DEV_LOGIN_ROLE_STORAGE_KEY = 'dev_login_role'
+
+/** 测试/开发联调：登录页可选角色，wx.login 走 dev_* mock code */
+export const isMockLoginEnabled = (): boolean =>
+  import.meta.env.DEV || import.meta.env.VITE_ENABLE_MOCK_LOGIN === 'true'
+
+export const DEV_LOGIN_ROLE_GROUPS: {
+  title: string
+  roles: DevLoginRole[]
+}[] = [
+  { title: '来访者', roles: ['patient', 'patient_gang', 'patient_li'] },
+  { title: '咨询师', roles: ['counselor', 'counselor_zhang', 'counselor_wang', 'counselor_chen'] },
+  { title: '内部角色', roles: ['assistant', 'ops', 'admin'] },
+]
 
 export const DEV_LOGIN_ROLES: {
   role: DevLoginRole
@@ -13,8 +36,13 @@ export const DEV_LOGIN_ROLES: {
   code: string
   seedHint: string
 }[] = [
-  { role: 'patient', label: '来访者', code: 'dev_patient', seedHint: 'seed_demo_data.py' },
-  { role: 'counselor', label: '咨询师', code: 'dev_counselor', seedHint: 'seed_demo_data.py（李心怡）' },
+  { role: 'patient', label: '来访·小美', code: 'dev_patient', seedHint: 'seed_demo_data.py（林小美）' },
+  { role: 'patient_gang', label: '来访·小刚', code: 'dev_patient_xiaogang', seedHint: 'seed_demo_data.py（赵小刚）' },
+  { role: 'patient_li', label: '来访·小丽', code: 'dev_patient_xiaoli', seedHint: 'seed_demo_data.py（何小丽）' },
+  { role: 'counselor', label: '咨询师·李心怡', code: 'dev_counselor', seedHint: 'seed_demo_data.py' },
+  { role: 'counselor_zhang', label: '咨询师·张明远', code: 'dev_counselor_zhangmingyuan', seedHint: 'seed_demo_data.py' },
+  { role: 'counselor_wang', label: '咨询师·王婉清', code: 'dev_counselor_wangwanqing', seedHint: 'seed_demo_data.py' },
+  { role: 'counselor_chen', label: '咨询师·陈启明', code: 'dev_counselor_chenqiming', seedHint: 'seed_demo_data.py' },
   { role: 'assistant', label: '助理', code: 'dev_assistant', seedHint: 'seed_demo_data.py' },
   { role: 'ops', label: '运营', code: 'dev_ops', seedHint: 'seed_demo_data.py' },
   { role: 'admin', label: '管理员', code: 'dev_admin', seedHint: 'seed_demo_data.py' },
@@ -22,10 +50,35 @@ export const DEV_LOGIN_ROLES: {
 
 const DEV_ROLE_TO_CODE: Record<DevLoginRole, string> = {
   patient: 'dev_patient',
+  patient_gang: 'dev_patient_xiaogang',
+  patient_li: 'dev_patient_xiaoli',
   counselor: 'dev_counselor',
+  counselor_zhang: 'dev_counselor_zhangmingyuan',
+  counselor_wang: 'dev_counselor_wangwanqing',
+  counselor_chen: 'dev_counselor_chenqiming',
   assistant: 'dev_assistant',
   ops: 'dev_ops',
   admin: 'dev_admin',
+}
+
+/** 开发角色对应的后端 ActiveRole（工作台路由用） */
+export const getDevWorkbenchRole = (): string | null => {
+  const role = getDevLoginRole()
+  if (
+    role === 'patient'
+    || role === 'patient_gang'
+    || role === 'patient_li'
+  ) return 'Patient'
+  if (
+    role === 'counselor'
+    || role === 'counselor_zhang'
+    || role === 'counselor_wang'
+    || role === 'counselor_chen'
+  ) return 'Counselor'
+  if (role === 'assistant') return 'Assistant'
+  if (role === 'ops') return 'Ops'
+  if (role === 'admin') return 'Admin'
+  return null
 }
 
 const isDevLoginRole = (value: string): value is DevLoginRole =>
@@ -48,12 +101,17 @@ export const setDevLoginRole = (role: DevLoginRole): void => {
 
 export const getDevLoginCode = (): string => DEV_ROLE_TO_CODE[getDevLoginRole()]
 
+export const getDevLoginRoleLabel = (): string => {
+  const item = DEV_LOGIN_ROLES.find(r => r.role === getDevLoginRole())
+  return item?.label || '来访·小美'
+}
+
 /**
  * 获取微信登录 code。
- * 开发构建返回 dev_* mock code，与 seed 演示账号对齐；生产环境走 uni.login。
+ * 测试/开发联调返回 dev_* mock code，与 seed 演示账号对齐；正式版走 uni.login。
  */
 export const resolveWxLoginCode = async (): Promise<string> => {
-  if (import.meta.env.DEV) {
+  if (isMockLoginEnabled()) {
     return getDevLoginCode()
   }
   try {

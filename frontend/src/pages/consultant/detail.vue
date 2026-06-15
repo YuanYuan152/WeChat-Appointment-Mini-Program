@@ -359,6 +359,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed, nextTick } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { API_V2_CONFIG, API_ENDPOINTS } from '@/config/api'
 import { doctorApi } from '@/apis'
 import { httpV2 } from '@/utils/http'
@@ -448,6 +449,10 @@ const filteredTimeSlots = computed(() =>
   filterSlotsByCenter(timeSlots.value, selectedCenterId.value)
 )
 
+const counselorWorksAtCenter = (centerId: string) =>
+  counselorCenterIds.value.includes(centerId) ||
+  slotWorksAtCenter(timeSlots.value, centerId)
+
 /** 已选中心但咨询师不在该中心或无可约时段时，可约时间模块灰化且不可点 */
 const isTimeModuleDisabled = computed(() => {
   if (!selectedCenterId.value) return false
@@ -464,10 +469,6 @@ const canProceedBooking = computed(() =>
     selectedSlot.value.centerId === selectedCenterId.value
   )
 )
-
-const counselorWorksAtCenter = (centerId: string) =>
-  counselorCenterIds.value.includes(centerId) ||
-  slotWorksAtCenter(timeSlots.value, centerId)
 
 const applyBookingData = (data: {
   timeSlots?: any[]
@@ -523,10 +524,31 @@ const mapDoctorDetail = (item: any): Doctor => ({
 })
 
 // 获取医生详情
+const loadBookingSlots = async (doctorId: string | number) => {
+  try {
+    const res = await doctorApi.getTimeSlots(doctorId)
+    if (res.code === 0 && res.data) {
+      const prevCenter = selectedCenterId.value
+      const prevSlot = selectedSlotId.value
+      applyBookingData(res.data)
+      if (prevCenter && counselorWorksAtCenter(prevCenter)) {
+        selectedCenterId.value = prevCenter
+        if (prevSlot !== -1) {
+          const still = timeSlots.value.find(s => s.ID === prevSlot && isSlotBookable(s))
+          selectedSlotId.value = still ? prevSlot : -1
+        }
+      }
+    }
+  } catch (error) {
+    console.error('刷新可约时段失败:', error)
+  }
+}
+
 const getDoctorDetail = async () => {
   try {
     const params = getRouteParams()
     const doctorId = params.id || params.doctorId
+    const source = params.source
     
     console.log('获取医生详情，参数:', params)
     console.log('医生ID:', doctorId)
@@ -548,7 +570,7 @@ const getDoctorDetail = async () => {
       return
     }
 
-    const response = await doctorApi.getDetail(doctorId)
+    const response = await doctorApi.getDetail(doctorId, source ? { source } : undefined)
     if (response.code === 0 && response.data) {
       doctor.value = mapDoctorDetail(response.data)
       applyBookingData(response.data)
@@ -1103,60 +1125,6 @@ const goBackFromSignature = () => {
 onMounted(() => {
   resetSignatureForNewBooking()
   getDoctorDetail()
-
-  // 添加测试数据，确保页面能正常显示
-  setTimeout(() => {
-    if (!doctor.value.name) {
-      console.log('使用测试数据')
-      doctor.value = {
-        id: 1,
-        name: '赵晶',
-        specialty: '心理咨询师',
-        experience: 8,
-        price: 600,
-        avatar: getDefaultAvatar(),
-        description: '专注于情感关系、婚姻家庭、亲子教育等领域的心理咨询。拥有丰富的临床经验，擅长运用认知行为疗法、家庭系统疗法等多种治疗方法。',
-        profile: '生活坏到一定程度就会好起来,因为它无法更坏,因为你本自具足,因为生命本身就是黑暗中闪烁的光。',
-        qualification: '国家二级心理咨询师 上海某三甲医院心理咨询师',
-        field: '心理健康,人际关系,家庭养育,学业发展,亲密关系,个人成长',
-        targetGroup: '幼儿&儿童,青少年,伴侣,家庭,成年人',
-        consultHours: 1800,
-        workYears: 9,
-        mode: '线上/线下'
-      }
-      
-      applyBookingData({
-        availableCenterIds: ['yangpu', 'pudong'],
-        hasAvailableTime: true,
-        timeSlots: [
-          {
-            ID: 1,
-            centerId: 'yangpu',
-            startDate: '2025-01-20',
-            startHH: '09:00',
-            endHH: '10:00',
-            week: '星期一',
-            Price: 600,
-            maxSign: 1,
-            numSign: 0
-          },
-          {
-            ID: 2,
-            centerId: 'pudong',
-            startDate: '2025-01-20',
-            startHH: '14:00',
-            endHH: '15:00',
-            week: '星期一',
-            Price: 600,
-            maxSign: 1,
-            numSign: 0
-          }
-        ]
-      })
-      setTimeout(() => updateSectionOffsets(), 100)
-    }
-  }, 2000)
-  
   setTimeout(() => updateSectionOffsets(), 500)
   
   // 计算内容区域高度
@@ -1165,6 +1133,16 @@ onMounted(() => {
   const tabHeight = 44 // tab高度
   const statusBarHeight = systemInfo.statusBarHeight || 0
   contentHeight.value = systemInfo.windowHeight - navbarHeight - tabHeight - statusBarHeight
+})
+
+onShow(() => {
+  const params = getRouteParams()
+  const doctorId = params.id || params.doctorId
+  if (doctorId && doctor.value.id) {
+    loadBookingSlots(doctorId)
+  } else if (doctorId) {
+    getDoctorDetail()
+  }
 })
 </script>
 

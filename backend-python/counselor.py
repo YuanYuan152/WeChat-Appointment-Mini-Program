@@ -33,23 +33,30 @@ from models import (
 from app_time import china_now
 from consultation_cancel import has_appointment_started, is_refund_eligible
 from schedule_meta import (
+    CENTER_NAMES,
     CONSULTATION_ROOMS,
     center_display_name,
+    display_room_id,
     get_consultation_rooms,
+    is_video_center,
     parse_center_id,
     parse_room_id,
     room_display_name,
-    schedule_note,
+    release_assigned_room,
+    schedule_pref_note,
 )
-from schedule_display import DISPLAY_LABELS, resolve_schedule_display
+from room_slot_status import resolve_slot_manual_status, is_slot_operational
+from schedule_display import resolve_schedule_display, DISPLAY_LABELS
 from schedule_slots import (
     ROLLING_WINDOW_DAYS,
     active_schedules_at,
     all_slot_bounds_for_date,
     counselor_has_slot,
+    has_available_room_at_center,
     is_aligned_standard_slot,
-    room_occupied_at_center,
+    paid_occupied_rooms_at_center,
     rolling_window_end,
+    rolling_window_datetime_bounds,
     validate_slot_in_rolling_window,
 )
 
@@ -91,6 +98,7 @@ class ScheduleUpdate(BaseModel):
     center_id: Optional[str] = None
     room_id: Optional[str] = None
     communication_screenshot_url: Optional[str] = None
+    leave_reason: Optional[str] = None
 
 
 class RoomSlotOption(BaseModel):
@@ -238,8 +246,42 @@ class CounselorProfilePayload(BaseModel):
 
 def _build_schedule_note(body: ScheduleCreate) -> Optional[str]:
     if body.center_id:
-        return schedule_note(body.center_id, body.room_id)
+        if is_video_center(body.center_id):
+            return schedule_pref_note(body.center_id)
+        pref = (body.room_id or "").strip() or None
+        return schedule_pref_note(body.center_id, pref)
     return body.note
+
+
+def _resolve_calendar_room(
+    schedule: AppSchedule,
+    consultation: Optional[AppConsultation],
+    center_id: Optional[str],
+    db: Session,
+) -> tuple[Optional[str], Optional[str]]:
+    """返回 (roomId, roomName) 供工作台展示。"""
+    if is_video_center(center_id):
+        if schedule.Status == "BOOKED" or _active_consultation(consultation):
+            return None, "线上视频（不占咨询室）"
+        return None, None
+
+    room_id = display_room_id(schedule.Note, schedule.Status)
+    if not room_id and consultation and consultation.Note:
+        room_id = parse_room_id(consultation.Note)
+
+    is_booked = schedule.Status == "BOOKED" or _active_consultation(consultation)
+    if is_booked and room_id:
+        name = room_display_name(center_id, room_id, db) or room_id
+        return room_id, f"咨询室 {name}"
+
+    if schedule.Status == "AVAILABLE" and center_id:
+        pref_id = display_room_id(schedule.Note, schedule.Status)
+        if pref_id:
+            name = room_display_name(center_id, pref_id, db) or pref_id
+            return pref_id, f"{name}（偏好）"
+        return None, "无偏好"
+
+    return room_id, room_display_name(center_id, room_id, db) if room_id else None
 
 
 def _active_consultation(consultation: Optional[AppConsultation]) -> bool:
@@ -262,7 +304,7 @@ def _cancel_permissions(schedule: AppSchedule, consultation: Optional[AppConsult
 
     if not _has_active_booking(schedule, consultation):
         if schedule.Status == "AVAILABLE":
-            return True, False, "未预约挂课可随时取消或改约咨询室"
+            return True, False, "未预约挂课可随时取消或修改咨询室偏好"
         return False, False, "当前状态不可取消"
 
     if _active_consultation(consultation):
@@ -273,9 +315,9 @@ def _cancel_permissions(schedule: AppSchedule, consultation: Optional[AppConsult
                 "取消前请与来访者提前沟通并上传沟通截图。取消后将通知来访者并协助改约。",
             )
         return (
-            False,
             True,
-            "距咨询开始不足24小时，须先走请假流程，请假通过后方可取消该挂课。",
+            True,
+            "取消前请与来访者提前沟通并上传沟通截图。距咨询开始不足24小时，取消后不予退款，须协助来访者改约。",
         )
 
     # 已标 BOOKED 但无有效咨询单（数据异常），仍允许直接取消
@@ -287,14 +329,13 @@ def _counselor_cancel_booked(
     schedule: AppSchedule,
     counselor_id: int,
     *,
+    leave_reason: Optional[str] = None,
     communication_screenshot_url: Optional[str] = None,
 ) -> None:
-    """距开始≥24h：咨询师取消已预约挂课。"""
-    if not is_refund_eligible(schedule.StartTime):
-        raise HTTPException(
-            status_code=400,
-            detail="距咨询开始不足24小时，不能直接取消，请提交请假申请",
-        )
+    """咨询师取消/请假已预约挂课：须填写理由并上传沟通截图，取消后释放咨询室。"""
+    reason = (leave_reason or "").strip()
+    if not reason:
+        raise HTTPException(status_code=400, detail="请填写请假原因")
     screenshot = (communication_screenshot_url or "").strip()
     if not screenshot:
         raise HTTPException(status_code=400, detail="请上传与来访者的沟通截图后再取消")
@@ -316,6 +357,14 @@ def _counselor_cancel_booked(
                 order.Status = "REFUNDED" if is_refund_eligible(schedule.StartTime) else "CANCELLED"
                 order.UpdatedAt = datetime.utcnow()
     db.add(
+        AppLeaveRequest(
+            ScheduleId=schedule.Id,
+            CounselorId=counselor_id,
+            Reason=reason,
+            Status="APPROVED",
+        )
+    )
+    db.add(
         AppScheduleCancelLog(
             ScheduleId=schedule.Id,
             CounselorId=counselor_id,
@@ -324,6 +373,7 @@ def _counselor_cancel_booked(
         )
     )
     schedule.Status = "CANCELLED"
+    schedule.Note = release_assigned_room(schedule.Note)
     schedule.UpdatedAt = datetime.utcnow()
 
 
@@ -382,7 +432,7 @@ def _calendar_items_for_schedules(
         c = cons_by_schedule.get(s.Id)
         leave_row = leave_by_schedule.get(s.Id)
         center_id = parse_center_id(s.Note)
-        room_id = parse_room_id(s.Note)
+        room_id, room_name = _resolve_calendar_room(s, c, center_id, db)
         patient = patients.get(c.PatientId) if c else None
         patient_name = None
         if patient:
@@ -408,7 +458,7 @@ def _calendar_items_for_schedules(
                 centerId=center_id,
                 centerName=center_display_name(center_id),
                 roomId=room_id,
-                roomName=room_display_name(center_id, room_id),
+                roomName=room_name,
                 patientName=patient_name,
                 consultationId=c.Id if c else None,
                 consultationStatus=c.Status if c else None,
@@ -459,11 +509,11 @@ def schedule_slot_options(
         )
 
     now = china_now()
-    rooms = get_consultation_rooms(db, center_id)
-    if not rooms:
+    if not is_video_center(center_id) and not get_consultation_rooms(db, center_id):
         raise HTTPException(status_code=400, detail="无效的预约中心")
 
     options: List[TimeSlotOption] = []
+    rooms = [] if is_video_center(center_id) else get_consultation_rooms(db, center_id)
     for start_dt, end_dt in all_slot_bounds_for_date(slot_date):
         key = start_dt.strftime("%H:%M")
         label = f"{key} – {end_dt.strftime('%H:%M')}"
@@ -473,24 +523,32 @@ def schedule_slot_options(
             None,
         )
         room_opts: List[RoomSlotOption] = []
+        usable_room_ids = []
+        paid_occupied = paid_occupied_rooms_at_center(db, center_id, start_dt) if rooms else set()
         for room in rooms:
-            occ = room_occupied_at_center(db, center_id, room["id"], start_dt)
-            occupied_by_self = bool(occ and occ.CounselorId == counselor.Id)
-            occupied_by_other = bool(occ and occ.CounselorId != counselor.Id)
-            room_ok = room.get("status", "AVAILABLE") == "AVAILABLE"
-            available = not past and occ is None and room_ok
+            slot_status = resolve_slot_manual_status(
+                db, room.get("dbId"), start_dt, "AVAILABLE",
+            )
+            room_ok = is_slot_operational(slot_status)
+            if room_ok:
+                usable_room_ids.append(room["id"])
+            paid_taken = room["id"] in paid_occupied
+            available = not past and room_ok
             room_opts.append(
                 RoomSlotOption(
                     roomId=room["id"],
                     roomName=room["name"],
                     available=available,
-                    occupiedBySelf=occupied_by_self,
-                    occupiedByOther=occupied_by_other,
-                    otherCounselorId=occ.CounselorId if occupied_by_other and occ else None,
+                    occupiedBySelf=False,
+                    occupiedByOther=paid_taken,
+                    otherCounselorId=None,
                 )
             )
-        all_rooms_full = self_row is not None or (
-            bool(room_opts) and all(not r.available for r in room_opts)
+        all_rooms_full = False if is_video_center(center_id) else (
+            self_row is not None or (
+                bool(usable_room_ids)
+                and not has_available_room_at_center(db, center_id, start_dt, usable_room_ids)
+            )
         )
         options.append(
             TimeSlotOption(
@@ -534,7 +592,7 @@ def schedule_calendar(
         start_date = requested
 
     start_dt = datetime.combine(start_date, time.min)
-    end_dt = datetime.combine(rolling_window_end(today) + timedelta(days=1), time.min)
+    _, end_dt = rolling_window_datetime_bounds(today)
 
     schedules = (
         db.query(AppSchedule)
@@ -554,14 +612,16 @@ def schedule_calendar(
     )
 
 
-@router.post("/schedules", response_model=ScheduleOut, summary="新增挂课（标准时间槽+咨询室）")
+@router.post("/schedules", response_model=ScheduleOut, summary="新增挂课（标准时间槽+咨询室偏好）")
 def create_schedule(
     body: ScheduleCreate,
     counselor: AppAccount = Depends(require_counselor),
     db: Session = Depends(get_db),
 ):
-    if not body.center_id or not body.room_id:
-        raise HTTPException(status_code=400, detail="必须选择预约中心与咨询室")
+    if not body.center_id:
+        raise HTTPException(status_code=400, detail="必须选择预约中心")
+    if body.center_id not in CENTER_NAMES:
+        raise HTTPException(status_code=400, detail="无效的预约中心")
     if body.end_time <= body.start_time:
         raise HTTPException(status_code=400, detail="结束时间必须晚于开始时间")
     if not is_aligned_standard_slot(body.start_time, body.end_time):
@@ -572,15 +632,30 @@ def create_schedule(
         raise HTTPException(status_code=400, detail=str(e))
 
     if counselor_has_slot(db, counselor.Id, body.start_time):
-        raise HTTPException(status_code=400, detail="您在该时间槽已有挂课，同一时段最多一间咨询室")
+        raise HTTPException(status_code=400, detail="您在该时间槽已有挂课，同一时段最多一节")
 
-    if not body.center_id:
-        raise HTTPException(status_code=400, detail="请选择预约中心")
-    occ = room_occupied_at_center(db, body.center_id, body.room_id, body.start_time)
-    if occ:
-        if occ.CounselorId == counselor.Id:
-            raise HTTPException(status_code=400, detail="您已在该时段占用此咨询室")
-        raise HTTPException(status_code=400, detail="该咨询室在此时段已被其他咨询师预约")
+    if not is_video_center(body.center_id):
+        rooms = get_consultation_rooms(db, body.center_id)
+        usable_room_ids = []
+        for r in rooms:
+            slot_status = resolve_slot_manual_status(
+                db, r.get("dbId"), body.start_time, "AVAILABLE",
+            )
+            if is_slot_operational(slot_status):
+                usable_room_ids.append(r["id"])
+        if not usable_room_ids:
+            raise HTTPException(status_code=400, detail="该中心暂无可用咨询室")
+        if not has_available_room_at_center(
+            db, body.center_id, body.start_time, usable_room_ids,
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail="该时段所有咨询室均已约满，无法挂课",
+            )
+
+        pref = (body.room_id or "").strip() or None
+        if pref and pref not in {r["id"] for r in rooms}:
+            raise HTTPException(status_code=400, detail="无效的咨询室偏好")
 
     schedule = AppSchedule(
         CounselorId=counselor.Id,
@@ -623,30 +698,27 @@ def update_schedule(
             raise HTTPException(status_code=400, detail="咨询已开始或已过开始时间，不可取消")
         if _has_active_booking(schedule, consultation):
             if _active_consultation(consultation):
-                if not is_refund_eligible(schedule.StartTime):
-                    raise HTTPException(
-                        status_code=400,
-                        detail="距咨询开始不足24小时，不能直接取消，请走请假流程",
-                    )
                 _counselor_cancel_booked(
                     db,
                     schedule,
                     counselor.Id,
+                    leave_reason=body.leave_reason,
                     communication_screenshot_url=body.communication_screenshot_url,
                 )
             else:
                 schedule.Status = "CANCELLED"
+                schedule.Note = release_assigned_room(schedule.Note)
         elif schedule.Status == "AVAILABLE":
             schedule.Status = "CANCELLED"
         else:
             raise HTTPException(status_code=400, detail="当前状态不可取消")
-    elif body.center_id and body.room_id and schedule.Status == "AVAILABLE":
-        occ = room_occupied_at_center(
-            db, body.center_id, body.room_id, schedule.StartTime, exclude_id=schedule.Id,
-        )
-        if occ and occ.CounselorId != counselor.Id:
-            raise HTTPException(status_code=400, detail="该咨询室在此时段已被其他咨询师占用")
-        schedule.Note = schedule_note(body.center_id, body.room_id)
+    elif body.center_id is not None and schedule.Status == "AVAILABLE":
+        pref = (body.room_id or "").strip() or None
+        if pref:
+            rooms = get_consultation_rooms(db, body.center_id)
+            if pref not in {r["id"] for r in rooms}:
+                raise HTTPException(status_code=400, detail="无效的咨询室偏好")
+        schedule.Note = schedule_pref_note(body.center_id, pref)
     elif body.note is not None:
         schedule.Note = body.note
 
@@ -761,6 +833,7 @@ def update_consultation(
     if body.status == "CANCELLED" and consultation.ScheduleId:
         schedule = db.query(AppSchedule).filter(AppSchedule.Id == consultation.ScheduleId).first()
         if schedule and schedule.Status == "BOOKED":
+            schedule.Note = release_assigned_room(schedule.Note)
             schedule.Status = "AVAILABLE"
             schedule.UpdatedAt = datetime.utcnow()
 

@@ -1,11 +1,13 @@
 """
-咨询师角色演示数据注入。
+咨询师角色演示数据注入（隔离测试，会清空所有 App 表）。
+
+推荐日常使用: python seed_demo_data.py（增量，与 DevRolePicker 对齐）
 
 用法: python seed_demo_counselor.py
 
-会先清空所有 App 表，再写入：
-  - 演示患者账号（供咨询单关联）
-  - 咨询师账号 + 档案 + 排班 + 咨询单 + 个案记录
+写入：
+  - 来访者林小美（demo-openid-patient-xiaomei）
+  - 咨询师李心怡（demo-counselor-lixinyi）+ 档案 + 排班（含 BOOKED+room）+ 咨询单 + 个案
 """
 
 from seed_base import bind_role, clear_all_tables, create_account, days_from_now, utc_now
@@ -18,6 +20,19 @@ from models import (
     AppSchedule,
     AppSubscribeTemplate,
 )
+from seed_demo_common import demo_schedule_note
+
+LI_XINYI = {
+    "mobile": "13800000001",
+    "open_id": "demo-counselor-lixinyi",
+    "name": "李心怡",
+}
+XIAOMEI = {
+    "mobile": "13800000010",
+    "open_id": "demo-openid-patient-xiaomei",
+    "nickname": "来访·小美",
+    "real_name": "林小美",
+}
 
 
 def seed(db):
@@ -25,22 +40,22 @@ def seed(db):
 
     patient = create_account(
         db,
-        mobile="13800000000",
-        open_id="demo-openid-patient",
-        nickname="张小明",
+        mobile=XIAOMEI["mobile"],
+        open_id=XIAOMEI["open_id"],
+        nickname=XIAOMEI["nickname"],
         active_role="Patient",
-        real_name="张小明",
-        gender="男",
+        real_name=XIAOMEI["real_name"],
+        gender="女",
     )
     bind_role(db, patient.Id, "Patient")
 
     counselor = create_account(
         db,
-        mobile="13800000001",
-        open_id="demo-openid-counselor",
-        nickname="李心怡",
+        mobile=LI_XINYI["mobile"],
+        open_id=LI_XINYI["open_id"],
+        nickname=LI_XINYI["name"],
         active_role="Counselor",
-        real_name="李心怡",
+        real_name=LI_XINYI["name"],
         gender="女",
         avatar_url="/static/images/zixunshi11.png",
     )
@@ -50,7 +65,7 @@ def seed(db):
     db.add(
         AppCounselorProfile(
             AccountId=counselor.Id,
-            Name="李心怡",
+            Name=LI_XINYI["name"],
             AvatarUrl="/static/images/zixunshi11.png",
             Title="国家二级心理咨询师",
             Specialty="亲子关系｜婚姻情感｜情绪压力管理",
@@ -67,25 +82,32 @@ def seed(db):
     db.flush()
 
     schedules = []
-    for index, hour in enumerate([10, 14, 19], start=1):
-        start = days_from_now(index, hour=hour)
+    slot_defs = [
+        (1, 10, "yangpu", "AVAILABLE", None, None),
+        (2, 14, "pudong", "AVAILABLE", None, None),
+        (3, 19, "pudong", "AVAILABLE", None, None),
+    ]
+    for days, hour, center, status, pref, room in slot_defs:
+        start = days_from_now(days, hour=hour)
         schedule = AppSchedule(
             CounselorId=counselor.Id,
             StartTime=start,
             EndTime=start.replace(minute=50),
-            Status="AVAILABLE",
-            Note="演示可预约时段",
+            Status=status,
+            Note=demo_schedule_note(center, status=status, pref=pref, room=room),
         )
         db.add(schedule)
         schedules.append(schedule)
     db.flush()
 
+    booked_start = days_from_now(0, hour=15)
+    booked_note = demo_schedule_note("yangpu", status="BOOKED", room="yangpu-r1")
     booked_schedule = AppSchedule(
         CounselorId=counselor.Id,
-        StartTime=days_from_now(0, hour=15),
-        EndTime=days_from_now(0, hour=15).replace(minute=50),
+        StartTime=booked_start,
+        EndTime=booked_start.replace(minute=50),
         Status="BOOKED",
-        Note="已被预约",
+        Note=booked_note,
     )
     db.add(booked_schedule)
     db.flush()
@@ -111,7 +133,7 @@ def seed(db):
             Status="CONFIRMED",
             StartTime=booked_schedule.StartTime,
             EndTime=booked_schedule.EndTime,
-            Note="首次咨询，主诉：近期焦虑与睡眠问题",
+            Note=booked_note,
         ),
         AppConsultation(
             PatientId=patient.Id,
@@ -120,7 +142,7 @@ def seed(db):
             Status="PENDING",
             StartTime=schedules[0].StartTime,
             EndTime=schedules[0].EndTime,
-            Note="待确认预约",
+            Note=schedules[0].Note,
         ),
         AppConsultation(
             PatientId=patient.Id,
@@ -128,7 +150,7 @@ def seed(db):
             Status="DONE",
             StartTime=days_from_now(-7, hour=10),
             EndTime=days_from_now(-7, hour=10).replace(minute=50),
-            Note="已完成咨询",
+            Note=demo_schedule_note("pudong", status="BOOKED", room="pudong-r1"),
         ),
     ]
     db.add_all(consultations)
@@ -168,8 +190,9 @@ def main():
         counselor, patient = seed(db)
         db.commit()
         print("[OK] counselor demo data seeded")
-        print(f"[OK] counselor mobile: {counselor.Mobile}, account_id: {counselor.Id}")
-        print(f"[OK] patient mobile: {patient.Mobile}, account_id: {patient.Id}")
+        print(f"[OK] counselor mobile: {counselor.Mobile}, open_id: {counselor.OpenId}")
+        print(f"[OK] patient mobile: {patient.Mobile}, open_id: {patient.OpenId}")
+        print("[OK] 今日 15:00 BOOKED 时段 Note 含 room:yangpu-r1")
     except Exception:
         db.rollback()
         raise

@@ -15,11 +15,12 @@
   GET  /api/mini/ops/users/{id}          用户详情
 """
 
-from datetime import datetime, time, date as date_type
+from datetime import datetime, time, date as date_type, timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
+from sqlalchemy.exc import ProgrammingError, OperationalError
 from sqlalchemy.orm import Session
 
 from auth import get_current_account, AppAccount
@@ -30,9 +31,24 @@ from models import (
     AppConsultation, AppConsultationRoom,
 )
 from app_time import china_now
+from room_slot_status import (
+    SLOT_STATUSES,
+    normalize_slot_start,
+    resolve_slot_manual_status,
+    slot_start_iso,
+    slot_status_map_for_room,
+    upsert_slot_statuses,
+    is_slot_operational,
+)
 from schedule_meta import (
     center_display_name, room_display_name, get_consultation_rooms,
     get_all_consultation_rooms, CENTER_NAMES, parse_center_id, parse_room_id,
+    display_room_id, assign_room_to_note, schedule_note,
+)
+from schedule_slots import (
+    all_slot_bounds_for_date, rolling_window_end, ROLLING_WINDOW_DAYS,
+    is_aligned_standard_slot, standard_slot_start_containing, standard_slot_start_for_status,
+    active_schedules_at, SLOT_START_HOURS, paid_occupied_rooms_at_center,
 )
 
 router = APIRouter(prefix="/api/mini/ops", tags=["Ops"])
@@ -541,7 +557,12 @@ def _counselor_name(db: Session, counselor_id: int) -> str:
     return acc.Nickname if acc and acc.Nickname else f"咨询师#{counselor_id}"
 
 
-def _schedule_patient_name(db: Session, schedule_id: int) -> Optional[str]:
+def _account_mobile(db: Session, account_id: int) -> Optional[str]:
+    acc = db.query(AccountModel).filter(AccountModel.Id == account_id).first()
+    return acc.Mobile if acc and acc.Mobile else None
+
+
+def _schedule_patient_info(db: Session, schedule_id: int) -> tuple[Optional[str], Optional[str]]:
     consultation = (
         db.query(AppConsultation)
         .filter(
@@ -551,9 +572,17 @@ def _schedule_patient_name(db: Session, schedule_id: int) -> Optional[str]:
         .first()
     )
     if not consultation:
-        return None
+        return None, None
     patient = db.query(AccountModel).filter(AccountModel.Id == consultation.PatientId).first()
-    return patient.Nickname if patient else None
+    if not patient:
+        return None, None
+    name = patient.RealName or patient.Nickname
+    return name, patient.Mobile
+
+
+def _schedule_patient_name(db: Session, schedule_id: int) -> Optional[str]:
+    name, _ = _schedule_patient_info(db, schedule_id)
+    return name
 
 
 def _room_occupancy_at(
@@ -561,51 +590,59 @@ def _room_occupancy_at(
     center_id: str,
     room_code: str,
     at_time: datetime,
-    manual_status: str,
+    room_default_status: str,
+    *,
+    room_db_id: Optional[int] = None,
 ) -> dict:
-    if manual_status == "DISABLED":
-        return {"occupancy": "DISABLED", "label": "已停用"}
-    if manual_status == "MAINTENANCE":
-        return {"occupancy": "MAINTENANCE", "label": "维护中"}
-
-    rows = (
-        db.query(AppSchedule)
-        .filter(
-            AppSchedule.StartTime <= at_time,
-            AppSchedule.EndTime > at_time,
-            AppSchedule.Status != "CANCELLED",
-        )
-        .all()
+    status_slot_start = standard_slot_start_for_status(at_time)
+    # 未单独设置的时段默认「可用」，不再回退咨询室全局 Status
+    manual_status = resolve_slot_manual_status(
+        db, room_db_id, status_slot_start, "AVAILABLE",
     )
-    for s in rows:
+    if manual_status == "DISABLED":
+        return {
+            "occupancy": "DISABLED", "label": "停用", "manualStatus": manual_status,
+            "slotStartTime": status_slot_start,
+        }
+    if manual_status == "MAINTENANCE":
+        return {
+            "occupancy": "MAINTENANCE", "label": "维护中", "manualStatus": manual_status,
+            "slotStartTime": status_slot_start,
+        }
+
+    for s in active_schedules_at(db, status_slot_start):
         if parse_center_id(s.Note) != center_id or parse_room_id(s.Note) != room_code:
             continue
-        patient_name = _schedule_patient_name(db, s.Id)
+        if s.Status != "BOOKED" or not parse_room_id(s.Note):
+            continue
+        patient_name, patient_mobile = _schedule_patient_info(db, s.Id)
         counselor_name = _counselor_name(db, s.CounselorId)
-        if s.Status == "BOOKED" or patient_name:
-            return {
-                "occupancy": "IN_SESSION",
-                "label": "咨询中",
-                "scheduleId": s.Id,
-                "counselorId": s.CounselorId,
-                "counselorName": counselor_name,
-                "patientName": patient_name,
-                "startTime": s.StartTime,
-                "endTime": s.EndTime,
-                "scheduleStatus": s.Status,
-            }
+        counselor_mobile = _account_mobile(db, s.CounselorId)
+        assigned_room = parse_room_id(s.Note)
         return {
-            "occupancy": "RESERVED",
-            "label": "已挂课",
+            "occupancy": "IN_SESSION",
+            "label": "已预约",
+            "manualStatus": manual_status,
+            "slotStartTime": status_slot_start,
             "scheduleId": s.Id,
             "counselorId": s.CounselorId,
             "counselorName": counselor_name,
+            "counselorMobile": counselor_mobile,
             "patientName": patient_name,
+            "patientMobile": patient_mobile,
+            "roomCode": assigned_room,
+            "roomName": room_display_name(center_id, assigned_room, db),
             "startTime": s.StartTime,
             "endTime": s.EndTime,
             "scheduleStatus": s.Status,
         }
-    return {"occupancy": "IDLE", "label": "空闲"}
+    idle_label = {"AVAILABLE": "可用", "MAINTENANCE": "维护中", "DISABLED": "停用"}.get(
+        manual_status, "可用",
+    )
+    return {
+        "occupancy": "IDLE", "label": idle_label, "manualStatus": manual_status,
+        "slotStartTime": status_slot_start,
+    }
 
 
 @router.get("/schedules/overview", summary="各咨询师挂课总览")
@@ -657,7 +694,7 @@ def ops_schedules_overview(
             if s.CounselorId != cid:
                 continue
             center_id = parse_center_id(s.Note)
-            room_id = parse_room_id(s.Note)
+            room_id = display_room_id(s.Note, s.Status)
             items.append({
                 "scheduleId": s.Id,
                 "startTime": s.StartTime,
@@ -692,6 +729,15 @@ class RoomUpdate(BaseModel):
     sort_order: Optional[int] = None
 
 
+class RoomSlotStatusItem(BaseModel):
+    start_time: datetime
+    status: str
+
+
+class RoomSlotStatusBatch(BaseModel):
+    slots: List[RoomSlotStatusItem]
+
+
 @router.get("/rooms", summary="咨询室列表")
 def list_rooms(
     center_id: Optional[str] = Query(None),
@@ -722,6 +768,7 @@ def rooms_status(
     db: Session = Depends(get_db),
 ):
     now = china_now()
+    is_current_slot = False
     if date:
         try:
             day = date_type.fromisoformat(date)
@@ -730,21 +777,31 @@ def rooms_status(
     else:
         day = now.date()
 
-    at_time = now
     if time_slot:
         try:
             hh, mm = time_slot.split(":")
             at_time = datetime.combine(day, time(int(hh), int(mm)))
         except ValueError:
             raise HTTPException(status_code=400, detail="time_slot 格式应为 HH:MM")
-    elif date:
-        at_time = datetime.combine(day, now.time())
+    else:
+        if day == now.date():
+            at_time = standard_slot_start_for_status(now)
+        else:
+            at_time = datetime.combine(day, time(SLOT_START_HOURS[0], 0))
+
+    slot_start = standard_slot_start_for_status(at_time)
+    is_current_slot = day == now.date() and slot_start == standard_slot_start_for_status(now)
 
     rooms = get_all_consultation_rooms(db)
     snapshot = []
     for room in rooms:
         occ = _room_occupancy_at(
-            db, room["centerId"], room["id"], at_time, room.get("status", "AVAILABLE")
+            db,
+            room["centerId"],
+            room["id"],
+            slot_start,
+            room.get("status", "AVAILABLE"),
+            room_db_id=room.get("dbId"),
         )
         snapshot.append({
             "id": room.get("dbId"),
@@ -752,17 +809,23 @@ def rooms_status(
             "centerName": center_display_name(room["centerId"]),
             "roomCode": room["id"],
             "name": room["name"],
-            "manualStatus": room.get("status", "AVAILABLE"),
-            "atTime": at_time,
+            "manualStatus": occ.get("manualStatus", room.get("status", "AVAILABLE")),
+            "atTime": slot_start,
             **occ,
         })
-    return {"date": day.isoformat(), "timeSlot": at_time.strftime("%H:%M"), "rooms": snapshot}
+    return {
+        "date": day.isoformat(),
+        "timeSlot": slot_start.strftime("%H:%M"),
+        "isCurrentSlot": is_current_slot,
+        "rooms": snapshot,
+    }
 
 
-@router.get("/rooms/{room_id}", summary="咨询室详情")
+@router.get("/rooms/{room_id}", summary="咨询室详情与未来一周各时段状态")
 def get_room_detail(
     room_id: int,
-    date: Optional[str] = Query(None),
+    start: Optional[str] = Query(None, description="起始日期 YYYY-MM-DD，默认今天"),
+    days: int = Query(7, ge=1, le=7),
     _ops: AppAccount = Depends(require_ops),
     db: Session = Depends(get_db),
 ):
@@ -770,41 +833,76 @@ def get_room_detail(
     if not row:
         raise HTTPException(status_code=404, detail="咨询室不存在")
 
-    if date:
+    today = china_now().date()
+    window_end = rolling_window_end(today)
+    start_date = today
+    if start:
         try:
-            day = date_type.fromisoformat(date)
+            requested = date_type.fromisoformat(start)
         except ValueError:
-            raise HTTPException(status_code=400, detail="date 格式应为 YYYY-MM-DD")
-    else:
-        day = china_now().date()
+            raise HTTPException(status_code=400, detail="start 格式应为 YYYY-MM-DD")
+        if requested < today or requested > window_end:
+            raise HTTPException(
+                status_code=400,
+                detail=f"仅可查看今天起 {ROLLING_WINDOW_DAYS} 天内（{today.isoformat()} ~ {window_end.isoformat()}）",
+            )
+        start_date = requested
 
-    day_start = datetime.combine(day, time.min)
-    day_end = datetime.combine(day, time.max)
-    schedules = (
-        db.query(AppSchedule)
-        .filter(
-            AppSchedule.StartTime >= day_start,
-            AppSchedule.StartTime <= day_end,
-            AppSchedule.Status != "CANCELLED",
-        )
-        .order_by(AppSchedule.StartTime)
-        .all()
+    end_date = min(start_date + timedelta(days=days - 1), window_end)
+    now = china_now()
+
+    all_bounds: List[tuple] = []
+    cursor = start_date
+    while cursor <= end_date:
+        for start_dt, end_dt in all_slot_bounds_for_date(cursor):
+            all_bounds.append((cursor.isoformat(), start_dt, end_dt))
+        cursor += timedelta(days=1)
+
+    status_by_start = slot_status_map_for_room(
+        db,
+        row.Id,
+        [st for _, st, _ in all_bounds],
+        "AVAILABLE",
     )
-    day_schedules = []
-    for s in schedules:
-        if parse_center_id(s.Note) != row.CenterId or parse_room_id(s.Note) != row.RoomCode:
-            continue
-        day_schedules.append({
-            "scheduleId": s.Id,
-            "startTime": s.StartTime,
-            "endTime": s.EndTime,
-            "status": s.Status,
-            "counselorName": _counselor_name(db, s.CounselorId),
-            "patientName": _schedule_patient_name(db, s.Id),
+
+    by_date: dict[str, list] = {}
+    for day_str, start_dt, end_dt in all_bounds:
+        occ = _room_occupancy_at(
+            db, row.CenterId, row.RoomCode, start_dt, row.Status, room_db_id=row.Id,
+        )
+        manual_status = status_by_start.get(start_dt, "AVAILABLE")
+        occupancy = occ.get("occupancy")
+        past = start_dt <= now
+        editable = (not past) and occupancy != "IN_SESSION"
+        by_date.setdefault(day_str, []).append({
+            "key": start_dt.strftime("%H:%M"),
+            "startTime": slot_start_iso(start_dt),
+            "endTime": end_dt,
+            "timeLabel": f"{start_dt.strftime('%H:%M')} – {end_dt.strftime('%H:%M')}",
+            "past": past,
+            "occupancy": occupancy,
+            "statusLabel": occ.get("label"),
+            "manualStatus": manual_status,
+            "editable": editable,
+            "scheduleId": occ.get("scheduleId"),
+            "counselorId": occ.get("counselorId"),
+            "counselorName": occ.get("counselorName"),
+            "counselorMobile": occ.get("counselorMobile"),
+            "patientName": occ.get("patientName"),
+            "patientMobile": occ.get("patientMobile"),
+            "roomCode": occ.get("roomCode"),
+            "roomName": occ.get("roomName"),
+            "scheduleStatus": occ.get("scheduleStatus"),
         })
 
-    now = china_now()
-    current = _room_occupancy_at(db, row.CenterId, row.RoomCode, now, row.Status)
+    calendar_days = [
+        {"date": day_str, "slots": by_date[day_str]}
+        for day_str in sorted(by_date.keys())
+    ]
+
+    current = _room_occupancy_at(
+        db, row.CenterId, row.RoomCode, now, row.Status, room_db_id=row.Id,
+    )
 
     return {
         "id": row.Id,
@@ -814,7 +912,182 @@ def get_room_detail(
         "name": row.Name,
         "status": row.Status,
         "current": current,
-        "daySchedules": day_schedules,
+        "startDate": start_date.isoformat(),
+        "endDate": end_date.isoformat(),
+        "days": calendar_days,
+    }
+
+
+@router.put("/rooms/{room_id}/slot-statuses", summary="批量保存咨询室时段状态")
+def save_room_slot_statuses(
+    room_id: int,
+    body: RoomSlotStatusBatch,
+    _ops: AppAccount = Depends(require_ops),
+    db: Session = Depends(get_db),
+):
+    row = db.query(AppConsultationRoom).filter(AppConsultationRoom.Id == room_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="咨询室不存在")
+    if not body.slots:
+        raise HTTPException(status_code=400, detail="请至少提交一个时段状态")
+
+    now = china_now()
+    today = now.date()
+    window_end = rolling_window_end(today)
+    to_save: List[dict] = []
+
+    for item in body.slots:
+        if item.status not in SLOT_STATUSES:
+            raise HTTPException(status_code=400, detail=f"无效状态：{item.status}")
+        start_norm = normalize_slot_start(item.start_time)
+        slot_date = start_norm.date()
+        if slot_date < today or slot_date > window_end:
+            raise HTTPException(status_code=400, detail="仅可设置未来一周内的时段状态")
+        if start_norm <= now:
+            raise HTTPException(status_code=400, detail="已开始或已过的时段不可修改状态")
+        end_time = start_norm + timedelta(minutes=50)
+        if not is_aligned_standard_slot(start_norm, end_time):
+            raise HTTPException(status_code=400, detail="非标准时间槽，无法设置状态")
+
+        occ = _room_occupancy_at(
+            db, row.CenterId, row.RoomCode, start_norm, row.Status, room_db_id=row.Id,
+        )
+        if occ.get("occupancy") == "IN_SESSION":
+            raise HTTPException(
+                status_code=400,
+                detail=f"{start_norm.strftime('%m-%d %H:%M')} 已有预约，不可修改状态",
+            )
+        to_save.append({"start_time": start_norm, "status": item.status})
+
+    try:
+        upsert_slot_statuses(db, row.Id, to_save)
+        row.UpdatedAt = datetime.utcnow()
+        db.commit()
+    except (ProgrammingError, OperationalError) as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"保存失败，请确认已创建 AppConsultationRoomSlot 表：{e}")
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return {"code": 0, "msg": "时段状态已保存", "savedCount": len(to_save)}
+
+
+def _available_rooms_for_schedule(
+    db: Session,
+    schedule: AppSchedule,
+    *,
+    exclude_current: bool = False,
+) -> List[dict]:
+    """返回该排班时段同中心可更换的咨询室列表。"""
+    center_id = parse_center_id(schedule.Note)
+    if not center_id:
+        return []
+    current_room = parse_room_id(schedule.Note)
+    occupied = paid_occupied_rooms_at_center(
+        db, center_id, schedule.StartTime, exclude_id=schedule.Id,
+    )
+    options: List[dict] = []
+    for room in get_consultation_rooms(db, center_id):
+        room_code = room["id"]
+        if exclude_current and room_code == current_room:
+            continue
+        slot_status = resolve_slot_manual_status(
+            db, room.get("dbId"), schedule.StartTime, "AVAILABLE",
+        )
+        if not is_slot_operational(slot_status):
+            continue
+        if room_code in occupied:
+            continue
+        options.append({
+            "roomCode": room_code,
+            "roomDbId": room.get("dbId"),
+            "name": room["name"],
+            "isCurrent": room_code == current_room,
+        })
+    return options
+
+
+class ChangeScheduleRoomRequest(BaseModel):
+    room_code: str
+
+
+@router.get("/schedules/{schedule_id}/room-options", summary="已预约时段可更换的咨询室")
+def schedule_room_options(
+    schedule_id: int,
+    _ops: AppAccount = Depends(require_ops),
+    db: Session = Depends(get_db),
+):
+    schedule = db.query(AppSchedule).filter(AppSchedule.Id == schedule_id).first()
+    if not schedule:
+        raise HTTPException(status_code=404, detail="排班不存在")
+    if schedule.Status != "BOOKED" or not parse_room_id(schedule.Note):
+        raise HTTPException(status_code=400, detail="该时段未预约或尚未分配咨询室")
+
+    center_id = parse_center_id(schedule.Note)
+    current_room = parse_room_id(schedule.Note)
+    options = _available_rooms_for_schedule(db, schedule)
+    return {
+        "scheduleId": schedule_id,
+        "centerId": center_id,
+        "centerName": center_display_name(center_id),
+        "currentRoomCode": current_room,
+        "currentRoomName": room_display_name(center_id, current_room, db),
+        "startTime": schedule.StartTime,
+        "endTime": schedule.EndTime,
+        "options": options,
+    }
+
+
+@router.put("/schedules/{schedule_id}/room", summary="更换已预约时段的咨询室")
+def change_schedule_room(
+    schedule_id: int,
+    body: ChangeScheduleRoomRequest,
+    _ops: AppAccount = Depends(require_ops),
+    db: Session = Depends(get_db),
+):
+    schedule = db.query(AppSchedule).filter(AppSchedule.Id == schedule_id).first()
+    if not schedule:
+        raise HTTPException(status_code=404, detail="排班不存在")
+    if schedule.Status != "BOOKED" or not parse_room_id(schedule.Note):
+        raise HTTPException(status_code=400, detail="该时段未预约或尚未分配咨询室")
+
+    center_id = parse_center_id(schedule.Note)
+    if not center_id:
+        raise HTTPException(status_code=400, detail="排班未指定预约中心")
+
+    current_room = parse_room_id(schedule.Note)
+    new_room = body.room_code.strip()
+    if not new_room:
+        raise HTTPException(status_code=400, detail="请选择咨询室")
+    if new_room == current_room:
+        return {"code": 0, "msg": "咨询室未变更", "roomCode": new_room}
+
+    allowed = {opt["roomCode"] for opt in _available_rooms_for_schedule(db, schedule)}
+    if new_room not in allowed:
+        raise HTTPException(status_code=400, detail="该咨询室当前时段不可用")
+
+    schedule.Note = assign_room_to_note(schedule.Note, new_room)
+    schedule.UpdatedAt = datetime.utcnow()
+
+    consultation = (
+        db.query(AppConsultation)
+        .filter(
+            AppConsultation.ScheduleId == schedule.Id,
+            AppConsultation.Status.in_(["PENDING", "CONFIRMED", "ONGOING"]),
+        )
+        .first()
+    )
+    if consultation:
+        consultation.Note = schedule_note(center_id, new_room)
+        consultation.UpdatedAt = datetime.utcnow()
+
+    db.commit()
+    return {
+        "code": 0,
+        "msg": "咨询室已更换",
+        "roomCode": new_room,
+        "roomName": room_display_name(center_id, new_room, db),
     }
 
 
@@ -881,7 +1154,9 @@ def update_room(
         if body.status not in ("AVAILABLE", "MAINTENANCE", "DISABLED"):
             raise HTTPException(status_code=400, detail="无效的状态")
         now = china_now()
-        occ = _room_occupancy_at(db, row.CenterId, row.RoomCode, now, "AVAILABLE")
+        occ = _room_occupancy_at(
+            db, row.CenterId, row.RoomCode, now, row.Status, room_db_id=row.Id,
+        )
         if occ["occupancy"] not in ("IDLE", "MAINTENANCE", "DISABLED") and body.status != row.Status:
             raise HTTPException(status_code=400, detail="咨询室使用中，无法修改状态")
         row.Status = body.status

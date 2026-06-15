@@ -174,12 +174,16 @@ def simulate_pay(
                 center_id = part.split(":", 1)[1].strip()
                 break
 
-    complete_paid_order(
-        db,
-        order,
-        center_id=center_id,
-        transaction_id=f"SIM_{out_trade_no}",
-    )
+    try:
+        complete_paid_order(
+            db,
+            order,
+            center_id=center_id,
+            transaction_id=f"SIM_{out_trade_no}",
+        )
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
     db.commit()
     db.refresh(order)
 
@@ -219,7 +223,11 @@ def confirm_dev_payment(
                 center_id = part.split(":", 1)[1].strip()
                 break
 
-    complete_paid_order(db, order, center_id=center_id, transaction_id=f"DEV_{req.out_trade_no}")
+    try:
+        complete_paid_order(db, order, center_id=center_id, transaction_id=f"DEV_{req.out_trade_no}")
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
     db.commit()
     return {"code": 0, "msg": "支付确认成功", "order_id": order.Id}
 
@@ -250,10 +258,13 @@ async def payment_callback(request: Request, db: Session = Depends(get_db)):
                     if part.strip().lower().startswith("center:"):
                         center_id = part.split(":", 1)[1].strip()
                         break
-            complete_paid_order(
-                db, order, center_id=center_id, transaction_id=result.get("transaction_id")
-            )
-            db.commit()
+            try:
+                complete_paid_order(
+                    db, order, center_id=center_id, transaction_id=result.get("transaction_id")
+                )
+                db.commit()
+            except ValueError:
+                db.rollback()
 
     return Response(
         content="<xml><return_code>SUCCESS</return_code><return_msg>OK</return_msg></xml>",

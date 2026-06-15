@@ -15,13 +15,35 @@ router = APIRouter(prefix="/api/mini/auth", tags=["Auth"])
 
 # 本地联调固定 code → seed 脚本演示账号（即使 .env 填了占位微信凭证也走 mock）
 DEV_MOCK_CODE_OPENIDS = {
-    "dev_local": "demo-openid-patient",    # 兼容旧版
-    "dev_patient": "demo-openid-patient",
-    # 与 seed_demo_data.py 中李心怡账号对齐（dev_counselor 登录即该咨询师）
+    "dev_local": "demo-openid-patient-xiaomei",    # 兼容旧版，等同来访·小美
+    "dev_patient": "demo-openid-patient-xiaomei",
+    "dev_patient_xiaomei": "demo-openid-patient-xiaomei",
+    "dev_patient_xiaogang": "demo-openid-patient-xiaogang",
+    "dev_patient_xiaoli": "demo-openid-patient-xiaoli",
+    # 与 seed_demo_data.py 三位咨询师账号对齐
     "dev_counselor": "demo-counselor-lixinyi",
+    "dev_counselor_lixinyi": "demo-counselor-lixinyi",
+    "dev_counselor_zhangmingyuan": "demo-counselor-zhangmingyuan",
+    "dev_counselor_wangwanqing": "demo-counselor-wangwanqing",
+    "dev_counselor_chenqiming": "demo-counselor-chenqiming",
     "dev_assistant": "demo-openid-assistant",
     "dev_ops": "demo-openid-ops",
     "dev_admin": "demo-openid-admin",
+}
+DEV_MOCK_CODE_ACTIVE_ROLES = {
+    "dev_local": "Patient",
+    "dev_patient": "Patient",
+    "dev_patient_xiaomei": "Patient",
+    "dev_patient_xiaogang": "Patient",
+    "dev_patient_xiaoli": "Patient",
+    "dev_counselor": "Counselor",
+    "dev_counselor_lixinyi": "Counselor",
+    "dev_counselor_zhangmingyuan": "Counselor",
+    "dev_counselor_wangwanqing": "Counselor",
+    "dev_counselor_chenqiming": "Counselor",
+    "dev_assistant": "Assistant",
+    "dev_ops": "Ops",
+    "dev_admin": "Admin",
 }
 DEV_MOCK_CODES = frozenset(DEV_MOCK_CODE_OPENIDS.keys())
 _WECHAT_PLACEHOLDER_APPIDS = frozenset({"", "wx_your_appid_here"})
@@ -187,6 +209,20 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
         if unionid and not account.UnionId:
             account.UnionId = unionid
             db.commit()
+
+    if use_mock_login:
+        if getattr(account, "IsActive", True) is False:
+            raise HTTPException(
+                status_code=403,
+                detail="演示账号已注销，请在 backend-python 目录重新运行 python seed_demo_data.py",
+            )
+        target_role = DEV_MOCK_CODE_ACTIVE_ROLES.get(request.code)
+        if target_role:
+            try:
+                account.ActiveRole = target_role
+                db.commit()
+            except Exception:
+                db.rollback()
 
     token, expire = create_access_token({"sub": str(account.Id), "openid": openid})
 

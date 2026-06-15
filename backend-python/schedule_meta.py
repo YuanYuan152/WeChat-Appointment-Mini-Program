@@ -6,7 +6,18 @@ from sqlalchemy.orm import Session
 CENTER_NAMES = {
     "yangpu": "杨浦预约中心",
     "pudong": "浦东预约中心",
+    "video": "视频咨询",
 }
+
+VIDEO_CENTER_ID = "video"
+
+
+def is_video_center(center_id: Optional[str]) -> bool:
+    return (center_id or "").strip() == VIDEO_CENTER_ID
+
+
+def is_physical_center(center_id: Optional[str]) -> bool:
+    return bool(center_id) and not is_video_center(center_id)
 
 # 每个中心 3 间咨询室（仅咨询师挂课使用，来访者预约不展示）
 CONSULTATION_ROOMS: dict[str, List[dict[str, str]]] = {
@@ -24,7 +35,9 @@ CONSULTATION_ROOMS: dict[str, List[dict[str, str]]] = {
 
 
 def get_consultation_rooms(db: Optional[Session], center_id: str) -> List[dict[str, str]]:
-    """优先读数据库，无记录时回退静态配置。"""
+    """优先读数据库，无记录时回退静态配置。视频咨询不占咨询室，返回空列表。"""
+    if is_video_center(center_id):
+        return []
     if db is not None:
         try:
             from models import AppConsultationRoom
@@ -46,8 +59,8 @@ def get_consultation_rooms(db: Optional[Session], center_id: str) -> List[dict[s
 
 
 def get_all_consultation_rooms(db: Optional[Session]) -> List[dict]:
-    """全部中心的咨询室列表。"""
-    centers = list(CENTER_NAMES.keys())
+    """全部中心的咨询室列表（不含视频咨询）。"""
+    centers = [cid for cid in CENTER_NAMES if is_physical_center(cid)]
     result: List[dict] = []
     for center_id in centers:
         for room in get_consultation_rooms(db, center_id):
@@ -69,9 +82,32 @@ def parse_center_id(note: Optional[str]) -> Optional[str]:
 
 
 def parse_room_id(note: Optional[str]) -> Optional[str]:
+    """付款后实际分配的咨询室（room:）。"""
     for part in _note_parts(note):
         if part.lower().startswith("room:"):
             return part.split(":", 1)[1].strip()
+    return None
+
+
+def parse_pref_room_id(note: Optional[str]) -> Optional[str]:
+    """咨询师挂课时的咨询室偏好（pref:）。"""
+    for part in _note_parts(note):
+        if part.lower().startswith("pref:"):
+            val = part.split(":", 1)[1].strip()
+            if val and val.lower() != "none":
+                return val
+    return None
+
+
+def display_room_id(note: Optional[str], status: str) -> Optional[str]:
+    """日历展示：已预约显示实际咨询室，未预约显示偏好（兼容旧数据 room: 作偏好）。"""
+    if status == "BOOKED":
+        return parse_room_id(note)
+    pref = parse_pref_room_id(note)
+    if pref:
+        return pref
+    if status == "AVAILABLE":
+        return parse_room_id(note)
     return None
 
 
@@ -94,8 +130,37 @@ def center_note(center_id: str) -> str:
     return schedule_note(center_id)
 
 
-def schedule_note(center_id: str, room_id: Optional[str] = None) -> str:
-    base = f"center:{center_id}"
+def schedule_note(
+    center_id: str,
+    room_id: Optional[str] = None,
+    *,
+    pref_room_id: Optional[str] = None,
+) -> str:
+    """构建排班 Note。room_id 为付款后实际咨询室；pref_room_id 为挂课偏好。"""
+    parts = [f"center:{center_id}"]
+    if pref_room_id:
+        parts.append(f"pref:{pref_room_id}")
     if room_id:
-        return f"{base};room:{room_id}"
-    return base
+        parts.append(f"room:{room_id}")
+    return ";".join(parts)
+
+
+def schedule_pref_note(center_id: str, pref_room_id: Optional[str] = None) -> str:
+    """挂课时仅记录中心与咨询室偏好，不占用咨询室。视频咨询不记录偏好。"""
+    if is_video_center(center_id):
+        return schedule_note(center_id)
+    return schedule_note(center_id, pref_room_id=pref_room_id)
+
+
+def assign_room_to_note(note: Optional[str], room_id: str) -> str:
+    parts = [p for p in _note_parts(note) if not p.lower().startswith("room:")]
+    parts.append(f"room:{room_id}")
+    return ";".join(parts)
+
+
+def release_assigned_room(note: Optional[str]) -> Optional[str]:
+    """退款/取消后释放实际占用的咨询室，保留中心与偏好。"""
+    if not note:
+        return note
+    parts = [p for p in _note_parts(note) if not p.lower().startswith("room:")]
+    return ";".join(parts) if parts else None

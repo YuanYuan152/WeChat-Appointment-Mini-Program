@@ -5,11 +5,15 @@ from datetime import datetime, timedelta
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app_time import china_now
 from models import AppAccount, AppRoleBinding
 
 # 按依赖顺序删除，避免残留关联数据
 APP_TABLES_DELETE_ORDER = [
     "AppCaseRecord",
+    "AppRefundExemption",
+    "AppScheduleCancelLog",
+    "AppLeaveRequest",
     "AppConsultation",
     "AppContactRecord",
     "AppTask",
@@ -18,8 +22,11 @@ APP_TABLES_DELETE_ORDER = [
     "AppRemindTask",
     "AppMessage",
     "AppRegistrationForm",
+    "AppFeedback",
     "AppOrder",
+    "AppConsultationRoomSlot",
     "AppSchedule",
+    "AppConsultationRoom",
     "AppCounselorProfile",
     "AppRoleSwitchLog",
     "AppLoginSession",
@@ -80,6 +87,7 @@ def utc_now() -> datetime:
 
 
 def days_from_now(days: int, hour: int = 10, minute: int = 0) -> datetime:
-    return (utc_now() + timedelta(days=days)).replace(
+    """与业务排班一致，使用中国时区当前时间推算。"""
+    return (china_now() + timedelta(days=days)).replace(
         hour=hour, minute=minute, second=0, microsecond=0
     )

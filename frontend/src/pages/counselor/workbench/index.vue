@@ -16,7 +16,7 @@
 
     <view class="toolbar">
       <button class="add-btn" @tap="openAddModal">+ 新建挂课</button>
-      <text class="toolbar-tip">标准时间槽 50 分钟/节；须绑定咨询室；同室同时段全局唯一</text>
+      <text class="toolbar-tip">{{ toolbarTip }}</text>
     </view>
 
     <view v-if="loading" class="empty-card"><text class="empty-text">加载中...</text></view>
@@ -39,7 +39,8 @@
           <text class="slot-icon">{{ meta(slot.displayStatus).icon }}</text>
           <view>
             <text class="slot-time">{{ formatTime(slot.startTime) }} – {{ formatTime(slot.endTime) }}</text>
-            <text v-if="slot.centerName" class="slot-center">{{ slot.centerName }}{{ slot.roomName ? ` · ${slot.roomName}` : '' }}</text>
+            <text v-if="slot.centerName" class="slot-center">{{ slot.centerName }}</text>
+            <text v-if="slotRoomText(slot)" class="slot-room">{{ slotRoomText(slot) }}</text>
             <text v-if="slot.patientName" class="slot-patient">来访者：{{ slot.patientName }}</text>
           </view>
         </view>
@@ -47,7 +48,7 @@
           <text class="slot-status" :style="{ color: meta(slot.displayStatus).color }">{{ slot.displayLabel }}</text>
           <text v-if="slot.leaveRequestId" class="slot-detail-hint">点击查看请假详情</text>
           <text v-if="showCancelAction(slot)" class="slot-cancel" @tap.stop="handleCancelSlot(slot)">
-            取消挂课
+            {{ cancelActionLabel(slot) }}
           </text>
         </view>
       </view>
@@ -57,7 +58,7 @@
     <view v-if="showAdd" class="modal-overlay" @touchmove.stop.prevent>
       <view class="modal-card" @tap.stop @touchmove.stop.prevent>
         <text class="modal-title">新建挂课</text>
-        <text class="modal-sub">仅可挂今天起 7 天内未开始的标准时段</text>
+        <text class="modal-sub">{{ addModalSub }}</text>
 
         <view class="form-item">
           <text class="form-label">预约中心</text>
@@ -96,9 +97,14 @@
           </view>
         </view>
 
-        <view class="form-item">
-          <text class="form-label">咨询室（必选）</text>
+        <view v-if="!isVideoCenterSelected" class="form-item">
+          <text class="form-label">咨询室偏好</text>
           <view class="center-row">
+            <view
+              class="center-chip"
+              :class="{ active: form.roomId === NO_PREF }"
+              @tap="selectNoPref"
+            >无偏好</view>
             <view
               v-for="room in roomOptionsForSlot"
               :key="room.roomId"
@@ -110,6 +116,11 @@
               @tap="selectRoom(room)"
             >{{ room.roomName }}{{ roomLabel(room) }}</view>
           </view>
+        </view>
+
+        <view v-else class="form-item video-center-hint">
+          <text class="form-label">咨询室</text>
+          <text class="video-hint-text">视频咨询无需选择咨询室，预约成功后也不占用线下咨询室。</text>
         </view>
 
         <view class="modal-btns">
@@ -153,13 +164,11 @@
       </view>
     </view>
 
-    <!-- 超过24小时已预约取消：须上传沟通截图 -->
+    <!-- 已预约请假/取消：须上传沟通截图 -->
     <view v-if="showCancelBooked" class="notice-overlay" @touchmove.stop.prevent>
       <view class="cancel-booked-card" @tap.stop>
-        <text class="notice-title">取消已预约挂课</text>
-        <text class="cancel-booked-tip">
-          距咨询开始超过24小时，取消前请与来访者提前沟通，并上传沟通截图。取消后将通知来访者并协助改约。
-        </text>
+        <text class="notice-title">{{ cancelBookedIsLeave ? '请假（取消已预约）' : '取消已预约挂课' }}</text>
+        <text class="cancel-booked-tip">{{ cancelBookedTip }}</text>
         <view v-if="cancelBookedSlotText" class="detail-block">
           <text class="detail-label">咨询时段</text>
           <text class="detail-value">{{ cancelBookedSlotText }}</text>
@@ -167,6 +176,17 @@
         <view v-if="cancelBookedPatient" class="detail-block">
           <text class="detail-label">来访者</text>
           <text class="detail-value">{{ cancelBookedPatient }}</text>
+        </view>
+        <view class="reason-section">
+          <text class="detail-label">请假理由（必填）</text>
+          <textarea
+            v-model="cancelLeaveReason"
+            class="leave-reason-input"
+            placeholder="请说明无法履约的原因"
+            maxlength="1000"
+            :disabled="cancellingBooked"
+          />
+          <text class="reason-counter">{{ cancelLeaveReason.length }}/1000</text>
         </view>
         <view class="upload-section">
           <text class="detail-label">沟通截图（必填）</text>
@@ -184,22 +204,22 @@
           <button class="notice-btn secondary" @tap="closeCancelBooked">返回</button>
           <button
             class="notice-btn primary"
-            :disabled="!cancelScreenshotUrl || cancellingBooked"
+            :disabled="!canSubmitCancelBooked || cancellingBooked"
             :loading="cancellingBooked"
             @tap="confirmCancelBooked"
-          >{{ cancellingBooked ? '取消中...' : '确认取消' }}</button>
+          >{{ cancellingBooked ? '提交中...' : (cancelBookedIsLeave ? '确认请假' : '确认取消') }}</button>
         </view>
       </view>
     </view>
 
-    <!-- 不足24小时取消提示 -->
+    <!-- 已预约请假须知 -->
     <view v-if="showLeaveNotice" class="notice-overlay" @touchmove.stop.prevent>
       <view class="notice-card" @tap.stop>
-        <text class="notice-title">暂无法直接取消</text>
+        <text class="notice-title">请假须知</text>
         <text class="notice-content">{{ leaveNoticeText }}</text>
         <view class="notice-btns">
           <button class="notice-btn secondary" @tap="closeLeaveNotice">再想想</button>
-          <button class="notice-btn primary" @tap="confirmLeaveNotice">已知晓去请假</button>
+          <button class="notice-btn primary" @tap="confirmLeaveNotice">已沟通，继续请假</button>
         </view>
       </view>
     </view>
@@ -212,7 +232,7 @@ import { onShow } from '@dcloudio/uni-app'
 import { httpV2 } from '@/utils/http'
 import { fixImageUrl } from '@/utils/image'
 import { API_ENDPOINTS } from '@/config/api'
-import { APPOINTMENT_CENTERS } from '@/constants/appointmentCenters'
+import { APPOINTMENT_CENTERS, isVideoCenter } from '@/constants/appointmentCenters'
 import { SCHEDULE_DISPLAY_META, type ScheduleDisplayStatus } from '@/constants/scheduleDisplay'
 import { formatDateLocal, ROLLING_WINDOW_DAYS, addDays } from '@/constants/scheduleSlots'
 
@@ -242,6 +262,7 @@ interface CalendarSlot {
   displayStatus: ScheduleDisplayStatus
   displayLabel: string
   centerName?: string
+  centerId?: string
   roomName?: string
   patientName?: string
   consultationId?: number
@@ -254,7 +275,11 @@ interface CalendarSlot {
   leaveStatus?: string
 }
 
+const NO_PREF = '__none__'
 const MS_24H = 24 * 60 * 60 * 1000
+
+const DEFAULT_BOOKED_LEAVE_HINT =
+  '取消前请与来访者提前沟通，填写请假理由并上传沟通截图。取消成功后将释放咨询室、通知来访者并协助改约。'
 
 const parseStartTime = (iso: string) => new Date(iso.includes('T') ? iso : iso.replace(' ', 'T'))
 
@@ -272,21 +297,14 @@ const msUntilStart = (slot: CalendarSlot) => parseStartTime(slot.startTime).getT
 /** 当前时间是否已到或超过开始时间 */
 const slotHasStarted = (slot: CalendarSlot) => msUntilStart(slot) <= 0
 
-/** 已预约且距开始不足24小时：须走请假流程 */
-const slotNeedsLeave = (slot: CalendarSlot) => {
-  if (hasPendingLeave(slot) || slotHasStarted(slot)) return false
-  if (slot.requiresLeave) return true
-  if (!isBookedSlot(slot)) return false
-  const ms = msUntilStart(slot)
-  return ms > 0 && ms < MS_24H
-}
-
-/** 是否显示「取消挂课」操作 */
+/** 是否显示取消/请假操作 */
 const showCancelAction = (slot: CalendarSlot) => {
   if (slot.displayStatus === 'EXPIRED' || hasPendingLeave(slot) || slotHasStarted(slot)) return false
   if (isBookedSlot(slot)) return true
   return !!slot.canCancel
 }
+
+const cancelActionLabel = (slot: CalendarSlot) => (isBookedSlot(slot) ? '请假' : '取消挂课')
 
 const loading = ref(true)
 const slots = ref<CalendarSlot[]>([])
@@ -301,11 +319,14 @@ const leaveDetailPatient = ref('')
 const leaveDetailReason = ref('')
 const leaveDetailSubmittedAt = ref('')
 const leaveDetailStatusLabel = ref('')
+const cancelBookedIsLeave = ref(false)
+const cancelBookedTip = ref('')
 const showCancelBooked = ref(false)
 const cancelBookedSlot = ref<CalendarSlot | null>(null)
 const cancelBookedSlotText = ref('')
 const cancelBookedPatient = ref('')
 const cancelScreenshotUrl = ref('')
+const cancelLeaveReason = ref('')
 const cancelScreenshotUploading = ref(false)
 const cancellingBooked = ref(false)
 const submitting = ref(false)
@@ -314,15 +335,35 @@ const timeSlotOptions = ref<TimeSlotOpt[]>([])
 const centers = APPOINTMENT_CENTERS
 const defaultCenterId = 'yangpu'
 
+const isVideoCenterSelected = computed(() => isVideoCenter(form.value.centerId))
+
+const toolbarTip = computed(() =>
+  isVideoCenterSelected.value
+    ? '标准时间槽 50 分钟/节；视频咨询不占咨询室，来访者预约成功后线上进行'
+    : '标准时间槽 50 分钟/节；线下中心挂课可设咨询室偏好，付款后才占用咨询室',
+)
+
+const addModalSub = computed(() =>
+  isVideoCenterSelected.value
+    ? '仅可挂今天起 7 天内未开始的标准时段（视频咨询）'
+    : '仅可挂今天起 7 天内未开始的标准时段',
+)
+
+const slotRoomText = (slot: CalendarSlot) => {
+  if (slot.roomName) return slot.roomName
+  if (isVideoCenter(slot.centerId) && isBookedSlot(slot)) return '线上视频（不占咨询室）'
+  return ''
+}
+
 /** 滚动窗口须每次按当前日期计算，避免 Tab 页常驻导致日期过期、日历加载失败 */
 const minDate = computed(() => formatDateLocal())
 const maxDate = computed(() => addDays(minDate.value, ROLLING_WINDOW_DAYS - 1))
 
 const form = ref({
   centerId: defaultCenterId,
-  date: minDate,
+  date: formatDateLocal(),
   slotKey: '',
-  roomId: '',
+  roomId: NO_PREF,
   startTime: '',
   endTime: '',
 })
@@ -339,6 +380,10 @@ const meta = (status: ScheduleDisplayStatus) =>
 const rollingRangeText = computed(() => `${minDate.value} ~ ${maxDate.value}`)
 
 const cancelScreenshotPreview = computed(() => fixImageUrl(cancelScreenshotUrl.value))
+
+const canSubmitCancelBooked = computed(
+  () => !!cancelScreenshotUrl.value && !!cancelLeaveReason.value.trim(),
+)
 
 const formatTime = (iso: string) => (iso ? iso.replace('T', ' ').slice(11, 16) : '')
 
@@ -448,7 +493,7 @@ const loadSlotOptions = async () => {
       const still = timeSlotOptions.value.find(t => t.key === form.value.slotKey)
       if (!still || still.past || still.allRoomsFull || still.counselorOccupied) {
         form.value.slotKey = ''
-        form.value.roomId = ''
+        form.value.roomId = NO_PREF
       }
     }
   } catch {
@@ -461,21 +506,24 @@ const loadSlotOptions = async () => {
 const onCenterChange = async (id: string) => {
   form.value.centerId = id
   form.value.slotKey = ''
-  form.value.roomId = ''
+  form.value.roomId = isVideoCenter(id) ? '' : NO_PREF
   await loadSlotOptions()
 }
 
 const onDateChange = async (e: { detail: { value: string } }) => {
   form.value.date = e.detail.value
   form.value.slotKey = ''
-  form.value.roomId = ''
+  form.value.roomId = NO_PREF
   await loadSlotOptions()
 }
 
 const roomLabel = (room: RoomOpt) => {
-  if (room.occupiedByOther) return '（已占用）'
-  if (room.occupiedBySelf) return '（您已挂课）'
+  if (room.occupiedByOther) return '（已约满）'
   return ''
+}
+
+const selectNoPref = () => {
+  form.value.roomId = NO_PREF
 }
 
 const selectTimeSlot = (ts: TimeSlotOpt) => {
@@ -494,16 +542,12 @@ const selectTimeSlot = (ts: TimeSlotOpt) => {
   form.value.slotKey = ts.key
   form.value.startTime = ts.startTime
   form.value.endTime = ts.endTime
-  const firstAvail = ts.rooms.find(r => r.available)
-  form.value.roomId = firstAvail?.roomId || ''
+  form.value.roomId = NO_PREF
 }
 
 const selectRoom = (room: RoomOpt) => {
   if (!room.available) {
-    uni.showToast({
-      title: room.occupiedByOther ? '该咨询室已被其他咨询师占用' : '不可选择',
-      icon: 'none',
-    })
+    uni.showToast({ title: '该咨询室暂不可用', icon: 'none' })
     return
   }
   form.value.roomId = room.roomId
@@ -514,22 +558,12 @@ const openAddModal = async () => {
     centerId: defaultCenterId,
     date: minDate.value,
     slotKey: '',
-    roomId: '',
+    roomId: NO_PREF,
     startTime: '',
     endTime: '',
   }
   showAdd.value = true
   await loadSlotOptions()
-}
-
-const goLeaveRequest = (slot: CalendarSlot) => {
-  const slotText = `${formatTime(slot.startTime)} – ${formatTime(slot.endTime)}`
-  const centerRoom = `${slot.centerName || ''}${slot.roomName ? ` · ${slot.roomName}` : ''}`
-  uni.navigateTo({
-    url: `/pages/counselor/leave-request/apply?scheduleId=${slot.id}`
-      + `&slotText=${encodeURIComponent(slotText)}`
-      + `&centerRoom=${encodeURIComponent(centerRoom)}`,
-  })
 }
 
 const closeLeaveNotice = () => {
@@ -540,7 +574,7 @@ const closeLeaveNotice = () => {
 const confirmLeaveNotice = () => {
   const slot = leaveNoticeSlot.value
   closeLeaveNotice()
-  if (slot) goLeaveRequest(slot)
+  if (slot) openCancelBooked(slot)
 }
 
 const openCancelBooked = (slot: CalendarSlot) => {
@@ -548,6 +582,14 @@ const openCancelBooked = (slot: CalendarSlot) => {
   cancelBookedSlotText.value = `${formatTime(slot.startTime)} – ${formatTime(slot.endTime)}`
   cancelBookedPatient.value = slot.patientName || ''
   cancelScreenshotUrl.value = ''
+  cancelLeaveReason.value = ''
+  const within24h = msUntilStart(slot) > 0 && msUntilStart(slot) < MS_24H
+  cancelBookedIsLeave.value = within24h
+  cancelBookedTip.value = slot.cancelHint || (
+    within24h
+      ? '距咨询开始不足24小时。取消前请与来访者提前沟通并上传沟通截图；取消后不予退款，将释放咨询室并协助来访者改约。'
+      : '距咨询开始超过24小时。取消前请与来访者提前沟通并上传沟通截图；取消后将释放咨询室、通知来访者并协助改约。'
+  )
   showCancelBooked.value = true
 }
 
@@ -555,6 +597,7 @@ const closeCancelBooked = () => {
   showCancelBooked.value = false
   cancelBookedSlot.value = null
   cancelScreenshotUrl.value = ''
+  cancelLeaveReason.value = ''
 }
 
 const pickCancelScreenshot = () => {
@@ -579,7 +622,12 @@ const pickCancelScreenshot = () => {
 
 const confirmCancelBooked = async () => {
   const slot = cancelBookedSlot.value
-  if (!slot || !cancelScreenshotUrl.value) {
+  const reason = cancelLeaveReason.value.trim()
+  if (!slot || !reason) {
+    uni.showToast({ title: '请填写请假理由', icon: 'none' })
+    return
+  }
+  if (!cancelScreenshotUrl.value) {
     uni.showToast({ title: '请上传沟通截图', icon: 'none' })
     return
   }
@@ -587,11 +635,15 @@ const confirmCancelBooked = async () => {
   try {
     const r = await httpV2.put(`/api/mini/counselor/schedules/${slot.id}`, {
       status: 'CANCELLED',
+      leave_reason: reason,
       communication_screenshot_url: cancelScreenshotUrl.value,
     })
     if (r.code === 0) {
       closeCancelBooked()
-      uni.showToast({ title: '已取消', icon: 'success' })
+      uni.showToast({
+        title: cancelBookedIsLeave.value ? '请假成功' : '已取消',
+        icon: 'success',
+      })
       await loadCalendar()
     } else {
       uni.showToast({ title: r.msg || '取消失败', icon: 'none' })
@@ -602,16 +654,10 @@ const confirmCancelBooked = async () => {
 }
 
 const handleCancelSlot = (slot: CalendarSlot) => {
-  if (slotNeedsLeave(slot)) {
+  if (isBookedSlot(slot)) {
     leaveNoticeSlot.value = slot
-    leaveNoticeText.value = '距离开始不足24小时，无法直接取消，请走请假流程。'
+    leaveNoticeText.value = slot.cancelHint || DEFAULT_BOOKED_LEAVE_HINT
     showLeaveNotice.value = true
-    return
-  }
-
-  const bookedOver24h = isBookedSlot(slot) && msUntilStart(slot) >= MS_24H
-  if (bookedOver24h) {
-    openCancelBooked(slot)
     return
   }
 
@@ -634,8 +680,12 @@ const handleCancelSlot = (slot: CalendarSlot) => {
 const submitSlot = async () => {
   if (submitting.value) return
   const { centerId, roomId, startTime, endTime, slotKey } = form.value
-  if (!centerId || !roomId || !slotKey || !startTime || !endTime) {
-    uni.showToast({ title: '请选择中心、日期、时间槽和咨询室', icon: 'none' })
+  if (!centerId || !slotKey || !startTime || !endTime) {
+    uni.showToast({ title: '请选择中心、日期、时间槽和咨询室偏好', icon: 'none' })
+    return
+  }
+  if (!isVideoCenter(centerId) && !roomId) {
+    uni.showToast({ title: '请选择咨询室偏好', icon: 'none' })
     return
   }
 
@@ -645,7 +695,7 @@ const submitSlot = async () => {
       start_time: startTime.slice(0, 19),
       end_time: endTime.slice(0, 19),
       center_id: centerId,
-      room_id: roomId,
+      room_id: isVideoCenter(centerId) ? null : (roomId === NO_PREF ? null : roomId),
     })
     if (res.code === 0) {
       showAdd.value = false
@@ -699,6 +749,7 @@ onShow(loadCalendar)
 .slot-icon { font-size: 36rpx; }
 .slot-time { display: block; font-size: 30rpx; font-weight: 700; color: #1F2937; }
 .slot-center, .slot-patient { display: block; font-size: 22rpx; color: #6B7280; margin-top: 4rpx; }
+.slot-room { display: block; font-size: 22rpx; color: #0D9488; margin-top: 4rpx; font-weight: 600; }
 .slot-right {
   display: flex; flex-direction: column; align-items: flex-end; gap: 8rpx;
   flex-shrink: 0; min-width: 120rpx;
@@ -726,6 +777,15 @@ onShow(loadCalendar)
 .cancel-booked-tip {
   display: block; font-size: 28rpx; color: #4B5563; line-height: 1.6;
   margin-bottom: 24rpx; text-align: left;
+}
+.reason-section { margin-bottom: 24rpx; text-align: left; }
+.leave-reason-input {
+  width: 100%; box-sizing: border-box; min-height: 180rpx; margin-top: 12rpx;
+  font-size: 28rpx; background: #F9FAFB; border-radius: 12rpx; padding: 20rpx;
+  border: 1rpx solid #E5E7EB;
+}
+.reason-counter {
+  display: block; text-align: right; font-size: 22rpx; color: #9CA3AF; margin-top: 8rpx;
 }
 .upload-section { margin-bottom: 32rpx; text-align: left; }
 .screenshot-upload {
@@ -778,6 +838,10 @@ onShow(loadCalendar)
 .modal-sub { display: block; font-size: 24rpx; color: #9CA3AF; margin: 8rpx 0 24rpx; }
 .form-item { margin-bottom: 24rpx; }
 .form-label { display: block; font-size: 26rpx; color: #6B7280; margin-bottom: 12rpx; }
+.video-hint-text {
+  display: block; font-size: 26rpx; color: #6B7280; line-height: 1.6;
+  background: #F0FDFA; border-radius: 12rpx; padding: 20rpx;
+}
 .center-row { display: flex; gap: 16rpx; flex-wrap: wrap; }
 .center-chip, .slot-chip {
   padding: 12rpx 28rpx; border-radius: 100rpx; background: #F3F4F6;

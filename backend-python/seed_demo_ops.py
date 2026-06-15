@@ -1,10 +1,13 @@
 """
-运营角色演示数据注入。
+运营角色演示数据注入（隔离测试，会清空所有 App 表）。
+
+推荐日常使用: python seed_demo_data.py
 
 用法: python seed_demo_ops.py
 
-会先清空所有 App 表，再写入：
-  - 运营账号 + 若干示例用户（供用户列表接口）
+写入:
+  - 运营账号 demo-openid-ops（13800000005，与 auth.py 对齐）
+  - 示例用户（13800000020+，避免与来访者/咨询师手机号冲突）
   - Banner / 活动 / 文章等内容运营数据
 """
 
@@ -14,28 +17,36 @@ from seed_base import bind_role, clear_all_tables, create_account, utc_now
 from database import SessionLocal
 from models import AppActivity, AppArticle, AppBanner, AppSubscribeTemplate
 
+OPS = {
+    "mobile": "13800000005",
+    "open_id": "demo-openid-ops",
+    "nickname": "演示运营",
+}
+
+# 独立手机号段，不与 dev 主账号冲突
+SAMPLE_USERS = [
+    ("13800000020", "demo-openid-ops-user-a", "运营示例用户A", "Patient"),
+    ("13800000021", "demo-openid-ops-user-b", "运营示例用户B", "Patient"),
+    ("13800000022", "demo-openid-ops-user-c", "运营示例咨询师", "Counselor"),
+]
+
 
 def seed(db):
     clear_all_tables(db)
 
     ops = create_account(
         db,
-        mobile="13800000003",
-        open_id="demo-openid-ops",
-        nickname="陈运营",
+        mobile=OPS["mobile"],
+        open_id=OPS["open_id"],
+        nickname=OPS["nickname"],
         active_role="Ops",
-        real_name="陈运营",
+        real_name=OPS["nickname"],
         gender="女",
     )
     bind_role(db, ops.Id, "Ops")
     bind_role(db, ops.Id, "Patient")
 
-    sample_users = [
-        ("13800000010", "demo-openid-user-a", "访客用户A", "Patient"),
-        ("13800000011", "demo-openid-user-b", "访客用户B", "Patient"),
-        ("13800000012", "demo-openid-user-c", "咨询师候选", "Counselor"),
-    ]
-    for mobile, open_id, nickname, role in sample_users:
+    for mobile, open_id, nickname, role in SAMPLE_USERS:
         user = create_account(
             db,
             mobile=mobile,
@@ -188,7 +199,8 @@ def main():
         ops = seed(db)
         db.commit()
         print("[OK] ops demo data seeded")
-        print(f"[OK] ops mobile: {ops.Mobile}, account_id: {ops.Id}")
+        print(f"[OK] ops mobile: {ops.Mobile}, open_id: {ops.OpenId}")
+        print("[OK] 示例用户手机号 13800000020–22，不与主演示账号冲突")
     except Exception:
         db.rollback()
         raise

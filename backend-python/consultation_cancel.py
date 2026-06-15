@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app_time import china_now, hours_until as _hours_until
 from models import AppConsultation, AppOrder, AppSchedule
+from schedule_meta import release_assigned_room
 
 CANCEL_REFUND_HOURS = 24
 
@@ -73,6 +74,7 @@ def cancel_consultation_for_visitor(
     if consultation.ScheduleId:
         schedule = db.query(AppSchedule).filter(AppSchedule.Id == consultation.ScheduleId).first()
         if schedule and schedule.Status == "BOOKED":
+            schedule.Note = release_assigned_room(schedule.Note)
             schedule.Status = "AVAILABLE"
             schedule.UpdatedAt = datetime.utcnow()
 

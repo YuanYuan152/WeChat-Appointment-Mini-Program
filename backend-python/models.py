@@ -404,6 +404,18 @@ class AppConsultationRoom(Base):
     UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
 
 
+class AppConsultationRoomSlot(Base):
+    """咨询室单时段管理状态（覆盖默认状态）。"""
+    __tablename__ = "AppConsultationRoomSlot"
+
+    Id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    RoomId = Column(Integer, nullable=False, index=True)
+    StartTime = Column(DateTime, nullable=False)
+    Status = Column(String(20), nullable=False, default="AVAILABLE")
+    CreatedAt = Column(DateTime, default=func.now(), nullable=False)
+    UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
+
+
 class AppLoginSession(Base):
     __tablename__ = "AppLoginSession"
 

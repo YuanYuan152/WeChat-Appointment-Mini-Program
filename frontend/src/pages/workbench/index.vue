@@ -40,7 +40,13 @@ import { ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { AuthApi } from '@/apis/auth'
 import DevRolePicker from '@/components/DevRolePicker.vue'
-import { getDevLoginCode, isLoggedIn, resolveWxLoginCode } from '@/utils/auth'
+import {
+  getDevLoginCode,
+  getDevWorkbenchRole,
+  isLoggedIn,
+  isMockLoginEnabled,
+  resolveWxLoginCode,
+} from '@/utils/auth'
 
 type RouterState = 'loading' | 'needLogin' | 'error' | 'patientBlocked'
 
@@ -57,6 +63,11 @@ const ROLE_ROUTES: Record<string, string> = {
 const WORKBENCH_ROLES = new Set(['Counselor', 'Assistant', 'Ops', 'Admin'])
 
 const resolveActiveRole = (roles: string[], activeRole?: string) => {
+  // 测试/开发联调：以 DevRolePicker 所选角色为准，避免多角色账号 ActiveRole 不一致
+  if (isMockLoginEnabled()) {
+    const devRole = getDevWorkbenchRole()
+    if (devRole && devRole !== 'Patient' && roles.includes(devRole)) return devRole
+  }
   // 来访者主动切换为 Patient 时，不再按多角色优先级跳进工作台
   if (activeRole === 'Patient') return 'Patient'
   if (activeRole && WORKBENCH_ROLES.has(activeRole)) return activeRole

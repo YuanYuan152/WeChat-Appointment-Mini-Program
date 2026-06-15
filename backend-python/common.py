@@ -16,11 +16,8 @@ from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from database import get_db
 from config import settings
-from app_time import china_now
-from consultation_cancel import has_appointment_started
-from models import AppBanner, AppActivity, AppArticle, AppSchedule, AppCounselorProfile
-from schedule_meta import parse_center_id
-from schedule_slots import rolling_window_end
+from models import AppBanner, AppActivity, AppArticle, AppCounselorProfile
+from booking_availability import counselor_booking_time_slots
 
 router = APIRouter(prefix="/api/mini/common", tags=["Common"])
 
@@ -337,54 +334,11 @@ def common_counselor_detail(
     )
     if not new_rows:
         return common_counselor_detail(cid=cid, source="T_Doctor", db=db)
-    now = china_now()
-    today = now.date()
-    window_end = rolling_window_end(today)
-    start_bound = datetime.combine(today, time.min)
-    end_bound = datetime.combine(window_end + timedelta(days=1), time.min)
-    schedules = (
-        db.query(AppSchedule)
-        .filter(
-            AppSchedule.CounselorId == cid,
-            AppSchedule.Status.in_(["AVAILABLE", "BOOKED"]),
-            AppSchedule.StartTime >= start_bound,
-            AppSchedule.StartTime < end_bound,
-        )
-        .order_by(AppSchedule.StartTime.asc())
-        .limit(50)
-        .all()
+
+    billing_cents = int(new_rows[0].get("Billing") or 0)
+    time_slots, center_ids = counselor_booking_time_slots(
+        db, cid, billing_cents=billing_cents,
     )
-    time_slots = []
-    center_ids = set()
-    for s in schedules:
-        center_id = parse_center_id(s.Note)
-        if center_id:
-            center_ids.add(center_id)
-        expired = has_appointment_started(s.StartTime)
-        if s.Status == "BOOKED":
-            if expired:
-                continue
-            slot_status = "BOOKED"
-            is_bookable = False
-        elif expired:
-            slot_status = "EXPIRED"
-            is_bookable = False
-        else:
-            slot_status = "AVAILABLE"
-            is_bookable = True
-        time_slots.append({
-            "ID": s.Id,
-            "centerId": center_id,
-            "startDate": s.StartTime.strftime("%Y-%m-%d"),
-            "startHH": s.StartTime.strftime("%H:%M"),
-            "endHH": s.EndTime.strftime("%H:%M"),
-            "week": f"周{'一二三四五六日'[s.StartTime.weekday()]}",
-            "Price": float(new_rows[0].get("Billing") or 0) / 100,
-            "maxSign": 1,
-            "numSign": 0 if is_bookable else 1,
-            "status": slot_status,
-            "isBookable": is_bookable,
-        })
     return {
         "id": cid,
         "name": new_rows[0].get("Name"),
@@ -393,7 +347,7 @@ def common_counselor_detail(
         "specialty": new_rows[0].get("Specialty"),
         "field": new_rows[0].get("Field"),
         "introduce": new_rows[0].get("Introduce"),
-        "billing": float(new_rows[0].get("Billing") or 0),
+        "billing": float(billing_cents),
         "consultHours": int(new_rows[0].get("ConsultHours") or 0),
         "workYears": int(new_rows[0].get("WorkYears") or 0),
         "career": new_rows[0].get("Career"),
@@ -403,6 +357,31 @@ def common_counselor_detail(
         "hasAvailableTime": any(t.get("isBookable") for t in time_slots),
         "province": "线下/线上",
         "_source": "AppCounselorProfile",
+    }
+
+
+@router.get("/counselors/{cid}/time-slots", summary="咨询师可预约时段（与挂课同步）")
+def common_counselor_time_slots(
+    cid: int,
+    db: Session = Depends(get_db),
+):
+    """轻量接口：仅返回预约时段，供预约页刷新。"""
+    rows = _safe_legacy_query(
+        db,
+        "SELECT Billing FROM AppCounselorProfile WHERE AccountId = :id AND IsActive = 1",
+        id=cid,
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail="咨询师不存在或未开通排班")
+    billing_cents = int(rows[0].get("Billing") or 0)
+    time_slots, center_ids = counselor_booking_time_slots(
+        db, cid, billing_cents=billing_cents,
+    )
+    return {
+        "counselorId": cid,
+        "timeSlots": time_slots,
+        "availableCenterIds": sorted(center_ids),
+        "hasAvailableTime": any(t.get("isBookable") for t in time_slots),
     }
 
 

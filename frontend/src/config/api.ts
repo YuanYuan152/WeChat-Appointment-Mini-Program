@@ -95,6 +95,7 @@ export const API_ENDPOINTS = {
     articleDetail: (id: number | string) => `/api/mini/common/articles/${id}`,
     counselors: '/api/mini/common/counselors',
     counselorDetail: (id: number | string) => `/api/mini/common/counselors/${id}`,
+    counselorTimeSlots: (id: number | string) => `/api/mini/common/counselors/${id}/time-slots`,
     search: '/api/mini/common/search',
   },
 
@@ -150,6 +151,9 @@ export const API_ENDPOINTS = {
     rooms: '/api/mini/ops/rooms',
     roomsStatus: '/api/mini/ops/rooms/status',
     roomDetail: (id: number | string) => `/api/mini/ops/rooms/${id}`,
+    roomSlotStatuses: (id: number | string) => `/api/mini/ops/rooms/${id}/slot-statuses`,
+    scheduleRoomOptions: (scheduleId: number | string) => `/api/mini/ops/schedules/${scheduleId}/room-options`,
+    changeScheduleRoom: (scheduleId: number | string) => `/api/mini/ops/schedules/${scheduleId}/room`,
   },
 
   // 管理员

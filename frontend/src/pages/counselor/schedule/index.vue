@@ -72,8 +72,13 @@
         </view>
 
         <view class="form-item">
-          <text class="form-label">咨询室</text>
+          <text class="form-label">咨询室偏好</text>
           <view class="center-row">
+            <view
+              class="center-chip"
+              :class="{ active: form.roomId === NO_PREF }"
+              @tap="selectNoPref"
+            >无偏好</view>
             <view
               v-for="room in roomOptions"
               :key="room.id"
@@ -111,6 +116,7 @@ interface Schedule {
   Note?: string
 }
 
+const NO_PREF = '__none__'
 const schedules = ref<Schedule[]>([])
 const showAdd = ref(false)
 const submitting = ref(false)
@@ -122,7 +128,7 @@ const form = ref({
   endDate: '',
   endTime: '',
   centerId: defaultCenterId,
-  roomId: getRoomsByCenter(defaultCenterId)[0]?.id || '',
+  roomId: NO_PREF,
 })
 
 const roomOptions = computed(() => getRoomsByCenter(form.value.centerId))
@@ -140,17 +146,24 @@ const parseNotePart = (note: string, key: string) => {
 const formatScheduleNote = (note?: string) => {
   if (!note) return ''
   const centerId = parseNotePart(note, 'center')
-  const roomId = parseNotePart(note, 'room')
+  const roomId = parseNotePart(note, 'room') || parseNotePart(note, 'pref')
   const centerName = APPOINTMENT_CENTER_MAP[centerId] || centerId
   const roomName = centerId && roomId ? getRoomName(centerId, roomId) : ''
-  if (centerName && roomName) return `${centerName} · ${roomName}`
-  return centerName || note
+  const prefOnly = !parseNotePart(note, 'room') && !!parseNotePart(note, 'pref')
+  if (centerName && roomName) {
+    return `${centerName} · ${roomName}${prefOnly ? '（偏好）' : ''}`
+  }
+  if (centerName) return centerName
+  return note
 }
 
 const selectCenter = (id: string) => {
   form.value.centerId = id
-  const rooms = getRoomsByCenter(id)
-  form.value.roomId = rooms[0]?.id || ''
+  form.value.roomId = NO_PREF
+}
+
+const selectNoPref = () => {
+  form.value.roomId = NO_PREF
 }
 
 const selectRoom = (id: string) => {
@@ -177,14 +190,13 @@ const onEndTime = (e: any) => { form.value.endTime = e.detail.value }
 
 const openAddModal = () => {
   const today = formatToday()
-  const rooms = getRoomsByCenter(defaultCenterId)
   form.value = {
     startDate: today,
     startTime: '10:00',
     endDate: today,
     endTime: '10:50',
     centerId: defaultCenterId,
-    roomId: rooms[0]?.id || '',
+    roomId: NO_PREF,
   }
   showAdd.value = true
 }
@@ -198,7 +210,7 @@ const submitSchedule = async () => {
   if (submitting.value) return
   const { startDate, startTime, endDate, endTime, centerId, roomId } = form.value
   if (!startDate || !startTime || !endDate || !endTime || !centerId || !roomId) {
-    uni.showToast({ title: '请选择中心、咨询室并填写时间', icon: 'none' })
+    uni.showToast({ title: '请选择中心、咨询室偏好并填写时间', icon: 'none' })
     return
   }
   const startAt = new Date(`${startDate}T${startTime}:00`)
@@ -218,7 +230,7 @@ const submitSchedule = async () => {
       start_time: `${startDate}T${startTime}:00`,
       end_time: `${endDate}T${endTime}:00`,
       center_id: centerId,
-      room_id: roomId,
+      room_id: roomId === NO_PREF ? null : roomId,
     })
     if (res.code === 0) {
       showAdd.value = false
@@ -228,7 +240,7 @@ const submitSchedule = async () => {
         endDate: '',
         endTime: '',
         centerId: defaultCenterId,
-        roomId: getRoomsByCenter(defaultCenterId)[0]?.id || '',
+        roomId: NO_PREF,
       }
       await loadSchedules()
       uni.showToast({ title: '挂课成功', icon: 'success' })

@@ -367,6 +367,7 @@ const handleLogout = () => {
       if (!res.confirm) return
       clearToken()
       uni.removeStorageSync('user_roles')
+      uni.removeStorageSync('redirectAfterLogin')
       isLoggedIn.value = false
       resetPageState()
       uni.showToast({ title: '已退出登录', icon: 'success' })

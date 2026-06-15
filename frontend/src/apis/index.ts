@@ -121,8 +121,12 @@ export const doctorApi = {
         })
     },
 
-    getDetail: (id: string | number) => {
-        return httpV2.get<any>(API_ENDPOINTS.common.counselorDetail(id))
+    getDetail: (id: string | number, params?: { source?: string }) => {
+        return httpV2.get<any>(API_ENDPOINTS.common.counselorDetail(id), params)
+    },
+
+    getTimeSlots: (id: string | number) => {
+        return httpV2.get<any>(API_ENDPOINTS.common.counselorTimeSlots(id))
     },
 
     search: (keyword: string) => {
