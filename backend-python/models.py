@@ -374,6 +374,9 @@ class AppRefundExemption(Base):
     Reason = Column(UnicodeText, nullable=False)
     ScreenshotUrl = Column(Unicode(500), nullable=True)
     Status = Column(String(20), nullable=False, default="PENDING")
+    RejectReason = Column(UnicodeText, nullable=True)
+    ReviewedBy = Column(Integer, nullable=True)
+    ReviewedAt = Column(DateTime, nullable=True)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
     UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
 

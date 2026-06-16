@@ -2,7 +2,7 @@
   <view class="page-exemption">
     <view class="tip-card">
       <text class="tip-title">申请退款豁免</text>
-      <text class="tip-desc">如因特殊情况无法按约前来咨询，可填写以下信息提交人工审核。</text>
+      <text class="tip-desc">距咨询开始不足24小时时，可提交豁免申请由管理员审核。审核通过前预约与订单维持不变。</text>
     </view>
 
     <view v-if="counselorName || slotText" class="info-card">

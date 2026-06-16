@@ -160,6 +160,9 @@ export const API_ENDPOINTS = {
   admin: {
     users: '/api/mini/admin/users',
     bindRole: (uid: number | string) => `/api/mini/admin/users/${uid}/roles`,
+    refundExemptions: '/api/mini/admin/refund-exemptions',
+    refundExemptionApprove: (id: number | string) => `/api/mini/admin/refund-exemptions/${id}/approve`,
+    refundExemptionReject: (id: number | string) => `/api/mini/admin/refund-exemptions/${id}/reject`,
   },
 
   // 意见反馈

@@ -30,6 +30,11 @@ from models import (
     AppSchedule,
     AppRefundExemption,
 )
+from refund_exemption_service import (
+    latest_exemptions_by_consultation,
+    notify_admins_new_exemption,
+    validate_exemption_submission,
+)
 from schedule_meta import center_display_name, parse_center_id
 
 router = APIRouter(prefix="/api/mini/patient", tags=["Patient"])
@@ -185,6 +190,11 @@ class ConsultationOut(BaseModel):
     refundEligible: bool = False
     orderAmount: Optional[int] = None
     refundReason: Optional[str] = None
+    exemptionStatus: Optional[str] = None
+    exemptionRejectReason: Optional[str] = None
+    exemptionId: Optional[int] = None
+    orderStatus: Optional[str] = None
+    cancelSummary: Optional[str] = None
 
 
 class CancelConsultationOut(BaseModel):
@@ -205,6 +215,7 @@ class RefundExemptionOut(BaseModel):
     reason: str
     screenshotUrl: Optional[str] = None
     status: str
+    rejectReason: Optional[str] = None
     createdAt: datetime
 
 
@@ -240,6 +251,11 @@ def get_my_consultations(
         for o in db.query(AppOrder).filter(AppOrder.Id.in_(order_ids)).all():
             order_map[o.Id] = o
 
+    consultation_ids = [r.Id for r in rows]
+    exemption_map = latest_exemptions_by_consultation(
+        db, consultation_ids, account_id=current_account.Id,
+    )
+
     result: List[ConsultationOut] = []
     for r in rows:
         prof = counselor_map.get(r.CounselorId)
@@ -259,7 +275,18 @@ def get_my_consultations(
         cancelable = can_visitor_cancel(r.Status)
         refund_ok = cancelable and is_refund_eligible(start_time)
         order = order_map.get(r.OrderId) if r.OrderId else None
-        order_amount = order.TotalFee if order and order.Status == "PAID" else None
+        order_status = order.Status if order else None
+        if order and order.Status in ("PAID", "REFUNDED", "CANCELLED"):
+            order_amount = order.TotalFee
+        else:
+            order_amount = None
+        cancel_summary = None
+        if r.Status == "CANCELLED":
+            if order_status == "REFUNDED":
+                cancel_summary = "预约已取消，款项将原路退回"
+            else:
+                cancel_summary = "预约已取消，按规定不予退款"
+        exemption = exemption_map.get(r.Id)
 
         result.append(ConsultationOut(
             id=r.Id,
@@ -279,6 +306,11 @@ def get_my_consultations(
             refundEligible=refund_ok,
             orderAmount=order_amount,
             refundReason=None if refund_ok else refund_ineligible_reason(start_time),
+            exemptionStatus=exemption.Status if exemption else None,
+            exemptionRejectReason=exemption.RejectReason if exemption and exemption.Status == "REJECTED" else None,
+            exemptionId=exemption.Id if exemption else None,
+            orderStatus=order_status,
+            cancelSummary=cancel_summary,
         ))
     return result
 
@@ -333,14 +365,6 @@ def submit_refund_exemption(
     )
     if not row:
         raise HTTPException(status_code=404, detail="咨询记录不存在")
-    if not can_visitor_cancel(row.Status):
-        raise HTTPException(status_code=400, detail="当前状态不可申请豁免")
-
-    reason = (body.reason or "").strip()
-    if not reason:
-        raise HTTPException(status_code=400, detail="请填写申请原因")
-    if body.amount <= 0:
-        raise HTTPException(status_code=400, detail="申请金额须大于 0")
 
     pending = (
         db.query(AppRefundExemption)
@@ -351,18 +375,28 @@ def submit_refund_exemption(
         )
         .first()
     )
-    if pending:
-        raise HTTPException(status_code=400, detail="该预约已有待审核的豁免申请")
+    try:
+        validate_exemption_submission(
+            row,
+            patient_id=current_account.Id,
+            amount=body.amount,
+            reason=body.reason or "",
+            pending=pending,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     exemption = AppRefundExemption(
         ConsultationId=consultation_id,
         AccountId=current_account.Id,
         Amount=body.amount,
-        Reason=reason,
+        Reason=(body.reason or "").strip(),
         ScreenshotUrl=body.screenshot_url,
         Status="PENDING",
     )
     db.add(exemption)
+    db.flush()
+    notify_admins_new_exemption(db, exemption, row)
     db.commit()
     db.refresh(exemption)
     return RefundExemptionOut(
@@ -372,6 +406,7 @@ def submit_refund_exemption(
         reason=exemption.Reason,
         screenshotUrl=exemption.ScreenshotUrl,
         status=exemption.Status,
+        rejectReason=exemption.RejectReason,
         createdAt=exemption.CreatedAt,
     )
 

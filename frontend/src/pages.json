@@ -295,6 +295,14 @@
                     }
                 },
                 {
+                    "path": "refund-exemptions/index",
+                    "style": {
+                        "navigationBarTitleText": "豁免申请审核",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                },
+                {
                     "path": "schedules/index",
                     "style": {
                         "navigationBarTitleText": "挂课情况",

@@ -22,6 +22,9 @@ CREATE TABLE [dbo].[AppRefundExemption](
     [Reason] [nvarchar](max) NOT NULL,
     [ScreenshotUrl] [nvarchar](500) NULL,
     [Status] [nvarchar](20) NOT NULL DEFAULT 'PENDING',
+    [RejectReason] [nvarchar](max) NULL,
+    [ReviewedBy] [int] NULL,
+    [ReviewedAt] [datetime] NULL,
     [CreatedAt] [datetime] NOT NULL DEFAULT (getdate()),
     [UpdatedAt] [datetime] NULL,
     CONSTRAINT [PK_AppRefundExemption] PRIMARY KEY CLUSTERED ([Id] ASC)

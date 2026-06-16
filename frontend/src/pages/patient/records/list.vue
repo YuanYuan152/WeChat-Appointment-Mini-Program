@@ -40,7 +40,7 @@
 
     <view v-else-if="records.length === 0" class="empty-state">
 
-      <text class="empty-text">暂无预约记录</text>
+      <text class="empty-text">{{ emptyText }}</text>
 
     </view>
 
@@ -77,6 +77,25 @@
         </view>
 
         <view v-if="r.note && !isCenterNote(r.note)" class="note">{{ r.note }}</view>
+
+        <view v-if="r.exemptionStatus === 'PENDING'" class="exemption-banner pending">
+          <text class="exemption-title">退款豁免审核中</text>
+          <text class="exemption-desc">管理员审核通过后将取消预约并退款；审核前预约与订单维持不变</text>
+        </view>
+        <view v-else-if="r.exemptionStatus === 'REJECTED'" class="exemption-banner rejected">
+          <text class="exemption-title">退款豁免未通过</text>
+          <text v-if="r.exemptionRejectReason" class="exemption-desc">拒绝理由：{{ r.exemptionRejectReason }}</text>
+          <text class="exemption-desc">预约与订单维持不变，您仍可按原订单前来咨询或自行取消（不退款）</text>
+        </view>
+        <view v-else-if="r.exemptionStatus === 'APPROVED'" class="exemption-banner approved">
+          <text class="exemption-title">退款豁免已通过</text>
+          <text class="exemption-desc">预约已取消，款项将原路退回</text>
+        </view>
+
+        <view v-else-if="r.status === 'CANCELLED' && r.cancelSummary" class="cancel-summary">
+          <text class="cancel-summary-text">{{ r.cancelSummary }}</text>
+          <text v-if="r.orderAmount" class="cancel-summary-amount">订单金额：￥{{ formatYuan(r.orderAmount) }}</text>
+        </view>
 
         <view v-if="r.canCancel" class="record-actions">
 
@@ -174,7 +193,11 @@
 
           <button class="cancel-action-btn back" @tap="closeCancelModal">返回</button>
 
-          <button class="cancel-action-btn exempt" @tap="goExemption">申请豁免</button>
+          <button class="cancel-action-btn exempt" :disabled="cancelTarget?.exemptionStatus === 'PENDING'" @tap="goExemption">
+
+            {{ cancelTarget?.exemptionStatus === 'PENDING' ? '审核中' : '申请豁免' }}
+
+          </button>
 
           <button
 
@@ -204,7 +227,7 @@
 
 <script setup lang="ts">
 
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 
 import { onShow } from '@dcloudio/uni-app'
 
@@ -250,11 +273,21 @@ interface Consultation {
 
   refundReason?: string
 
+  exemptionStatus?: string
+
+  exemptionRejectReason?: string
+
+  exemptionId?: number
+
+  orderStatus?: string
+
+  cancelSummary?: string
+
 }
 
 
 
-type RecordTab = 'unfinished' | 'done'
+type RecordTab = 'unfinished' | 'done' | 'cancelled'
 
 
 
@@ -263,6 +296,8 @@ const tabs: { label: string; value: RecordTab }[] = [
   { label: '未完成', value: 'unfinished' },
 
   { label: '已完成', value: 'done' },
+
+  { label: '已取消', value: 'cancelled' },
 
 ]
 
@@ -273,6 +308,8 @@ const UNFINISHED_STATUSES = new Set(['PENDING', 'CONFIRMED', 'ONGOING'])
 
 
 const activeTab = ref<RecordTab>('unfinished')
+
+const allRecords = ref<Consultation[]>([])
 
 const records = ref<Consultation[]>([])
 
@@ -290,11 +327,25 @@ const statusLabel = (s: string) => {
 
   if (s === 'DONE') return '已完成'
 
+  if (s === 'CANCELLED') return '已取消'
+
   if (UNFINISHED_STATUSES.has(s)) return '未完成'
 
   return s
 
 }
+
+
+
+const emptyText = computed(() => {
+
+  if (activeTab.value === 'cancelled') return '暂无已取消的预约'
+
+  if (activeTab.value === 'done') return '暂无已完成的预约'
+
+  return '暂无未完成的预约'
+
+})
 
 
 
@@ -364,7 +415,21 @@ const filterByTab = (list: Consultation[], tab: RecordTab) => {
 
   }
 
+  if (tab === 'cancelled') {
+
+    return list.filter(r => r.status === 'CANCELLED')
+
+  }
+
   return list.filter(r => UNFINISHED_STATUSES.has(r.status))
+
+}
+
+
+
+const applyTabFilter = () => {
+
+  records.value = filterByTab(allRecords.value, activeTab.value)
 
 }
 
@@ -380,9 +445,13 @@ const fetchList = async () => {
 
     const all = res.code === 0 && Array.isArray(res.data) ? res.data : []
 
-    records.value = filterByTab(all, activeTab.value)
+    allRecords.value = all
+
+    applyTabFilter()
 
   } catch {
+
+    allRecords.value = []
 
     records.value = []
 
@@ -402,7 +471,7 @@ const switchTab = (v: RecordTab) => {
 
   activeTab.value = v
 
-  fetchList()
+  applyTabFilter()
 
 }
 
@@ -431,6 +500,14 @@ const closeCancelModal = () => {
 const goExemption = () => {
   const r = cancelTarget.value
   if (!r) return
+  if (r.exemptionStatus === 'PENDING') {
+    uni.showToast({ title: '已有待审核的豁免申请', icon: 'none' })
+    return
+  }
+  if (r.refundEligible) {
+    uni.showToast({ title: '超过24小时可直接取消退款，无需申请豁免', icon: 'none' })
+    return
+  }
   const slotText = formatSlotRange(r.startTime, r.endTime)
   const url = `/pages/patient/refund-exemption/apply?consultationId=${r.id}`
     + `&counselorName=${encodeURIComponent(r.counselorName || '')}`
@@ -561,6 +638,15 @@ onShow(fetchList)
 
 .status.done { color: #6B7280; background: #E5E7EB; }
 
+.status.cancelled { color: #9CA3AF; background: #F3F4F6; }
+
+.cancel-summary {
+  margin-top: 20rpx; padding: 20rpx 24rpx; border-radius: 16rpx;
+  background: #F3F4F6; border: 1rpx solid #E5E7EB;
+}
+.cancel-summary-text { display: block; font-size: 24rpx; color: #6B7280; line-height: 1.6; }
+.cancel-summary-amount { display: block; margin-top: 8rpx; font-size: 22rpx; color: #9CA3AF; }
+
 .note {
 
   margin-top: 20rpx; padding-top: 20rpx; border-top: 1rpx dashed #E5E7EB;
@@ -568,6 +654,18 @@ onShow(fetchList)
   font-size: 26rpx; color: #4B5563; line-height: 1.6;
 
 }
+
+.exemption-banner {
+  margin-top: 20rpx; padding: 20rpx 24rpx; border-radius: 16rpx;
+}
+.exemption-banner.pending { background: #FFFBEB; border: 1rpx solid #FDE68A; }
+.exemption-banner.rejected { background: #FEF2F2; border: 1rpx solid #FECACA; }
+.exemption-banner.approved { background: #ECFDF5; border: 1rpx solid #A7F3D0; }
+.exemption-title { display: block; font-size: 26rpx; font-weight: 700; margin-bottom: 8rpx; }
+.exemption-banner.pending .exemption-title { color: #B45309; }
+.exemption-banner.rejected .exemption-title { color: #B91C1C; }
+.exemption-banner.approved .exemption-title { color: #047857; }
+.exemption-desc { display: block; font-size: 22rpx; color: #6B7280; line-height: 1.6; }
 
 .record-actions {
 

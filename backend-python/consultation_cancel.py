@@ -51,17 +51,19 @@ def cancel_consultation_for_visitor(
     consultation: AppConsultation,
     *,
     patient_id: int,
+    force_refund: bool = False,
 ) -> Tuple[bool, str]:
     """
     取消咨询单。返回 (是否退款, 提示文案)。
     仅本人、待确认/已确认/进行中可取消。
+    force_refund=True 时无视 24 小时规则（管理员豁免审核通过）。
     """
     if consultation.PatientId != patient_id:
         raise PermissionError("无权取消该咨询")
     if not can_visitor_cancel(consultation.Status):
         raise ValueError("当前状态不可取消")
 
-    refund = is_refund_eligible(consultation.StartTime)
+    refund = force_refund or is_refund_eligible(consultation.StartTime)
     consultation.Status = "CANCELLED"
     consultation.UpdatedAt = datetime.utcnow()
 

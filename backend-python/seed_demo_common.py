@@ -36,7 +36,7 @@ DEMO_PATIENTS = [
         "real_name": "林小美",
         "gender": "女",
         "avatar": "/static/images/tc59.png",
-        "consultations": ["refund_ok", "no_refund"],
+        "consultations": ["refund_ok", "no_refund", "cancelled_refund"],
     },
     {
         "mobile": "13800000011",
@@ -193,6 +193,16 @@ DEMO_PATIENT_CONSULTATIONS = [
         "center": "video",
         "status": "CONFIRMED",
         "billing": 62000,
+    },
+    {
+        "key": "cancelled_refund",
+        "counselor": "王婉清",
+        "offset": timedelta(days=5),
+        "center": "pudong",
+        "status": "CANCELLED",
+        "billing": 68000,
+        "room": "pudong-r2",
+        "order_status": "REFUNDED",
     },
 ]
 
@@ -432,7 +442,7 @@ def ensure_patient_consultations(
                 SlotId=schedule.Id,
                 OutTradeNo=out_trade_no,
                 TotalFee=cfg["billing"],
-                Status="PAID",
+                Status=cfg.get("order_status", "REFUNDED") if cfg["status"] == "CANCELLED" else "PAID",
                 Description=f"演示咨询-{cfg['counselor']}-{demo_key}",
                 PaidAt=now - timedelta(days=1),
             )
@@ -441,7 +451,10 @@ def ensure_patient_consultations(
         else:
             order.SlotId = schedule.Id
             order.TotalFee = cfg["billing"]
-            order.Status = "PAID" if cfg["status"] != "CANCELLED" else order.Status
+            if cfg["status"] == "CANCELLED":
+                order.Status = cfg.get("order_status", "REFUNDED")
+            else:
+                order.Status = "PAID"
             order.PaidAt = order.PaidAt or (now - timedelta(days=1))
 
         consultation = (

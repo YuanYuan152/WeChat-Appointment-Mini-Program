@@ -17,6 +17,12 @@ APP_ACCOUNT_COLUMNS = {
     "DeletedAt": "DATETIME NULL",
 }
 
+APP_REFUND_EXEMPTION_COLUMNS = {
+    "RejectReason": "NVARCHAR(MAX) NULL",
+    "ReviewedBy": "INT NULL",
+    "ReviewedAt": "DATETIME NULL",
+}
+
 
 def ensure_tables():
     Base.metadata.create_all(bind=engine)
@@ -39,6 +45,25 @@ def ensure_app_account_columns():
             print(f"[OK] Added AppAccount.{name}")
 
 
+def ensure_refund_exemption_columns():
+    inspector = inspect(engine)
+    if not inspector.has_table("AppRefundExemption"):
+        return
+
+    existing = {column["name"] for column in inspector.get_columns("AppRefundExemption")}
+    missing = [
+        (name, ddl) for name, ddl in APP_REFUND_EXEMPTION_COLUMNS.items() if name not in existing
+    ]
+    if not missing:
+        print("[OK] AppRefundExemption columns already complete")
+        return
+
+    with engine.begin() as conn:
+        for name, ddl in missing:
+            conn.execute(text(f"ALTER TABLE [dbo].[AppRefundExemption] ADD [{name}] {ddl}"))
+            print(f"[OK] Added AppRefundExemption.{name}")
+
+
 def print_summary():
     inspector = inspect(engine)
     tables = [name for name in inspector.get_table_names() if name.startswith("App")]
@@ -55,6 +80,7 @@ def main():
 
     ensure_tables()
     ensure_app_account_columns()
+    ensure_refund_exemption_columns()
     print_summary()
 
 
