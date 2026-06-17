@@ -23,6 +23,7 @@ from database import get_db
 from models import AppAccount, AppOrder, AppSchedule
 from config import settings
 from payment_service import complete_paid_order
+from intake_agreement import attach_intake_to_order
 
 router = APIRouter(prefix="/api/payment", tags=["Payment"])
 
@@ -73,6 +74,8 @@ class CreateOrderRequest(BaseModel):
     total_fee: int        # 金额（分）
     description: Optional[str] = "心理咨询预约"
     center_id: Optional[str] = None
+    is_adult: Optional[bool] = None
+    signature_url: Optional[str] = None
 
 
 class ConfirmDevPaymentRequest(BaseModel):
@@ -114,6 +117,16 @@ def _create_pending_order(
         Status="PENDING",
         Description=_build_order_description(req),
     )
+    try:
+        attach_intake_to_order(
+            db,
+            account,
+            order,
+            is_adult=req.is_adult,
+            signature_url=req.signature_url,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     db.add(order)
     db.flush()
     return order, schedule

@@ -11,7 +11,7 @@
           v-for="item in group.items"
           :key="item.role"
           class="dev-role-chip"
-          :class="{ active: currentRole === item.role }"
+          :class="{ active: currentRole === item.role, disabled: switching }"
           @click="selectRole(item.role)"
         >
           <text class="dev-role-chip-text">{{ item.label }}</text>
@@ -24,21 +24,33 @@
 
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
+import { AuthApi } from '@/apis/auth'
 import {
   DEV_LOGIN_ROLE_GROUPS,
   DEV_LOGIN_ROLES,
   clearToken,
+  getDevLoginCode,
   getDevLoginRole,
   isMockLoginEnabled,
   setDevLoginRole,
   type DevLoginRole,
 } from '@/utils/auth'
 
+const props = withDefaults(
+  defineProps<{
+    /** 选中角色后立即用对应 dev_* code 重新登录（切换演示账号） */
+    autoSwitch?: boolean
+  }>(),
+  { autoSwitch: false },
+)
+
 const emit = defineEmits<{
   change: [role: DevLoginRole]
+  switched: [role: DevLoginRole]
 }>()
 
 const showPicker = isMockLoginEnabled()
+const switching = ref(false)
 const currentRole = ref<DevLoginRole>('patient')
 const currentLabel = computed(() => {
   const item = DEV_LOGIN_ROLES.find(r => r.role === currentRole.value)
@@ -55,20 +67,52 @@ const roleGroups = computed(() =>
 )
 
 const hintText = computed(() => {
+  if (switching.value) return '正在切换演示账号...'
   const item = DEV_LOGIN_ROLES.find(r => r.role === currentRole.value)
+  if (props.autoSwitch) {
+    return item
+      ? `点击角色即切换并登录 · ${item.seedHint}`
+      : '请选择演示角色'
+  }
   return item
     ? `将以此身份微信一键登录 · ${item.seedHint} · 切换后需重新登录`
     : '请先选择角色，再点击微信一键登录'
 })
 
-const selectRole = (role: DevLoginRole) => {
-  if (currentRole.value === role) return
-  currentRole.value = role
-  setDevLoginRole(role)
+const selectRole = async (role: DevLoginRole) => {
+  if (switching.value) return
+  const label = DEV_LOGIN_ROLES.find(r => r.role === role)?.label || role
+  const roleChanged = currentRole.value !== role
+
+  if (roleChanged) {
+    currentRole.value = role
+    setDevLoginRole(role)
+  }
+
+  if (!props.autoSwitch) {
+    if (!roleChanged) return
+    clearToken()
+    uni.removeStorageSync('user_roles')
+    emit('change', role)
+    uni.showToast({ title: `已切换为${label}，请重新登录`, icon: 'none' })
+    return
+  }
+
+  switching.value = true
   clearToken()
   uni.removeStorageSync('user_roles')
   emit('change', role)
-  uni.showToast({ title: `已切换为${DEV_LOGIN_ROLES.find(r => r.role === role)?.label}`, icon: 'none' })
+  try {
+    await AuthApi.wxLogin(getDevLoginCode())
+    const me = await AuthApi.getMe()
+    uni.setStorageSync('user_roles', JSON.stringify(me.roles || []))
+    emit('switched', role)
+    uni.showToast({ title: `已切换为${label}`, icon: 'success' })
+  } catch (err: any) {
+    uni.showToast({ title: err?.message || '切换账号失败', icon: 'none' })
+  } finally {
+    switching.value = false
+  }
 }
 
 onMounted(() => {
@@ -133,6 +177,10 @@ onMounted(() => {
 .dev-role-chip.active .dev-role-chip-text {
   color: #0D9488;
   font-weight: 600;
+}
+.dev-role-chip.disabled {
+  opacity: 0.55;
+  pointer-events: none;
 }
 .dev-role-hint {
   display: block;

@@ -432,6 +432,10 @@ const showAgeConfirm = ref(false)
 const showAgreement = ref(false)
 const showPayment = ref(false)
 const showSignatureCanvas = ref(false)
+/** 是否仍需首次协议签署（年龄确认 + 签字） */
+const needsIntakeAgreement = ref(true)
+/** 首次来访年龄确认结果：true=已成年，false=未成年 */
+const intakeIsAdult = ref<boolean | null>(null)
 /** 确认订单页：是否已勾选同意温馨提示与隐私协议 */
 const payRulesAgreed = ref(false)
 
@@ -679,6 +683,7 @@ const selectTimeSlot = (slot: BookingTimeSlot) => {
 const resetSignatureForNewBooking = () => {
   hasSignature.value = false
   signatureData.value = ''
+  intakeIsAdult.value = null
   showSignatureCanvas.value = false
   try {
     uni.removeStorageSync('signatureImage')
@@ -694,8 +699,24 @@ const resetSignatureForNewBooking = () => {
   })
 }
 
-// 预约：须先选预约中心 → 可约时间 → 协议 → 支付成功
-const makeAppointment = () => {
+const loadIntakeStatus = async () => {
+  try {
+    const res = await httpV2.get<{ needsIntakeAgreement?: boolean }>(API_ENDPOINTS.patient.me)
+    if (res.code === 0 && res.data) {
+      needsIntakeAgreement.value = res.data.needsIntakeAgreement !== false
+    }
+  } catch {
+    /* 默认仍走首次流程，由后端支付时校验 */
+  }
+}
+
+const proceedToPayment = () => {
+  payRulesAgreed.value = false
+  showPayment.value = true
+}
+
+// 预约：须先选预约中心 → 可约时间 →（首次）协议 → 支付成功
+const makeAppointment = async () => {
   if (!selectedCenterId.value) {
     uni.showToast({ title: '请选择预约中心', icon: 'none' })
     return
@@ -726,7 +747,11 @@ const makeAppointment = () => {
       icon: 'none',
       duration: 2200
     })
-    showAgeConfirmDialog()
+    if (needsIntakeAgreement.value) {
+      showAgeConfirmDialog()
+    } else {
+      proceedToPayment()
+    }
     return
   }
 
@@ -736,6 +761,12 @@ const makeAppointment = () => {
     uni.navigateTo({
       url: '/pages/auth/login'
     })
+    return
+  }
+
+  await loadIntakeStatus()
+  if (!needsIntakeAgreement.value) {
+    proceedToPayment()
     return
   }
 
@@ -806,6 +837,7 @@ const closeAgeConfirm = () => {
 }
 
 const confirmAge = (isAdult: boolean) => {
+  intakeIsAdult.value = isAdult
   closeAgeConfirm()
   showAgreement.value = true
   
@@ -1040,6 +1072,7 @@ const confirmPayment = async () => {
   }
 
   const finishOk = async (orderId?: string) => {
+    needsIntakeAgreement.value = false
     closePayment()
     await getDoctorDetail()
     uni.showToast({ title: '预约成功！', icon: 'success', duration: 2000 })
@@ -1055,11 +1088,41 @@ const confirmPayment = async () => {
     return
   }
 
-  const payBody = {
+  let signatureUrl: string | undefined
+  if (needsIntakeAgreement.value) {
+    if (intakeIsAdult.value === null) {
+      uni.showToast({ title: '请先确认是否成年', icon: 'none' })
+      return
+    }
+    if (!hasSignature.value || !signatureData.value) {
+      uni.showToast({ title: '请先完成协议签字', icon: 'none' })
+      return
+    }
+    uni.showLoading({ title: '正在上传签名...' })
+    try {
+      const uploadRes = await httpV2.upload(API_ENDPOINTS.upload.file, signatureData.value, 'file')
+      uni.hideLoading()
+      if (uploadRes.code !== 0 || !uploadRes.data?.url) {
+        uni.showToast({ title: uploadRes.msg || '签名上传失败', icon: 'none' })
+        return
+      }
+      signatureUrl = uploadRes.data.url
+    } catch (e: any) {
+      uni.hideLoading()
+      uni.showToast({ title: e?.message || '签名上传失败', icon: 'none' })
+      return
+    }
+  }
+
+  const payBody: Record<string, unknown> = {
     slot_id: selectedSlotId.value,
     center_id: selectedCenterId.value,
     total_fee: Math.round((selectedSlot.value?.Price ?? doctor.value.price ?? 0) * 100),
     description: `心理咨询预约 - ${doctor.value.name}`,
+  }
+  if (needsIntakeAgreement.value) {
+    payBody.is_adult = intakeIsAdult.value
+    payBody.signature_url = signatureUrl
   }
 
   // 默认：一键模拟支付（点击确认即预约成功）
@@ -1125,6 +1188,9 @@ const goBackFromSignature = () => {
 onMounted(() => {
   resetSignatureForNewBooking()
   getDoctorDetail()
+  if (uni.getStorageSync('token')) {
+    loadIntakeStatus()
+  }
   setTimeout(() => updateSectionOffsets(), 500)
   
   // 计算内容区域高度

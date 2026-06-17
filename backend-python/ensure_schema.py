@@ -13,8 +13,16 @@ APP_ACCOUNT_COLUMNS = {
     "Birthday": "DATETIME NULL",
     "EmergencyContact": "NVARCHAR(100) NULL",
     "EmergencyPhone": "NVARCHAR(20) NULL",
+    "IntakeAgreementSignedAt": "DATETIME NULL",
+    "IntakeIsAdult": "BIT NULL",
+    "IntakeSignatureUrl": "VARCHAR(500) NULL",
     "IsActive": "BIT NOT NULL CONSTRAINT DF_AppAccount_IsActive DEFAULT 1",
     "DeletedAt": "DATETIME NULL",
+}
+
+APP_ORDER_COLUMNS = {
+    "IntakeIsAdult": "BIT NULL",
+    "IntakeSignatureUrl": "VARCHAR(500) NULL",
 }
 
 APP_REFUND_EXEMPTION_COLUMNS = {
@@ -43,6 +51,23 @@ def ensure_app_account_columns():
         for name, ddl in missing:
             conn.execute(text(f"ALTER TABLE [dbo].[AppAccount] ADD [{name}] {ddl}"))
             print(f"[OK] Added AppAccount.{name}")
+
+
+def ensure_app_order_columns():
+    inspector = inspect(engine)
+    if not inspector.has_table("AppOrder"):
+        return
+
+    existing = {column["name"] for column in inspector.get_columns("AppOrder")}
+    missing = [(name, ddl) for name, ddl in APP_ORDER_COLUMNS.items() if name not in existing]
+    if not missing:
+        print("[OK] AppOrder columns already complete")
+        return
+
+    with engine.begin() as conn:
+        for name, ddl in missing:
+            conn.execute(text(f"ALTER TABLE [dbo].[AppOrder] ADD [{name}] {ddl}"))
+            print(f"[OK] Added AppOrder.{name}")
 
 
 def ensure_refund_exemption_columns():
@@ -80,6 +105,7 @@ def main():
 
     ensure_tables()
     ensure_app_account_columns()
+    ensure_app_order_columns()
     ensure_refund_exemption_columns()
     print_summary()
 

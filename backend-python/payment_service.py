@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from models import AppOrder, AppSchedule, AppConsultation
 from room_assignment import apply_room_assignment
 from schedule_meta import parse_center_id, schedule_note, is_video_center
+from intake_agreement import record_intake_from_order
 
 
 def complete_paid_order(
@@ -18,6 +19,8 @@ def complete_paid_order(
 ) -> None:
     if order.Status == "PAID":
         return
+
+    record_intake_from_order(db, order)
 
     order.Status = "PAID"
     order.PaidAt = datetime.utcnow()

@@ -17,9 +17,16 @@ export type DevLoginRole =
 
 export const DEV_LOGIN_ROLE_STORAGE_KEY = 'dev_login_role'
 
+const isLocalV2Backend = (): boolean => {
+  const base = String(import.meta.env.VITE_API_V2_BASE_URL || '').trim()
+  return /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?\/?$/i.test(base)
+}
+
 /** 测试/开发联调：登录页可选角色，wx.login 走 dev_* mock code */
 export const isMockLoginEnabled = (): boolean =>
-  import.meta.env.DEV || import.meta.env.VITE_ENABLE_MOCK_LOGIN === 'true'
+  import.meta.env.DEV
+  || import.meta.env.VITE_ENABLE_MOCK_LOGIN === 'true'
+  || isLocalV2Backend()
 
 export const DEV_LOGIN_ROLE_GROUPS: {
   title: string
@@ -112,7 +119,9 @@ export const getDevLoginRoleLabel = (): string => {
  */
 export const resolveWxLoginCode = async (): Promise<string> => {
   if (isMockLoginEnabled()) {
-    return getDevLoginCode()
+    const code = getDevLoginCode()
+    console.info('[MockLogin] 使用演示 code:', code, '角色:', getDevLoginRole())
+    return code
   }
   try {
     const loginRes: any = await new Promise((resolve, reject) => {

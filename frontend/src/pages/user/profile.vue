@@ -572,6 +572,7 @@ const handleDeleteAccount = () => {
 
 /* 菜单列表 */
 .menu-section {
+  margin-top: 0;
   padding: 0 32rpx;
 }
 

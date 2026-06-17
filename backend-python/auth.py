@@ -146,6 +146,16 @@ def get_current_account(
 # Routes
 # ---------------------------------------------------------------------------
 
+def _ensure_role_binding(db: Session, account_id: int, role: str) -> None:
+    exists = (
+        db.query(AppRoleBinding)
+        .filter(AppRoleBinding.AccountId == account_id, AppRoleBinding.RoleType == role)
+        .first()
+    )
+    if not exists:
+        db.add(AppRoleBinding(AccountId=account_id, RoleType=role, TargetId=account_id))
+
+
 @router.post("/login", response_model=LoginResponse, summary="微信小程序一键登录")
 def login(request: LoginRequest, db: Session = Depends(get_db)):
     """
@@ -218,11 +228,9 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
             )
         target_role = DEV_MOCK_CODE_ACTIVE_ROLES.get(request.code)
         if target_role:
-            try:
-                account.ActiveRole = target_role
-                db.commit()
-            except Exception:
-                db.rollback()
+            account.ActiveRole = target_role
+            _ensure_role_binding(db, account.Id, target_role)
+            db.commit()
 
     token, expire = create_access_token({"sub": str(account.Id), "openid": openid})
 

@@ -36,6 +36,7 @@ from refund_exemption_service import (
     validate_exemption_submission,
 )
 from schedule_meta import center_display_name, parse_center_id
+from intake_agreement import needs_intake_agreement
 
 router = APIRouter(prefix="/api/mini/patient", tags=["Patient"])
 
@@ -76,6 +77,7 @@ class PatientProfileOut(BaseModel):
     birthday: Optional[datetime] = None
     emergencyContact: Optional[str] = None
     emergencyPhone: Optional[str] = None
+    needsIntakeAgreement: bool = True
 
 
 class RegistrationPayload(BaseModel):
@@ -120,7 +122,7 @@ class RegistrationPayload(BaseModel):
     consultationGoal: Optional[str] = None
 
 
-def _profile_out(account: AppAccount) -> PatientProfileOut:
+def _profile_out(account: AppAccount, db: Session) -> PatientProfileOut:
     return PatientProfileOut(
         id=account.Id,
         openId=account.OpenId,
@@ -132,6 +134,7 @@ def _profile_out(account: AppAccount) -> PatientProfileOut:
         birthday=account.Birthday,
         emergencyContact=account.EmergencyContact,
         emergencyPhone=account.EmergencyPhone,
+        needsIntakeAgreement=needs_intake_agreement(db, account),
     )
 
 
@@ -442,8 +445,11 @@ def get_my_order(
 
 
 @router.get("/me", response_model=PatientProfileOut, summary="获取患者资料")
-def get_patient_me(current_account: AppAccount = Depends(get_current_account)):
-    return _profile_out(current_account)
+def get_patient_me(
+    current_account: AppAccount = Depends(get_current_account),
+    db: Session = Depends(get_db),
+):
+    return _profile_out(current_account, db)
 
 
 @router.put("/me", response_model=PatientProfileOut, summary="更新患者资料")
@@ -468,7 +474,7 @@ def update_patient_me(
     current_account.UpdatedAt = datetime.utcnow()
     db.commit()
     db.refresh(current_account)
-    return _profile_out(current_account)
+    return _profile_out(current_account, db)
 
 
 @router.get("/registration", summary="获取当前用户完整版登记表")
