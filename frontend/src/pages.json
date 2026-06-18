@@ -303,6 +303,22 @@
                     }
                 },
                 {
+                    "path": "case-records/index",
+                    "style": {
+                        "navigationBarTitleText": "咨询记录",
+                        "navigationBarBackgroundColor": "#3D5A4E",
+                        "navigationBarTextStyle": "white"
+                    }
+                },
+                {
+                    "path": "case-records/detail",
+                    "style": {
+                        "navigationBarTitleText": "咨询记录明细",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                },
+                {
                     "path": "schedules/index",
                     "style": {
                         "navigationBarTitleText": "挂课情况",
@@ -473,7 +489,7 @@
                 {
                     "path": "case-record/edit",
                     "style": {
-                        "navigationBarTitleText": "个案记录",
+                        "navigationBarTitleText": "咨询记录",
                         "navigationBarBackgroundColor": "#ffffff",
                         "navigationBarTextStyle": "black"
                     }

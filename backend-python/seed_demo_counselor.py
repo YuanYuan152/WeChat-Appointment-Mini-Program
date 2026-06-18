@@ -11,15 +11,18 @@
 """
 
 from seed_base import bind_role, clear_all_tables, create_account, days_from_now, utc_now
+from datetime import timedelta
 from database import SessionLocal
 from models import (
     AppCaseRecord,
+    AppCaseRecordRevision,
     AppConsultation,
     AppCounselorProfile,
     AppOrder,
     AppSchedule,
     AppSubscribeTemplate,
 )
+from case_record_service import encode_photo_urls
 from seed_demo_common import demo_schedule_note
 
 LI_XINYI = {
@@ -156,14 +159,31 @@ def seed(db):
     db.add_all(consultations)
     db.flush()
 
+    done_consultation = consultations[2]
+    record = AppCaseRecord(
+        ConsultationId=done_consultation.Id,
+        CounselorId=counselor.Id,
+        Subjective="来访者自述近两周入睡困难，易烦躁，与工作压力相关。",
+        Objective="情绪稳定，语速正常，配合度良好。",
+        Assessment="轻度焦虑，暂无自伤风险。",
+        Plan="继续每周一次个体咨询，布置呼吸放松练习。",
+        PhotoUrls=encode_photo_urls(["/static/images/tc59.png", "/static/images/slide11.png"]),
+        UpdatedAt=utc_now(),
+    )
+    db.add(record)
+    db.flush()
     db.add(
-        AppCaseRecord(
-            ConsultationId=consultations[2].Id,
+        AppCaseRecordRevision(
+            CaseRecordId=record.Id,
+            ConsultationId=done_consultation.Id,
             CounselorId=counselor.Id,
-            Subjective="来访者自述近两周入睡困难，易烦躁，与工作压力相关。",
-            Objective="情绪稳定，语速正常，配合度良好。",
-            Assessment="轻度焦虑，暂无自伤风险。",
-            Plan="继续每周一次个体咨询，布置呼吸放松练习。",
+            Subjective="来访者主诉近期睡眠不佳，情绪偶有低落。",
+            Objective="精神状态一般，愿意配合咨询。",
+            Assessment="待进一步评估。",
+            Plan="下次补充量表与睡眠日记。",
+            PhotoUrls=encode_photo_urls(["/static/images/tc59.png"]),
+            RevisedAt=utc_now() - timedelta(days=3),
+            RevisedBy=counselor.Id,
         )
     )
 

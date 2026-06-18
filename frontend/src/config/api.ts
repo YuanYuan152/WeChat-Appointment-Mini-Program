@@ -163,6 +163,8 @@ export const API_ENDPOINTS = {
     refundExemptions: '/api/mini/admin/refund-exemptions',
     refundExemptionApprove: (id: number | string) => `/api/mini/admin/refund-exemptions/${id}/approve`,
     refundExemptionReject: (id: number | string) => `/api/mini/admin/refund-exemptions/${id}/reject`,
+    consultationRecordCounselors: '/api/mini/admin/consultation-records/counselors',
+    consultationRecordDetail: (id: number | string) => `/api/mini/admin/consultation-records/counselors/${id}`,
   },
 
   // 意见反馈

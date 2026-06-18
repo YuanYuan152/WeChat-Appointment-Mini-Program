@@ -31,6 +31,10 @@ APP_REFUND_EXEMPTION_COLUMNS = {
     "ReviewedAt": "DATETIME NULL",
 }
 
+APP_CASE_RECORD_COLUMNS = {
+    "PhotoUrls": "NVARCHAR(MAX) NULL",
+}
+
 
 def ensure_tables():
     Base.metadata.create_all(bind=engine)
@@ -70,6 +74,23 @@ def ensure_app_order_columns():
             print(f"[OK] Added AppOrder.{name}")
 
 
+def ensure_case_record_columns():
+    inspector = inspect(engine)
+    if not inspector.has_table("AppCaseRecord"):
+        return
+
+    existing = {column["name"] for column in inspector.get_columns("AppCaseRecord")}
+    missing = [(name, ddl) for name, ddl in APP_CASE_RECORD_COLUMNS.items() if name not in existing]
+    if not missing:
+        print("[OK] AppCaseRecord columns already complete")
+        return
+
+    with engine.begin() as conn:
+        for name, ddl in missing:
+            conn.execute(text(f"ALTER TABLE [dbo].[AppCaseRecord] ADD [{name}] {ddl}"))
+            print(f"[OK] Added AppCaseRecord.{name}")
+
+
 def ensure_refund_exemption_columns():
     inspector = inspect(engine)
     if not inspector.has_table("AppRefundExemption"):
@@ -106,6 +127,7 @@ def main():
     ensure_tables()
     ensure_app_account_columns()
     ensure_app_order_columns()
+    ensure_case_record_columns()
     ensure_refund_exemption_columns()
     print_summary()
 

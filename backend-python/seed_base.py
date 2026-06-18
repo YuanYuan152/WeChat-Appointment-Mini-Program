@@ -10,6 +10,7 @@ from models import AppAccount, AppRoleBinding
 
 # 按依赖顺序删除，避免残留关联数据
 APP_TABLES_DELETE_ORDER = [
+    "AppCaseRecordRevision",
     "AppCaseRecord",
     "AppRefundExemption",
     "AppScheduleCancelLog",

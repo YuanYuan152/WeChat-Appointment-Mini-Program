@@ -12,12 +12,15 @@ from sqlalchemy.orm import Session
 from app_time import china_now
 from models import (
     AppAccount,
+    AppCaseRecord,
+    AppCaseRecordRevision,
     AppConsultation,
     AppCounselorProfile,
     AppOrder,
     AppRoleBinding,
     AppSchedule,
 )
+from case_record_service import encode_photo_urls
 from schedule_meta import (
     is_video_center,
     schedule_note,
@@ -36,7 +39,7 @@ DEMO_PATIENTS = [
         "real_name": "林小美",
         "gender": "女",
         "avatar": "/static/images/tc59.png",
-        "consultations": ["refund_ok", "no_refund", "cancelled_refund"],
+        "consultations": ["refund_ok", "no_refund", "cancelled_refund", "done_lixinyi_recent", "done_lixinyi_old", "done_wang_extra"],
     },
     {
         "mobile": "13800000011",
@@ -45,7 +48,7 @@ DEMO_PATIENTS = [
         "real_name": "赵小刚",
         "gender": "男",
         "avatar": "/static/images/tc59.png",
-        "consultations": ["pending"],
+        "consultations": ["pending", "done_zhang_pending"],
     },
     {
         "mobile": "13800000012",
@@ -187,6 +190,42 @@ DEMO_PATIENT_CONSULTATIONS = [
         "room": "pudong-r1",
     },
     {
+        "key": "done_lixinyi_recent",
+        "counselor": "李心怡",
+        "offset": timedelta(days=-5),
+        "center": "yangpu",
+        "status": "DONE",
+        "billing": 60000,
+        "room": "yangpu-r1",
+    },
+    {
+        "key": "done_lixinyi_old",
+        "counselor": "李心怡",
+        "offset": timedelta(days=-18),
+        "center": "pudong",
+        "status": "DONE",
+        "billing": 60000,
+        "room": "pudong-r2",
+    },
+    {
+        "key": "done_wang_extra",
+        "counselor": "王婉清",
+        "offset": timedelta(days=-12),
+        "center": "yangpu",
+        "status": "DONE",
+        "billing": 68000,
+        "room": "yangpu-r2",
+    },
+    {
+        "key": "done_zhang_pending",
+        "counselor": "张明远",
+        "offset": timedelta(days=-3),
+        "center": "pudong",
+        "status": "DONE",
+        "billing": 55000,
+        "room": "pudong-r3",
+    },
+    {
         "key": "video_confirmed",
         "counselor": "陈启明",
         "offset": timedelta(days=2, hours=1),
@@ -204,6 +243,69 @@ DEMO_PATIENT_CONSULTATIONS = [
         "room": "pudong-r2",
         "order_status": "REFUNDED",
     },
+]
+
+# 咨询记录演示（对应 DEMO_PATIENT_CONSULTATIONS 中 status=DONE 的咨询单）
+DEMO_CASE_RECORDS = [
+    {
+        "consultation_key": "done",
+        "patient": "何小丽",
+        "subjective": "来访者反映职场会议前心慌手抖，担心当众发言出错，近一月症状加重。",
+        "objective": "面谈时语速略快，提及症状时可见紧张；GAD-7 自评中度。",
+        "assessment": "情境性焦虑为主，与完美主义认知及回避行为相关。",
+        "plan": "认知重构配合渐进暴露，布置每日 5 分钟呼吸放松练习。",
+        "photo_urls": ["/static/images/slide11.png", "/static/images/tc59.png"],
+        "revisions": [
+            {
+                "days_ago": 5,
+                "subjective": "来访者主诉近两周工作压力增大，偶有入睡困难。",
+                "objective": "情绪尚稳定，配合度良好。",
+                "assessment": "轻度焦虑倾向，需进一步评估。",
+                "plan": "继续收集信息，下次面谈深入探讨。",
+                "photo_urls": ["/static/images/tc59.png"],
+            },
+        ],
+    },
+    {
+        "consultation_key": "done_lixinyi_recent",
+        "patient": "林小美",
+        "subjective": "孩子进入青春期后亲子沟通变少，夫妻因教育方式常有争执。",
+        "objective": "来访者情绪激动时语速加快，谈及孩子时眼眶湿润。",
+        "assessment": "家庭互动模式僵化，存在三角化倾向。",
+        "plan": "下次邀请配偶参与部分会谈，练习非暴力沟通句式。",
+        "photo_urls": ["/static/images/huodong11.png"],
+        "revisions": [],
+    },
+    {
+        "consultation_key": "done_lixinyi_old",
+        "patient": "林小美",
+        "subjective": "首次咨询，主诉与婆婆同住边界不清，常感到被指责。",
+        "objective": "叙述条理清晰，自尊水平尚可，求助动机明确。",
+        "assessment": "婆媳关系议题突出，需厘清夫妻同盟。",
+        "plan": "绘制家庭关系图，识别可改变互动环节。",
+        "photo_urls": [],
+        "revisions": [],
+    },
+    {
+        "consultation_key": "done_wang_extra",
+        "patient": "林小美",
+        "subjective": "长期加班后疲惫感明显，周末也难以恢复精力。",
+        "objective": "面色疲倦，自述睡眠质量差，无自杀意念。",
+        "assessment": "职业倦怠与轻度抑郁症状需鉴别。",
+        "plan": "睡眠卫生教育，评估是否需要精神科会诊。",
+        "photo_urls": ["/static/images/slide11.png"],
+        "revisions": [
+            {
+                "days_ago": 10,
+                "subjective": "来访者表示最近总是很累，但说不清原因。",
+                "objective": "精神状态一般，语速缓慢。",
+                "assessment": "待进一步评估。",
+                "plan": "下次补充量表测评。",
+                "photo_urls": [],
+            },
+        ],
+    },
+    # done_zhang_pending 故意不写入记录，用于演示「待填写」
 ]
 
 DEMO_CENTER_DEFAULT_ROOM = {
@@ -478,6 +580,67 @@ def ensure_patient_consultations(
         consultation.StartTime = start
         consultation.EndTime = end
         consultation.Note = note
+
+
+def _consultation_by_demo_key(db: Session, patient_id: int, demo_key: str) -> Optional[AppConsultation]:
+    out_trade_no = f"DEMO-PAT-{demo_key}-{patient_id}"
+    order = db.query(AppOrder).filter(AppOrder.OutTradeNo == out_trade_no).first()
+    if not order:
+        return None
+    return db.query(AppConsultation).filter(AppConsultation.OrderId == order.Id).first()
+
+
+def ensure_demo_case_records(db: Session, patient_map: dict) -> None:
+    """为已完成咨询写入/更新咨询记录与历史版本（增量可重复执行）。"""
+    now = china_now()
+    for cfg in DEMO_CASE_RECORDS:
+        patient = patient_map.get(cfg["patient"])
+        if not patient:
+            continue
+        consultation = _consultation_by_demo_key(db, patient.Id, cfg["consultation_key"])
+        if not consultation or consultation.Status != "DONE":
+            continue
+
+        record = (
+            db.query(AppCaseRecord)
+            .filter(AppCaseRecord.ConsultationId == consultation.Id)
+            .first()
+        )
+        if not record:
+            record = AppCaseRecord(
+                ConsultationId=consultation.Id,
+                CounselorId=consultation.CounselorId,
+            )
+            db.add(record)
+            db.flush()
+
+        record.Subjective = cfg.get("subjective")
+        record.Objective = cfg.get("objective")
+        record.Assessment = cfg.get("assessment")
+        record.Plan = cfg.get("plan")
+        record.PhotoUrls = encode_photo_urls(cfg.get("photo_urls"))
+        record.UpdatedAt = now
+
+        db.query(AppCaseRecordRevision).filter(
+            AppCaseRecordRevision.CaseRecordId == record.Id,
+        ).delete(synchronize_session=False)
+
+        for rev_cfg in cfg.get("revisions", []):
+            revised_at = now - timedelta(days=rev_cfg.get("days_ago", 1))
+            db.add(
+                AppCaseRecordRevision(
+                    CaseRecordId=record.Id,
+                    ConsultationId=consultation.Id,
+                    CounselorId=consultation.CounselorId,
+                    Subjective=rev_cfg.get("subjective"),
+                    Objective=rev_cfg.get("objective"),
+                    Assessment=rev_cfg.get("assessment"),
+                    Plan=rev_cfg.get("plan"),
+                    PhotoUrls=encode_photo_urls(rev_cfg.get("photo_urls")),
+                    RevisedAt=revised_at,
+                    RevisedBy=consultation.CounselorId,
+                )
+            )
 
 
 def legacy_patient_placeholder(db: Session) -> None:

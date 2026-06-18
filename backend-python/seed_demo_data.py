@@ -9,6 +9,7 @@
   - 三位来访者：林小美 / 赵小刚 / 何小丽（与 auth.py dev_patient_* 对齐）
   - 四位咨询师：李心怡 / 张明远 / 王婉清 / 陈启明（含视频咨询中心时段）
   - BOOKED 时段 Note 含 center + room（视频中心无 room），工作台可显示咨询室
+  - 已完成咨询 + 咨询记录（含照片与修改历史版本）
   - 助理 / 运营 / 管理员演示账号
 
 测试置灰（无需真实微信支付）:
@@ -32,6 +33,7 @@ from seed_demo_common import (
     DEMO_STAFF_ACCOUNTS,
     ensure_counselor_profile,
     ensure_counselor_slots,
+    ensure_demo_case_records,
     ensure_patient_consultations,
     ensure_role,
     get_or_create_counselor_account,
@@ -161,6 +163,8 @@ def main():
                 db, acc.Id, counselor_map, consultation_keys=cfg.get("consultations"),
             )
 
+        ensure_demo_case_records(db, patient_map)
+
         db.commit()
         print("[OK] 演示助理/运营/管理员账号已写入（dev_assistant / dev_ops / dev_admin）")
         print("[OK] 四位咨询师演示数据已写入（含视频咨询中心）")
@@ -176,6 +180,11 @@ def main():
         print("  2. 张明远 → 浦东 → 后天 14:00 灰显，工作台显示咨询室 pudong-r2")
         print("  3. 陈启明 → 视频咨询 → 后天 11:00 可约；15:00 已约（无咨询室）")
         print("  4. DevRolePicker 三位来访者「我的咨询记录」见各账号 consultations 配置")
+        print("--- 咨询记录演示 ---")
+        print("  5. 李心怡登录 → 工作台「咨询记录」：2 条已完成（林小美）")
+        print("  6. 王婉清登录 → 咨询记录：2 条已完成（何小丽已填+历史版本，林小美已填）")
+        print("  7. 张明远登录 → 1 条待填写（赵小刚，近3天）")
+        print("  8. 运营/管理员 → 咨询记录：各咨询师近30天填写情况")
     except Exception:
         db.rollback()
         raise

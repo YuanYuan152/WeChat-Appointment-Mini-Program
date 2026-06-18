@@ -104,8 +104,26 @@ class AppCaseRecord(Base):
     Objective = Column(UnicodeText, nullable=True)
     Assessment = Column(UnicodeText, nullable=True)
     Plan = Column(UnicodeText, nullable=True)
+    PhotoUrls = Column(UnicodeText, nullable=True)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
     UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
+
+
+class AppCaseRecordRevision(Base):
+    """咨询记录每次修改前的版本快照。"""
+    __tablename__ = "AppCaseRecordRevision"
+
+    Id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    CaseRecordId = Column(Integer, nullable=False, index=True)
+    ConsultationId = Column(Integer, nullable=False)
+    CounselorId = Column(Integer, nullable=False)
+    Subjective = Column(UnicodeText, nullable=True)
+    Objective = Column(UnicodeText, nullable=True)
+    Assessment = Column(UnicodeText, nullable=True)
+    Plan = Column(UnicodeText, nullable=True)
+    PhotoUrls = Column(UnicodeText, nullable=True)
+    RevisedAt = Column(DateTime, default=func.now(), nullable=False)
+    RevisedBy = Column(Integer, nullable=False)
 
 
 class AppTask(Base):

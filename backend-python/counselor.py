@@ -5,25 +5,31 @@ POST /api/mini/counselor/schedules          新增排班
 PUT  /api/mini/counselor/schedules/{id}     修改排班（取消/备注）
 GET  /api/mini/counselor/consultations      咨询单列表（按状态筛选）
 PUT  /api/mini/counselor/consultations/{id} 更新咨询单状态（确认/完成/取消）
-GET  /api/mini/counselor/case-records       个案记录列表
-POST /api/mini/counselor/case-records       新建个案记录
-PUT  /api/mini/counselor/case-records/{id}  更新个案记录
+GET  /api/mini/counselor/consultations/completed 已完成咨询（含个案记录摘要）
+GET  /api/mini/counselor/case-records/{id}        个案记录详情
+GET  /api/mini/counselor/case-records/{id}/revisions  个案记录历史版本
 """
 
 from datetime import datetime, timedelta, date as date_type, time
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import ProgrammingError, OperationalError
 
+from case_record_service import (
+    apply_case_record_fields,
+    decode_photo_urls,
+    save_case_record_revision,
+)
 from auth import get_current_account, AppAccount
 from database import get_db
 from models import (
     AppSchedule,
     AppConsultation,
     AppCaseRecord,
+    AppCaseRecordRevision,
     AppRoleBinding,
     AppCounselorProfile,
     AppLeaveRequest,
@@ -201,6 +207,7 @@ class CaseRecordCreate(BaseModel):
     objective: Optional[str] = None
     assessment: Optional[str] = None
     plan: Optional[str] = None
+    photo_urls: Optional[List[str]] = None
 
 
 class CaseRecordUpdate(BaseModel):
@@ -208,6 +215,7 @@ class CaseRecordUpdate(BaseModel):
     objective: Optional[str] = None
     assessment: Optional[str] = None
     plan: Optional[str] = None
+    photo_urls: Optional[List[str]] = None
 
 
 class CaseRecordOut(BaseModel):
@@ -218,11 +226,65 @@ class CaseRecordOut(BaseModel):
     Objective: Optional[str] = None
     Assessment: Optional[str] = None
     Plan: Optional[str] = None
+    PhotoUrls: List[str] = []
     CreatedAt: datetime
     UpdatedAt: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+    @classmethod
+    def from_record(cls, record: AppCaseRecord) -> "CaseRecordOut":
+        return cls(
+            Id=record.Id,
+            ConsultationId=record.ConsultationId,
+            CounselorId=record.CounselorId,
+            Subjective=record.Subjective,
+            Objective=record.Objective,
+            Assessment=record.Assessment,
+            Plan=record.Plan,
+            PhotoUrls=decode_photo_urls(record.PhotoUrls),
+            CreatedAt=record.CreatedAt,
+            UpdatedAt=record.UpdatedAt,
+        )
+
+
+class CaseRecordRevisionOut(BaseModel):
+    Id: int
+    CaseRecordId: int
+    ConsultationId: int
+    Subjective: Optional[str] = None
+    Objective: Optional[str] = None
+    Assessment: Optional[str] = None
+    Plan: Optional[str] = None
+    PhotoUrls: List[str] = []
+    RevisedAt: datetime
+    RevisedBy: int
+
+    @classmethod
+    def from_revision(cls, row: AppCaseRecordRevision) -> "CaseRecordRevisionOut":
+        return cls(
+            Id=row.Id,
+            CaseRecordId=row.CaseRecordId,
+            ConsultationId=row.ConsultationId,
+            Subjective=row.Subjective,
+            Objective=row.Objective,
+            Assessment=row.Assessment,
+            Plan=row.Plan,
+            PhotoUrls=decode_photo_urls(row.PhotoUrls),
+            RevisedAt=row.RevisedAt,
+            RevisedBy=row.RevisedBy,
+        )
+
+
+class CompletedConsultationOut(BaseModel):
+    Id: int
+    PatientId: int
+    PatientName: str
+    StartTime: Optional[datetime] = None
+    EndTime: Optional[datetime] = None
+    Note: Optional[str] = None
+    CaseRecordId: Optional[int] = None
+    HasRecord: bool = False
+    RecordUpdatedAt: Optional[datetime] = None
+    PhotoCount: int = 0
 
 
 class CounselorProfilePayload(BaseModel):
@@ -843,6 +905,80 @@ def update_consultation(
     return consultation
 
 
+def _patient_display_name(account: Optional[AppAccount]) -> str:
+    if not account:
+        return "来访者"
+    return (account.RealName or account.Nickname or account.Mobile or "来访者").strip()
+
+
+@router.get(
+    "/consultations/completed",
+    response_model=List[CompletedConsultationOut],
+    summary="已完成咨询列表（含个案记录摘要）",
+)
+def list_completed_consultations(
+    counselor: AppAccount = Depends(require_counselor),
+    db: Session = Depends(get_db),
+):
+    consultations = (
+        db.query(AppConsultation)
+        .filter(
+            AppConsultation.CounselorId == counselor.Id,
+            AppConsultation.Status == "DONE",
+        )
+        .order_by(AppConsultation.EndTime.desc(), AppConsultation.Id.desc())
+        .all()
+    )
+    if not consultations:
+        return []
+
+    consultation_ids = [c.Id for c in consultations]
+    patient_ids = {c.PatientId for c in consultations}
+    patients = {
+        a.Id: a
+        for a in db.query(AppAccount).filter(AppAccount.Id.in_(patient_ids)).all()
+    }
+    records = {
+        r.ConsultationId: r
+        for r in db.query(AppCaseRecord)
+        .filter(
+            AppCaseRecord.CounselorId == counselor.Id,
+            AppCaseRecord.ConsultationId.in_(consultation_ids),
+        )
+        .all()
+    }
+
+    result: List[CompletedConsultationOut] = []
+    for c in consultations:
+        record = records.get(c.Id)
+        photo_count = len(decode_photo_urls(record.PhotoUrls)) if record else 0
+        has_content = bool(
+            record
+            and (
+                (record.Subjective or "").strip()
+                or (record.Objective or "").strip()
+                or (record.Assessment or "").strip()
+                or (record.Plan or "").strip()
+                or photo_count > 0
+            )
+        )
+        result.append(
+            CompletedConsultationOut(
+                Id=c.Id,
+                PatientId=c.PatientId,
+                PatientName=_patient_display_name(patients.get(c.PatientId)),
+                StartTime=c.StartTime,
+                EndTime=c.EndTime,
+                Note=c.Note,
+                CaseRecordId=record.Id if record else None,
+                HasRecord=has_content,
+                RecordUpdatedAt=record.UpdatedAt or record.CreatedAt if record else None,
+                PhotoCount=photo_count,
+            )
+        )
+    return result
+
+
 # ---------------------------------------------------------------------------
 # 个案记录接口
 # ---------------------------------------------------------------------------
@@ -852,12 +988,53 @@ def list_case_records(
     counselor: AppAccount = Depends(require_counselor),
     db: Session = Depends(get_db),
 ):
-    return (
+    rows = (
         db.query(AppCaseRecord)
         .filter(AppCaseRecord.CounselorId == counselor.Id)
         .order_by(AppCaseRecord.CreatedAt.desc())
         .all()
     )
+    return [CaseRecordOut.from_record(r) for r in rows]
+
+
+@router.get("/case-records/{record_id}", response_model=CaseRecordOut, summary="获取个案记录详情")
+def get_case_record(
+    record_id: int,
+    counselor: AppAccount = Depends(require_counselor),
+    db: Session = Depends(get_db),
+):
+    record = db.query(AppCaseRecord).filter(
+        AppCaseRecord.Id == record_id,
+        AppCaseRecord.CounselorId == counselor.Id,
+    ).first()
+    if not record:
+        raise HTTPException(status_code=404, detail="个案记录不存在")
+    return CaseRecordOut.from_record(record)
+
+
+@router.get(
+    "/case-records/{record_id}/revisions",
+    response_model=List[CaseRecordRevisionOut],
+    summary="个案记录历史版本",
+)
+def list_case_record_revisions(
+    record_id: int,
+    counselor: AppAccount = Depends(require_counselor),
+    db: Session = Depends(get_db),
+):
+    record = db.query(AppCaseRecord).filter(
+        AppCaseRecord.Id == record_id,
+        AppCaseRecord.CounselorId == counselor.Id,
+    ).first()
+    if not record:
+        raise HTTPException(status_code=404, detail="个案记录不存在")
+    rows = (
+        db.query(AppCaseRecordRevision)
+        .filter(AppCaseRecordRevision.CaseRecordId == record_id)
+        .order_by(AppCaseRecordRevision.RevisedAt.desc())
+        .all()
+    )
+    return [CaseRecordRevisionOut.from_revision(r) for r in rows]
 
 
 @router.post("/case-records", response_model=CaseRecordOut, summary="新建个案记录")
@@ -866,18 +1043,38 @@ def create_case_record(
     counselor: AppAccount = Depends(require_counselor),
     db: Session = Depends(get_db),
 ):
+    consultation = db.query(AppConsultation).filter(
+        AppConsultation.Id == body.consultation_id,
+        AppConsultation.CounselorId == counselor.Id,
+        AppConsultation.Status == "DONE",
+    ).first()
+    if not consultation:
+        raise HTTPException(status_code=400, detail="仅可为已完成的咨询填写记录")
+
+    existing = db.query(AppCaseRecord).filter(
+        AppCaseRecord.ConsultationId == body.consultation_id,
+        AppCaseRecord.CounselorId == counselor.Id,
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="该咨询已有记录，请直接编辑")
+
     record = AppCaseRecord(
         ConsultationId=body.consultation_id,
         CounselorId=counselor.Id,
-        Subjective=body.subjective,
-        Objective=body.objective,
-        Assessment=body.assessment,
-        Plan=body.plan,
+    )
+    apply_case_record_fields(
+        record,
+        subjective=body.subjective,
+        objective=body.objective,
+        assessment=body.assessment,
+        plan=body.plan,
+        photo_urls=body.photo_urls,
+        photo_urls_set=body.photo_urls is not None,
     )
     db.add(record)
     db.commit()
     db.refresh(record)
-    return record
+    return CaseRecordOut.from_record(record)
 
 
 @router.put("/case-records/{record_id}", response_model=CaseRecordOut, summary="更新个案记录")
@@ -894,14 +1091,20 @@ def update_case_record(
     if not record:
         raise HTTPException(status_code=404, detail="个案记录不存在")
 
-    for field in ("Subjective", "Objective", "Assessment", "Plan"):
-        val = getattr(body, field.lower(), None)
-        if val is not None:
-            setattr(record, field, val)
+    save_case_record_revision(db, record, revised_by=counselor.Id)
+    apply_case_record_fields(
+        record,
+        subjective=body.subjective,
+        objective=body.objective,
+        assessment=body.assessment,
+        plan=body.plan,
+        photo_urls=body.photo_urls,
+        photo_urls_set=body.photo_urls is not None,
+    )
     record.UpdatedAt = datetime.utcnow()
     db.commit()
     db.refresh(record)
-    return record
+    return CaseRecordOut.from_record(record)
 
 
 # ---------------------------------------------------------------------------

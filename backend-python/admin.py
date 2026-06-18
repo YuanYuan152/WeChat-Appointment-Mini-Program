@@ -1,6 +1,6 @@
 """管理员轻控制台：最小角色绑定/解绑能力。"""
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -11,11 +11,13 @@ from auth import get_current_account
 from database import get_db
 from models import (
     AppAccount,
+    AppCaseRecord,
     AppConsultation,
     AppCounselorProfile,
     AppRefundExemption,
     AppRoleBinding,
 )
+from case_record_service import decode_photo_urls
 from refund_exemption_service import approve_refund_exemption, reject_refund_exemption
 
 router = APIRouter(prefix="/api/mini/admin", tags=["Admin"])
@@ -249,3 +251,200 @@ def reject_refund_exemption_request(
         raise HTTPException(status_code=400, detail=str(e))
     db.commit()
     return {"message": "已拒绝申请，预约与订单维持不变", "status": "REJECTED"}
+
+
+def _admin_patient_name(account: Optional[AppAccount]) -> str:
+    if not account:
+        return "来访者"
+    return (account.RealName or account.Nickname or account.Mobile or "来访者").strip()
+
+
+class CounselorRecordSummaryOut(BaseModel):
+    counselorId: int
+    counselorName: str
+    completedCount: int
+    recordedCount: int
+    missingCount: int
+
+
+class AdminConsultationRecordOut(BaseModel):
+    consultationId: int
+    patientId: int
+    patientName: str
+    startTime: Optional[datetime] = None
+    endTime: Optional[datetime] = None
+    caseRecordId: Optional[int] = None
+    hasRecord: bool = False
+    recordUpdatedAt: Optional[datetime] = None
+    photoCount: int = 0
+    subjectivePreview: Optional[str] = None
+
+
+@router.get(
+    "/consultation-records/counselors",
+    response_model=List[CounselorRecordSummaryOut],
+    summary="咨询师咨询记录概览（近 N 天）",
+)
+def list_counselor_record_summaries(
+    days: int = Query(30, ge=1, le=90, description="统计近多少天"),
+    _admin: AppAccount = Depends(require_ops_or_admin),
+    db: Session = Depends(get_db),
+):
+    since = datetime.utcnow() - timedelta(days=days)
+    counselor_bindings = (
+        db.query(AppRoleBinding)
+        .filter(AppRoleBinding.RoleType == "Counselor")
+        .all()
+    )
+    counselor_ids = sorted({b.AccountId for b in counselor_bindings})
+    if not counselor_ids:
+        return []
+
+    profiles = {
+        p.AccountId: p
+        for p in db.query(AppCounselorProfile)
+        .filter(AppCounselorProfile.AccountId.in_(counselor_ids))
+        .all()
+    }
+    accounts = {
+        a.Id: a
+        for a in db.query(AppAccount).filter(AppAccount.Id.in_(counselor_ids)).all()
+    }
+
+    consultations = (
+        db.query(AppConsultation)
+        .filter(
+            AppConsultation.CounselorId.in_(counselor_ids),
+            AppConsultation.Status == "DONE",
+            AppConsultation.EndTime >= since,
+        )
+        .all()
+    )
+    cons_by_counselor: dict[int, list] = {}
+    consultation_ids: list[int] = []
+    for c in consultations:
+        cons_by_counselor.setdefault(c.CounselorId, []).append(c)
+        consultation_ids.append(c.Id)
+
+    records_by_consultation: dict[int, AppCaseRecord] = {}
+    if consultation_ids:
+        for r in db.query(AppCaseRecord).filter(
+            AppCaseRecord.ConsultationId.in_(consultation_ids)
+        ).all():
+            records_by_consultation[r.ConsultationId] = r
+
+    result: List[CounselorRecordSummaryOut] = []
+    for cid in counselor_ids:
+        cons = cons_by_counselor.get(cid, [])
+        recorded = 0
+        for c in cons:
+            record = records_by_consultation.get(c.Id)
+            if not record:
+                continue
+            photo_count = len(decode_photo_urls(record.PhotoUrls))
+            if (
+                (record.Subjective or "").strip()
+                or (record.Objective or "").strip()
+                or (record.Assessment or "").strip()
+                or (record.Plan or "").strip()
+                or photo_count > 0
+            ):
+                recorded += 1
+        profile = profiles.get(cid)
+        account = accounts.get(cid)
+        name = (
+            (profile.Name if profile else None)
+            or (account.Nickname if account else None)
+            or (account.RealName if account else None)
+            or f"咨询师#{cid}"
+        )
+        completed = len(cons)
+        result.append(
+            CounselorRecordSummaryOut(
+                counselorId=cid,
+                counselorName=name,
+                completedCount=completed,
+                recordedCount=recorded,
+                missingCount=max(0, completed - recorded),
+            )
+        )
+    result.sort(key=lambda x: (-x.completedCount, x.counselorName))
+    return result
+
+
+@router.get(
+    "/consultation-records/counselors/{counselor_id}",
+    response_model=List[AdminConsultationRecordOut],
+    summary="指定咨询师近 N 天咨询记录明细",
+)
+def list_counselor_consultation_records(
+    counselor_id: int,
+    days: int = Query(30, ge=1, le=90),
+    _admin: AppAccount = Depends(require_ops_or_admin),
+    db: Session = Depends(get_db),
+):
+    binding = db.query(AppRoleBinding).filter(
+        AppRoleBinding.AccountId == counselor_id,
+        AppRoleBinding.RoleType == "Counselor",
+    ).first()
+    if not binding:
+        raise HTTPException(status_code=404, detail="咨询师不存在")
+
+    since = datetime.utcnow() - timedelta(days=days)
+    consultations = (
+        db.query(AppConsultation)
+        .filter(
+            AppConsultation.CounselorId == counselor_id,
+            AppConsultation.Status == "DONE",
+            AppConsultation.EndTime >= since,
+        )
+        .order_by(AppConsultation.EndTime.desc(), AppConsultation.Id.desc())
+        .all()
+    )
+    if not consultations:
+        return []
+
+    patient_ids = {c.PatientId for c in consultations}
+    patients = {
+        a.Id: a
+        for a in db.query(AppAccount).filter(AppAccount.Id.in_(patient_ids)).all()
+    }
+    consultation_ids = [c.Id for c in consultations]
+    records = {
+        r.ConsultationId: r
+        for r in db.query(AppCaseRecord)
+        .filter(AppCaseRecord.ConsultationId.in_(consultation_ids))
+        .all()
+    }
+
+    items: List[AdminConsultationRecordOut] = []
+    for c in consultations:
+        record = records.get(c.Id)
+        photo_count = len(decode_photo_urls(record.PhotoUrls)) if record else 0
+        subjective = (record.Subjective or "").strip() if record else ""
+        has_record = bool(
+            record
+            and (
+                subjective
+                or (record.Objective or "").strip()
+                or (record.Assessment or "").strip()
+                or (record.Plan or "").strip()
+                or photo_count > 0
+            )
+        )
+        preview = subjective[:80] + ("…" if len(subjective) > 80 else "") if subjective else None
+        items.append(
+            AdminConsultationRecordOut(
+                consultationId=c.Id,
+                patientId=c.PatientId,
+                patientName=_admin_patient_name(patients.get(c.PatientId)),
+                startTime=c.StartTime,
+                endTime=c.EndTime,
+                caseRecordId=record.Id if record else None,
+                hasRecord=has_record,
+                recordUpdatedAt=record.UpdatedAt or record.CreatedAt if record else None,
+                photoCount=photo_count,
+                subjectivePreview=preview,
+            )
+        )
+    return items

@@ -37,6 +37,7 @@ const entries = [
   { title: '运营看板', desc: '关键指标与日活数据', symbol: '数', tone: 'tone-muted', path: '/pages/ops/dashboard/index' },
   { title: '用户与角色', desc: '账号绑定与角色管理', symbol: '人', tone: 'tone-green', path: '/pages/ops/admin-roles/index' },
   { title: '豁免申请审核', desc: '24小时内取消退款豁免 · 管理员', symbol: '审', tone: 'tone-gold', path: '/pages/ops/refund-exemptions/index' },
+  { title: '咨询记录', desc: '各咨询师近30天记录填写情况', symbol: '记', tone: 'tone-green', path: '/pages/ops/case-records/index' },
   { title: '重后台 (Web)', desc: 'WebView 嵌入旧管理后台', symbol: 'Web', tone: 'tone-dark', path: '/pages/admin-webview/index' },
 ]
 
