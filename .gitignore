@@ -38,6 +38,9 @@ mono_crash.*
 .vscode/
 .idea/
 
+# 本地文档/笔记
+local-docs/
+
 # Build results
 [Dd]ebug/
 [Dd]ebugPublic/
@@ -404,6 +407,7 @@ FodyWeavers.xsd
 
 # Python 虚拟环境与缓存
 backend-python/venv/
+backend-python/.local/
 **/__pycache__/
 *.py[cod]
 .Python
@@ -413,4 +417,3 @@ lxxl/Web.config
 backend-python/.env
 frontend/.env
 frontend/.env.production
-

@@ -96,7 +96,7 @@
           <view class="menu-icon-wrap bg-gray-light">
             <text class="menu-icon text-gray">ℹ</text>
           </view>
-          <text class="menu-text">关于我们</text>
+          <text class="menu-text">联系我们</text>
           <text class="menu-arrow">›</text>
         </view>
       </view>

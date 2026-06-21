@@ -19,14 +19,6 @@
         >{{ p }}</text>
       </view>
     </view>
-
-    <view class="link-card" @click="goJixinli">
-      <view class="link-left">
-        <text class="link-title">了解济心理</text>
-        <text class="link-desc">连心心理旗下知识品牌</text>
-      </view>
-      <text class="link-arrow">›</text>
-    </view>
   </view>
 </template>
 
@@ -34,10 +26,6 @@
 import { ABOUT_CONTENT } from '@/constants/siteContent'
 
 const content = ABOUT_CONTENT
-
-const goJixinli = () => {
-  uni.navigateTo({ url: '/pages/jixinli/index' })
-}
 </script>
 
 <style scoped>
@@ -104,38 +92,5 @@ const goJixinli = () => {
 
 .info-paragraph:last-child {
   margin-bottom: 0;
-}
-
-.link-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: #fff;
-  border-radius: 28rpx;
-  padding: 32rpx;
-  box-shadow: 0 4rpx 16rpx rgba(15, 23, 42, 0.05);
-}
-
-.link-card:active {
-  opacity: 0.9;
-}
-
-.link-title {
-  display: block;
-  font-size: 30rpx;
-  font-weight: 700;
-  color: #1F2937;
-}
-
-.link-desc {
-  display: block;
-  margin-top: 8rpx;
-  font-size: 24rpx;
-  color: #6B7280;
-}
-
-.link-arrow {
-  font-size: 40rpx;
-  color: #D1D5DB;
 }
 </style>
