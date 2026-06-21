@@ -227,15 +227,11 @@
 
 <script setup lang="ts">
 
-import { computed, onMounted, ref } from 'vue'
-
-import { onShow } from '@dcloudio/uni-app'
+import { computed, onMounted, ref, watch } from 'vue'
 
 import { httpV2 } from '@/utils/http'
 
 import { API_ENDPOINTS } from '@/config/api'
-
-import { syncTabBarByAuth } from '@/utils/tabBar'
 
 
 
@@ -322,6 +318,8 @@ const cancellingId = ref<number | null>(null)
 const showCancelModal = ref(false)
 
 const cancelTarget = ref<Consultation | null>(null)
+
+const props = defineProps<{ refreshKey?: number }>()
 
 
 
@@ -572,12 +570,14 @@ const confirmCancel = async () => {
 
 
 
-onShow(() => {
-  syncTabBarByAuth()
-  fetchList()
-})
-
 onMounted(fetchList)
+
+watch(
+  () => props.refreshKey,
+  () => {
+    fetchList()
+  },
+)
 
 </script>
 

@@ -54,7 +54,7 @@
           <text class="menu-text">个人信息</text>
           <text class="menu-arrow">›</text>
         </view>
-        <view class="menu-item" @click="navigateTo('/pages/patient/records/list')">
+        <view class="menu-item" @click="navigateTo('/pages/workbench/index')">
           <view class="menu-icon-wrap bg-blue-light">
             <text class="menu-icon text-blue">📋</text>
           </view>
@@ -124,6 +124,7 @@ import { UserApi } from '@/apis/user'
 import { AuthApi } from '@/apis/auth'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
+import { cacheRoleSnapshot, clearRoleSnapshot, syncTabBarByAuth } from '@/utils/tabBar'
 
 interface UserInfo {
   name: string
@@ -181,12 +182,14 @@ const resetPageState = () => {
 const refreshPage = () => {
   if (checkIsLoggedIn()) {
     isLoggedIn.value = true
+    syncTabBarByAuth()
     loadUserInfo()
     loadStats()
     return
   }
   isLoggedIn.value = false
   resetPageState()
+  syncTabBarByAuth()
 }
 
 // Tab 页切换回来不会重新 onMounted，必须在 onShow 刷新
@@ -205,8 +208,10 @@ const loadUserInfo = async () => {
 
     if (res.code === 401 || res.code === 403) {
       clearToken()
+      clearRoleSnapshot()
       isLoggedIn.value = false
       resetPageState()
+      syncTabBarByAuth()
       return
     }
     if (res.code !== 0 || !res.data) return
@@ -219,9 +224,8 @@ const loadUserInfo = async () => {
       avatar: meData.avatarUrl || '',
     }
     activeRole.value = meData.activeRole || meData.roles?.[0] || ''
-    if (meData.roles?.length) {
-      uni.setStorageSync('user_roles', JSON.stringify(meData.roles))
-    }
+    cacheRoleSnapshot(meData)
+    syncTabBarByAuth(meData)
   } catch {
     // 网络异常时保留登录态，避免误清 token
   }
@@ -256,6 +260,7 @@ const hideModal = () => {
 const handleLoginSuccess = (data: any) => {
   isLoggedIn.value = true
   loadUserInfo()
+  syncTabBarByAuth()
   
   // 登录成功后，如果有跳转地址，则跳转过去
   // 这里可以通过全局状态管理或其他方式传递跳转地址
@@ -300,6 +305,8 @@ const clearCache = () => {
     success: (res) => {
       if (res.confirm) {
         uni.clearStorageSync()
+        clearRoleSnapshot()
+        syncTabBarByAuth()
         uni.showToast({
           title: '缓存已清空',
           icon: 'success'
@@ -325,6 +332,20 @@ const goPersonalInfo = () => {
 }
 
 const navigateTo = (url: string) => {
+  const pathOnly = url.split('?')[0]
+  if (
+    pathOnly === '/pages/workbench/index'
+    || pathOnly === '/pages/records/index'
+    || pathOnly === '/pages/patient/records/list'
+  ) {
+    uni.switchTab({
+      url: '/pages/workbench/index',
+      fail: () => {
+        uni.navigateTo({ url })
+      },
+    })
+    return
+  }
   uni.navigateTo({ url })
 }
 
@@ -366,10 +387,11 @@ const handleLogout = () => {
     success: (res) => {
       if (!res.confirm) return
       clearToken()
-      uni.removeStorageSync('user_roles')
+      clearRoleSnapshot()
       uni.removeStorageSync('redirectAfterLogin')
       isLoggedIn.value = false
       resetPageState()
+      syncTabBarByAuth()
       uni.showToast({ title: '已退出登录', icon: 'success' })
     },
   })
@@ -399,7 +421,9 @@ const handleDeleteAccount = () => {
             await AuthApi.deleteAccount()
             uni.hideLoading()
             clearToken()
+            clearRoleSnapshot()
             isLoggedIn.value = false
+            syncTabBarByAuth()
             uni.showToast({ title: '已注销账号', icon: 'success' })
             setTimeout(() => {
               uni.switchTab({ url: '/pages/index/index' })

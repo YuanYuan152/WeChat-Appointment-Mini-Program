@@ -55,6 +55,7 @@
 import { computed, ref, onMounted } from 'vue'
 import { AuthApi } from '@/apis/auth'
 import DevRolePicker from '@/components/DevRolePicker.vue'
+import { cacheRoleSnapshot, syncTabBarByAuth } from '@/utils/tabBar'
 import {
   DEV_LOGIN_ROLES,
   getDevLoginCode,
@@ -137,7 +138,8 @@ const afterLoginSuccess = async () => {
   // 登录后拉取角色信息存入 storage，供路由守卫使用
   try {
     const me = await AuthApi.getMe()
-    uni.setStorageSync('user_roles', JSON.stringify(me.roles || []))
+    cacheRoleSnapshot(me)
+    await syncTabBarByAuth(me)
   } catch { /* ignore */ }
 
   setTimeout(() => {
@@ -258,4 +260,4 @@ onMounted(() => {
   backdrop-filter: blur(10px);
 }
 .back-icon { font-size: 40rpx; color: white; font-weight: bold; }
-</style> 
+</style>

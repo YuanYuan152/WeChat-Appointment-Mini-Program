@@ -1,20 +1,12 @@
 <template>
-  <view class="page-workbench-router">
-    <!-- 来访者：工作台不开放 -->
-    <view v-if="state === 'patientBlocked'" class="card patient-card">
-      <text class="patient-emoji">(｡•́︿•̀｡)</text>
-      <text class="title">当前工作台界面暂时不对来访者开放哦</text>
-      <text class="desc">预约咨询请前往「咨询」页；查看记录请前往「我的」</text>
-      <view class="patient-actions">
-        <button class="ghost-btn" @click="goConsult">去预约咨询</button>
-        <button class="ghost-btn" @click="goProfile">我的中心</button>
-      </view>
-    </view>
+  <view class="page-workbench-router" :class="{ 'records-mode': state === 'patientRecords' }">
+    <!-- 来访者：第三个 tab 展示预约记录 -->
+    <PatientRecordsList v-if="state === 'patientRecords'" :refresh-key="recordsRefreshKey" />
 
     <!-- 未登录 -->
     <view v-else-if="state === 'needLogin'" class="card">
       <text class="title">请先登录</text>
-      <text class="desc">登录后将根据您的角色进入对应工作台</text>
+      <text class="desc">登录后可查看预约记录，或根据账号角色进入对应工作台</text>
       <DevRolePicker />
       <button class="login-btn" @click="goLogin">微信一键登录</button>
     </view>
@@ -40,6 +32,7 @@ import { ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { AuthApi } from '@/apis/auth'
 import DevRolePicker from '@/components/DevRolePicker.vue'
+import PatientRecordsList from '@/components/PatientRecordsList.vue'
 import {
   getDevLoginCode,
   getDevWorkbenchRole,
@@ -47,11 +40,13 @@ import {
   isMockLoginEnabled,
   resolveWxLoginCode,
 } from '@/utils/auth'
+import { cacheRoleSnapshot, clearRoleSnapshot, syncTabBarByAuth } from '@/utils/tabBar'
 
-type RouterState = 'loading' | 'needLogin' | 'error' | 'patientBlocked'
+type RouterState = 'loading' | 'needLogin' | 'error' | 'patientRecords'
 
 const state = ref<RouterState>('loading')
 const errorMsg = ref('')
+const recordsRefreshKey = ref(0)
 
 const ROLE_ROUTES: Record<string, string> = {
   Counselor: '/pages/counselor/workbench/index',
@@ -75,9 +70,6 @@ const resolveActiveRole = (roles: string[], activeRole?: string) => {
   return priority.find(role => roles.includes(role)) || 'Patient'
 }
 
-const goConsult = () => uni.navigateTo({ url: '/pages/consultant/list' })
-const goProfile = () => uni.switchTab({ url: '/pages/user/profile' })
-
 const goLogin = async () => {
   state.value = 'loading'
   try {
@@ -92,24 +84,33 @@ const goLogin = async () => {
 
 const routeToWorkbench = async () => {
   if (!isLoggedIn()) {
+    clearRoleSnapshot()
+    syncTabBarByAuth()
+    uni.setNavigationBarTitle({ title: '预约记录' })
     state.value = 'needLogin'
     return
   }
 
   state.value = 'loading'
+  uni.setNavigationBarTitle({ title: '工作台' })
   try {
     const me = await AuthApi.getMe()
     const role = resolveActiveRole(me.roles || [], me.activeRole)
 
-    uni.setStorageSync('user_roles', JSON.stringify(me.roles || []))
+    cacheRoleSnapshot(me)
+    syncTabBarByAuth(me)
 
     if (!WORKBENCH_ROLES.has(role)) {
-      state.value = 'patientBlocked'
+      uni.setNavigationBarTitle({ title: '预约记录' })
+      recordsRefreshKey.value += 1
+      state.value = 'patientRecords'
       return
     }
 
     if (role !== me.activeRole) {
       await AuthApi.switchRole(role)
+      cacheRoleSnapshot({ roles: me.roles || [], activeRole: role })
+      syncTabBarByAuth({ roles: me.roles || [], activeRole: role })
     }
 
     const target = ROLE_ROUTES[role]
@@ -121,8 +122,8 @@ const routeToWorkbench = async () => {
 }
 
 onShow(() => {
-  if (isLoggedIn()) routeToWorkbench()
-  else state.value = 'needLogin'
+  syncTabBarByAuth()
+  routeToWorkbench()
 })
 </script>
 
@@ -134,6 +135,11 @@ onShow(() => {
   align-items: center;
   justify-content: center;
   padding: 40rpx;
+}
+.page-workbench-router.records-mode {
+  display: block;
+  padding: 0;
+  background: #F4F6F8;
 }
 .card {
   width: 100%;

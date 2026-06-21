@@ -550,7 +550,7 @@
                 "pagePath": "pages/workbench/index",
                 "iconPath": "static/images/bottom3.png",
                 "selectedIconPath": "static/images/bottom3.png",
-                "text": "工作台"
+                "text": "预约记录"
             },
             {
                 "pagePath": "pages/user/profile",

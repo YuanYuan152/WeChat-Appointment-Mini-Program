@@ -6,6 +6,7 @@
 
 <script setup lang="ts">
 import { onLaunch, onShow, onHide } from '@dcloudio/uni-app'
+import { syncTabBarByAuth } from '@/utils/tabBar'
 
 // 应用启动时执行
 onLaunch(() => {
@@ -17,6 +18,7 @@ onLaunch(() => {
 // 应用显示时执行
 onShow(() => {
   console.log('App Show')
+  syncTabBarByAuth()
 })
 
 // 应用隐藏时执行
@@ -28,6 +30,7 @@ onHide(() => {
 const initApp = () => {
   console.log('应用初始化完成')
   console.log('API地址:', import.meta.env.VITE_API_BASE_URL)
+  syncTabBarByAuth()
 }
 </script>
 

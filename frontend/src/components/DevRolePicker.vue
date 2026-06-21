@@ -25,6 +25,7 @@
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
 import { AuthApi } from '@/apis/auth'
+import { cacheRoleSnapshot, clearRoleSnapshot, syncTabBarByAuth } from '@/utils/tabBar'
 import {
   DEV_LOGIN_ROLE_GROUPS,
   DEV_LOGIN_ROLES,
@@ -92,7 +93,8 @@ const selectRole = async (role: DevLoginRole) => {
   if (!props.autoSwitch) {
     if (!roleChanged) return
     clearToken()
-    uni.removeStorageSync('user_roles')
+    clearRoleSnapshot()
+    syncTabBarByAuth()
     emit('change', role)
     uni.showToast({ title: `已切换为${label}，请重新登录`, icon: 'none' })
     return
@@ -100,12 +102,14 @@ const selectRole = async (role: DevLoginRole) => {
 
   switching.value = true
   clearToken()
-  uni.removeStorageSync('user_roles')
+  clearRoleSnapshot()
+  syncTabBarByAuth()
   emit('change', role)
   try {
     await AuthApi.wxLogin(getDevLoginCode())
     const me = await AuthApi.getMe()
-    uni.setStorageSync('user_roles', JSON.stringify(me.roles || []))
+    cacheRoleSnapshot(me)
+    await syncTabBarByAuth(me)
     emit('switched', role)
     uni.showToast({ title: `已切换为${label}`, icon: 'success' })
   } catch (err: any) {
