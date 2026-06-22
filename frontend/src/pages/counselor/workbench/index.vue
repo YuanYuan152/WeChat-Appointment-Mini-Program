@@ -8,7 +8,7 @@
           :class="{ active: activeTab === 'schedule' }"
           @tap="switchTab('schedule')"
         >
-          咨询挂课
+          咨询排期
         </view>
         <view
           class="segment-item"

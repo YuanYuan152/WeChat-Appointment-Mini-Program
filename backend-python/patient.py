@@ -343,6 +343,14 @@ def cancel_my_consultation(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+    from staff_message_service import notify_staff_appointment_cancelled
+    from counselor_message_service import notify_counselor_appointment_cancelled
+    from patient_message_service import cancel_patient_consultation_reminders
+
+    notify_staff_appointment_cancelled(db, row, refunded=refunded)
+    notify_counselor_appointment_cancelled(db, row, refunded=refunded)
+    cancel_patient_consultation_reminders(db, row.Id)
+
     db.commit()
     return CancelConsultationOut(refunded=refunded, message=message)
 

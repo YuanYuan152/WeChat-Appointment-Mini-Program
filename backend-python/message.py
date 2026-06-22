@@ -4,10 +4,12 @@ import json
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from app_time import china_now
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from message_filters import apply_message_category, apply_message_search
 from auth import get_current_account
 from database import get_db
 from models import (
@@ -116,13 +118,18 @@ def log_subscribe_event(
 @router.get("/list", response_model=List[MessageOut], summary="站内消息列表")
 def list_messages(
     unread_only: bool = False,
+    category: Optional[str] = Query(None, description="消息分类，如 appointment_new / exemption / UNREAD"),
+    q: Optional[str] = Query(None, description="关键词搜索（标题、摘要、人名、类型等）"),
     current_account: AppAccount = Depends(get_current_account),
     db: Session = Depends(get_db),
 ):
-    q = db.query(AppMessage).filter(AppMessage.AccountId == current_account.Id)
-    if unread_only:
-        q = q.filter(AppMessage.IsRead == False)
-    return q.order_by(AppMessage.CreatedAt.desc()).limit(100).all()
+    query = db.query(AppMessage).filter(AppMessage.AccountId == current_account.Id)
+    if unread_only or category == "UNREAD":
+        query = query.filter(AppMessage.IsRead == False)
+    else:
+        query = apply_message_category(query, category)
+    query = apply_message_search(query, q)
+    return query.order_by(AppMessage.CreatedAt.desc()).limit(100).all()
 
 
 @router.get("/unread-count", summary="未读消息数")
@@ -184,6 +191,22 @@ def list_subscribe_templates(
     }
 
 
+@router.get("/{message_id}", response_model=MessageOut, summary="站内消息详情")
+def get_message(
+    message_id: int,
+    current_account: AppAccount = Depends(get_current_account),
+    db: Session = Depends(get_db),
+):
+    msg = (
+        db.query(AppMessage)
+        .filter(AppMessage.Id == message_id, AppMessage.AccountId == current_account.Id)
+        .first()
+    )
+    if not msg:
+        raise HTTPException(status_code=404, detail="消息不存在")
+    return msg
+
+
 @router.post("/subscribe", summary="记录订阅消息授权与发送日志（mock 可替换真实模板）")
 def subscribe_message(
     body: SubscribeRequest,
@@ -240,7 +263,7 @@ def create_remind_task(body: CreateRemindTaskRequest, db: Session = Depends(get_
 
 @router.post("/remind-tasks/process", summary="处理到期提醒任务（可由定时任务调用）")
 def process_due_reminders(db: Session = Depends(get_db)):
-    now = datetime.utcnow()
+    now = china_now()
     tasks = (
         db.query(AppRemindTask)
         .filter(AppRemindTask.Status == "PENDING", AppRemindTask.ScheduledAt <= now)
@@ -251,10 +274,32 @@ def process_due_reminders(db: Session = Depends(get_db)):
     processed = 0
     for task in tasks:
         try:
+            if task.EventKey == "COUNSELOR_CONSULTATION_DONE":
+                from counselor_message_service import notify_counselor_consultation_done
+                from models import AppConsultation
+
+                consultation = (
+                    db.query(AppConsultation)
+                    .filter(AppConsultation.Id == task.RelatedId)
+                    .first()
+                )
+                if consultation and consultation.Status in ("PENDING", "CONFIRMED", "ONGOING"):
+                    notify_counselor_consultation_done(db, consultation)
+                task.Status = "DONE"
+                task.ProcessedAt = datetime.utcnow()
+                processed += 1
+                continue
+
+            if task.EventKey == "COUNSELOR_APPOINTMENT_REMIND":
+                msg_type = "CONSULTATION"
+            elif task.EventKey == "PATIENT_APPOINTMENT_REMIND":
+                msg_type = "REMIND"
+            else:
+                msg_type = "REMIND"
             create_message(
                 db,
                 account_id=task.AccountId,
-                type_="REMIND",
+                type_=msg_type,
                 title=task.Title,
                 content=task.Content,
                 related_type=task.RelatedType,
@@ -272,7 +317,7 @@ def process_due_reminders(db: Session = Depends(get_db)):
                 },
             )
             task.Status = "DONE"
-            task.ProcessedAt = now
+            task.ProcessedAt = datetime.utcnow()
             processed += 1
         except Exception as exc:
             task.Status = "FAILED"

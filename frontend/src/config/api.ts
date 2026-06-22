@@ -113,6 +113,7 @@ export const API_ENDPOINTS = {
   // 消息中心（Batch B 后续填充）
   message: {
     list: '/api/mini/message/list',
+    detail: (id: number | string) => `/api/mini/message/${id}`,
     unreadCount: '/api/mini/message/unread-count',
     markRead: (id: number | string) => `/api/mini/message/${id}/read`,
     subscribe: '/api/mini/message/subscribe',
@@ -163,6 +164,10 @@ export const API_ENDPOINTS = {
     refundExemptions: '/api/mini/admin/refund-exemptions',
     refundExemptionApprove: (id: number | string) => `/api/mini/admin/refund-exemptions/${id}/approve`,
     refundExemptionReject: (id: number | string) => `/api/mini/admin/refund-exemptions/${id}/reject`,
+    leaveRequests: '/api/mini/admin/leave-requests',
+    leaveRequestDetail: (id: number | string) => `/api/mini/admin/leave-requests/${id}`,
+    leaveRequestApprove: (id: number | string) => `/api/mini/admin/leave-requests/${id}/approve`,
+    leaveRequestReject: (id: number | string) => `/api/mini/admin/leave-requests/${id}/reject`,
     consultationRecordCounselors: '/api/mini/admin/consultation-records/counselors',
     consultationRecordDetail: (id: number | string) => `/api/mini/admin/consultation-records/counselors/${id}`,
   },

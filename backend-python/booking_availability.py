@@ -1,12 +1,12 @@
-"""
-来访者预约可约时段 — 与咨询师工作台挂课同源、同规则。
+﻿"""
+来访者预约可约时段 — 与咨询师工作台排期同源、同规则。
 
 数据流（持久链路，非注入）：
   咨询师 POST /counselor/schedules  → 写入 AppSchedule
   来访者 GET  /common/counselors/{id} 或 /time-slots → 读本模块 → 同一 AppSchedule
 
 展示/可约规则与 schedule_display.resolve_schedule_display 一致：
-  OPEN（已挂课）→ 来访者可见且可预约
+  OPEN（已排期）→ 来访者可见且可预约
   BOOKED（已预约）→ 可见但不可约
   EXPIRED（已过期）→ 可见但不可约
   CANCELLED / DONE / ON_LEAVE → 不展示给来访者
@@ -126,6 +126,6 @@ def counselor_booking_time_slots(
     *,
     billing_cents: int = 0,
 ) -> Tuple[List[dict], Set[str]]:
-    """咨询师可预约时段：读 AppSchedule，规则与工作台挂课展示一致。"""
+    """咨询师可预约时段：读 AppSchedule，规则与工作台排期展示一致。"""
     schedules = query_counselor_schedules_for_booking(db, counselor_id)
     return schedules_to_booking_time_slots(db, schedules, billing_cents=billing_cents)

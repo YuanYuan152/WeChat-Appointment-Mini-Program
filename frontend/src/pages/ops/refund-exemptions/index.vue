@@ -28,27 +28,27 @@
       </view>
     </view>
 
-    <view v-if="showDetail" class="overlay" @touchmove.stop.prevent>
+    <view v-if="showDetail && detail" class="overlay" @touchmove.stop.prevent>
       <view class="detail-card" @tap.stop>
         <text class="detail-title">豁免申请详情</text>
         <view class="detail-body">
-          <view class="detail-row"><text class="label">来访者</text><text class="value">{{ detail?.patientName }}</text></view>
-          <view class="detail-row"><text class="label">手机号</text><text class="value">{{ detail?.patientMobile || '-' }}</text></view>
-          <view class="detail-row"><text class="label">咨询师</text><text class="value">{{ detail?.counselorName }}</text></view>
-          <view class="detail-row"><text class="label">咨询时段</text><text class="value">{{ formatTime(detail?.consultationStartTime) }}</text></view>
-          <view class="detail-row"><text class="label">预约状态</text><text class="value">{{ detail?.consultationStatus || '-' }}</text></view>
-          <view class="detail-row"><text class="label">申请金额</text><text class="value highlight">￥{{ formatYuan(detail?.amount) }}</text></view>
+          <view class="detail-row"><text class="label">来访者</text><text class="value">{{ detail.patientName }}</text></view>
+          <view class="detail-row"><text class="label">手机号</text><text class="value">{{ detail.patientMobile || '-' }}</text></view>
+          <view class="detail-row"><text class="label">咨询师</text><text class="value">{{ detail.counselorName }}</text></view>
+          <view class="detail-row"><text class="label">咨询时段</text><text class="value">{{ formatTime(detail.consultationStartTime) }}</text></view>
+          <view class="detail-row"><text class="label">预约状态</text><text class="value">{{ detail.consultationStatus || '-' }}</text></view>
+          <view class="detail-row"><text class="label">申请金额</text><text class="value highlight">￥{{ formatYuan(detail.amount) }}</text></view>
           <view class="reason-box">
             <text class="reason-label">申请原因</text>
-            <text class="reason-text">{{ detail?.reason }}</text>
+            <text class="reason-text">{{ detail.reason }}</text>
           </view>
-          <view v-if="detail?.status === 'REJECTED' && detail?.rejectReason" class="reject-box">
+          <view v-if="detail.status === 'REJECTED' && detail.rejectReason" class="reject-box">
             <text class="reason-label">拒绝理由</text>
             <text class="reason-text">{{ detail.rejectReason }}</text>
           </view>
         </view>
 
-        <view v-if="detail?.status === 'PENDING'" class="actions">
+        <view v-if="detail.status === 'PENDING'" class="actions">
           <button class="btn reject" :disabled="processing" @click="showRejectInput = true">拒绝</button>
           <button class="btn approve" :loading="processing" @click="approve">同意豁免</button>
         </view>

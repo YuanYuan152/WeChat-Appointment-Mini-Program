@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 预约中心常量 — 用户端选择与咨询师端排班录入需保持一致。
  * 咨询师工作台写入 AppSchedule.Note 的 center: 字段应使用相同 id。
  */
@@ -6,7 +6,7 @@ export interface AppointmentCenter {
   /** 与后端 AppSchedule.Note / centerId 字段对齐 */
   id: string
   name: string
-  /** 线上视频咨询：不占咨询室、挂课不可选咨询室偏好 */
+  /** 线上视频咨询：不占咨询室、排期不可选咨询室偏好 */
   virtual?: boolean
 }
 

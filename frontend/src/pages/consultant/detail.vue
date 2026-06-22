@@ -205,12 +205,33 @@
     </scroll-view>
 
     <!-- 底部悬浮预约栏 (Glassmorphism) -->
-    <view class="bottom-action-bar" :class="{ 'show': canProceedBooking }">
+    <view class="bottom-action-bar show">
       <view class="action-info">
-        <text class="action-label">合计</text>
+        <text class="action-label">{{ canProceedBooking ? '合计' : '咨询费用' }}</text>
         <text class="action-price">￥{{ selectedSlot?.Price || doctor.price }}</text>
       </view>
-      <button class="action-btn" @click="makeAppointment">立即预约</button>
+      <view class="action-btns">
+        <button class="action-btn outline" @click="openAssistantContact">联系助理</button>
+        <button
+          class="action-btn"
+          :class="{ disabled: !canProceedBooking }"
+          :disabled="!canProceedBooking"
+          @click="makeAppointment"
+        >立即预约</button>
+      </view>
+    </view>
+
+    <!-- 联系助理 -->
+    <view v-if="showAssistantContact" class="modal-overlay modern-modal modal-overlay--bottom" @tap="closeAssistantContact">
+      <view class="modal-content bottom-sheet assistant-sheet" @tap.stop>
+        <view class="modal-header-modern">
+          <text class="modal-title">联系助理</text>
+          <view class="modal-close-btn" @click="closeAssistantContact">×</view>
+        </view>
+        <view class="modal-body assistant-body">
+          <ContactUsContent :show-centers="false" compact />
+        </view>
+      </view>
     </view>
 
     <!-- 年龄确认弹框（居中） -->
@@ -375,6 +396,7 @@ import {
   hasBookableSlotsInCenter,
   type BookingTimeSlot,
 } from '@/utils/bookingSlots'
+import ContactUsContent from '@/components/ContactUsContent.vue'
 
 interface Doctor {
   id: number
@@ -431,6 +453,7 @@ const counselorCenterIds = ref<string[]>([])
 const showAgeConfirm = ref(false)
 const showAgreement = ref(false)
 const showPayment = ref(false)
+const showAssistantContact = ref(false)
 const showSignatureCanvas = ref(false)
 /** 是否仍需首次协议签署（年龄确认 + 签字） */
 const needsIntakeAgreement = ref(true)
@@ -713,6 +736,14 @@ const loadIntakeStatus = async () => {
 const proceedToPayment = () => {
   payRulesAgreed.value = false
   showPayment.value = true
+}
+
+const openAssistantContact = () => {
+  showAssistantContact.value = true
+}
+
+const closeAssistantContact = () => {
+  showAssistantContact.value = false
 }
 
 // 预约：须先选预约中心 → 可约时间 →（首次）协议 → 支付成功
@@ -1808,7 +1839,7 @@ onShow(() => {
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  padding: 24rpx 40rpx calc(24rpx + env(safe-area-inset-bottom));
+  padding: 20rpx 32rpx calc(20rpx + env(safe-area-inset-bottom));
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -1828,6 +1859,8 @@ onShow(() => {
   display: flex;
   align-items: baseline;
   gap: 12rpx;
+  flex-shrink: 0;
+  margin-right: 16rpx;
 }
 
 .action-label {
@@ -1836,26 +1869,63 @@ onShow(() => {
 }
 
 .action-price {
-  font-size: 48rpx;
+  font-size: 36rpx;
   font-weight: 800;
   color: #F59E0B;
 }
 
+.action-btns {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  flex: 1;
+  justify-content: flex-end;
+}
+
 .action-btn {
+  flex: 0 0 auto;
+  min-width: 140rpx;
+  max-width: 168rpx;
   background: linear-gradient(135deg, #0F766E 0%, #0D9488 100%);
   color: white;
-  font-size: 32rpx;
-  font-weight: 700;
-  padding: 0 60rpx;
-  height: 88rpx;
-  line-height: 88rpx;
+  font-size: 24rpx;
+  font-weight: 600;
+  padding: 0 20rpx;
+  height: 64rpx;
+  line-height: 64rpx;
   border-radius: 100rpx;
   margin: 0;
-  box-shadow: 0 8rpx 24rpx rgba(13, 148, 136, 0.3);
+  box-shadow: 0 6rpx 16rpx rgba(13, 148, 136, 0.25);
+}
+
+.action-btn::after {
+  border: none;
+}
+
+.action-btn.outline {
+  background: #fff;
+  color: #3D5A4E;
+  border: 2rpx solid #3D5A4E;
+  box-shadow: none;
+}
+
+.action-btn.disabled {
+  opacity: 0.45;
+  box-shadow: none;
 }
 
 .action-btn:active {
   transform: scale(0.96);
+}
+
+.assistant-sheet {
+  max-height: 85vh;
+}
+
+.assistant-body {
+  padding: 0 32rpx 32rpx;
+  max-height: 70vh;
+  overflow-y: auto;
 }
 
 /* 遮罩层：必须 fixed，否则会排在页面文档流最底部，无法盖住全屏 */

@@ -1,4 +1,4 @@
-"""
+﻿"""
 /api/mini/common/* 公共内容域（小程序公开读取，无需登录）
 - banners      首页 Banner（与 ops 公开读一致，但归类到 common）
 - articles     文章/知识/公告（双源：AppArticle + 旧 T_Content 兜底）
@@ -360,7 +360,7 @@ def common_counselor_detail(
     }
 
 
-@router.get("/counselors/{cid}/time-slots", summary="咨询师可预约时段（与挂课同步）")
+@router.get("/counselors/{cid}/time-slots", summary="咨询师可预约时段（与排期同步）")
 def common_counselor_time_slots(
     cid: int,
     db: Session = Depends(get_db),

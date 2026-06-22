@@ -1,4 +1,4 @@
-{
+﻿{
     "pages": [
         {
             "path": "pages/index/index",
@@ -146,6 +146,14 @@
             }
         },
         {
+            "path": "pages/contact/index",
+            "style": {
+                "navigationBarTitleText": "联系我们",
+                "navigationBarBackgroundColor": "#ffffff",
+                "navigationBarTextStyle": "black"
+            }
+        },
+        {
             "path": "pages/jixinli/index",
             "style": {
                 "navigationBarTitleText": "济心理",
@@ -218,7 +226,15 @@
                 {
                     "path": "messages/index",
                     "style": {
-                        "navigationBarTitleText": "消息中心",
+                        "navigationBarTitleText": "我的消息",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                },
+                {
+                    "path": "messages/detail",
+                    "style": {
+                        "navigationBarTitleText": "消息详情",
                         "navigationBarBackgroundColor": "#ffffff",
                         "navigationBarTextStyle": "black"
                     }
@@ -303,6 +319,14 @@
                     }
                 },
                 {
+                    "path": "leave-requests/index",
+                    "style": {
+                        "navigationBarTitleText": "咨询师请假审批",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                },
+                {
                     "path": "case-records/index",
                     "style": {
                         "navigationBarTitleText": "咨询记录",
@@ -321,7 +345,7 @@
                 {
                     "path": "schedules/index",
                     "style": {
-                        "navigationBarTitleText": "挂课情况",
+                        "navigationBarTitleText": "排期情况",
                         "navigationBarBackgroundColor": "#ffffff",
                         "navigationBarTextStyle": "black"
                     }

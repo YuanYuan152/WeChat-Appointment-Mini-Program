@@ -1,0 +1,18 @@
+{
+  "description": "微信小程序项目配置（uni-app 编译时会合并到 dist/dev|build/mp-weixin）",
+  "compileType": "miniprogram",
+  "projectname": "连心心理",
+  "appid": "touristappid",
+  "libVersion": "3.5.7",
+  "setting": {
+    "urlCheck": false,
+    "es6": true,
+    "enhance": true,
+    "postcss": true,
+    "minified": false,
+    "useMultiFrameRuntime": true,
+    "useApiHook": true,
+    "useIsolateContext": true,
+    "bigPackageSizeSupport": true
+  }
+}

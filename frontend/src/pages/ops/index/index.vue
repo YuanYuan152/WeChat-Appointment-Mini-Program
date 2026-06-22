@@ -1,8 +1,8 @@
-<template>
+﻿<template>
   <view class="page-ops-home">
     <view class="hero-card">
       <text class="hero-title">运营工作台</text>
-      <text class="hero-subtitle">管理挂课、咨询室、Banner、活动、主题月、文章与用户</text>
+      <text class="hero-subtitle">管理排期、咨询室、Banner、活动、主题月、文章与用户</text>
     </view>
 
     <view class="grid">
@@ -28,7 +28,7 @@
 
 <script setup lang="ts">
 const entries = [
-  { title: '挂课情况', desc: '各咨询师当日挂课与预约', symbol: '课', tone: 'tone-green', path: '/pages/ops/schedules/index' },
+  { title: '排期情况', desc: '各咨询师当日排期与预约', symbol: '期', tone: 'tone-green', path: '/pages/ops/schedules/index' },
   { title: '咨询室情况', desc: '咨询室占用与管理', symbol: '室', tone: 'tone-green', path: '/pages/ops/rooms/index' },
   { title: 'Banner 管理', desc: '首页轮播图位与跳转链路', symbol: '图', tone: 'tone-gold', path: '/pages/ops/banner/index' },
   { title: '活动管理', desc: '招募 / 公告 / 主题活动', symbol: '活', tone: 'tone-gold', path: '/pages/ops/activities/index' },
@@ -37,6 +37,7 @@ const entries = [
   { title: '运营看板', desc: '关键指标与日活数据', symbol: '数', tone: 'tone-muted', path: '/pages/ops/dashboard/index' },
   { title: '用户与角色', desc: '账号绑定与角色管理', symbol: '人', tone: 'tone-green', path: '/pages/ops/admin-roles/index' },
   { title: '豁免申请审核', desc: '24小时内取消退款豁免 · 管理员', symbol: '审', tone: 'tone-gold', path: '/pages/ops/refund-exemptions/index' },
+  { title: '咨询师请假审批', desc: '查看请假详情与来访联系方式', symbol: '假', tone: 'tone-gold', path: '/pages/ops/leave-requests/index' },
   { title: '咨询记录', desc: '各咨询师近30天记录填写情况', symbol: '记', tone: 'tone-green', path: '/pages/ops/case-records/index' },
   { title: '重后台 (Web)', desc: 'WebView 嵌入旧管理后台', symbol: 'Web', tone: 'tone-dark', path: '/pages/admin-webview/index' },
 ]

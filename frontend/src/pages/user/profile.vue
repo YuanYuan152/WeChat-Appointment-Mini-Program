@@ -61,6 +61,16 @@
           <text class="menu-text">预约记录</text>
           <text class="menu-arrow">›</text>
         </view>
+        <view class="menu-item" @click="handleMessagesClick">
+          <view class="menu-icon-wrap bg-green-light">
+            <text class="menu-icon text-green">💬</text>
+          </view>
+          <text class="menu-text">我的消息</text>
+          <view class="menu-arrow-wrap">
+            <text v-if="unreadMessageCount > 0" class="menu-unread-dot" />
+            <text class="menu-arrow">›</text>
+          </view>
+        </view>
         <view class="menu-item" @click="navigateTo('/pages/user/wallet')">
           <view class="menu-icon-wrap bg-orange-light">
             <text class="menu-icon text-orange">💰</text>
@@ -92,11 +102,11 @@
           <text class="menu-text">隐私政策</text>
           <text class="menu-arrow">›</text>
         </view>
-        <view class="menu-item" @click="navigateTo('/pages/about/index')">
+        <view class="menu-item" @click="navigateTo('/pages/contact/index')">
           <view class="menu-icon-wrap bg-gray-light">
-            <text class="menu-icon text-gray">ℹ</text>
+            <text class="menu-icon text-gray">☎</text>
           </view>
-          <text class="menu-text">关于我们</text>
+          <text class="menu-text">联系我们</text>
           <text class="menu-arrow">›</text>
         </view>
       </view>
@@ -150,6 +160,7 @@ const showModal = ref(false)
 const loginMode = ref<'login' | 'register'>('login')
 const userInfo = ref<UserInfo>(emptyUserInfo())
 const stats = ref({ appointmentCount: 0, activityCount: 0, favoriteCount: 0 })
+const unreadMessageCount = ref(0)
 
 const ROLE_LABELS: Record<string, string> = {
   Patient: '来访者',
@@ -176,6 +187,7 @@ const resetPageState = () => {
   userInfo.value = emptyUserInfo()
   activeRole.value = ''
   stats.value = { appointmentCount: 0, activityCount: 0, favoriteCount: 0 }
+  unreadMessageCount.value = 0
 }
 
 const refreshPage = () => {
@@ -183,6 +195,7 @@ const refreshPage = () => {
     isLoggedIn.value = true
     loadUserInfo()
     loadStats()
+    loadUnreadMessageCount()
     return
   }
   isLoggedIn.value = false
@@ -241,6 +254,21 @@ const loadStats = async () => {
     }
   } catch {
     stats.value = { appointmentCount: 0, activityCount: 0, favoriteCount: 0 }
+  }
+}
+
+const loadUnreadMessageCount = async () => {
+  try {
+    const res = await httpV2.get<{ count: number }>(
+      API_ENDPOINTS.message.unreadCount,
+      undefined,
+      { showLoading: false, showError: false },
+    )
+    if (res.code === 0 && res.data) {
+      unreadMessageCount.value = res.data.count || 0
+    }
+  } catch {
+    unreadMessageCount.value = 0
   }
 }
 
@@ -314,6 +342,13 @@ const handleFeedbackClick = () => {
   handleRequireLogin(
     () => navigateTo('/pages/user/feedback'),
     '/pages/user/feedback'
+  )
+}
+
+const handleMessagesClick = () => {
+  handleRequireLogin(
+    () => navigateTo('/pages/patient/messages/index'),
+    '/pages/patient/messages/index'
   )
 }
 
@@ -620,6 +655,9 @@ const handleDeleteAccount = () => {
 .bg-orange-light { background: #FFF7ED; }
 .text-orange { color: #F59E0B; }
 
+.bg-green-light { background: #ECFDF5; }
+.text-green { color: #10B981; }
+
 .bg-purple-light { background: #FAF5FF; }
 .text-purple { color: #8B5CF6; }
 
@@ -635,6 +673,20 @@ const handleDeleteAccount = () => {
   font-size: 30rpx;
   font-weight: 600;
   color: #1F2937;
+}
+
+.menu-arrow-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.menu-unread-dot {
+  width: 16rpx;
+  height: 16rpx;
+  border-radius: 50%;
+  background: #EF4444;
 }
 
 .menu-arrow {

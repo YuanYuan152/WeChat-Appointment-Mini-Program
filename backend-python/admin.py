@@ -14,8 +14,14 @@ from models import (
     AppCaseRecord,
     AppConsultation,
     AppCounselorProfile,
+    AppLeaveRequest,
     AppRefundExemption,
     AppRoleBinding,
+)
+from leave_request_service import (
+    approve_leave_request,
+    build_leave_request_out,
+    reject_leave_request,
 )
 from case_record_service import decode_photo_urls
 from refund_exemption_service import approve_refund_exemption, reject_refund_exemption
@@ -448,3 +454,62 @@ def list_counselor_consultation_records(
             )
         )
     return items
+
+
+@router.get("/leave-requests", summary="咨询师请假列表（管理员）")
+def list_leave_requests(
+    status: str = Query("ALL", description="PENDING|APPROVED|REJECTED|ALL"),
+    _admin: AppAccount = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    q = db.query(AppLeaveRequest).order_by(AppLeaveRequest.CreatedAt.desc())
+    if status and status != "ALL":
+        q = q.filter(AppLeaveRequest.Status == status)
+    rows = q.limit(100).all()
+    return [build_leave_request_out(db, row) for row in rows]
+
+
+@router.get("/leave-requests/{leave_id}", summary="咨询师请假详情（管理员）")
+def get_leave_request(
+    leave_id: int,
+    _admin: AppAccount = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    row = db.query(AppLeaveRequest).filter(AppLeaveRequest.Id == leave_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="请假记录不存在")
+    return build_leave_request_out(db, row)
+
+
+@router.post("/leave-requests/{leave_id}/approve", summary="通过咨询师请假")
+def approve_leave_request_api(
+    leave_id: int,
+    admin: AppAccount = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    row = db.query(AppLeaveRequest).filter(AppLeaveRequest.Id == leave_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="请假记录不存在")
+    try:
+        status, message = approve_leave_request(db, row, admin.Id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    db.commit()
+    return {"message": message, "status": status}
+
+
+@router.post("/leave-requests/{leave_id}/reject", summary="拒绝咨询师请假")
+def reject_leave_request_api(
+    leave_id: int,
+    admin: AppAccount = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    row = db.query(AppLeaveRequest).filter(AppLeaveRequest.Id == leave_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="请假记录不存在")
+    try:
+        reject_leave_request(db, row, admin.Id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    db.commit()
+    return {"message": "已拒绝请假申请", "status": "REJECTED"}

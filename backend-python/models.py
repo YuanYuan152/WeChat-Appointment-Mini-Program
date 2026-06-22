@@ -1,4 +1,4 @@
-"""
+﻿"""
 SQLAlchemy ORM 模型。
 
 约定：
@@ -376,7 +376,7 @@ class AppLeaveRequest(Base):
 
 
 class AppScheduleCancelLog(Base):
-    """咨询师取消已预约挂课（距开始≥24h）时留存沟通截图凭证。"""
+    """咨询师取消已预约排期（距开始≥24h）时留存沟通截图凭证。"""
     __tablename__ = "AppScheduleCancelLog"
 
     Id = Column(Integer, primary_key=True, index=True, autoincrement=True)

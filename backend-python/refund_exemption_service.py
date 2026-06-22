@@ -1,4 +1,5 @@
 """退款豁免申请：提交校验、管理员审核、消息通知。"""
+import json
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
@@ -96,11 +97,19 @@ def notify_admins_new_exemption(
 ) -> None:
     patient_name = _patient_display_name(db, exemption.AccountId)
     counselor_name = _counselor_display_name(db, consultation.CounselorId)
+    amount_yuan = f"{exemption.Amount / 100:.2f}"
     title = "新的退款豁免申请待审核"
-    content = (
-        f"来访者 {patient_name} 对咨询师 {counselor_name} 的预约提交了退款豁免申请，"
-        f"申请金额 {exemption.Amount / 100:.2f} 元，请及时审核。"
-    )
+    summary = f"{patient_name} · {counselor_name} · ¥{amount_yuan}"
+    detail = {
+        "patientName": patient_name,
+        "counselorName": counselor_name,
+        "amountYuan": amount_yuan,
+        "reason": exemption.Reason,
+        "exemptionId": exemption.Id,
+        "consultationId": exemption.ConsultationId,
+        "status": "PENDING",
+    }
+    content = json.dumps({"summary": summary, "detail": detail}, ensure_ascii=False)
     for admin_id in _admin_account_ids(db):
         create_message(
             db,
@@ -108,7 +117,7 @@ def notify_admins_new_exemption(
             "SYSTEM",
             title,
             content,
-            related_type="REFUND_EXEMPTION",
+            related_type="REFUND_EXEMPTION_PENDING",
             related_id=exemption.Id,
         )
 
@@ -120,27 +129,13 @@ def notify_patient_exemption_result(
     approved: bool,
     reject_reason: Optional[str] = None,
 ) -> None:
-    if approved:
-        title = "退款豁免申请已通过"
-        content = (
-            f"您的退款豁免申请已审核通过，预约已取消，"
-            f"款项 {exemption.Amount / 100:.2f} 元将原路退回。"
-        )
-    else:
-        title = "退款豁免申请未通过"
-        reason_text = (reject_reason or "").strip() or "未说明具体原因"
-        content = (
-            f"您的退款豁免申请未通过审核，预约与订单维持不变。"
-            f"拒绝理由：{reason_text}"
-        )
-    create_message(
+    from patient_message_service import notify_patient_refund_exemption_result
+
+    notify_patient_refund_exemption_result(
         db,
-        exemption.AccountId,
-        "SYSTEM",
-        title,
-        content,
-        related_type="REFUND_EXEMPTION",
-        related_id=exemption.Id,
+        exemption,
+        approved=approved,
+        reject_reason=reject_reason,
     )
 
 
@@ -174,6 +169,14 @@ def approve_refund_exemption(
     exemption.ReviewedAt = now
     exemption.UpdatedAt = now
     exemption.RejectReason = None
+
+    from staff_message_service import notify_staff_appointment_cancelled
+    from counselor_message_service import notify_counselor_appointment_cancelled
+    from patient_message_service import cancel_patient_consultation_reminders
+
+    notify_staff_appointment_cancelled(db, consultation, refunded=refunded)
+    notify_counselor_appointment_cancelled(db, consultation, refunded=refunded)
+    cancel_patient_consultation_reminders(db, consultation.Id)
 
     notify_patient_exemption_result(db, exemption, approved=True)
     return refunded, cancel_msg

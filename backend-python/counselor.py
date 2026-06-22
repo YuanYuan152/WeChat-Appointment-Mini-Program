@@ -1,4 +1,4 @@
-"""
+﻿"""
 3.1 咨询师工作台接口
 GET  /api/mini/counselor/schedules          今日及近期排班
 POST /api/mini/counselor/schedules          新增排班
@@ -366,7 +366,7 @@ def _cancel_permissions(schedule: AppSchedule, consultation: Optional[AppConsult
 
     if not _has_active_booking(schedule, consultation):
         if schedule.Status == "AVAILABLE":
-            return True, False, "未预约挂课可随时取消或修改咨询室偏好"
+            return True, False, "未预约排期可随时取消或修改咨询室偏好"
         return False, False, "当前状态不可取消"
 
     if _active_consultation(consultation):
@@ -383,7 +383,7 @@ def _cancel_permissions(schedule: AppSchedule, consultation: Optional[AppConsult
         )
 
     # 已标 BOOKED 但无有效咨询单（数据异常），仍允许直接取消
-    return True, False, "确认取消该挂课？"
+    return True, False, "确认取消该排期？"
 
 
 def _counselor_cancel_booked(
@@ -394,7 +394,7 @@ def _counselor_cancel_booked(
     leave_reason: Optional[str] = None,
     communication_screenshot_url: Optional[str] = None,
 ) -> None:
-    """咨询师取消/请假已预约挂课：须填写理由并上传沟通截图，取消后释放咨询室。"""
+    """咨询师取消/请假已预约排期：须填写理由并上传沟通截图，取消后释放咨询室。"""
     reason = (leave_reason or "").strip()
     if not reason:
         raise HTTPException(status_code=400, detail="请填写请假原因")
@@ -418,6 +418,25 @@ def _counselor_cancel_booked(
             if order and order.Status == "PAID":
                 order.Status = "REFUNDED" if is_refund_eligible(schedule.StartTime) else "CANCELLED"
                 order.UpdatedAt = datetime.utcnow()
+        from counselor_message_service import (
+            cancel_counselor_consultation_done_notices,
+            cancel_counselor_consultation_reminders,
+        )
+        from patient_message_service import (
+            cancel_patient_consultation_reminders,
+            notify_patient_counselor_leave_approved,
+        )
+
+        cancel_counselor_consultation_reminders(db, consultation.Id)
+        cancel_counselor_consultation_done_notices(db, consultation.Id)
+        cancel_patient_consultation_reminders(db, consultation.Id)
+        refunded = is_refund_eligible(schedule.StartTime)
+        notify_patient_counselor_leave_approved(
+            db,
+            consultation,
+            leave_reason=reason,
+            refunded=refunded,
+        )
     db.add(
         AppLeaveRequest(
             ScheduleId=schedule.Id,
@@ -557,7 +576,7 @@ def schedule_slot_options(
     counselor: AppAccount = Depends(require_counselor),
     db: Session = Depends(get_db),
 ):
-    """滚动 7 天内某日各标准时段 + 各咨询室是否可挂。"""
+    """滚动窗口内某日各标准时段 + 各咨询室是否可挂。"""
     try:
         slot_date = date_type.fromisoformat(date)
     except ValueError:
@@ -634,14 +653,14 @@ def schedule_slot_options(
     )
 
 
-@router.get("/schedules/calendar", response_model=ScheduleCalendarOut, summary="滚动7天排班日历")
+@router.get("/schedules/calendar", response_model=ScheduleCalendarOut, summary="滚动排期日历")
 def schedule_calendar(
     start: Optional[str] = Query(None, description="起始日期 YYYY-MM-DD，默认今天"),
     days: int = Query(7, ge=1, le=7),
     counselor: AppAccount = Depends(require_counselor),
     db: Session = Depends(get_db),
 ):
-    """滚动 7 天：从今天起连续 7 天。"""
+    """滚动窗口：从今天起连续 ROLLING_WINDOW_DAYS 天。"""
     today = china_now().date()
     start_date = today
     if start:
@@ -674,7 +693,7 @@ def schedule_calendar(
     )
 
 
-@router.post("/schedules", response_model=ScheduleOut, summary="新增挂课（标准时间槽+咨询室偏好）")
+@router.post("/schedules", response_model=ScheduleOut, summary="新增排期（标准时间槽+咨询室偏好）")
 def create_schedule(
     body: ScheduleCreate,
     counselor: AppAccount = Depends(require_counselor),
@@ -687,14 +706,14 @@ def create_schedule(
     if body.end_time <= body.start_time:
         raise HTTPException(status_code=400, detail="结束时间必须晚于开始时间")
     if not is_aligned_standard_slot(body.start_time, body.end_time):
-        raise HTTPException(status_code=400, detail="请使用标准时间槽挂课（50分钟/节）")
+        raise HTTPException(status_code=400, detail="请使用标准时间槽排期（50分钟/节）")
     try:
         validate_slot_in_rolling_window(body.start_time)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
     if counselor_has_slot(db, counselor.Id, body.start_time):
-        raise HTTPException(status_code=400, detail="您在该时间槽已有挂课，同一时段最多一节")
+        raise HTTPException(status_code=400, detail="您在该时间槽已有排期，同一时段最多一节")
 
     if not is_video_center(body.center_id):
         rooms = get_consultation_rooms(db, body.center_id)
@@ -712,7 +731,7 @@ def create_schedule(
         ):
             raise HTTPException(
                 status_code=400,
-                detail="该时段所有咨询室均已约满，无法挂课",
+                detail="该时段所有咨询室均已约满，无法排期",
             )
 
         pref = (body.room_id or "").strip() or None
@@ -767,6 +786,16 @@ def update_schedule(
                     leave_reason=body.leave_reason,
                     communication_screenshot_url=body.communication_screenshot_url,
                 )
+                from staff_message_service import notify_staff_counselor_leave
+
+                notify_staff_counselor_leave(
+                    db,
+                    schedule=schedule,
+                    counselor_id=counselor.Id,
+                    leave_reason=body.leave_reason or "",
+                    screenshot_url=body.communication_screenshot_url,
+                    consultation=consultation,
+                )
             else:
                 schedule.Status = "CANCELLED"
                 schedule.Note = release_assigned_room(schedule.Note)
@@ -814,7 +843,7 @@ def submit_leave_request(
     if has_appointment_started(schedule.StartTime):
         raise HTTPException(status_code=400, detail="咨询已开始或已过开始时间，不可申请请假")
     if is_refund_eligible(schedule.StartTime):
-        raise HTTPException(status_code=400, detail="距咨询开始超过24小时，可直接取消挂课")
+        raise HTTPException(status_code=400, detail="距咨询开始超过24小时，可直接取消排期")
     if schedule.Status != "BOOKED" and not _active_consultation(consultation):
         raise HTTPException(status_code=400, detail="仅已预约时段可申请请假")
 
@@ -841,6 +870,17 @@ def submit_leave_request(
         Status="PENDING",
     )
     db.add(row)
+    db.flush()
+    from staff_message_service import notify_staff_counselor_leave
+
+    notify_staff_counselor_leave(
+        db,
+        schedule=schedule,
+        counselor_id=counselor.Id,
+        leave_reason=reason,
+        screenshot_url=None,
+        consultation=consultation,
+    )
     db.commit()
     db.refresh(row)
     return {
@@ -898,6 +938,11 @@ def update_consultation(
             schedule.Note = release_assigned_room(schedule.Note)
             schedule.Status = "AVAILABLE"
             schedule.UpdatedAt = datetime.utcnow()
+
+    if body.status == "DONE":
+        from counselor_message_service import notify_counselor_consultation_done
+
+        notify_counselor_consultation_done(db, consultation)
 
     consultation.UpdatedAt = datetime.utcnow()
     db.commit()

@@ -68,9 +68,9 @@
         <view class="quick-icon"><text class="quick-symbol">询</text></view>
         <text class="quick-label">了解咨询</text>
       </view>
-      <view class="quick-item" @tap="navigateTo('/pages/about/index')">
-        <view class="quick-icon"><text class="quick-symbol">关</text></view>
-        <text class="quick-label">关于我们</text>
+      <view class="quick-item" @tap="navigateTo('/pages/contact/index')">
+        <view class="quick-icon"><text class="quick-symbol">联</text></view>
+        <text class="quick-label">联系我们</text>
       </view>
       <view class="quick-item" @tap="navigateTo('/pages/jixinli/index')">
         <view class="quick-icon"><text class="quick-symbol">济</text></view>

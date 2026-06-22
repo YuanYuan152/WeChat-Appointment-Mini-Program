@@ -200,7 +200,10 @@
               <text class="price-num">{{ doctor.price || 500 }}</text>
               <text class="price-unit">/50分钟</text>
             </view>
-            <button class="book-btn" @click.stop="goToDetail(doctor.id)">立即预约</button>
+            <view class="doc-card-actions">
+              <button class="assistant-btn" @click.stop="openAssistantContact">联系助理</button>
+              <button class="book-btn" @click.stop="goToDetail(doctor.id)">立即预约</button>
+            </view>
           </view>
         </view>
 
@@ -215,6 +218,19 @@
         </view>
       </view>
     </view>
+
+    <!-- 联系助理 -->
+    <view v-if="showAssistantContact" class="modal-overlay" @tap="closeAssistantContact">
+      <view class="modal-content bottom-sheet" @tap.stop>
+        <view class="modal-header">
+          <text class="modal-title">联系助理</text>
+          <view class="modal-close" @click="closeAssistantContact">×</view>
+        </view>
+        <view class="modal-body">
+          <ContactUsContent :show-centers="false" compact />
+        </view>
+      </view>
+    </view>
   </view>
 </template>
 
@@ -225,6 +241,7 @@ import { doctorApi } from '@/apis/index'
 import type { Doctor } from '@/types'
 import { fixImageUrl } from '@/utils/image'
 import { getMockConsultantFilterMetaResponse } from '@/mocks/bookingDemo'
+import ContactUsContent from '@/components/ContactUsContent.vue'
 
 // 咨询师数据接口扩展
 interface Consultant extends Omit<Doctor, 'province'> {
@@ -244,6 +261,7 @@ const consultants = ref<Consultant[]>([])
 const loading = ref(false)
 const hasMore = ref(true)
 const searchKeyword = ref('')
+const showAssistantContact = ref(false)
 const statusBarPx = ref(_sys.statusBarHeight || 0)
 const headerPlaceholderPx = ref((_sys.statusBarHeight || 0) + uni.upx2px(88 + 124 + 88))
 
@@ -425,6 +443,14 @@ const goToDetail = (id: number | string) => {
   uni.navigateTo({
     url: `/pages/consultant/detail?id=${id}${source}`
   })
+}
+
+const openAssistantContact = () => {
+  showAssistantContact.value = true
+}
+
+const closeAssistantContact = () => {
+  showAssistantContact.value = false
 }
 
 // 返回上一页
@@ -899,6 +925,13 @@ onPullDownRefresh(async () => {
   border-top: 1px dashed #E5E7EB;
 }
 
+.doc-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  flex-shrink: 0;
+}
+
 .doc-price-box {
   display: flex;
   align-items: baseline;
@@ -922,17 +955,87 @@ onPullDownRefresh(async () => {
   margin-left: 4rpx;
 }
 
+.assistant-btn {
+  background: #fff;
+  color: #3D5A4E;
+  font-size: 22rpx;
+  font-weight: 600;
+  height: 56rpx;
+  line-height: 56rpx;
+  padding: 0 24rpx;
+  border-radius: 100rpx;
+  margin: 0;
+  border: 2rpx solid #3D5A4E;
+}
+
+.assistant-btn::after {
+  border: none;
+}
+
 .book-btn {
   background: #0D9488;
   color: #ffffff;
-  font-size: 26rpx;
+  font-size: 22rpx;
   font-weight: 600;
-  height: 64rpx;
-  line-height: 64rpx;
-  padding: 0 40rpx;
+  height: 56rpx;
+  line-height: 56rpx;
+  padding: 0 28rpx;
   border-radius: 100rpx;
   margin: 0;
   box-shadow: 0 4rpx 12rpx rgba(13, 148, 136, 0.2);
+}
+
+.book-btn::after {
+  border: none;
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10050;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.modal-content.bottom-sheet {
+  background: #fff;
+  border-radius: 32rpx 32rpx 0 0;
+  max-height: 85vh;
+  overflow: hidden;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 28rpx 32rpx;
+  border-bottom: 1rpx solid #F3F4F6;
+}
+
+.modal-title {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #1F2937;
+}
+
+.modal-close {
+  width: 56rpx;
+  height: 56rpx;
+  line-height: 56rpx;
+  text-align: center;
+  font-size: 40rpx;
+  color: #9CA3AF;
+}
+
+.modal-body {
+  padding: 0 32rpx calc(32rpx + env(safe-area-inset-bottom));
+  max-height: 70vh;
+  overflow-y: auto;
 }
 
 /* 加载状态 */
