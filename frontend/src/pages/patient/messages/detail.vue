@@ -6,7 +6,7 @@
 
     <view v-else-if="message" class="detail-card">
       <view class="detail-head">
-        <text class="detail-title">{{ message.Title }}</text>
+        <text class="detail-title">{{ messageDisplayTitle(message) }}</text>
         <text class="detail-time">{{ formatTime(message.CreatedAt) }}</text>
       </view>
 
@@ -80,9 +80,9 @@
         </view>
       </view>
 
-      <view v-else-if="isAdminExemptionPending" class="detail-body">
+      <view v-else-if="isExemptionPending" class="detail-body">
         <view class="tip-box pending">
-          <text class="tip-text">待审核：请在工作台「豁免申请审核」中选择对应申请后处理</text>
+          <text class="tip-text">{{ exemptionPendingTip }}</text>
         </view>
         <view class="detail-row">
           <text class="label">审核状态</text>
@@ -112,7 +112,7 @@
       <view v-else-if="relatedType === 'REFUND_EXEMPTION'" class="detail-body">
         <view class="detail-row">
           <text class="label">审核结果</text>
-          <text class="value" :class="{ highlight: detail.approved }">{{ detail.approved ? '已通过' : '未通过' }}</text>
+          <text class="value" :class="exemptionResultClass">{{ exemptionStatusLabel }}</text>
         </view>
         <view class="reason-box">
           <text class="reason-label">详情说明</text>
@@ -139,8 +139,8 @@
           <text class="value">{{ detail.startTime }}<text v-if="detail.endTime"> - {{ formatEndTime(detail.endTime) }}</text></text>
         </view>
         <view v-if="detail.location" class="detail-row">
-          <text class="label">预约地点</text>
-          <text class="value">{{ detail.location }}</text>
+          <text class="label">{{ relatedType === 'PATIENT_APPOINTMENT_SUCCESS' ? '预约中心' : '预约地点' }}</text>
+          <text class="value">{{ detail.centerName || detail.location }}</text>
         </view>
         <view v-if="relatedType === 'PATIENT_LEAVE_APPROVED'" class="detail-row">
           <text class="label">退款说明</text>
@@ -156,17 +156,27 @@
         <view v-if="detail.tip" class="tip-box">
           <text class="tip-text">{{ detail.tip }}</text>
         </view>
-        <view class="detail-row">
+        <view v-if="relatedType === 'COUNSELOR_LEAVE_SUBMITTED' || relatedType === 'COUNSELOR_LEAVE_SUCCESS'" class="detail-row">
+          <text class="label">审核状态</text>
+          <text class="value" :class="detail.status === 'PENDING' ? 'pending-text' : 'highlight'">
+            {{ detail.statusLabel || (detail.status === 'PENDING' ? '待审核' : '已成功') }}
+          </text>
+        </view>
+        <view v-if="detail.patientName" class="detail-row">
           <text class="label">来访者</text>
           <text class="value">{{ detail.patientName }}</text>
         </view>
         <view class="detail-row">
-          <text class="label">咨询时间</text>
+          <text class="label">{{ (relatedType === 'COUNSELOR_LEAVE_SUBMITTED' || relatedType === 'COUNSELOR_LEAVE_SUCCESS') ? '请假时段' : '咨询时间' }}</text>
           <text class="value">{{ detail.startTime }}<text v-if="detail.endTime"> - {{ formatEndTime(detail.endTime) }}</text></text>
         </view>
         <view class="detail-row">
           <text class="label">咨询地点</text>
           <text class="value">{{ detail.location }}</text>
+        </view>
+        <view v-if="(relatedType === 'COUNSELOR_LEAVE_SUBMITTED' || relatedType === 'COUNSELOR_LEAVE_SUCCESS') && detail.leaveReason" class="detail-row">
+          <text class="label">请假原因</text>
+          <text class="value multiline">{{ detail.leaveReason }}</text>
         </view>
         <view v-if="relatedType === 'COUNSELOR_APPOINTMENT_CANCEL'" class="detail-row">
           <text class="label">是否退款</text>
@@ -242,7 +252,7 @@ import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
-import { COUNSELOR_MESSAGE_TYPES, PATIENT_MESSAGE_TYPES, parseMessageContent, type MessageItem } from '@/utils/message'
+import { COUNSELOR_MESSAGE_TYPES, PATIENT_MESSAGE_TYPES, isExemptionPendingMessage, messageDisplayTitle, parseMessageContent, type MessageItem } from '@/utils/message'
 
 interface AffectedAppointment {
   patientName?: string
@@ -264,12 +274,25 @@ const detail = computed(() => (payload.value.detail || {}) as Record<string, any
 const relatedType = computed(() => message.value?.RelatedType || '')
 const isCounselorMessage = computed(() => COUNSELOR_MESSAGE_TYPES.has(relatedType.value))
 const isPatientMessage = computed(() => PATIENT_MESSAGE_TYPES.has(relatedType.value))
-const isAdminExemptionPending = computed(() => {
-  if (relatedType.value === 'REFUND_EXEMPTION_PENDING') return true
-  if (relatedType.value !== 'REFUND_EXEMPTION') return false
-  if (detail.value.status === 'PENDING') return true
-  if ((message.value?.Title || '').includes('待审核')) return true
-  return detail.value.approved !== true && detail.value.approved !== false
+const isExemptionPending = computed(() => {
+  if (!message.value) return false
+  return isExemptionPendingMessage(message.value)
+})
+const exemptionPendingTip = computed(() => {
+  const text = detail.value.resultText as string | undefined
+  if (text && text.includes('您的')) return text
+  return '待审核：请在工作台「豁免申请审核」中选择对应申请后处理'
+})
+const exemptionStatusLabel = computed(() => {
+  if (isExemptionPending.value) return '待审核'
+  if (detail.value.status === 'APPROVED' || detail.value.approved === true) return '已通过'
+  if (detail.value.status === 'REJECTED' || detail.value.approved === false) return '未通过'
+  return '待审核'
+})
+const exemptionResultClass = computed(() => {
+  if (exemptionStatusLabel.value === '已通过') return 'highlight'
+  if (exemptionStatusLabel.value === '未通过') return 'rejected-text'
+  return 'pending-text'
 })
 const affectedList = computed(() => {
   const list = detail.value.affectedAppointments
@@ -458,6 +481,11 @@ onLoad((options) => {
 
 .pending-text {
   color: #D97706;
+  font-weight: 600;
+}
+
+.rejected-text {
+  color: #DC2626;
   font-weight: 600;
 }
 

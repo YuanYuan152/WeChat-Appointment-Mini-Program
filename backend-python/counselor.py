@@ -445,6 +445,27 @@ def _counselor_cancel_booked(
             Status="APPROVED",
         )
     )
+    db.flush()
+    leave_row = (
+        db.query(AppLeaveRequest)
+        .filter(
+            AppLeaveRequest.ScheduleId == schedule.Id,
+            AppLeaveRequest.CounselorId == counselor_id,
+        )
+        .order_by(AppLeaveRequest.CreatedAt.desc())
+        .first()
+    )
+    if leave_row:
+        from counselor_message_service import notify_counselor_leave_success
+
+        notify_counselor_leave_success(
+            db,
+            counselor_id=counselor_id,
+            schedule=schedule,
+            leave_reason=reason,
+            leave_request_id=leave_row.Id,
+            consultation=consultation,
+        )
     db.add(
         AppScheduleCancelLog(
             ScheduleId=schedule.Id,
@@ -656,7 +677,7 @@ def schedule_slot_options(
 @router.get("/schedules/calendar", response_model=ScheduleCalendarOut, summary="滚动排期日历")
 def schedule_calendar(
     start: Optional[str] = Query(None, description="起始日期 YYYY-MM-DD，默认今天"),
-    days: int = Query(7, ge=1, le=7),
+    days: int = Query(ROLLING_WINDOW_DAYS, ge=1, le=ROLLING_WINDOW_DAYS),
     counselor: AppAccount = Depends(require_counselor),
     db: Session = Depends(get_db),
 ):
@@ -871,6 +892,7 @@ def submit_leave_request(
     )
     db.add(row)
     db.flush()
+    from counselor_message_service import notify_counselor_leave_submitted
     from staff_message_service import notify_staff_counselor_leave
 
     notify_staff_counselor_leave(
@@ -879,6 +901,14 @@ def submit_leave_request(
         counselor_id=counselor.Id,
         leave_reason=reason,
         screenshot_url=None,
+        consultation=consultation,
+    )
+    notify_counselor_leave_submitted(
+        db,
+        counselor_id=counselor.Id,
+        schedule=schedule,
+        leave_reason=reason,
+        leave_request_id=row.Id,
         consultation=consultation,
     )
     db.commit()

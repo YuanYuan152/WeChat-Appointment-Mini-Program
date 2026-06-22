@@ -19,7 +19,7 @@ from models import (
 )
 
 PATIENT_REMIND_EVENT = "PATIENT_APPOINTMENT_REMIND"
-PATIENT_REMIND_HOURS = 24
+PATIENT_REMIND_HOURS = 2
 
 
 def _format_datetime(dt: Optional[datetime]) -> str:
@@ -54,6 +54,13 @@ def _counselor_display_name(db: Session, counselor_id: int) -> str:
     if acc:
         return acc.RealName or acc.Nickname or f"咨询师#{counselor_id}"
     return f"咨询师#{counselor_id}"
+
+
+def _appointment_center_name(note: Optional[str]) -> str:
+    from schedule_meta import center_display_name, parse_center_id
+
+    center_id = parse_center_id(note)
+    return center_display_name(center_id) or "未知地点"
 
 
 def _appointment_location(
@@ -175,13 +182,21 @@ def notify_patient_appointment_success(
     consultation: AppConsultation,
 ) -> None:
     ctx = _consultation_context(db, consultation)
+    schedule = (
+        db.query(AppSchedule).filter(AppSchedule.Id == consultation.ScheduleId).first()
+        if consultation.ScheduleId
+        else None
+    )
+    note = consultation.Note or (schedule.Note if schedule else None)
+    center_name = _appointment_center_name(note)
     time_text = _format_datetime(ctx["startTime"])
-    summary = f"{ctx['counselorName']} · {time_text} · {ctx['location']}"
+    summary = f"{ctx['counselorName']} · {time_text} · {center_name}"
     detail = {
         "counselorName": ctx["counselorName"],
         "startTime": time_text,
         "endTime": _format_datetime(ctx["endTime"]),
-        "location": ctx["location"],
+        "location": center_name,
+        "centerName": center_name,
         "consultationId": consultation.Id,
         "tip": "预约成功，请准时赴约",
     }
@@ -200,7 +215,7 @@ def schedule_patient_consultation_reminder(
     db: Session,
     consultation: AppConsultation,
 ) -> None:
-    """预约开始前 24 小时提醒来访者。"""
+    """预约开始前 2 小时提醒来访者。"""
     if consultation.Status not in ("PENDING", "CONFIRMED", "ONGOING"):
         return
 
@@ -211,15 +226,22 @@ def schedule_patient_consultation_reminder(
         return
 
     time_text = _format_datetime(start_time)
-    location = ctx["location"]
-    summary = f"{time_text} · {location}"
+    schedule = (
+        db.query(AppSchedule).filter(AppSchedule.Id == consultation.ScheduleId).first()
+        if consultation.ScheduleId
+        else None
+    )
+    note = consultation.Note or (schedule.Note if schedule else None)
+    center_name = _appointment_center_name(note)
+    summary = f"{time_text} · {center_name}"
     detail = {
         "counselorName": ctx["counselorName"],
         "startTime": time_text,
         "endTime": _format_datetime(ctx["endTime"]),
-        "location": location,
+        "location": center_name,
+        "centerName": center_name,
         "consultationId": consultation.Id,
-        "tip": "您的预约将在24小时后开始，请准时赴约",
+        "tip": "您的预约将在2小时后开始，请准时赴约",
     }
     content = _message_payload(summary, detail)
     remind_at = start_time - timedelta(hours=PATIENT_REMIND_HOURS)
@@ -283,6 +305,34 @@ def notify_patient_counselor_leave_approved(
     )
 
 
+def notify_patient_refund_exemption_pending(
+    db: Session,
+    exemption: AppRefundExemption,
+    consultation: AppConsultation,
+) -> None:
+    amount_yuan = f"{exemption.Amount / 100:.2f}"
+    title = "豁免申请待审核"
+    summary = f"您的退款豁免申请已提交，金额 ¥{amount_yuan}，请等待审核"
+    detail = {
+        "status": "PENDING",
+        "amountYuan": amount_yuan,
+        "reason": exemption.Reason,
+        "exemptionId": exemption.Id,
+        "consultationId": exemption.ConsultationId,
+        "counselorName": _counselor_display_name(db, consultation.CounselorId),
+        "resultText": "您的退款豁免申请正在审核中，审核结果将在此通知。",
+    }
+    _notify_patient(
+        db,
+        exemption.AccountId,
+        type_="SYSTEM",
+        title=title,
+        content=_message_payload(summary, detail),
+        related_type="REFUND_EXEMPTION_PENDING",
+        related_id=exemption.Id,
+    )
+
+
 def notify_patient_refund_exemption_result(
     db: Session,
     exemption: AppRefundExemption,
@@ -294,6 +344,7 @@ def notify_patient_refund_exemption_result(
         title = "豁免申请已通过"
         summary = f"退款 {exemption.Amount / 100:.2f} 元将原路退回"
         detail = {
+            "status": "APPROVED",
             "approved": True,
             "resultText": "您的退款豁免申请已审核通过，预约已取消。",
             "amountYuan": f"{exemption.Amount / 100:.2f}",
@@ -305,6 +356,7 @@ def notify_patient_refund_exemption_result(
         title = "豁免申请未通过"
         summary = f"拒绝理由：{reason_text}"
         detail = {
+            "status": "REJECTED",
             "approved": False,
             "resultText": "您的退款豁免申请未通过审核，预约与订单维持不变。",
             "rejectReason": reason_text,

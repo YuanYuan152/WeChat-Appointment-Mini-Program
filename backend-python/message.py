@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from message_enrich import enrich_message
 from message_filters import apply_message_category, apply_message_search
 from auth import get_current_account
 from database import get_db
@@ -129,7 +130,8 @@ def list_messages(
     else:
         query = apply_message_category(query, category)
     query = apply_message_search(query, q)
-    return query.order_by(AppMessage.CreatedAt.desc()).limit(100).all()
+    rows = query.order_by(AppMessage.CreatedAt.desc()).limit(100).all()
+    return [enrich_message(m, db) for m in rows]
 
 
 @router.get("/unread-count", summary="未读消息数")
@@ -162,7 +164,7 @@ def mark_read(
     msg.ReadAt = datetime.utcnow()
     db.commit()
     db.refresh(msg)
-    return msg
+    return enrich_message(msg, db)
 
 
 @router.get("/templates", summary="按 event_key 列表返回需要前端请求授权的订阅消息模板 ID")
@@ -204,7 +206,7 @@ def get_message(
     )
     if not msg:
         raise HTTPException(status_code=404, detail="消息不存在")
-    return msg
+    return enrich_message(msg, db)
 
 
 @router.post("/subscribe", summary="记录订阅消息授权与发送日志（mock 可替换真实模板）")

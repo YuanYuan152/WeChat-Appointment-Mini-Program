@@ -176,6 +176,17 @@ def approve_leave_request(
     now = datetime.utcnow()
     leave.Status = "APPROVED"
     leave.UpdatedAt = now
+
+    from counselor_message_service import notify_counselor_leave_success
+
+    notify_counselor_leave_success(
+        db,
+        counselor_id=leave.CounselorId,
+        schedule=schedule,
+        leave_reason=leave.Reason,
+        leave_request_id=leave.Id,
+        consultation=consultation,
+    )
     return "APPROVED", "请假已通过，相关预约已取消"
 
 

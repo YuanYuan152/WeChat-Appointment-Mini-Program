@@ -61,6 +61,7 @@ def complete_paid_order(
         db.flush()
         from staff_message_service import notify_staff_new_appointment
         from counselor_message_service import (
+            notify_counselor_new_appointment,
             schedule_counselor_consultation_done_notice,
             schedule_counselor_consultation_reminder,
         )
@@ -70,6 +71,7 @@ def complete_paid_order(
         )
 
         notify_staff_new_appointment(db, existing, order)
+        notify_counselor_new_appointment(db, existing)
         schedule_counselor_consultation_reminder(db, existing)
         schedule_counselor_consultation_done_notice(db, existing)
         notify_patient_appointment_success(db, existing)
@@ -90,6 +92,7 @@ def complete_paid_order(
     db.flush()
     from staff_message_service import notify_staff_new_appointment
     from counselor_message_service import (
+        notify_counselor_new_appointment,
         schedule_counselor_consultation_done_notice,
         schedule_counselor_consultation_reminder,
     )
@@ -99,6 +102,7 @@ def complete_paid_order(
     )
 
     notify_staff_new_appointment(db, consultation, order)
+    notify_counselor_new_appointment(db, consultation)
     schedule_counselor_consultation_reminder(db, consultation)
     schedule_counselor_consultation_done_notice(db, consultation)
     notify_patient_appointment_success(db, consultation)

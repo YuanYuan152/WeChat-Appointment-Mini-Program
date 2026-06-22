@@ -1,4 +1,4 @@
-"""咨询师站内消息：完成、开始前提醒、来访取消（不含来访联系方式）。"""
+"""咨询师站内消息：完成、开始前提醒、来访取消、请假提交（不含来访联系方式）。"""
 import json
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
@@ -152,6 +152,175 @@ def cancel_counselor_consultation_reminders(
     for row in rows:
         row.Status = "CANCELLED"
         row.ProcessedAt = now
+
+
+def _leave_notice_detail(
+    db: Session,
+    *,
+    schedule: AppSchedule,
+    leave_reason: str,
+    leave_request_id: int,
+    status: str,
+    consultation: Optional[AppConsultation] = None,
+) -> tuple[str, str, Dict[str, Any]]:
+    ctx = _consultation_context(db, consultation) if consultation else None
+    time_text = _format_datetime(schedule.StartTime)
+    location = _appointment_location(db, schedule.Note, status=schedule.Status)
+    patient_name = ctx["patientName"] if ctx else None
+    pending = status == "PENDING"
+    if pending:
+        title = "请假申请已提交"
+        tip = "您的请假申请已提交，请等待管理员审核并协助来访者改约。"
+        status_label = "待审核"
+    else:
+        title = "请假已成功"
+        tip = "您的请假已生效，相关预约已取消，来访者将收到通知。"
+        status_label = "已成功"
+    summary = f"{time_text} · {location}"
+    if patient_name:
+        summary = f"{patient_name} · {summary}"
+    detail: Dict[str, Any] = {
+        "startTime": time_text,
+        "endTime": _format_datetime(schedule.EndTime),
+        "location": location,
+        "leaveReason": leave_reason,
+        "leaveRequestId": leave_request_id,
+        "scheduleId": schedule.Id,
+        "status": status,
+        "statusLabel": status_label,
+        "tip": tip,
+    }
+    if patient_name:
+        detail["patientName"] = patient_name
+    if consultation:
+        detail["consultationId"] = consultation.Id
+    return title, _message_payload(summary, detail), detail
+
+
+def notify_counselor_leave_submitted(
+    db: Session,
+    *,
+    counselor_id: int,
+    schedule: AppSchedule,
+    leave_reason: str,
+    leave_request_id: int,
+    consultation: Optional[AppConsultation] = None,
+) -> None:
+    """咨询师提交待审核请假后通知本人。"""
+    existing = (
+        db.query(AppMessage)
+        .filter(
+            AppMessage.AccountId == counselor_id,
+            AppMessage.RelatedType == "COUNSELOR_LEAVE_SUBMITTED",
+            AppMessage.RelatedId == leave_request_id,
+        )
+        .first()
+    )
+    if existing:
+        return
+
+    title, content, _ = _leave_notice_detail(
+        db,
+        schedule=schedule,
+        leave_reason=leave_reason,
+        leave_request_id=leave_request_id,
+        status="PENDING",
+        consultation=consultation,
+    )
+    _notify_counselor(
+        db,
+        counselor_id,
+        type_="CONSULTATION",
+        title=title,
+        content=content,
+        related_type="COUNSELOR_LEAVE_SUBMITTED",
+        related_id=leave_request_id,
+    )
+
+
+def notify_counselor_leave_success(
+    db: Session,
+    *,
+    counselor_id: int,
+    schedule: AppSchedule,
+    leave_reason: str,
+    leave_request_id: int,
+    consultation: Optional[AppConsultation] = None,
+) -> None:
+    """请假生效（直接取消或管理员审核通过）后通知咨询师本人。"""
+    existing = (
+        db.query(AppMessage)
+        .filter(
+            AppMessage.AccountId == counselor_id,
+            AppMessage.RelatedType == "COUNSELOR_LEAVE_SUCCESS",
+            AppMessage.RelatedId == leave_request_id,
+        )
+        .first()
+    )
+    if existing:
+        return
+
+    title, content, _ = _leave_notice_detail(
+        db,
+        schedule=schedule,
+        leave_reason=leave_reason,
+        leave_request_id=leave_request_id,
+        status="APPROVED",
+        consultation=consultation,
+    )
+    _notify_counselor(
+        db,
+        counselor_id,
+        type_="CONSULTATION",
+        title=title,
+        content=content,
+        related_type="COUNSELOR_LEAVE_SUCCESS",
+        related_id=leave_request_id,
+    )
+
+
+def notify_counselor_new_appointment(
+    db: Session,
+    consultation: AppConsultation,
+) -> None:
+    """来访者预约成功后立即通知咨询师（仅含来访者姓名、时间、地点）。"""
+    if consultation.Status not in ("PENDING", "CONFIRMED", "ONGOING"):
+        return
+
+    existing = (
+        db.query(AppMessage)
+        .filter(
+            AppMessage.AccountId == consultation.CounselorId,
+            AppMessage.RelatedType == "COUNSELOR_APPOINTMENT_NEW",
+            AppMessage.RelatedId == consultation.Id,
+        )
+        .first()
+    )
+    if existing:
+        return
+
+    ctx = _consultation_context(db, consultation)
+    time_text = _format_datetime(ctx["startTime"])
+    patient_name = ctx["patientName"]
+    location = ctx["location"]
+    summary = f"{patient_name} · {time_text} · {location}"
+    detail = {
+        "patientName": patient_name,
+        "startTime": time_text,
+        "endTime": _format_datetime(ctx["endTime"]),
+        "location": location,
+        "consultationId": consultation.Id,
+        "tip": "来访者已成功预约，请准时赴约",
+    }
+    _notify_counselor(
+        db,
+        consultation.CounselorId,
+        type_="ORDER",
+        title="新预约",
+        content=_message_payload(summary, detail),
+        related_type="COUNSELOR_APPOINTMENT_NEW",
+        related_id=consultation.Id,
+    )
 
 
 def schedule_counselor_consultation_reminder(

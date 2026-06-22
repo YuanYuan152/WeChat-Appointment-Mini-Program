@@ -408,6 +408,9 @@ def submit_refund_exemption(
     db.add(exemption)
     db.flush()
     notify_admins_new_exemption(db, exemption, row)
+    from patient_message_service import notify_patient_refund_exemption_pending
+
+    notify_patient_refund_exemption_pending(db, exemption, row)
     db.commit()
     db.refresh(exemption)
     return RefundExemptionOut(

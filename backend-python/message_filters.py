@@ -7,9 +7,10 @@ from sqlalchemy.orm import Query
 from models import AppMessage
 
 CATEGORY_RELATED_TYPES: dict[str, list[str]] = {
-    "appointment_new": ["APPOINTMENT_NEW"],
+    "appointment_new": ["APPOINTMENT_NEW", "COUNSELOR_APPOINTMENT_NEW"],
     "appointment_cancel": ["APPOINTMENT_CANCEL", "COUNSELOR_APPOINTMENT_CANCEL"],
     "counselor_leave": ["COUNSELOR_LEAVE"],
+    "leave_submitted": ["COUNSELOR_LEAVE_SUBMITTED", "COUNSELOR_LEAVE_SUCCESS"],
     "exemption": ["REFUND_EXEMPTION", "REFUND_EXEMPTION_PENDING"],
     "activity": ["PATIENT_NEW_ACTIVITY"],
     "appointment_success": ["PATIENT_APPOINTMENT_SUCCESS"],
@@ -19,13 +20,14 @@ CATEGORY_RELATED_TYPES: dict[str, list[str]] = {
 }
 
 CATEGORY_KEYWORDS: dict[str, list[str]] = {
-    "appointment_new": ["新增预约"],
+    "appointment_new": ["新增预约", "新预约"],
     "appointment_cancel": ["预约已取消", "预约取消"],
     "counselor_leave": ["咨询师请假"],
+    "leave_submitted": ["请假申请已提交", "请假已成功", "请假已提交"],
     "exemption": ["豁免", "退款豁免", "待审核"],
     "activity": ["有新活动", "新活动"],
     "appointment_success": ["预约成功"],
-    "appointment_remind": ["预约即将开始", "咨询即将开始"],
+    "appointment_remind": ["预约即将开始", "2小时后"],
     "consultation_done": ["咨询已完成", "请尽快填写咨询记录"],
     "leave_notice": ["咨询师请假，预约已取消"],
 }
