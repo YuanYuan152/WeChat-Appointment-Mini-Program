@@ -106,6 +106,7 @@ export const RELATED_TYPE_LABELS: Record<string, string> = {
   COUNSELOR_APPOINTMENT_CANCEL: '预约取消',
   PATIENT_NEW_ACTIVITY: '新活动',
   PATIENT_APPOINTMENT_SUCCESS: '预约成功',
+  PATIENT_APPOINTMENT_CANCEL: '预约取消',
   PATIENT_APPOINTMENT_REMIND: '预约提醒',
   PATIENT_LEAVE_APPROVED: '请假通知',
 }
@@ -123,6 +124,7 @@ export const COUNSELOR_MESSAGE_TYPES = new Set([
 export const PATIENT_MESSAGE_TYPES = new Set([
   'PATIENT_NEW_ACTIVITY',
   'PATIENT_APPOINTMENT_SUCCESS',
+  'PATIENT_APPOINTMENT_CANCEL',
   'PATIENT_APPOINTMENT_REMIND',
   'PATIENT_LEAVE_APPROVED',
   'REFUND_EXEMPTION',
@@ -173,6 +175,7 @@ export function getMessageCategoriesForRole(role: string): MessageCategoryOption
   return [
     ...common,
     { value: 'appointment_success', label: '预约成功' },
+    { value: 'appointment_cancel', label: '预约取消' },
     { value: 'appointment_remind', label: '预约提醒' },
     { value: 'activity', label: '活动' },
     { value: 'leave_notice', label: '请假通知' },
@@ -250,6 +253,10 @@ export function resolveMessageNavigation(
     return '/pages/patient/records/list'
   }
 
+  if (item.RelatedType === 'PATIENT_APPOINTMENT_CANCEL' && activeRole === 'Patient') {
+    return '/pages/patient/records/list'
+  }
+
   if (item.RelatedType === 'COUNSELOR_CONSULTATION_DONE' && activeRole === 'Counselor') {
     const consultationId = item.RelatedId || detail?.consultationId
     if (consultationId) {
@@ -264,6 +271,10 @@ export function resolveMessageNavigation(
       || item.RelatedType === 'COUNSELOR_LEAVE_SUCCESS')
     && activeRole === 'Counselor'
   ) {
+    const scheduleId = detail?.scheduleId
+    if (scheduleId) {
+      return `/pages/counselor/workbench/index?scheduleId=${scheduleId}`
+    }
     return '/pages/counselor/workbench/index'
   }
 

@@ -172,8 +172,14 @@ def approve_refund_exemption(
 
     from staff_message_service import notify_staff_appointment_cancelled
     from counselor_message_service import notify_counselor_appointment_cancelled
-    from patient_message_service import cancel_patient_consultation_reminders
+    from patient_message_service import (
+        cancel_patient_consultation_reminders,
+        notify_patient_appointment_cancelled,
+    )
 
+    notify_patient_appointment_cancelled(
+        db, consultation, refunded=refunded, cancelled_by="exemption",
+    )
     notify_staff_appointment_cancelled(db, consultation, refunded=refunded)
     notify_counselor_appointment_cancelled(db, consultation, refunded=refunded)
     cancel_patient_consultation_reminders(db, consultation.Id)

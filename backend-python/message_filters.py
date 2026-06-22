@@ -8,7 +8,7 @@ from models import AppMessage
 
 CATEGORY_RELATED_TYPES: dict[str, list[str]] = {
     "appointment_new": ["APPOINTMENT_NEW", "COUNSELOR_APPOINTMENT_NEW"],
-    "appointment_cancel": ["APPOINTMENT_CANCEL", "COUNSELOR_APPOINTMENT_CANCEL"],
+    "appointment_cancel": ["APPOINTMENT_CANCEL", "COUNSELOR_APPOINTMENT_CANCEL", "PATIENT_APPOINTMENT_CANCEL"],
     "counselor_leave": ["COUNSELOR_LEAVE"],
     "leave_submitted": ["COUNSELOR_LEAVE_SUBMITTED", "COUNSELOR_LEAVE_SUCCESS"],
     "exemption": ["REFUND_EXEMPTION", "REFUND_EXEMPTION_PENDING"],

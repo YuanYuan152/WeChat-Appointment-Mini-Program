@@ -27,7 +27,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { onShow } from '@dcloudio/uni-app'
+import { onLoad, onShow } from '@dcloudio/uni-app'
 import SchedulePanel from './schedule-panel.vue'
 import RecordsPanel from './records-panel.vue'
 
@@ -36,6 +36,7 @@ type WorkbenchTab = 'schedule' | 'records'
 const activeTab = ref<WorkbenchTab>('schedule')
 const recordsMounted = ref(false)
 const scheduleRef = ref<InstanceType<typeof SchedulePanel> | null>(null)
+const pendingScheduleId = ref(0)
 
 const switchTab = (tab: WorkbenchTab) => {
   activeTab.value = tab
@@ -43,8 +44,21 @@ const switchTab = (tab: WorkbenchTab) => {
   if (tab === 'schedule') scheduleRef.value?.refresh?.()
 }
 
-onShow(() => {
-  if (activeTab.value === 'schedule') scheduleRef.value?.refresh?.()
+const applyPendingFocus = async () => {
+  if (!pendingScheduleId.value) return
+  const scheduleId = pendingScheduleId.value
+  pendingScheduleId.value = 0
+  await scheduleRef.value?.focusScheduleId?.(scheduleId)
+}
+
+onLoad((options?: Record<string, string | undefined>) => {
+  pendingScheduleId.value = Number(options?.scheduleId || 0)
+})
+
+onShow(async () => {
+  activeTab.value = 'schedule'
+  await scheduleRef.value?.refresh?.()
+  await applyPendingFocus()
 })
 </script>
 

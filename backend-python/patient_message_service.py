@@ -211,6 +211,52 @@ def notify_patient_appointment_success(
     )
 
 
+def notify_patient_appointment_cancelled(
+    db: Session,
+    consultation: AppConsultation,
+    *,
+    refunded: bool,
+    cancelled_by: str = "visitor",
+) -> None:
+    """来访者取消预约后通知本人（含超过/不足24小时）。"""
+    cancel_patient_consultation_reminders(db, consultation.Id)
+    ctx = _consultation_context(db, consultation)
+    schedule = (
+        db.query(AppSchedule).filter(AppSchedule.Id == consultation.ScheduleId).first()
+        if consultation.ScheduleId
+        else None
+    )
+    note = consultation.Note or (schedule.Note if schedule else None)
+    center_name = _appointment_center_name(note)
+    time_text = _format_datetime(ctx["startTime"])
+    summary = f"{ctx['counselorName']} · {time_text} · {center_name}"
+    if refunded:
+        tip = "您的预约已取消，款项将原路退回"
+    else:
+        tip = "您的预约已取消；距咨询开始不足24小时，按规定不予退款"
+    detail = {
+        "counselorName": ctx["counselorName"],
+        "startTime": time_text,
+        "endTime": _format_datetime(ctx["endTime"]),
+        "location": center_name,
+        "centerName": center_name,
+        "refunded": refunded,
+        "refundText": "款项将原路退回" if refunded else "按规定不予退款",
+        "cancelledBy": cancelled_by,
+        "consultationId": consultation.Id,
+        "tip": tip,
+    }
+    _notify_patient(
+        db,
+        consultation.PatientId,
+        type_="ORDER",
+        title="预约已取消",
+        content=_message_payload(summary, detail),
+        related_type="PATIENT_APPOINTMENT_CANCEL",
+        related_id=consultation.Id,
+    )
+
+
 def schedule_patient_consultation_reminder(
     db: Session,
     consultation: AppConsultation,

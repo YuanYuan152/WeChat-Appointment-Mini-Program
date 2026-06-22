@@ -3,7 +3,7 @@
     <view class="header-card">
       <view>
         <text class="greeting">咨询师工作台</text>
-        <text class="date-text">滚动7天：{{ rollingRangeText }}</text>
+        <text class="date-text">滚动{{ ROLLING_WINDOW_DAYS }}天：{{ rollingRangeText }}</text>
       </view>
     </view>
 
@@ -430,7 +430,7 @@ const groupedDays = computed(() => {
   const today = minDate.value
   const byDate = new Map<string, CalendarSlot[]>()
   for (const s of slots.value) {
-    if (s.displayStatus === 'CANCELLED') continue
+    if (s.displayStatus === 'CANCELLED' && !s.leaveRequestId) continue
     const date = s.startTime.slice(0, 10)
     if (!byDate.has(date)) byDate.set(date, [])
     byDate.get(date)!.push(s)
@@ -712,7 +712,17 @@ const submitSlot = async () => {
 }
 
 onMounted(loadCalendar)
-defineExpose({ refresh: loadCalendar })
+
+const focusScheduleId = async (scheduleId: number) => {
+  if (!scheduleId) return
+  await loadCalendar()
+  const slot = slots.value.find(s => s.id === scheduleId)
+  if (slot?.leaveRequestId) {
+    openLeaveDetail(slot)
+  }
+}
+
+defineExpose({ refresh: loadCalendar, focusScheduleId })
 </script>
 
 <style scoped>

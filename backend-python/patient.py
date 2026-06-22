@@ -345,11 +345,11 @@ def cancel_my_consultation(
 
     from staff_message_service import notify_staff_appointment_cancelled
     from counselor_message_service import notify_counselor_appointment_cancelled
-    from patient_message_service import cancel_patient_consultation_reminders
+    from patient_message_service import notify_patient_appointment_cancelled
 
+    notify_patient_appointment_cancelled(db, row, refunded=refunded)
     notify_staff_appointment_cancelled(db, row, refunded=refunded)
     notify_counselor_appointment_cancelled(db, row, refunded=refunded)
-    cancel_patient_consultation_reminders(db, row.Id)
 
     db.commit()
     return CancelConsultationOut(refunded=refunded, message=message)

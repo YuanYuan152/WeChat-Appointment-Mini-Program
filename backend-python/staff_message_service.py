@@ -29,7 +29,7 @@ from schedule_meta import (
 def _staff_account_ids(db: Session) -> List[int]:
     rows = (
         db.query(AppRoleBinding.AccountId)
-        .filter(AppRoleBinding.RoleType.in_(["Assistant", "Admin"]))
+        .filter(AppRoleBinding.RoleType.in_(["Assistant", "Admin", "Ops"]))
         .distinct()
         .all()
     )

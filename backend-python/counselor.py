@@ -479,12 +479,12 @@ def _counselor_cancel_booked(
     schedule.UpdatedAt = datetime.utcnow()
 
 
-def _pending_leaves_by_schedule(
+def _leaves_by_schedule(
     db: Session,
     schedule_ids: List[int],
     counselor_id: int,
 ) -> dict[int, AppLeaveRequest]:
-    """查询待审核请假；若 AppLeaveRequest 表尚未建表则返回空（避免日历接口 500）。"""
+    """每条排期最近一条有效请假（待审核或已通过）。"""
     if not schedule_ids:
         return {}
     try:
@@ -493,11 +493,16 @@ def _pending_leaves_by_schedule(
             .filter(
                 AppLeaveRequest.ScheduleId.in_(schedule_ids),
                 AppLeaveRequest.CounselorId == counselor_id,
-                AppLeaveRequest.Status == "PENDING",
+                AppLeaveRequest.Status.in_(["PENDING", "APPROVED"]),
             )
+            .order_by(AppLeaveRequest.CreatedAt.desc())
             .all()
         )
-        return {r.ScheduleId: r for r in rows}
+        result: dict[int, AppLeaveRequest] = {}
+        for row in rows:
+            if row.ScheduleId not in result:
+                result[row.ScheduleId] = row
+        return result
     except (ProgrammingError, OperationalError):
         db.rollback()
         return {}
@@ -511,19 +516,25 @@ def _calendar_items_for_schedules(
     if not schedules:
         return []
     schedule_ids = [s.Id for s in schedules]
-    consultations = (
+    all_consultations = (
         db.query(AppConsultation)
-        .filter(
-            AppConsultation.ScheduleId.in_(schedule_ids),
-            AppConsultation.Status != "CANCELLED",
-        )
+        .filter(AppConsultation.ScheduleId.in_(schedule_ids))
+        .order_by(AppConsultation.Id.desc())
         .all()
     )
-    cons_by_schedule = {c.ScheduleId: c for c in consultations if c.ScheduleId}
+    active_by_schedule: dict[int, AppConsultation] = {}
+    any_by_schedule: dict[int, AppConsultation] = {}
+    for c in all_consultations:
+        if not c.ScheduleId:
+            continue
+        if c.ScheduleId not in any_by_schedule:
+            any_by_schedule[c.ScheduleId] = c
+        if c.Status != "CANCELLED" and c.ScheduleId not in active_by_schedule:
+            active_by_schedule[c.ScheduleId] = c
 
-    leave_by_schedule = _pending_leaves_by_schedule(db, schedule_ids, counselor_id)
+    leave_by_schedule = _leaves_by_schedule(db, schedule_ids, counselor_id)
 
-    patient_ids = {c.PatientId for c in consultations}
+    patient_ids = {c.PatientId for c in all_consultations}
     patients = {
         a.Id: a
         for a in db.query(AppAccount).filter(AppAccount.Id.in_(patient_ids)).all()
@@ -531,11 +542,12 @@ def _calendar_items_for_schedules(
 
     items: List[ScheduleCalendarItem] = []
     for s in schedules:
-        c = cons_by_schedule.get(s.Id)
+        c = active_by_schedule.get(s.Id)
         leave_row = leave_by_schedule.get(s.Id)
+        display_cons = c or any_by_schedule.get(s.Id)
         center_id = parse_center_id(s.Note)
         room_id, room_name = _resolve_calendar_room(s, c, center_id, db)
-        patient = patients.get(c.PatientId) if c else None
+        patient = patients.get(display_cons.PatientId) if display_cons else None
         patient_name = None
         if patient:
             patient_name = patient.RealName or patient.Nickname or f"来访者#{patient.Id}"
@@ -562,8 +574,8 @@ def _calendar_items_for_schedules(
                 roomId=room_id,
                 roomName=room_name,
                 patientName=patient_name,
-                consultationId=c.Id if c else None,
-                consultationStatus=c.Status if c else None,
+                consultationId=display_cons.Id if display_cons else None,
+                consultationStatus=display_cons.Status if display_cons else None,
                 canCancel=can_cancel,
                 requiresLeave=requires_leave,
                 cancelHint=cancel_hint,

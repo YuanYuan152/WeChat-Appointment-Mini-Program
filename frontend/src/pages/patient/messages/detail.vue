@@ -142,9 +142,9 @@
           <text class="label">{{ relatedType === 'PATIENT_APPOINTMENT_SUCCESS' ? '预约中心' : '预约地点' }}</text>
           <text class="value">{{ detail.centerName || detail.location }}</text>
         </view>
-        <view v-if="relatedType === 'PATIENT_LEAVE_APPROVED'" class="detail-row">
+        <view v-if="relatedType === 'PATIENT_APPOINTMENT_CANCEL' || relatedType === 'PATIENT_LEAVE_APPROVED'" class="detail-row">
           <text class="label">退款说明</text>
-          <text class="value">{{ detail.refundText }}</text>
+          <text class="value" :class="{ highlight: detail.refunded }">{{ detail.refundText }}</text>
         </view>
         <view v-if="relatedType === 'PATIENT_LEAVE_APPROVED' && detail.leaveReason" class="detail-row">
           <text class="label">请假原因</text>
