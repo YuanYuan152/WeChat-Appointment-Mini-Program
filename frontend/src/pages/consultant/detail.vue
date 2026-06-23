@@ -375,7 +375,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed, nextTick } from 'vue'
-import { onShow } from '@dcloudio/uni-app'
+import { onShow, onLoad } from '@dcloudio/uni-app'
 import { API_V2_CONFIG, API_ENDPOINTS } from '@/config/api'
 import { doctorApi } from '@/apis'
 import { httpV2 } from '@/utils/http'
@@ -456,6 +456,7 @@ const hasAvailableTime = ref(false)
 const counselorCenterIds = ref<string[]>([])
 const isFavorited = ref(false)
 const favoriteLoading = ref(false)
+const routeDoctorId = ref<string | number>('')
 
 // 弹框状态
 const showAgeConfirm = ref(false)
@@ -672,7 +673,7 @@ const loadBookingSlots = async (doctorId: string | number) => {
 const getDoctorDetail = async () => {
   try {
     const params = getRouteParams()
-    const doctorId = params.id || params.doctorId
+    const doctorId = routeDoctorId.value || params.id || params.doctorId
     const source = params.source
     
     console.log('获取医生详情，参数:', params)
@@ -1310,25 +1311,29 @@ const goBackFromSignature = () => {
   // 只关闭绘制区域，保持其他状态不变
 }
 
+onLoad((opts) => {
+  routeDoctorId.value = opts?.id || opts?.doctorId || ''
+  getDoctorDetail()
+  if (uni.getStorageSync('token')) {
+    loadIntakeStatus()
+  }
+})
+
 onShow(() => {
   if (doctor.value.id) {
     loadFavoriteStatus()
   }
   const params = getRouteParams()
-  const doctorId = params.id || params.doctorId
+  const doctorId = routeDoctorId.value || params.id || params.doctorId
   if (doctorId && doctor.value.id) {
     loadBookingSlots(doctorId)
-  } else if (doctorId) {
+  } else if (doctorId && !doctor.value.id) {
     getDoctorDetail()
   }
 })
 
 onMounted(() => {
   resetSignatureForNewBooking()
-  getDoctorDetail()
-  if (uni.getStorageSync('token')) {
-    loadIntakeStatus()
-  }
   setTimeout(() => updateSectionOffsets(), 500)
 
   const systemInfo = uni.getSystemInfoSync()

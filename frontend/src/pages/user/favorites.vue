@@ -6,13 +6,13 @@
 
     <view v-else-if="!isLoggedIn" class="state-box">
       <text class="state-text">登录后可查看收藏的咨询师</text>
-      <button class="login-btn" @click="goLogin">去登录</button>
+      <button class="login-btn" @tap="goLogin">去登录</button>
     </view>
 
     <view v-else-if="favorites.length === 0" class="state-box">
       <image src="/static/images/place12.png" class="empty-img" mode="aspectFit" />
       <text class="state-text">暂无收藏的咨询师</text>
-      <button class="login-btn outline" @click="goConsultants">去找咨询师</button>
+      <button class="login-btn outline" @tap="goConsultants">去预约咨询师</button>
     </view>
 
     <view v-else class="list-wrap">
@@ -20,7 +20,7 @@
         v-for="item in favorites"
         :key="item.counselorId"
         class="doc-card"
-        @click="goDetail(item.counselorId)"
+        @tap="goDetail(item.counselorId)"
       >
         <view class="doc-card-top">
           <image
@@ -53,7 +53,7 @@
             <text class="price-num">{{ formatPrice(item.billing) }}</text>
             <text class="price-unit">/50分钟</text>
           </view>
-          <button class="book-btn" @click.stop="goDetail(item.counselorId)">立即预约</button>
+          <button class="book-btn" @tap.stop="goDetail(item.counselorId)">立即预约</button>
         </view>
       </view>
     </view>
@@ -125,8 +125,17 @@ const loadFavorites = async () => {
   }
 }
 
-const goDetail = (id: number) => {
-  uni.navigateTo({ url: `/pages/consultant/detail?id=${id}` })
+const goDetail = (id?: number) => {
+  if (!id) {
+    uni.showToast({ title: '咨询师信息无效', icon: 'none' })
+    return
+  }
+  uni.navigateTo({
+    url: `/pages/consultant/detail?id=${id}`,
+    fail: () => {
+      uni.showToast({ title: '无法打开预约页面', icon: 'none' })
+    },
+  })
 }
 
 const goLogin = () => {
@@ -134,7 +143,12 @@ const goLogin = () => {
 }
 
 const goConsultants = () => {
-  uni.navigateTo({ url: '/pages/consultant/list' })
+  uni.switchTab({
+    url: '/pages/consultant/list',
+    fail: () => {
+      uni.reLaunch({ url: '/pages/consultant/list' })
+    },
+  })
 }
 
 onMounted(loadFavorites)

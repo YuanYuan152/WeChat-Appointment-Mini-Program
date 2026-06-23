@@ -5,11 +5,7 @@
       <!-- 自定义导航栏 -->
       <view class="custom-navbar" :style="{ paddingTop: statusBarPx + 'px' }">
         <view class="navbar-content">
-          <view class="nav-left" @click="goBack">
-            <text class="nav-icon">‹</text>
-          </view>
-          <view class="nav-title">找咨询师</view>
-          <view class="nav-right"></view>
+          <view class="nav-title">预约咨询师</view>
         </view>
       </view>
 
@@ -37,7 +33,7 @@
             @click="toggleFilter('sort')"
           >
             <text class="filter-text">{{ currentSortLabel }}</text>
-            <text class="filter-arrow" :class="{ up: activeFilter === 'sort' }">▾</text>
+            <view class="filter-chevron" :class="{ up: activeFilter === 'sort' }" />
           </view>
           <view 
             class="filter-item" 
@@ -45,7 +41,7 @@
             @click="toggleFilter('city')"
           >
             <text class="filter-text">{{ currentCityLabel }}</text>
-            <text class="filter-arrow" :class="{ up: activeFilter === 'city' }">▾</text>
+            <view class="filter-chevron" :class="{ up: activeFilter === 'city' }" />
           </view>
           <view 
             class="filter-item" 
@@ -53,7 +49,7 @@
             @click="toggleFilter('price')"
           >
             <text class="filter-text">{{ currentPriceLabel }}</text>
-            <text class="filter-arrow" :class="{ up: activeFilter === 'price' }">▾</text>
+            <view class="filter-chevron" :class="{ up: activeFilter === 'price' }" />
           </view>
           <view 
             class="filter-item" 
@@ -61,12 +57,11 @@
             @click="toggleFilter('more')"
           >
             <text class="filter-text">筛选</text>
-            <text class="filter-icon-img">▼</text>
+            <view class="filter-chevron" :class="{ up: activeFilter === 'more' }" />
           </view>
         </view>
 
         <!-- 筛选下拉面板 -->
-        <view v-if="activeFilter" class="filter-dropdown-mask" @click="closeFilter"></view>
         <view class="filter-dropdown" :class="{ show: activeFilter }">
           <!-- 综合排序 -->
           <view v-if="activeFilter === 'sort'" class="dropdown-list">
@@ -148,6 +143,14 @@
         </view>
       </view>
     </view>
+
+    <!-- 遮罩仅覆盖头部以下区域，避免压在筛选栏文字上 -->
+    <view
+      v-if="activeFilter"
+      class="filter-dropdown-mask"
+      :style="{ top: headerPlaceholderPx + 'px' }"
+      @tap="closeFilter"
+    />
 
     <!-- 占位符，防止内容被固定头部遮挡 -->
     <view class="header-placeholder" :style="{ height: headerPlaceholderPx + 'px' }"></view>
@@ -453,18 +456,6 @@ const closeAssistantContact = () => {
   showAssistantContact.value = false
 }
 
-// 返回上一页
-const goBack = () => {
-  uni.navigateBack()
-}
-
-// 跳转到首页
-const goHome = () => {
-  uni.switchTab({
-    url: '/pages/index/index'
-  })
-}
-
 // 图片加载错误处理
 const handleImageError = (e: any) => {
   console.error('图片加载失败:', e)
@@ -531,26 +522,9 @@ onPullDownRefresh(async () => {
 .navbar-content {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   height: 88rpx;
   padding: 0 32rpx;
-}
-
-.nav-left, .nav-right {
-  width: 80rpx;
-  display: flex;
-  align-items: center;
-}
-
-.nav-right {
-  justify-content: flex-end;
-}
-
-.nav-icon {
-  font-size: 64rpx;
-  color: #ffffff;
-  line-height: 1;
-  margin-top: -8rpx;
 }
 
 .nav-title {
@@ -611,12 +585,16 @@ onPullDownRefresh(async () => {
 .filter-section {
   position: relative;
   background: #ffffff;
+  z-index: 1;
 }
 
 .filter-bar {
   display: flex;
   height: 88rpx;
   border-bottom: 1px solid #F3F4F6;
+  position: relative;
+  z-index: 2;
+  background: #ffffff;
 }
 
 .filter-item {
@@ -634,41 +612,36 @@ onPullDownRefresh(async () => {
   transition: color 0.2s;
 }
 
-.filter-arrow {
-  font-size: 24rpx;
-  color: #9CA3AF;
-  transition: transform 0.3s;
+.filter-chevron {
+  width: 0;
+  height: 0;
+  border-left: 7rpx solid transparent;
+  border-right: 7rpx solid transparent;
+  border-top: 8rpx solid #9CA3AF;
+  flex-shrink: 0;
+  transition: transform 0.25s ease, border-top-color 0.2s;
 }
 
-.filter-arrow.up {
+.filter-chevron.up {
   transform: rotate(180deg);
 }
 
-.filter-icon-img {
-  width: 24rpx;
-  height: 24rpx;
-  opacity: 0.6;
-}
-
-.filter-item.active .filter-text,
-.filter-item.active .filter-arrow {
+.filter-item.active .filter-text {
   color: #0D9488;
 }
 
-.filter-item.active .filter-icon-img {
-  opacity: 1;
-  filter: sepia(1) hue-rotate(150deg) saturate(300%);
+.filter-item.active .filter-chevron {
+  border-top-color: #0D9488;
 }
 
 /* 筛选下拉面板 */
 .filter-dropdown-mask {
   position: fixed;
-  top: calc(88rpx + 124rpx + 88rpx + var(--status-bar-height, 0px));
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.4);
-  z-index: 90;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 98;
   animation: fadeIn 0.2s ease;
 }
 
@@ -683,16 +656,17 @@ onPullDownRefresh(async () => {
   left: 0;
   right: 0;
   background: #ffffff;
-  z-index: 95;
+  z-index: 3;
   max-height: 0;
   overflow: hidden;
   transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  border-radius: 0 0 32rpx 32rpx;
+  border-radius: 0 0 24rpx 24rpx;
 }
 
 .filter-dropdown.show {
   max-height: 800rpx;
-  box-shadow: 0 16rpx 32rpx rgba(0, 0, 0, 0.08);
+  box-shadow: 0 12rpx 24rpx rgba(0, 0, 0, 0.06);
+  border-top: 1px solid #F3F4F6;
 }
 
 .dropdown-list {

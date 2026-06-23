@@ -49,7 +49,7 @@
         {
             "path": "pages/consultant/list",
             "style": {
-                "navigationBarTitleText": "心理咨询",
+                "navigationBarTitleText": "预约咨询师",
                 "navigationBarBackgroundColor": "#0D9488",
                 "navigationBarTextStyle": "white",
                 "navigationStyle": "custom",

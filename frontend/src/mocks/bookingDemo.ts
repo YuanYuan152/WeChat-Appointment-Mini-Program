@@ -111,7 +111,6 @@ export function getMockConsultantFilterMetaResponse(): ApiResponse<{
         { label: '综合排序', value: 'default' },
         { label: '价格从低到高', value: 'price_asc' },
         { label: '价格从高到低', value: 'price_desc' },
-        { label: '评分优先', value: 'rating_desc' }
       ],
       provinces: [
         { label: '全部城市', value: '' },
