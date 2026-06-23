@@ -516,8 +516,8 @@ const handleJoinLive = (live: LiveStream) => {
 // tabBar 页面必须用 switchTab，不能用 navigateTo（否则 H5/小程序点击无反应）
 const TAB_BAR_PATHS = new Set([
   '/pages/index/index',
-  '/pages/activity/list',
-  '/pages/workbench/index',
+  '/pages/consultant/list',
+  '/pages/tab-slot/index',
   '/pages/theme/index',
   '/pages/user/profile'
 ])

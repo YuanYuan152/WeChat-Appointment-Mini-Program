@@ -1,4 +1,4 @@
-﻿{
+{
     "pages": [
         {
             "path": "pages/index/index",
@@ -21,6 +21,15 @@
             }
         },
         {
+            "path": "pages/tab-slot/index",
+            "style": {
+                "navigationBarTitleText": "预约记录",
+                "navigationBarBackgroundColor": "#ffffff",
+                "navigationBarTextStyle": "black",
+                "backgroundColor": "#F7F5F2"
+            }
+        },
+        {
             "path": "pages/workbench/index",
             "style": {
                 "navigationBarTitleText": "工作台",
@@ -40,7 +49,7 @@
         {
             "path": "pages/consultant/list",
             "style": {
-                "navigationBarTitleText": "咨询师",
+                "navigationBarTitleText": "心理咨询",
                 "navigationBarBackgroundColor": "#0D9488",
                 "navigationBarTextStyle": "white",
                 "navigationStyle": "custom",
@@ -77,6 +86,14 @@
             "path": "pages/user/feedback",
             "style": {
                 "navigationBarTitleText": "意见反馈",
+                "navigationBarBackgroundColor": "#ffffff",
+                "navigationBarTextStyle": "black"
+            }
+        },
+        {
+            "path": "pages/user/favorites",
+            "style": {
+                "navigationBarTitleText": "我的收藏",
                 "navigationBarBackgroundColor": "#ffffff",
                 "navigationBarTextStyle": "black"
             }
@@ -565,16 +582,16 @@
                 "text": "首页"
             },
             {
-                "pagePath": "pages/activity/list",
+                "pagePath": "pages/consultant/list",
                 "iconPath": "static/images/bottom2.png",
                 "selectedIconPath": "static/images/bottom2.png",
-                "text": "活动"
+                "text": "心理咨询"
             },
             {
-                "pagePath": "pages/workbench/index",
+                "pagePath": "pages/tab-slot/index",
                 "iconPath": "static/images/bottom3.png",
                 "selectedIconPath": "static/images/bottom3.png",
-                "text": "工作台"
+                "text": "预约记录"
             },
             {
                 "pagePath": "pages/user/profile",
@@ -596,8 +613,12 @@
                 "path": "pages/auth/login"
             },
             {
-                "name": "工作台",
-                "path": "pages/workbench/index"
+                "name": "心理咨询",
+                "path": "pages/consultant/list"
+            },
+            {
+                "name": "预约记录",
+                "path": "pages/tab-slot/index"
             },
             {
                 "name": "搜索",

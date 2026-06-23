@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { AuthApi, type UserInfo } from '@/apis/auth'
 import { setToken, clearToken, getToken } from '@/utils/auth'
+import { updateTabBarForRole } from '@/utils/tabBar'
 
 export const useUserStore = defineStore('user', {
   state: () => ({
@@ -40,11 +41,15 @@ export const useUserStore = defineStore('user', {
       this.roles = me.roles || []
       this.activeRole = me.activeRole || ''
       uni.setStorageSync('user_roles', JSON.stringify(this.roles))
+      if (me.activeRole) uni.setStorageSync('active_role', me.activeRole)
+      updateTabBarForRole(this.roles, this.activeRole)
     },
 
     async switchRole(role: string) {
       const res = await AuthApi.switchRole(role)
       this.activeRole = res.activeRole || role
+      uni.setStorageSync('active_role', this.activeRole)
+      updateTabBarForRole(this.roles, this.activeRole)
       return res
     },
 
@@ -56,6 +61,8 @@ export const useUserStore = defineStore('user', {
       this.isLogin = false
       clearToken()
       uni.removeStorageSync('user_roles')
+      uni.removeStorageSync('active_role')
+      updateTabBarForRole([], 'Patient')
       uni.switchTab({ url: '/pages/index/index' })
     },
 

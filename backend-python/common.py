@@ -1,4 +1,4 @@
-﻿"""
+"""
 /api/mini/common/* 公共内容域（小程序公开读取，无需登录）
 - banners      首页 Banner（与 ops 公开读一致，但归类到 common）
 - articles     文章/知识/公告（双源：AppArticle + 旧 T_Content 兜底）
@@ -352,6 +352,11 @@ def common_counselor_detail(
         "workYears": int(new_rows[0].get("WorkYears") or 0),
         "career": new_rows[0].get("Career"),
         "qualification": new_rows[0].get("Qualification"),
+        "targetGroup": new_rows[0].get("TargetGroup"),
+        "mode": new_rows[0].get("Mode"),
+        "infoAuthenticityCommitted": bool(new_rows[0].get("InfoAuthenticityCommittedAt")),
+        "infoAuthenticityCommittedAt": new_rows[0].get("InfoAuthenticityCommittedAt"),
+        "infoAuthenticitySignerName": new_rows[0].get("InfoAuthenticitySignerName"),
         "timeSlots": time_slots,
         "availableCenterIds": sorted(center_ids),
         "hasAvailableTime": any(t.get("isBookable") for t in time_slots),

@@ -3,8 +3,21 @@
     <view class="header-card">
       <view>
         <text class="greeting">咨询师工作台</text>
-        <text class="date-text">滚动{{ ROLLING_WINDOW_DAYS }}天：{{ rollingRangeText }}</text>
+        <text class="date-text">{{ viewMode === 'list' ? `滚动${ROLLING_WINDOW_DAYS}天：${rollingRangeText}` : `${calendarMonthLabel} 排期日历` }}</text>
       </view>
+    </view>
+
+    <view class="mode-switch">
+      <view
+        class="mode-chip"
+        :class="{ active: viewMode === 'list' }"
+        @tap="switchViewMode('list')"
+      >普通模式</view>
+      <view
+        class="mode-chip"
+        :class="{ active: viewMode === 'calendar' }"
+        @tap="switchViewMode('calendar')"
+      >日历模式</view>
     </view>
 
     <view class="legend-card">
@@ -15,17 +28,86 @@
     </view>
 
     <view class="toolbar">
-      <button class="add-btn" @tap="openAddModal">+ 新建挂课</button>
+      <button class="add-btn" @tap="openAddModal">+ 新建排期</button>
       <text class="toolbar-tip">{{ toolbarTip }}</text>
+    </view>
+
+    <view v-if="viewMode === 'list'" class="filter-section">
+      <view class="filter-bar" @tap="showListFilter = !showListFilter">
+        <text class="filter-bar-text">筛选</text>
+        <text v-if="listFilterActive" class="filter-bar-badge">已启用</text>
+        <text class="filter-bar-arrow">{{ showListFilter ? '▲' : '▼' }}</text>
+      </view>
+      <view v-if="showListFilter" class="filter-panel">
+        <text class="filter-label">时间段</text>
+        <view class="filter-chips">
+          <view
+            v-for="opt in listTimeOptions"
+            :key="opt.value"
+            class="filter-chip"
+            :class="{ active: listTimeFilter === opt.value }"
+            @tap="listTimeFilter = opt.value"
+          >{{ opt.label }}</view>
+        </view>
+        <text class="filter-label">状态</text>
+        <view class="filter-chips">
+          <view
+            v-for="opt in listStatusOptions"
+            :key="opt.value"
+            class="filter-chip"
+            :class="{ active: listStatusFilter === opt.value }"
+            @tap="listStatusFilter = opt.value"
+          >{{ opt.label }}</view>
+        </view>
+        <text v-if="listFilterActive" class="filter-reset" @tap="resetListFilters">重置筛选</text>
+      </view>
     </view>
 
     <view v-if="loading" class="empty-card"><text class="empty-text">加载中...</text></view>
 
-    <view v-for="day in groupedDays" v-else :key="day.date" class="day-section">
-      <text class="day-title">{{ day.label }}</text>
+    <template v-else>
+      <view v-if="viewMode === 'calendar'" class="calendar-section">
+        <view class="calendar-nav">
+          <text class="cal-nav-btn" @tap="shiftMonth(-1)">‹</text>
+          <text class="cal-month-title">{{ calendarMonthLabel }}</text>
+          <text class="cal-nav-btn" @tap="shiftMonth(1)">›</text>
+        </view>
+        <view class="cal-weekdays">
+          <text v-for="w in weekdayHeaders" :key="w" class="cal-weekday">{{ w }}</text>
+        </view>
+        <view class="cal-grid">
+          <view
+            v-for="(cell, idx) in calendarCells"
+            :key="idx"
+            class="cal-cell"
+            :class="{
+              empty: cell.empty,
+              today: cell.isToday,
+              selected: cell.isSelected,
+            }"
+            @tap="!cell.empty && selectCalendarDate(cell.date)"
+          >
+            <template v-if="!cell.empty">
+              <text class="cal-day-num">{{ cell.day }}</text>
+              <view v-if="cell.dots.length" class="cal-dots">
+                <view
+                  v-for="(dot, di) in cell.dots"
+                  :key="di"
+                  class="cal-dot"
+                  :style="{ background: dotColor(dot) }"
+                />
+              </view>
+            </template>
+          </view>
+        </view>
+        <text v-if="selectedCalendarDate" class="cal-selected-label">{{ weekdayLabel(selectedCalendarDate) }} 排班</text>
+      </view>
+
+      <view v-for="day in displayDaySections" :key="day.date" class="day-section">
+      <text v-if="viewMode === 'list'" class="day-title">{{ day.label }}</text>
       <view v-if="day.slots.length === 0" class="empty-slot-row">
         <text class="empty-slot-icon">⬜</text>
-        <text class="empty-slot-text">本日暂无挂课</text>
+        <text class="empty-slot-text">本日暂无排期</text>
       </view>
       <view
         v-for="slot in day.slots"
@@ -45,19 +127,29 @@
           </view>
         </view>
         <view class="slot-right">
-          <text class="slot-status" :style="{ color: meta(slot.displayStatus).color }">{{ slot.displayLabel }}</text>
+          <text class="slot-status" :style="{ color: slotStatusColor(slot) }">{{ slot.displayLabel }}</text>
           <text v-if="slot.leaveRequestId" class="slot-detail-hint">点击查看请假详情</text>
+          <text v-if="showCaseRecordAction(slot)" class="slot-record-btn" @tap.stop="openCaseRecord(slot)">
+            {{ slot.hasCaseRecord ? '查看 / 修改记录' : '填写咨询记录' }}
+          </text>
           <text v-if="showCancelAction(slot)" class="slot-cancel" @tap.stop="handleCancelSlot(slot)">
             {{ cancelActionLabel(slot) }}
           </text>
         </view>
       </view>
     </view>
+    <view
+      v-if="viewMode === 'list' && !loading && groupedDays.length === 0"
+      class="empty-card"
+    >
+      <text class="empty-text">{{ emptyListText }}</text>
+    </view>
+    </template>
 
-    <!-- 新建挂课 -->
+    <!-- 新建排期 -->
     <view v-if="showAdd" class="modal-overlay" @touchmove.stop.prevent>
       <view class="modal-card" @tap.stop @touchmove.stop.prevent>
-        <text class="modal-title">新建挂课</text>
+        <text class="modal-title">新建排期</text>
         <text class="modal-sub">{{ addModalSub }}</text>
 
         <view class="form-item">
@@ -126,7 +218,7 @@
         <view class="modal-btns">
           <button class="modal-btn cancel" @tap.stop="showAdd = false">取消</button>
           <button class="modal-btn confirm" :disabled="submitting" @tap.stop="submitSlot">
-            {{ submitting ? '保存中...' : '保存挂课' }}
+            {{ submitting ? '保存中...' : '保存排期' }}
           </button>
         </view>
       </view>
@@ -265,6 +357,8 @@ interface CalendarSlot {
   roomName?: string
   patientName?: string
   consultationId?: number
+  hasCaseRecord?: boolean
+  caseRecordId?: number | null
   canCancel?: boolean
   requiresLeave?: boolean
   cancelHint?: string
@@ -272,6 +366,41 @@ interface CalendarSlot {
   leaveReason?: string
   leaveSubmittedAt?: string
   leaveStatus?: string
+}
+
+type ViewMode = 'list' | 'calendar'
+type ListTimeFilter = 'all' | 'today' | 'week' | 'month'
+type ListStatusFilter = 'ALL' | 'OPEN' | 'BOOKED' | 'DONE' | 'UNRECORDED' | 'RECORDED' | 'ON_LEAVE' | 'EXPIRED'
+type CalendarDotStatus = ScheduleDisplayStatus | 'RECORDED'
+
+const listTimeOptions: { value: ListTimeFilter; label: string }[] = [
+  { value: 'all', label: '全部' },
+  { value: 'today', label: '今天' },
+  { value: 'week', label: '近7天' },
+  { value: 'month', label: '本月' },
+]
+
+const listStatusOptions: { value: ListStatusFilter; label: string }[] = [
+  { value: 'ALL', label: '全部状态' },
+  { value: 'OPEN', label: '已排期' },
+  { value: 'BOOKED', label: '已预约' },
+  { value: 'DONE', label: '已完成' },
+  { value: 'UNRECORDED', label: '未填咨询记录' },
+  { value: 'RECORDED', label: '咨询已填写' },
+  { value: 'ON_LEAVE', label: '已请假' },
+  { value: 'EXPIRED', label: '已过期' },
+]
+
+const weekdayHeaders = ['一', '二', '三', '四', '五', '六', '日']
+
+const DOT_COLORS: Record<string, string> = {
+  OPEN: '#7A5C3A',
+  BOOKED: '#1F4034',
+  ON_LEAVE: '#C2410C',
+  DONE: '#6B7280',
+  RECORDED: '#0D9488',
+  EXPIRED: '#9CA3AF',
+  CANCELLED: '#D1D5DB',
 }
 
 const NO_PREF = '__none__'
@@ -303,9 +432,16 @@ const showCancelAction = (slot: CalendarSlot) => {
   return !!slot.canCancel
 }
 
-const cancelActionLabel = (slot: CalendarSlot) => (isBookedSlot(slot) ? '请假' : '取消挂课')
+const cancelActionLabel = (slot: CalendarSlot) => (isBookedSlot(slot) ? '请假' : '取消排期')
 
 const loading = ref(true)
+const viewMode = ref<ViewMode>('list')
+const showListFilter = ref(false)
+const listTimeFilter = ref<ListTimeFilter>('all')
+const listStatusFilter = ref<ListStatusFilter>('ALL')
+const calendarMonth = ref(formatDateLocal().slice(0, 7))
+const selectedCalendarDate = ref(formatDateLocal())
+const monthSlots = ref<CalendarSlot[]>([])
 const slots = ref<CalendarSlot[]>([])
 const showAdd = ref(false)
 const showLeaveNotice = ref(false)
@@ -339,7 +475,7 @@ const isVideoCenterSelected = computed(() => isVideoCenter(form.value.centerId))
 const toolbarTip = computed(() =>
   isVideoCenterSelected.value
     ? '标准时间槽 50 分钟/节；视频咨询不占咨询室，来访者预约成功后线上进行'
-    : '标准时间槽 50 分钟/节；线下中心挂课可设咨询室偏好，付款后才占用咨询室',
+    : '标准时间槽 50 分钟/节；线下中心排期可设咨询室偏好，付款后才占用咨询室',
 )
 
 const addModalSub = computed(() =>
@@ -367,11 +503,14 @@ const form = ref({
   endTime: '',
 })
 
-const legend = Object.entries(SCHEDULE_DISPLAY_META).map(([key, v]) => ({
-  key,
-  icon: v.icon,
-  label: v.label,
-}))
+const legend = [
+  ...Object.entries(SCHEDULE_DISPLAY_META).map(([key, v]) => ({
+    key,
+    icon: v.icon,
+    label: v.label,
+  })),
+  { key: 'RECORDED', icon: '📝', label: '咨询已填写' },
+]
 
 const meta = (status: ScheduleDisplayStatus) =>
   SCHEDULE_DISPLAY_META[status] || SCHEDULE_DISPLAY_META.OPEN
@@ -426,11 +565,69 @@ const weekdayLabel = (dateStr: string) => {
   return `${dateStr} ${names[d.getDay()]}`
 }
 
+const listFilterActive = computed(
+  () => listTimeFilter.value !== 'all' || listStatusFilter.value !== 'ALL',
+)
+
+const emptyListText = computed(() => {
+  if (listStatusFilter.value === 'UNRECORDED') return '暂无待填写的咨询记录'
+  if (listFilterActive.value) return '暂无符合筛选条件的排期'
+  return '暂无排期'
+})
+
+const resetListFilters = () => {
+  listTimeFilter.value = 'all'
+  listStatusFilter.value = 'ALL'
+}
+
+const slotMatchesTimeFilter = (slot: CalendarSlot, filter: ListTimeFilter) => {
+  if (filter === 'all') return true
+  const date = slot.startTime.slice(0, 10)
+  const today = minDate.value
+  if (filter === 'today') return date === today
+  if (filter === 'week') return date >= today && date <= addDays(today, 6)
+  if (filter === 'month') return date.slice(0, 7) === today.slice(0, 7)
+  return true
+}
+
+const slotMatchesStatusFilter = (slot: CalendarSlot, filter: ListStatusFilter) => {
+  if (filter === 'ALL') return true
+  if (filter === 'RECORDED') return slot.displayStatus === 'DONE' && !!slot.hasCaseRecord
+  if (filter === 'UNRECORDED') {
+    return slot.displayStatus === 'DONE' && !!slot.consultationId && !slot.hasCaseRecord
+  }
+  if (filter === 'DONE') return slot.displayStatus === 'DONE'
+  return slot.displayStatus === filter
+}
+
+interface ScheduleListFilter {
+  time?: ListTimeFilter
+  status?: ListStatusFilter
+  expand?: boolean
+}
+
+const applyListFilter = (opts?: ScheduleListFilter) => {
+  viewMode.value = 'list'
+  if (opts?.time) listTimeFilter.value = opts.time
+  if (opts?.status) listStatusFilter.value = opts.status
+  if (opts?.expand !== false) showListFilter.value = true
+}
+
+const getUnrecordedCount = () =>
+  slots.value.filter(
+    s => s.displayStatus === 'DONE' && !!s.consultationId && !s.hasCaseRecord,
+  ).length
+
+const slotPassesListFilters = (slot: CalendarSlot) =>
+  slotMatchesTimeFilter(slot, listTimeFilter.value)
+  && slotMatchesStatusFilter(slot, listStatusFilter.value)
+
 const groupedDays = computed(() => {
   const today = minDate.value
   const byDate = new Map<string, CalendarSlot[]>()
   for (const s of slots.value) {
     if (s.displayStatus === 'CANCELLED' && !s.leaveRequestId) continue
+    if (!slotPassesListFilters(s)) continue
     const date = s.startTime.slice(0, 10)
     if (!byDate.has(date)) byDate.set(date, [])
     byDate.get(date)!.push(s)
@@ -444,16 +641,146 @@ const groupedDays = computed(() => {
     const day = String(d.getDate()).padStart(2, '0')
     const date = `${y}-${m}-${day}`
     const daySlots = (byDate.get(date) || []).slice().sort((a, b) => a.startTime.localeCompare(b.startTime))
+    if (listFilterActive.value && daySlots.length === 0) continue
     days.push({ date, label: weekdayLabel(date), slots: daySlots })
   }
   return days
 })
+
+const slotsForDate = (source: CalendarSlot[], date: string) =>
+  source
+    .filter(s => s.startTime.slice(0, 10) === date && !(s.displayStatus === 'CANCELLED' && !s.leaveRequestId))
+    .slice()
+    .sort((a, b) => a.startTime.localeCompare(b.startTime))
+
+const displayDaySections = computed(() => {
+  if (viewMode.value === 'list') return groupedDays.value
+  if (!selectedCalendarDate.value) return []
+  return [{
+    date: selectedCalendarDate.value,
+    label: weekdayLabel(selectedCalendarDate.value),
+    slots: slotsForDate(monthSlots.value, selectedCalendarDate.value),
+  }]
+})
+
+const calendarMonthLabel = computed(() => {
+  const [y, m] = calendarMonth.value.split('-').map(Number)
+  return `${y}年${m}月`
+})
+
+const dotsForDate = (date: string) => {
+  const daySlots = slotsForDate(monthSlots.value, date)
+  const statuses = new Set<CalendarDotStatus>()
+  for (const s of daySlots) {
+    if (s.displayStatus === 'DONE' && s.hasCaseRecord) statuses.add('RECORDED')
+    else statuses.add(s.displayStatus)
+  }
+  return Array.from(statuses).slice(0, 4)
+}
+
+const dotColor = (status: string) => DOT_COLORS[status] || '#9CA3AF'
+
+const calendarCells = computed(() => {
+  const [y, m] = calendarMonth.value.split('-').map(Number)
+  const first = new Date(y, m - 1, 1)
+  const lastDay = new Date(y, m, 0).getDate()
+  const startPad = (first.getDay() + 6) % 7
+  const today = formatDateLocal()
+  const cells: Array<{
+    empty: boolean
+    date?: string
+    day?: number
+    isToday?: boolean
+    isSelected?: boolean
+    dots?: CalendarDotStatus[]
+  }> = []
+  for (let i = 0; i < startPad; i++) cells.push({ empty: true })
+  for (let d = 1; d <= lastDay; d++) {
+    const date = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+    cells.push({
+      empty: false,
+      date,
+      day: d,
+      isToday: date === today,
+      isSelected: date === selectedCalendarDate.value,
+      dots: dotsForDate(date),
+    })
+  }
+  return cells
+})
+
+const showCaseRecordAction = (slot: CalendarSlot) =>
+  slot.displayStatus === 'DONE' && !!slot.consultationId
+
+const slotStatusColor = (slot: CalendarSlot) => {
+  if (slot.displayStatus === 'DONE' && slot.hasCaseRecord) return '#0D9488'
+  return meta(slot.displayStatus).color
+}
+
+const openCaseRecord = (slot: CalendarSlot) => {
+  if (!slot.consultationId) return
+  const q = slot.caseRecordId
+    ? `consultationId=${slot.consultationId}&recordId=${slot.caseRecordId}`
+    : `consultationId=${slot.consultationId}`
+  uni.navigateTo({ url: `/pages/counselor/case-record/edit?${q}` })
+}
+
+const selectCalendarDate = (date: string) => {
+  selectedCalendarDate.value = date
+}
+
+const shiftMonth = async (delta: number) => {
+  const [y, m] = calendarMonth.value.split('-').map(Number)
+  const d = new Date(y, m - 1 + delta, 1)
+  calendarMonth.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  await loadMonthCalendar()
+  const [ny, nm] = calendarMonth.value.split('-').map(Number)
+  const lastDay = new Date(ny, nm, 0).getDate()
+  const dayNum = Math.min(
+    Number((selectedCalendarDate.value || '').slice(8, 10)) || 1,
+    lastDay,
+  )
+  selectedCalendarDate.value = `${ny}-${String(nm).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`
+}
+
+const switchViewMode = async (mode: ViewMode) => {
+  if (viewMode.value === mode) return
+  viewMode.value = mode
+  if (mode === 'calendar') {
+    if (!selectedCalendarDate.value) selectedCalendarDate.value = formatDateLocal()
+    await loadMonthCalendar()
+  } else {
+    await loadCalendar()
+  }
+}
 
 const selectedTimeSlot = computed(() =>
   timeSlotOptions.value.find(t => t.key === form.value.slotKey) || null,
 )
 
 const roomOptionsForSlot = computed(() => selectedTimeSlot.value?.rooms || [])
+
+const loadMonthCalendar = async () => {
+  loading.value = true
+  try {
+    const res = await httpV2.get<{ slots: CalendarSlot[] }>(
+      API_ENDPOINTS.counselor.scheduleCalendar,
+      { month: calendarMonth.value },
+      { showLoading: false, showError: false },
+    )
+    if (res.code === 0 && res.data) {
+      monthSlots.value = res.data.slots || []
+    } else {
+      monthSlots.value = []
+      uni.showToast({ title: res.msg || '加载月历失败', icon: 'none' })
+    }
+  } catch {
+    monthSlots.value = []
+    uni.showToast({ title: '加载月历失败，请检查后端服务', icon: 'none' })
+  } finally {
+    loading.value = false
+  }
+}
 
 const loadCalendar = async () => {
   loading.value = true
@@ -643,7 +970,7 @@ const confirmCancelBooked = async () => {
         title: cancelBookedIsLeave.value ? '请假成功' : '已取消',
         icon: 'success',
       })
-      await loadCalendar()
+      await refresh()
     } else {
       uni.showToast({ title: r.msg || '取消失败', icon: 'none' })
     }
@@ -668,7 +995,7 @@ const handleCancelSlot = (slot: CalendarSlot) => {
       const r = await httpV2.put(`/api/mini/counselor/schedules/${slot.id}`, { status: 'CANCELLED' })
       if (r.code === 0) {
         uni.showToast({ title: '已取消', icon: 'success' })
-        await loadCalendar()
+        await refresh()
       } else {
         uni.showToast({ title: r.msg || '取消失败', icon: 'none' })
       }
@@ -699,7 +1026,7 @@ const submitSlot = async () => {
     if (res.code === 0) {
       showAdd.value = false
       uni.showToast({ title: '挂课成功', icon: 'success' })
-      await loadCalendar()
+      await refresh()
       await loadSlotOptions()
     } else {
       uni.showToast({ title: res.msg || '挂课失败', icon: 'none' })
@@ -713,20 +1040,106 @@ const submitSlot = async () => {
 
 onMounted(loadCalendar)
 
-const focusScheduleId = async (scheduleId: number) => {
-  if (!scheduleId) return
-  await loadCalendar()
-  const slot = slots.value.find(s => s.id === scheduleId)
-  if (slot?.leaveRequestId) {
-    openLeaveDetail(slot)
-  }
+const refresh = async () => {
+  if (viewMode.value === 'calendar') await loadMonthCalendar()
+  else await loadCalendar()
 }
 
-defineExpose({ refresh: loadCalendar, focusScheduleId })
+const focusScheduleId = async (scheduleId: number) => {
+  if (!scheduleId) return
+  await refresh()
+  const pool = viewMode.value === 'calendar' ? monthSlots.value : slots.value
+  const slot = pool.find(s => s.id === scheduleId)
+  if (slot) {
+    selectedCalendarDate.value = slot.startTime.slice(0, 10)
+    if (viewMode.value === 'calendar' && slot.startTime.slice(0, 7) !== calendarMonth.value) {
+      calendarMonth.value = slot.startTime.slice(0, 7)
+      await loadMonthCalendar()
+    }
+  }
+  const found = (viewMode.value === 'calendar' ? monthSlots.value : slots.value).find(s => s.id === scheduleId)
+  if (found?.leaveRequestId) openLeaveDetail(found)
+}
+
+defineExpose({ refresh, focusScheduleId, applyListFilter, getUnrecordedCount })
 </script>
 
 <style scoped>
 .page-workbench { padding: 32rpx; background: #F7F5F2; min-height: 100vh; padding-bottom: 48rpx; }
+.filter-section { margin-bottom: 24rpx; }
+.filter-bar {
+  display: flex; align-items: center; gap: 12rpx;
+  background: #fff; border-radius: 16rpx; padding: 20rpx 24rpx;
+  box-shadow: 0 4rpx 20rpx rgba(0,0,0,0.03);
+}
+.filter-bar-text { font-size: 28rpx; font-weight: 600; color: #3D5A4E; flex: 1; }
+.filter-bar-badge {
+  font-size: 22rpx; color: #0D9488; background: #F0FDFA;
+  padding: 4rpx 12rpx; border-radius: 999rpx;
+}
+.filter-bar-arrow { font-size: 22rpx; color: #9CA3AF; }
+.filter-panel {
+  margin-top: 16rpx; background: #fff; border-radius: 16rpx;
+  padding: 24rpx; box-shadow: 0 4rpx 20rpx rgba(0,0,0,0.03);
+}
+.filter-label {
+  display: block; font-size: 24rpx; color: #6B7280; margin-bottom: 12rpx;
+}
+.filter-label + .filter-chips { margin-bottom: 20rpx; }
+.filter-chips { display: flex; flex-wrap: wrap; gap: 12rpx; }
+.filter-chip {
+  padding: 10rpx 24rpx; border-radius: 999rpx; font-size: 24rpx;
+  color: #6B7280; background: #F3F4F6; border: 1rpx solid transparent;
+}
+.filter-chip.active {
+  background: #E8E4DE; color: #3D5A4E; border-color: #3D5A4E; font-weight: 600;
+}
+.filter-reset {
+  display: block; text-align: center; font-size: 24rpx; color: #8A7560; margin-top: 8rpx;
+}
+.mode-switch {
+  display: flex; gap: 16rpx; margin-bottom: 24rpx;
+}
+.mode-chip {
+  flex: 1; text-align: center; padding: 18rpx 0; border-radius: 999rpx;
+  font-size: 26rpx; font-weight: 600; color: #6B6560; background: #fff;
+  border: 1rpx solid #E8E4DE;
+}
+.mode-chip.active {
+  background: #3D5A4E; color: #fff; border-color: #3D5A4E;
+}
+.calendar-section {
+  background: #fff; border-radius: 20rpx; padding: 24rpx; margin-bottom: 24rpx;
+  box-shadow: 0 4rpx 20rpx rgba(0,0,0,0.03);
+}
+.calendar-nav {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 20rpx;
+}
+.cal-nav-btn {
+  width: 64rpx; height: 64rpx; line-height: 64rpx; text-align: center;
+  font-size: 40rpx; color: #3D5A4E; background: #F0EDE8; border-radius: 50%;
+}
+.cal-month-title { font-size: 30rpx; font-weight: 700; color: #2C2C2C; }
+.cal-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); margin-bottom: 8rpx; }
+.cal-weekday { text-align: center; font-size: 22rpx; color: #9CA3AF; padding: 8rpx 0; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8rpx; }
+.cal-cell {
+  min-height: 88rpx; border-radius: 12rpx; padding: 8rpx 4rpx;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+}
+.cal-cell.empty { background: transparent; }
+.cal-cell.today { background: #F0FDFA; }
+.cal-cell.selected { background: #E8E4DE; border: 2rpx solid #3D5A4E; }
+.cal-day-num { font-size: 26rpx; font-weight: 600; color: #374151; }
+.cal-dots { display: flex; gap: 4rpx; margin-top: 8rpx; flex-wrap: wrap; justify-content: center; }
+.cal-dot { width: 10rpx; height: 10rpx; border-radius: 50%; }
+.cal-selected-label {
+  display: block; margin-top: 20rpx; font-size: 26rpx; font-weight: 600; color: #3D5A4E;
+}
+.slot-record-btn {
+  font-size: 22rpx; color: #fff; background: #3D5A4E;
+  padding: 8rpx 16rpx; border-radius: 8rpx; white-space: nowrap;
+}
 .header-card {
   background: linear-gradient(135deg, #3D5A4E, #2F4A40);
   border-radius: 24rpx; padding: 40rpx; margin-bottom: 24rpx;

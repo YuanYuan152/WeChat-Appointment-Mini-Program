@@ -108,6 +108,10 @@ export const API_ENDPOINTS = {
     refundExemption: (id: number | string) => `/api/mini/patient/consultations/${id}/refund-exemption`,
     me: '/api/mini/patient/me',
     registration: '/api/mini/patient/registration',
+    favorites: '/api/mini/patient/favorites',
+    favoriteCheck: (id: number | string) => `/api/mini/patient/favorites/check/${id}`,
+    favoriteItem: (id: number | string) => `/api/mini/patient/favorites/${id}`,
+    favoritesCount: '/api/mini/patient/favorites/count',
   },
 
   // 消息中心（Batch B 后续填充）
@@ -129,7 +133,9 @@ export const API_ENDPOINTS = {
     consultations: '/api/mini/counselor/consultations',
     caseRecords: '/api/mini/counselor/case-records',
     profile: '/api/mini/counselor/profile',
+    profileAuthenticityCommitment: '/api/mini/counselor/profile/authenticity-commitment',
     stats: '/api/mini/counselor/stats',
+    statsDetails: '/api/mini/counselor/stats/details',
   },
 
   // 助理工作台

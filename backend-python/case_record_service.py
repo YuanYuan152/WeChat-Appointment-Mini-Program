@@ -59,6 +59,19 @@ def save_case_record_revision(
     )
 
 
+def case_record_has_content(record: Optional[AppCaseRecord]) -> bool:
+    if not record:
+        return False
+    photo_count = len(decode_photo_urls(record.PhotoUrls))
+    return bool(
+        (record.Subjective or "").strip()
+        or (record.Objective or "").strip()
+        or (record.Assessment or "").strip()
+        or (record.Plan or "").strip()
+        or photo_count > 0
+    )
+
+
 def apply_case_record_fields(
     record: AppCaseRecord,
     *,

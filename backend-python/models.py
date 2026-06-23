@@ -1,4 +1,4 @@
-﻿"""
+"""
 SQLAlchemy ORM 模型。
 
 约定：
@@ -8,7 +8,7 @@ SQLAlchemy ORM 模型。
   避免出现 "???" 乱码。
 """
 
-from sqlalchemy import Column, Integer, String, DateTime, BigInteger, Boolean, Unicode, UnicodeText
+from sqlalchemy import Column, Integer, String, DateTime, BigInteger, Boolean, Unicode, UnicodeText, UniqueConstraint
 from sqlalchemy.sql import func
 from database import Base
 
@@ -342,9 +342,13 @@ class AppCounselorProfile(Base):
     Introduce = Column(UnicodeText, nullable=True)
     Career = Column(UnicodeText, nullable=True)
     Qualification = Column(UnicodeText, nullable=True)
+    TargetGroup = Column(Unicode(500), nullable=True)
+    Mode = Column(Unicode(100), nullable=True)
     Billing = Column(Integer, nullable=False, default=0)
     ConsultHours = Column(Integer, nullable=False, default=0)
     WorkYears = Column(Integer, nullable=False, default=0)
+    InfoAuthenticityCommittedAt = Column(DateTime, nullable=True)
+    InfoAuthenticitySignerName = Column(Unicode(100), nullable=True)
     IsActive = Column(Boolean, nullable=False, default=True)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
     UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
@@ -414,6 +418,20 @@ class AppFeedback(Base):
     Contact = Column(String(50), nullable=True)
     Status = Column(String(20), nullable=False, default="OPEN")
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
+
+
+class AppCounselorFavorite(Base):
+    """来访者收藏的咨询师。"""
+    __tablename__ = "AppCounselorFavorite"
+
+    Id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    AccountId = Column(Integer, nullable=False, index=True)
+    CounselorId = Column(Integer, nullable=False, index=True)
+    CreatedAt = Column(DateTime, default=func.now(), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("AccountId", "CounselorId", name="UQ_AppCounselorFavorite_Account_Counselor"),
+    )
 
 
 class AppConsultationRoom(Base):

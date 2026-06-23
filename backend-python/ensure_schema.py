@@ -35,6 +35,13 @@ APP_CASE_RECORD_COLUMNS = {
     "PhotoUrls": "NVARCHAR(MAX) NULL",
 }
 
+APP_COUNSELOR_PROFILE_COLUMNS = {
+    "TargetGroup": "NVARCHAR(500) NULL",
+    "Mode": "NVARCHAR(100) NULL",
+    "InfoAuthenticityCommittedAt": "DATETIME NULL",
+    "InfoAuthenticitySignerName": "NVARCHAR(100) NULL",
+}
+
 
 def ensure_tables():
     Base.metadata.create_all(bind=engine)
@@ -110,6 +117,25 @@ def ensure_refund_exemption_columns():
             print(f"[OK] Added AppRefundExemption.{name}")
 
 
+def ensure_counselor_profile_columns():
+    inspector = inspect(engine)
+    if not inspector.has_table("AppCounselorProfile"):
+        return
+
+    existing = {column["name"] for column in inspector.get_columns("AppCounselorProfile")}
+    missing = [
+        (name, ddl) for name, ddl in APP_COUNSELOR_PROFILE_COLUMNS.items() if name not in existing
+    ]
+    if not missing:
+        print("[OK] AppCounselorProfile columns already complete")
+        return
+
+    with engine.begin() as conn:
+        for name, ddl in missing:
+            conn.execute(text(f"ALTER TABLE [dbo].[AppCounselorProfile] ADD [{name}] {ddl}"))
+            print(f"[OK] Added AppCounselorProfile.{name}")
+
+
 def print_summary():
     inspector = inspect(engine)
     tables = [name for name in inspector.get_table_names() if name.startswith("App")]
@@ -129,6 +155,7 @@ def main():
     ensure_app_order_columns()
     ensure_case_record_columns()
     ensure_refund_exemption_columns()
+    ensure_counselor_profile_columns()
     print_summary()
 
 

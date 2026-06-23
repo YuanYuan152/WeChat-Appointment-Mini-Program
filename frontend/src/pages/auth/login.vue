@@ -55,6 +55,7 @@
 import { computed, ref, onMounted } from 'vue'
 import { AuthApi } from '@/apis/auth'
 import DevRolePicker from '@/components/DevRolePicker.vue'
+import { updateTabBarForRole } from '@/utils/tabBar'
 import {
   DEV_LOGIN_ROLES,
   getDevLoginCode,
@@ -138,6 +139,8 @@ const afterLoginSuccess = async () => {
   try {
     const me = await AuthApi.getMe()
     uni.setStorageSync('user_roles', JSON.stringify(me.roles || []))
+    if (me.activeRole) uni.setStorageSync('active_role', me.activeRole)
+    updateTabBarForRole(me.roles, me.activeRole)
   } catch { /* ignore */ }
 
   setTimeout(() => {

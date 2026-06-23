@@ -29,6 +29,8 @@ from models import (
     AppCounselorProfile,
     AppSchedule,
     AppRefundExemption,
+    AppCounselorFavorite,
+    AppAccount,
 )
 from refund_exemption_service import (
     latest_exemptions_by_consultation,
@@ -565,3 +567,154 @@ def save_registration(
     db.commit()
     db.refresh(form)
     return _registration_to_dict(form)
+
+
+class CounselorFavoriteOut(BaseModel):
+    counselorId: int
+    name: str
+    title: Optional[str] = None
+    avatarUrl: Optional[str] = None
+    specialty: Optional[str] = None
+    billing: Optional[int] = None
+    workYears: Optional[int] = None
+    consultHours: Optional[int] = None
+    createdAt: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class FavoriteStatusOut(BaseModel):
+    favorited: bool
+    count: int = 0
+
+
+def _favorite_counselor_out(db: Session, counselor_id: int, created_at: datetime) -> CounselorFavoriteOut:
+    profile = (
+        db.query(AppCounselorProfile)
+        .filter(AppCounselorProfile.AccountId == counselor_id)
+        .first()
+    )
+    account = db.query(AppAccount).filter(AppAccount.Id == counselor_id).first()
+    name = "咨询师"
+    avatar = None
+    if profile:
+        name = profile.Name or name
+        avatar = profile.AvatarUrl
+    if account and not profile:
+        name = account.RealName or account.Nickname or name
+        avatar = account.AvatarUrl
+    return CounselorFavoriteOut(
+        counselorId=counselor_id,
+        name=name,
+        title=profile.Title if profile else None,
+        avatarUrl=avatar,
+        specialty=profile.Specialty if profile else None,
+        billing=int(profile.Billing or 0) if profile else None,
+        workYears=int(profile.WorkYears or 0) if profile else None,
+        consultHours=int(profile.ConsultHours or 0) if profile else None,
+        createdAt=created_at,
+    )
+
+
+@router.get("/favorites", response_model=List[CounselorFavoriteOut], summary="我的收藏咨询师")
+def list_favorites(
+    account: AppAccount = Depends(get_current_account),
+    db: Session = Depends(get_db),
+):
+    rows = (
+        db.query(AppCounselorFavorite)
+        .filter(AppCounselorFavorite.AccountId == account.Id)
+        .order_by(AppCounselorFavorite.CreatedAt.desc())
+        .all()
+    )
+    return [_favorite_counselor_out(db, r.CounselorId, r.CreatedAt) for r in rows]
+
+
+@router.get("/favorites/count", summary="收藏数量")
+def favorite_count(
+    account: AppAccount = Depends(get_current_account),
+    db: Session = Depends(get_db),
+):
+    count = (
+        db.query(AppCounselorFavorite)
+        .filter(AppCounselorFavorite.AccountId == account.Id)
+        .count()
+    )
+    return {"count": count}
+
+
+@router.get(
+    "/favorites/check/{counselor_id}",
+    response_model=FavoriteStatusOut,
+    summary="是否已收藏某咨询师",
+)
+def check_favorite(
+    counselor_id: int,
+    account: AppAccount = Depends(get_current_account),
+    db: Session = Depends(get_db),
+):
+    exists = (
+        db.query(AppCounselorFavorite)
+        .filter(
+            AppCounselorFavorite.AccountId == account.Id,
+            AppCounselorFavorite.CounselorId == counselor_id,
+        )
+        .first()
+    )
+    return FavoriteStatusOut(favorited=bool(exists))
+
+
+@router.post(
+    "/favorites/{counselor_id}",
+    response_model=FavoriteStatusOut,
+    summary="收藏咨询师",
+)
+def add_favorite(
+    counselor_id: int,
+    account: AppAccount = Depends(get_current_account),
+    db: Session = Depends(get_db),
+):
+    profile = (
+        db.query(AppCounselorProfile)
+        .filter(AppCounselorProfile.AccountId == counselor_id, AppCounselorProfile.IsActive == True)
+        .first()
+    )
+    if not profile:
+        raise HTTPException(status_code=404, detail="咨询师不存在")
+    existing = (
+        db.query(AppCounselorFavorite)
+        .filter(
+            AppCounselorFavorite.AccountId == account.Id,
+            AppCounselorFavorite.CounselorId == counselor_id,
+        )
+        .first()
+    )
+    if not existing:
+        db.add(AppCounselorFavorite(AccountId=account.Id, CounselorId=counselor_id))
+        db.commit()
+    return FavoriteStatusOut(favorited=True)
+
+
+@router.delete(
+    "/favorites/{counselor_id}",
+    response_model=FavoriteStatusOut,
+    summary="取消收藏咨询师",
+)
+def remove_favorite(
+    counselor_id: int,
+    account: AppAccount = Depends(get_current_account),
+    db: Session = Depends(get_db),
+):
+    row = (
+        db.query(AppCounselorFavorite)
+        .filter(
+            AppCounselorFavorite.AccountId == account.Id,
+            AppCounselorFavorite.CounselorId == counselor_id,
+        )
+        .first()
+    )
+    if row:
+        db.delete(row)
+        db.commit()
+    return FavoriteStatusOut(favorited=False)

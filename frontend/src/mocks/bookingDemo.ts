@@ -261,7 +261,10 @@ export function getMockDoctorDetailJson(doctorId: string | number) {
         targetGroup: '成年人,青少年,家庭',
         consultHours: 1200,
         workYears: years,
-        mode: src.consultMethod
+        mode: src.consultMethod,
+        career: '4',
+        infoAuthenticityCommitted: true,
+        infoAuthenticityCommittedAt: '2026-01-15T10:00:00',
       },
       /** 咨询师可约中心（后续由咨询师端排班 API 注入） */
       availableCenterIds: ['yangpu', 'pudong'],

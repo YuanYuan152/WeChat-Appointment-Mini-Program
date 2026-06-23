@@ -2,7 +2,7 @@
   <view class="workbench-shell">
     <view class="segment-wrap">
       <view class="segment-track">
-        <view class="segment-thumb" :class="{ right: activeTab === 'records' }" />
+        <view class="segment-thumb" :class="{ right: activeTab === 'dashboard' }" />
         <view
           class="segment-item"
           :class="{ active: activeTab === 'schedule' }"
@@ -12,16 +12,16 @@
         </view>
         <view
           class="segment-item"
-          :class="{ active: activeTab === 'records' }"
-          @tap="switchTab('records')"
+          :class="{ active: activeTab === 'dashboard' }"
+          @tap="switchTab('dashboard')"
         >
-          咨询记录
+          个人看板
         </view>
       </view>
     </view>
 
     <SchedulePanel v-show="activeTab === 'schedule'" ref="scheduleRef" />
-    <RecordsPanel v-if="recordsMounted" v-show="activeTab === 'records'" />
+    <DashboardPanel v-if="dashboardMounted" v-show="activeTab === 'dashboard'" ref="dashboardRef" />
   </view>
 </template>
 
@@ -29,19 +29,23 @@
 import { ref } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import SchedulePanel from './schedule-panel.vue'
-import RecordsPanel from './records-panel.vue'
+import DashboardPanel from './dashboard-panel.vue'
 
-type WorkbenchTab = 'schedule' | 'records'
+type WorkbenchTab = 'schedule' | 'dashboard'
 
 const activeTab = ref<WorkbenchTab>('schedule')
-const recordsMounted = ref(false)
+const dashboardMounted = ref(false)
 const scheduleRef = ref<InstanceType<typeof SchedulePanel> | null>(null)
+const dashboardRef = ref<InstanceType<typeof DashboardPanel> | null>(null)
 const pendingScheduleId = ref(0)
+const preferDashboard = ref(false)
+const preferScheduleFilter = ref<'unrecorded' | ''>('')
 
 const switchTab = (tab: WorkbenchTab) => {
   activeTab.value = tab
-  if (tab === 'records') recordsMounted.value = true
+  if (tab === 'dashboard') dashboardMounted.value = true
   if (tab === 'schedule') scheduleRef.value?.refresh?.()
+  if (tab === 'dashboard') dashboardRef.value?.refresh?.()
 }
 
 const applyPendingFocus = async () => {
@@ -51,13 +55,40 @@ const applyPendingFocus = async () => {
   await scheduleRef.value?.focusScheduleId?.(scheduleId)
 }
 
+const applyPendingScheduleFilter = async () => {
+  if (!preferScheduleFilter.value) return
+  const filter = preferScheduleFilter.value
+  preferScheduleFilter.value = ''
+  activeTab.value = 'schedule'
+  await scheduleRef.value?.refresh?.()
+  if (filter === 'unrecorded') {
+    scheduleRef.value?.applyListFilter?.({ status: 'UNRECORDED', time: 'all' })
+  }
+}
+
 onLoad((options?: Record<string, string | undefined>) => {
   pendingScheduleId.value = Number(options?.scheduleId || 0)
+  if (options?.tab === 'dashboard') {
+    preferDashboard.value = true
+    dashboardMounted.value = true
+    activeTab.value = 'dashboard'
+  }
+  if (options?.scheduleFilter === 'unrecorded') {
+    preferScheduleFilter.value = 'unrecorded'
+  }
 })
 
 onShow(async () => {
-  activeTab.value = 'schedule'
-  await scheduleRef.value?.refresh?.()
+  if (preferScheduleFilter.value) {
+    await applyPendingScheduleFilter()
+  } else if (preferDashboard.value) {
+    preferDashboard.value = false
+    switchTab('dashboard')
+  } else {
+    activeTab.value = 'schedule'
+    await scheduleRef.value?.refresh?.()
+  }
+  dashboardRef.value?.refresh?.()
   await applyPendingFocus()
 })
 </script>

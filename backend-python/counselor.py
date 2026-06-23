@@ -1,4 +1,4 @@
-﻿"""
+"""
 3.1 咨询师工作台接口
 GET  /api/mini/counselor/schedules          今日及近期排班
 POST /api/mini/counselor/schedules          新增排班
@@ -20,6 +20,7 @@ from sqlalchemy.exc import ProgrammingError, OperationalError
 
 from case_record_service import (
     apply_case_record_fields,
+    case_record_has_content,
     decode_photo_urls,
     save_case_record_revision,
 )
@@ -173,6 +174,8 @@ class ScheduleCalendarItem(BaseModel):
     leaveReason: Optional[str] = None
     leaveSubmittedAt: Optional[datetime] = None
     leaveStatus: Optional[str] = None
+    hasCaseRecord: bool = False
+    caseRecordId: Optional[int] = None
 
 
 class ScheduleCalendarOut(BaseModel):
@@ -296,10 +299,160 @@ class CounselorProfilePayload(BaseModel):
     introduce: Optional[str] = None
     career: Optional[str] = None
     qualification: Optional[str] = None
-    billing: Optional[int] = None
+    targetGroup: Optional[str] = None
+    mode: Optional[str] = None
     consultHours: Optional[int] = None
     workYears: Optional[int] = None
     isActive: Optional[bool] = True
+
+
+class AuthenticityCommitmentPayload(BaseModel):
+    signerName: str
+    agreed: bool = True
+
+
+class DashboardDetailItem(BaseModel):
+    id: int
+    title: str
+    subtitle: Optional[str] = None
+    extra: Optional[str] = None
+    amount: Optional[int] = None
+    consultationId: Optional[int] = None
+    caseRecordId: Optional[int] = None
+    status: Optional[str] = None
+
+
+def _resolve_dashboard_range(
+    period: Optional[str],
+    start: Optional[str],
+    end: Optional[str],
+) -> tuple[Optional[datetime], Optional[datetime]]:
+    now = china_now()
+    if start and end:
+        try:
+            range_start = datetime.combine(date_type.fromisoformat(start), time.min)
+            range_end = datetime.combine(date_type.fromisoformat(end), time.min) + timedelta(days=1)
+            return range_start, range_end
+        except ValueError:
+            raise HTTPException(status_code=400, detail="start/end 格式应为 YYYY-MM-DD")
+    p = (period or "month").lower()
+    if p == "all":
+        return None, None
+    if p == "quarter":
+        return now - timedelta(days=90), now + timedelta(days=1)
+    if p == "half_year":
+        return now - timedelta(days=180), now + timedelta(days=1)
+    return datetime(now.year, now.month, 1), now + timedelta(days=1)
+
+
+def _consultation_time(c: AppConsultation) -> Optional[datetime]:
+    return c.StartTime or c.EndTime or c.CreatedAt
+
+
+def _consultation_in_range(
+    c: AppConsultation,
+    range_start: Optional[datetime],
+    range_end: Optional[datetime],
+) -> bool:
+    if not range_start and not range_end:
+        return True
+    ref = _consultation_time(c)
+    if not ref:
+        return False
+    if range_start and ref < range_start:
+        return False
+    if range_end and ref >= range_end:
+        return False
+    return True
+
+
+def _format_dt_short(dt: Optional[datetime]) -> str:
+    if not dt:
+        return ""
+    return dt.strftime("%Y-%m-%d %H:%M")
+
+
+def _compute_dashboard_stats(
+    db: Session,
+    counselor: AppAccount,
+    range_start: Optional[datetime],
+    range_end: Optional[datetime],
+) -> dict:
+    profile = db.query(AppCounselorProfile).filter(
+        AppCounselorProfile.AccountId == counselor.Id
+    ).first()
+    billing = profile.Billing if profile else 0
+
+    consultations = (
+        db.query(AppConsultation)
+        .filter(AppConsultation.CounselorId == counselor.Id)
+        .all()
+    )
+    in_range = [c for c in consultations if _consultation_in_range(c, range_start, range_end)]
+
+    done_in_range = [c for c in in_range if c.Status == "DONE"]
+    order_ids = {c.OrderId for c in done_in_range if c.OrderId}
+    orders_by_id = {}
+    if order_ids:
+        orders_by_id = {
+            o.Id: o
+            for o in db.query(AppOrder).filter(AppOrder.Id.in_(order_ids)).all()
+        }
+
+    completed_order_count = 0
+    completed_order_revenue = 0
+    for c in done_in_range:
+        order = orders_by_id.get(c.OrderId) if c.OrderId else None
+        if order and order.Status == "PAID":
+            completed_order_count += 1
+            completed_order_revenue += order.TotalFee or 0
+        elif not order:
+            completed_order_count += 1
+            completed_order_revenue += billing or 0
+
+    case_records = (
+        db.query(AppCaseRecord)
+        .filter(AppCaseRecord.CounselorId == counselor.Id)
+        .all()
+    )
+    consultation_map = {c.Id: c for c in consultations}
+    case_record_count = 0
+    for record in case_records:
+        if not case_record_has_content(record):
+            continue
+        cons = consultation_map.get(record.ConsultationId)
+        ref = record.UpdatedAt or record.CreatedAt
+        if cons and cons.StartTime:
+            ref = cons.StartTime
+        if range_start and ref and ref < range_start:
+            continue
+        if range_end and ref and ref >= range_end:
+            continue
+        case_record_count += 1
+
+    total_appointments = sum(1 for c in in_range if c.Status != "CANCELLED")
+
+    leave_rows = (
+        db.query(AppLeaveRequest)
+        .filter(AppLeaveRequest.CounselorId == counselor.Id)
+        .all()
+    )
+    leave_count = 0
+    for row in leave_rows:
+        ref = row.CreatedAt
+        if range_start and ref < range_start:
+            continue
+        if range_end and ref >= range_end:
+            continue
+        leave_count += 1
+
+    return {
+        "completedOrderCount": completed_order_count,
+        "completedOrderRevenue": completed_order_revenue,
+        "caseRecordCount": case_record_count,
+        "totalAppointments": total_appointments,
+        "leaveCount": leave_count,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -534,6 +687,19 @@ def _calendar_items_for_schedules(
 
     leave_by_schedule = _leaves_by_schedule(db, schedule_ids, counselor_id)
 
+    consultation_ids = list({c.Id for c in all_consultations if c.Id})
+    case_records_by_consultation: dict[int, AppCaseRecord] = {}
+    if consultation_ids:
+        case_records_by_consultation = {
+            r.ConsultationId: r
+            for r in db.query(AppCaseRecord)
+            .filter(
+                AppCaseRecord.CounselorId == counselor_id,
+                AppCaseRecord.ConsultationId.in_(consultation_ids),
+            )
+            .all()
+        }
+
     patient_ids = {c.PatientId for c in all_consultations}
     patients = {
         a.Id: a
@@ -561,6 +727,14 @@ def _calendar_items_for_schedules(
             display_label = DISPLAY_LABELS.get(display, display)
             can_cancel, requires_leave, cancel_hint = _cancel_permissions(s, c)
 
+        case_record = None
+        has_record = False
+        if display_cons:
+            case_record = case_records_by_consultation.get(display_cons.Id)
+            has_record = case_record_has_content(case_record)
+        if display == "DONE" and has_record:
+            display_label = "咨询已填写"
+
         items.append(
             ScheduleCalendarItem(
                 id=s.Id,
@@ -583,6 +757,8 @@ def _calendar_items_for_schedules(
                 leaveReason=leave_row.Reason if leave_row else None,
                 leaveSubmittedAt=leave_row.CreatedAt if leave_row else None,
                 leaveStatus=leave_row.Status if leave_row else None,
+                hasCaseRecord=has_record,
+                caseRecordId=case_record.Id if case_record and has_record else None,
             )
         )
     return items
@@ -690,11 +866,45 @@ def schedule_slot_options(
 def schedule_calendar(
     start: Optional[str] = Query(None, description="起始日期 YYYY-MM-DD，默认今天"),
     days: int = Query(ROLLING_WINDOW_DAYS, ge=1, le=ROLLING_WINDOW_DAYS),
+    month: Optional[str] = Query(None, description="按月查看 YYYY-MM（日历模式）"),
     counselor: AppAccount = Depends(require_counselor),
     db: Session = Depends(get_db),
 ):
-    """滚动窗口：从今天起连续 ROLLING_WINDOW_DAYS 天。"""
+    """滚动窗口：从今天起连续 ROLLING_WINDOW_DAYS 天；或指定 month 查看整月。"""
     today = china_now().date()
+
+    if month:
+        try:
+            year_s, mon_s = month.split("-", 1)
+            year_i, mon_i = int(year_s), int(mon_s)
+            if mon_i < 1 or mon_i > 12:
+                raise ValueError
+            start_date = date_type(year_i, mon_i, 1)
+            if mon_i == 12:
+                end_date = date_type(year_i + 1, 1, 1)
+            else:
+                end_date = date_type(year_i, mon_i + 1, 1)
+            span_days = (end_date - start_date).days
+        except (ValueError, AttributeError):
+            raise HTTPException(status_code=400, detail="month 格式应为 YYYY-MM")
+        start_dt = datetime.combine(start_date, time.min)
+        end_dt = datetime.combine(end_date, time.min)
+        schedules = (
+            db.query(AppSchedule)
+            .filter(
+                AppSchedule.CounselorId == counselor.Id,
+                AppSchedule.StartTime >= start_dt,
+                AppSchedule.StartTime < end_dt,
+            )
+            .order_by(AppSchedule.StartTime.asc())
+            .all()
+        )
+        return ScheduleCalendarOut(
+            startDate=start_date.isoformat(),
+            days=span_days,
+            slots=_calendar_items_for_schedules(db, schedules, counselor.Id),
+        )
+
     start_date = today
     if start:
         try:
@@ -1039,16 +1249,7 @@ def list_completed_consultations(
     for c in consultations:
         record = records.get(c.Id)
         photo_count = len(decode_photo_urls(record.PhotoUrls)) if record else 0
-        has_content = bool(
-            record
-            and (
-                (record.Subjective or "").strip()
-                or (record.Objective or "").strip()
-                or (record.Assessment or "").strip()
-                or (record.Plan or "").strip()
-                or photo_count > 0
-            )
-        )
+        has_content = case_record_has_content(record)
         result.append(
             CompletedConsultationOut(
                 Id=c.Id,
@@ -1210,10 +1411,15 @@ def _profile_to_dict(profile: AppCounselorProfile):
         "introduce": profile.Introduce,
         "career": profile.Career,
         "qualification": profile.Qualification,
+        "targetGroup": profile.TargetGroup,
+        "mode": profile.Mode,
         "billing": profile.Billing,
         "consultHours": profile.ConsultHours,
         "workYears": profile.WorkYears,
         "isActive": profile.IsActive,
+        "infoAuthenticityCommitted": bool(profile.InfoAuthenticityCommittedAt),
+        "infoAuthenticityCommittedAt": profile.InfoAuthenticityCommittedAt,
+        "infoAuthenticitySignerName": profile.InfoAuthenticitySignerName,
     }
 
 
@@ -1237,6 +1443,37 @@ def get_profile(
     return _profile_to_dict(profile)
 
 
+@router.post("/profile/authenticity-commitment", summary="签署信息真实可信承诺书")
+def sign_authenticity_commitment(
+    body: AuthenticityCommitmentPayload,
+    counselor: AppAccount = Depends(require_counselor),
+    db: Session = Depends(get_db),
+):
+    signer = (body.signerName or "").strip()
+    if not body.agreed:
+        raise HTTPException(status_code=400, detail="请先阅读并同意承诺书")
+    if not signer:
+        raise HTTPException(status_code=400, detail="请填写签署姓名")
+
+    profile = db.query(AppCounselorProfile).filter(
+        AppCounselorProfile.AccountId == counselor.Id
+    ).first()
+    if not profile:
+        profile = AppCounselorProfile(
+            AccountId=counselor.Id,
+            Name=counselor.Nickname,
+            AvatarUrl=counselor.AvatarUrl,
+        )
+        db.add(profile)
+
+    profile.InfoAuthenticitySignerName = signer
+    profile.InfoAuthenticityCommittedAt = datetime.utcnow()
+    profile.UpdatedAt = datetime.utcnow()
+    db.commit()
+    db.refresh(profile)
+    return _profile_to_dict(profile)
+
+
 @router.put("/profile", summary="更新咨询师个人资料")
 def update_profile(
     body: CounselorProfilePayload,
@@ -1249,6 +1486,10 @@ def update_profile(
     if not profile:
         profile = AppCounselorProfile(AccountId=counselor.Id)
         db.add(profile)
+        db.flush()
+
+    if not profile.InfoAuthenticityCommittedAt:
+        raise HTTPException(status_code=403, detail="请先签署信息真实可信承诺书")
 
     mapping = {
         "name": "Name",
@@ -1259,7 +1500,8 @@ def update_profile(
         "introduce": "Introduce",
         "career": "Career",
         "qualification": "Qualification",
-        "billing": "Billing",
+        "targetGroup": "TargetGroup",
+        "mode": "Mode",
         "consultHours": "ConsultHours",
         "workYears": "WorkYears",
         "isActive": "IsActive",
@@ -1276,9 +1518,15 @@ def update_profile(
 
 @router.get("/stats", summary="咨询师统计看板")
 def counselor_stats(
+    period: Optional[str] = Query("month", description="month|quarter|half_year|all"),
+    start: Optional[str] = Query(None, description="自定义起始 YYYY-MM-DD"),
+    end: Optional[str] = Query(None, description="自定义结束 YYYY-MM-DD"),
     counselor: AppAccount = Depends(require_counselor),
     db: Session = Depends(get_db),
 ):
+    range_start, range_end = _resolve_dashboard_range(period, start, end)
+    metrics = _compute_dashboard_stats(db, counselor, range_start, range_end)
+
     now = datetime.utcnow()
     month_start = datetime(now.year, now.month, 1)
     total = db.query(AppConsultation).filter(
@@ -1300,10 +1548,197 @@ def counselor_stats(
         AppCounselorProfile.AccountId == counselor.Id
     ).first()
     billing = profile.Billing if profile else 0
+
     return {
         "totalConsultations": total,
         "monthConsultations": month_total,
         "pendingConsultations": pending,
         "doneConsultations": done,
         "estimatedRevenue": done * billing,
+        **metrics,
     }
+
+
+@router.get(
+    "/stats/details",
+    response_model=List[DashboardDetailItem],
+    summary="个人看板明细",
+)
+def counselor_stats_details(
+    category: str = Query(
+        ...,
+        description="orders|case-records|appointments|leaves",
+    ),
+    period: Optional[str] = Query("month"),
+    start: Optional[str] = Query(None),
+    end: Optional[str] = Query(None),
+    counselor: AppAccount = Depends(require_counselor),
+    db: Session = Depends(get_db),
+):
+    range_start, range_end = _resolve_dashboard_range(period, start, end)
+    cat = category.strip().lower()
+
+    if cat == "orders":
+        consultations = (
+            db.query(AppConsultation)
+            .filter(
+                AppConsultation.CounselorId == counselor.Id,
+                AppConsultation.Status == "DONE",
+            )
+            .order_by(AppConsultation.StartTime.desc(), AppConsultation.Id.desc())
+            .all()
+        )
+        consultations = [c for c in consultations if _consultation_in_range(c, range_start, range_end)]
+        patient_ids = {c.PatientId for c in consultations}
+        patients = {
+            a.Id: a
+            for a in db.query(AppAccount).filter(AppAccount.Id.in_(patient_ids)).all()
+        } if patient_ids else {}
+        order_ids = {c.OrderId for c in consultations if c.OrderId}
+        orders_by_id = {
+            o.Id: o
+            for o in db.query(AppOrder).filter(AppOrder.Id.in_(order_ids)).all()
+        } if order_ids else {}
+        profile = db.query(AppCounselorProfile).filter(
+            AppCounselorProfile.AccountId == counselor.Id
+        ).first()
+        billing = profile.Billing if profile else 0
+
+        items: List[DashboardDetailItem] = []
+        for c in consultations:
+            order = orders_by_id.get(c.OrderId) if c.OrderId else None
+            if order and order.Status != "PAID":
+                continue
+            amount = (order.TotalFee if order else billing) or 0
+            if order or not c.OrderId:
+                items.append(
+                    DashboardDetailItem(
+                        id=c.Id,
+                        title=_patient_display_name(patients.get(c.PatientId)),
+                        subtitle=_format_dt_short(_consultation_time(c)),
+                        extra=f"咨询单 #{c.Id}",
+                        amount=amount,
+                        consultationId=c.Id,
+                        status=c.Status,
+                    )
+                )
+        return items
+
+    if cat == "case-records":
+        records = (
+            db.query(AppCaseRecord)
+            .filter(AppCaseRecord.CounselorId == counselor.Id)
+            .order_by(AppCaseRecord.UpdatedAt.desc(), AppCaseRecord.Id.desc())
+            .all()
+        )
+        consultation_ids = [r.ConsultationId for r in records]
+        consultations = {
+            c.Id: c
+            for c in db.query(AppConsultation)
+            .filter(AppConsultation.Id.in_(consultation_ids))
+            .all()
+        } if consultation_ids else {}
+        patient_ids = {c.PatientId for c in consultations.values()}
+        patients = {
+            a.Id: a
+            for a in db.query(AppAccount).filter(AppAccount.Id.in_(patient_ids)).all()
+        } if patient_ids else {}
+
+        items = []
+        for record in records:
+            if not case_record_has_content(record):
+                continue
+            cons = consultations.get(record.ConsultationId)
+            ref = cons.StartTime if cons and cons.StartTime else (record.UpdatedAt or record.CreatedAt)
+            if range_start and ref and ref < range_start:
+                continue
+            if range_end and ref and ref >= range_end:
+                continue
+            patient_name = _patient_display_name(patients.get(cons.PatientId)) if cons else "来访者"
+            items.append(
+                DashboardDetailItem(
+                    id=record.Id,
+                    title=patient_name,
+                    subtitle=_format_dt_short(ref),
+                    extra=f"照片 {len(decode_photo_urls(record.PhotoUrls))} 张",
+                    consultationId=record.ConsultationId,
+                    caseRecordId=record.Id,
+                    status="FILLED",
+                )
+            )
+        return items
+
+    if cat == "appointments":
+        consultations = (
+            db.query(AppConsultation)
+            .filter(
+                AppConsultation.CounselorId == counselor.Id,
+                AppConsultation.Status != "CANCELLED",
+            )
+            .order_by(AppConsultation.StartTime.desc(), AppConsultation.Id.desc())
+            .all()
+        )
+        consultations = [c for c in consultations if _consultation_in_range(c, range_start, range_end)]
+        patient_ids = {c.PatientId for c in consultations}
+        patients = {
+            a.Id: a
+            for a in db.query(AppAccount).filter(AppAccount.Id.in_(patient_ids)).all()
+        } if patient_ids else {}
+        status_labels = {
+            "PENDING": "待确认",
+            "CONFIRMED": "已确认",
+            "ONGOING": "进行中",
+            "DONE": "已完成",
+        }
+        return [
+            DashboardDetailItem(
+                id=c.Id,
+                title=_patient_display_name(patients.get(c.PatientId)),
+                subtitle=_format_dt_short(_consultation_time(c)),
+                extra=status_labels.get(c.Status, c.Status),
+                consultationId=c.Id,
+                status=c.Status,
+            )
+            for c in consultations
+        ]
+
+    if cat == "leaves":
+        rows = (
+            db.query(AppLeaveRequest)
+            .filter(AppLeaveRequest.CounselorId == counselor.Id)
+            .order_by(AppLeaveRequest.CreatedAt.desc(), AppLeaveRequest.Id.desc())
+            .all()
+        )
+        schedule_ids = [r.ScheduleId for r in rows]
+        schedules = {
+            s.Id: s
+            for s in db.query(AppSchedule).filter(AppSchedule.Id.in_(schedule_ids)).all()
+        } if schedule_ids else {}
+        status_labels = {
+            "PENDING": "待审核",
+            "APPROVED": "已通过",
+            "REJECTED": "已驳回",
+        }
+        items = []
+        for row in rows:
+            ref = row.CreatedAt
+            if range_start and ref < range_start:
+                continue
+            if range_end and ref >= range_end:
+                continue
+            schedule = schedules.get(row.ScheduleId)
+            slot_text = ""
+            if schedule:
+                slot_text = f"{_format_dt_short(schedule.StartTime)} – {_format_dt_short(schedule.EndTime)}"
+            items.append(
+                DashboardDetailItem(
+                    id=row.Id,
+                    title=slot_text or f"排期 #{row.ScheduleId}",
+                    subtitle=_format_dt_short(row.CreatedAt),
+                    extra=status_labels.get(row.Status, row.Status),
+                    status=row.Status,
+                )
+            )
+        return items
+
+    raise HTTPException(status_code=400, detail="category 应为 orders|case-records|appointments|leaves")

@@ -54,7 +54,7 @@
           <text class="menu-text">个人信息</text>
           <text class="menu-arrow">›</text>
         </view>
-        <view class="menu-item" @click="navigateTo('/pages/patient/records/list')">
+        <view class="menu-item" @click="goRecordsTab">
           <view class="menu-icon-wrap bg-blue-light">
             <text class="menu-icon text-blue">📋</text>
           </view>
@@ -71,11 +71,28 @@
             <text class="menu-arrow">›</text>
           </view>
         </view>
+        <view v-if="isCounselor" class="menu-item" @click="goCounselorRecordFill">
+          <view class="menu-icon-wrap bg-purple-light">
+            <text class="menu-icon text-purple">📝</text>
+          </view>
+          <text class="menu-text">咨询记录填写</text>
+          <view class="menu-arrow-wrap">
+            <text v-if="pendingRecordCount > 0" class="menu-unread-dot" />
+            <text class="menu-arrow">›</text>
+          </view>
+        </view>
         <view class="menu-item" @click="navigateTo('/pages/user/wallet')">
           <view class="menu-icon-wrap bg-orange-light">
             <text class="menu-icon text-orange">💰</text>
           </view>
           <text class="menu-text">我的钱包</text>
+          <text class="menu-arrow">›</text>
+        </view>
+        <view v-if="isCounselor" class="menu-item" @click="goCounselorDashboard">
+          <view class="menu-icon-wrap bg-teal-light">
+            <text class="menu-icon text-teal">📊</text>
+          </view>
+          <text class="menu-text">我的看板</text>
           <text class="menu-arrow">›</text>
         </view>
       </view>
@@ -126,7 +143,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import LoginModal from '@/components/LoginModal.vue'
 import { isLoggedIn as checkIsLoggedIn, handleRequireLogin, logout as authLogout, clearToken } from '@/utils/auth'
@@ -134,6 +151,7 @@ import { UserApi } from '@/apis/user'
 import { AuthApi } from '@/apis/auth'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
+import { updateTabBarForRole } from '@/utils/tabBar'
 
 interface UserInfo {
   name: string
@@ -161,6 +179,10 @@ const loginMode = ref<'login' | 'register'>('login')
 const userInfo = ref<UserInfo>(emptyUserInfo())
 const stats = ref({ appointmentCount: 0, activityCount: 0, favoriteCount: 0 })
 const unreadMessageCount = ref(0)
+const userRoles = ref<string[]>([])
+const pendingRecordCount = ref(0)
+
+const isCounselor = computed(() => userRoles.value.includes('Counselor'))
 
 const ROLE_LABELS: Record<string, string> = {
   Patient: '来访者',
@@ -186,8 +208,10 @@ const getProfileEditUrl = () =>
 const resetPageState = () => {
   userInfo.value = emptyUserInfo()
   activeRole.value = ''
+  userRoles.value = []
   stats.value = { appointmentCount: 0, activityCount: 0, favoriteCount: 0 }
   unreadMessageCount.value = 0
+  pendingRecordCount.value = 0
 }
 
 const refreshPage = () => {
@@ -232,9 +256,15 @@ const loadUserInfo = async () => {
       avatar: meData.avatarUrl || '',
     }
     activeRole.value = meData.activeRole || meData.roles?.[0] || ''
+    userRoles.value = meData.roles || []
     if (meData.roles?.length) {
       uni.setStorageSync('user_roles', JSON.stringify(meData.roles))
     }
+    if (meData.activeRole) {
+      uni.setStorageSync('active_role', meData.activeRole)
+    }
+    updateTabBarForRole(meData.roles, meData.activeRole)
+    await loadPendingRecordCount()
   } catch {
     // 网络异常时保留登录态，避免误清 token
   }
@@ -243,17 +273,39 @@ const loadUserInfo = async () => {
 const loadStats = async () => {
   try {
     const silent = { showLoading: false, showError: false }
-    const [ordersRes, consultRes] = await Promise.all([
+    const [ordersRes, consultRes, favRes] = await Promise.all([
       httpV2.get<any[]>(API_ENDPOINTS.patient.orders, undefined, silent),
       httpV2.get<any[]>(API_ENDPOINTS.patient.consultations, undefined, silent),
+      httpV2.get<{ count: number }>(API_ENDPOINTS.patient.favoritesCount, undefined, silent),
     ])
     stats.value = {
       appointmentCount: Array.isArray(ordersRes.data) ? ordersRes.data.length : 0,
       activityCount: Array.isArray(consultRes.data) ? consultRes.data.length : 0,
-      favoriteCount: 0,
+      favoriteCount: favRes.code === 0 && favRes.data ? (favRes.data.count || 0) : 0,
     }
   } catch {
     stats.value = { appointmentCount: 0, activityCount: 0, favoriteCount: 0 }
+  }
+}
+
+const loadPendingRecordCount = async () => {
+  if (!userRoles.value.includes('Counselor') && activeRole.value !== 'Counselor') {
+    pendingRecordCount.value = 0
+    return
+  }
+  try {
+    const res = await httpV2.get<Array<{ HasRecord?: boolean }>>(
+      `${API_ENDPOINTS.counselor.consultations}/completed`,
+      undefined,
+      { showLoading: false, showError: false },
+    )
+    if (res.code === 0 && Array.isArray(res.data)) {
+      pendingRecordCount.value = res.data.filter(item => !item.HasRecord).length
+    } else {
+      pendingRecordCount.value = 0
+    }
+  } catch {
+    pendingRecordCount.value = 0
   }
 }
 
@@ -363,6 +415,28 @@ const navigateTo = (url: string) => {
   uni.navigateTo({ url })
 }
 
+const goRecordsTab = () => {
+  if (!isLoggedIn.value) {
+    goLogin()
+    return
+  }
+  uni.switchTab({ url: '/pages/tab-slot/index' })
+}
+
+const goCounselorDashboard = () => {
+  handleRequireLogin(
+    () => uni.navigateTo({ url: '/pages/counselor/workbench/index?tab=dashboard' }),
+    '/pages/counselor/workbench/index?tab=dashboard',
+  )
+}
+
+const goCounselorRecordFill = () => {
+  handleRequireLogin(
+    () => uni.navigateTo({ url: '/pages/counselor/workbench/index?scheduleFilter=unrecorded' }),
+    '/pages/counselor/workbench/index?scheduleFilter=unrecorded',
+  )
+}
+
 // 模板里的几个未定义方法兜底实现
 const handleAvatarClick = () => {
   if (!isLoggedIn.value) {
@@ -402,7 +476,9 @@ const handleLogout = () => {
       if (!res.confirm) return
       clearToken()
       uni.removeStorageSync('user_roles')
+      uni.removeStorageSync('active_role')
       uni.removeStorageSync('redirectAfterLogin')
+      updateTabBarForRole([], 'Patient')
       isLoggedIn.value = false
       resetPageState()
       uni.showToast({ title: '已退出登录', icon: 'success' })

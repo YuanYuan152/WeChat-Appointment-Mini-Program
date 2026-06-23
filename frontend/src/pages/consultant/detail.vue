@@ -37,7 +37,10 @@
             @error="handleImageError"
           />
           <view class="hero-info">
-            <text class="hero-name">{{ doctor.name }}</text>
+            <view class="hero-name-row">
+              <text class="hero-name">{{ doctor.name }}</text>
+              <text class="hero-price">￥{{ doctor.price }}<text class="hero-price-unit">/次</text></text>
+            </view>
             <view class="hero-tags">
               <text class="hero-tag secondary">从业{{ doctor.workYears }}年</text>
             </view>
@@ -45,7 +48,7 @@
         </view>
       </view>
 
-      <!-- 悬浮数据卡片 -->
+      <!-- 悬浮数据卡片：从业年限 | 咨询时数 | 培训经历（4段） -->
       <view class="stats-card">
         <view class="stat-item">
           <text class="stat-value">{{ doctor.workYears }}<text class="stat-unit">年</text></text>
@@ -58,8 +61,8 @@
         </view>
         <view class="stat-divider"></view>
         <view class="stat-item">
-          <text class="stat-value price">￥{{ doctor.price }}</text>
-          <text class="stat-label">每次/50分钟</text>
+          <text class="stat-value">{{ trainingCount }}<text class="stat-unit">段</text></text>
+          <text class="stat-label">培训经历</text>
         </view>
       </view>
 
@@ -74,11 +77,6 @@
           class="tab-item" 
           :class="{ active: activeTab === 1 }"
           @click="scrollToSection(1)"
-        >咨询过程</view>
-        <view 
-          class="tab-item" 
-          :class="{ active: activeTab === 2 }"
-          @click="scrollToSection(2)"
         >预约</view>
       </view>
 
@@ -87,11 +85,6 @@
           <view class="info-block">
             <text class="block-title">简介</text>
             <text class="block-text quote-text">"{{ doctor.profile }}"</text>
-          </view>
-          
-          <view class="info-block">
-            <text class="block-title">个人介绍</text>
-            <text class="block-text">{{ doctor.description }}</text>
           </view>
           
           <view class="info-block">
@@ -112,26 +105,24 @@
               <text v-for="group in doctorTargetGroups" :key="group" class="cloud-tag alt">{{ group }}</text>
             </view>
           </view>
-      </view>
 
-      <!-- 咨询过程区域 -->
-      <view class="content-section main-content-padding" id="section1">
-          <view class="info-block">
-            <text class="block-title">咨询过程</text>
-            <view class="process-card">
-              <text class="block-text">
-                咨询是以精神分析取向的心理咨询，这意味着当前状况的缓解可能不是一个很快的过程，但是你会通过这样一个逐步展开的咨询得到一个更深入的转变，无论是自我认识，还是自我的接纳和自尊的改善，以及生活的关系中的动力和快乐。
-                
-
-
-                但是可能也会在咨询的过程中体验到许多未曾感受的情感，这些也许会让你感觉到有一些难以耐受，但是所有这些我们可以去讨论，我也会和你在一起来经历这些。每次50分钟。前面的3-4次为初始访谈，每周的频率在1-2次，有些可以是3-4次。一个个短程的咨询在15-30次，中长程持续50-100次，长程在100次以上。如果你不喜欢精神分析，也可以采用人本主义聚焦疗法的方式，是从身体的感受入手来工作。所以需要通过一点点地增加对自己的身体的理解，来帮助自己解决困扰，增强自己对于自己的情绪及反应的领悟。会有一个更加自主性的过程。每次也是50分钟，频率一周1-2次。每次会包括聚焦和讨论。
+          <view v-if="doctor.infoAuthenticityCommitted" class="info-block trust-pledge-block">
+            <view class="trust-pledge-card">
+              <view class="trust-pledge-head">
+                <text class="trust-pledge-icon">✓</text>
+                <text class="trust-pledge-title">可信承诺</text>
+              </view>
+              <text class="trust-pledge-main">该咨询师已承诺：所展示信息均真实可信</text>
+              <text class="trust-pledge-sub">资质、从业经历、专业背景等资料经本人确认真实有效</text>
+              <text v-if="doctor.infoAuthenticityCommittedAt" class="trust-pledge-time">
+                签署时间：{{ formatCommitmentTime(doctor.infoAuthenticityCommittedAt) }}
               </text>
             </view>
           </view>
       </view>
 
       <!-- 预约区域：预约中心 + 可约时间 -->
-      <view class="content-section main-content-padding" id="section2">
+      <view class="content-section main-content-padding" id="section1">
         <view class="booking-section">
           <text class="block-title block-title--green">预约</text>
           <text class="booking-hint">请选择您合适的预约中心和时间段</text>
@@ -206,10 +197,14 @@
 
     <!-- 底部悬浮预约栏 (Glassmorphism) -->
     <view class="bottom-action-bar show">
-      <view class="action-info">
-        <text class="action-label">{{ canProceedBooking ? '合计' : '咨询费用' }}</text>
-        <text class="action-price">￥{{ selectedSlot?.Price || doctor.price }}</text>
-      </view>
+      <button
+        class="favorite-btn"
+        :class="{ active: isFavorited }"
+        @click="toggleFavorite"
+      >
+        <text class="favorite-icon">{{ isFavorited ? '♥' : '♡' }}</text>
+        <text>{{ isFavorited ? '已收藏' : '收藏' }}</text>
+      </button>
       <view class="action-btns">
         <button class="action-btn outline" @click="openAssistantContact">联系助理</button>
         <button
@@ -217,7 +212,7 @@
           :class="{ disabled: !canProceedBooking }"
           :disabled="!canProceedBooking"
           @click="makeAppointment"
-        >立即预约</button>
+        >{{ canProceedBooking ? `立即预约 ￥${selectedSlot?.Price || doctor.price}` : '立即预约' }}</button>
       </view>
     </view>
 
@@ -397,6 +392,7 @@ import {
   type BookingTimeSlot,
 } from '@/utils/bookingSlots'
 import ContactUsContent from '@/components/ContactUsContent.vue'
+import { isLoggedIn, handleRequireLogin } from '@/utils/auth'
 
 interface Doctor {
   id: number
@@ -407,6 +403,11 @@ interface Doctor {
   avatar: string
   description: string
   profile: string
+  career: string
+  joiner: string
+  trainingCount: number
+  infoAuthenticityCommitted: boolean
+  infoAuthenticityCommittedAt: string
   qualification: string
   field: string
   targetGroup: string
@@ -420,7 +421,7 @@ const activeTab = ref(0)
 const pageScrollTop = ref(0)
 /** 仅用于编程式滚动，不与 @scroll 双向绑定 */
 const scrollTopBinding = ref(0)
-const sectionOffsets = ref<number[]>([0, 0, 0])
+const sectionOffsets = ref<number[]>([0, 0])
 const isClickScrolling = ref(false)
 /** 吸顶 Tab 高度补偿（px） */
 const STICKY_TAB_OFFSET = 48
@@ -434,6 +435,11 @@ const doctor = ref<Doctor>({
   avatar: '',
   description: '',
   profile: '',
+  career: '',
+  joiner: '',
+  trainingCount: 0,
+  infoAuthenticityCommitted: false,
+  infoAuthenticityCommittedAt: '',
   qualification: '',
   field: '',
   targetGroup: '',
@@ -448,6 +454,8 @@ const selectedSlotId = ref<number>(-1)
 const hasAvailableTime = ref(false)
 /** 咨询师实际可约中心（API 注入；无则根据 timeSlots 推导） */
 const counselorCenterIds = ref<string[]>([])
+const isFavorited = ref(false)
+const favoriteLoading = ref(false)
 
 // 弹框状态
 const showAgeConfirm = ref(false)
@@ -526,6 +534,41 @@ const doctorTargetGroups = computed(() => {
   return doctor.value.targetGroup ? doctor.value.targetGroup.split(',').map(g => g.trim()) : []
 })
 
+const parseTrainingSegments = (raw?: string): string[] => {
+  const text = raw?.trim()
+  if (!text) return []
+
+  let parts = text.split(/\n+/).map(p => p.trim()).filter(Boolean)
+  if (parts.length <= 1) {
+    parts = text.split(/[;；|｜]/).map(p => p.trim()).filter(Boolean)
+  }
+  if (parts.length <= 1) {
+    parts = text.split(/[。！？.!?]+/).map(p => p.trim()).filter(p => p.length > 1)
+  }
+  if (parts.length <= 1) {
+    parts = [text]
+  }
+  return parts
+}
+
+const trainingCount = computed(() => {
+  if (doctor.value.trainingCount != null && doctor.value.trainingCount > 0) {
+    return doctor.value.trainingCount
+  }
+  const merged = [doctor.value.career, doctor.value.joiner].filter(Boolean).join('\n').trim()
+  if (!merged) return 0
+  if (/^\d+$/.test(merged)) return Number(merged)
+  const match = merged.match(/(\d+)\s*段/)
+  if (match) return Number(match[1])
+  return parseTrainingSegments(merged).length
+})
+
+const formatCommitmentTime = (value?: string) => {
+  if (!value) return ''
+  const text = String(value).replace('T', ' ').slice(0, 16)
+  return text
+}
+
 // 获取路由参数
 const getRouteParams = () => {
   const pages = getCurrentPages()
@@ -541,7 +584,12 @@ const mapDoctorDetail = (item: any): Doctor => ({
   price: Math.round(Number(item.billing || 0) / 100) || item.price || 500,
   avatar: item.avatarUrl || item.avatar || '',
   description: item.introduce || item.description || '暂无介绍',
-  profile: item.career || item.introduce || item.description || '暂无简介',
+  profile: item.profile || item.introduce || '暂无简介',
+  career: item.career || '',
+  joiner: item.joiner || '',
+  trainingCount: Number(item.trainingCount ?? item.trainingSegments ?? 0) || 0,
+  infoAuthenticityCommitted: !!item.infoAuthenticityCommitted,
+  infoAuthenticityCommittedAt: item.infoAuthenticityCommittedAt || '',
   qualification: item.qualification || '暂无资质信息',
   field: item.field || item.specialty || '',
   targetGroup: item.targetGroup || '成人,青少年,亲子家庭',
@@ -549,6 +597,56 @@ const mapDoctorDetail = (item: any): Doctor => ({
   workYears: Number(item.workYears || 0),
   mode: item.mode || '线上/线下'
 })
+
+const loadFavoriteStatus = async () => {
+  if (!doctor.value.id || !isLoggedIn()) {
+    isFavorited.value = false
+    return
+  }
+  try {
+    const res = await httpV2.get<{ favorited: boolean }>(
+      API_ENDPOINTS.patient.favoriteCheck(doctor.value.id),
+      undefined,
+      { showLoading: false, showError: false },
+    )
+    if (res.code === 0 && res.data) {
+      isFavorited.value = !!res.data.favorited
+    }
+  } catch {
+    // ignore
+  }
+}
+
+const toggleFavorite = () => {
+  if (!doctor.value.id) return
+  handleRequireLogin(async () => {
+    if (favoriteLoading.value) return
+    favoriteLoading.value = true
+    try {
+      if (isFavorited.value) {
+        const res = await httpV2.delete(API_ENDPOINTS.patient.favoriteItem(doctor.value.id))
+        if (res.code === 0) {
+          isFavorited.value = false
+          uni.showToast({ title: '已取消收藏', icon: 'none' })
+        } else {
+          uni.showToast({ title: res.msg || '操作失败', icon: 'none' })
+        }
+      } else {
+        const res = await httpV2.post(API_ENDPOINTS.patient.favoriteItem(doctor.value.id))
+        if (res.code === 0) {
+          isFavorited.value = true
+          uni.showToast({ title: '收藏成功', icon: 'success' })
+        } else {
+          uni.showToast({ title: res.msg || '操作失败', icon: 'none' })
+        }
+      }
+    } catch {
+      uni.showToast({ title: '操作失败', icon: 'none' })
+    } finally {
+      favoriteLoading.value = false
+    }
+  })
+}
 
 // 获取医生详情
 const loadBookingSlots = async (doctorId: string | number) => {
@@ -593,6 +691,7 @@ const getDoctorDetail = async () => {
       const data = payload.data
       doctor.value = data.doctor
       applyBookingData(data)
+      await loadFavoriteStatus()
       setTimeout(() => updateSectionOffsets(), 300)
       return
     }
@@ -601,6 +700,7 @@ const getDoctorDetail = async () => {
     if (response.code === 0 && response.data) {
       doctor.value = mapDoctorDetail(response.data)
       applyBookingData(response.data)
+      await loadFavoriteStatus()
       setTimeout(() => updateSectionOffsets(), 300)
     } else {
       uni.showToast({
@@ -624,17 +724,16 @@ const updateSectionOffsets = () => {
       const query = uni.createSelectorQuery()
       query.select('#section0').boundingClientRect()
       query.select('#section1').boundingClientRect()
-      query.select('#section2').boundingClientRect()
       query.select('.content-area').boundingClientRect()
       query.select('.content-area').scrollOffset()
       query.exec((res) => {
-        if (!res || res.length < 5 || !res[0] || !res[3] || !res[4]) {
+        if (!res || res.length < 4 || !res[0] || !res[2] || !res[3]) {
           resolve()
           return
         }
-        const scrollViewTop = res[3].top
-        const currentScroll = res[4].scrollTop || 0
-        sectionOffsets.value = [0, 1, 2].map((i) => {
+        const scrollViewTop = res[2].top
+        const currentScroll = res[3].scrollTop || 0
+        sectionOffsets.value = [0, 1].map((i) => {
           const rect = res[i]
           if (!rect) return 0
           const offset = currentScroll + rect.top - scrollViewTop
@@ -669,15 +768,10 @@ const onScroll = (e: any) => {
   if (isClickScrolling.value) return
 
   const offsets = sectionOffsets.value
-  if (offsets.length < 3) return
+  if (offsets.length < 2) return
 
   const threshold = scrollTopValue + STICKY_TAB_OFFSET + 10
-  let currentIndex = 0
-  if (threshold >= offsets[2]) {
-    currentIndex = 2
-  } else if (threshold >= offsets[1]) {
-    currentIndex = 1
-  }
+  const currentIndex = threshold >= offsets[1] ? 1 : 0
 
   if (currentIndex !== activeTab.value) {
     activeTab.value = currentIndex
@@ -1216,23 +1310,10 @@ const goBackFromSignature = () => {
   // 只关闭绘制区域，保持其他状态不变
 }
 
-onMounted(() => {
-  resetSignatureForNewBooking()
-  getDoctorDetail()
-  if (uni.getStorageSync('token')) {
-    loadIntakeStatus()
-  }
-  setTimeout(() => updateSectionOffsets(), 500)
-  
-  // 计算内容区域高度
-  const systemInfo = uni.getSystemInfoSync()
-  const navbarHeight = 88 // 导航栏高度
-  const tabHeight = 44 // tab高度
-  const statusBarHeight = systemInfo.statusBarHeight || 0
-  contentHeight.value = systemInfo.windowHeight - navbarHeight - tabHeight - statusBarHeight
-})
-
 onShow(() => {
+  if (doctor.value.id) {
+    loadFavoriteStatus()
+  }
   const params = getRouteParams()
   const doctorId = params.id || params.doctorId
   if (doctorId && doctor.value.id) {
@@ -1240,6 +1321,21 @@ onShow(() => {
   } else if (doctorId) {
     getDoctorDetail()
   }
+})
+
+onMounted(() => {
+  resetSignatureForNewBooking()
+  getDoctorDetail()
+  if (uni.getStorageSync('token')) {
+    loadIntakeStatus()
+  }
+  setTimeout(() => updateSectionOffsets(), 500)
+
+  const systemInfo = uni.getSystemInfoSync()
+  const navbarHeight = 88
+  const tabHeight = 44
+  const statusBarHeight = systemInfo.statusBarHeight || 0
+  contentHeight.value = systemInfo.windowHeight - navbarHeight - tabHeight - statusBarHeight
 })
 </script>
 
@@ -1386,13 +1482,34 @@ onShow(() => {
   padding-bottom: 10rpx;
 }
 
+.hero-name-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16rpx;
+  flex-wrap: wrap;
+  margin-bottom: 16rpx;
+}
+
 .hero-name {
   font-size: 48rpx;
   font-weight: 800;
   color: #1F2937;
-  display: block;
-  margin-bottom: 16rpx;
+  flex: 1;
   text-shadow: 0 2rpx 4rpx rgba(255,255,255,0.5);
+}
+
+.hero-price {
+  font-size: 36rpx;
+  font-weight: 800;
+  color: #F59E0B;
+  flex-shrink: 0;
+}
+
+.hero-price-unit {
+  font-size: 22rpx;
+  font-weight: 600;
+  color: #9CA3AF;
 }
 
 .hero-tags {
@@ -1538,6 +1655,67 @@ onShow(() => {
   padding: 40rpx;
   margin-bottom: 24rpx;
   box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.02);
+}
+
+.trust-pledge-block {
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.trust-pledge-card {
+  background: linear-gradient(135deg, #ECFDF5 0%, #F0FDFA 100%);
+  border: 1rpx solid #A7F3D0;
+  border-radius: 32rpx;
+  padding: 32rpx 36rpx;
+}
+
+.trust-pledge-head {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-bottom: 16rpx;
+}
+
+.trust-pledge-icon {
+  width: 40rpx;
+  height: 40rpx;
+  line-height: 40rpx;
+  text-align: center;
+  border-radius: 50%;
+  background: #10B981;
+  color: #fff;
+  font-size: 24rpx;
+  font-weight: 700;
+}
+
+.trust-pledge-title {
+  font-size: 32rpx;
+  font-weight: 800;
+  color: #065F46;
+}
+
+.trust-pledge-main {
+  display: block;
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #047857;
+  line-height: 1.6;
+  margin-bottom: 8rpx;
+}
+
+.trust-pledge-sub {
+  display: block;
+  font-size: 24rpx;
+  color: #059669;
+  line-height: 1.6;
+  margin-bottom: 12rpx;
+}
+
+.trust-pledge-time {
+  display: block;
+  font-size: 22rpx;
+  color: #6B7280;
 }
 
 .block-title {
@@ -1880,6 +2058,40 @@ onShow(() => {
   gap: 12rpx;
   flex: 1;
   justify-content: flex-end;
+}
+
+.favorite-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4rpx;
+  background: transparent;
+  border: none;
+  padding: 0 16rpx;
+  margin: 0;
+  flex-shrink: 0;
+  min-width: 88rpx;
+  color: #6B7280;
+  font-size: 22rpx;
+  line-height: 1.2;
+}
+
+.favorite-btn::after {
+  border: none;
+}
+
+.favorite-btn.active {
+  color: #EF4444;
+}
+
+.favorite-icon {
+  font-size: 44rpx;
+  line-height: 1;
+}
+
+.favorite-btn.active .favorite-icon {
+  color: #EF4444;
 }
 
 .action-btn {
