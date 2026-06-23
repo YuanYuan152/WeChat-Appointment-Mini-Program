@@ -74,6 +74,16 @@ frontend/dist/
 frontend/unpackage/
 frontend/.env.local
 
+# Web 管理端忽略
+admin-web/node_modules/
+admin-web/.next/
+admin-web/out/
+admin-web/docs/
+admin-web/.env.local
+admin-web/.env.*.local
+admin-web/tsconfig.tsbuildinfo
+admin-web/.turbo/
+
 # Visual Studio 2015/2017 cache/options directory
 .vs/
 # Uncomment if you have tasks that create the project's static files in wwwroot

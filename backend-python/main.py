@@ -13,6 +13,7 @@ from common import router as common_router
 from message import router as message_router
 from admin import router as admin_router
 from feedback import router as feedback_router
+from web_admin import router as web_admin_router
 
 app = FastAPI(title="LXXL API", version="2.0")
 
@@ -41,6 +42,7 @@ app.include_router(common_router)
 app.include_router(message_router)
 app.include_router(admin_router)
 app.include_router(feedback_router)
+app.include_router(web_admin_router)
 
 @app.get("/")
 def read_root():
