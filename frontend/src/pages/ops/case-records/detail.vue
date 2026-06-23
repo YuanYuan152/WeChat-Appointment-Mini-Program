@@ -9,7 +9,13 @@
     <view v-else-if="list.length === 0" class="empty">该时段暂无已完成咨询</view>
 
     <view v-else class="list">
-      <view v-for="item in list" :key="item.consultationId" class="card">
+      <view
+        v-for="item in list"
+        :key="item.consultationId"
+        class="card"
+        :class="{ clickable: item.hasRecord && item.caseRecordId }"
+        @tap="openRecord(item)"
+      >
         <view class="card-head">
           <text class="patient">{{ item.patientName }}</text>
           <text class="tag" :class="item.hasRecord ? 'ok' : 'warn'">
@@ -22,13 +28,15 @@
           <text v-if="item.photoCount > 0">照片 {{ item.photoCount }} 张</text>
           <text v-if="item.recordUpdatedAt">更新 {{ formatDT(item.recordUpdatedAt) }}</text>
         </view>
+        <text v-if="item.hasRecord && item.caseRecordId" class="view-hint">点击查看完整咨询记录 ›</text>
       </view>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
+import { onLoad } from '@dcloudio/uni-app'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
 
@@ -37,6 +45,7 @@ interface RecordItem {
   patientName: string
   startTime?: string
   endTime?: string
+  caseRecordId?: number
   hasRecord: boolean
   subjectivePreview?: string
   photoCount: number
@@ -50,12 +59,17 @@ const counselorName = ref('咨询师')
 
 const formatDT = (dt?: string) => (dt ? dt.slice(0, 16).replace('T', ' ') : '')
 
-onMounted(async () => {
-  const pages = getCurrentPages()
-  const opts = (pages[pages.length - 1] as any)?.options || {}
-  counselorId.value = Number(opts.counselorId || 0)
-  counselorName.value = decodeURIComponent(opts.name || '咨询师')
+const openRecord = (item: RecordItem) => {
+  if (!item.hasRecord || !item.caseRecordId) {
+    uni.showToast({ title: '该咨询暂未填写记录', icon: 'none' })
+    return
+  }
+  uni.navigateTo({
+    url: `/pages/ops/case-records/view?recordId=${item.caseRecordId}`,
+  })
+}
 
+const load = async () => {
   if (!counselorId.value) return
   loading.value = true
   try {
@@ -66,6 +80,12 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+}
+
+onLoad((opts) => {
+  counselorId.value = Number(opts?.counselorId || 0)
+  counselorName.value = decodeURIComponent(opts?.name || '咨询师')
+  load()
 })
 </script>
 
@@ -82,6 +102,7 @@ onMounted(async () => {
   margin-bottom: 16rpx;
   box-shadow: 0 4rpx 20rpx rgba(0,0,0,0.03);
 }
+.card.clickable:active { opacity: 0.92; }
 .card-head { display: flex; justify-content: space-between; align-items: center; }
 .patient { font-size: 30rpx; font-weight: 600; color: #2C2C2C; }
 .tag { font-size: 22rpx; padding: 4rpx 14rpx; border-radius: 999rpx; font-weight: 600; }
@@ -102,5 +123,12 @@ onMounted(async () => {
   margin-top: 12rpx;
   font-size: 22rpx;
   color: #9CA3AF;
+}
+.view-hint {
+  display: block;
+  margin-top: 14rpx;
+  font-size: 24rpx;
+  color: #3D5A4E;
+  font-weight: 600;
 }
 </style>

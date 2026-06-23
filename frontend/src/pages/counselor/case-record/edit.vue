@@ -1,7 +1,11 @@
 <template>
   <view class="page-case-record">
+    <view class="tip-banner">
+      <text>请一次性完整填写并提交，提交后不可修改</text>
+    </view>
+
     <view class="form-section">
-      <text class="form-section-title">患者情况记录（主观陈述）</text>
+      <text class="form-section-title">患者情况记录（主观陈述）<text class="required">*</text></text>
       <textarea
         class="form-textarea"
         v-model="form.subjective"
@@ -12,7 +16,7 @@
     </view>
 
     <view class="form-section">
-      <text class="form-section-title">客观观察</text>
+      <text class="form-section-title">客观观察<text class="required">*</text></text>
       <textarea
         class="form-textarea"
         v-model="form.objective"
@@ -23,7 +27,7 @@
     </view>
 
     <view class="form-section">
-      <text class="form-section-title">评估分析</text>
+      <text class="form-section-title">评估分析<text class="required">*</text></text>
       <textarea
         class="form-textarea"
         v-model="form.assessment"
@@ -34,7 +38,7 @@
     </view>
 
     <view class="form-section">
-      <text class="form-section-title">计划方向</text>
+      <text class="form-section-title">计划方向<text class="required">*</text></text>
       <textarea
         class="form-textarea"
         v-model="form.plan"
@@ -46,7 +50,7 @@
 
     <view class="form-section">
       <text class="form-section-title">相关照片</text>
-      <text class="form-hint">可上传咨询相关照片，最多 9 张</text>
+      <text class="form-hint">选填，可上传咨询相关照片，最多 9 张</text>
       <view class="photo-grid">
         <view v-for="(url, idx) in photoUrls" :key="url" class="photo-item">
           <image class="photo-img" :src="fixImageUrl(url)" mode="aspectFill" @tap="previewPhoto(idx)" />
@@ -58,86 +62,66 @@
       </view>
     </view>
 
-    <view v-if="revisions.length > 0" class="form-section">
-      <text class="form-section-title">修改历史</text>
-      <view v-for="rev in revisions" :key="rev.Id" class="revision-card">
-        <text class="revision-time">{{ formatDT(rev.RevisedAt) }}</text>
-        <text v-if="rev.Subjective" class="revision-line">患者情况：{{ rev.Subjective }}</text>
-        <text v-if="rev.Objective" class="revision-line">客观观察：{{ rev.Objective }}</text>
-        <text v-if="rev.Assessment" class="revision-line">评估分析：{{ rev.Assessment }}</text>
-        <text v-if="rev.Plan" class="revision-line">计划方向：{{ rev.Plan }}</text>
-        <view v-if="rev.PhotoUrls?.length" class="revision-photos">
-          <image
-            v-for="(url, i) in rev.PhotoUrls"
-            :key="url"
-            class="revision-thumb"
-            :src="fixImageUrl(url)"
-            mode="aspectFill"
-            @tap="previewRevisionPhotos(rev.PhotoUrls, i)"
-          />
-        </view>
-      </view>
-    </view>
-
-    <button class="save-btn" :loading="saving" @click="save">保存咨询记录</button>
+    <button class="save-btn" :loading="saving" @tap="save">提交咨询记录</button>
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
+import { onLoad } from '@dcloudio/uni-app'
 import { httpV2 } from '@/utils/http'
 import { fixImageUrl } from '@/utils/image'
 import { API_ENDPOINTS } from '@/config/api'
+import { caseRecordHasContent } from '@/utils/case-record'
 
-interface Revision {
-  Id: number
-  RevisedAt: string
-  Subjective?: string
-  Objective?: string
-  Assessment?: string
-  Plan?: string
-  PhotoUrls?: string[]
-}
+type FormKey = 'subjective' | 'objective' | 'assessment' | 'plan'
+
+const REQUIRED_FIELDS: { key: FormKey; label: string }[] = [
+  { key: 'subjective', label: '患者情况记录（主观陈述）' },
+  { key: 'objective', label: '客观观察' },
+  { key: 'assessment', label: '评估分析' },
+  { key: 'plan', label: '计划方向' },
+]
 
 const form = ref({ subjective: '', objective: '', assessment: '', plan: '' })
 const photoUrls = ref<string[]>([])
-const revisions = ref<Revision[]>([])
 const saving = ref(false)
 const uploading = ref(false)
 const consultationId = ref(0)
-const recordId = ref<number | null>(null)
 
-const formatDT = (dt: string) => dt?.slice(0, 16).replace('T', ' ') ?? ''
-
-const loadRecord = async (rid: number) => {
-  const res = await httpV2.get(`${API_ENDPOINTS.counselor.caseRecords}/${rid}`)
-  if (res.code === 0 && res.data) {
-    const found = res.data
-    form.value = {
-      subjective: found.Subjective ?? '',
-      objective: found.Objective ?? '',
-      assessment: found.Assessment ?? '',
-      plan: found.Plan ?? '',
-    }
-    photoUrls.value = Array.isArray(found.PhotoUrls) ? [...found.PhotoUrls] : []
+const loadExistingDraft = async (rid: number) => {
+  const res = await httpV2.get(`${API_ENDPOINTS.counselor.caseRecords}/${rid}`, undefined, {
+    showLoading: false,
+  })
+  if (res.code !== 0 || !res.data) return
+  if (caseRecordHasContent(res.data)) {
+    uni.redirectTo({ url: `/pages/counselor/case-record/view?recordId=${rid}` })
+    return
   }
-  const revRes = await httpV2.get(`${API_ENDPOINTS.counselor.caseRecords}/${rid}/revisions`)
-  if (revRes.code === 0 && Array.isArray(revRes.data)) {
-    revisions.value = revRes.data
+  form.value = {
+    subjective: res.data.Subjective ?? '',
+    objective: res.data.Objective ?? '',
+    assessment: res.data.Assessment ?? '',
+    plan: res.data.Plan ?? '',
   }
+  photoUrls.value = Array.isArray(res.data.PhotoUrls) ? [...res.data.PhotoUrls] : []
+  if (res.data.ConsultationId) consultationId.value = res.data.ConsultationId
 }
 
-onMounted(async () => {
-  const pages = getCurrentPages()
-  const current = pages[pages.length - 1] as any
-  consultationId.value = Number(current?.options?.consultationId || 0)
-  const rid = Number(current?.options?.recordId || 0)
-
-  if (rid) {
-    recordId.value = rid
-    await loadRecord(rid)
-  }
+onLoad(async (opts) => {
+  consultationId.value = Number(opts?.consultationId || 0)
+  const rid = Number(opts?.recordId || 0)
+  if (rid) await loadExistingDraft(rid)
 })
+
+const validateForm = () => {
+  const missing = REQUIRED_FIELDS.filter(({ key }) => !form.value[key].trim()).map(({ label }) => label)
+  if (missing.length) {
+    uni.showToast({ title: `请填写：${missing[0]}`, icon: 'none' })
+    return false
+  }
+  return true
+}
 
 const pickPhotos = () => {
   if (uploading.value) return
@@ -173,40 +157,31 @@ const previewPhoto = (idx: number) => {
   })
 }
 
-const previewRevisionPhotos = (urls: string[], idx: number) => {
-  uni.previewImage({
-    current: fixImageUrl(urls[idx]),
-    urls: urls.map((u) => fixImageUrl(u)),
-  })
-}
-
 const save = async () => {
-  if (!consultationId.value && !recordId.value) {
-    uni.showToast({ title: '参数错误', icon: 'none' })
+  if (!validateForm()) return
+  if (!consultationId.value) {
+    uni.showToast({ title: '缺少咨询参数，请返回重试', icon: 'none' })
     return
   }
   saving.value = true
   try {
-    const payload = {
+    const res = await httpV2.post(API_ENDPOINTS.counselor.caseRecords, {
+      consultation_id: consultationId.value,
       ...form.value,
       photo_urls: photoUrls.value,
-    }
-    let res
-    if (recordId.value) {
-      res = await httpV2.put(`${API_ENDPOINTS.counselor.caseRecords}/${recordId.value}`, payload)
-    } else {
-      res = await httpV2.post(API_ENDPOINTS.counselor.caseRecords, {
-        consultation_id: consultationId.value,
-        ...payload,
-      })
-      if (res.code === 0 && res.data?.Id) recordId.value = res.data.Id
-    }
+    })
     if (res.code === 0) {
-      if (recordId.value) await loadRecord(recordId.value)
-      uni.showToast({ title: '保存成功', icon: 'success' })
-      setTimeout(() => uni.navigateBack(), 1200)
+      uni.showToast({ title: '提交成功', icon: 'success' })
+      const newId = res.data?.Id
+      setTimeout(() => {
+        if (newId) {
+          uni.redirectTo({ url: `/pages/counselor/case-record/view?recordId=${newId}` })
+        } else {
+          uni.navigateBack()
+        }
+      }, 1200)
     } else {
-      uni.showToast({ title: res.msg || '保存失败', icon: 'none' })
+      uni.showToast({ title: res.msg || '提交失败', icon: 'none' })
     }
   } finally {
     saving.value = false
@@ -216,6 +191,17 @@ const save = async () => {
 
 <style scoped>
 .page-case-record { padding: 32rpx; background: #F4F6F8; min-height: 100vh; padding-bottom: 48rpx; }
+
+.tip-banner {
+  background: #EFF6FF;
+  border: 1rpx solid #BFDBFE;
+  border-radius: 12rpx;
+  padding: 16rpx 20rpx;
+  margin-bottom: 24rpx;
+  font-size: 24rpx;
+  color: #1D4ED8;
+  text-align: center;
+}
 
 .form-section {
   background: #fff;
@@ -231,6 +217,11 @@ const save = async () => {
   font-weight: 700;
   color: #1F2937;
   margin-bottom: 16rpx;
+}
+
+.required {
+  color: #DC2626;
+  margin-left: 4rpx;
 }
 
 .form-hint {
@@ -295,47 +286,6 @@ const save = async () => {
 .photo-add-text {
   font-size: 48rpx;
   color: #9CA3AF;
-}
-
-.revision-card {
-  border-top: 1rpx solid #F3F4F6;
-  padding-top: 20rpx;
-  margin-top: 20rpx;
-}
-
-.revision-card:first-of-type {
-  border-top: none;
-  margin-top: 0;
-  padding-top: 0;
-}
-
-.revision-time {
-  display: block;
-  font-size: 24rpx;
-  color: #6B7280;
-  margin-bottom: 12rpx;
-}
-
-.revision-line {
-  display: block;
-  font-size: 26rpx;
-  color: #374151;
-  line-height: 1.6;
-  margin-bottom: 8rpx;
-}
-
-.revision-photos {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12rpx;
-  margin-top: 12rpx;
-}
-
-.revision-thumb {
-  width: 120rpx;
-  height: 120rpx;
-  border-radius: 8rpx;
-  background: #F3F4F6;
 }
 
 .save-btn {

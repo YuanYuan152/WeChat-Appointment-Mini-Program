@@ -176,6 +176,10 @@ export const API_ENDPOINTS = {
     leaveRequestReject: (id: number | string) => `/api/mini/admin/leave-requests/${id}/reject`,
     consultationRecordCounselors: '/api/mini/admin/consultation-records/counselors',
     consultationRecordDetail: (id: number | string) => `/api/mini/admin/consultation-records/counselors/${id}`,
+    consultationRecordView: (id: number | string) => `/api/mini/admin/consultation-records/records/${id}`,
+    consultationRecordRevisions: (id: number | string) => `/api/mini/admin/consultation-records/records/${id}/revisions`,
+    patients: '/api/mini/admin/patients',
+    patientDetail: (id: number | string) => `/api/mini/admin/patients/${id}`,
   },
 
   // 意见反馈

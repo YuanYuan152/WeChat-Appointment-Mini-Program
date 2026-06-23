@@ -23,6 +23,9 @@ from case_record_service import (
     case_record_has_content,
     decode_photo_urls,
     save_case_record_revision,
+    validate_case_record_required_fields,
+    ensure_consultation_done_for_record,
+    reject_if_case_record_locked,
 )
 from auth import get_current_account, AppAccount
 from database import get_db
@@ -53,7 +56,7 @@ from schedule_meta import (
     schedule_pref_note,
 )
 from room_slot_status import resolve_slot_manual_status, is_slot_operational
-from schedule_display import resolve_schedule_display, DISPLAY_LABELS
+from schedule_display import resolve_schedule_display, DISPLAY_LABELS, is_consultation_recordable
 from schedule_slots import (
     ROLLING_WINDOW_DAYS,
     active_schedules_at,
@@ -758,7 +761,7 @@ def _calendar_items_for_schedules(
                 leaveSubmittedAt=leave_row.CreatedAt if leave_row else None,
                 leaveStatus=leave_row.Status if leave_row else None,
                 hasCaseRecord=has_record,
-                caseRecordId=case_record.Id if case_record and has_record else None,
+                caseRecordId=case_record.Id if case_record else None,
             )
         )
     return items
@@ -1208,6 +1211,54 @@ def _patient_display_name(account: Optional[AppAccount]) -> str:
     return (account.RealName or account.Nickname or account.Mobile or "来访者").strip()
 
 
+def _load_consultation_schedule(
+    db: Session, consultation: AppConsultation
+) -> Optional[AppSchedule]:
+    if not consultation.ScheduleId:
+        return None
+    return db.query(AppSchedule).filter(AppSchedule.Id == consultation.ScheduleId).first()
+
+
+def _get_recordable_consultation(
+    db: Session,
+    counselor_id: int,
+    consultation_id: int,
+) -> tuple[AppConsultation, Optional[AppSchedule]]:
+    consultation = db.query(AppConsultation).filter(
+        AppConsultation.Id == consultation_id,
+        AppConsultation.CounselorId == counselor_id,
+    ).first()
+    if not consultation:
+        raise HTTPException(status_code=404, detail="咨询单不存在")
+    schedule = _load_consultation_schedule(db, consultation)
+    if not is_consultation_recordable(consultation, schedule):
+        raise HTTPException(status_code=400, detail="咨询尚未结束，暂不可填写记录")
+    return consultation, schedule
+
+
+def _list_recordable_consultations(db: Session, counselor_id: int) -> List[AppConsultation]:
+    rows = (
+        db.query(AppConsultation)
+        .filter(
+            AppConsultation.CounselorId == counselor_id,
+            AppConsultation.Status.in_(["PENDING", "CONFIRMED", "ONGOING", "DONE"]),
+        )
+        .order_by(AppConsultation.EndTime.desc(), AppConsultation.StartTime.desc(), AppConsultation.Id.desc())
+        .all()
+    )
+    if not rows:
+        return []
+    schedule_ids = {c.ScheduleId for c in rows if c.ScheduleId}
+    schedules = {
+        s.Id: s
+        for s in db.query(AppSchedule).filter(AppSchedule.Id.in_(schedule_ids)).all()
+    } if schedule_ids else {}
+    return [
+        c for c in rows
+        if is_consultation_recordable(c, schedules.get(c.ScheduleId) if c.ScheduleId else None)
+    ]
+
+
 @router.get(
     "/consultations/completed",
     response_model=List[CompletedConsultationOut],
@@ -1217,15 +1268,7 @@ def list_completed_consultations(
     counselor: AppAccount = Depends(require_counselor),
     db: Session = Depends(get_db),
 ):
-    consultations = (
-        db.query(AppConsultation)
-        .filter(
-            AppConsultation.CounselorId == counselor.Id,
-            AppConsultation.Status == "DONE",
-        )
-        .order_by(AppConsultation.EndTime.desc(), AppConsultation.Id.desc())
-        .all()
-    )
+    consultations = _list_recordable_consultations(db, counselor.Id)
     if not consultations:
         return []
 
@@ -1331,20 +1374,37 @@ def create_case_record(
     counselor: AppAccount = Depends(require_counselor),
     db: Session = Depends(get_db),
 ):
-    consultation = db.query(AppConsultation).filter(
-        AppConsultation.Id == body.consultation_id,
-        AppConsultation.CounselorId == counselor.Id,
-        AppConsultation.Status == "DONE",
-    ).first()
-    if not consultation:
-        raise HTTPException(status_code=400, detail="仅可为已完成的咨询填写记录")
+    consultation, schedule = _get_recordable_consultation(
+        db, counselor.Id, body.consultation_id
+    )
+    ensure_consultation_done_for_record(consultation, schedule)
+
+    validate_case_record_required_fields(
+        subjective=body.subjective,
+        objective=body.objective,
+        assessment=body.assessment,
+        plan=body.plan,
+    )
 
     existing = db.query(AppCaseRecord).filter(
         AppCaseRecord.ConsultationId == body.consultation_id,
         AppCaseRecord.CounselorId == counselor.Id,
     ).first()
     if existing:
-        raise HTTPException(status_code=400, detail="该咨询已有记录，请直接编辑")
+        reject_if_case_record_locked(existing)
+        apply_case_record_fields(
+            existing,
+            subjective=body.subjective,
+            objective=body.objective,
+            assessment=body.assessment,
+            plan=body.plan,
+            photo_urls=body.photo_urls,
+            photo_urls_set=body.photo_urls is not None,
+        )
+        existing.UpdatedAt = datetime.utcnow()
+        db.commit()
+        db.refresh(existing)
+        return CaseRecordOut.from_record(existing)
 
     record = AppCaseRecord(
         ConsultationId=body.consultation_id,
@@ -1379,20 +1439,8 @@ def update_case_record(
     if not record:
         raise HTTPException(status_code=404, detail="个案记录不存在")
 
-    save_case_record_revision(db, record, revised_by=counselor.Id)
-    apply_case_record_fields(
-        record,
-        subjective=body.subjective,
-        objective=body.objective,
-        assessment=body.assessment,
-        plan=body.plan,
-        photo_urls=body.photo_urls,
-        photo_urls_set=body.photo_urls is not None,
-    )
-    record.UpdatedAt = datetime.utcnow()
-    db.commit()
-    db.refresh(record)
-    return CaseRecordOut.from_record(record)
+    reject_if_case_record_locked(record)
+    raise HTTPException(status_code=403, detail="咨询记录提交后不可修改")
 
 
 # ---------------------------------------------------------------------------

@@ -360,6 +360,30 @@
                     }
                 },
                 {
+                    "path": "case-records/view",
+                    "style": {
+                        "navigationBarTitleText": "咨询记录详情",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                },
+                {
+                    "path": "patients/index",
+                    "style": {
+                        "navigationBarTitleText": "来访管理",
+                        "navigationBarBackgroundColor": "#3D5A4E",
+                        "navigationBarTextStyle": "white"
+                    }
+                },
+                {
+                    "path": "patients/detail",
+                    "style": {
+                        "navigationBarTitleText": "来访者详情",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                },
+                {
                     "path": "schedules/index",
                     "style": {
                         "navigationBarTitleText": "排期情况",
@@ -530,7 +554,15 @@
                 {
                     "path": "case-record/edit",
                     "style": {
-                        "navigationBarTitleText": "咨询记录",
+                        "navigationBarTitleText": "填写咨询记录",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                },
+                {
+                    "path": "case-record/view",
+                    "style": {
+                        "navigationBarTitleText": "咨询记录详情",
                         "navigationBarBackgroundColor": "#ffffff",
                         "navigationBarTextStyle": "black"
                     }

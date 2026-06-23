@@ -122,6 +122,7 @@ import { ref, computed, onMounted, defineExpose } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
+import { openCounselorCaseRecord } from '@/utils/case-record'
 import { fixImageUrl } from '@/utils/image'
 
 interface ProfileHeader {
@@ -306,10 +307,11 @@ const closeDetail = () => {
 
 const onDetailItemTap = (item: DetailItem) => {
   if (detailCategory.value === 'case-records' && item.consultationId) {
-    const q = item.caseRecordId
-      ? `consultationId=${item.consultationId}&recordId=${item.caseRecordId}`
-      : `consultationId=${item.consultationId}`
-    uni.navigateTo({ url: `/pages/counselor/case-record/edit?${q}` })
+    openCounselorCaseRecord({
+      consultationId: item.consultationId,
+      recordId: item.caseRecordId,
+      hasRecord: item.status === 'FILLED' || !!item.caseRecordId,
+    })
     return
   }
   if (detailCategory.value === 'orders' && item.consultationId) {

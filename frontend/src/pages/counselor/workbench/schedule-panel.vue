@@ -130,7 +130,7 @@
           <text class="slot-status" :style="{ color: slotStatusColor(slot) }">{{ slot.displayLabel }}</text>
           <text v-if="slot.leaveRequestId" class="slot-detail-hint">点击查看请假详情</text>
           <text v-if="showCaseRecordAction(slot)" class="slot-record-btn" @tap.stop="openCaseRecord(slot)">
-            {{ slot.hasCaseRecord ? '查看 / 修改记录' : '填写咨询记录' }}
+            {{ slot.hasCaseRecord ? '查看咨询记录' : '填写咨询记录' }}
           </text>
           <text v-if="showCancelAction(slot)" class="slot-cancel" @tap.stop="handleCancelSlot(slot)">
             {{ cancelActionLabel(slot) }}
@@ -326,6 +326,7 @@ import { API_ENDPOINTS } from '@/config/api'
 import { APPOINTMENT_CENTERS, isVideoCenter } from '@/constants/appointmentCenters'
 import { SCHEDULE_DISPLAY_META, type ScheduleDisplayStatus } from '@/constants/scheduleDisplay'
 import { formatDateLocal, ROLLING_WINDOW_DAYS, addDays } from '@/constants/scheduleSlots'
+import { openCounselorCaseRecord } from '@/utils/case-record'
 
 interface RoomOpt {
   roomId: string
@@ -719,10 +720,11 @@ const slotStatusColor = (slot: CalendarSlot) => {
 
 const openCaseRecord = (slot: CalendarSlot) => {
   if (!slot.consultationId) return
-  const q = slot.caseRecordId
-    ? `consultationId=${slot.consultationId}&recordId=${slot.caseRecordId}`
-    : `consultationId=${slot.consultationId}`
-  uni.navigateTo({ url: `/pages/counselor/case-record/edit?${q}` })
+  openCounselorCaseRecord({
+    consultationId: slot.consultationId,
+    recordId: slot.caseRecordId,
+    hasRecord: slot.hasCaseRecord,
+  })
 }
 
 const selectCalendarDate = (date: string) => {

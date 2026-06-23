@@ -2,7 +2,7 @@
   <view class="records-panel">
     <view class="header-card">
       <text class="title">咨询记录</text>
-      <text class="subtitle">已完成咨询须填写患者情况与相关照片，支持后续修改并保留历史版本</text>
+      <text class="subtitle">已完成咨询须填写患者情况、观察、评估与计划，提交后不可修改，照片为选填</text>
     </view>
 
     <view v-if="loading" class="empty-box">
@@ -33,7 +33,7 @@
         </view>
 
         <button class="action-btn" @tap="openRecord(item)">
-          {{ item.HasRecord ? '查看 / 修改记录' : '填写咨询记录' }}
+          {{ item.HasRecord ? '查看咨询记录' : '填写咨询记录' }}
         </button>
       </view>
     </view>
@@ -45,6 +45,7 @@ import { ref, onMounted } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
+import { openCounselorCaseRecord } from '@/utils/case-record'
 
 interface CompletedConsultation {
   Id: number
@@ -77,10 +78,11 @@ const load = async () => {
 }
 
 const openRecord = (item: CompletedConsultation) => {
-  const q = item.CaseRecordId
-    ? `consultationId=${item.Id}&recordId=${item.CaseRecordId}`
-    : `consultationId=${item.Id}`
-  uni.navigateTo({ url: `/pages/counselor/case-record/edit?${q}` })
+  openCounselorCaseRecord({
+    consultationId: item.Id,
+    recordId: item.CaseRecordId,
+    hasRecord: item.HasRecord,
+  })
 }
 
 onMounted(load)
