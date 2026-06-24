@@ -2,32 +2,20 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { apiRequest, clearStoredToken, fetchCurrentUser, getStoredToken, loginWithDevCode } from "@/lib/api";
+import { clearStoredToken, fetchCurrentUser, getStoredToken, loginWithDevCode } from "@/lib/api";
 import { formatMoneyFromCents, roleLabel, statusLabel } from "@/lib/format";
-import type {
-  Activity,
-  AdminUser,
-  Article,
-  Banner,
-  CounselorBoardDetail,
-  CounselorBoardSummary,
-  CounselorRecordSummary,
-  CurrentUser,
-  OperationRecord,
-  OpsDashboard,
-  PagedResult,
-  RefundExemption,
-  Role,
-  Room,
-  RoomStatusSnapshot,
-  ScheduleOverview,
-  UserBoardDetail,
-  UserBoardSummary,
-} from "@/types/api";
+import type { CurrentUser, Role } from "@/types/api";
 
 import { LoginScreen } from "./components/LoginScreen";
 import { AdminShell } from "./components/AdminShell";
-import { today } from "./constants";
+import { fetchCounselorBoard, fetchCounselorBoardDetail, fetchUserBoard, fetchUserBoardDetail } from "./api/boards";
+import { createContent, deleteContent, fetchContentData } from "./api/content";
+import { fetchDashboardData } from "./api/dashboard";
+import { fetchRefundExemptions, approveRefundExemption, rejectRefundExemption } from "./api/refunds";
+import { fetchCounselorRecordSummary, fetchOperationRecords } from "./api/records";
+import { bindUserRole, fetchAdminUsers, unbindUserRole } from "./api/roles";
+import { fetchRoomsData } from "./api/rooms";
+import { fetchScheduleOverview } from "./api/schedules";
 import { CaseRecordsPanel } from "./panels/CaseRecordsPanel";
 import { ContentPanel } from "./panels/ContentPanel";
 import { CounselorBoardPanel } from "./panels/CounselorBoardPanel";
@@ -81,90 +69,52 @@ export function AdminApp() {
 
       try {
         if (section === "dashboard") {
-          const [dashboard, refunds, counselorRecords, roomStatus] = await Promise.all([
-            apiRequest<OpsDashboard>("/api/mini/ops/dashboard"),
-            apiRequest<RefundExemption[]>("/api/mini/admin/refund-exemptions?status=PENDING"),
-            apiRequest<CounselorRecordSummary[]>("/api/mini/admin/consultation-records/counselors?days=30"),
-            apiRequest<RoomStatusSnapshot>("/api/mini/ops/rooms/status"),
-          ]);
+          const { dashboard, refunds, counselorRecords, roomStatus } = await fetchDashboardData();
           setData((prev) => ({ ...prev, dashboard, refunds, counselorRecords, roomStatus }));
         }
 
         if (section === "roles") {
-          const adminUsers = await apiRequest<AdminUser[]>("/api/mini/admin/users");
+          const adminUsers = await fetchAdminUsers();
           setData((prev) => ({ ...prev, adminUsers }));
         }
 
         if (section === "refunds") {
-          const refunds = await apiRequest<RefundExemption[]>("/api/mini/admin/refund-exemptions?status=ALL");
+          const refunds = await fetchRefundExemptions("ALL");
           setData((prev) => ({ ...prev, refunds }));
         }
 
         if (section === "content") {
-          const [banners, activities, articles] = await Promise.all([
-            apiRequest<Banner[]>("/api/mini/ops/banners/manage"),
-            apiRequest<Activity[]>("/api/mini/ops/activities"),
-            apiRequest<PagedResult<Article>>("/api/mini/ops/articles?page=1&page_size=20"),
-          ]);
+          const { banners, activities, articles } = await fetchContentData();
           setData((prev) => ({ ...prev, banners, activities, articles }));
         }
 
         if (section === "schedules") {
-          const schedules = await apiRequest<ScheduleOverview>(`/api/mini/ops/schedules/overview?date=${today}`);
+          const schedules = await fetchScheduleOverview();
           setData((prev) => ({ ...prev, schedules }));
         }
 
         if (section === "rooms") {
-          const [rooms, roomStatus] = await Promise.all([
-            apiRequest<Room[]>("/api/mini/ops/rooms"),
-            apiRequest<RoomStatusSnapshot>("/api/mini/ops/rooms/status"),
-          ]);
+          const { rooms, roomStatus } = await fetchRoomsData();
           setData((prev) => ({ ...prev, rooms, roomStatus }));
         }
 
         if (section === "caseRecords" || section === "counselorBoard") {
-          const counselorRecords = await apiRequest<CounselorRecordSummary[]>(
-            "/api/mini/admin/consultation-records/counselors?days=30",
-          );
+          const counselorRecords = await fetchCounselorRecordSummary();
           setData((prev) => ({ ...prev, counselorRecords }));
         }
 
         if (section === "operationLogs") {
-          const params = new URLSearchParams({ page: "1", page_size: "50" });
-          if (operationFilters.keyword) {
-            params.set("keyword", operationFilters.keyword);
-          }
-          if (operationFilters.role) {
-            params.set("role", operationFilters.role);
-          }
-          if (operationFilters.actionType) {
-            params.set("action_type", operationFilters.actionType);
-          }
-          const operationRecords = await apiRequest<PagedResult<OperationRecord>>(
-            `/api/web/admin/operation-records?${params.toString()}`,
-          );
+          const operationRecords = await fetchOperationRecords(operationFilters);
           setData((prev) => ({ ...prev, operationRecords }));
         }
 
         if (section === "userBoard") {
-          const params = new URLSearchParams({ page: "1", page_size: "30" });
-          if (userKeyword) {
-            params.set("keyword", userKeyword);
-          }
-          const userBoard = await apiRequest<PagedResult<UserBoardSummary>>(
-            `/api/web/admin/users/board?${params.toString()}`,
-          );
+          const userBoard = await fetchUserBoard(userKeyword);
           setData((prev) => ({ ...prev, userBoard }));
         }
 
         if (section === "counselorBoard") {
-          const params = new URLSearchParams({ page: "1", page_size: "30" });
-          if (counselorKeyword) {
-            params.set("keyword", counselorKeyword);
-          }
-          const counselorBoard = await apiRequest<PagedResult<CounselorBoardSummary>>(
-            `/api/web/admin/counselors/board?${params.toString()}`,
-          );
+          const counselorBoard = await fetchCounselorBoard(counselorKeyword);
           setData((prev) => ({ ...prev, counselorBoard }));
         }
       } catch (error) {
@@ -241,7 +191,7 @@ export function AdminApp() {
   const openUserDetail = async (accountId: number) => {
     setLoading(true);
     try {
-      const selectedUserBoard = await apiRequest<UserBoardDetail>(`/api/web/admin/users/${accountId}/board`);
+      const selectedUserBoard = await fetchUserBoardDetail(accountId);
       setData((prev) => ({ ...prev, selectedUserBoard }));
     } catch (error) {
       showNotice("error", error instanceof Error ? error.message : "用户详情加载失败");
@@ -253,9 +203,7 @@ export function AdminApp() {
   const openCounselorDetail = async (accountId: number) => {
     setLoading(true);
     try {
-      const selectedCounselorBoard = await apiRequest<CounselorBoardDetail>(
-        `/api/web/admin/counselors/${accountId}/board`,
-      );
+      const selectedCounselorBoard = await fetchCounselorBoardDetail(accountId);
       setData((prev) => ({ ...prev, selectedCounselorBoard }));
     } catch (error) {
       showNotice("error", error instanceof Error ? error.message : "咨询师详情加载失败");
@@ -338,20 +286,13 @@ export function AdminApp() {
           setRoleDrafts={setRoleDrafts}
           onBindRole={(userId, role) =>
             runAction(
-              () =>
-                apiRequest(`/api/mini/admin/users/${userId}/roles`, {
-                  method: "POST",
-                  body: JSON.stringify({ role }),
-                }),
+              () => bindUserRole(userId, role),
               "角色已绑定",
             )
           }
           onUnbindRole={(userId, role) =>
             runAction(
-              () =>
-                apiRequest(`/api/mini/admin/users/${userId}/roles/${role}`, {
-                  method: "DELETE",
-                }),
+              () => unbindUserRole(userId, role),
               "角色已解绑",
             )
           }
@@ -362,7 +303,7 @@ export function AdminApp() {
           refunds={data.refunds}
           onApprove={(id) =>
             runAction(
-              () => apiRequest(`/api/mini/admin/refund-exemptions/${id}/approve`, { method: "POST" }),
+              () => approveRefundExemption(id),
               "已通过豁免申请",
             )
           }
@@ -372,11 +313,7 @@ export function AdminApp() {
               return;
             }
             void runAction(
-              () =>
-                apiRequest(`/api/mini/admin/refund-exemptions/${id}/reject`, {
-                  method: "POST",
-                  body: JSON.stringify({ reject_reason: reason }),
-                }),
+              () => rejectRefundExemption(id, reason),
               "已拒绝豁免申请",
             );
           }}
@@ -388,57 +325,10 @@ export function AdminApp() {
           draft={contentDraft}
           setDraft={setContentDraft}
           onCreate={() =>
-            runAction(async () => {
-              if (!contentDraft.title.trim()) {
-                throw new Error("请输入标题");
-              }
-              if (contentDraft.kind === "banner") {
-                if (!contentDraft.imageUrl.trim()) {
-                  throw new Error("Banner 需要图片地址");
-                }
-                return apiRequest("/api/mini/ops/banners", {
-                  method: "POST",
-                  body: JSON.stringify({
-                    title: contentDraft.title,
-                    image_url: contentDraft.imageUrl,
-                    link_type: "PAGE",
-                    is_active: true,
-                  }),
-                });
-              }
-              if (contentDraft.kind === "activity") {
-                return apiRequest("/api/mini/ops/activities", {
-                  method: "POST",
-                  body: JSON.stringify({
-                    title: contentDraft.title,
-                    content: contentDraft.summary,
-                    type: "NOTICE",
-                    is_active: true,
-                  }),
-                });
-              }
-              return apiRequest("/api/mini/ops/articles", {
-                method: "POST",
-                body: JSON.stringify({
-                  title: contentDraft.title,
-                  summary: contentDraft.summary,
-                  content: contentDraft.summary,
-                  category: "文章",
-                  is_active: true,
-                }),
-              });
-            }, "内容已新增")
+            runAction(() => createContent(contentDraft), "内容已新增")
           }
           onDelete={(kind, id) =>
-            runAction(() => {
-              const path =
-                kind === "banner"
-                  ? `/api/mini/ops/banners/${id}`
-                  : kind === "activity"
-                    ? `/api/mini/ops/activities/${id}`
-                    : `/api/mini/ops/articles/${id}`;
-              return apiRequest(path, { method: "DELETE" });
-            }, "内容已删除")
+            runAction(() => deleteContent(kind, id), "内容已删除")
           }
         />
       )}
