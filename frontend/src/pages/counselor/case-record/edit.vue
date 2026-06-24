@@ -86,6 +86,7 @@ import CaseRecordHeaderForm from '@/components/CaseRecordHeaderForm.vue'
 import {
   CASE_RECORD_FIELD_LABELS,
   createEmptyRiskAssessment,
+  crisisLevelRequiresReport,
   normalizeRiskAssessment,
   riskAssessmentMissingLabel,
   type RiskAssessmentData,
@@ -250,7 +251,11 @@ const save = async () => {
       ...buildPayload(),
     })
     if (res.code === 0) {
-      uni.showToast({ title: '提交成功', icon: 'success' })
+      const needReport = crisisLevelRequiresReport(riskAssessment.value)
+      uni.showToast({
+        title: needReport ? '提交成功，请完成上报' : '提交成功',
+        icon: 'success',
+      })
       const newId = res.data?.Id
       setTimeout(() => {
         if (newId) {

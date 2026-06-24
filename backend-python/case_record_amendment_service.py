@@ -16,6 +16,8 @@ from case_record_service import (
     decode_header_info,
     save_case_record_revision,
     validate_case_record_required_fields,
+    get_crisis_level_choice,
+    notify_admins_crisis_report_if_needed,
 )
 from message import create_message
 from models import (
@@ -259,6 +261,7 @@ def approve_amendment(
     if not record:
         raise ValueError("关联咨询记录不存在")
 
+    old_crisis_choice = get_crisis_level_choice(decode_risk_assessment(record.RiskAssessment))
     save_case_record_revision(db, record, revised_by=amendment.CounselorId)
     apply_case_record_fields(
         record,
@@ -282,6 +285,12 @@ def approve_amendment(
 
     _update_admin_pending_messages(db, amendment, approved=True)
     notify_counselor_amendment_result(db, amendment, approved=True)
+    notify_admins_crisis_report_if_needed(
+        db,
+        record,
+        counselor_id=amendment.CounselorId,
+        old_crisis_choice=old_crisis_choice,
+    )
 
 
 def reject_amendment(

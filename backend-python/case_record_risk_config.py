@@ -229,3 +229,38 @@ def risk_choice_label(item_id: str, choice: str) -> str:
     choice = normalize_risk_choice(choice, item_id)
     text = cfg.get("options", {}).get(choice, choice)
     return f"{choice}. {text}"
+
+
+CRISIS_REPORT_CHOICES: Tuple[str, ...] = ("A", "B", "C")
+
+
+def get_crisis_level_choice(risk_assessment: Optional[Dict[str, Any]]) -> str:
+    if not risk_assessment or not isinstance(risk_assessment.get("items"), dict):
+        return ""
+    val = risk_assessment["items"].get("crisis_level") or {}
+    if not isinstance(val, dict):
+        return ""
+    return normalize_risk_choice(str(val.get("choice") or "").strip(), "crisis_level")
+
+
+def crisis_level_label(choice: str) -> str:
+    return risk_choice_label("crisis_level", choice)
+
+
+def crisis_level_text_only(choice: str) -> str:
+    """风险等级选项文字（不含 A/B/C 前缀）。"""
+    cfg = RISK_ITEM_BY_ID.get("crisis_level")
+    if not cfg:
+        return choice
+    choice = normalize_risk_choice(choice, "crisis_level")
+    return str(cfg.get("options", {}).get(choice, choice))
+
+
+def crisis_level_requires_report(risk_assessment: Optional[Dict[str, Any]]) -> bool:
+    return get_crisis_level_choice(risk_assessment) in CRISIS_REPORT_CHOICES
+
+
+def should_notify_crisis_report(old_choice: str, new_choice: str) -> bool:
+    return new_choice in CRISIS_REPORT_CHOICES and (
+        old_choice not in CRISIS_REPORT_CHOICES or old_choice != new_choice
+    )

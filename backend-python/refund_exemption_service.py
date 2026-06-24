@@ -66,7 +66,7 @@ def validate_exemption_submission(
 def _admin_account_ids(db: Session) -> List[int]:
     rows = (
         db.query(AppRoleBinding.AccountId)
-        .filter(AppRoleBinding.RoleType == "Admin")
+        .filter(AppRoleBinding.RoleType.in_(["Admin", "Ops"]))
         .distinct()
         .all()
     )

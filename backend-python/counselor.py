@@ -29,6 +29,8 @@ from case_record_service import (
     validate_case_record_required_fields,
     ensure_consultation_done_for_record,
     reject_if_case_record_locked,
+    get_crisis_level_choice,
+    notify_admins_crisis_report_if_needed,
 )
 from case_record_amendment_service import (
     latest_amendment_for_record,
@@ -1456,6 +1458,7 @@ def create_case_record(
     ).first()
     if existing:
         reject_if_case_record_locked(existing)
+        old_crisis_choice = get_crisis_level_choice(decode_risk_assessment(existing.RiskAssessment))
         apply_case_record_fields(
             existing,
             subjective=body.subjective,
@@ -1470,6 +1473,9 @@ def create_case_record(
             photo_urls_set=True,
         )
         existing.UpdatedAt = datetime.utcnow()
+        notify_admins_crisis_report_if_needed(
+            db, existing, counselor_id=counselor.Id, old_crisis_choice=old_crisis_choice
+        )
         db.commit()
         db.refresh(existing)
         return CaseRecordOut.from_record(existing)
@@ -1492,6 +1498,10 @@ def create_case_record(
         photo_urls_set=True,
     )
     db.add(record)
+    db.flush()
+    notify_admins_crisis_report_if_needed(
+        db, record, counselor_id=counselor.Id, old_crisis_choice=""
+    )
     db.commit()
     db.refresh(record)
     return CaseRecordOut.from_record(record)

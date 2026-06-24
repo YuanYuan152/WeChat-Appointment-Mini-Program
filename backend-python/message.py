@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from message_enrich import enrich_message
-from message_filters import apply_message_category, apply_message_search
+from message_filters import apply_message_category, apply_message_search, apply_admin_ops_inbox_scope
 from auth import get_current_account
 from database import get_db
 from models import (
@@ -125,10 +125,12 @@ def list_messages(
     db: Session = Depends(get_db),
 ):
     query = db.query(AppMessage).filter(AppMessage.AccountId == current_account.Id)
+    active_role = getattr(current_account, "ActiveRole", None)
+    query = apply_admin_ops_inbox_scope(query, active_role)
     if unread_only or category == "UNREAD":
         query = query.filter(AppMessage.IsRead == False)
     else:
-        query = apply_message_category(query, category)
+        query = apply_message_category(query, category, active_role)
     query = apply_message_search(query, q)
     rows = query.order_by(AppMessage.CreatedAt.desc()).limit(100).all()
     return [enrich_message(m, db) for m in rows]
@@ -139,11 +141,13 @@ def unread_count(
     current_account: AppAccount = Depends(get_current_account),
     db: Session = Depends(get_db),
 ):
-    count = (
+    active_role = getattr(current_account, "ActiveRole", None)
+    query = (
         db.query(AppMessage)
         .filter(AppMessage.AccountId == current_account.Id, AppMessage.IsRead == False)
-        .count()
     )
+    query = apply_admin_ops_inbox_scope(query, active_role)
+    count = query.count()
     return {"count": count}
 
 

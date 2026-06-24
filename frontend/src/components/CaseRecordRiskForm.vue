@@ -55,6 +55,8 @@
 import {
   RISK_ASSESSMENT_ITEMS,
   RISK_LEVEL_GUIDE,
+  CRISIS_REPORT_CHOICES,
+  crisisLevelReportPrompt,
   normalizeRiskChoice,
   type RiskAssessmentData,
   type RiskAssessmentItemConfig,
@@ -136,6 +138,17 @@ const selectChoice = (itemId: string, choice: RiskChoice) => {
     choice,
     note: prev?.choice === choice ? (prev.note ?? '') : '',
   })
+  if (
+    itemId === 'crisis_level'
+    && CRISIS_REPORT_CHOICES.includes(choice)
+  ) {
+    uni.showModal({
+      title: '请上报',
+      content: crisisLevelReportPrompt(choice),
+      showCancel: false,
+      confirmText: '我知道了',
+    })
+  }
 }
 
 const onNoteInput = (itemId: string, e: { detail?: { value?: string } }) => {

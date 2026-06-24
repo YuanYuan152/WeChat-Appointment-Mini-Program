@@ -10,10 +10,14 @@ from case_record_risk_config import (
     RISK_ITEM_IDS,
     RISK_ITEM_BY_ID,
     VALID_CHOICES,
+    get_crisis_level_choice,
+    crisis_level_text_only,
     risk_item_allowed_choices,
     risk_item_note_required,
     normalize_risk_choice,
+    should_notify_crisis_report,
 )
+from message import create_message
 from case_record_header_config import (
     empty_header_info,
     header_info_is_complete,
@@ -27,6 +31,7 @@ from models import (
     AppConsultation,
     AppCounselorProfile,
     AppOrder,
+    AppRoleBinding,
     AppSchedule,
 )
 
@@ -343,3 +348,105 @@ def ensure_consultation_done_for_record(
         else:
             consultation.EndTime = datetime.utcnow()
     consultation.UpdatedAt = datetime.utcnow()
+
+
+def _ops_admin_account_ids(db: Session) -> List[int]:
+    rows = (
+        db.query(AppRoleBinding.AccountId)
+        .filter(AppRoleBinding.RoleType.in_(["Admin", "Ops"]))
+        .distinct()
+        .all()
+    )
+    return [r[0] for r in rows]
+
+
+def _counselor_display_name(db: Session, counselor_id: int) -> str:
+    prof = (
+        db.query(AppCounselorProfile)
+        .filter(AppCounselorProfile.AccountId == counselor_id)
+        .first()
+    )
+    if prof and prof.Name:
+        return prof.Name
+    acc = db.query(AppAccount).filter(AppAccount.Id == counselor_id).first()
+    if acc:
+        return acc.Nickname or acc.RealName or f"咨询师#{counselor_id}"
+    return f"咨询师#{counselor_id}"
+
+
+def _patient_display_name(db: Session, patient_id: int) -> str:
+    acc = db.query(AppAccount).filter(AppAccount.Id == patient_id).first()
+    if not acc:
+        return f"来访者#{patient_id}"
+    return acc.RealName or acc.Nickname or acc.Mobile or f"来访者#{patient_id}"
+
+
+def _account_phone(db: Session, account_id: int) -> str:
+    acc = db.query(AppAccount).filter(AppAccount.Id == account_id).first()
+    return (acc.Mobile or "").strip() if acc else ""
+
+
+def notify_admins_crisis_report_if_needed(
+    db: Session,
+    record: AppCaseRecord,
+    *,
+    counselor_id: int,
+    old_crisis_choice: str = "",
+) -> None:
+    """个案风险评估第10题选 A/B/C 时，通知管理员/Ops 需上报。"""
+    risk = decode_risk_assessment(record.RiskAssessment)
+    new_choice = get_crisis_level_choice(risk)
+    if not should_notify_crisis_report(old_crisis_choice, new_choice):
+        return
+
+    consultation = (
+        db.query(AppConsultation)
+        .filter(AppConsultation.Id == record.ConsultationId)
+        .first()
+    )
+    counselor_name = _counselor_display_name(db, counselor_id)
+    patient_name = (
+        _patient_display_name(db, consultation.PatientId)
+        if consultation
+        else "来访者"
+    )
+    patient_phone = (
+        _account_phone(db, consultation.PatientId) if consultation else ""
+    )
+    counselor_phone = _account_phone(db, counselor_id)
+    start_time = (
+        consultation.StartTime.strftime("%Y-%m-%d %H:%M")
+        if consultation and consultation.StartTime
+        else ""
+    )
+    level_label = crisis_level_text_only(new_choice)
+    title = "个案风险需上报"
+    summary = (
+        f"{counselor_name} · {patient_name} · {level_label}"
+        f" · 来访 {patient_phone or '未填写'}"
+        f" · 咨询师 {counselor_phone or '未填写'}"
+    )
+    if start_time:
+        summary += f" · {start_time}"
+    detail = {
+        "counselorName": counselor_name,
+        "counselorPhone": counselor_phone or None,
+        "patientName": patient_name,
+        "patientPhone": patient_phone or None,
+        "caseRecordId": record.Id,
+        "consultationId": record.ConsultationId,
+        "crisisLevel": new_choice,
+        "crisisLevelLabel": level_label,
+        "startTime": start_time or None,
+    }
+    content = json.dumps({"summary": summary, "detail": detail}, ensure_ascii=False)
+    for admin_id in _ops_admin_account_ids(db):
+        create_message(
+            db,
+            admin_id,
+            "RISK",
+            title,
+            content,
+            related_type="CASE_RECORD_CRISIS_REPORT",
+            related_id=record.Id,
+        )

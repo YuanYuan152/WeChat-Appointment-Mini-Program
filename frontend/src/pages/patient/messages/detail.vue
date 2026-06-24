@@ -135,6 +135,37 @@
         <button class="review-btn" @click="goAmendmentReview">前往审核</button>
       </view>
 
+      <view v-else-if="isCaseRecordCrisisReport" class="detail-body">
+        <view class="tip-box pending">
+          <text class="tip-text">该来访个案风险评估为需上报等级，请及时跟进处理。</text>
+        </view>
+        <view v-if="detail.patientName" class="detail-row">
+          <text class="label">来访者</text>
+          <text class="value">{{ detail.patientName }}</text>
+        </view>
+        <view class="detail-row">
+          <text class="label">来访电话</text>
+          <text class="value">{{ detail.patientPhone || '未填写' }}</text>
+        </view>
+        <view v-if="detail.counselorName" class="detail-row">
+          <text class="label">咨询师</text>
+          <text class="value">{{ detail.counselorName }}</text>
+        </view>
+        <view class="detail-row">
+          <text class="label">咨询师电话</text>
+          <text class="value">{{ detail.counselorPhone || '未填写' }}</text>
+        </view>
+        <view v-if="crisisLevelText" class="detail-row">
+          <text class="label">风险等级</text>
+          <text class="value">{{ crisisLevelText }}</text>
+        </view>
+        <view v-if="detail.startTime" class="detail-row">
+          <text class="label">咨询时段</text>
+          <text class="value">{{ detail.startTime }}</text>
+        </view>
+        <button class="review-btn" @click="goCaseRecordView">查看咨询记录</button>
+      </view>
+
       <view v-else-if="relatedType === 'REFUND_EXEMPTION'" class="detail-body">
         <view class="detail-row">
           <text class="label">审核结果</text>
@@ -278,7 +309,8 @@ import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
-import { COUNSELOR_MESSAGE_TYPES, PATIENT_MESSAGE_TYPES, CASE_RECORD_AMENDMENT_REVIEW_PATH, isCaseRecordAmendmentPendingMessage, isExemptionPendingMessage, messageDisplayTitle, parseMessageContent, type MessageItem } from '@/utils/message'
+import { COUNSELOR_MESSAGE_TYPES, PATIENT_MESSAGE_TYPES, CASE_RECORD_AMENDMENT_REVIEW_PATH, caseRecordCrisisReportViewPath, isCaseRecordAmendmentPendingMessage, isExemptionPendingMessage, messageDisplayTitle, parseMessageContent, type MessageItem } from '@/utils/message'
+import { RISK_ASSESSMENT_ITEMS } from '@/constants/caseRecordRiskAssessment'
 
 interface AffectedAppointment {
   patientName?: string
@@ -307,6 +339,17 @@ const isExemptionPending = computed(() => {
 const isCaseRecordAmendmentPending = computed(() => {
   if (!message.value) return false
   return isCaseRecordAmendmentPendingMessage(message.value)
+})
+const isCaseRecordCrisisReport = computed(() => relatedType.value === 'CASE_RECORD_CRISIS_REPORT')
+const crisisLevelText = computed(() => {
+  const choice = detail.value.crisisLevel as string | undefined
+  const crisisItem = RISK_ASSESSMENT_ITEMS.find(i => i.id === 'crisis_level')
+  if (choice && crisisItem) {
+    const text = crisisItem.options[choice as 'A' | 'B' | 'C' | 'D']
+    if (text) return text
+  }
+  const label = detail.value.crisisLevelLabel as string | undefined
+  return label ? label.replace(/^[A-D]\.\s*/, '') : ''
 })
 const amendmentPendingTip = computed(() => {
   return '待审核：请在工作台「咨询记录修改审核」中查看并处理'
@@ -366,6 +409,24 @@ const loadDetail = async () => {
 const goAmendmentReview = () => {
   uni.navigateTo({
     url: CASE_RECORD_AMENDMENT_REVIEW_PATH,
+    fail: () => {
+      uni.showModal({
+        title: '页面未找到',
+        content: '请重启 pnpm dev:mp-weixin，并在微信开发者工具中点击「编译」刷新后重试。',
+        showCancel: false,
+      })
+    },
+  })
+}
+
+const goCaseRecordView = () => {
+  const caseRecordId = detail.value.caseRecordId || message.value?.RelatedId
+  if (!caseRecordId) {
+    uni.showToast({ title: '缺少记录编号', icon: 'none' })
+    return
+  }
+  uni.navigateTo({
+    url: caseRecordCrisisReportViewPath(caseRecordId),
     fail: () => {
       uni.showModal({
         title: '页面未找到',

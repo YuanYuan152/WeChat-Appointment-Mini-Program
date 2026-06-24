@@ -200,6 +200,21 @@ export const createEmptyRiskAssessment = (): RiskAssessmentData => ({
 
 export const OTHER_OPTION_LABEL = '其他'
 
+/** 第10题选 A/B/C 时需提示咨询师上报 */
+export const CRISIS_REPORT_CHOICES: RiskChoice[] = ['A', 'B', 'C']
+
+export const getCrisisLevelChoice = (data?: RiskAssessmentData | null): RiskChoice =>
+  normalizeRiskChoice(data?.items.crisis_level?.choice ?? '', 'crisis_level')
+
+export const crisisLevelRequiresReport = (data?: RiskAssessmentData | null): boolean =>
+  CRISIS_REPORT_CHOICES.includes(getCrisisLevelChoice(data))
+
+export const crisisLevelReportPrompt = (choice: RiskChoice): string => {
+  const item = RISK_ASSESSMENT_ITEMS.find(i => i.id === 'crisis_level')
+  const text = item?.options[choice as 'A' | 'B' | 'C'] ?? ''
+  return `您选择了「${choice}. ${text}」，请按规定完成上报。`
+}
+
 /** @deprecated 使用 OTHER_OPTION_LABEL */
 export const E_OPTION_LABEL = OTHER_OPTION_LABEL
 

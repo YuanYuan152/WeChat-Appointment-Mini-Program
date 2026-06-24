@@ -63,6 +63,9 @@ export function messageDisplayTitle(item: MessageItem): string {
   if (rt === 'CASE_RECORD_AMENDMENT_PENDING' || isCaseRecordAmendmentPendingMessage(item)) {
     return '咨询记录修改待审核'
   }
+  if (rt === 'CASE_RECORD_CRISIS_REPORT') {
+    return '个案风险需上报'
+  }
   if (rt === 'CASE_RECORD_AMENDMENT') {
     const detail = parseMessageContent(item.Content).detail as Record<string, unknown> | undefined
     if (detail?.status === 'APPROVED' || detail?.approved === true) return '咨询记录修改已通过'
@@ -130,6 +133,7 @@ export const RELATED_TYPE_LABELS: Record<string, string> = {
   REFUND_EXEMPTION_PENDING: '豁免待审核',
   CASE_RECORD_AMENDMENT: '记录修改',
   CASE_RECORD_AMENDMENT_PENDING: '记录修改待审核',
+  CASE_RECORD_CRISIS_REPORT: '风险需上报',
   COUNSELOR_CONSULTATION_DONE: '咨询完成',
   COUNSELOR_CONSULTATION_REMIND: '咨询提醒',
   COUNSELOR_APPOINTMENT_NEW: '新预约',
@@ -167,21 +171,34 @@ export interface MessageCategoryOption {
   label: string
 }
 
+/** 管理员/Ops 我的消息可用筛选项（不含预约类） */
+export const ADMIN_OPS_MESSAGE_CATEGORIES: MessageCategoryOption[] = [
+  { value: 'exemption', label: '豁免审核' },
+  { value: 'counselor_leave', label: '咨询师请假' },
+  { value: 'case_record_amendment', label: '记录修改审核' },
+  { value: 'case_record_crisis', label: '风险上报' },
+]
+
+const ADMIN_OPS_FORBIDDEN_FILTER_VALUES = new Set(['appointment_new', 'appointment_cancel'])
+
+export function isAdminOpsMessageInbox(role: string): boolean {
+  return role === 'Admin' || role === 'Ops'
+}
+
+export function sanitizeMessageCategoryForRole(role: string, category: string): string {
+  if (!isAdminOpsMessageInbox(role)) return category
+  if (ADMIN_OPS_FORBIDDEN_FILTER_VALUES.has(category)) return 'ALL'
+  return category
+}
+
 export function getMessageCategoriesForRole(role: string): MessageCategoryOption[] {
   const common: MessageCategoryOption[] = [
     { value: 'ALL', label: '全部' },
     { value: 'UNREAD', label: '未读' },
   ]
 
-  if (role === 'Admin' || role === 'Ops') {
-    return [
-      ...common,
-      { value: 'appointment_new', label: '新增预约' },
-      { value: 'appointment_cancel', label: '预约取消' },
-      { value: 'counselor_leave', label: '咨询师请假' },
-      { value: 'exemption', label: '豁免审核' },
-      { value: 'case_record_amendment', label: '记录修改审核' },
-    ]
+  if (isAdminOpsMessageInbox(role)) {
+    return [...common, ...ADMIN_OPS_MESSAGE_CATEGORIES]
   }
 
   if (role === 'Assistant') {
@@ -228,6 +245,9 @@ export function messageCategoryLabel(item: MessageItem): string {
   if (rt === 'CASE_RECORD_AMENDMENT_PENDING' || isCaseRecordAmendmentPendingMessage(item)) {
     return '记录修改待审核'
   }
+  if (rt === 'CASE_RECORD_CRISIS_REPORT') {
+    return '风险需上报'
+  }
   if (rt === 'CASE_RECORD_AMENDMENT') {
     const detail = parseMessageContent(item.Content).detail as Record<string, unknown> | undefined
     if (detail?.status === 'APPROVED' || detail?.approved === true) return '记录修改已通过'
@@ -255,6 +275,8 @@ export function messageSearchText(item: MessageItem): string {
     messageCategoryLabel(item),
     detail.patientName,
     detail.counselorName,
+    detail.patientPhone,
+    detail.counselorPhone,
     detail.activityTitle,
     detail.location,
     detail.startTime,
@@ -272,12 +294,23 @@ export function shouldOpenCaseRecordAmendmentReview(activeRole: string, item: Me
   return isCaseRecordAmendmentPendingMessage(item)
 }
 
+export function shouldOpenCaseRecordCrisisReport(activeRole: string, item: MessageItem): boolean {
+  if (!canReviewAsOpsAdmin(activeRole)) return false
+  return item.RelatedType === 'CASE_RECORD_CRISIS_REPORT'
+}
+
 export const CASE_RECORD_AMENDMENT_REVIEW_PATH = '/pages/ops/case-record-amendments/index'
+
+export function caseRecordCrisisReportViewPath(caseRecordId: number | string): string {
+  return `/pages/ops/case-records/view?recordId=${caseRecordId}`
+}
 
 export function resolveMessageNavigation(
   item: MessageItem,
   activeRole: string,
 ): string {
+  const detail = parseMessageContent(item.Content).detail as Record<string, unknown> | undefined
+
   if (shouldOpenLeaveApproval(activeRole, item)) {
     const leaveId = getLeaveRequestId(item)
     return leaveId ? `/pages/ops/leave-requests/index?id=${leaveId}` : `/pages/patient/messages/detail?id=${item.Id}`
@@ -291,7 +324,9 @@ export function resolveMessageNavigation(
     return CASE_RECORD_AMENDMENT_REVIEW_PATH
   }
 
-  const detail = parseMessageContent(item.Content).detail as Record<string, unknown> | undefined
+  if (shouldOpenCaseRecordCrisisReport(activeRole, item)) {
+    return `/pages/patient/messages/detail?id=${item.Id}`
+  }
 
   if (item.RelatedType === 'CASE_RECORD_AMENDMENT' && activeRole === 'Counselor') {
     const caseRecordId = detail?.caseRecordId

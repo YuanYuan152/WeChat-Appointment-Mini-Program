@@ -26,14 +26,36 @@ from schedule_meta import (
 )
 
 
-def _staff_account_ids(db: Session) -> List[int]:
+def _assistant_account_ids(db: Session) -> List[int]:
     rows = (
         db.query(AppRoleBinding.AccountId)
-        .filter(AppRoleBinding.RoleType.in_(["Assistant", "Admin", "Ops"]))
+        .filter(AppRoleBinding.RoleType == "Assistant")
         .distinct()
         .all()
     )
     return [r[0] for r in rows]
+
+
+def _admin_ops_account_ids(db: Session) -> List[int]:
+    rows = (
+        db.query(AppRoleBinding.AccountId)
+        .filter(AppRoleBinding.RoleType.in_(["Admin", "Ops"]))
+        .distinct()
+        .all()
+    )
+    return [r[0] for r in rows]
+
+
+def _staff_account_ids(db: Session) -> List[int]:
+    """助理 + 管理员/Ops（请假等需多方知晓的场景）。"""
+    seen: set[int] = set()
+    ids: List[int] = []
+    for account_id in _assistant_account_ids(db) + _admin_ops_account_ids(db):
+        if account_id in seen:
+            continue
+        seen.add(account_id)
+        ids.append(account_id)
+    return ids
 
 
 def _account_display_name(db: Session, account_id: int) -> str:
@@ -109,8 +131,9 @@ def _notify_staff(
     content: str,
     related_type: str,
     related_id: Optional[int],
+    account_ids: List[int],
 ) -> None:
-    for account_id in _staff_account_ids(db):
+    for account_id in account_ids:
         create_message(
             db,
             account_id,
@@ -177,6 +200,7 @@ def notify_staff_new_appointment(
         content=_message_payload(summary, detail),
         related_type="APPOINTMENT_NEW",
         related_id=consultation.Id,
+        account_ids=_assistant_account_ids(db),
     )
 
 
@@ -225,6 +249,7 @@ def notify_staff_appointment_cancelled(
         content=_message_payload(summary, detail),
         related_type="APPOINTMENT_CANCEL",
         related_id=consultation.Id,
+        account_ids=_assistant_account_ids(db),
     )
 
 
@@ -294,4 +319,5 @@ def notify_staff_counselor_leave(
         content=_message_payload(summary, detail),
         related_type="COUNSELOR_LEAVE",
         related_id=leave_request_id or schedule.Id,
+        account_ids=_staff_account_ids(db),
     )
