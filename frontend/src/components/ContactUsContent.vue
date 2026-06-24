@@ -9,15 +9,6 @@
     </view>
 
     <view class="block">
-      <text class="block-title">助理联系电话</text>
-      <view class="phone-row" @tap="callAssistant">
-        <text class="phone-number">{{ assistant.phone }}</text>
-        <text class="phone-action">点击拨打</text>
-      </view>
-      <text class="work-hours">{{ assistant.workHours }}</text>
-    </view>
-
-    <view class="block">
       <text class="block-title">助理微信二维码</text>
       <text v-if="assistant.hint" class="qr-hint">{{ assistant.hint }}</text>
       <view class="qr-wrap">
@@ -34,6 +25,16 @@
         </view>
       </view>
       <text class="qr-tip">长按识别二维码添加助理微信</text>
+      <text class="work-hours">{{ assistant.workHours }}</text>
+    </view>
+
+    <view class="block">
+      <text class="block-title">助理联系电话</text>
+      <view class="phone-row" @tap="callAssistant">
+        <text class="phone-number">{{ assistant.phone }}</text>
+        <text class="phone-action">点击拨打</text>
+      </view>
+      <text class="work-hours">{{ assistant.workHours }}</text>
     </view>
   </view>
 </template>
@@ -146,13 +147,6 @@ const onQrError = () => {
   font-weight: 600;
 }
 
-.work-hours {
-  display: block;
-  margin-top: 12rpx;
-  font-size: 24rpx;
-  color: #8A8A8A;
-}
-
 .qr-hint {
   display: block;
   font-size: 26rpx;
@@ -206,5 +200,13 @@ const onQrError = () => {
   text-align: center;
   font-size: 24rpx;
   color: #8A8A8A;
+}
+
+.work-hours {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 24rpx;
+  color: #8A8A8A;
+  line-height: 1.6;
 }
 </style>

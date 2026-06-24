@@ -12,6 +12,7 @@ from models import (
     AppActivity,
     AppConsultation,
     AppCounselorProfile,
+    AppMessage,
     AppRefundExemption,
     AppRemindTask,
     AppRoleBinding,
@@ -19,7 +20,7 @@ from models import (
 )
 
 PATIENT_REMIND_EVENT = "PATIENT_APPOINTMENT_REMIND"
-PATIENT_REMIND_HOURS = 2
+PATIENT_REMIND_MINUTES = 30
 
 
 def _format_datetime(dt: Optional[datetime]) -> str:
@@ -181,6 +182,18 @@ def notify_patient_appointment_success(
     db: Session,
     consultation: AppConsultation,
 ) -> None:
+    existing = (
+        db.query(AppMessage)
+        .filter(
+            AppMessage.AccountId == consultation.PatientId,
+            AppMessage.RelatedType == "PATIENT_APPOINTMENT_SUCCESS",
+            AppMessage.RelatedId == consultation.Id,
+        )
+        .first()
+    )
+    if existing:
+        return
+
     ctx = _consultation_context(db, consultation)
     schedule = (
         db.query(AppSchedule).filter(AppSchedule.Id == consultation.ScheduleId).first()
@@ -261,14 +274,14 @@ def schedule_patient_consultation_reminder(
     db: Session,
     consultation: AppConsultation,
 ) -> None:
-    """预约开始前 2 小时提醒来访者。"""
+    """咨询开始前 30 分钟提醒来访者（距开始不足 30 分钟则不再单独提醒）。"""
     if consultation.Status not in ("PENDING", "CONFIRMED", "ONGOING"):
         return
 
     cancel_patient_consultation_reminders(db, consultation.Id)
     ctx = _consultation_context(db, consultation)
     start_time = ctx["startTime"]
-    if not start_time:
+    if not start_time or start_time <= china_now():
         return
 
     time_text = _format_datetime(start_time)
@@ -287,28 +300,19 @@ def schedule_patient_consultation_reminder(
         "location": center_name,
         "centerName": center_name,
         "consultationId": consultation.Id,
-        "tip": "您的预约将在2小时后开始，请准时赴约",
+        "tip": "您的咨询将在30分钟后开始，请准时赴约",
     }
     content = _message_payload(summary, detail)
-    remind_at = start_time - timedelta(hours=PATIENT_REMIND_HOURS)
+    remind_at = start_time - timedelta(minutes=PATIENT_REMIND_MINUTES)
 
     if remind_at <= china_now():
-        _notify_patient(
-            db,
-            consultation.PatientId,
-            type_="REMIND",
-            title="预约即将开始",
-            content=content,
-            related_type="PATIENT_APPOINTMENT_REMIND",
-            related_id=consultation.Id,
-        )
         return
 
     db.add(
         AppRemindTask(
             AccountId=consultation.PatientId,
             EventKey=PATIENT_REMIND_EVENT,
-            Title="预约即将开始",
+            Title="咨询即将开始",
             Content=content,
             RelatedType="PATIENT_APPOINTMENT_REMIND",
             RelatedId=consultation.Id,
@@ -336,9 +340,13 @@ def notify_patient_counselor_leave_approved(
         "location": ctx["location"],
         "leaveReason": (leave_reason or "").strip() or None,
         "refunded": refunded,
-        "refundText": "款项将原路退回" if refunded else "按规定不予退款",
+        "refundText": "款项将原路全额退回" if refunded else "本次预约无支付记录",
         "consultationId": consultation.Id,
-        "tip": "咨询师已请假，您的预约已取消，如需改约请联系助理",
+        "tip": (
+            "咨询师已请假，您的预约已取消，款项将原路全额退回，如需改约请联系助理"
+            if refunded
+            else "咨询师已请假，您的预约已取消，如需改约请联系助理"
+        ),
     }
     _notify_patient(
         db,
@@ -409,12 +417,36 @@ def notify_patient_refund_exemption_result(
             "exemptionId": exemption.Id,
             "consultationId": exemption.ConsultationId,
         }
+
+    content = _message_payload(summary, detail)
+    existing_rows = (
+        db.query(AppMessage)
+        .filter(
+            AppMessage.AccountId == exemption.AccountId,
+            AppMessage.RelatedId == exemption.Id,
+            AppMessage.RelatedType.in_(["REFUND_EXEMPTION_PENDING", "REFUND_EXEMPTION"]),
+        )
+        .order_by(AppMessage.CreatedAt.asc())
+        .all()
+    )
+    if existing_rows:
+        primary = existing_rows[0]
+        primary.Type = "SYSTEM"
+        primary.Title = title
+        primary.Content = content
+        primary.RelatedType = "REFUND_EXEMPTION"
+        primary.IsRead = False
+        primary.ReadAt = None
+        for duplicate in existing_rows[1:]:
+            db.delete(duplicate)
+        return
+
     _notify_patient(
         db,
         exemption.AccountId,
         type_="SYSTEM",
         title=title,
-        content=_message_payload(summary, detail),
+        content=content,
         related_type="REFUND_EXEMPTION",
         related_id=exemption.Id,
     )

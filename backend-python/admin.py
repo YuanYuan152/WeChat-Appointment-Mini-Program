@@ -13,6 +13,7 @@ from models import (
     AppAccount,
     AppCaseRecord,
     AppCaseRecordRevision,
+    AppCaseRecordAmendmentRequest,
     AppConsultation,
     AppCounselorProfile,
     AppLeaveRequest,
@@ -35,6 +36,8 @@ from leave_request_service import (
 )
 from case_record_service import decode_photo_urls, case_record_has_content
 from refund_exemption_service import approve_refund_exemption, reject_refund_exemption
+from case_record_amendment_service import approve_amendment, reject_amendment
+from case_record_service import decode_photo_urls, snapshot_case_record
 
 router = APIRouter(prefix="/api/mini/admin", tags=["Admin"])
 
@@ -91,6 +94,34 @@ class RefundExemptionAdminOut(BaseModel):
 
 
 class RejectRefundExemptionRequest(BaseModel):
+    reject_reason: str = Field(..., min_length=1, max_length=1000)
+
+
+class CaseRecordSnapshotOut(BaseModel):
+    subjective: Optional[str] = None
+    objective: Optional[str] = None
+    assessment: Optional[str] = None
+    plan: Optional[str] = None
+    photoUrls: List[str] = []
+
+
+class CaseRecordAmendmentAdminOut(BaseModel):
+    id: int
+    caseRecordId: int
+    consultationId: int
+    counselorId: int
+    counselorName: str
+    reason: Optional[str] = None
+    status: str
+    rejectReason: Optional[str] = None
+    consultationStartTime: Optional[datetime] = None
+    createdAt: datetime
+    reviewedAt: Optional[datetime] = None
+    current: CaseRecordSnapshotOut
+    proposed: CaseRecordSnapshotOut
+
+
+class RejectCaseRecordAmendmentRequest(BaseModel):
     reject_reason: str = Field(..., min_length=1, max_length=1000)
 
 
@@ -267,6 +298,140 @@ def reject_refund_exemption_request(
         raise HTTPException(status_code=400, detail=str(e))
     db.commit()
     return {"message": "已拒绝申请，预约与订单维持不变", "status": "REJECTED"}
+
+
+def _snapshot_to_out(data: dict) -> CaseRecordSnapshotOut:
+    return CaseRecordSnapshotOut(
+        subjective=data.get("subjective"),
+        objective=data.get("objective"),
+        assessment=data.get("assessment"),
+        plan=data.get("plan"),
+        photoUrls=data.get("photo_urls") or [],
+    )
+
+
+def _build_amendment_admin_out(
+    db: Session,
+    row: AppCaseRecordAmendmentRequest,
+    record: Optional[AppCaseRecord],
+    consultation: Optional[AppConsultation],
+) -> CaseRecordAmendmentAdminOut:
+    prof = (
+        db.query(AppCounselorProfile)
+        .filter(AppCounselorProfile.AccountId == row.CounselorId)
+        .first()
+    )
+    acc = db.query(AppAccount).filter(AppAccount.Id == row.CounselorId).first()
+    counselor_name = (
+        (prof.Name if prof and prof.Name else None)
+        or (acc.Nickname if acc else None)
+        or f"咨询师#{row.CounselorId}"
+    )
+    current = _snapshot_to_out(snapshot_case_record(record)) if record else CaseRecordSnapshotOut()
+    proposed = CaseRecordSnapshotOut(
+        subjective=row.Subjective,
+        objective=row.Objective,
+        assessment=row.Assessment,
+        plan=row.Plan,
+        photoUrls=decode_photo_urls(row.PhotoUrls),
+    )
+    return CaseRecordAmendmentAdminOut(
+        id=row.Id,
+        caseRecordId=row.CaseRecordId,
+        consultationId=row.ConsultationId,
+        counselorId=row.CounselorId,
+        counselorName=counselor_name,
+        reason=row.Reason,
+        status=row.Status,
+        rejectReason=row.RejectReason,
+        consultationStartTime=consultation.StartTime if consultation else None,
+        createdAt=row.CreatedAt,
+        reviewedAt=row.ReviewedAt,
+        current=current,
+        proposed=proposed,
+    )
+
+
+@router.get(
+    "/case-record-amendments",
+    response_model=List[CaseRecordAmendmentAdminOut],
+    summary="咨询记录修改申请列表（管理员审核）",
+)
+def list_case_record_amendments(
+    status: Optional[str] = Query(None, description="PENDING / APPROVED / REJECTED"),
+    _admin: AppAccount = Depends(require_ops_or_admin),
+    db: Session = Depends(get_db),
+):
+    q = db.query(AppCaseRecordAmendmentRequest).order_by(
+        AppCaseRecordAmendmentRequest.CreatedAt.desc()
+    )
+    if status and status.upper() != "ALL":
+        q = q.filter(AppCaseRecordAmendmentRequest.Status == status.upper())
+    rows = q.limit(100).all()
+    record_ids = [r.CaseRecordId for r in rows]
+    consultation_ids = [r.ConsultationId for r in rows]
+    records = {
+        r.Id: r
+        for r in db.query(AppCaseRecord).filter(AppCaseRecord.Id.in_(record_ids)).all()
+    } if record_ids else {}
+    consultations = {
+        c.Id: c
+        for c in db.query(AppConsultation).filter(AppConsultation.Id.in_(consultation_ids)).all()
+    } if consultation_ids else {}
+    return [
+        _build_amendment_admin_out(
+            db,
+            r,
+            records.get(r.CaseRecordId),
+            consultations.get(r.ConsultationId),
+        )
+        for r in rows
+    ]
+
+
+@router.post(
+    "/case-record-amendments/{amendment_id}/approve",
+    summary="同意咨询记录修改申请",
+)
+def approve_case_record_amendment(
+    amendment_id: int,
+    admin: AppAccount = Depends(require_ops_or_admin),
+    db: Session = Depends(get_db),
+):
+    row = db.query(AppCaseRecordAmendmentRequest).filter(
+        AppCaseRecordAmendmentRequest.Id == amendment_id
+    ).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="申请不存在")
+    try:
+        approve_amendment(db, row, admin.Id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    db.commit()
+    return {"message": "已同意修改，咨询记录已更新", "status": "APPROVED"}
+
+
+@router.post(
+    "/case-record-amendments/{amendment_id}/reject",
+    summary="驳回咨询记录修改申请",
+)
+def reject_case_record_amendment(
+    amendment_id: int,
+    body: RejectCaseRecordAmendmentRequest,
+    admin: AppAccount = Depends(require_ops_or_admin),
+    db: Session = Depends(get_db),
+):
+    row = db.query(AppCaseRecordAmendmentRequest).filter(
+        AppCaseRecordAmendmentRequest.Id == amendment_id
+    ).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="申请不存在")
+    try:
+        reject_amendment(db, row, admin.Id, body.reject_reason)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    db.commit()
+    return {"message": "已驳回修改申请，原记录维持不变", "status": "REJECTED"}
 
 
 def _admin_patient_name(account: Optional[AppAccount]) -> str:

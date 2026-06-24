@@ -126,6 +126,27 @@ class AppCaseRecordRevision(Base):
     RevisedBy = Column(Integer, nullable=False)
 
 
+class AppCaseRecordAmendmentRequest(Base):
+    """咨询师提交的咨询记录修改申请，需管理员审核后生效。"""
+    __tablename__ = "AppCaseRecordAmendmentRequest"
+
+    Id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    CaseRecordId = Column(Integer, nullable=False, index=True)
+    ConsultationId = Column(Integer, nullable=False)
+    CounselorId = Column(Integer, nullable=False)
+    Subjective = Column(UnicodeText, nullable=False)
+    Objective = Column(UnicodeText, nullable=False)
+    Assessment = Column(UnicodeText, nullable=False)
+    Plan = Column(UnicodeText, nullable=False)
+    PhotoUrls = Column(UnicodeText, nullable=True)
+    Reason = Column(UnicodeText, nullable=True)
+    Status = Column(String(20), nullable=False, default="PENDING")
+    RejectReason = Column(UnicodeText, nullable=True)
+    ReviewedBy = Column(Integer, nullable=True)
+    ReviewedAt = Column(DateTime, nullable=True)
+    CreatedAt = Column(DateTime, default=func.now(), nullable=False)
+
+
 class AppTask(Base):
     __tablename__ = "AppTask"
 

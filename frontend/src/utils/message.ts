@@ -35,10 +35,38 @@ export function isExemptionPendingMessage(item: MessageItem): boolean {
   return false
 }
 
+export function isCaseRecordAmendmentPendingMessage(item: MessageItem): boolean {
+  const rt = item.RelatedType || ''
+  if (rt === 'CASE_RECORD_AMENDMENT_PENDING') return true
+  if (rt !== 'CASE_RECORD_AMENDMENT') return false
+  const detail = parseMessageContent(item.Content).detail as Record<string, unknown> | undefined
+  if (detail?.status === 'PENDING') return true
+  if ((item.Title || '').includes('待审核')) return true
+  return false
+}
+
+export function canReviewAsOpsAdmin(activeRole: string): boolean {
+  if (activeRole === 'Admin' || activeRole === 'Ops') return true
+  try {
+    const roles = JSON.parse(uni.getStorageSync('user_roles') || '[]') as string[]
+    return roles.includes('Admin') || roles.includes('Ops')
+  } catch {
+    return false
+  }
+}
+
 export function messageDisplayTitle(item: MessageItem): string {
   const rt = item.RelatedType || ''
   if (rt === 'REFUND_EXEMPTION_PENDING' || isExemptionPendingMessage(item)) {
     return '豁免申请待审核'
+  }
+  if (rt === 'CASE_RECORD_AMENDMENT_PENDING' || isCaseRecordAmendmentPendingMessage(item)) {
+    return '咨询记录修改待审核'
+  }
+  if (rt === 'CASE_RECORD_AMENDMENT') {
+    const detail = parseMessageContent(item.Content).detail as Record<string, unknown> | undefined
+    if (detail?.status === 'APPROVED' || detail?.approved === true) return '咨询记录修改已通过'
+    if (detail?.status === 'REJECTED' || detail?.approved === false) return '咨询记录修改已驳回'
   }
   if (rt === 'REFUND_EXEMPTION') {
     const detail = parseMessageContent(item.Content).detail as Record<string, unknown> | undefined
@@ -100,6 +128,8 @@ export const RELATED_TYPE_LABELS: Record<string, string> = {
   COUNSELOR_LEAVE_SUCCESS: '请假成功',
   REFUND_EXEMPTION: '退款豁免',
   REFUND_EXEMPTION_PENDING: '豁免待审核',
+  CASE_RECORD_AMENDMENT: '记录修改',
+  CASE_RECORD_AMENDMENT_PENDING: '记录修改待审核',
   COUNSELOR_CONSULTATION_DONE: '咨询完成',
   COUNSELOR_CONSULTATION_REMIND: '咨询提醒',
   COUNSELOR_APPOINTMENT_NEW: '新预约',
@@ -119,6 +149,7 @@ export const COUNSELOR_MESSAGE_TYPES = new Set([
   'COUNSELOR_APPOINTMENT_CANCEL',
   'COUNSELOR_LEAVE_SUBMITTED',
   'COUNSELOR_LEAVE_SUCCESS',
+  'CASE_RECORD_AMENDMENT',
 ])
 
 export const PATIENT_MESSAGE_TYPES = new Set([
@@ -149,6 +180,7 @@ export function getMessageCategoriesForRole(role: string): MessageCategoryOption
       { value: 'appointment_cancel', label: '预约取消' },
       { value: 'counselor_leave', label: '咨询师请假' },
       { value: 'exemption', label: '豁免审核' },
+      { value: 'case_record_amendment', label: '记录修改审核' },
     ]
   }
 
@@ -168,6 +200,7 @@ export function getMessageCategoriesForRole(role: string): MessageCategoryOption
       { value: 'leave_submitted', label: '请假提交' },
       { value: 'consultation_remind', label: '咨询提醒' },
       { value: 'consultation_done', label: '咨询完成' },
+      { value: 'case_record_amendment', label: '记录修改' },
       { value: 'appointment_cancel', label: '预约取消' },
     ]
   }
@@ -191,6 +224,14 @@ export function messageCategoryLabel(item: MessageItem): string {
   const rt = item.RelatedType || ''
   if (rt === 'REFUND_EXEMPTION_PENDING' || isExemptionPendingMessage(item)) {
     return '豁免待审核'
+  }
+  if (rt === 'CASE_RECORD_AMENDMENT_PENDING' || isCaseRecordAmendmentPendingMessage(item)) {
+    return '记录修改待审核'
+  }
+  if (rt === 'CASE_RECORD_AMENDMENT') {
+    const detail = parseMessageContent(item.Content).detail as Record<string, unknown> | undefined
+    if (detail?.status === 'APPROVED' || detail?.approved === true) return '记录修改已通过'
+    if (detail?.status === 'REJECTED' || detail?.approved === false) return '记录修改已驳回'
   }
   if (rt === 'REFUND_EXEMPTION') {
     const detail = parseMessageContent(item.Content).detail as Record<string, unknown> | undefined
@@ -222,9 +263,16 @@ export function messageSearchText(item: MessageItem): string {
 }
 
 export function shouldOpenExemptionReview(activeRole: string, item: MessageItem): boolean {
-  if (activeRole !== 'Admin' && activeRole !== 'Ops') return false
+  if (!canReviewAsOpsAdmin(activeRole)) return false
   return isExemptionPendingMessage(item)
 }
+
+export function shouldOpenCaseRecordAmendmentReview(activeRole: string, item: MessageItem): boolean {
+  if (!canReviewAsOpsAdmin(activeRole)) return false
+  return isCaseRecordAmendmentPendingMessage(item)
+}
+
+export const CASE_RECORD_AMENDMENT_REVIEW_PATH = '/pages/ops/case-record-amendments/index'
 
 export function resolveMessageNavigation(
   item: MessageItem,
@@ -239,7 +287,18 @@ export function resolveMessageNavigation(
     return '/pages/ops/refund-exemptions/index'
   }
 
+  if (shouldOpenCaseRecordAmendmentReview(activeRole, item)) {
+    return CASE_RECORD_AMENDMENT_REVIEW_PATH
+  }
+
   const detail = parseMessageContent(item.Content).detail as Record<string, unknown> | undefined
+
+  if (item.RelatedType === 'CASE_RECORD_AMENDMENT' && activeRole === 'Counselor') {
+    const caseRecordId = detail?.caseRecordId
+    if (caseRecordId) {
+      return `/pages/counselor/case-record/view?recordId=${caseRecordId}`
+    }
+  }
 
   if (item.RelatedType === 'PATIENT_NEW_ACTIVITY') {
     const activityId = item.RelatedId || detail?.activityId

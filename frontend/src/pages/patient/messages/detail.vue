@@ -109,6 +109,32 @@
         </view>
       </view>
 
+      <view v-else-if="isCaseRecordAmendmentPending" class="detail-body">
+        <view class="tip-box pending">
+          <text class="tip-text">{{ amendmentPendingTip }}</text>
+        </view>
+        <view class="detail-row">
+          <text class="label">审核状态</text>
+          <text class="value pending-text">待审核</text>
+        </view>
+        <view v-if="detail.counselorName" class="detail-row">
+          <text class="label">咨询师</text>
+          <text class="value">{{ detail.counselorName }}</text>
+        </view>
+        <view v-if="detail.caseRecordId" class="detail-row">
+          <text class="label">记录编号</text>
+          <text class="value">#{{ detail.caseRecordId }}</text>
+        </view>
+        <view v-if="detail.startTime" class="detail-row">
+          <text class="label">咨询时段</text>
+          <text class="value">{{ detail.startTime }}</text>
+        </view>
+        <view class="reason-box">
+          <text class="reason-text">{{ payload.summary || message.Content }}</text>
+        </view>
+        <button class="review-btn" @click="goAmendmentReview">前往审核</button>
+      </view>
+
       <view v-else-if="relatedType === 'REFUND_EXEMPTION'" class="detail-body">
         <view class="detail-row">
           <text class="label">审核结果</text>
@@ -252,7 +278,7 @@ import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
-import { COUNSELOR_MESSAGE_TYPES, PATIENT_MESSAGE_TYPES, isExemptionPendingMessage, messageDisplayTitle, parseMessageContent, type MessageItem } from '@/utils/message'
+import { COUNSELOR_MESSAGE_TYPES, PATIENT_MESSAGE_TYPES, CASE_RECORD_AMENDMENT_REVIEW_PATH, isCaseRecordAmendmentPendingMessage, isExemptionPendingMessage, messageDisplayTitle, parseMessageContent, type MessageItem } from '@/utils/message'
 
 interface AffectedAppointment {
   patientName?: string
@@ -277,6 +303,13 @@ const isPatientMessage = computed(() => PATIENT_MESSAGE_TYPES.has(relatedType.va
 const isExemptionPending = computed(() => {
   if (!message.value) return false
   return isExemptionPendingMessage(message.value)
+})
+const isCaseRecordAmendmentPending = computed(() => {
+  if (!message.value) return false
+  return isCaseRecordAmendmentPendingMessage(message.value)
+})
+const amendmentPendingTip = computed(() => {
+  return '待审核：请在工作台「咨询记录修改审核」中查看并处理'
 })
 const exemptionPendingTip = computed(() => {
   const text = detail.value.resultText as string | undefined
@@ -330,6 +363,19 @@ const loadDetail = async () => {
   }
 }
 
+const goAmendmentReview = () => {
+  uni.navigateTo({
+    url: CASE_RECORD_AMENDMENT_REVIEW_PATH,
+    fail: () => {
+      uni.showModal({
+        title: '页面未找到',
+        content: '请重启 pnpm dev:mp-weixin，并在微信开发者工具中点击「编译」刷新后重试。',
+        showCancel: false,
+      })
+    },
+  })
+}
+
 onLoad((options) => {
   messageId.value = Number(options?.id || 0)
   loadDetail()
@@ -339,16 +385,17 @@ onLoad((options) => {
 <style scoped>
 .page-detail {
   min-height: 100vh;
-  background: #F4F6F8;
+  background: #F7F5F2;
   padding: 28rpx;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
 .empty-state {
   background: #fff;
-  border-radius: 28rpx;
+  border-radius: 32rpx;
   padding: 80rpx 40rpx;
   text-align: center;
-  box-shadow: 0 4rpx 16rpx rgba(15, 23, 42, 0.06);
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.02);
 }
 
 .empty-title {
@@ -377,9 +424,9 @@ onLoad((options) => {
 
 .detail-card {
   background: #fff;
-  border-radius: 28rpx;
+  border-radius: 32rpx;
   padding: 32rpx;
-  box-shadow: 0 4rpx 16rpx rgba(15, 23, 42, 0.06);
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.02);
 }
 
 .detail-head {
@@ -432,7 +479,7 @@ onLoad((options) => {
 }
 
 .value.highlight {
-  color: #0D9488;
+  color: #3D5A4E;
   font-weight: 600;
 }
 
@@ -444,12 +491,13 @@ onLoad((options) => {
 }
 
 .sub-card {
-  background: #F9FAFB;
-  border-radius: 20rpx;
+  background: #F7F5F2;
+  border-radius: 24rpx;
   padding: 24rpx;
   display: flex;
   flex-direction: column;
   gap: 16rpx;
+  border: 1rpx solid #F0EDE8;
 }
 
 .fallback-text {
@@ -460,14 +508,15 @@ onLoad((options) => {
 }
 
 .tip-box {
-  background: #ECFDF5;
+  background: #F0EDE8;
   border-radius: 16rpx;
   padding: 20rpx 24rpx;
+  border: 1rpx solid #E0D8CE;
 }
 
 .tip-text {
   font-size: 26rpx;
-  color: #047857;
+  color: #3D5A4E;
   line-height: 1.6;
 }
 
@@ -489,10 +538,28 @@ onLoad((options) => {
   font-weight: 600;
 }
 
+.review-btn {
+  width: 100%;
+  height: 88rpx;
+  line-height: 88rpx;
+  margin-top: 28rpx;
+  background: #3D5A4E;
+  color: #fff;
+  border-radius: 16rpx;
+  font-size: 30rpx;
+  font-weight: 600;
+  border: none;
+}
+
+.review-btn::after {
+  border: none;
+}
+
 .reason-box {
-  background: #F9FAFB;
-  border-radius: 20rpx;
+  background: #F7F5F2;
+  border-radius: 24rpx;
   padding: 24rpx;
+  border: 1rpx solid #F0EDE8;
 }
 
 .reason-label {

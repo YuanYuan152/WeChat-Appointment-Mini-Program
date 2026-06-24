@@ -50,7 +50,7 @@
             "path": "pages/consultant/list",
             "style": {
                 "navigationBarTitleText": "预约咨询师",
-                "navigationBarBackgroundColor": "#0D9488",
+                "navigationBarBackgroundColor": "#3D5A4E",
                 "navigationBarTextStyle": "white",
                 "navigationStyle": "custom",
                 "enablePullDownRefresh": true,
@@ -63,7 +63,8 @@
                 "navigationBarTitleText": "咨询师详情",
                 "navigationBarBackgroundColor": "#ffffff",
                 "navigationBarTextStyle": "black",
-                "navigationStyle": "custom"
+                "navigationStyle": "custom",
+                "backgroundColor": "#F7F5F2"
             }
         },
         {
@@ -79,7 +80,8 @@
             "style": {
                 "navigationBarTitleText": "个人信息",
                 "navigationBarBackgroundColor": "#ffffff",
-                "navigationBarTextStyle": "black"
+                "navigationBarTextStyle": "black",
+                "backgroundColor": "#F7F5F2"
             }
         },
         {
@@ -159,7 +161,8 @@
             "style": {
                 "navigationBarTitleText": "关于我们",
                 "navigationBarBackgroundColor": "#ffffff",
-                "navigationBarTextStyle": "black"
+                "navigationBarTextStyle": "black",
+                "backgroundColor": "#F7F5F2"
             }
         },
         {
@@ -175,7 +178,8 @@
             "style": {
                 "navigationBarTitleText": "济心理",
                 "navigationBarBackgroundColor": "#ffffff",
-                "navigationBarTextStyle": "black"
+                "navigationBarTextStyle": "black",
+                "backgroundColor": "#F7F5F2"
             }
         },
         {
@@ -213,7 +217,8 @@
                     "style": {
                         "navigationBarTitleText": "预约记录",
                         "navigationBarBackgroundColor": "#ffffff",
-                        "navigationBarTextStyle": "black"
+                        "navigationBarTextStyle": "black",
+                        "backgroundColor": "#F7F5F2"
                     }
                 },
                 {
@@ -237,7 +242,8 @@
                     "style": {
                         "navigationBarTitleText": "编辑资料",
                         "navigationBarBackgroundColor": "#ffffff",
-                        "navigationBarTextStyle": "black"
+                        "navigationBarTextStyle": "black",
+                        "backgroundColor": "#F7F5F2"
                     }
                 },
                 {
@@ -245,7 +251,8 @@
                     "style": {
                         "navigationBarTitleText": "我的消息",
                         "navigationBarBackgroundColor": "#ffffff",
-                        "navigationBarTextStyle": "black"
+                        "navigationBarTextStyle": "black",
+                        "backgroundColor": "#F7F5F2"
                     }
                 },
                 {
@@ -253,7 +260,8 @@
                     "style": {
                         "navigationBarTitleText": "消息详情",
                         "navigationBarBackgroundColor": "#ffffff",
-                        "navigationBarTextStyle": "black"
+                        "navigationBarTextStyle": "black",
+                        "backgroundColor": "#F7F5F2"
                     }
                 }
             ]
@@ -331,6 +339,14 @@
                     "path": "refund-exemptions/index",
                     "style": {
                         "navigationBarTitleText": "豁免申请审核",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                },
+                {
+                    "path": "case-record-amendments/index",
+                    "style": {
+                        "navigationBarTitleText": "咨询记录修改审核",
                         "navigationBarBackgroundColor": "#ffffff",
                         "navigationBarTextStyle": "black"
                     }
@@ -572,7 +588,8 @@
                     "style": {
                         "navigationBarTitleText": "咨询师资料",
                         "navigationBarBackgroundColor": "#ffffff",
-                        "navigationBarTextStyle": "black"
+                        "navigationBarTextStyle": "black",
+                        "backgroundColor": "#F7F5F2"
                     }
                 },
                 {
@@ -590,6 +607,10 @@
         "pages/index/index": {
             "network": "all",
             "packages": ["patient"]
+        },
+        "pages/workbench/index": {
+            "network": "all",
+            "packages": ["ops", "counselor", "assistant"]
         }
     },
     "globalStyle": {

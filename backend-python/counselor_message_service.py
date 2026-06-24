@@ -19,7 +19,7 @@ from schedule_meta import (
 
 COUNSELOR_REMIND_EVENT = "COUNSELOR_APPOINTMENT_REMIND"
 COUNSELOR_DONE_EVENT = "COUNSELOR_CONSULTATION_DONE"
-COUNSELOR_REMIND_HOURS = 24
+COUNSELOR_REMIND_MINUTES = 30
 COUNSELOR_DONE_TITLE = "咨询已完成，请尽快填写咨询记录"
 COUNSELOR_DONE_TIP = "咨询已结束，请尽快填写咨询记录以便归档。"
 
@@ -327,7 +327,7 @@ def schedule_counselor_consultation_reminder(
     db: Session,
     consultation: AppConsultation,
 ) -> None:
-    """咨询开始前 24 小时提醒咨询师（仅含时间、地点、来访者姓名）。"""
+    """咨询开始前 30 分钟提醒咨询师（距开始不足 30 分钟则不再单独提醒）。"""
     if consultation.Status not in ("PENDING", "CONFIRMED", "ONGOING"):
         return
 
@@ -335,7 +335,7 @@ def schedule_counselor_consultation_reminder(
 
     ctx = _consultation_context(db, consultation)
     start_time = ctx["startTime"]
-    if not start_time:
+    if not start_time or start_time <= china_now():
         return
 
     time_text = _format_datetime(start_time)
@@ -348,20 +348,12 @@ def schedule_counselor_consultation_reminder(
         "endTime": _format_datetime(ctx["endTime"]),
         "location": location,
         "consultationId": consultation.Id,
+        "tip": "咨询将在30分钟后开始，请准时赴约",
     }
     content = _message_payload(summary, detail)
-    remind_at = start_time - timedelta(hours=COUNSELOR_REMIND_HOURS)
+    remind_at = start_time - timedelta(minutes=COUNSELOR_REMIND_MINUTES)
 
     if remind_at <= china_now():
-        _notify_counselor(
-            db,
-            consultation.CounselorId,
-            type_="CONSULTATION",
-            title="咨询即将开始",
-            content=content,
-            related_type="COUNSELOR_CONSULTATION_REMIND",
-            related_id=consultation.Id,
-        )
         return
 
     db.add(

@@ -99,15 +99,16 @@ onMounted(load)
 <style scoped>
 .page-profile-edit {
   min-height: 100vh;
-  background: #F4F6F8;
+  background: #F7F5F2;
   padding: 32rpx;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
 .form-card {
   background: #fff;
-  border-radius: 28rpx;
+  border-radius: 32rpx;
   padding: 8rpx 32rpx;
-  box-shadow: 0 4rpx 16rpx rgba(15, 23, 42, 0.06);
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.02);
 }
 
 .form-item {
@@ -135,14 +136,19 @@ onMounted(load)
 
 .save-btn {
   width: 100%;
-  height: 92rpx;
-  line-height: 92rpx;
+  height: 96rpx;
+  line-height: 96rpx;
   border: none;
   border-radius: 100rpx;
   margin-top: 40rpx;
-  background: #0D9488;
+  background: #3D5A4E;
   color: #fff;
   font-size: 32rpx;
-  font-weight: 800;
+  font-weight: 600;
+  box-shadow: 0 8rpx 24rpx rgba(61, 90, 78, 0.2);
+}
+
+.save-btn:active {
+  background: #2F4A40;
 }
 </style>

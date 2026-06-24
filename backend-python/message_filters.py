@@ -12,10 +12,12 @@ CATEGORY_RELATED_TYPES: dict[str, list[str]] = {
     "counselor_leave": ["COUNSELOR_LEAVE"],
     "leave_submitted": ["COUNSELOR_LEAVE_SUBMITTED", "COUNSELOR_LEAVE_SUCCESS"],
     "exemption": ["REFUND_EXEMPTION", "REFUND_EXEMPTION_PENDING"],
+    "case_record_amendment": ["CASE_RECORD_AMENDMENT", "CASE_RECORD_AMENDMENT_PENDING"],
     "activity": ["PATIENT_NEW_ACTIVITY"],
     "appointment_success": ["PATIENT_APPOINTMENT_SUCCESS"],
     "appointment_remind": ["PATIENT_APPOINTMENT_REMIND", "COUNSELOR_CONSULTATION_REMIND"],
     "consultation_done": ["COUNSELOR_CONSULTATION_DONE"],
+    "case_record_amendment": ["CASE_RECORD_AMENDMENT", "CASE_RECORD_AMENDMENT_PENDING"],
     "leave_notice": ["PATIENT_LEAVE_APPROVED"],
 }
 
@@ -25,10 +27,12 @@ CATEGORY_KEYWORDS: dict[str, list[str]] = {
     "counselor_leave": ["咨询师请假"],
     "leave_submitted": ["请假申请已提交", "请假已成功", "请假已提交"],
     "exemption": ["豁免", "退款豁免", "待审核"],
+    "case_record_amendment": ["咨询记录修改", "记录修改", "待审核"],
     "activity": ["有新活动", "新活动"],
     "appointment_success": ["预约成功"],
-    "appointment_remind": ["预约即将开始", "2小时后"],
+    "appointment_remind": ["咨询即将开始", "30分钟后"],
     "consultation_done": ["咨询已完成", "请尽快填写咨询记录"],
+    "case_record_amendment": ["咨询记录修改", "记录修改", "修改申请"],
     "leave_notice": ["咨询师请假，预约已取消"],
 }
 

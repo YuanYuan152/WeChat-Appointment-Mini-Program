@@ -185,7 +185,7 @@
                 disabled: ts.past || ts.allRoomsFull || ts.counselorOccupied,
               }"
               @tap="selectTimeSlot(ts)"
-            >{{ ts.label }}{{ ts.counselorOccupied ? '（已挂）' : '' }}</view>
+            >{{ ts.label }}{{ ts.counselorOccupied ? '（已排期）' : '' }}</view>
           </view>
         </view>
 
@@ -481,8 +481,8 @@ const toolbarTip = computed(() =>
 
 const addModalSub = computed(() =>
   isVideoCenterSelected.value
-    ? '仅可挂今天起 7 天内未开始的标准时段（视频咨询）'
-    : '仅可挂今天起 7 天内未开始的标准时段',
+    ? '仅可安排一个月内未开始的标准时段（视频咨询）'
+    : '仅可安排一个月内未开始的标准时段',
 )
 
 const slotRoomText = (slot: CalendarSlot) => {
@@ -915,7 +915,7 @@ const openCancelBooked = (slot: CalendarSlot) => {
   cancelBookedIsLeave.value = within24h
   cancelBookedTip.value = slot.cancelHint || (
     within24h
-      ? '距咨询开始不足24小时。取消前请与来访者提前沟通并上传沟通截图；取消后不予退款，将释放咨询室并协助来访者改约。'
+      ? '距咨询开始不足24小时。取消前请与来访者提前沟通并上传沟通截图；取消后来访者将全额退款，将释放咨询室并协助改约。'
       : '距咨询开始超过24小时。取消前请与来访者提前沟通并上传沟通截图；取消后将释放咨询室、通知来访者并协助改约。'
   )
   showCancelBooked.value = true

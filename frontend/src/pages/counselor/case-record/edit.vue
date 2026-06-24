@@ -1,7 +1,7 @@
 <template>
   <view class="page-case-record">
     <view class="tip-banner">
-      <text>请一次性完整填写并提交，提交后不可修改</text>
+      <text>{{ isAmendment ? '修改内容需管理员审核通过后才会生效' : '请一次性完整填写并提交，提交后不可修改' }}</text>
     </view>
 
     <view class="form-section">
@@ -62,7 +62,19 @@
       </view>
     </view>
 
-    <button class="save-btn" :loading="saving" @tap="save">提交咨询记录</button>
+    <view v-if="isAmendment" class="form-section">
+      <text class="form-section-title">修改说明</text>
+      <text class="form-hint">选填，可向管理员说明修改原因</text>
+      <textarea
+        class="form-textarea"
+        v-model="amendReason"
+        placeholder="例如：补充遗漏的观察内容..."
+        :auto-height="true"
+        :maxlength="500"
+      />
+    </view>
+
+    <button class="save-btn" :loading="saving" @tap="save">{{ isAmendment ? '提交修改申请' : '提交咨询记录' }}</button>
   </view>
 </template>
 
@@ -88,14 +100,22 @@ const photoUrls = ref<string[]>([])
 const saving = ref(false)
 const uploading = ref(false)
 const consultationId = ref(0)
+const recordId = ref(0)
+const isAmendment = ref(false)
+const amendReason = ref('')
 
 const loadExistingDraft = async (rid: number) => {
   const res = await httpV2.get(`${API_ENDPOINTS.counselor.caseRecords}/${rid}`, undefined, {
     showLoading: false,
   })
   if (res.code !== 0 || !res.data) return
-  if (caseRecordHasContent(res.data)) {
+  if (caseRecordHasContent(res.data) && !isAmendment.value) {
     uni.redirectTo({ url: `/pages/counselor/case-record/view?recordId=${rid}` })
+    return
+  }
+  if (isAmendment.value && res.data.AmendmentStatus === 'PENDING') {
+    uni.showToast({ title: '已有待审核的修改申请', icon: 'none' })
+    setTimeout(() => uni.redirectTo({ url: `/pages/counselor/case-record/view?recordId=${rid}` }), 1200)
     return
   }
   form.value = {
@@ -110,8 +130,9 @@ const loadExistingDraft = async (rid: number) => {
 
 onLoad(async (opts) => {
   consultationId.value = Number(opts?.consultationId || 0)
-  const rid = Number(opts?.recordId || 0)
-  if (rid) await loadExistingDraft(rid)
+  recordId.value = Number(opts?.recordId || 0)
+  isAmendment.value = opts?.mode === 'amendment'
+  if (recordId.value) await loadExistingDraft(recordId.value)
 })
 
 const validateForm = () => {
@@ -159,6 +180,34 @@ const previewPhoto = (idx: number) => {
 
 const save = async () => {
   if (!validateForm()) return
+  if (isAmendment.value) {
+    if (!recordId.value) {
+      uni.showToast({ title: '缺少记录编号', icon: 'none' })
+      return
+    }
+    saving.value = true
+    try {
+      const res = await httpV2.post(
+        API_ENDPOINTS.counselor.caseRecordAmendmentRequest(recordId.value),
+        {
+          ...form.value,
+          photo_urls: photoUrls.value,
+          reason: amendReason.value.trim() || undefined,
+        },
+      )
+      if (res.code === 0) {
+        uni.showToast({ title: '修改申请已提交', icon: 'success' })
+        setTimeout(() => {
+          uni.redirectTo({ url: `/pages/counselor/case-record/view?recordId=${recordId.value}` })
+        }, 1200)
+      } else {
+        uni.showToast({ title: res.msg || '提交失败', icon: 'none' })
+      }
+    } finally {
+      saving.value = false
+    }
+    return
+  }
   if (!consultationId.value) {
     uni.showToast({ title: '缺少咨询参数，请返回重试', icon: 'none' })
     return

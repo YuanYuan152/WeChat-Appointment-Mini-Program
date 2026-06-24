@@ -194,7 +194,7 @@ const ROLE_LABELS: Record<string, string> = {
 
 const PROFILE_EDIT_ROUTES: Record<string, string> = {
   Patient: '/pages/patient/profile/edit',
-  Counselor: '/pages/counselor/profile/edit',
+  Counselor: '/pages/user/info',
   Assistant: '/pages/user/info',
   Ops: '/pages/user/info',
   Admin: '/pages/user/info',

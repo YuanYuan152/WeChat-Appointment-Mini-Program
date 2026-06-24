@@ -37,6 +37,7 @@ const entries = [
   { title: '运营看板', desc: '关键指标与日活数据', symbol: '数', tone: 'tone-muted', path: '/pages/ops/dashboard/index' },
   { title: '用户与角色', desc: '账号绑定与角色管理', symbol: '人', tone: 'tone-green', path: '/pages/ops/admin-roles/index' },
   { title: '豁免申请审核', desc: '24小时内取消退款豁免 · 管理员', symbol: '审', tone: 'tone-gold', path: '/pages/ops/refund-exemptions/index' },
+  { title: '咨询记录修改审核', desc: '咨询师提交的记录修改申请', symbol: '改', tone: 'tone-gold', path: '/pages/ops/case-record-amendments/index' },
   { title: '咨询师请假审批', desc: '查看请假详情与来访联系方式', symbol: '假', tone: 'tone-gold', path: '/pages/ops/leave-requests/index' },
   { title: '来访管理', desc: '来访者信息与全部咨询预约', symbol: '访', tone: 'tone-green', path: '/pages/ops/patients/index' },
   { title: '咨询记录', desc: '各咨询师近30天记录填写情况', symbol: '记', tone: 'tone-green', path: '/pages/ops/case-records/index' },
@@ -47,10 +48,10 @@ const navigate = (path: string) => {
   uni.navigateTo({
     url: path,
     fail: () => {
-      uni.showToast({
-        title: '页面未编译，请重启 pnpm dev:mp-weixin 后刷新开发者工具',
-        icon: 'none',
-        duration: 3000,
+      uni.showModal({
+        title: '页面未找到',
+        content: '新页面尚未编译进小程序，请重启 pnpm dev:mp-weixin，并在微信开发者工具中点击「编译」刷新后重试。',
+        showCancel: false,
       })
     },
   })

@@ -27,6 +27,10 @@ from case_record_service import (
     ensure_consultation_done_for_record,
     reject_if_case_record_locked,
 )
+from case_record_amendment_service import (
+    latest_amendment_for_record,
+    submit_amendment_request,
+)
 from auth import get_current_account, AppAccount
 from database import get_db
 from models import (
@@ -34,6 +38,7 @@ from models import (
     AppConsultation,
     AppCaseRecord,
     AppCaseRecordRevision,
+    AppCaseRecordAmendmentRequest,
     AppRoleBinding,
     AppCounselorProfile,
     AppLeaveRequest,
@@ -41,7 +46,7 @@ from models import (
     AppScheduleCancelLog,
 )
 from app_time import china_now
-from consultation_cancel import has_appointment_started, is_refund_eligible
+from consultation_cancel import has_appointment_started, is_refund_eligible, refund_order_for_counselor_leave
 from schedule_meta import (
     CENTER_NAMES,
     CONSULTATION_ROOMS,
@@ -235,10 +240,17 @@ class CaseRecordOut(BaseModel):
     PhotoUrls: List[str] = []
     CreatedAt: datetime
     UpdatedAt: Optional[datetime] = None
+    AmendmentStatus: Optional[str] = None
+    AmendmentId: Optional[int] = None
+    AmendmentRejectReason: Optional[str] = None
 
     @classmethod
-    def from_record(cls, record: AppCaseRecord) -> "CaseRecordOut":
-        return cls(
+    def from_record(
+        cls,
+        record: AppCaseRecord,
+        amendment: Optional[AppCaseRecordAmendmentRequest] = None,
+    ) -> "CaseRecordOut":
+        out = cls(
             Id=record.Id,
             ConsultationId=record.ConsultationId,
             CounselorId=record.CounselorId,
@@ -250,6 +262,21 @@ class CaseRecordOut(BaseModel):
             CreatedAt=record.CreatedAt,
             UpdatedAt=record.UpdatedAt,
         )
+        if amendment:
+            out.AmendmentStatus = amendment.Status
+            out.AmendmentId = amendment.Id
+            if amendment.Status == "REJECTED":
+                out.AmendmentRejectReason = amendment.RejectReason
+        return out
+
+
+class CaseRecordAmendmentCreate(BaseModel):
+    subjective: str
+    objective: str
+    assessment: str
+    plan: str
+    photo_urls: Optional[List[str]] = None
+    reason: Optional[str] = None
 
 
 class CaseRecordRevisionOut(BaseModel):
@@ -535,7 +562,7 @@ def _cancel_permissions(schedule: AppSchedule, consultation: Optional[AppConsult
         return (
             True,
             True,
-            "取消前请与来访者提前沟通并上传沟通截图。距咨询开始不足24小时，取消后不予退款，须协助来访者改约。",
+            "取消前请与来访者提前沟通并上传沟通截图。取消后来访者将全额退款，请协助改约。",
         )
 
     # 已标 BOOKED 但无有效咨询单（数据异常），仍允许直接取消
@@ -569,11 +596,7 @@ def _counselor_cancel_booked(
     if consultation:
         consultation.Status = "CANCELLED"
         consultation.UpdatedAt = datetime.utcnow()
-        if consultation.OrderId:
-            order = db.query(AppOrder).filter(AppOrder.Id == consultation.OrderId).first()
-            if order and order.Status == "PAID":
-                order.Status = "REFUNDED" if is_refund_eligible(schedule.StartTime) else "CANCELLED"
-                order.UpdatedAt = datetime.utcnow()
+        refunded = refund_order_for_counselor_leave(db, consultation)
         from counselor_message_service import (
             cancel_counselor_consultation_done_notices,
             cancel_counselor_consultation_reminders,
@@ -586,7 +609,6 @@ def _counselor_cancel_booked(
         cancel_counselor_consultation_reminders(db, consultation.Id)
         cancel_counselor_consultation_done_notices(db, consultation.Id)
         cancel_patient_consultation_reminders(db, consultation.Id)
-        refunded = is_refund_eligible(schedule.StartTime)
         notify_patient_counselor_leave_approved(
             db,
             consultation,
@@ -1325,7 +1347,7 @@ def list_case_records(
         .order_by(AppCaseRecord.CreatedAt.desc())
         .all()
     )
-    return [CaseRecordOut.from_record(r) for r in rows]
+    return [CaseRecordOut.from_record(r, latest_amendment_for_record(db, r.Id)) for r in rows]
 
 
 @router.get("/case-records/{record_id}", response_model=CaseRecordOut, summary="获取个案记录详情")
@@ -1340,7 +1362,8 @@ def get_case_record(
     ).first()
     if not record:
         raise HTTPException(status_code=404, detail="个案记录不存在")
-    return CaseRecordOut.from_record(record)
+    amendment = latest_amendment_for_record(db, record.Id)
+    return CaseRecordOut.from_record(record, amendment)
 
 
 @router.get(
@@ -1443,6 +1466,40 @@ def update_case_record(
     raise HTTPException(status_code=403, detail="咨询记录提交后不可修改")
 
 
+@router.post(
+    "/case-records/{record_id}/amendment-requests",
+    response_model=CaseRecordOut,
+    summary="提交咨询记录修改申请（需管理员审核）",
+)
+def create_case_record_amendment(
+    record_id: int,
+    body: CaseRecordAmendmentCreate,
+    counselor: AppAccount = Depends(require_counselor),
+    db: Session = Depends(get_db),
+):
+    record = db.query(AppCaseRecord).filter(
+        AppCaseRecord.Id == record_id,
+        AppCaseRecord.CounselorId == counselor.Id,
+    ).first()
+    if not record:
+        raise HTTPException(status_code=404, detail="个案记录不存在")
+
+    amendment = submit_amendment_request(
+        db,
+        record,
+        counselor.Id,
+        subjective=body.subjective,
+        objective=body.objective,
+        assessment=body.assessment,
+        plan=body.plan,
+        photo_urls=body.photo_urls,
+        reason=body.reason,
+    )
+    db.commit()
+    db.refresh(record)
+    return CaseRecordOut.from_record(record, amendment)
+
+
 # ---------------------------------------------------------------------------
 # 个人资料与统计
 # ---------------------------------------------------------------------------
@@ -1497,29 +1554,7 @@ def sign_authenticity_commitment(
     counselor: AppAccount = Depends(require_counselor),
     db: Session = Depends(get_db),
 ):
-    signer = (body.signerName or "").strip()
-    if not body.agreed:
-        raise HTTPException(status_code=400, detail="请先阅读并同意承诺书")
-    if not signer:
-        raise HTTPException(status_code=400, detail="请填写签署姓名")
-
-    profile = db.query(AppCounselorProfile).filter(
-        AppCounselorProfile.AccountId == counselor.Id
-    ).first()
-    if not profile:
-        profile = AppCounselorProfile(
-            AccountId=counselor.Id,
-            Name=counselor.Nickname,
-            AvatarUrl=counselor.AvatarUrl,
-        )
-        db.add(profile)
-
-    profile.InfoAuthenticitySignerName = signer
-    profile.InfoAuthenticityCommittedAt = datetime.utcnow()
-    profile.UpdatedAt = datetime.utcnow()
-    db.commit()
-    db.refresh(profile)
-    return _profile_to_dict(profile)
+    raise HTTPException(status_code=403, detail="咨询师资料由平台统一维护，请联系运营人员更新")
 
 
 @router.put("/profile", summary="更新咨询师个人资料")
@@ -1528,40 +1563,7 @@ def update_profile(
     counselor: AppAccount = Depends(require_counselor),
     db: Session = Depends(get_db),
 ):
-    profile = db.query(AppCounselorProfile).filter(
-        AppCounselorProfile.AccountId == counselor.Id
-    ).first()
-    if not profile:
-        profile = AppCounselorProfile(AccountId=counselor.Id)
-        db.add(profile)
-        db.flush()
-
-    if not profile.InfoAuthenticityCommittedAt:
-        raise HTTPException(status_code=403, detail="请先签署信息真实可信承诺书")
-
-    mapping = {
-        "name": "Name",
-        "avatarUrl": "AvatarUrl",
-        "title": "Title",
-        "specialty": "Specialty",
-        "field": "Field",
-        "introduce": "Introduce",
-        "career": "Career",
-        "qualification": "Qualification",
-        "targetGroup": "TargetGroup",
-        "mode": "Mode",
-        "consultHours": "ConsultHours",
-        "workYears": "WorkYears",
-        "isActive": "IsActive",
-    }
-    for src, dst in mapping.items():
-        val = getattr(body, src, None)
-        if val is not None:
-            setattr(profile, dst, val)
-    profile.UpdatedAt = datetime.utcnow()
-    db.commit()
-    db.refresh(profile)
-    return _profile_to_dict(profile)
+    raise HTTPException(status_code=403, detail="咨询师资料由平台统一维护，请联系运营人员更新")
 
 
 @router.get("/stats", summary="咨询师统计看板")

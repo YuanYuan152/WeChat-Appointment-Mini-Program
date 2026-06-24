@@ -1,16 +1,13 @@
 <template>
   <view class="dashboard-panel">
     <view class="header-section">
-      <view class="profile-card" @tap="goProfileEdit">
+      <view class="profile-card">
         <view class="avatar-wrap">
           <image
             :src="profileHeader.avatar"
             class="avatar-img"
             mode="aspectFill"
           />
-          <view class="edit-badge">
-            <text class="edit-icon">✎</text>
-          </view>
         </view>
         <view class="user-info">
           <text class="user-name">{{ profileHeader.name || '咨询师' }}</text>
@@ -18,7 +15,12 @@
           <text v-if="profileHeader.phone" class="user-phone">{{ formatPhone(profileHeader.phone) }}</text>
           <text v-if="profileHeader.meta" class="user-meta">{{ profileHeader.meta }}</text>
         </view>
-        <text class="profile-arrow">›</text>
+      </view>
+
+      <view class="intro-card">
+        <text class="intro-title">咨询师介绍</text>
+        <text class="intro-notice">对外展示资料由平台统一维护</text>
+        <text class="intro-text">{{ profileHeader.introduce || '暂无介绍，如需更新请联系运营人员' }}</text>
       </view>
       <view class="section-head">
         <text class="section-title">个人看板</text>
@@ -59,7 +61,7 @@
       </view>
       <view class="stat-card highlight" @tap="openDetail('orders')">
         <text class="num">¥{{ formatYuan(stats.completedOrderRevenue) }}</text>
-        <text class="label">成单总价</text>
+        <text class="label">成单收入</text>
         <text class="tap-hint">点击查看明细</text>
       </view>
       <view class="stat-card" @tap="openDetail('case-records')">
@@ -70,12 +72,6 @@
       <view class="stat-card" @tap="openDetail('appointments')">
         <text class="num">{{ stats.totalAppointments }}</text>
         <text class="label">预约总量</text>
-        <text class="tap-hint">点击查看明细</text>
-      </view>
-      <view class="stat-card wide" @tap="openDetail('leaves')">
-        <text class="num">{{ stats.leaveCount }}</text>
-        <text class="label">请假次数</text>
-        <text class="hint">含已提交的全部请假申请</text>
         <text class="tap-hint">点击查看明细</text>
       </view>
     </view>
@@ -131,6 +127,7 @@ interface ProfileHeader {
   title: string
   phone: string
   meta: string
+  introduce: string
 }
 
 type PeriodFilter = 'month' | 'quarter' | 'half_year' | 'all'
@@ -141,7 +138,6 @@ interface DashboardStats {
   completedOrderRevenue: number
   caseRecordCount: number
   totalAppointments: number
-  leaveCount: number
 }
 
 interface DetailItem {
@@ -178,13 +174,13 @@ const profileHeader = ref<ProfileHeader>({
   title: '',
   phone: '',
   meta: '',
+  introduce: '',
 })
 const stats = ref<DashboardStats>({
   completedOrderCount: 0,
   completedOrderRevenue: 0,
   caseRecordCount: 0,
   totalAppointments: 0,
-  leaveCount: 0,
 })
 
 const showDetail = ref(false)
@@ -224,6 +220,7 @@ const loadProfileHeader = async () => {
         title?: string
         specialty?: string
         field?: string
+        introduce?: string
         workYears?: number
         consultHours?: number
       }>(API_ENDPOINTS.counselor.profile, undefined, silent),
@@ -241,14 +238,11 @@ const loadProfileHeader = async () => {
       title: profile?.title || '咨询师',
       phone: me?.mobile || '',
       meta: metaParts.join(' · '),
+      introduce: profile?.introduce || '',
     }
   } catch {
     // 保留已有展示
   }
-}
-
-const goProfileEdit = () => {
-  uni.navigateTo({ url: '/pages/counselor/profile/edit' })
 }
 
 const load = async () => {
@@ -266,7 +260,6 @@ const load = async () => {
         completedOrderRevenue: res.data.completedOrderRevenue ?? 0,
         caseRecordCount: res.data.caseRecordCount ?? 0,
         totalAppointments: res.data.totalAppointments ?? 0,
-        leaveCount: res.data.leaveCount ?? 0,
       }
     }
   } finally {
@@ -351,6 +344,39 @@ defineExpose({ refresh: load })
   border: 1rpx solid rgba(232, 228, 222, 0.9);
 }
 
+.intro-card {
+  margin-top: 20rpx;
+  background: #fff;
+  border-radius: 24rpx;
+  padding: 28rpx;
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.03);
+  border: 1rpx solid rgba(232, 228, 222, 0.9);
+}
+
+.intro-title {
+  display: block;
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #3D5A4E;
+}
+
+.intro-notice {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: #8A8A8A;
+}
+
+.intro-text {
+  display: block;
+  margin-top: 16rpx;
+  font-size: 26rpx;
+  color: #6B6560;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .avatar-wrap {
   flex-shrink: 0;
   position: relative;
@@ -364,25 +390,6 @@ defineExpose({ refresh: load })
   border-radius: 50%;
   border: 4rpx solid #E8E4DE;
   background: #F3F4F6;
-}
-
-.edit-badge {
-  position: absolute;
-  bottom: 0;
-  right: 0;
-  width: 36rpx;
-  height: 36rpx;
-  background: #3D5A4E;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 3rpx solid #fff;
-}
-
-.edit-icon {
-  font-size: 20rpx;
-  color: #fff;
 }
 
 .user-info {
@@ -419,13 +426,6 @@ defineExpose({ refresh: load })
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
-}
-
-.profile-arrow {
-  flex-shrink: 0;
-  font-size: 40rpx;
-  color: #C4B8A8;
-  line-height: 1;
 }
 
 .section-head {

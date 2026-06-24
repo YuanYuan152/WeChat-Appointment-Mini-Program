@@ -105,20 +105,6 @@
               <text v-for="group in doctorTargetGroups" :key="group" class="cloud-tag alt">{{ group }}</text>
             </view>
           </view>
-
-          <view v-if="doctor.infoAuthenticityCommitted" class="info-block trust-pledge-block">
-            <view class="trust-pledge-card">
-              <view class="trust-pledge-head">
-                <text class="trust-pledge-icon">✓</text>
-                <text class="trust-pledge-title">可信承诺</text>
-              </view>
-              <text class="trust-pledge-main">该咨询师已承诺：所展示信息均真实可信</text>
-              <text class="trust-pledge-sub">资质、从业经历、专业背景等资料经本人确认真实有效</text>
-              <text v-if="doctor.infoAuthenticityCommittedAt" class="trust-pledge-time">
-                签署时间：{{ formatCommitmentTime(doctor.infoAuthenticityCommittedAt) }}
-              </text>
-            </view>
-          </view>
       </view>
 
       <!-- 预约区域：预约中心 + 可约时间 -->
@@ -406,8 +392,6 @@ interface Doctor {
   career: string
   joiner: string
   trainingCount: number
-  infoAuthenticityCommitted: boolean
-  infoAuthenticityCommittedAt: string
   qualification: string
   field: string
   targetGroup: string
@@ -438,8 +422,6 @@ const doctor = ref<Doctor>({
   career: '',
   joiner: '',
   trainingCount: 0,
-  infoAuthenticityCommitted: false,
-  infoAuthenticityCommittedAt: '',
   qualification: '',
   field: '',
   targetGroup: '',
@@ -564,12 +546,6 @@ const trainingCount = computed(() => {
   return parseTrainingSegments(merged).length
 })
 
-const formatCommitmentTime = (value?: string) => {
-  if (!value) return ''
-  const text = String(value).replace('T', ' ').slice(0, 16)
-  return text
-}
-
 // 获取路由参数
 const getRouteParams = () => {
   const pages = getCurrentPages()
@@ -589,8 +565,6 @@ const mapDoctorDetail = (item: any): Doctor => ({
   career: item.career || '',
   joiner: item.joiner || '',
   trainingCount: Number(item.trainingCount ?? item.trainingSegments ?? 0) || 0,
-  infoAuthenticityCommitted: !!item.infoAuthenticityCommitted,
-  infoAuthenticityCommittedAt: item.infoAuthenticityCommittedAt || '',
   qualification: item.qualification || '暂无资质信息',
   field: item.field || item.specialty || '',
   targetGroup: item.targetGroup || '成人,青少年,亲子家庭',
@@ -1347,7 +1321,7 @@ onMounted(() => {
 <style>
 /* 顶级设计系统变量与重置 */
 .page-consultant-detail {
-  background-color: #F4F6F8;
+  background-color: #F7F5F2;
   position: relative;
   width: 100%;
   overflow-x: hidden;
@@ -1459,7 +1433,7 @@ onMounted(() => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: linear-gradient(to bottom, rgba(0,0,0,0.2) 0%, #F4F6F8 100%);
+  background: linear-gradient(to bottom, rgba(0,0,0,0.2) 0%, #F7F5F2 100%);
 }
 
 .hero-content {
@@ -1532,9 +1506,9 @@ onMounted(() => {
 }
 
 .hero-tag.primary {
-  background: rgba(13, 148, 136, 0.15);
-  color: #0D9488;
-  border: 1px solid rgba(13, 148, 136, 0.3);
+  background: rgba(61, 90, 78, 0.15);
+  color: #3D5A4E;
+  border: 1px solid rgba(61, 90, 78, 0.3);
 }
 
 .hero-tag.secondary {
@@ -1609,7 +1583,7 @@ onMounted(() => {
   top: calc(88rpx + var(--status-bar-height, 0px));
   left: 0;
   right: 0;
-  background: rgba(244, 246, 248, 0.95);
+  background: rgba(247, 245, 242, 0.95);
   backdrop-filter: blur(20px);
   padding-top: 20rpx;
   padding-bottom: 20rpx;
@@ -1640,7 +1614,7 @@ onMounted(() => {
   transform: translateX(-50%);
   width: 48rpx;
   height: 6rpx;
-  background: #0D9488;
+  background: #3D5A4E;
   border-radius: 6rpx 6rpx 0 0;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -1662,67 +1636,6 @@ onMounted(() => {
   box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.02);
 }
 
-.trust-pledge-block {
-  padding: 0;
-  background: transparent;
-  box-shadow: none;
-}
-
-.trust-pledge-card {
-  background: linear-gradient(135deg, #ECFDF5 0%, #F0FDFA 100%);
-  border: 1rpx solid #A7F3D0;
-  border-radius: 32rpx;
-  padding: 32rpx 36rpx;
-}
-
-.trust-pledge-head {
-  display: flex;
-  align-items: center;
-  gap: 12rpx;
-  margin-bottom: 16rpx;
-}
-
-.trust-pledge-icon {
-  width: 40rpx;
-  height: 40rpx;
-  line-height: 40rpx;
-  text-align: center;
-  border-radius: 50%;
-  background: #10B981;
-  color: #fff;
-  font-size: 24rpx;
-  font-weight: 700;
-}
-
-.trust-pledge-title {
-  font-size: 32rpx;
-  font-weight: 800;
-  color: #065F46;
-}
-
-.trust-pledge-main {
-  display: block;
-  font-size: 28rpx;
-  font-weight: 600;
-  color: #047857;
-  line-height: 1.6;
-  margin-bottom: 8rpx;
-}
-
-.trust-pledge-sub {
-  display: block;
-  font-size: 24rpx;
-  color: #059669;
-  line-height: 1.6;
-  margin-bottom: 12rpx;
-}
-
-.trust-pledge-time {
-  display: block;
-  font-size: 22rpx;
-  color: #6B7280;
-}
-
 .block-title {
   display: block;
   font-size: 34rpx;
@@ -1741,7 +1654,7 @@ onMounted(() => {
   transform: translateY(-50%);
   width: 8rpx;
   height: 32rpx;
-  background: #0D9488;
+  background: #3D5A4E;
   border-radius: 8rpx;
 }
 
@@ -1772,11 +1685,11 @@ onMounted(() => {
 }
 
 .block-title--green::before {
-  background: #0D9488;
+  background: #3D5A4E;
 }
 
 .block-title--orange::before {
-  background: #F59E0B;
+  background: #4A6B5D;
 }
 
 .block-title--sm {
@@ -1816,9 +1729,9 @@ onMounted(() => {
 }
 
 .center-card.selected {
-  background: #FFFBEB;
-  border-color: #F59E0B;
-  box-shadow: 0 8rpx 24rpx rgba(245, 158, 11, 0.12);
+  background: #F0EDE8;
+  border-color: #3D5A4E;
+  box-shadow: 0 8rpx 24rpx rgba(61, 90, 78, 0.12);
 }
 
 .center-card.unavailable {
@@ -1857,8 +1770,8 @@ onMounted(() => {
 
 .quote-text {
   font-style: italic;
-  color: #0D9488;
-  background: #F0FDFA;
+  color: #3D5A4E;
+  background: #F0EDE8;
   padding: 24rpx;
   border-radius: 16rpx;
   display: block;
@@ -1878,8 +1791,8 @@ onMounted(() => {
 }
 
 .cloud-tag {
-  background: #F3F4F6;
-  color: #4B5563;
+  background: #F0EDE8;
+  color: #3D5A4E;
   padding: 12rpx 32rpx;
   border-radius: 100rpx;
   font-size: 26rpx;
@@ -1887,8 +1800,8 @@ onMounted(() => {
 }
 
 .cloud-tag.alt {
-  background: #EFF6FF;
-  color: #3B82F6;
+  background: #F0EDE8;
+  color: #3D5A4E;
 }
 
 /* 可约时间 Grid */
@@ -1907,9 +1820,9 @@ onMounted(() => {
 }
 
 .time-card.selected {
-  background: #F0FDFA;
-  border-color: #0D9488;
-  box-shadow: 0 8rpx 24rpx rgba(13, 148, 136, 0.1);
+  background: #F0EDE8;
+  border-color: #3D5A4E;
+  box-shadow: 0 8rpx 24rpx rgba(61, 90, 78, 0.1);
 }
 
 .time-card--booked {
@@ -1956,7 +1869,7 @@ onMounted(() => {
 .tc-time {
   font-size: 32rpx;
   font-weight: 800;
-  color: #0D9488;
+  color: #3D5A4E;
 }
 
 .time-card-bot {
@@ -1984,13 +1897,13 @@ onMounted(() => {
 }
 
 .time-card.selected .tc-radio {
-  border-color: #0D9488;
+  border-color: #3D5A4E;
 }
 
 .tc-radio-inner {
   width: 20rpx;
   height: 20rpx;
-  background: #0D9488;
+  background: #3D5A4E;
   border-radius: 50%;
 }
 
@@ -2103,7 +2016,7 @@ onMounted(() => {
   flex: 0 0 auto;
   min-width: 140rpx;
   max-width: 168rpx;
-  background: linear-gradient(135deg, #0F766E 0%, #0D9488 100%);
+  background: linear-gradient(135deg, #3D5A4E 0%, #4A6B5D 100%);
   color: white;
   font-size: 24rpx;
   font-weight: 600;
@@ -2112,7 +2025,7 @@ onMounted(() => {
   line-height: 64rpx;
   border-radius: 100rpx;
   margin: 0;
-  box-shadow: 0 6rpx 16rpx rgba(13, 148, 136, 0.25);
+  box-shadow: 0 6rpx 16rpx rgba(61, 90, 78, 0.25);
 }
 
 .action-btn::after {
@@ -2257,7 +2170,7 @@ onMounted(() => {
 }
 
 .btn-fill {
-  background: #0D9488;
+  background: #3D5A4E;
   color: white;
   font-size: 32rpx;
   font-weight: 600;
@@ -2473,7 +2386,7 @@ onMounted(() => {
 }
 
 .sig-btn.fill {
-  background: #0D9488;
+  background: #3D5A4E;
   color: white;
 }
 
@@ -2550,7 +2463,7 @@ onMounted(() => {
 }
 
 .pay-value.highlight {
-  color: #0D9488;
+  color: #3D5A4E;
 }
 
 .pay-warm-tips {
@@ -2621,8 +2534,8 @@ onMounted(() => {
 }
 
 .pay-checkbox.checked {
-  background: #0D9488;
-  border-color: #0D9488;
+  background: #3D5A4E;
+  border-color: #3D5A4E;
 }
 
 .pay-check-icon {
@@ -2639,7 +2552,7 @@ onMounted(() => {
 }
 
 .pay-agree-link {
-  color: #0D9488;
+  color: #3D5A4E;
   font-weight: 600;
 }
 </style>

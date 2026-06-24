@@ -1,5 +1,9 @@
 <template>
   <view class="page-user-info">
+    <view v-if="isCounselor" class="notice-bar">
+      <text class="notice-text">此处仅可修改账号昵称等个人信息；咨询师对外展示资料由平台统一维护</text>
+    </view>
+
     <view class="form-card">
       <view class="form-item">
         <text class="label">昵称</text>
@@ -35,6 +39,7 @@ import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
 
 const genderOptions = ['男', '女', '其他']
+const isCounselor = ref(false)
 const form = ref({
   nickname: '',
   avatarUrl: '',
@@ -56,6 +61,7 @@ const onGenderChange = (e: any) => {
 const load = async () => {
   const res = await httpV2.get<any>(API_ENDPOINTS.auth.me)
   if (res.code === 0 && res.data) {
+    isCounselor.value = (res.data.roles || []).includes('Counselor')
     form.value = {
       nickname: res.data.nickname || '',
       avatarUrl: res.data.avatarUrl || '',
@@ -93,15 +99,30 @@ onMounted(load)
 <style scoped>
 .page-user-info {
   min-height: 100vh;
-  background: #F4F6F8;
+  background: #F7F5F2;
   padding: 32rpx;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+.notice-bar {
+  background: #F0EDE8;
+  border: 1rpx solid #E8E4DE;
+  border-radius: 16rpx;
+  padding: 20rpx 24rpx;
+  margin-bottom: 24rpx;
+}
+
+.notice-text {
+  font-size: 24rpx;
+  color: #3D5A4E;
+  line-height: 1.6;
 }
 
 .form-card {
   background: #fff;
-  border-radius: 28rpx;
+  border-radius: 32rpx;
   padding: 8rpx 32rpx;
-  box-shadow: 0 4rpx 16rpx rgba(15, 23, 42, 0.06);
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.02);
 }
 
 .form-item {
@@ -134,14 +155,19 @@ onMounted(load)
 
 .save-btn {
   width: 100%;
-  height: 92rpx;
-  line-height: 92rpx;
+  height: 96rpx;
+  line-height: 96rpx;
   border: none;
   border-radius: 100rpx;
   margin-top: 40rpx;
-  background: #0D9488;
+  background: #3D5A4E;
   color: #fff;
   font-size: 32rpx;
-  font-weight: 800;
+  font-weight: 600;
+  box-shadow: 0 8rpx 24rpx rgba(61, 90, 78, 0.2);
+}
+
+.save-btn:active {
+  background: #2F4A40;
 }
 </style>

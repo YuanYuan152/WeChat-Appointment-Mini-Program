@@ -4,7 +4,7 @@ from typing import List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
-from consultation_cancel import is_refund_eligible
+from consultation_cancel import refund_order_for_counselor_leave
 from models import (
     AppAccount,
     AppConsultation,
@@ -142,13 +142,7 @@ def approve_leave_request(
     if consultation:
         consultation.Status = "CANCELLED"
         consultation.UpdatedAt = datetime.utcnow()
-        if consultation.OrderId:
-            order = db.query(AppOrder).filter(AppOrder.Id == consultation.OrderId).first()
-            if order and order.Status == "PAID":
-                order.Status = (
-                    "REFUNDED" if is_refund_eligible(schedule.StartTime) else "CANCELLED"
-                )
-                order.UpdatedAt = datetime.utcnow()
+        refunded = refund_order_for_counselor_leave(db, consultation)
         from counselor_message_service import (
             cancel_counselor_consultation_done_notices,
             cancel_counselor_consultation_reminders,
@@ -161,7 +155,6 @@ def approve_leave_request(
         cancel_counselor_consultation_reminders(db, consultation.Id)
         cancel_counselor_consultation_done_notices(db, consultation.Id)
         cancel_patient_consultation_reminders(db, consultation.Id)
-        refunded = is_refund_eligible(schedule.StartTime)
         notify_patient_counselor_leave_approved(
             db,
             consultation,

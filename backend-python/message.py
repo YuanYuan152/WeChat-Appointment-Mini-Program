@@ -298,6 +298,23 @@ def process_due_reminders(db: Session = Depends(get_db)):
                 msg_type = "REMIND"
             else:
                 msg_type = "REMIND"
+
+            if task.RelatedType and task.RelatedId:
+                existing_msg = (
+                    db.query(AppMessage)
+                    .filter(
+                        AppMessage.AccountId == task.AccountId,
+                        AppMessage.RelatedType == task.RelatedType,
+                        AppMessage.RelatedId == task.RelatedId,
+                    )
+                    .first()
+                )
+                if existing_msg:
+                    task.Status = "DONE"
+                    task.ProcessedAt = datetime.utcnow()
+                    processed += 1
+                    continue
+
             create_message(
                 db,
                 account_id=task.AccountId,

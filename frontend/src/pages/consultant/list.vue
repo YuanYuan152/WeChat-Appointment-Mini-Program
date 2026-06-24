@@ -498,7 +498,7 @@ onPullDownRefresh(async () => {
 /* 顶级设计系统变量与重置 */
 .page-consultant-list {
   min-height: 100vh;
-  background-color: #F4F6F8;
+  background-color: #F7F5F2;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   padding-bottom: env(safe-area-inset-bottom);
 }
@@ -510,13 +510,12 @@ onPullDownRefresh(async () => {
   left: 0;
   right: 0;
   z-index: 100;
-  background: #ffffff;
-  box-shadow: 0 4rpx 24rpx rgba(0, 0, 0, 0.04);
+  background: #F7F5F2;
 }
 
 /* 自定义导航栏 */
 .custom-navbar {
-  background: #0D9488;
+  background: linear-gradient(135deg, #3D5A4E 0%, #4A6B5D 100%);
 }
 
 .navbar-content {
@@ -535,8 +534,9 @@ onPullDownRefresh(async () => {
 
 /* 搜索栏 */
 .search-section {
-  background: #0D9488;
+  background: linear-gradient(135deg, #3D5A4E 0%, #4A6B5D 100%);
   padding: 16rpx 32rpx 32rpx;
+  border-radius: 0 0 48rpx 48rpx;
 }
 
 .search-bar-modern {
@@ -586,6 +586,9 @@ onPullDownRefresh(async () => {
   position: relative;
   background: #ffffff;
   z-index: 1;
+  margin: 0 32rpx;
+  border-radius: 32rpx 32rpx 0 0;
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.02);
 }
 
 .filter-bar {
@@ -595,6 +598,7 @@ onPullDownRefresh(async () => {
   position: relative;
   z-index: 2;
   background: #ffffff;
+  border-radius: 32rpx 32rpx 0 0;
 }
 
 .filter-item {
@@ -627,11 +631,11 @@ onPullDownRefresh(async () => {
 }
 
 .filter-item.active .filter-text {
-  color: #0D9488;
+  color: #3D5A4E;
 }
 
 .filter-item.active .filter-chevron {
-  border-top-color: #0D9488;
+  border-top-color: #3D5A4E;
 }
 
 /* 筛选下拉面板 */
@@ -688,13 +692,13 @@ onPullDownRefresh(async () => {
 }
 
 .dropdown-item.selected {
-  color: #0D9488;
+  color: #3D5A4E;
   font-weight: 600;
-  background: #F0FDFA;
+  background: #F0EDE8;
 }
 
 .check-icon {
-  color: #0D9488;
+  color: #3D5A4E;
   font-size: 32rpx;
   font-weight: bold;
 }
@@ -732,9 +736,9 @@ onPullDownRefresh(async () => {
 }
 
 .panel-tag.active {
-  background: #F0FDFA;
-  color: #0D9488;
-  border-color: #0D9488;
+  background: #F0EDE8;
+  color: #3D5A4E;
+  border-color: #3D5A4E;
   font-weight: 600;
 }
 
@@ -760,7 +764,7 @@ onPullDownRefresh(async () => {
   flex: 1;
   height: 80rpx;
   line-height: 80rpx;
-  background: #0D9488;
+  background: #3D5A4E;
   color: #ffffff;
   font-size: 30rpx;
   font-weight: 600;
@@ -885,8 +889,8 @@ onPullDownRefresh(async () => {
 
 .doc-tag {
   font-size: 22rpx;
-  color: #0D9488;
-  background: #F0FDFA;
+  color: #3D5A4E;
+  background: #F0EDE8;
   padding: 6rpx 16rpx;
   border-radius: 100rpx;
 }
@@ -947,7 +951,7 @@ onPullDownRefresh(async () => {
 }
 
 .book-btn {
-  background: #0D9488;
+  background: #3D5A4E;
   color: #ffffff;
   font-size: 22rpx;
   font-weight: 600;
@@ -956,7 +960,7 @@ onPullDownRefresh(async () => {
   padding: 0 28rpx;
   border-radius: 100rpx;
   margin: 0;
-  box-shadow: 0 4rpx 12rpx rgba(13, 148, 136, 0.2);
+  box-shadow: 0 4rpx 12rpx rgba(61, 90, 78, 0.25);
 }
 
 .book-btn::after {

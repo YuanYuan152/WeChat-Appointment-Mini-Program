@@ -132,6 +132,8 @@ export const API_ENDPOINTS = {
     scheduleLeaveRequest: (id: number | string) => `/api/mini/counselor/schedules/${id}/leave-request`,
     consultations: '/api/mini/counselor/consultations',
     caseRecords: '/api/mini/counselor/case-records',
+    caseRecordAmendmentRequest: (id: number | string) =>
+      `/api/mini/counselor/case-records/${id}/amendment-requests`,
     profile: '/api/mini/counselor/profile',
     profileAuthenticityCommitment: '/api/mini/counselor/profile/authenticity-commitment',
     stats: '/api/mini/counselor/stats',
@@ -170,6 +172,11 @@ export const API_ENDPOINTS = {
     refundExemptions: '/api/mini/admin/refund-exemptions',
     refundExemptionApprove: (id: number | string) => `/api/mini/admin/refund-exemptions/${id}/approve`,
     refundExemptionReject: (id: number | string) => `/api/mini/admin/refund-exemptions/${id}/reject`,
+    caseRecordAmendments: '/api/mini/admin/case-record-amendments',
+    caseRecordAmendmentApprove: (id: number | string) =>
+      `/api/mini/admin/case-record-amendments/${id}/approve`,
+    caseRecordAmendmentReject: (id: number | string) =>
+      `/api/mini/admin/case-record-amendments/${id}/reject`,
     leaveRequests: '/api/mini/admin/leave-requests',
     leaveRequestDetail: (id: number | string) => `/api/mini/admin/leave-requests/${id}`,
     leaveRequestApprove: (id: number | string) => `/api/mini/admin/leave-requests/${id}/approve`,

@@ -11,7 +11,13 @@
         </view>
       </view>
 
-      <view class="readonly-banner">
+      <view v-if="record.AmendmentStatus === 'PENDING'" class="pending-banner">
+        <text>修改申请审核中，请等待管理员处理</text>
+      </view>
+      <view v-else-if="record.AmendmentStatus === 'REJECTED'" class="rejected-banner">
+        <text>上次修改申请已驳回{{ record.AmendmentRejectReason ? `：${record.AmendmentRejectReason}` : '' }}</text>
+      </view>
+      <view v-else class="readonly-banner">
         <text>咨询记录已提交，仅可查看不可修改</text>
       </view>
 
@@ -49,6 +55,10 @@
         </view>
       </view>
     </view>
+
+    <view v-if="record && canApplyAmendment" class="footer-bar">
+      <button class="apply-btn" @tap="goApplyAmendment">申请修改</button>
+    </view>
   </view>
 </template>
 
@@ -70,13 +80,20 @@ interface CaseRecordView {
   PhotoUrls?: string[]
   CreatedAt?: string
   UpdatedAt?: string
+  AmendmentStatus?: string
+  AmendmentRejectReason?: string
 }
 
 const loading = ref(true)
 const errorMsg = ref('')
 const record = ref<CaseRecordView | null>(null)
+const recordId = ref(0)
 
 const photoUrls = computed(() => record.value?.PhotoUrls || [])
+const canApplyAmendment = computed(() => {
+  const status = record.value?.AmendmentStatus
+  return !status || status === 'REJECTED' || status === 'APPROVED'
+})
 
 const formatDT = (dt?: string) => (dt ? dt.slice(0, 16).replace('T', ' ') : '—')
 
@@ -87,8 +104,15 @@ const previewPhoto = (idx: number) => {
   })
 }
 
-const loadRecord = async (recordId: number) => {
-  if (!recordId) {
+const goApplyAmendment = () => {
+  if (!recordId.value) return
+  uni.navigateTo({
+    url: `/pages/counselor/case-record/edit?mode=amendment&recordId=${recordId.value}`,
+  })
+}
+
+const loadRecord = async (rid: number) => {
+  if (!rid) {
     errorMsg.value = '缺少记录编号'
     loading.value = false
     return
@@ -97,7 +121,7 @@ const loadRecord = async (recordId: number) => {
   errorMsg.value = ''
   try {
     const res = await httpV2.get<CaseRecordView>(
-      `${API_ENDPOINTS.counselor.caseRecords}/${recordId}`,
+      `${API_ENDPOINTS.counselor.caseRecords}/${rid}`,
       undefined,
       { showLoading: false, showError: false },
     )
@@ -106,7 +130,7 @@ const loadRecord = async (recordId: number) => {
       return
     }
     if (!caseRecordHasContent(res.data)) {
-      uni.redirectTo({ url: `/pages/counselor/case-record/edit?recordId=${recordId}&consultationId=${res.data.ConsultationId}` })
+      uni.redirectTo({ url: `/pages/counselor/case-record/edit?recordId=${rid}&consultationId=${res.data.ConsultationId}` })
       return
     }
     record.value = res.data
@@ -118,12 +142,13 @@ const loadRecord = async (recordId: number) => {
 }
 
 onLoad((opts) => {
-  loadRecord(Number(opts?.recordId || 0))
+  recordId.value = Number(opts?.recordId || 0)
+  loadRecord(recordId.value)
 })
 </script>
 
 <style scoped>
-.page-view { min-height: 100vh; background: #F4F6F8; padding: 32rpx; padding-bottom: 48rpx; }
+.page-view { min-height: 100vh; background: #F4F6F8; padding: 32rpx; padding-bottom: 160rpx; }
 .empty { text-align: center; padding: 120rpx 32rpx; color: #9CA3AF; font-size: 28rpx; }
 .meta-card {
   background: #fff;
@@ -144,6 +169,47 @@ onLoad((opts) => {
   font-size: 24rpx;
   color: #92400E;
   text-align: center;
+}
+.pending-banner {
+  background: #EFF6FF;
+  border: 1rpx solid #BFDBFE;
+  border-radius: 12rpx;
+  padding: 16rpx 20rpx;
+  margin-bottom: 20rpx;
+  font-size: 24rpx;
+  color: #1D4ED8;
+  text-align: center;
+}
+.rejected-banner {
+  background: #FEF2F2;
+  border: 1rpx solid #FECACA;
+  border-radius: 12rpx;
+  padding: 16rpx 20rpx;
+  margin-bottom: 20rpx;
+  font-size: 24rpx;
+  color: #B91C1C;
+  text-align: center;
+}
+.footer-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 24rpx 32rpx;
+  padding-bottom: calc(24rpx + env(safe-area-inset-bottom));
+  background: #fff;
+  box-shadow: 0 -4rpx 20rpx rgba(0,0,0,0.06);
+}
+.apply-btn {
+  width: 100%;
+  height: 88rpx;
+  line-height: 88rpx;
+  background: #3D5A4E;
+  color: #fff;
+  border-radius: 16rpx;
+  font-size: 30rpx;
+  font-weight: 600;
+  border: none;
 }
 .form-section {
   background: #fff;

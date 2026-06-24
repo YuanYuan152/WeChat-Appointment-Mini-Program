@@ -43,16 +43,17 @@ const goJixinli = () => {
 <style scoped>
 .page-about {
   min-height: 100vh;
-  background: #F4F6F8;
+  background: #F7F5F2;
   padding: 32rpx;
   padding-bottom: 60rpx;
 }
 
 .hero-card {
-  background: linear-gradient(135deg, #0D9488 0%, #14B8A6 100%);
+  background: linear-gradient(135deg, #3D5A4E 0%, #2F4A40 100%);
   border-radius: 28rpx;
   padding: 48rpx 36rpx;
   margin-bottom: 24rpx;
+  box-shadow: 0 8rpx 32rpx rgba(61, 90, 78, 0.15);
 }
 
 .hero-title {
@@ -66,15 +67,15 @@ const goJixinli = () => {
   display: block;
   margin-top: 12rpx;
   font-size: 28rpx;
-  color: rgba(255, 255, 255, 0.9);
+  color: rgba(255, 255, 255, 0.88);
   font-weight: 500;
 }
 
 .info-card {
   background: #fff;
-  border-radius: 28rpx;
+  border-radius: 24rpx;
   padding: 40rpx 32rpx;
-  box-shadow: 0 4rpx 16rpx rgba(15, 23, 42, 0.05);
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.03);
   margin-bottom: 24rpx;
 }
 
@@ -90,14 +91,14 @@ const goJixinli = () => {
   display: block;
   font-size: 30rpx;
   font-weight: 700;
-  color: #0D9488;
+  color: #3D5A4E;
   margin-bottom: 16rpx;
 }
 
 .info-paragraph {
   display: block;
   font-size: 28rpx;
-  color: #374151;
+  color: #6B6560;
   line-height: 1.85;
   margin-bottom: 16rpx;
 }
@@ -111,31 +112,33 @@ const goJixinli = () => {
   align-items: center;
   justify-content: space-between;
   background: #fff;
-  border-radius: 28rpx;
+  border-radius: 24rpx;
   padding: 32rpx;
-  box-shadow: 0 4rpx 16rpx rgba(15, 23, 42, 0.05);
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.03);
+  border: 1rpx solid #E8E4DE;
 }
 
 .link-card:active {
-  opacity: 0.9;
+  opacity: 0.92;
+  background: #F0EDE8;
 }
 
 .link-title {
   display: block;
   font-size: 30rpx;
   font-weight: 700;
-  color: #1F2937;
+  color: #2C2C2C;
 }
 
 .link-desc {
   display: block;
   margin-top: 8rpx;
   font-size: 24rpx;
-  color: #6B7280;
+  color: #8A8A8A;
 }
 
 .link-arrow {
   font-size: 40rpx;
-  color: #D1D5DB;
+  color: #3D5A4E;
 }
 </style>

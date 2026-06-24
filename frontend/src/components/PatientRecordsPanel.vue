@@ -191,13 +191,17 @@
 
         <view class="cancel-btns">
 
-          <button class="cancel-action-btn back" @tap="closeCancelModal">返回</button>
+          <view class="cancel-btn-row">
 
-          <button class="cancel-action-btn exempt" :disabled="cancelTarget?.exemptionStatus === 'PENDING'" @tap="goExemption">
+            <button class="cancel-action-btn back" @tap="closeCancelModal">返回</button>
 
-            {{ cancelTarget?.exemptionStatus === 'PENDING' ? '审核中' : '申请豁免' }}
+            <button class="cancel-action-btn exempt" :disabled="cancelTarget?.exemptionStatus === 'PENDING'" @tap="goExemption">
 
-          </button>
+              {{ cancelTarget?.exemptionStatus === 'PENDING' ? '审核中' : '申请豁免' }}
+
+            </button>
+
+          </view>
 
           <button
 
@@ -578,11 +582,11 @@ defineExpose({ refresh: fetchList })
 
 <style scoped>
 
-.page-records { padding: 32rpx; min-height: 100vh; background: #F4F6F8; }
+.page-records { padding: 32rpx; min-height: 100vh; background: #F7F5F2; }
 
 .page-header { margin-bottom: 24rpx; }
 
-.page-title { font-size: 40rpx; font-weight: 700; color: #1F2937; }
+.page-title { font-size: 40rpx; font-weight: 800; color: #1F2937; }
 
 .filter-bar { display: flex; gap: 16rpx; margin-top: 24rpx; flex-wrap: wrap; }
 
@@ -594,7 +598,7 @@ defineExpose({ refresh: fetchList })
 
 }
 
-.filter-tab.active { background: #0D9488; color: #fff; border-color: #0D9488; }
+.filter-tab.active { background: #3D5A4E; color: #fff; border-color: #3D5A4E; }
 
 .empty-state { text-align: center; padding: 120rpx 0; }
 
@@ -604,15 +608,15 @@ defineExpose({ refresh: fetchList })
 
 .record-card {
 
-  background: #fff; border-radius: 24rpx; padding: 32rpx;
+  background: #fff; border-radius: 32rpx; padding: 32rpx;
 
-  box-shadow: 0 4rpx 16rpx rgba(0,0,0,0.06);
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.02);
 
 }
 
-.record-card--done { background: #F9FAFB; opacity: 0.85; }
+.record-card--done { background: #FAFAF8; opacity: 0.92; }
 
-.record-card--cancelled { background: #F9FAFB; opacity: 0.75; }
+.record-card--cancelled { background: #FAFAF8; opacity: 0.85; }
 
 .record-header { display: flex; align-items: flex-start; gap: 20rpx; }
 
@@ -634,7 +638,7 @@ defineExpose({ refresh: fetchList })
 
 }
 
-.status.pending, .status.confirmed, .status.ongoing { color: #0D9488; background: #CCFBF1; }
+.status.pending, .status.confirmed, .status.ongoing { color: #3D5A4E; background: #F0EDE8; }
 
 .status.done { color: #6B7280; background: #E5E7EB; }
 
@@ -660,11 +664,11 @@ defineExpose({ refresh: fetchList })
 }
 .exemption-banner.pending { background: #FFFBEB; border: 1rpx solid #FDE68A; }
 .exemption-banner.rejected { background: #FEF2F2; border: 1rpx solid #FECACA; }
-.exemption-banner.approved { background: #ECFDF5; border: 1rpx solid #A7F3D0; }
+.exemption-banner.approved { background: #F0EDE8; border: 1rpx solid #D4C9BC; }
 .exemption-title { display: block; font-size: 26rpx; font-weight: 700; margin-bottom: 8rpx; }
 .exemption-banner.pending .exemption-title { color: #B45309; }
 .exemption-banner.rejected .exemption-title { color: #B91C1C; }
-.exemption-banner.approved .exemption-title { color: #047857; }
+.exemption-banner.approved .exemption-title { color: #3D5A4E; }
 .exemption-desc { display: block; font-size: 22rpx; color: #6B7280; line-height: 1.6; }
 
 .record-actions {
@@ -693,75 +697,141 @@ defineExpose({ refresh: fetchList })
 
 .cancel-overlay {
 
-  position: fixed; inset: 0; background: rgba(0, 0, 0, 0.45);
-
-  display: flex; align-items: center; justify-content: center;
-
-  padding: 40rpx; z-index: 1000;
-
+  position: fixed;
+  inset: 0;
+  z-index: 10050;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48rpx 32rpx;
+  padding-top: calc(48rpx + env(safe-area-inset-top, 0px));
+  padding-bottom: calc(48rpx + env(safe-area-inset-bottom, 0px));
+  background: rgba(17, 24, 39, 0.45);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
 .cancel-card {
 
-  width: 100%; max-width: 640rpx; background: #fff;
-
-  border-radius: 28rpx; padding: 40rpx 32rpx 32rpx;
-
+  width: 100%;
+  max-width: 640rpx;
+  background: #ffffff;
+  border-radius: 40rpx;
+  padding: 40rpx 40rpx 32rpx;
+  box-shadow: 0 24rpx 64rpx rgba(0, 0, 0, 0.2);
+  box-sizing: border-box;
 }
 
-.cancel-title { display: block; font-size: 36rpx; font-weight: 800; color: #1F2937; text-align: center; }
+.cancel-title {
+  display: block;
+  font-size: 36rpx;
+  font-weight: 800;
+  color: #1F2937;
+  text-align: center;
+}
 
-.cancel-sub { display: block; font-size: 24rpx; color: #9CA3AF; text-align: center; margin: 8rpx 0 28rpx; }
+.cancel-sub {
+  display: block;
+  font-size: 28rpx;
+  color: #6B7280;
+  text-align: center;
+  margin: 8rpx 0 32rpx;
+  line-height: 1.5;
+}
 
 .cancel-info {
 
-  background: #F9FAFB; border-radius: 20rpx; padding: 24rpx; margin-bottom: 32rpx;
-
+  background: #F7F5F2;
+  border-radius: 24rpx;
+  padding: 28rpx 24rpx;
+  margin-bottom: 32rpx;
+  border: 1rpx solid #F0EDE8;
 }
 
 .cancel-row { display: flex; justify-content: space-between; gap: 20rpx; margin-bottom: 20rpx; align-items: flex-start; }
 
 .cancel-row:last-child { margin-bottom: 0; }
 
-.cancel-label { font-size: 26rpx; color: #6B7280; flex-shrink: 0; }
+.cancel-label { font-size: 28rpx; color: #6B7280; font-weight: 500; flex-shrink: 0; }
 
-.cancel-value { font-size: 26rpx; color: #1F2937; font-weight: 600; text-align: right; flex: 1; }
+.cancel-value { font-size: 28rpx; color: #1F2937; font-weight: 600; text-align: right; flex: 1; line-height: 1.5; }
 
-.cancel-value.highlight { color: #0D9488; }
+.cancel-value.highlight { color: #3D5A4E; }
 
-.cancel-value.refund-yes { color: #059669; }
+.cancel-value.refund-yes { color: #3D5A4E; }
 
 .cancel-value.refund-no { color: #DC2626; }
 
 .cancel-reason-box {
 
-  margin-top: 16rpx; padding: 16rpx; background: #FEF2F2;
-
-  border-radius: 12rpx; border: 1rpx solid #FECACA;
+  margin-top: 16rpx;
+  padding: 20rpx;
+  background: #FFFBEB;
+  border-radius: 16rpx;
+  border: 1rpx solid #FDE68A;
 
 }
 
-.cancel-reason-label { display: block; font-size: 22rpx; color: #991B1B; margin-bottom: 6rpx; }
+.cancel-reason-label { display: block; font-size: 24rpx; color: #B45309; font-weight: 600; margin-bottom: 8rpx; }
 
-.cancel-reason-text { display: block; font-size: 24rpx; color: #B91C1C; line-height: 1.6; }
+.cancel-reason-text { display: block; font-size: 26rpx; color: #92400E; line-height: 1.6; }
 
-.cancel-btns { display: flex; gap: 16rpx; }
+.cancel-btns { display: flex; flex-direction: column; gap: 20rpx; }
+
+.cancel-btn-row { display: flex; gap: 20rpx; }
 
 .cancel-action-btn {
 
-  flex: 1; height: 76rpx; line-height: 76rpx; font-size: 26rpx;
-
-  border-radius: 12rpx; margin: 0; padding: 0; border: none;
-
+  flex: 1;
+  height: 88rpx;
+  line-height: 88rpx;
+  font-size: 28rpx;
+  font-weight: 600;
+  border-radius: 100rpx;
+  margin: 0;
+  padding: 0;
+  border: none;
 }
 
 .cancel-action-btn::after { border: none; }
 
-.cancel-action-btn.back { background: #F3F4F6; color: #4B5563; }
+.cancel-action-btn.back {
+  background: #ffffff;
+  color: #4B5563;
+  border: 2rpx solid #E5E7EB;
+  line-height: 84rpx;
+}
 
-.cancel-action-btn.exempt { background: #FFFBEB; color: #B45309; border: 1rpx solid #FDE68A; }
+.cancel-action-btn.exempt {
+  background: #ffffff;
+  color: #3D5A4E;
+  border: 2rpx solid #3D5A4E;
+  line-height: 84rpx;
+}
 
-.cancel-action-btn.confirm { background: #DC2626; color: #fff; }
+.cancel-action-btn.exempt[disabled] {
+  opacity: 0.45;
+  color: #9CA3AF;
+  border-color: #D1D5DB;
+}
+
+.cancel-action-btn.confirm {
+  width: 100%;
+  background: #3D5A4E;
+  color: #ffffff;
+  box-shadow: 0 8rpx 24rpx rgba(61, 90, 78, 0.2);
+}
+
+.cancel-action-btn.confirm[disabled] {
+  background: #D1D5DB;
+  color: #9CA3AF;
+  box-shadow: none;
+}
+
+.cancel-action-btn.confirm:active:not([disabled]) {
+  background: #2F4A40;
+}
 
 </style>
 

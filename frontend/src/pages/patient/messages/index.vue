@@ -225,11 +225,15 @@ const openMessage = async (item: MessageItem) => {
   uni.navigateTo({
     url,
     fail: () => {
-      uni.showToast({
-        title: '页面未编译，请重启 pnpm dev:mp-weixin',
-        icon: 'none',
-        duration: 3000,
-      })
+      if (url.includes('case-record-amendments') || url.includes('refund-exemptions')) {
+        uni.showModal({
+          title: '页面未找到',
+          content: '请重启 pnpm dev:mp-weixin，并在微信开发者工具中点击「编译」刷新后重试。',
+          showCancel: false,
+        })
+        return
+      }
+      uni.navigateTo({ url: `/pages/patient/messages/detail?id=${item.Id}` })
     },
   })
 }
@@ -245,18 +249,19 @@ onShow(async () => {
 <style scoped>
 .page-messages {
   min-height: 100vh;
-  background: #F4F6F8;
+  background: #F7F5F2;
   padding: 28rpx;
   box-sizing: border-box;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
 .toolbar-card {
   position: relative;
   z-index: 20;
   background: #fff;
-  border-radius: 24rpx;
+  border-radius: 32rpx;
   margin-bottom: 24rpx;
-  box-shadow: 0 4rpx 16rpx rgba(15, 23, 42, 0.06);
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.02);
   overflow: visible;
 }
 
@@ -277,7 +282,7 @@ onShow(async () => {
 }
 
 .filter-trigger.active .filter-value {
-  color: #0D9488;
+  color: #3D5A4E;
   font-weight: 700;
 }
 
@@ -328,7 +333,7 @@ onShow(async () => {
 
 .filter-arrow.up {
   transform: rotate(180deg);
-  color: #0D9488;
+  color: #3D5A4E;
 }
 
 .filter-mask {
@@ -369,7 +374,7 @@ onShow(async () => {
 }
 
 .filter-option.selected .option-label {
-  color: #0D9488;
+  color: #3D5A4E;
   font-weight: 700;
 }
 
@@ -398,7 +403,7 @@ onShow(async () => {
 
 .check-icon {
   font-size: 28rpx;
-  color: #0D9488;
+  color: #3D5A4E;
   font-weight: 700;
 }
 
@@ -420,16 +425,16 @@ onShow(async () => {
 .search-clear {
   flex-shrink: 0;
   font-size: 26rpx;
-  color: #0D9488;
+  color: #3D5A4E;
   padding: 8rpx 12rpx;
 }
 
 .empty-state {
   background: #fff;
-  border-radius: 28rpx;
+  border-radius: 32rpx;
   padding: 80rpx 40rpx;
   text-align: center;
-  box-shadow: 0 4rpx 16rpx rgba(15, 23, 42, 0.06);
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.02);
 }
 
 .empty-title {
@@ -452,15 +457,15 @@ onShow(async () => {
   align-items: center;
   gap: 16rpx;
   background: #fff;
-  border-radius: 24rpx;
+  border-radius: 32rpx;
   padding: 28rpx;
   margin-bottom: 18rpx;
-  box-shadow: 0 4rpx 16rpx rgba(15, 23, 42, 0.06);
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.02);
   border-left: 8rpx solid transparent;
 }
 
 .message-card.unread {
-  border-left-color: #0D9488;
+  border-left-color: #3D5A4E;
 }
 
 .msg-main {
@@ -479,8 +484,8 @@ onShow(async () => {
   flex-shrink: 0;
   padding: 4rpx 12rpx;
   border-radius: 8rpx;
-  background: #F0FDF4;
-  color: #059669;
+  background: #F0EDE8;
+  color: #3D5A4E;
   font-size: 20rpx;
   font-weight: 600;
 }
