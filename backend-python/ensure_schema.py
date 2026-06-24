@@ -33,6 +33,18 @@ APP_REFUND_EXEMPTION_COLUMNS = {
 
 APP_CASE_RECORD_COLUMNS = {
     "PhotoUrls": "NVARCHAR(MAX) NULL",
+    "RiskAssessment": "NVARCHAR(MAX) NULL",
+    "HeaderInfo": "NVARCHAR(MAX) NULL",
+}
+
+APP_CASE_RECORD_REVISION_COLUMNS = {
+    "RiskAssessment": "NVARCHAR(MAX) NULL",
+    "HeaderInfo": "NVARCHAR(MAX) NULL",
+}
+
+APP_CASE_RECORD_AMENDMENT_COLUMNS = {
+    "RiskAssessment": "NVARCHAR(MAX) NULL",
+    "HeaderInfo": "NVARCHAR(MAX) NULL",
 }
 
 APP_COUNSELOR_PROFILE_COLUMNS = {
@@ -90,12 +102,49 @@ def ensure_case_record_columns():
     missing = [(name, ddl) for name, ddl in APP_CASE_RECORD_COLUMNS.items() if name not in existing]
     if not missing:
         print("[OK] AppCaseRecord columns already complete")
-        return
+    else:
+        with engine.begin() as conn:
+            for name, ddl in missing:
+                conn.execute(text(f"ALTER TABLE [dbo].[AppCaseRecord] ADD [{name}] {ddl}"))
+                print(f"[OK] Added AppCaseRecord.{name}")
 
-    with engine.begin() as conn:
-        for name, ddl in missing:
-            conn.execute(text(f"ALTER TABLE [dbo].[AppCaseRecord] ADD [{name}] {ddl}"))
-            print(f"[OK] Added AppCaseRecord.{name}")
+    if inspector.has_table("AppCaseRecordRevision"):
+        existing_rev = {column["name"] for column in inspector.get_columns("AppCaseRecordRevision")}
+        missing_rev = [
+            (name, ddl)
+            for name, ddl in APP_CASE_RECORD_REVISION_COLUMNS.items()
+            if name not in existing_rev
+        ]
+        if not missing_rev:
+            print("[OK] AppCaseRecordRevision columns already complete")
+        else:
+            with engine.begin() as conn:
+                for name, ddl in missing_rev:
+                    conn.execute(
+                        text(f"ALTER TABLE [dbo].[AppCaseRecordRevision] ADD [{name}] {ddl}")
+                    )
+                    print(f"[OK] Added AppCaseRecordRevision.{name}")
+
+    if inspector.has_table("AppCaseRecordAmendmentRequest"):
+        existing_amd = {
+            column["name"] for column in inspector.get_columns("AppCaseRecordAmendmentRequest")
+        }
+        missing_amd = [
+            (name, ddl)
+            for name, ddl in APP_CASE_RECORD_AMENDMENT_COLUMNS.items()
+            if name not in existing_amd
+        ]
+        if not missing_amd:
+            print("[OK] AppCaseRecordAmendmentRequest columns already complete")
+        else:
+            with engine.begin() as conn:
+                for name, ddl in missing_amd:
+                    conn.execute(
+                        text(
+                            f"ALTER TABLE [dbo].[AppCaseRecordAmendmentRequest] ADD [{name}] {ddl}"
+                        )
+                    )
+                    print(f"[OK] Added AppCaseRecordAmendmentRequest.{name}")
 
 
 def ensure_refund_exemption_columns():

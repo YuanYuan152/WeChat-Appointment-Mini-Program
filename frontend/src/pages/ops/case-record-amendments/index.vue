@@ -80,12 +80,28 @@
                 </view>
               </view>
 
-              <view
-                v-if="detail.proposed.photoUrls?.length || detail.current.photoUrls?.length"
-                class="diff-section"
-              >
-                <text class="diff-title">相关照片</text>
-                <text class="diff-label">原 {{ detail.current.photoUrls?.length || 0 }} 张 → 拟 {{ detail.proposed.photoUrls?.length || 0 }} 张</text>
+              <view v-if="headerDiffChanged" class="diff-section">
+                <text class="diff-title">表头信息</text>
+                <view class="diff-block">
+                  <text class="diff-label">原内容</text>
+                  <text class="diff-text old">{{ headerDiffCurrent }}</text>
+                </view>
+                <view class="diff-block proposed">
+                  <text class="diff-label">拟修改为</text>
+                  <text class="diff-text">{{ headerDiffProposed }}</text>
+                </view>
+              </view>
+
+              <view v-if="riskDiffChanged" class="diff-section">
+                <text class="diff-title">个案风险评估表</text>
+                <view class="diff-block">
+                  <text class="diff-label">原内容</text>
+                  <text class="diff-text old">{{ riskDiffCurrent }}</text>
+                </view>
+                <view class="diff-block proposed">
+                  <text class="diff-label">拟修改为</text>
+                  <text class="diff-text">{{ riskDiffProposed }}</text>
+                </view>
               </view>
 
               <view v-if="detail.status === 'REJECTED' && detail.rejectReason" class="reject-box">
@@ -111,12 +127,25 @@ import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
+import {
+  CASE_RECORD_FIELD_LABELS,
+  formatRiskAssessmentText,
+  normalizeRiskAssessment,
+  type RiskAssessmentData,
+} from '@/constants/caseRecordRiskAssessment'
+import {
+  formatHeaderInfoText,
+  normalizeHeaderInfo,
+  type CaseRecordHeaderInfo,
+} from '@/constants/caseRecordHeader'
 
 interface Snapshot {
   subjective?: string
   objective?: string
   assessment?: string
   plan?: string
+  riskAssessment?: RiskAssessmentData | null
+  headerInfo?: CaseRecordHeaderInfo | null
   photoUrls?: string[]
 }
 
@@ -137,10 +166,10 @@ interface AmendmentItem {
 }
 
 const FIELD_LABELS: { key: keyof Snapshot; label: string }[] = [
-  { key: 'subjective', label: '患者情况记录（主观陈述）' },
-  { key: 'objective', label: '客观观察' },
-  { key: 'assessment', label: '评估分析' },
-  { key: 'plan', label: '计划方向' },
+  { key: 'subjective', label: CASE_RECORD_FIELD_LABELS.subjective },
+  { key: 'objective', label: CASE_RECORD_FIELD_LABELS.objective },
+  { key: 'assessment', label: CASE_RECORD_FIELD_LABELS.assessment },
+  { key: 'plan', label: CASE_RECORD_FIELD_LABELS.plan },
 ]
 
 const tabs = [
@@ -171,6 +200,22 @@ const diffFields = computed(() => {
     proposed: (proposed[key] as string) || '',
   }))
 })
+
+const riskDiffCurrent = computed(() =>
+  formatRiskAssessmentText(normalizeRiskAssessment(detail.value?.current.riskAssessment)) || '—',
+)
+const riskDiffProposed = computed(() =>
+  formatRiskAssessmentText(normalizeRiskAssessment(detail.value?.proposed.riskAssessment)) || '—',
+)
+const riskDiffChanged = computed(() => riskDiffCurrent.value !== riskDiffProposed.value)
+
+const headerDiffCurrent = computed(() =>
+  formatHeaderInfoText(normalizeHeaderInfo(detail.value?.current.headerInfo)) || '—',
+)
+const headerDiffProposed = computed(() =>
+  formatHeaderInfoText(normalizeHeaderInfo(detail.value?.proposed.headerInfo)) || '—',
+)
+const headerDiffChanged = computed(() => headerDiffCurrent.value !== headerDiffProposed.value)
 
 const formatTime = (value?: string) => {
   if (!value) return '-'

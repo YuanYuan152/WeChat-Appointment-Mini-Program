@@ -6,7 +6,29 @@ from typing import Any, Dict, List, Optional
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from models import AppCaseRecord, AppCaseRecordRevision, AppConsultation, AppSchedule
+from case_record_risk_config import (
+    RISK_ITEM_IDS,
+    RISK_ITEM_BY_ID,
+    VALID_CHOICES,
+    risk_item_allowed_choices,
+    risk_item_note_required,
+    normalize_risk_choice,
+)
+from case_record_header_config import (
+    empty_header_info,
+    header_info_is_complete,
+    normalize_header_info,
+    validate_header_info,
+)
+from models import (
+    AppAccount,
+    AppCaseRecord,
+    AppCaseRecordRevision,
+    AppConsultation,
+    AppCounselorProfile,
+    AppOrder,
+    AppSchedule,
+)
 
 
 def encode_photo_urls(urls: Optional[List[str]]) -> Optional[str]:
@@ -28,12 +50,177 @@ def decode_photo_urls(raw: Optional[str]) -> List[str]:
     return []
 
 
+def encode_risk_assessment(data: Optional[Dict[str, Any]]) -> Optional[str]:
+    if not data:
+        return None
+    return json.dumps(data, ensure_ascii=False)
+
+
+def decode_risk_assessment(raw: Optional[str]) -> Optional[Dict[str, Any]]:
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+        if isinstance(data, dict):
+            return data
+    except (TypeError, ValueError, json.JSONDecodeError):
+        pass
+    return None
+
+
+def risk_assessment_is_complete(data: Optional[Dict[str, Any]]) -> bool:
+    if not data or not isinstance(data, dict):
+        return False
+    items = data.get("items")
+    if not isinstance(items, dict):
+        return False
+    for item_id in RISK_ITEM_IDS:
+        val = items.get(item_id)
+        if not isinstance(val, dict):
+            return False
+        choice = normalize_risk_choice(str(val.get("choice") or "").strip().upper(), item_id)
+        if choice not in risk_item_allowed_choices(item_id):
+            return False
+        if risk_item_note_required(item_id, choice) and not str(val.get("note") or "").strip():
+            return False
+    return True
+
+
+def validate_risk_assessment(data: Optional[Dict[str, Any]]) -> None:
+    if not risk_assessment_is_complete(data):
+        if not data or not isinstance(data, dict) or not isinstance(data.get("items"), dict):
+            raise HTTPException(status_code=400, detail="请完成个案风险评估表")
+        items = data["items"]
+        for item_id in RISK_ITEM_IDS:
+            cfg = RISK_ITEM_BY_ID[item_id]
+            val = items.get(item_id) or {}
+            choice = normalize_risk_choice(str(val.get("choice") or "").strip().upper(), item_id)
+            if choice not in risk_item_allowed_choices(item_id):
+                raise HTTPException(status_code=400, detail=f"请选择：{cfg['label']}")
+            if risk_item_note_required(item_id, choice) and not str(val.get("note") or "").strip():
+                raise HTTPException(status_code=400, detail=f"请填写：{cfg['label']}说明")
+        raise HTTPException(status_code=400, detail="请完成个案风险评估表")
+
+
+def encode_header_info(data: Optional[Dict[str, Any]]) -> Optional[str]:
+    if not data:
+        return None
+    normalized = normalize_header_info(data)
+    if not any(normalized.values()):
+        return None
+    return json.dumps(normalized, ensure_ascii=False)
+
+
+def decode_header_info(raw: Optional[str]) -> Optional[Dict[str, str]]:
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+        if isinstance(data, dict):
+            return normalize_header_info(data)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        pass
+    return None
+
+
+def _dt_parts(dt: Optional[datetime]) -> Dict[str, str]:
+    if not dt:
+        return {"year": "", "month": "", "day": "", "hour": "", "minute": ""}
+    return {
+        "year": str(dt.year),
+        "month": str(dt.month),
+        "day": str(dt.day),
+        "hour": str(dt.hour).zfill(2),
+        "minute": str(dt.minute).zfill(2),
+    }
+
+
+def _resolve_consult_center_id(
+    schedule: Optional[AppSchedule],
+    order: Optional[AppOrder],
+) -> Optional[str]:
+    from schedule_meta import parse_center_id
+
+    if schedule and schedule.Note:
+        center_id = parse_center_id(schedule.Note)
+        if center_id:
+            return center_id
+    if order and order.Description:
+        for part in str(order.Description).split("|"):
+            if part.strip().lower().startswith("center:"):
+                return part.split(":", 1)[1].strip()
+    return None
+
+
+def _session_number(
+    db: Session,
+    consultation: AppConsultation,
+) -> str:
+    rows = (
+        db.query(AppConsultation)
+        .filter(
+            AppConsultation.PatientId == consultation.PatientId,
+            AppConsultation.CounselorId == consultation.CounselorId,
+            AppConsultation.Status.in_(["CONFIRMED", "ONGOING", "DONE"]),
+        )
+        .order_by(AppConsultation.StartTime.asc(), AppConsultation.Id.asc())
+        .all()
+    )
+    for idx, row in enumerate(rows, start=1):
+        if row.Id == consultation.Id:
+            return str(idx)
+    return str(len(rows) + 1)
+
+
+def build_default_header_info(
+    db: Session,
+    consultation: AppConsultation,
+    schedule: Optional[AppSchedule],
+    counselor_id: int,
+) -> Dict[str, str]:
+    from schedule_meta import center_display_name
+
+    patient = db.query(AppAccount).filter(AppAccount.Id == consultation.PatientId).first()
+    counselor_profile = (
+        db.query(AppCounselorProfile)
+        .filter(AppCounselorProfile.AccountId == counselor_id)
+        .first()
+    )
+    order = (
+        db.query(AppOrder).filter(AppOrder.Id == consultation.OrderId).first()
+        if consultation.OrderId
+        else None
+    )
+    start_dt = (schedule.StartTime if schedule else None) or consultation.StartTime
+    end_dt = (schedule.EndTime if schedule else None) or consultation.EndTime
+    start_parts = _dt_parts(start_dt)
+    end_parts = _dt_parts(end_dt)
+    center_id = _resolve_consult_center_id(schedule, order)
+
+    header = empty_header_info()
+    header["code"] = str(patient.Id) if patient else ""
+    header["gender"] = (patient.Gender or "").strip() if patient else ""
+    header["consult_method"] = center_display_name(center_id) or ""
+    header["session_number"] = _session_number(db, consultation)
+    header["start_year"] = start_parts["year"]
+    header["start_month"] = start_parts["month"]
+    header["start_day"] = start_parts["day"]
+    header["start_hour"] = start_parts["hour"]
+    header["start_minute"] = start_parts["minute"]
+    header["end_hour"] = end_parts["hour"]
+    header["end_minute"] = end_parts["minute"]
+    header["counselor_signature"] = (counselor_profile.Name or "").strip() if counselor_profile else ""
+    return header
+
+
 def snapshot_case_record(record: AppCaseRecord) -> Dict[str, Any]:
     return {
         "subjective": record.Subjective,
         "objective": record.Objective,
         "assessment": record.Assessment,
         "plan": record.Plan,
+        "risk_assessment": decode_risk_assessment(record.RiskAssessment),
+        "header_info": decode_header_info(record.HeaderInfo),
         "photo_urls": decode_photo_urls(record.PhotoUrls),
     }
 
@@ -53,6 +240,8 @@ def save_case_record_revision(
             Objective=record.Objective,
             Assessment=record.Assessment,
             Plan=record.Plan,
+            RiskAssessment=record.RiskAssessment,
+            HeaderInfo=record.HeaderInfo,
             PhotoUrls=record.PhotoUrls,
             RevisedAt=datetime.utcnow(),
             RevisedBy=revised_by,
@@ -66,13 +255,16 @@ def validate_case_record_required_fields(
     objective: Optional[str] = None,
     assessment: Optional[str] = None,
     plan: Optional[str] = None,
+    risk_assessment: Optional[Dict[str, Any]] = None,
+    header_info: Optional[Dict[str, Any]] = None,
 ) -> None:
-    """四项文字内容为必填，照片可选。"""
+    """表头、四项文字内容与风险评估表为必填。"""
+    validate_header_info(header_info)
     labels = {
-        "subjective": "患者情况记录（主观陈述）",
-        "objective": "客观观察",
-        "assessment": "评估分析",
-        "plan": "计划方向",
+        "subjective": "来访者的主观描述",
+        "objective": "对来访者客观描述",
+        "assessment": "咨询师对个案的风险等级评估、以及对来访者的问题和咨询过程的评估",
+        "plan": "本次咨询要点及处理",
     }
     values = {
         "subjective": subjective,
@@ -83,6 +275,7 @@ def validate_case_record_required_fields(
     missing = [labels[key] for key, val in values.items() if not (val or "").strip()]
     if missing:
         raise HTTPException(status_code=400, detail=f"请填写：{'、'.join(missing)}")
+    validate_risk_assessment(risk_assessment)
 
 
 def reject_if_case_record_locked(record: Optional[AppCaseRecord]) -> None:
@@ -100,6 +293,8 @@ def case_record_has_content(record: Optional[AppCaseRecord]) -> bool:
         or (record.Objective or "").strip()
         or (record.Assessment or "").strip()
         or (record.Plan or "").strip()
+        or risk_assessment_is_complete(decode_risk_assessment(record.RiskAssessment))
+        or header_info_is_complete(decode_header_info(record.HeaderInfo))
         or photo_count > 0
     )
 
@@ -111,6 +306,10 @@ def apply_case_record_fields(
     objective: Optional[str] = None,
     assessment: Optional[str] = None,
     plan: Optional[str] = None,
+    risk_assessment: Optional[Dict[str, Any]] = None,
+    risk_assessment_set: bool = False,
+    header_info: Optional[Dict[str, Any]] = None,
+    header_info_set: bool = False,
     photo_urls: Optional[List[str]] = None,
     photo_urls_set: bool = False,
 ) -> None:
@@ -122,6 +321,10 @@ def apply_case_record_fields(
         record.Assessment = assessment
     if plan is not None:
         record.Plan = plan
+    if risk_assessment_set:
+        record.RiskAssessment = encode_risk_assessment(risk_assessment)
+    if header_info_set:
+        record.HeaderInfo = encode_header_info(header_info)
     if photo_urls_set:
         record.PhotoUrls = encode_photo_urls(photo_urls)
 

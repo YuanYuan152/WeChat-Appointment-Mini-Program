@@ -22,37 +22,37 @@
       </view>
 
       <view class="form-section">
-        <text class="form-section-title">患者情况记录（主观陈述）</text>
+        <CaseRecordHeaderForm :model-value="headerInfo" readonly />
+      </view>
+
+      <view class="form-section">
+        <text class="form-section-title">来访者的主观描述</text>
+        <text class="form-hint">{{ CASE_RECORD_SECTION_HINTS.subjective }}</text>
         <text class="form-text readonly">{{ record.Subjective || '—' }}</text>
       </view>
 
       <view class="form-section">
-        <text class="form-section-title">客观观察</text>
+        <text class="form-section-title">对来访者客观描述</text>
+        <text class="form-hint">{{ CASE_RECORD_SECTION_HINTS.objective }}</text>
         <text class="form-text readonly">{{ record.Objective || '—' }}</text>
       </view>
 
       <view class="form-section">
-        <text class="form-section-title">评估分析</text>
+        <text class="form-section-title">咨询师对个案的风险等级评估、以及对来访者的问题和咨询过程的评估</text>
         <text class="form-text readonly">{{ record.Assessment || '—' }}</text>
       </view>
 
       <view class="form-section">
-        <text class="form-section-title">计划方向</text>
+        <text class="form-section-title">本次咨询要点及处理</text>
+        <text class="form-hint">{{ CASE_RECORD_SECTION_HINTS.plan }}</text>
         <text class="form-text readonly">{{ record.Plan || '—' }}</text>
       </view>
 
-      <view v-if="photoUrls.length" class="form-section">
-        <text class="form-section-title">相关照片</text>
-        <view class="photo-grid">
-          <image
-            v-for="(url, idx) in photoUrls"
-            :key="url"
-            class="photo-img"
-            :src="fixImageUrl(url)"
-            mode="aspectFill"
-            @tap="previewPhoto(idx)"
-          />
-        </view>
+      <view class="form-section">
+        <CaseRecordRiskForm
+          :model-value="riskAssessment"
+          readonly
+        />
       </view>
     </view>
 
@@ -66,9 +66,16 @@
 import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { httpV2 } from '@/utils/http'
-import { fixImageUrl } from '@/utils/image'
 import { API_ENDPOINTS } from '@/config/api'
 import { caseRecordHasContent } from '@/utils/case-record'
+import CaseRecordRiskForm from '@/components/CaseRecordRiskForm.vue'
+import CaseRecordHeaderForm from '@/components/CaseRecordHeaderForm.vue'
+import { normalizeRiskAssessment, type RiskAssessmentData } from '@/constants/caseRecordRiskAssessment'
+import {
+  CASE_RECORD_SECTION_HINTS,
+  normalizeHeaderInfo,
+  type CaseRecordHeaderInfo,
+} from '@/constants/caseRecordHeader'
 
 interface CaseRecordView {
   Id: number
@@ -77,6 +84,8 @@ interface CaseRecordView {
   Objective?: string
   Assessment?: string
   Plan?: string
+  RiskAssessment?: RiskAssessmentData | null
+  HeaderInfo?: CaseRecordHeaderInfo | null
   PhotoUrls?: string[]
   CreatedAt?: string
   UpdatedAt?: string
@@ -89,20 +98,14 @@ const errorMsg = ref('')
 const record = ref<CaseRecordView | null>(null)
 const recordId = ref(0)
 
-const photoUrls = computed(() => record.value?.PhotoUrls || [])
+const riskAssessment = computed(() => normalizeRiskAssessment(record.value?.RiskAssessment))
+const headerInfo = computed(() => normalizeHeaderInfo(record.value?.HeaderInfo))
 const canApplyAmendment = computed(() => {
   const status = record.value?.AmendmentStatus
   return !status || status === 'REJECTED' || status === 'APPROVED'
 })
 
 const formatDT = (dt?: string) => (dt ? dt.slice(0, 16).replace('T', ' ') : '—')
-
-const previewPhoto = (idx: number) => {
-  uni.previewImage({
-    current: fixImageUrl(photoUrls.value[idx]),
-    urls: photoUrls.value.map(u => fixImageUrl(u)),
-  })
-}
 
 const goApplyAmendment = () => {
   if (!recordId.value) return
@@ -224,6 +227,22 @@ onLoad((opts) => {
   font-weight: 700;
   color: #1F2937;
   margin-bottom: 16rpx;
+  line-height: 1.5;
+}
+.form-hint {
+  display: block;
+  font-size: 22rpx;
+  color: #9CA3AF;
+  margin-bottom: 12rpx;
+  line-height: 1.5;
+}
+.sub-block-title {
+  display: block;
+  margin-top: 24rpx;
+  margin-bottom: 12rpx;
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #374151;
 }
 .form-text.readonly {
   display: block;
@@ -233,6 +252,4 @@ onLoad((opts) => {
   white-space: pre-wrap;
   word-break: break-word;
 }
-.photo-grid { display: flex; flex-wrap: wrap; gap: 16rpx; }
-.photo-img { width: 200rpx; height: 200rpx; border-radius: 12rpx; background: #F3F4F6; }
 </style>

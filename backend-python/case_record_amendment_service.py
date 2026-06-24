@@ -10,6 +10,10 @@ from case_record_service import (
     apply_case_record_fields,
     case_record_has_content,
     decode_photo_urls,
+    encode_risk_assessment,
+    decode_risk_assessment,
+    encode_header_info,
+    decode_header_info,
     save_case_record_revision,
     validate_case_record_required_fields,
 )
@@ -80,6 +84,8 @@ def submit_amendment_request(
     objective: str,
     assessment: str,
     plan: str,
+    risk_assessment: dict,
+    header_info: dict,
     photo_urls: Optional[List[str]] = None,
     reason: Optional[str] = None,
 ) -> AppCaseRecordAmendmentRequest:
@@ -95,6 +101,8 @@ def submit_amendment_request(
         objective=objective,
         assessment=assessment,
         plan=plan,
+        risk_assessment=risk_assessment,
+        header_info=header_info,
     )
 
     from case_record_service import encode_photo_urls
@@ -107,7 +115,9 @@ def submit_amendment_request(
         Objective=objective.strip(),
         Assessment=assessment.strip(),
         Plan=plan.strip(),
-        PhotoUrls=encode_photo_urls(photo_urls),
+        RiskAssessment=encode_risk_assessment(risk_assessment),
+        HeaderInfo=encode_header_info(header_info),
+        PhotoUrls=encode_photo_urls(photo_urls or []),
         Reason=(reason or "").strip() or None,
         Status="PENDING",
     )
@@ -256,6 +266,10 @@ def approve_amendment(
         objective=amendment.Objective,
         assessment=amendment.Assessment,
         plan=amendment.Plan,
+        risk_assessment=decode_risk_assessment(amendment.RiskAssessment),
+        risk_assessment_set=True,
+        header_info=decode_header_info(amendment.HeaderInfo),
+        header_info_set=True,
         photo_urls=decode_photo_urls(amendment.PhotoUrls),
         photo_urls_set=True,
     )

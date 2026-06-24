@@ -34,7 +34,7 @@ from leave_request_service import (
     build_leave_request_out,
     reject_leave_request,
 )
-from case_record_service import decode_photo_urls, case_record_has_content
+from case_record_service import decode_photo_urls, case_record_has_content, decode_risk_assessment, decode_header_info
 from refund_exemption_service import approve_refund_exemption, reject_refund_exemption
 from case_record_amendment_service import approve_amendment, reject_amendment
 from case_record_service import decode_photo_urls, snapshot_case_record
@@ -102,6 +102,8 @@ class CaseRecordSnapshotOut(BaseModel):
     objective: Optional[str] = None
     assessment: Optional[str] = None
     plan: Optional[str] = None
+    riskAssessment: Optional[dict] = None
+    headerInfo: Optional[dict] = None
     photoUrls: List[str] = []
 
 
@@ -306,6 +308,8 @@ def _snapshot_to_out(data: dict) -> CaseRecordSnapshotOut:
         objective=data.get("objective"),
         assessment=data.get("assessment"),
         plan=data.get("plan"),
+        riskAssessment=data.get("risk_assessment"),
+        headerInfo=data.get("header_info"),
         photoUrls=data.get("photo_urls") or [],
     )
 
@@ -333,6 +337,8 @@ def _build_amendment_admin_out(
         objective=row.Objective,
         assessment=row.Assessment,
         plan=row.Plan,
+        riskAssessment=decode_risk_assessment(row.RiskAssessment),
+        headerInfo=decode_header_info(row.HeaderInfo),
         photoUrls=decode_photo_urls(row.PhotoUrls),
     )
     return CaseRecordAmendmentAdminOut(
@@ -629,6 +635,8 @@ class AdminCaseRecordViewOut(BaseModel):
     Objective: Optional[str] = None
     Assessment: Optional[str] = None
     Plan: Optional[str] = None
+    RiskAssessment: Optional[dict] = None
+    HeaderInfo: Optional[dict] = None
     PhotoUrls: List[str] = []
     CreatedAt: datetime
     UpdatedAt: Optional[datetime] = None
@@ -642,6 +650,8 @@ class AdminCaseRecordRevisionOut(BaseModel):
     Objective: Optional[str] = None
     Assessment: Optional[str] = None
     Plan: Optional[str] = None
+    RiskAssessment: Optional[dict] = None
+    HeaderInfo: Optional[dict] = None
     PhotoUrls: List[str] = []
     RevisedAt: datetime
     RevisedBy: int
@@ -873,6 +883,8 @@ def get_admin_case_record(
         Objective=record.Objective,
         Assessment=record.Assessment,
         Plan=record.Plan,
+        RiskAssessment=decode_risk_assessment(record.RiskAssessment),
+        HeaderInfo=decode_header_info(record.HeaderInfo),
         PhotoUrls=decode_photo_urls(record.PhotoUrls),
         CreatedAt=record.CreatedAt,
         UpdatedAt=record.UpdatedAt,
@@ -907,6 +919,8 @@ def list_admin_case_record_revisions(
             Objective=r.Objective,
             Assessment=r.Assessment,
             Plan=r.Plan,
+            RiskAssessment=decode_risk_assessment(r.RiskAssessment),
+            HeaderInfo=decode_header_info(r.HeaderInfo),
             PhotoUrls=decode_photo_urls(r.PhotoUrls),
             RevisedAt=r.RevisedAt,
             RevisedBy=r.RevisedBy,

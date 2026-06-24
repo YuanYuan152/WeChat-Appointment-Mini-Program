@@ -132,6 +132,8 @@ export const API_ENDPOINTS = {
     scheduleLeaveRequest: (id: number | string) => `/api/mini/counselor/schedules/${id}/leave-request`,
     consultations: '/api/mini/counselor/consultations',
     caseRecords: '/api/mini/counselor/case-records',
+    caseRecordFormDefaults: (consultationId: number | string) =>
+      `/api/mini/counselor/case-records/form-defaults?consultation_id=${consultationId}`,
     caseRecordAmendmentRequest: (id: number | string) =>
       `/api/mini/counselor/case-records/${id}/amendment-requests`,
     profile: '/api/mini/counselor/profile',

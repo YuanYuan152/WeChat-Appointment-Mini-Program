@@ -22,6 +22,9 @@ from case_record_service import (
     apply_case_record_fields,
     case_record_has_content,
     decode_photo_urls,
+    decode_risk_assessment,
+    decode_header_info,
+    build_default_header_info,
     save_case_record_revision,
     validate_case_record_required_fields,
     ensure_consultation_done_for_record,
@@ -218,6 +221,8 @@ class CaseRecordCreate(BaseModel):
     objective: Optional[str] = None
     assessment: Optional[str] = None
     plan: Optional[str] = None
+    risk_assessment: Optional[Dict[str, Any]] = None
+    header_info: Optional[Dict[str, Any]] = None
     photo_urls: Optional[List[str]] = None
 
 
@@ -226,6 +231,8 @@ class CaseRecordUpdate(BaseModel):
     objective: Optional[str] = None
     assessment: Optional[str] = None
     plan: Optional[str] = None
+    risk_assessment: Optional[Dict[str, Any]] = None
+    header_info: Optional[Dict[str, Any]] = None
     photo_urls: Optional[List[str]] = None
 
 
@@ -237,6 +244,8 @@ class CaseRecordOut(BaseModel):
     Objective: Optional[str] = None
     Assessment: Optional[str] = None
     Plan: Optional[str] = None
+    RiskAssessment: Optional[Dict[str, Any]] = None
+    HeaderInfo: Optional[Dict[str, Any]] = None
     PhotoUrls: List[str] = []
     CreatedAt: datetime
     UpdatedAt: Optional[datetime] = None
@@ -258,6 +267,8 @@ class CaseRecordOut(BaseModel):
             Objective=record.Objective,
             Assessment=record.Assessment,
             Plan=record.Plan,
+            RiskAssessment=decode_risk_assessment(record.RiskAssessment),
+            HeaderInfo=decode_header_info(record.HeaderInfo),
             PhotoUrls=decode_photo_urls(record.PhotoUrls),
             CreatedAt=record.CreatedAt,
             UpdatedAt=record.UpdatedAt,
@@ -275,8 +286,15 @@ class CaseRecordAmendmentCreate(BaseModel):
     objective: str
     assessment: str
     plan: str
+    risk_assessment: Dict[str, Any]
+    header_info: Dict[str, Any]
     photo_urls: Optional[List[str]] = None
     reason: Optional[str] = None
+
+
+class CaseRecordFormDefaultsOut(BaseModel):
+    ConsultationId: int
+    HeaderInfo: Dict[str, Any]
 
 
 class CaseRecordRevisionOut(BaseModel):
@@ -287,6 +305,8 @@ class CaseRecordRevisionOut(BaseModel):
     Objective: Optional[str] = None
     Assessment: Optional[str] = None
     Plan: Optional[str] = None
+    RiskAssessment: Optional[Dict[str, Any]] = None
+    HeaderInfo: Optional[Dict[str, Any]] = None
     PhotoUrls: List[str] = []
     RevisedAt: datetime
     RevisedBy: int
@@ -301,6 +321,8 @@ class CaseRecordRevisionOut(BaseModel):
             Objective=row.Objective,
             Assessment=row.Assessment,
             Plan=row.Plan,
+            RiskAssessment=decode_risk_assessment(row.RiskAssessment),
+            HeaderInfo=decode_header_info(row.HeaderInfo),
             PhotoUrls=decode_photo_urls(row.PhotoUrls),
             RevisedAt=row.RevisedAt,
             RevisedBy=row.RevisedBy,
@@ -1336,6 +1358,23 @@ def list_completed_consultations(
 # 个案记录接口
 # ---------------------------------------------------------------------------
 
+@router.get(
+    "/case-records/form-defaults",
+    response_model=CaseRecordFormDefaultsOut,
+    summary="咨询记录表头默认值（新建时预填）",
+)
+def get_case_record_form_defaults(
+    consultation_id: int = Query(..., description="咨询单 ID"),
+    counselor: AppAccount = Depends(require_counselor),
+    db: Session = Depends(get_db),
+):
+    consultation, schedule = _get_recordable_consultation(db, counselor.Id, consultation_id)
+    return CaseRecordFormDefaultsOut(
+        ConsultationId=consultation.Id,
+        HeaderInfo=build_default_header_info(db, consultation, schedule, counselor.Id),
+    )
+
+
 @router.get("/case-records", response_model=List[CaseRecordOut], summary="获取个案记录列表")
 def list_case_records(
     counselor: AppAccount = Depends(require_counselor),
@@ -1407,6 +1446,8 @@ def create_case_record(
         objective=body.objective,
         assessment=body.assessment,
         plan=body.plan,
+        risk_assessment=body.risk_assessment,
+        header_info=body.header_info,
     )
 
     existing = db.query(AppCaseRecord).filter(
@@ -1421,8 +1462,12 @@ def create_case_record(
             objective=body.objective,
             assessment=body.assessment,
             plan=body.plan,
-            photo_urls=body.photo_urls,
-            photo_urls_set=body.photo_urls is not None,
+            risk_assessment=body.risk_assessment,
+            risk_assessment_set=True,
+            header_info=body.header_info,
+            header_info_set=True,
+            photo_urls=[],
+            photo_urls_set=True,
         )
         existing.UpdatedAt = datetime.utcnow()
         db.commit()
@@ -1439,8 +1484,12 @@ def create_case_record(
         objective=body.objective,
         assessment=body.assessment,
         plan=body.plan,
-        photo_urls=body.photo_urls,
-        photo_urls_set=body.photo_urls is not None,
+        risk_assessment=body.risk_assessment,
+        risk_assessment_set=True,
+        header_info=body.header_info,
+        header_info_set=True,
+        photo_urls=[],
+        photo_urls_set=True,
     )
     db.add(record)
     db.commit()
@@ -1492,6 +1541,8 @@ def create_case_record_amendment(
         objective=body.objective,
         assessment=body.assessment,
         plan=body.plan,
+        risk_assessment=body.risk_assessment,
+        header_info=body.header_info,
         photo_urls=body.photo_urls,
         reason=body.reason,
     )

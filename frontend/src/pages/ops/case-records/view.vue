@@ -29,57 +29,44 @@
       </view>
 
       <view class="form-section">
-        <text class="form-section-title">患者情况记录（主观陈述）</text>
+        <CaseRecordHeaderForm :model-value="headerInfo" readonly />
+      </view>
+
+      <view class="form-section">
+        <text class="form-section-title">来访者的主观描述</text>
+        <text class="form-hint">{{ CASE_RECORD_SECTION_HINTS.subjective }}</text>
         <text class="form-text readonly">{{ record.Subjective || '—' }}</text>
       </view>
 
       <view class="form-section">
-        <text class="form-section-title">客观观察</text>
+        <text class="form-section-title">对来访者客观描述</text>
+        <text class="form-hint">{{ CASE_RECORD_SECTION_HINTS.objective }}</text>
         <text class="form-text readonly">{{ record.Objective || '—' }}</text>
       </view>
 
       <view class="form-section">
-        <text class="form-section-title">评估分析</text>
+        <text class="form-section-title">咨询师对个案的风险等级评估、以及对来访者的问题和咨询过程的评估</text>
         <text class="form-text readonly">{{ record.Assessment || '—' }}</text>
       </view>
 
       <view class="form-section">
-        <text class="form-section-title">计划方向</text>
+        <text class="form-section-title">本次咨询要点及处理</text>
+        <text class="form-hint">{{ CASE_RECORD_SECTION_HINTS.plan }}</text>
         <text class="form-text readonly">{{ record.Plan || '—' }}</text>
       </view>
 
-      <view v-if="photoUrls.length" class="form-section">
-        <text class="form-section-title">相关照片</text>
-        <view class="photo-grid">
-          <image
-            v-for="(url, idx) in photoUrls"
-            :key="url"
-            class="photo-img"
-            :src="fixImageUrl(url)"
-            mode="aspectFill"
-            @tap="previewPhoto(idx)"
-          />
-        </view>
+      <view class="form-section">
+        <CaseRecordRiskForm :model-value="riskAssessment" readonly />
       </view>
 
       <view v-if="revisions.length > 0" class="form-section">
         <text class="form-section-title">修改历史</text>
         <view v-for="rev in revisions" :key="rev.Id" class="revision-card">
           <text class="revision-time">{{ formatDT(rev.RevisedAt) }}</text>
-          <text v-if="rev.Subjective" class="revision-line">患者情况：{{ rev.Subjective }}</text>
-          <text v-if="rev.Objective" class="revision-line">客观观察：{{ rev.Objective }}</text>
-          <text v-if="rev.Assessment" class="revision-line">评估分析：{{ rev.Assessment }}</text>
-          <text v-if="rev.Plan" class="revision-line">计划方向：{{ rev.Plan }}</text>
-          <view v-if="rev.PhotoUrls && rev.PhotoUrls.length" class="revision-photos">
-            <image
-              v-for="(url, i) in rev.PhotoUrls"
-              :key="url"
-              class="revision-thumb"
-              :src="fixImageUrl(url)"
-              mode="aspectFill"
-              @tap="previewRevisionPhotos(rev.PhotoUrls!, i)"
-            />
-          </view>
+          <text v-if="rev.Subjective" class="revision-line">主观描述：{{ rev.Subjective }}</text>
+          <text v-if="rev.Objective" class="revision-line">客观描述：{{ rev.Objective }}</text>
+          <text v-if="rev.Assessment" class="revision-line">过程评估：{{ rev.Assessment }}</text>
+          <text v-if="rev.Plan" class="revision-line">咨询要点：{{ rev.Plan }}</text>
         </view>
       </view>
     </view>
@@ -90,8 +77,15 @@
 import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { httpV2 } from '@/utils/http'
-import { fixImageUrl } from '@/utils/image'
 import { API_ENDPOINTS } from '@/config/api'
+import CaseRecordRiskForm from '@/components/CaseRecordRiskForm.vue'
+import CaseRecordHeaderForm from '@/components/CaseRecordHeaderForm.vue'
+import { normalizeRiskAssessment, type RiskAssessmentData } from '@/constants/caseRecordRiskAssessment'
+import {
+  CASE_RECORD_SECTION_HINTS,
+  normalizeHeaderInfo,
+  type CaseRecordHeaderInfo,
+} from '@/constants/caseRecordHeader'
 
 interface CaseRecordView {
   Id: number
@@ -105,6 +99,8 @@ interface CaseRecordView {
   Objective?: string
   Assessment?: string
   Plan?: string
+  RiskAssessment?: RiskAssessmentData | null
+  HeaderInfo?: CaseRecordHeaderInfo | null
   PhotoUrls?: string[]
   CreatedAt?: string
   UpdatedAt?: string
@@ -117,6 +113,7 @@ interface Revision {
   Objective?: string
   Assessment?: string
   Plan?: string
+  RiskAssessment?: RiskAssessmentData | null
   PhotoUrls?: string[]
 }
 
@@ -125,7 +122,8 @@ const errorMsg = ref('')
 const record = ref<CaseRecordView | null>(null)
 const revisions = ref<Revision[]>([])
 
-const photoUrls = computed(() => record.value?.PhotoUrls || [])
+const riskAssessment = computed(() => normalizeRiskAssessment(record.value?.RiskAssessment))
+const headerInfo = computed(() => normalizeHeaderInfo(record.value?.HeaderInfo))
 
 const toText = (dt: unknown) => {
   if (dt == null || dt === '') return ''
@@ -161,6 +159,8 @@ const normalizeRecord = (raw: any): CaseRecordView | null => {
     Objective: raw.Objective ?? raw.objective,
     Assessment: raw.Assessment ?? raw.assessment,
     Plan: raw.Plan ?? raw.plan,
+    RiskAssessment: raw.RiskAssessment ?? raw.riskAssessment ?? null,
+    HeaderInfo: raw.HeaderInfo ?? raw.headerInfo ?? null,
     PhotoUrls: raw.PhotoUrls ?? raw.photoUrls ?? [],
     CreatedAt: toText(raw.CreatedAt ?? raw.createdAt) || undefined,
     UpdatedAt: toText(raw.UpdatedAt ?? raw.updatedAt) || undefined,
@@ -174,22 +174,9 @@ const normalizeRevision = (raw: any): Revision => ({
   Objective: raw.Objective ?? raw.objective,
   Assessment: raw.Assessment ?? raw.assessment,
   Plan: raw.Plan ?? raw.plan,
+  RiskAssessment: raw.RiskAssessment ?? raw.riskAssessment ?? null,
   PhotoUrls: raw.PhotoUrls ?? raw.photoUrls ?? [],
 })
-
-const previewPhoto = (idx: number) => {
-  uni.previewImage({
-    current: fixImageUrl(photoUrls.value[idx]),
-    urls: photoUrls.value.map(u => fixImageUrl(u)),
-  })
-}
-
-const previewRevisionPhotos = (urls: string[], idx: number) => {
-  uni.previewImage({
-    current: fixImageUrl(urls[idx]),
-    urls: urls.map(u => fixImageUrl(u)),
-  })
-}
 
 const loadRecord = async (recordId: number) => {
   if (!recordId) {
@@ -274,6 +261,22 @@ onLoad((opts) => {
   font-weight: 600;
   color: #3D5A4E;
   margin-bottom: 16rpx;
+  line-height: 1.5;
+}
+.form-hint {
+  display: block;
+  font-size: 22rpx;
+  color: #9CA3AF;
+  margin-bottom: 12rpx;
+  line-height: 1.5;
+}
+.sub-block-title {
+  display: block;
+  margin-top: 24rpx;
+  margin-bottom: 12rpx;
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #374151;
 }
 .form-text.readonly {
   display: block;
