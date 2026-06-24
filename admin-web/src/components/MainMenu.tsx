@@ -1,0 +1,230 @@
+"use client";
+
+import { useEffect, useState } from "react";
+
+import {
+  getNavigationGroupBySection,
+  getSectionById,
+  navigationGroups,
+} from "@/config/navigation";
+import type { SectionId } from "@/types/app";
+
+const EXPANDED_GROUPS_STORAGE_KEY = "lxxl-admin-web-main-menu-expanded-groups";
+let cachedExpandedGroupIds: string[] | null = null;
+
+export function MainMenu({
+  activeSection,
+  isAdmin,
+  collapsed,
+  onCollapsedChange,
+  onChangeSection,
+}: {
+  activeSection: SectionId;
+  isAdmin: boolean;
+  collapsed: boolean;
+  onCollapsedChange: (collapsed: boolean) => void;
+  onChangeSection: (section: SectionId) => void;
+}) {
+  const activeGroupId = getNavigationGroupBySection(activeSection)?.id;
+  const [expandedGroupIds, setExpandedGroupIds] = useState<string[]>(
+    () => cachedExpandedGroupIds ?? [],
+  );
+  const [expandedStateReady, setExpandedStateReady] = useState(cachedExpandedGroupIds !== null);
+
+  useEffect(() => {
+    if (cachedExpandedGroupIds) {
+      setExpandedStateReady(true);
+      return;
+    }
+
+    const storedExpandedGroupIds = readStoredExpandedGroupIds();
+    cachedExpandedGroupIds = storedExpandedGroupIds;
+    setExpandedGroupIds(storedExpandedGroupIds);
+    setExpandedStateReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!expandedStateReady) {
+      return;
+    }
+
+    cachedExpandedGroupIds = expandedGroupIds;
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(EXPANDED_GROUPS_STORAGE_KEY, JSON.stringify(expandedGroupIds));
+    }
+  }, [expandedGroupIds, expandedStateReady]);
+
+  const toggleGroup = (groupId: string) => {
+    setExpandedGroupIds((current) =>
+      current.includes(groupId) ? current.filter((id) => id !== groupId) : [...current, groupId],
+    );
+  };
+
+  return (
+    <aside
+      className={`sticky top-0 flex h-screen shrink-0 flex-col border-r border-[var(--lxxl-border)] bg-white transition-[width] duration-200 ${
+        collapsed ? "w-28" : "w-72"
+      }`}
+    >
+      <div
+        className={`flex shrink-0 border-b border-[var(--lxxl-border)] px-3 py-4 ${
+          collapsed ? "flex-col items-start gap-3" : "items-center justify-between gap-3"
+        }`}
+      >
+        {collapsed ? (
+          <div className="whitespace-nowrap text-sm font-semibold text-[var(--lxxl-text)]">连心心理</div>
+        ) : (
+          <div className="min-w-0 px-3">
+            <div className="text-lg font-semibold">连心心理</div>
+            <div className="mt-1 text-sm text-[var(--lxxl-muted)]">Web 管理端</div>
+          </div>
+        )}
+        <button
+          aria-label={collapsed ? "展开主菜单" : "收起主菜单"}
+          className={`flex h-8 shrink-0 items-center text-[var(--lxxl-muted)] transition hover:text-[var(--lxxl-green)] ${
+            collapsed ? "w-5 justify-start" : "w-8 justify-center"
+          }`}
+          type="button"
+          onClick={() => onCollapsedChange(!collapsed)}
+        >
+          <SidebarToggleIcon collapsed={collapsed} />
+        </button>
+      </div>
+
+      <nav className={`min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain py-4 ${collapsed ? "px-3" : "px-3"}`}>
+        {navigationGroups.map((group) => {
+          const expanded = expandedGroupIds.includes(group.id);
+          const groupActive = group.id === activeGroupId;
+
+          return (
+            <div key={group.id}>
+              <button
+                aria-expanded={expanded}
+                className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm font-medium transition ${
+                  groupActive ? "text-[var(--lxxl-green)]" : "text-[var(--lxxl-muted)]"
+                } ${collapsed ? "justify-start" : "hover:bg-[#F4F1EB]"}`}
+                title={group.label}
+                type="button"
+                onClick={() => {
+                  if (collapsed) {
+                    onCollapsedChange(false);
+                    setExpandedGroupIds((current) =>
+                      current.includes(group.id) ? current : [...current, group.id],
+                    );
+                    return;
+                  }
+                  toggleGroup(group.id);
+                }}
+              >
+                <span className={collapsed ? "whitespace-nowrap" : ""}>{group.label}</span>
+                {!collapsed && <ChevronIcon expanded={expanded} />}
+              </button>
+
+              {!collapsed && expanded && (
+                <div className="mt-1 space-y-1">
+                  {group.sectionIds.map((sectionId) => {
+                    const section = getSectionById(sectionId);
+                    if (!section) {
+                      return null;
+                    }
+                    const disabled = section.adminOnly && !isAdmin;
+                    const active = activeSection === section.id;
+
+                    return (
+                      <button
+                        key={section.id}
+                        className={`w-full rounded-xl px-4 py-3 text-left transition ${
+                          active
+                            ? "bg-[var(--lxxl-green)] text-white"
+                            : "text-[var(--lxxl-text)] hover:bg-[#F4F1EB]"
+                        } ${disabled ? "cursor-not-allowed opacity-45" : ""}`}
+                        disabled={disabled}
+                        title={section.label}
+                        type="button"
+                        onClick={() => onChangeSection(section.id)}
+                      >
+                        <span className="block text-sm font-medium">{section.label}</span>
+                        <span className={`mt-1 block text-xs ${active ? "text-white/75" : "text-[var(--lxxl-muted)]"}`}>
+                          {section.desc}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </nav>
+    </aside>
+  );
+}
+
+function SidebarToggleIcon({ collapsed }: { collapsed: boolean }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-5 w-5"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.9"
+      viewBox="0 0 24 24"
+    >
+      <rect height="18" rx="2.5" width="18" x="3" y="3" />
+      <path d="M9 3v18" />
+      {collapsed ? (
+        <>
+          <path d="M13 12h5" />
+          <path d="m16 9 3 3-3 3" />
+        </>
+      ) : (
+        <>
+          <path d="M18 12h-5" />
+          <path d="m15 9-3 3 3 3" />
+        </>
+      )}
+    </svg>
+  );
+}
+
+function ChevronIcon({ expanded }: { expanded: boolean }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={`h-4 w-4 transition-transform ${expanded ? "rotate-90" : ""}`}
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+      viewBox="0 0 24 24"
+    >
+      <path d="m9 6 6 6-6 6" />
+    </svg>
+  );
+}
+
+function readStoredExpandedGroupIds() {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  try {
+    const storedValue = window.localStorage.getItem(EXPANDED_GROUPS_STORAGE_KEY);
+    if (!storedValue) {
+      return [];
+    }
+
+    const parsedValue = JSON.parse(storedValue) as unknown;
+    if (!Array.isArray(parsedValue)) {
+      return [];
+    }
+
+    const groupIds = new Set(navigationGroups.map((group) => group.id));
+    return parsedValue.filter((value): value is string => typeof value === "string" && groupIds.has(value));
+  } catch {
+    return [];
+  }
+}
