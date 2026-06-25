@@ -15,12 +15,14 @@ from models import (
     AppCaseRecordRevision,
     AppCaseRecordAmendmentRequest,
     AppConsultation,
+    AppConsultationFeedback,
     AppCounselorProfile,
     AppLeaveRequest,
     AppRefundExemption,
     AppRoleBinding,
     AppSchedule,
 )
+from consultation_feedback import feedback_detail, feedback_summary
 from app_time import china_now
 from schedule_meta import (
     center_display_name,
@@ -460,15 +462,29 @@ def _admin_counselor_name(db: Session, counselor_id: int) -> str:
     return acc.RealName or acc.Nickname or acc.Mobile or f"咨询师#{counselor_id}"
 
 
+# 来访管理仅展示纯来访者，排除工作人员账号
+_VISITOR_EXCLUDED_ROLES = ("Counselor", "Admin", "Ops", "Assistant")
+
+
+def _admin_staff_account_ids(db: Session) -> set[int]:
+    return {
+        b.AccountId
+        for b in db.query(AppRoleBinding)
+        .filter(AppRoleBinding.RoleType.in_(_VISITOR_EXCLUDED_ROLES))
+        .all()
+    }
+
+
 def _admin_visitor_patient_ids(db: Session) -> set[int]:
+    staff_ids = _admin_staff_account_ids(db)
     role_ids = {
         b.AccountId
         for b in db.query(AppRoleBinding)
         .filter(AppRoleBinding.RoleType == "Patient")
         .all()
-    }
+    } - staff_ids
     cons_rows = db.query(AppConsultation.PatientId).distinct().all()
-    cons_ids = {row[0] for row in cons_rows if row[0]}
+    cons_ids = {row[0] for row in cons_rows if row[0]} - staff_ids
     return role_ids | cons_ids
 
 
@@ -551,6 +567,24 @@ class AdminPatientConsultationOut(BaseModel):
     endTime: Optional[datetime] = None
     location: Optional[str] = None
     createdAt: datetime
+    hasFeedback: bool = False
+
+
+class AdminConsultationFeedbackOut(BaseModel):
+    id: int
+    consultationId: int
+    patientId: int
+    patientName: str
+    patientMobile: Optional[str] = None
+    counselorId: int
+    counselorName: str
+    startTime: Optional[datetime] = None
+    endTime: Optional[datetime] = None
+    goalScore: Optional[int] = None
+    rhythmScore: Optional[int] = None
+    improvements: List[str] = []
+    summary: str
+    createdAt: datetime
 
 
 class AdminPatientDetailOut(BaseModel):
@@ -565,15 +599,19 @@ class AdminPatientDetailOut(BaseModel):
     upcomingCount: int = 0
     completedCount: int = 0
     cancelledCount: int = 0
+    feedbackCount: int = 0
     consultations: List[AdminPatientConsultationOut] = []
+    feedbacks: List[AdminConsultationFeedbackOut] = []
 
 
 def _build_patient_consultation_outs(
     db: Session,
     consultations: List[AppConsultation],
+    feedback_map: Optional[dict[int, AppConsultationFeedback]] = None,
 ) -> List[AdminPatientConsultationOut]:
     if not consultations:
         return []
+    feedback_map = feedback_map or {}
     schedule_ids = {c.ScheduleId for c in consultations if c.ScheduleId}
     schedules = {
         s.Id: s
@@ -596,9 +634,42 @@ def _build_patient_consultation_outs(
                 endTime=end_time,
                 location=_admin_consultation_location(db, c, sched),
                 createdAt=c.CreatedAt,
+                hasFeedback=c.Id in feedback_map,
             )
         )
     return items
+
+
+def _build_admin_feedback_out(
+    db: Session,
+    fb: AppConsultationFeedback,
+    consultation: AppConsultation,
+) -> AdminConsultationFeedbackOut:
+    patient = db.query(AppAccount).filter(AppAccount.Id == consultation.PatientId).first()
+    sched = (
+        db.query(AppSchedule).filter(AppSchedule.Id == consultation.ScheduleId).first()
+        if consultation.ScheduleId
+        else None
+    )
+    start_time = consultation.StartTime or (sched.StartTime if sched else None)
+    end_time = consultation.EndTime or (sched.EndTime if sched else None)
+    detail = feedback_detail(fb.Content)
+    return AdminConsultationFeedbackOut(
+        id=fb.Id,
+        consultationId=consultation.Id,
+        patientId=consultation.PatientId,
+        patientName=_admin_patient_name(patient),
+        patientMobile=patient.Mobile if patient else None,
+        counselorId=consultation.CounselorId,
+        counselorName=_admin_counselor_name(db, consultation.CounselorId),
+        startTime=start_time,
+        endTime=end_time,
+        goalScore=detail.get("goalScore") if detail else None,
+        rhythmScore=detail.get("rhythmScore") if detail else None,
+        improvements=detail.get("improvements") or [] if detail else [],
+        summary=feedback_summary(fb.Content) or fb.Content.strip(),
+        createdAt=fb.CreatedAt,
+    )
 
 
 def _summarize_patient_consultations(
@@ -1037,13 +1108,31 @@ def get_admin_patient_detail(
     total, upcoming, completed, cancelled, _ = _summarize_patient_consultations(
         consultations, schedules
     )
-    cons_out = _build_patient_consultation_outs(db, consultations)
+
+    consultation_ids = [c.Id for c in consultations]
+    feedback_rows: list[AppConsultationFeedback] = []
+    if consultation_ids:
+        feedback_rows = (
+            db.query(AppConsultationFeedback)
+            .filter(AppConsultationFeedback.ConsultationId.in_(consultation_ids))
+            .order_by(AppConsultationFeedback.CreatedAt.desc())
+            .all()
+        )
+    cons_by_id = {c.Id: c for c in consultations}
+    feedback_map = {fb.ConsultationId: fb for fb in feedback_rows}
+    cons_out = _build_patient_consultation_outs(db, consultations, feedback_map)
     cons_out.sort(
         key=lambda x: (
             x.startTime is None,
             -(x.startTime.timestamp() if x.startTime else x.createdAt.timestamp()),
         )
     )
+    feedbacks_out = [
+        _build_admin_feedback_out(db, fb, cons_by_id[fb.ConsultationId])
+        for fb in feedback_rows
+        if fb.ConsultationId in cons_by_id
+    ]
+
     return AdminPatientDetailOut(
         patientId=patient.Id,
         name=_admin_patient_name(patient),
@@ -1056,8 +1145,536 @@ def get_admin_patient_detail(
         upcomingCount=upcoming,
         completedCount=completed,
         cancelledCount=cancelled,
+        feedbackCount=len(feedbacks_out),
         consultations=cons_out,
+        feedbacks=feedbacks_out,
     )
+
+
+@router.get(
+    "/consultation-feedbacks",
+    response_model=List[AdminConsultationFeedbackOut],
+    summary="来访者咨询反馈列表",
+)
+def list_consultation_feedbacks(
+    keyword: Optional[str] = Query(None, description="来访者/咨询师姓名搜索"),
+    patient_id: Optional[int] = Query(None, description="按来访者筛选"),
+    _admin: AppAccount = Depends(require_ops_or_admin),
+    db: Session = Depends(get_db),
+):
+    rows = (
+        db.query(AppConsultationFeedback)
+        .order_by(AppConsultationFeedback.CreatedAt.desc())
+        .limit(200)
+        .all()
+    )
+    if not rows:
+        return []
+
+    consultation_ids = [r.ConsultationId for r in rows]
+    consultations = {
+        c.Id: c
+        for c in db.query(AppConsultation).filter(AppConsultation.Id.in_(consultation_ids)).all()
+    }
+
+    result: List[AdminConsultationFeedbackOut] = []
+    for fb in rows:
+        consultation = consultations.get(fb.ConsultationId)
+        if not consultation:
+            continue
+        if patient_id and consultation.PatientId != patient_id:
+            continue
+        item = _build_admin_feedback_out(db, fb, consultation)
+        if keyword:
+            kw = keyword.strip().lower()
+            if kw and kw not in item.patientName.lower() and kw not in item.counselorName.lower():
+                if not (item.patientMobile and kw in item.patientMobile):
+                    continue
+        result.append(item)
+    return result
+
+
+def _admin_counselor_ids(db: Session) -> list[int]:
+    bindings = db.query(AppRoleBinding).filter(AppRoleBinding.RoleType == "Counselor").all()
+    return sorted({b.AccountId for b in bindings})
+
+
+def _admin_record_is_filled(record: Optional[AppCaseRecord]) -> bool:
+    if not record:
+        return False
+    photo_count = len(decode_photo_urls(record.PhotoUrls))
+    return bool(
+        (record.Subjective or "").strip()
+        or (record.Objective or "").strip()
+        or (record.Assessment or "").strip()
+        or (record.Plan or "").strip()
+        or (record.RiskAssessment or "").strip()
+        or (record.HeaderInfo or "").strip()
+        or photo_count > 0
+    )
+
+
+def _admin_profile_dict(profile: Optional[AppCounselorProfile], counselor_id: int, db: Session) -> dict:
+    acc = db.query(AppAccount).filter(AppAccount.Id == counselor_id).first()
+    billing = int(profile.Billing or 0) if profile else 0
+    face_billing = int(profile.FaceBilling or 0) if profile else 0
+    if billing <= 0:
+        billing = 60000
+    if face_billing <= 0:
+        face_billing = 30000
+    return {
+        "counselorId": counselor_id,
+        "name": (profile.Name if profile else None) or (acc.Nickname if acc else None) or "",
+        "avatarUrl": (profile.AvatarUrl if profile else None) or (acc.AvatarUrl if acc else None),
+        "title": profile.Title if profile else None,
+        "specialty": profile.Specialty if profile else None,
+        "field": profile.Field if profile else None,
+        "introduce": profile.Introduce if profile else None,
+        "career": profile.Career if profile else None,
+        "qualification": profile.Qualification if profile else None,
+        "targetGroup": profile.TargetGroup if profile else None,
+        "mode": profile.Mode if profile else None,
+        "workYears": int(profile.WorkYears or 0) if profile else 0,
+        "consultHours": int(profile.ConsultHours or 0) if profile else 0,
+        "billing": billing,
+        "faceBilling": face_billing,
+        "billingYuan": billing // 100,
+        "faceBillingYuan": face_billing // 100,
+        "infoAuthenticityCommitted": bool(profile.InfoAuthenticityCommittedAt) if profile else False,
+        "infoAuthenticityCommittedAt": profile.InfoAuthenticityCommittedAt if profile else None,
+        "infoAuthenticitySignerName": profile.InfoAuthenticitySignerName if profile else None,
+        "isActive": bool(profile.IsActive) if profile else True,
+    }
+
+
+class AdminCounselorSummaryOut(BaseModel):
+    counselorId: int
+    name: str
+    title: Optional[str] = None
+    avatarUrl: Optional[str] = None
+    activeBookingCount: int = 0
+    cancelledCount: int = 0
+    scheduleCount: int = 0
+    recordedCount: int = 0
+    missingRecordCount: int = 0
+    visitorCount: int = 0
+    billingYuan: int = 600
+    faceBillingYuan: int = 300
+
+
+class AdminCounselorVisitorOut(BaseModel):
+    patientId: int
+    patientName: str
+    mobile: Optional[str] = None
+    consultationCount: int = 0
+
+
+class AdminCounselorScheduleOut(BaseModel):
+    scheduleId: int
+    startTime: Optional[datetime] = None
+    endTime: Optional[datetime] = None
+    status: str
+    statusLabel: str
+    patientName: Optional[str] = None
+    location: Optional[str] = None
+
+
+class AdminCounselorConsultationBriefOut(BaseModel):
+    consultationId: int
+    patientId: int
+    patientName: str
+    startTime: Optional[datetime] = None
+    endTime: Optional[datetime] = None
+    status: str
+    statusLabel: str
+    hasRecord: bool = False
+
+
+class AdminCounselorStatsOut(BaseModel):
+    activeBookingCount: int = 0
+    cancelledCount: int = 0
+    scheduleCount: int = 0
+    recordedCount: int = 0
+    missingRecordCount: int = 0
+    visitorCount: int = 0
+    totalConsultations: int = 0
+
+
+class AdminCounselorDetailOut(BaseModel):
+    counselorId: int
+    name: str
+    avatarUrl: Optional[str] = None
+    title: Optional[str] = None
+    specialty: Optional[str] = None
+    field: Optional[str] = None
+    introduce: Optional[str] = None
+    career: Optional[str] = None
+    qualification: Optional[str] = None
+    targetGroup: Optional[str] = None
+    mode: Optional[str] = None
+    workYears: int = 0
+    consultHours: int = 0
+    billing: int = 60000
+    faceBilling: int = 30000
+    billingYuan: int = 600
+    faceBillingYuan: int = 300
+    infoAuthenticityCommitted: bool = False
+    infoAuthenticityCommittedAt: Optional[datetime] = None
+    infoAuthenticitySignerName: Optional[str] = None
+    isActive: bool = True
+    stats: AdminCounselorStatsOut
+    visitors: List[AdminCounselorVisitorOut] = []
+    schedules: List[AdminCounselorScheduleOut] = []
+    recordedConsultations: List[AdminCounselorConsultationBriefOut] = []
+    unrecordedConsultations: List[AdminCounselorConsultationBriefOut] = []
+
+
+class AdminCounselorUpdatePayload(BaseModel):
+    name: Optional[str] = None
+    avatarUrl: Optional[str] = None
+    title: Optional[str] = None
+    specialty: Optional[str] = None
+    field: Optional[str] = None
+    introduce: Optional[str] = None
+    career: Optional[str] = None
+    qualification: Optional[str] = None
+    targetGroup: Optional[str] = None
+    mode: Optional[str] = None
+    workYears: Optional[int] = None
+    consultHours: Optional[int] = None
+    billingYuan: Optional[int] = Field(None, ge=0, le=99999)
+    faceBillingYuan: Optional[int] = Field(None, ge=0, le=99999)
+    isActive: Optional[bool] = None
+
+
+def _admin_counselor_stats(
+    db: Session,
+    counselor_id: int,
+    consultations: list,
+    schedules: list,
+    records_by_consultation: dict[int, AppCaseRecord],
+) -> AdminCounselorStatsOut:
+    now = china_now()
+    active = 0
+    cancelled = 0
+    recorded = 0
+    missing = 0
+    patient_ids: set[int] = set()
+    for c in consultations:
+        patient_ids.add(c.PatientId)
+        if c.Status == "CANCELLED":
+            cancelled += 1
+            continue
+        if c.Status in ("PENDING", "CONFIRMED", "ONGOING"):
+            active += 1
+        if c.Status == "DONE":
+            record = records_by_consultation.get(c.Id)
+            if _admin_record_is_filled(record):
+                recorded += 1
+            else:
+                missing += 1
+    future_schedules = [
+        s for s in schedules
+        if s.StartTime and s.StartTime >= now and s.Status in ("AVAILABLE", "BOOKED")
+    ]
+    return AdminCounselorStatsOut(
+        activeBookingCount=active,
+        cancelledCount=cancelled,
+        scheduleCount=len(future_schedules),
+        recordedCount=recorded,
+        missingRecordCount=missing,
+        visitorCount=len(patient_ids),
+        totalConsultations=len(consultations),
+    )
+
+
+@router.get(
+    "/counselors",
+    response_model=List[AdminCounselorSummaryOut],
+    summary="咨询师管理列表",
+)
+def list_admin_counselors(
+    keyword: Optional[str] = Query(None, description="姓名搜索"),
+    _admin: AppAccount = Depends(require_ops_or_admin),
+    db: Session = Depends(get_db),
+):
+    counselor_ids = _admin_counselor_ids(db)
+    if not counselor_ids:
+        return []
+
+    profiles = {
+        p.AccountId: p
+        for p in db.query(AppCounselorProfile)
+        .filter(AppCounselorProfile.AccountId.in_(counselor_ids))
+        .all()
+    }
+    accounts = {
+        a.Id: a
+        for a in db.query(AppAccount).filter(AppAccount.Id.in_(counselor_ids)).all()
+    }
+
+    if keyword:
+        kw = keyword.strip().lower()
+        if kw:
+            filtered = []
+            for cid in counselor_ids:
+                prof = profiles.get(cid)
+                acc = accounts.get(cid)
+                name = (
+                    (prof.Name if prof else None)
+                    or (acc.Nickname if acc else None)
+                    or (acc.RealName if acc else None)
+                    or ""
+                ).lower()
+                if kw in name:
+                    filtered.append(cid)
+            counselor_ids = filtered
+
+    consultations = (
+        db.query(AppConsultation)
+        .filter(AppConsultation.CounselorId.in_(counselor_ids))
+        .all()
+    ) if counselor_ids else []
+    cons_by_counselor: dict[int, list] = {}
+    consultation_ids: list[int] = []
+    for c in consultations:
+        cons_by_counselor.setdefault(c.CounselorId, []).append(c)
+        consultation_ids.append(c.Id)
+
+    records_by_consultation: dict[int, AppCaseRecord] = {}
+    if consultation_ids:
+        for r in db.query(AppCaseRecord).filter(
+            AppCaseRecord.ConsultationId.in_(consultation_ids)
+        ).all():
+            records_by_consultation[r.ConsultationId] = r
+
+    now = china_now()
+    schedules = (
+        db.query(AppSchedule)
+        .filter(AppSchedule.CounselorId.in_(counselor_ids))
+        .all()
+    ) if counselor_ids else []
+    schedules_by_counselor: dict[int, list] = {}
+    for s in schedules:
+        schedules_by_counselor.setdefault(s.CounselorId, []).append(s)
+
+    result: List[AdminCounselorSummaryOut] = []
+    for cid in counselor_ids:
+        prof = profiles.get(cid)
+        acc = accounts.get(cid)
+        name = (
+            (prof.Name if prof else None)
+            or (acc.Nickname if acc else None)
+            or (acc.RealName if acc else None)
+            or f"咨询师#{cid}"
+        )
+        cons = cons_by_counselor.get(cid, [])
+        scheds = schedules_by_counselor.get(cid, [])
+        stats = _admin_counselor_stats(db, cid, cons, scheds, records_by_consultation)
+        billing = int(prof.Billing or 0) if prof else 0
+        face_billing = int(prof.FaceBilling or 0) if prof else 0
+        if billing <= 0:
+            billing = 60000
+        if face_billing <= 0:
+            face_billing = 30000
+        result.append(
+            AdminCounselorSummaryOut(
+                counselorId=cid,
+                name=name,
+                title=prof.Title if prof else None,
+                avatarUrl=prof.AvatarUrl if prof else (acc.AvatarUrl if acc else None),
+                activeBookingCount=stats.activeBookingCount,
+                cancelledCount=stats.cancelledCount,
+                scheduleCount=stats.scheduleCount,
+                recordedCount=stats.recordedCount,
+                missingRecordCount=stats.missingRecordCount,
+                visitorCount=stats.visitorCount,
+                billingYuan=billing // 100,
+                faceBillingYuan=face_billing // 100,
+            )
+        )
+    result.sort(key=lambda x: x.name)
+    return result
+
+
+@router.get(
+    "/counselors/{counselor_id}",
+    response_model=AdminCounselorDetailOut,
+    summary="咨询师管理详情",
+)
+def get_admin_counselor_detail(
+    counselor_id: int,
+    _admin: AppAccount = Depends(require_ops_or_admin),
+    db: Session = Depends(get_db),
+):
+    if counselor_id not in _admin_counselor_ids(db):
+        raise HTTPException(status_code=404, detail="咨询师不存在")
+
+    profile = (
+        db.query(AppCounselorProfile)
+        .filter(AppCounselorProfile.AccountId == counselor_id)
+        .first()
+    )
+    base = _admin_profile_dict(profile, counselor_id, db)
+
+    consultations = (
+        db.query(AppConsultation)
+        .filter(AppConsultation.CounselorId == counselor_id)
+        .order_by(AppConsultation.StartTime.desc(), AppConsultation.Id.desc())
+        .all()
+    )
+    consultation_ids = [c.Id for c in consultations]
+    records_by_consultation: dict[int, AppCaseRecord] = {}
+    if consultation_ids:
+        for r in db.query(AppCaseRecord).filter(
+            AppCaseRecord.ConsultationId.in_(consultation_ids)
+        ).all():
+            records_by_consultation[r.ConsultationId] = r
+
+    schedules = (
+        db.query(AppSchedule)
+        .filter(AppSchedule.CounselorId == counselor_id)
+        .order_by(AppSchedule.StartTime.asc())
+        .all()
+    )
+    schedule_ids = {c.ScheduleId for c in consultations if c.ScheduleId}
+    schedule_map = {s.Id: s for s in schedules}
+
+    stats = _admin_counselor_stats(
+        db, counselor_id, consultations, schedules, records_by_consultation
+    )
+
+    patient_ids = {c.PatientId for c in consultations}
+    patients = {
+        a.Id: a
+        for a in db.query(AppAccount).filter(AppAccount.Id.in_(patient_ids)).all()
+    } if patient_ids else {}
+    visitor_counts: dict[int, int] = {}
+    for c in consultations:
+        if c.Status == "CANCELLED":
+            continue
+        visitor_counts[c.PatientId] = visitor_counts.get(c.PatientId, 0) + 1
+    visitors = [
+        AdminCounselorVisitorOut(
+            patientId=pid,
+            patientName=_admin_patient_name(patients.get(pid)),
+            mobile=patients[pid].Mobile if pid in patients else None,
+            consultationCount=count,
+        )
+        for pid, count in sorted(visitor_counts.items(), key=lambda x: -x[1])
+    ]
+
+    now = china_now()
+    schedule_out: List[AdminCounselorScheduleOut] = []
+    for s in schedules:
+        if s.StartTime and s.StartTime < now - timedelta(days=7):
+            continue
+        linked = next((c for c in consultations if c.ScheduleId == s.Id), None)
+        patient_name = _admin_patient_name(patients.get(linked.PatientId)) if linked else None
+        label = "已预约" if linked and linked.Status != "CANCELLED" else (
+            "可预约" if s.Status == "AVAILABLE" else s.Status
+        )
+        schedule_out.append(
+            AdminCounselorScheduleOut(
+                scheduleId=s.Id,
+                startTime=s.StartTime,
+                endTime=s.EndTime,
+                status=s.Status,
+                statusLabel=label,
+                patientName=patient_name if linked and linked.Status != "CANCELLED" else None,
+                location=_admin_consultation_location(db, linked, s) if linked else (
+                    center_display_name(parse_center_id(s.Note or "")) if s.Note else None
+                ),
+            )
+        )
+
+    recorded_out: List[AdminCounselorConsultationBriefOut] = []
+    unrecorded_out: List[AdminCounselorConsultationBriefOut] = []
+    for c in consultations:
+        if c.Status != "DONE":
+            continue
+        record = records_by_consultation.get(c.Id)
+        filled = _admin_record_is_filled(record)
+        brief = AdminCounselorConsultationBriefOut(
+            consultationId=c.Id,
+            patientId=c.PatientId,
+            patientName=_admin_patient_name(patients.get(c.PatientId)),
+            startTime=c.StartTime,
+            endTime=c.EndTime,
+            status=c.Status,
+            statusLabel=_admin_consultation_status_label(c.Status, c.StartTime),
+            hasRecord=filled,
+        )
+        if filled:
+            recorded_out.append(brief)
+        else:
+            unrecorded_out.append(brief)
+
+    return AdminCounselorDetailOut(
+        stats=stats,
+        visitors=visitors,
+        schedules=schedule_out[:50],
+        recordedConsultations=recorded_out[:30],
+        unrecordedConsultations=unrecorded_out[:30],
+        **{k: v for k, v in base.items() if k != "counselorId"},
+        counselorId=counselor_id,
+    )
+
+
+@router.put(
+    "/counselors/{counselor_id}",
+    response_model=AdminCounselorDetailOut,
+    summary="管理员更新咨询师资料与定价",
+)
+def update_admin_counselor(
+    counselor_id: int,
+    body: AdminCounselorUpdatePayload,
+    _admin: AppAccount = Depends(require_ops_or_admin),
+    db: Session = Depends(get_db),
+):
+    if counselor_id not in _admin_counselor_ids(db):
+        raise HTTPException(status_code=404, detail="咨询师不存在")
+
+    profile = (
+        db.query(AppCounselorProfile)
+        .filter(AppCounselorProfile.AccountId == counselor_id)
+        .first()
+    )
+    if not profile:
+        profile = AppCounselorProfile(
+            AccountId=counselor_id,
+            Billing=60000,
+            FaceBilling=30000,
+        )
+        db.add(profile)
+
+    mapping = {
+        "name": "Name",
+        "avatarUrl": "AvatarUrl",
+        "title": "Title",
+        "specialty": "Specialty",
+        "field": "Field",
+        "introduce": "Introduce",
+        "career": "Career",
+        "qualification": "Qualification",
+        "targetGroup": "TargetGroup",
+        "mode": "Mode",
+        "workYears": "WorkYears",
+        "consultHours": "ConsultHours",
+        "isActive": "IsActive",
+    }
+    for src, dst in mapping.items():
+        val = getattr(body, src, None)
+        if val is not None:
+            setattr(profile, dst, val)
+    if body.billingYuan is not None:
+        profile.Billing = int(body.billingYuan) * 100
+    if body.faceBillingYuan is not None:
+        profile.FaceBilling = int(body.faceBillingYuan) * 100
+    profile.UpdatedAt = datetime.utcnow()
+    db.commit()
+    db.refresh(profile)
+    return get_admin_counselor_detail(counselor_id, _admin, db)
 
 
 @router.get("/leave-requests", summary="咨询师请假列表（管理员）")

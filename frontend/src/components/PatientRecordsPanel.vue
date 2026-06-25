@@ -72,7 +72,7 @@
 
           </view>
 
-          <text class="status" :class="r.status.toLowerCase()">{{ statusLabel(r.status) }}</text>
+          <text class="status" :class="statusClass(r)">{{ statusLabel(r) }}</text>
 
         </view>
 
@@ -97,6 +97,28 @@
           <text v-if="r.orderAmount" class="cancel-summary-amount">订单金额：￥{{ formatYuan(r.orderAmount) }}</text>
         </view>
 
+        <view v-else-if="r.status === 'DONE' && r.hasFeedback" class="feedback-banner">
+          <text class="feedback-title">我的反馈</text>
+          <view v-if="r.feedbackGoalScore && r.feedbackGoalScore > 0" class="feedback-line feedback-stars-row">
+            <text class="feedback-label">目标达成</text>
+            <FeedbackStarRating :model-value="r.feedbackGoalScore" readonly />
+            <text v-if="goalScoreHint(r.feedbackGoalScore)" class="feedback-hint">
+              {{ goalScoreHint(r.feedbackGoalScore) }}
+            </text>
+          </view>
+          <view v-if="r.feedbackRhythmScore && r.feedbackRhythmScore > 0" class="feedback-line feedback-stars-row">
+            <text class="feedback-label">议题节奏</text>
+            <FeedbackStarRating :model-value="r.feedbackRhythmScore" readonly />
+            <text v-if="rhythmScoreHint(r.feedbackRhythmScore)" class="feedback-hint">
+              {{ rhythmScoreHint(r.feedbackRhythmScore) }}
+            </text>
+          </view>
+          <text v-if="r.feedbackImprovements?.length" class="feedback-line">
+            改进方面：{{ r.feedbackImprovements.join('、') }}
+          </text>
+          <text v-else-if="r.feedbackContent" class="feedback-text">{{ r.feedbackContent }}</text>
+        </view>
+
         <view v-if="r.canCancel" class="record-actions">
 
           <text class="refund-hint">{{ r.refundEligible ? '距咨询超过24小时，取消可退款' : '距咨询不足24小时，取消不退款' }}</text>
@@ -107,6 +129,10 @@
 
           </button>
 
+        </view>
+
+        <view v-else-if="r.status === 'DONE' && !r.hasFeedback" class="record-actions">
+          <button class="feedback-btn" @click="goFeedback(r)">去反馈</button>
         </view>
 
       </view>
@@ -236,6 +262,8 @@ import { computed, onMounted, ref } from 'vue'
 import { httpV2 } from '@/utils/http'
 
 import { API_ENDPOINTS } from '@/config/api'
+import { goalScoreHint, rhythmScoreHint, PATIENT_RECORDS_AFTER_FEEDBACK } from '@/constants/consultationFeedback'
+import FeedbackStarRating from '@/components/FeedbackStarRating.vue'
 
 
 
@@ -285,11 +313,23 @@ interface Consultation {
 
   cancelSummary?: string
 
+  hasFeedback?: boolean
+
+  feedbackContent?: string
+
+  feedbackAt?: string
+
+  feedbackGoalScore?: number
+
+  feedbackRhythmScore?: number
+
+  feedbackImprovements?: string[]
+
 }
 
 
 
-type RecordTab = 'unfinished' | 'done' | 'cancelled'
+type RecordTab = 'unfinished' | 'done' | 'feedbacked' | 'cancelled'
 
 
 
@@ -298,6 +338,8 @@ const tabs: { label: string; value: RecordTab }[] = [
   { label: '未完成', value: 'unfinished' },
 
   { label: '已完成', value: 'done' },
+
+  { label: '已反馈', value: 'feedbacked' },
 
   { label: '已取消', value: 'cancelled' },
 
@@ -325,15 +367,25 @@ const cancelTarget = ref<Consultation | null>(null)
 
 
 
-const statusLabel = (s: string) => {
+const statusLabel = (r: Consultation) => {
 
-  if (s === 'DONE') return '已完成'
+  if (r.status === 'DONE' && r.hasFeedback) return '已反馈'
 
-  if (s === 'CANCELLED') return '已取消'
+  if (r.status === 'DONE') return '已完成'
 
-  if (UNFINISHED_STATUSES.has(s)) return '未完成'
+  if (r.status === 'CANCELLED') return '已取消'
 
-  return s
+  if (UNFINISHED_STATUSES.has(r.status)) return '未完成'
+
+  return r.status
+
+}
+
+const statusClass = (r: Consultation) => {
+
+  if (r.status === 'DONE' && r.hasFeedback) return 'feedbacked'
+
+  return r.status.toLowerCase()
 
 }
 
@@ -343,7 +395,9 @@ const emptyText = computed(() => {
 
   if (activeTab.value === 'cancelled') return '暂无已取消的预约'
 
-  if (activeTab.value === 'done') return '暂无已完成的预约'
+  if (activeTab.value === 'feedbacked') return '暂无已反馈的预约'
+
+  if (activeTab.value === 'done') return '暂无待反馈的已完成预约'
 
   return '暂无未完成的预约'
 
@@ -399,6 +453,8 @@ const isCenterNote = (note: string) => note.toLowerCase().includes('center:')
 
 const cardClass = (r: Consultation) => {
 
+  if (r.status === 'DONE' && r.hasFeedback) return 'record-card--feedbacked'
+
   if (r.status === 'DONE') return 'record-card--done'
 
   if (r.status === 'CANCELLED') return 'record-card--cancelled'
@@ -413,7 +469,13 @@ const filterByTab = (list: Consultation[], tab: RecordTab) => {
 
   if (tab === 'done') {
 
-    return list.filter(r => r.status === 'DONE')
+    return list.filter(r => r.status === 'DONE' && !r.hasFeedback)
+
+  }
+
+  if (tab === 'feedbacked') {
+
+    return list.filter(r => r.status === 'DONE' && r.hasFeedback)
 
   }
 
@@ -460,6 +522,26 @@ const fetchList = async () => {
   } finally {
 
     loading.value = false
+
+  }
+
+}
+
+
+
+const refresh = async () => {
+
+  const afterFeedback = uni.getStorageSync(PATIENT_RECORDS_AFTER_FEEDBACK)
+
+  await fetchList()
+
+  if (afterFeedback) {
+
+    uni.removeStorageSync(PATIENT_RECORDS_AFTER_FEEDBACK)
+
+    activeTab.value = 'feedbacked'
+
+    applyTabFilter()
 
   }
 
@@ -524,6 +606,19 @@ const goExemption = () => {
   })
 }
 
+const goFeedback = (r: Consultation) => {
+  const slotText = formatSlotRange(r.startTime, r.endTime)
+  const url = `/pages/patient/consultation-feedback/index?consultationId=${r.id}`
+    + `&counselorName=${encodeURIComponent(r.counselorName || '')}`
+    + `&slotText=${encodeURIComponent(slotText)}`
+  uni.navigateTo({
+    url,
+    fail: () => {
+      uni.showToast({ title: '无法打开反馈页，请重新编译小程序', icon: 'none' })
+    },
+  })
+}
+
 
 
 const confirmCancel = async () => {
@@ -572,9 +667,9 @@ const confirmCancel = async () => {
 
 
 
-onMounted(fetchList)
+onMounted(refresh)
 
-defineExpose({ refresh: fetchList })
+defineExpose({ refresh })
 
 </script>
 
@@ -616,6 +711,8 @@ defineExpose({ refresh: fetchList })
 
 .record-card--done { background: #FAFAF8; opacity: 0.92; }
 
+.record-card--feedbacked { background: #F0FDFA; }
+
 .record-card--cancelled { background: #FAFAF8; opacity: 0.85; }
 
 .record-header { display: flex; align-items: flex-start; gap: 20rpx; }
@@ -641,6 +738,8 @@ defineExpose({ refresh: fetchList })
 .status.pending, .status.confirmed, .status.ongoing { color: #3D5A4E; background: #F0EDE8; }
 
 .status.done { color: #6B7280; background: #E5E7EB; }
+
+.status.feedbacked { color: #047857; background: #D1FAE5; }
 
 .status.cancelled { color: #9CA3AF; background: #F3F4F6; }
 
@@ -692,6 +791,64 @@ defineExpose({ refresh: fetchList })
 }
 
 .cancel-btn::after { border: none; }
+
+.feedback-banner {
+  margin-top: 20rpx;
+  padding: 20rpx 24rpx;
+  border-radius: 16rpx;
+  background: #ECFDF5;
+  border: 1rpx solid #A7F3D0;
+}
+.feedback-title {
+  display: block;
+  font-size: 24rpx;
+  font-weight: 700;
+  color: #047857;
+  margin-bottom: 8rpx;
+}
+.feedback-text {
+  display: block;
+  font-size: 26rpx;
+  color: #374151;
+  line-height: 1.6;
+}
+.feedback-line {
+  display: block;
+  font-size: 26rpx;
+  color: #374151;
+  line-height: 1.7;
+  margin-bottom: 6rpx;
+}
+.feedback-stars-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12rpx 16rpx;
+  margin-bottom: 12rpx;
+}
+.feedback-label {
+  font-size: 26rpx;
+  color: #6B7280;
+  flex-shrink: 0;
+}
+.feedback-hint {
+  font-size: 24rpx;
+  color: #9CA3AF;
+}
+.feedback-line:last-child { margin-bottom: 0; }
+
+.feedback-btn {
+  margin: 0;
+  padding: 0 32rpx;
+  height: 64rpx;
+  line-height: 64rpx;
+  font-size: 26rpx;
+  color: #fff;
+  background: #3D5A4E;
+  border: none;
+  border-radius: 12rpx;
+}
+.feedback-btn::after { border: none; }
 
 
 

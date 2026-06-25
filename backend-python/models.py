@@ -31,6 +31,8 @@ class AppAccount(Base):
     IntakeAgreementSignedAt = Column(DateTime, nullable=True)
     IntakeIsAdult = Column(Boolean, nullable=True)
     IntakeSignatureUrl = Column(String(500), nullable=True)
+    PasswordHash = Column(String(255), nullable=True)
+    PreferenceTagsCompletedAt = Column(DateTime, nullable=True)
     IsActive = Column(Boolean, nullable=False, default=True, server_default="1")
     DeletedAt = Column(DateTime, nullable=True)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
@@ -371,7 +373,8 @@ class AppCounselorProfile(Base):
     Qualification = Column(UnicodeText, nullable=True)
     TargetGroup = Column(Unicode(500), nullable=True)
     Mode = Column(Unicode(100), nullable=True)
-    Billing = Column(Integer, nullable=False, default=0)
+    Billing = Column(Integer, nullable=False, default=60000)
+    FaceBilling = Column(Integer, nullable=False, default=30000)
     ConsultHours = Column(Integer, nullable=False, default=0)
     WorkYears = Column(Integer, nullable=False, default=0)
     InfoAuthenticityCommittedAt = Column(DateTime, nullable=True)
@@ -435,6 +438,17 @@ class AppRefundExemption(Base):
     UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
 
 
+class AppConsultationFeedback(Base):
+    """来访者对已完成咨询的反馈。"""
+    __tablename__ = "AppConsultationFeedback"
+
+    Id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    ConsultationId = Column(Integer, nullable=False, unique=True, index=True)
+    AccountId = Column(Integer, nullable=False, index=True)
+    Content = Column(UnicodeText, nullable=False)
+    CreatedAt = Column(DateTime, default=func.now(), nullable=False)
+
+
 class AppFeedback(Base):
     __tablename__ = "AppFeedback"
 
@@ -496,3 +510,30 @@ class AppLoginSession(Base):
     SessionKey = Column(String(100), nullable=True)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
     ExpiresAt = Column(DateTime, nullable=False)
+
+
+class AppSmsVerification(Base):
+    """官网/Web 端短信验证码（与小程序微信手机号绑定并存）。"""
+    __tablename__ = "AppSmsVerification"
+
+    Id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    Mobile = Column(String(20), nullable=False, index=True)
+    Code = Column(String(10), nullable=False)
+    Purpose = Column(String(20), nullable=False, default="login")
+    ExpiresAt = Column(DateTime, nullable=False)
+    UsedAt = Column(DateTime, nullable=True)
+    CreatedAt = Column(DateTime, default=func.now(), nullable=False)
+
+
+class AppUserPreferenceTag(Base):
+    """用户自选偏好标签（个人人群 / 感兴趣的心理问题）。"""
+    __tablename__ = "AppUserPreferenceTag"
+    __table_args__ = (
+        UniqueConstraint("AccountId", "Category", "Tag", name="UQ_AppUserPreferenceTag_Account_Category_Tag"),
+    )
+
+    Id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    AccountId = Column(Integer, nullable=False, index=True)
+    Category = Column(String(20), nullable=False)  # personal | interest
+    Tag = Column(Unicode(50), nullable=False)
+    CreatedAt = Column(DateTime, default=func.now(), nullable=False)

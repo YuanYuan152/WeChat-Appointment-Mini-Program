@@ -9,10 +9,9 @@ PUT /api/mini/patient/registration  → 保存完整版登记表
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 
 from auth import get_current_account, AppAccount
 from consultation_cancel import (
@@ -30,7 +29,14 @@ from models import (
     AppSchedule,
     AppRefundExemption,
     AppCounselorFavorite,
+    AppConsultationFeedback,
     AppAccount,
+)
+from consultation_feedback import (
+    ALLOWED_IMPROVEMENTS,
+    encode_feedback,
+    feedback_detail,
+    feedback_summary,
 )
 from refund_exemption_service import (
     latest_exemptions_by_consultation,
@@ -200,6 +206,27 @@ class ConsultationOut(BaseModel):
     exemptionId: Optional[int] = None
     orderStatus: Optional[str] = None
     cancelSummary: Optional[str] = None
+    hasFeedback: bool = False
+    feedbackContent: Optional[str] = None
+    feedbackAt: Optional[datetime] = None
+    feedbackGoalScore: Optional[int] = None
+    feedbackRhythmScore: Optional[int] = None
+    feedbackImprovements: Optional[List[str]] = None
+
+
+class ConsultationFeedbackCreate(BaseModel):
+    goalScore: Optional[int] = Field(default=None, ge=1, le=5, description="目标达成 1-5 星")
+    rhythmScore: Optional[int] = Field(default=None, ge=1, le=5, description="议题节奏 1-5 星")
+    improvements: List[str] = Field(default_factory=list, description="需改进方面（多选，可空）")
+
+
+class ConsultationFeedbackOut(BaseModel):
+    consultationId: int
+    goalScore: Optional[int] = None
+    rhythmScore: Optional[int] = None
+    improvements: List[str] = []
+    summary: str
+    createdAt: datetime
 
 
 class CancelConsultationOut(BaseModel):
@@ -261,6 +288,14 @@ def get_my_consultations(
         db, consultation_ids, account_id=current_account.Id,
     )
 
+    feedback_map: dict[int, AppConsultationFeedback] = {}
+    if consultation_ids:
+        for fb in db.query(AppConsultationFeedback).filter(
+            AppConsultationFeedback.ConsultationId.in_(consultation_ids),
+            AppConsultationFeedback.AccountId == current_account.Id,
+        ).all():
+            feedback_map[fb.ConsultationId] = fb
+
     result: List[ConsultationOut] = []
     for r in rows:
         prof = counselor_map.get(r.CounselorId)
@@ -292,6 +327,8 @@ def get_my_consultations(
             else:
                 cancel_summary = "预约已取消，按规定不予退款"
         exemption = exemption_map.get(r.Id)
+        feedback = feedback_map.get(r.Id)
+        fb_detail = feedback_detail(feedback.Content) if feedback else None
 
         result.append(ConsultationOut(
             id=r.Id,
@@ -316,8 +353,72 @@ def get_my_consultations(
             exemptionId=exemption.Id if exemption else None,
             orderStatus=order_status,
             cancelSummary=cancel_summary,
+            hasFeedback=bool(feedback),
+            feedbackContent=feedback_summary(feedback.Content) if feedback else None,
+            feedbackAt=feedback.CreatedAt if feedback else None,
+            feedbackGoalScore=fb_detail.get("goalScore") or None if fb_detail else None,
+            feedbackRhythmScore=fb_detail.get("rhythmScore") or None if fb_detail else None,
+            feedbackImprovements=fb_detail.get("improvements") if fb_detail else None,
         ))
     return result
+
+
+@router.post(
+    "/consultations/{consultation_id}/feedback",
+    response_model=ConsultationFeedbackOut,
+    summary="提交已完成咨询的反馈",
+)
+def submit_consultation_feedback(
+    consultation_id: int,
+    body: ConsultationFeedbackCreate,
+    current_account: AppAccount = Depends(get_current_account),
+    db: Session = Depends(get_db),
+):
+    consultation = (
+        db.query(AppConsultation)
+        .filter(
+            AppConsultation.Id == consultation_id,
+            AppConsultation.PatientId == current_account.Id,
+        )
+        .first()
+    )
+    if not consultation:
+        raise HTTPException(status_code=404, detail="咨询记录不存在")
+    if consultation.Status != "DONE":
+        raise HTTPException(status_code=400, detail="仅已完成的咨询可提交反馈")
+
+    exists = (
+        db.query(AppConsultationFeedback)
+        .filter(AppConsultationFeedback.ConsultationId == consultation_id)
+        .first()
+    )
+    if exists:
+        raise HTTPException(status_code=400, detail="该咨询已提交过反馈")
+
+    improvements = [x.strip() for x in (body.improvements or []) if x and x.strip()]
+    invalid = [x for x in improvements if x not in ALLOWED_IMPROVEMENTS]
+    if invalid:
+        raise HTTPException(status_code=400, detail="包含无效的改进选项")
+
+    goal_score = body.goalScore if body.goalScore and body.goalScore > 0 else None
+    rhythm_score = body.rhythmScore if body.rhythmScore and body.rhythmScore > 0 else None
+    payload = encode_feedback(goal_score, rhythm_score, improvements)
+    row = AppConsultationFeedback(
+        ConsultationId=consultation_id,
+        AccountId=current_account.Id,
+        Content=payload,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return ConsultationFeedbackOut(
+        consultationId=consultation_id,
+        goalScore=goal_score,
+        rhythmScore=rhythm_score,
+        improvements=improvements,
+        summary=feedback_summary(payload) or "",
+        createdAt=row.CreatedAt,
+    )
 
 
 @router.post("/consultations/{consultation_id}/cancel", response_model=CancelConsultationOut, summary="取消咨询")

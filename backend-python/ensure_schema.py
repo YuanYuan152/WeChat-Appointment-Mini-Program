@@ -18,6 +18,8 @@ APP_ACCOUNT_COLUMNS = {
     "IntakeSignatureUrl": "VARCHAR(500) NULL",
     "IsActive": "BIT NOT NULL CONSTRAINT DF_AppAccount_IsActive DEFAULT 1",
     "DeletedAt": "DATETIME NULL",
+    "PasswordHash": "VARCHAR(255) NULL",
+    "PreferenceTagsCompletedAt": "DATETIME NULL",
 }
 
 APP_ORDER_COLUMNS = {
@@ -52,6 +54,7 @@ APP_COUNSELOR_PROFILE_COLUMNS = {
     "Mode": "NVARCHAR(100) NULL",
     "InfoAuthenticityCommittedAt": "DATETIME NULL",
     "InfoAuthenticitySignerName": "NVARCHAR(100) NULL",
+    "FaceBilling": "INT NOT NULL CONSTRAINT DF_AppCounselorProfile_FaceBilling DEFAULT 30000",
 }
 
 

@@ -451,7 +451,8 @@ def ensure_counselor_profile(db: Session, account_id: int, data: dict) -> None:
     row.Qualification = data.get("qualification")
     row.TargetGroup = data.get("target_group", "成人,青少年,亲子家庭")
     row.Mode = data.get("mode", "线上/线下")
-    row.Billing = data["billing"]
+    row.Billing = data.get("billing") or 60000
+    row.FaceBilling = data.get("face_billing") or 30000
     row.ConsultHours = data["consult_hours"]
     row.WorkYears = data["work_years"]
     row.InfoAuthenticitySignerName = data.get("name")

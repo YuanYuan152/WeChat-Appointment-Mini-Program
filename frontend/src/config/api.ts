@@ -105,6 +105,7 @@ export const API_ENDPOINTS = {
     orderDetail: (id: number | string) => `/api/mini/patient/orders/${id}`,
     consultations: '/api/mini/patient/consultations',
     consultationCancel: (id: number | string) => `/api/mini/patient/consultations/${id}/cancel`,
+    consultationFeedback: (id: number | string) => `/api/mini/patient/consultations/${id}/feedback`,
     refundExemption: (id: number | string) => `/api/mini/patient/consultations/${id}/refund-exemption`,
     me: '/api/mini/patient/me',
     registration: '/api/mini/patient/registration',
@@ -189,6 +190,9 @@ export const API_ENDPOINTS = {
     consultationRecordRevisions: (id: number | string) => `/api/mini/admin/consultation-records/records/${id}/revisions`,
     patients: '/api/mini/admin/patients',
     patientDetail: (id: number | string) => `/api/mini/admin/patients/${id}`,
+    counselors: '/api/mini/admin/counselors',
+    counselorDetail: (id: number | string) => `/api/mini/admin/counselors/${id}`,
+    consultationFeedbacks: '/api/mini/admin/consultation-feedbacks',
   },
 
   // 意见反馈

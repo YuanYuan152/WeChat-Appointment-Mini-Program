@@ -12,6 +12,7 @@ from models import AppAccount, AppRoleBinding
 APP_TABLES_DELETE_ORDER = [
     "AppCaseRecordRevision",
     "AppCaseRecord",
+    "AppConsultationFeedback",
     "AppRefundExemption",
     "AppScheduleCancelLog",
     "AppLeaveRequest",

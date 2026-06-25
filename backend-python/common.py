@@ -348,6 +348,7 @@ def common_counselor_detail(
         "field": new_rows[0].get("Field"),
         "introduce": new_rows[0].get("Introduce"),
         "billing": float(billing_cents),
+        "faceBilling": float(int(new_rows[0].get("FaceBilling") or 30000)),
         "consultHours": int(new_rows[0].get("ConsultHours") or 0),
         "workYears": int(new_rows[0].get("WorkYears") or 0),
         "career": new_rows[0].get("Career"),

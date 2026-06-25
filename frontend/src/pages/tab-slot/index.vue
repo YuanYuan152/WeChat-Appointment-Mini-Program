@@ -1,6 +1,6 @@
 <template>
   <view class="tab-slot">
-    <PatientRecordsPanel v-if="mode === 'patient'" :key="patientRefreshKey" />
+    <PatientRecordsPanel v-if="mode === 'patient'" ref="patientPanelRef" />
     <WorkbenchRouter v-else ref="workbenchRef" />
   </view>
 </template>
@@ -15,7 +15,7 @@ import PatientRecordsPanel from '@/components/PatientRecordsPanel.vue'
 import WorkbenchRouter from '@/components/WorkbenchRouter.vue'
 
 const mode = ref<'patient' | 'workbench'>('patient')
-const patientRefreshKey = ref(0)
+const patientPanelRef = ref<InstanceType<typeof PatientRecordsPanel> | null>(null)
 const workbenchRef = ref<InstanceType<typeof WorkbenchRouter> | null>(null)
 
 const syncMode = async () => {
@@ -46,7 +46,7 @@ onShow(async () => {
   await syncMode()
   await nextTick()
   if (mode.value === 'patient') {
-    patientRefreshKey.value++
+    await patientPanelRef.value?.refresh()
   } else {
     workbenchRef.value?.activate()
   }

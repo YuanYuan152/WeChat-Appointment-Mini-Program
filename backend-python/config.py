@@ -42,6 +42,12 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRATION_HOURS: int = 24 * 7
 
+    # Web SMS (官网注册登录)
+    SMS_MOCK: bool = True
+    SMS_CODE_LENGTH: int = 6
+    SMS_CODE_TTL_MINUTES: int = 5
+    SMS_RESEND_INTERVAL_SECONDS: int = 1
+
     @property
     def database_url(self) -> str:
         server = self.DB_SERVER

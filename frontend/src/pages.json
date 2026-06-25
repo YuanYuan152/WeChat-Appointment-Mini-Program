@@ -230,6 +230,14 @@
                     }
                 },
                 {
+                    "path": "consultation-feedback/index",
+                    "style": {
+                        "navigationBarTitleText": "咨询反馈",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                },
+                {
                     "path": "registration/edit",
                     "style": {
                         "navigationBarTitleText": "心理登记表",
@@ -389,6 +397,30 @@
                         "navigationBarTitleText": "来访管理",
                         "navigationBarBackgroundColor": "#3D5A4E",
                         "navigationBarTextStyle": "white"
+                    }
+                },
+                {
+                    "path": "consultation-feedbacks/index",
+                    "style": {
+                        "navigationBarTitleText": "用户反馈",
+                        "navigationBarBackgroundColor": "#3D5A4E",
+                        "navigationBarTextStyle": "white"
+                    }
+                },
+                {
+                    "path": "users/index",
+                    "style": {
+                        "navigationBarTitleText": "用户管理",
+                        "navigationBarBackgroundColor": "#3D5A4E",
+                        "navigationBarTextStyle": "white"
+                    }
+                },
+                {
+                    "path": "counselors/detail",
+                    "style": {
+                        "navigationBarTitleText": "咨询师详情",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
                     }
                 },
                 {

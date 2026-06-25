@@ -10,6 +10,6 @@ import PatientRecordsPanel from '@/components/PatientRecordsPanel.vue'
 const panelRef = ref<InstanceType<typeof PatientRecordsPanel> | null>(null)
 
 onShow(() => {
-  panelRef.value?.refresh()
+  void panelRef.value?.refresh()
 })
 </script>
