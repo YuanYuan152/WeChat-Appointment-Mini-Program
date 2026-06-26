@@ -5,7 +5,11 @@ import type {
   Banner,
   CounselorBoardDetail,
   CounselorBoardSummary,
+  FeedbackItem,
+  MessageItem,
   CounselorRecordSummary,
+  AdminCaseRecordDetail,
+  AdminConsultationRecord,
   OperationRecord,
   OpsDashboard,
   PagedResult,
@@ -19,8 +23,10 @@ import type {
 
 export type SectionId =
   | "dashboard"
+  | "messages"
   | "roles"
   | "refunds"
+  | "feedback"
   | "content"
   | "schedules"
   | "rooms"
@@ -45,7 +51,9 @@ export interface NavigationGroup {
 
 export interface ScreenData {
   dashboard?: OpsDashboard;
+  messages?: MessageItem[];
   refunds?: RefundExemption[];
+  feedbacks?: FeedbackItem[];
   adminUsers?: AdminUser[];
   banners?: Banner[];
   activities?: Activity[];
@@ -54,6 +62,8 @@ export interface ScreenData {
   rooms?: Room[];
   roomStatus?: RoomStatusSnapshot;
   counselorRecords?: CounselorRecordSummary[];
+  selectedCounselorRecords?: AdminConsultationRecord[];
+  selectedCaseRecord?: AdminCaseRecordDetail;
   operationRecords?: PagedResult<OperationRecord>;
   userBoard?: PagedResult<UserBoardSummary>;
   selectedUserBoard?: UserBoardDetail;

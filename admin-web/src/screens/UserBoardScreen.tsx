@@ -45,7 +45,7 @@ function UserBoardScreenContent() {
       });
       setData((prev) => ({ ...prev, userBoard }));
     } catch (error) {
-      showNotice("error", error instanceof Error ? error.message : "用户看板加载失败");
+      showNotice("error", error instanceof Error ? error.message : "用户管理加载失败");
     } finally {
       setListLoading(false);
     }

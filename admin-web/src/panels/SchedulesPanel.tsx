@@ -43,9 +43,9 @@ export function SchedulesPanel({
         }}
       >
         <div>
-          <h2 className="text-xl font-semibold tracking-normal">挂课情况</h2>
+          <h2 className="text-xl font-semibold tracking-normal">排期情况</h2>
           <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">
-            日期：{schedules?.date || getLocalDateValue()}。复用运营挂课总览接口。
+            日期：{schedules?.date || getLocalDateValue()}。复用运营排期总览接口。
           </p>
         </div>
 
@@ -72,7 +72,7 @@ export function SchedulesPanel({
           </div>
         )}
         {rows.length === 0 ? (
-        <EmptyState text={listLoading ? "正在加载列表..." : "该日期暂无挂课记录。"} />
+        <EmptyState text={listLoading ? "正在加载列表..." : "该日期暂无排期记录。"} />
       ) : (
         <>
           <table className="w-full border-collapse text-sm">

@@ -66,6 +66,51 @@ export function createContent(draft: ContentDraft) {
   });
 }
 
+export function updateContent(kind: ContentKind, id: number, draft: ContentDraft) {
+  if (!draft.title.trim()) {
+    throw new Error("请输入标题");
+  }
+
+  if (kind === "banner") {
+    if (!draft.imageUrl.trim()) {
+      throw new Error("Banner 需要图片地址");
+    }
+    return apiRequest(`/api/mini/ops/banners/${id}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        title: draft.title,
+        image_url: draft.imageUrl,
+        is_active: true,
+      }),
+    });
+  }
+
+  if (kind === "activity") {
+    return apiRequest(`/api/mini/ops/activities/${id}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        title: draft.title,
+        content: draft.summary,
+        cover_url: draft.imageUrl || undefined,
+        type: "NOTICE",
+        is_active: true,
+      }),
+    });
+  }
+
+  return apiRequest(`/api/mini/ops/articles/${id}`, {
+    method: "PUT",
+    body: JSON.stringify({
+      title: draft.title,
+      summary: draft.summary,
+      content: draft.summary,
+      cover_url: draft.imageUrl || undefined,
+      category: "文章",
+      is_active: true,
+    }),
+  });
+}
+
 export function deleteContent(kind: "banner" | "activity" | "article", id: number) {
   const path =
     kind === "banner"

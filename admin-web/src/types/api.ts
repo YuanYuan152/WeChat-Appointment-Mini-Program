@@ -177,6 +177,62 @@ export interface CounselorRecordSummary {
   missingCount: number;
 }
 
+export interface AdminConsultationRecord {
+  consultationId: number;
+  patientId: number;
+  patientName: string;
+  startTime?: string | null;
+  endTime?: string | null;
+  caseRecordId?: number | null;
+  hasRecord: boolean;
+  recordUpdatedAt?: string | null;
+  photoCount: number;
+  subjectivePreview?: string | null;
+}
+
+export interface AdminCaseRecordDetail {
+  id: number;
+  consultationId: number;
+  counselorId: number;
+  counselorName: string;
+  patientId: number;
+  patientName: string;
+  startTime?: string | null;
+  endTime?: string | null;
+  subjective?: string | null;
+  objective?: string | null;
+  assessment?: string | null;
+  plan?: string | null;
+  photoUrls: string[];
+  createdAt: string;
+  updatedAt?: string | null;
+}
+
+export interface MessageItem {
+  Id: number;
+  AccountId: number;
+  Type: string;
+  Title: string;
+  Content?: string | null;
+  RelatedType?: string | null;
+  RelatedId?: number | null;
+  IsRead: boolean;
+  CreatedAt: string;
+  ReadAt?: string | null;
+}
+
+export interface FeedbackItem {
+  id: number;
+  accountId: number;
+  userName?: string | null;
+  userMobile?: string | null;
+  category?: string | null;
+  content: string;
+  contact?: string | null;
+  status: string;
+  createdAt: string;
+}
+
 export interface OperationRecord {
   id: string;
   occurredAt?: string | null;

@@ -1,10 +1,26 @@
 import { apiRequest } from "@/lib/api";
-import type { CounselorRecordSummary, OperationRecord, PagedResult } from "@/types/api";
+import type {
+  AdminCaseRecordDetail,
+  AdminConsultationRecord,
+  CounselorRecordSummary,
+  OperationRecord,
+  PagedResult,
+} from "@/types/api";
 
 import type { OperationFilters, PaginationParams } from "@/types/app";
 
 export function fetchCounselorRecordSummary(days = 30) {
   return apiRequest<CounselorRecordSummary[]>(`/api/mini/admin/consultation-records/counselors?days=${days}`);
+}
+
+export function fetchCounselorRecordDetails(counselorId: number, days = 30) {
+  return apiRequest<AdminConsultationRecord[]>(
+    `/api/mini/admin/consultation-records/counselors/${counselorId}?days=${days}`,
+  );
+}
+
+export function fetchCaseRecordDetail(recordId: number) {
+  return apiRequest<AdminCaseRecordDetail>(`/api/mini/admin/consultation-records/${recordId}`);
 }
 
 export function fetchOperationRecords(filters: OperationFilters, pagination: PaginationParams) {

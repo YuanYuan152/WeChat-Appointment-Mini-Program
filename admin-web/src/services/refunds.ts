@@ -1,7 +1,7 @@
 import { apiRequest } from "@/lib/api";
 import type { RefundExemption } from "@/types/api";
 
-export function fetchRefundExemptions(status: "ALL" | "PENDING" = "ALL") {
+export function fetchRefundExemptions(status: "ALL" | "PENDING" | "APPROVED" | "REJECTED" = "ALL") {
   return apiRequest<RefundExemption[]>(`/api/mini/admin/refund-exemptions?status=${status}`);
 }
 

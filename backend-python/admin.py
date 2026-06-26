@@ -280,6 +280,24 @@ class AdminConsultationRecordOut(BaseModel):
     subjectivePreview: Optional[str] = None
 
 
+class AdminCaseRecordDetailOut(BaseModel):
+    id: int
+    consultationId: int
+    counselorId: int
+    counselorName: str
+    patientId: int
+    patientName: str
+    startTime: Optional[datetime] = None
+    endTime: Optional[datetime] = None
+    subjective: Optional[str] = None
+    objective: Optional[str] = None
+    assessment: Optional[str] = None
+    plan: Optional[str] = None
+    photoUrls: List[str] = []
+    createdAt: datetime
+    updatedAt: Optional[datetime] = None
+
+
 @router.get(
     "/consultation-records/counselors",
     response_model=List[CounselorRecordSummaryOut],
@@ -448,3 +466,51 @@ def list_counselor_consultation_records(
             )
         )
     return items
+
+
+@router.get(
+    "/consultation-records/{record_id}",
+    response_model=AdminCaseRecordDetailOut,
+    summary="管理员查看咨询记录详情",
+)
+def get_admin_case_record_detail(
+    record_id: int,
+    _admin: AppAccount = Depends(require_ops_or_admin),
+    db: Session = Depends(get_db),
+):
+    record = db.query(AppCaseRecord).filter(AppCaseRecord.Id == record_id).first()
+    if not record:
+        raise HTTPException(status_code=404, detail="咨询记录不存在")
+
+    consultation = db.query(AppConsultation).filter(AppConsultation.Id == record.ConsultationId).first()
+    patient = db.query(AppAccount).filter(AppAccount.Id == consultation.PatientId).first() if consultation else None
+    counselor = db.query(AppAccount).filter(AppAccount.Id == record.CounselorId).first()
+    counselor_profile = (
+        db.query(AppCounselorProfile)
+        .filter(AppCounselorProfile.AccountId == record.CounselorId)
+        .first()
+    )
+    counselor_name = (
+        (counselor_profile.Name if counselor_profile else None)
+        or (counselor.Nickname if counselor else None)
+        or (counselor.RealName if counselor else None)
+        or f"咨询师#{record.CounselorId}"
+    )
+
+    return AdminCaseRecordDetailOut(
+        id=record.Id,
+        consultationId=record.ConsultationId,
+        counselorId=record.CounselorId,
+        counselorName=counselor_name,
+        patientId=consultation.PatientId if consultation else 0,
+        patientName=_admin_patient_name(patient),
+        startTime=consultation.StartTime if consultation else None,
+        endTime=consultation.EndTime if consultation else None,
+        subjective=record.Subjective,
+        objective=record.Objective,
+        assessment=record.Assessment,
+        plan=record.Plan,
+        photoUrls=decode_photo_urls(record.PhotoUrls),
+        createdAt=record.CreatedAt,
+        updatedAt=record.UpdatedAt,
+    )

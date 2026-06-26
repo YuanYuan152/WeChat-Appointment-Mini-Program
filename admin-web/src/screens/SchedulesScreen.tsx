@@ -33,7 +33,7 @@ function SchedulesScreenContent() {
       const schedules = await fetchScheduleOverview(queryDate);
       setData((prev) => ({ ...prev, schedules }));
     } catch (error) {
-      showNotice("error", error instanceof Error ? error.message : "挂课情况加载失败");
+      showNotice("error", error instanceof Error ? error.message : "排期情况加载失败");
     } finally {
       setListLoading(false);
     }

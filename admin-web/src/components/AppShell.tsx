@@ -6,7 +6,8 @@ import type { CurrentUser } from "@/types/api";
 
 import { getNavigationGroupBySection, getSectionById } from "@/config/navigation";
 import type { Notice, SectionId } from "@/types/app";
-import { getName, roleText } from "@/lib/display";
+import { getName } from "@/lib/display";
+import { roleLabel } from "@/lib/format";
 import { MainMenu } from "@/components/MainMenu";
 
 export function AppShell({
@@ -33,6 +34,9 @@ export function AppShell({
   const [menuCollapsed, setMenuCollapsed] = useState(false);
   const activeGroup = getNavigationGroupBySection(activeSection);
   const activeSectionConfig = getSectionById(activeSection);
+  const activeRoleText = roleLabel(
+    currentUser.activeRole || currentUser.roles.find((role) => role === "Admin" || role === "Ops") || currentUser.roles[0],
+  );
 
   return (
     <main className="min-h-screen bg-[var(--lxxl-bg)] text-[var(--lxxl-text)]">
@@ -50,7 +54,7 @@ export function AppShell({
             <div className="flex items-center gap-3 text-sm">
               <div className="text-right">
                 <div className="font-medium">{getName(currentUser)}</div>
-                <div className="text-xs text-[var(--lxxl-muted)]">{roleText(currentUser.roles)}</div>
+                <div className="text-xs text-[var(--lxxl-muted)]">{activeRoleText}</div>
               </div>
               <button
                 className="rounded-xl border border-[var(--lxxl-border)] px-4 py-2"

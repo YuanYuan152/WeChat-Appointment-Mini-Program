@@ -103,7 +103,7 @@ const UserBoardListSection = memo(function UserBoardListSection({
         }}
       >
         <div>
-          <h2 className="text-xl font-semibold tracking-normal">用户看板</h2>
+          <h2 className="text-xl font-semibold tracking-normal">用户管理</h2>
           <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">
             按用户聚合订单、退款、豁免、预约和咨询室预约记录。
           </p>

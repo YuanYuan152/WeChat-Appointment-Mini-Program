@@ -19,6 +19,7 @@ export function ContentList({
   page,
   pageSize,
   onCreateClick,
+  onEdit,
   onDelete,
   onPageChange,
   onPageSizeChange,
@@ -29,6 +30,7 @@ export function ContentList({
   page?: number;
   pageSize?: number;
   onCreateClick: () => void;
+  onEdit: (item: ContentListItem) => void;
   onDelete: (id: number) => void;
   onPageChange?: (page: number) => void;
   onPageSizeChange?: (pageSize: number) => void;
@@ -80,9 +82,14 @@ export function ContentList({
                   </td>
                   <td className="px-5 py-4 text-[var(--lxxl-muted)]">{formatDate(item.date)}</td>
                   <td className="px-5 py-4">
-                    <TableActionButton tone="danger" onClick={() => onDelete(item.id)}>
-                      删除
-                    </TableActionButton>
+                    <div className="flex justify-end gap-3">
+                      <TableActionButton onClick={() => onEdit(item)}>
+                        修改
+                      </TableActionButton>
+                      <TableActionButton tone="danger" onClick={() => onDelete(item.id)}>
+                        删除
+                      </TableActionButton>
+                    </div>
                   </td>
                 </tr>
               ))}

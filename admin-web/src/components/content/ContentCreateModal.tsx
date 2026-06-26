@@ -10,6 +10,7 @@ export function ContentCreateModal({
   setDraft,
   onClose,
   onCreate,
+  mode = "create",
 }: {
   open: boolean;
   activeKind: ContentKind;
@@ -17,12 +18,14 @@ export function ContentCreateModal({
   setDraft: Dispatch<SetStateAction<ContentDraft>>;
   onClose: () => void;
   onCreate: () => Promise<void> | void;
+  mode?: "create" | "edit";
 }) {
   if (!open) {
     return null;
   }
 
   const title = getContentKindLabel(activeKind);
+  const actionText = mode === "edit" ? "修改" : "新建";
   const canSubmit = draft.title.trim() && (activeKind !== "banner" || draft.imageUrl.trim());
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -41,11 +44,13 @@ export function ContentCreateModal({
         onSubmit={handleSubmit}
         role="dialog"
         aria-modal="true"
-        aria-label={`新建${title}`}
+        aria-label={`${actionText}${title}`}
       >
         <div className="border-b border-[var(--lxxl-border)] px-6 py-5">
-          <h3 className="text-lg font-semibold">新建{title}</h3>
-          <p className="mt-1 text-sm text-[var(--lxxl-muted)]">填写后会创建到当前内容类型下。</p>
+          <h3 className="text-lg font-semibold">{actionText}{title}</h3>
+          <p className="mt-1 text-sm text-[var(--lxxl-muted)]">
+            {mode === "edit" ? "保存后会更新当前内容。" : "填写后会创建到当前内容类型下。"}
+          </p>
         </div>
 
         <div className="space-y-4 px-6 py-5">
@@ -95,7 +100,7 @@ export function ContentCreateModal({
             type="submit"
             disabled={!canSubmit}
           >
-            新建
+            {actionText}
           </button>
         </div>
       </form>

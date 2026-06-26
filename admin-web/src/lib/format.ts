@@ -67,6 +67,8 @@ export function statusLabel(status?: string | null) {
     IN_SESSION: "已预约",
     IDLE: "空闲",
     CANCELLED: "已取消",
+    OPEN: "未处理",
+    CLOSED: "已处理",
   };
   return status ? labels[status] || status : "-";
 }

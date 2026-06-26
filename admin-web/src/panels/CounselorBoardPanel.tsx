@@ -218,7 +218,7 @@ function CounselorDetailPanel({ detail }: { detail: CounselorBoardDetail }) {
         <MiniStat label="缺记录" value={detail.profile.missingRecordCount} />
         <MiniStat label="个案记录" value={detail.profile.caseRecordCount} />
         <MiniStat label="请假" value={detail.profile.leaveRequestCount} />
-        <MiniStat label="挂课" value={detail.profile.scheduleCount} />
+        <MiniStat label="排期" value={detail.profile.scheduleCount} />
         <MiniStat label="已预约排班" value={detail.profile.bookedScheduleCount} />
         <MiniStat label="咨询室使用" value={detail.roomUsage.length} />
       </div>

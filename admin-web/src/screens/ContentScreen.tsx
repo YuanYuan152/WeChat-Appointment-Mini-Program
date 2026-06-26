@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { createContent, deleteContent, fetchContentData } from "@/services/content";
+import { createContent, deleteContent, fetchContentData, updateContent } from "@/services/content";
 import { AppRoute, useAppRoute } from "@/components/AppRoute";
 import { ContentPanel } from "@/panels/ContentPanel";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
@@ -70,6 +70,7 @@ function ContentScreenContent() {
         setArticlePageSize(nextPageSize);
       }}
       onCreate={() => runAction(() => createContent(contentDraft), "内容已新增")}
+      onUpdate={(id) => runAction(() => updateContent(activeKind, id, contentDraft), "内容已修改")}
       onDelete={(kind, id) => runAction(() => deleteContent(kind, id), "内容已删除")}
     />
   );

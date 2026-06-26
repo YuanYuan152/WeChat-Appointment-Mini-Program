@@ -20,6 +20,7 @@ export function ContentPanel({
   onArticlePageChange,
   onArticlePageSizeChange,
   onCreate,
+  onUpdate,
   onDelete,
 }: {
   data: ScreenData;
@@ -32,9 +33,11 @@ export function ContentPanel({
   onArticlePageChange: (page: number) => void;
   onArticlePageSizeChange: (pageSize: number) => void;
   onCreate: () => Promise<void> | void;
+  onUpdate: (id: number) => Promise<void> | void;
   onDelete: (kind: ContentKind, id: number) => void;
 }) {
   const [createOpen, setCreateOpen] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [localPage, setLocalPage] = useState(1);
   const [localPageSize, setLocalPageSize] = useState(DEFAULT_PAGE_SIZE);
   const activeItems = getContentItems(data, activeKind);
@@ -44,6 +47,7 @@ export function ContentPanel({
   const localPageData = getPageItems(activeItems, localPage, localPageSize);
   const visibleItems = activeKind === "article" ? activeItems : localPageData.items;
   const resetDraft = () => setDraft({ kind: activeKind, title: "", summary: "", imageUrl: "" });
+  const editing = editingId != null;
 
   return (
     <section className="overflow-hidden rounded-xl border border-[var(--lxxl-border)] bg-white">
@@ -62,7 +66,18 @@ export function ContentPanel({
         page={articleCurrentPage ?? localPageData.currentPage}
         pageSize={articleCurrentPageSize ?? localPageSize}
         onCreateClick={() => {
+          setEditingId(null);
           resetDraft();
+          setCreateOpen(true);
+        }}
+        onEdit={(item) => {
+          setEditingId(item.id);
+          setDraft({
+            kind: activeKind,
+            title: item.title,
+            summary: item.summary || "",
+            imageUrl: item.imageUrl || "",
+          });
           setCreateOpen(true);
         }}
         onDelete={(id) => onDelete(activeKind, id)}
@@ -82,10 +97,19 @@ export function ContentPanel({
         activeKind={activeKind}
         draft={draft}
         setDraft={setDraft}
-        onClose={() => setCreateOpen(false)}
+        onClose={() => {
+          setCreateOpen(false);
+          setEditingId(null);
+        }}
+        mode={editing ? "edit" : "create"}
         onCreate={async () => {
-          await onCreate();
+          if (editing && editingId != null) {
+            await onUpdate(editingId);
+          } else {
+            await onCreate();
+          }
           resetDraft();
+          setEditingId(null);
         }}
       />
     </section>
