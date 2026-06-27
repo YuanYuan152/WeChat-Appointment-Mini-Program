@@ -169,6 +169,57 @@ export interface RoomStatusSnapshot {
   rooms: RoomStatus[];
 }
 
+export interface RoomDetailSlot {
+  key: string;
+  startTime?: string | null;
+  endTime?: string | null;
+  timeLabel: string;
+  past: boolean;
+  occupancy?: string | null;
+  statusLabel?: string | null;
+  manualStatus?: string | null;
+  editable: boolean;
+  scheduleId?: number | null;
+  counselorId?: number | null;
+  counselorName?: string | null;
+  counselorMobile?: string | null;
+  patientName?: string | null;
+  patientMobile?: string | null;
+  roomCode?: string | null;
+  roomName?: string | null;
+  scheduleStatus?: string | null;
+}
+
+export interface RoomDetailDay {
+  date: string;
+  slots: RoomDetailSlot[];
+}
+
+export interface RoomDetail extends Room {
+  current?: RoomStatus;
+  startDate: string;
+  endDate: string;
+  days: RoomDetailDay[];
+}
+
+export interface ScheduleRoomOption {
+  roomCode: string;
+  roomDbId?: number | null;
+  name: string;
+  isCurrent: boolean;
+}
+
+export interface ScheduleRoomOptions {
+  scheduleId: number;
+  centerId?: string | null;
+  centerName?: string | null;
+  currentRoomCode?: string | null;
+  currentRoomName?: string | null;
+  startTime?: string | null;
+  endTime?: string | null;
+  options: ScheduleRoomOption[];
+}
+
 export interface CounselorRecordSummary {
   counselorId: number;
   counselorName: string;
@@ -249,7 +300,12 @@ export interface OperationRecord {
   summary?: string | null;
   amount?: number | null;
   status?: string | null;
+  patientName?: string | null;
+  patientContact?: string | null;
   counselorName?: string | null;
+  counselorContact?: string | null;
+  relatedOrderId?: number | null;
+  relatedConsultationId?: number | null;
 }
 
 export interface UserBoardSummary {
@@ -326,6 +382,7 @@ export interface CounselorBoardSummary {
   activeRole?: string | null;
   consultationCount: number;
   completedConsultationCount: number;
+  cancelledConsultationCount: number;
   caseRecordCount: number;
   missingRecordCount: number;
   scheduleCount: number;
@@ -376,6 +433,13 @@ export interface CounselorBoardDetail {
     status: string;
     centerName?: string | null;
     roomName?: string | null;
+  }>;
+  scheduleCancelLogs: Array<{
+    id: number;
+    scheduleId: number;
+    consultationId?: number | null;
+    screenshotUrl?: string | null;
+    createdAt?: string | null;
   }>;
 }
 

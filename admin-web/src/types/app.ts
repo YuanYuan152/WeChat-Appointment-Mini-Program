@@ -15,7 +15,9 @@ import type {
   PagedResult,
   RefundExemption,
   Room,
+  RoomDetail,
   RoomStatusSnapshot,
+  ScheduleRoomOptions,
   ScheduleOverview,
   UserBoardDetail,
   UserBoardSummary,
@@ -61,6 +63,8 @@ export interface ScreenData {
   schedules?: ScheduleOverview;
   rooms?: Room[];
   roomStatus?: RoomStatusSnapshot;
+  selectedRoom?: RoomDetail;
+  selectedRoomOptions?: ScheduleRoomOptions;
   counselorRecords?: CounselorRecordSummary[];
   selectedCounselorRecords?: AdminConsultationRecord[];
   selectedCaseRecord?: AdminCaseRecordDetail;
@@ -87,7 +91,6 @@ export interface OperationFilters {
 
 export interface UserBoardFilters {
   keyword: string;
-  gender: string;
   mobile: string;
 }
 

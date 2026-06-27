@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useState } from "react";
 
 import { formatDateTime, statusLabel } from "@/lib/format";
 import type { CounselorBoardDetail, CounselorBoardSummary, PagedResult } from "@/types/api";
@@ -6,7 +6,6 @@ import type { CounselorBoardDetail, CounselorBoardSummary, PagedResult } from "@
 import { DetailDrawer } from "@/components/boards/DetailDrawer";
 import {
   Badge,
-  DetailList,
   EmptyState,
   MiniStat,
   Pagination,
@@ -140,6 +139,7 @@ const CounselorBoardListSection = memo(function CounselorBoardListSection({
                   <th className="px-5 py-3 font-medium">咨询师</th>
                   <th className="px-5 py-3 font-medium">联系电话</th>
                   <th className="px-5 py-3 font-medium">咨询</th>
+                  <th className="px-5 py-3 font-medium">来访取消</th>
                   <th className="px-5 py-3 font-medium">咨询记录</th>
                   <th className="px-5 py-3 font-medium">请假</th>
                   <th className="px-5 py-3 font-medium">排班</th>
@@ -164,6 +164,7 @@ const CounselorBoardListSection = memo(function CounselorBoardListSection({
                         完成 {record.completedConsultationCount}
                       </div>
                     </td>
+                    <td className="px-5 py-4 font-semibold">{record.cancelledConsultationCount}</td>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-2">
                         <span className="font-semibold">{record.caseRecordCount}</span>
@@ -207,6 +208,70 @@ const CounselorBoardListSection = memo(function CounselorBoardListSection({
 });
 
 function CounselorDetailPanel({ detail }: { detail: CounselorBoardDetail }) {
+  const consultationItems = detail.consultations.map((item) => ({
+    label: `咨询 #${item.id} · ${formatDateTime(item.startTime)} 至 ${formatDateTime(item.endTime)} · ${
+      item.patientName
+    } · ${statusLabel(item.status)}`,
+    detail: [
+      `咨询ID：${item.id}`,
+      `来访者：${item.patientName}${item.patientMobile ? `（${item.patientMobile}）` : ""}`,
+      `状态：${statusLabel(item.status)}`,
+      `时间：${formatDateTime(item.startTime)} 至 ${formatDateTime(item.endTime)}`,
+      `咨询记录：${item.hasCaseRecord ? "已填写" : "未填写"}`,
+    ],
+  }));
+  const caseRecordItems = detail.caseRecords.map((item) => ({
+    label: `记录 #${item.id} · 咨询 #${item.consultationId} · 更新 ${formatDateTime(item.updatedAt)}`,
+    detail: [
+      `记录ID：${item.id}`,
+      `咨询ID：${item.consultationId}`,
+      `创建时间：${formatDateTime(item.createdAt)}`,
+      `更新时间：${formatDateTime(item.updatedAt)}`,
+      item.preview ? `摘要：${item.preview}` : "摘要：-",
+    ],
+  }));
+  const leaveItems = detail.leaveRequests.map((item) => ({
+    label: `请假 #${item.id} · 排期 #${item.scheduleId} · ${statusLabel(item.status)}`,
+    detail: [
+      `请假ID：${item.id}`,
+      `排期ID：${item.scheduleId}`,
+      `提交时间：${formatDateTime(item.createdAt)}`,
+      `更新时间：${formatDateTime(item.updatedAt)}`,
+      `状态：${statusLabel(item.status)}`,
+      `原因：${item.reason}`,
+    ],
+  }));
+  const scheduleItems = detail.schedules.map((item) => ({
+    label: `排期 #${item.id} · ${formatDateTime(item.startTime)} 至 ${formatDateTime(item.endTime)} · ${statusLabel(item.status)}`,
+    detail: [
+      `排期ID：${item.id}`,
+      `状态：${statusLabel(item.status)}`,
+      `时间：${formatDateTime(item.startTime)} 至 ${formatDateTime(item.endTime)}`,
+      `地点：${item.centerName || "-"} ${item.roomName || ""}`,
+    ],
+  }));
+  const roomUsageItems = detail.roomUsage.map((item) => ({
+    label: `排期 #${item.scheduleId} · ${formatDateTime(item.startTime)} 至 ${formatDateTime(item.endTime)} · ${
+      item.centerName || "-"
+    } ${item.roomName || ""}`,
+    detail: [
+      `排期ID：${item.scheduleId}`,
+      `状态：${statusLabel(item.status)}`,
+      `时间：${formatDateTime(item.startTime)} 至 ${formatDateTime(item.endTime)}`,
+      `咨询室：${item.centerName || "-"} ${item.roomName || ""}`,
+    ],
+  }));
+  const cancelItems = detail.scheduleCancelLogs.map((item) => ({
+    label: `取消 #${item.id} · 排期 #${item.scheduleId} · ${formatDateTime(item.createdAt)}`,
+    detail: [
+      `取消记录ID：${item.id}`,
+      `排期ID：${item.scheduleId}`,
+      `咨询ID：${item.consultationId || "-"}`,
+      `提交时间：${formatDateTime(item.createdAt)}`,
+      `沟通截图：${item.screenshotUrl || "-"}`,
+    ],
+  }));
+
   return (
     <>
       <div className="text-sm text-[var(--lxxl-muted)]">咨询师详情</div>
@@ -215,6 +280,7 @@ function CounselorDetailPanel({ detail }: { detail: CounselorBoardDetail }) {
       <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
         <MiniStat label="咨询" value={detail.profile.consultationCount} />
         <MiniStat label="已完成" value={detail.profile.completedConsultationCount} />
+        <MiniStat label="来访取消" value={detail.profile.cancelledConsultationCount} />
         <MiniStat label="缺记录" value={detail.profile.missingRecordCount} />
         <MiniStat label="个案记录" value={detail.profile.caseRecordCount} />
         <MiniStat label="请假" value={detail.profile.leaveRequestCount} />
@@ -222,57 +288,53 @@ function CounselorDetailPanel({ detail }: { detail: CounselorBoardDetail }) {
         <MiniStat label="已预约排班" value={detail.profile.bookedScheduleCount} />
         <MiniStat label="咨询室使用" value={detail.roomUsage.length} />
       </div>
-      <DetailList
-        title="咨询明细"
-        items={detail.consultations.map(
-          (item) =>
-            `咨询 #${item.id} · ${formatDateTime(item.startTime)} 至 ${formatDateTime(item.endTime)} · ${
-              item.patientName
-            }${item.patientMobile ? `（${item.patientMobile}）` : ""} · ${statusLabel(item.status)} · ${
-              item.hasCaseRecord ? "已写记录" : "未写记录"
-            }`,
-        )}
-      />
-      <DetailList
-        title="咨询记录"
-        items={detail.caseRecords.map(
-          (item) =>
-            `记录 #${item.id} · 咨询 #${item.consultationId} · 创建 ${formatDateTime(item.createdAt)} · 更新 ${formatDateTime(
-              item.updatedAt,
-            )}${item.preview ? ` · ${item.preview}` : ""}`,
-        )}
-      />
-      <DetailList
-        title="请假记录"
-        items={detail.leaveRequests.map(
-          (item) =>
-            `请假 #${item.id} · 排班 #${item.scheduleId} · ${formatDateTime(item.createdAt)} · ${statusLabel(item.status)} · ${
-              item.reason
-            }`,
-        )}
-      />
-      <DetailList
-        title="排班记录"
-        items={detail.schedules.map(
-          (item) =>
-            `排班 #${item.id} · ${formatDateTime(item.startTime)} 至 ${formatDateTime(item.endTime)} · ${
-              item.centerName || "-"
-            } ${item.roomName || ""} · ${statusLabel(item.status)}`,
-        )}
-      />
-      <DetailList
-        title="使用咨询室记录"
-        items={detail.roomUsage.map(
-          (item) =>
-            `排班 #${item.scheduleId} · ${formatDateTime(item.startTime)} 至 ${formatDateTime(item.endTime)} · ${
-              item.centerName || "-"
-            } ${item.roomName || ""} · ${statusLabel(item.status)}`,
-        )}
-      />
-      <DetailList
-        title="更换咨询室记录"
-        items={[]}
-      />
+      <ClickableDetailList title="咨询明细" items={consultationItems} />
+      <ClickableDetailList title="咨询记录" items={caseRecordItems} />
+      <ClickableDetailList title="来访取消记录" items={cancelItems} />
+      <ClickableDetailList title="请假记录" items={leaveItems} />
+      <ClickableDetailList title="排期记录" items={scheduleItems} />
+      <ClickableDetailList title="使用咨询室记录" items={roomUsageItems} />
     </>
+  );
+}
+
+function ClickableDetailList({
+  title,
+  items,
+}: {
+  title: string;
+  items: Array<{ label: string; detail: string[] }>;
+}) {
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const selected = selectedIndex == null ? null : items[selectedIndex];
+
+  return (
+    <div className="mt-6">
+      <h4 className="text-sm font-semibold">{title}</h4>
+      {items.length === 0 ? (
+        <div className="mt-3 text-sm text-[var(--lxxl-muted)]">暂无记录</div>
+      ) : (
+        <div className="mt-3 space-y-2">
+          {items.map((item, index) => (
+            <button
+              key={`${title}-${index}`}
+              className="block w-full rounded-xl bg-[#FAF8F4] p-3 text-left text-xs leading-5 text-[var(--lxxl-muted)] transition hover:bg-[#F4F1EB] hover:text-[var(--lxxl-text)]"
+              type="button"
+              onClick={() => setSelectedIndex(index)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
+      {selected && (
+        <div className="mt-3 rounded-xl border border-[var(--lxxl-border)] bg-white p-3 text-xs leading-6 text-[var(--lxxl-muted)]">
+          <div className="mb-1 font-medium text-[var(--lxxl-text)]">记录详情</div>
+          {selected.detail.map((line, index) => (
+            <div key={`${title}-detail-${index}`}>{line}</div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

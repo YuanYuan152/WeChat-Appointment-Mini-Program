@@ -17,9 +17,6 @@ export function fetchUserBoard(filters: UserBoardFilters, pagination: Pagination
   if (filters.keyword) {
     params.set("keyword", filters.keyword);
   }
-  if (filters.gender) {
-    params.set("gender", filters.gender);
-  }
   if (filters.mobile) {
     params.set("mobile", filters.mobile);
   }

@@ -12,7 +12,6 @@ import type { ScreenData, UserBoardFilters } from "@/types/app";
 
 const INITIAL_USER_BOARD_FILTERS: UserBoardFilters = {
   keyword: "",
-  gender: "",
   mobile: "",
 };
 
@@ -130,5 +129,5 @@ function UserBoardScreenContent() {
 }
 
 function areUserBoardFiltersEqual(left: UserBoardFilters, right: UserBoardFilters) {
-  return left.keyword === right.keyword && left.gender === right.gender && left.mobile === right.mobile;
+  return left.keyword === right.keyword && left.mobile === right.mobile;
 }

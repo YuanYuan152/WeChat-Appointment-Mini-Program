@@ -88,7 +88,7 @@ export function AppRoute({ sectionId, children }: { sectionId: SectionId; childr
       await loginWithDevCode(code);
       const me = await fetchCurrentUser();
       setCurrentUser(me);
-      showNotice("success", `已进入${roleLabel(me.activeRole)}开发账号`);
+      showNotice("success", `已进入${roleLabel(me.activeRole)}`);
       router.replace(sectionPathById[sectionId]);
     } catch (error) {
       showNotice("error", error instanceof Error ? error.message : "登录失败");
@@ -156,7 +156,7 @@ export function AppRoute({ sectionId, children }: { sectionId: SectionId; childr
         <section className="w-full max-w-lg rounded-2xl border border-[var(--lxxl-border)] bg-white p-8">
           <h1 className="text-xl font-semibold">无法进入 Web 管理端</h1>
           <p className="mt-3 text-sm leading-6 text-[var(--lxxl-muted)]">
-            当前账号是 {roleText(currentUser.roles)}，Web 第一版只开放管理员和运营角色。
+            当前账号是 {roleText(currentUser.roles)}，仅管理员和运营角色可以进入。
           </p>
           <button
             className="mt-6 rounded-xl bg-[var(--lxxl-green)] px-5 py-2 text-sm font-medium text-white"

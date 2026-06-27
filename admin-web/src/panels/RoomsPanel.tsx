@@ -1,46 +1,73 @@
-import { statusLabel } from "@/lib/format";
-import type { Room, RoomStatusSnapshot } from "@/types/api";
+import { useEffect, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 
-import { getPageItems } from "@/lib/pagination";
+import { DetailDrawer } from "@/components/boards/DetailDrawer";
 import {
   Badge,
   EmptyState,
+  MiniStat,
   Pagination,
   QueryButton,
   QueryField,
   QueryResetButton,
+  TableActionButton,
   queryControlClass,
 } from "@/components/ui";
-import { TimePicker } from "@/components/TimePicker";
 import { getLocalDateValue } from "@/lib/date";
+import { formatDateTime, statusLabel } from "@/lib/format";
+import { getPageItems } from "@/lib/pagination";
+import type { Room, RoomDetail, RoomStatus, RoomStatusSnapshot, ScheduleRoomOptions } from "@/types/api";
 import type { RoomFilters } from "@/types/app";
+
+const FIXED_TIME_SLOTS = ["09:00", "10:00", "11:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00"];
+const ROOM_STATUS_OPTIONS = ["AVAILABLE", "MAINTENANCE", "DISABLED"];
 
 export function RoomsPanel({
   rooms,
   roomStatus,
   listLoading,
+  detailLoading,
+  actionLoading,
+  selectedRoom,
+  selectedSnapshot,
+  roomOptions,
   filters,
   setFilters,
   page,
   pageSize,
   onSearch,
   onReset,
+  onOpenRoom,
+  onCloseDetail,
+  onSaveRoom,
+  onAddRoom,
+  onChangeScheduleRoom,
   onPageChange,
   onPageSizeChange,
 }: {
   rooms?: Room[];
   roomStatus?: RoomStatusSnapshot;
   listLoading: boolean;
+  detailLoading: boolean;
+  actionLoading: boolean;
+  selectedRoom?: RoomDetail;
+  selectedSnapshot?: RoomStatus;
+  roomOptions?: ScheduleRoomOptions;
   filters: RoomFilters;
   setFilters: Dispatch<SetStateAction<RoomFilters>>;
   page: number;
   pageSize: number;
   onSearch: () => void;
   onReset: () => void;
+  onOpenRoom: (room: Room, snapshot?: RoomStatus) => void;
+  onCloseDetail: () => void;
+  onSaveRoom: (roomId: number, input: { name: string; status: string }) => Promise<void>;
+  onAddRoom: (input: { centerId: string; name: string; roomCode?: string; status: string }) => Promise<boolean>;
+  onChangeScheduleRoom: (scheduleId: number, roomCode: string) => Promise<void>;
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
 }) {
+  const [createOpen, setCreateOpen] = useState(false);
   const statusMap = new Map((roomStatus?.rooms || []).map((room) => [`${room.centerId}-${room.roomCode}`, room]));
   const allRooms = rooms || [];
   const { currentPage, items } = getPageItems(allRooms, page, pageSize);
@@ -49,108 +76,395 @@ export function RoomsPanel({
   }`;
 
   return (
-    <section className="rounded-xl border border-[var(--lxxl-border)] bg-white">
-      <form
-        className="px-6 py-5 sm:px-7 lg:px-8"
-        onSubmit={(event) => {
-          event.preventDefault();
-          onSearch();
-        }}
-      >
-        <div>
-          <h2 className="text-xl font-semibold tracking-normal">咨询室情况</h2>
-          <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">快照：{snapshotText}。支持按预约中心、日期和时段查询。</p>
-        </div>
+    <>
+      <section className="rounded-xl border border-[var(--lxxl-border)] bg-white">
+        <form
+          className="px-6 py-5 sm:px-7 lg:px-8"
+          onSubmit={(event) => {
+            event.preventDefault();
+            onSearch();
+          }}
+        >
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-semibold tracking-normal">咨询室情况</h2>
+              <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">
+                快照：{snapshotText}。支持按预约中心、日期和固定时段查询。
+              </p>
+            </div>
+            <button
+              className="h-10 rounded-xl bg-[var(--lxxl-green)] px-4 text-sm font-medium text-white transition hover:bg-[var(--lxxl-green-dark)]"
+              type="button"
+              onClick={() => setCreateOpen(true)}
+            >
+              新增咨询室
+            </button>
+          </div>
 
-        <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <QueryField label="预约中心">
+          <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <QueryField label="预约中心">
+              <select
+                className={queryControlClass}
+                value={filters.centerId}
+                onChange={(event) => setFilters((prev) => ({ ...prev, centerId: event.target.value }))}
+              >
+                <option value="">全部中心</option>
+                <option value="yangpu">杨浦预约中心</option>
+                <option value="pudong">浦东预约中心</option>
+              </select>
+            </QueryField>
+
+            <QueryField label="日期">
+              <input
+                className={queryControlClass}
+                type="date"
+                value={filters.date}
+                onChange={(event) => setFilters((prev) => ({ ...prev, date: event.target.value }))}
+              />
+            </QueryField>
+
+            <QueryField label="时段">
+              <select
+                className={queryControlClass}
+                value={filters.timeSlot}
+                onChange={(event) => setFilters((prev) => ({ ...prev, timeSlot: event.target.value }))}
+              >
+                <option value="">默认时段</option>
+                {FIXED_TIME_SLOTS.map((slot) => (
+                  <option key={slot} value={slot}>
+                    {slotLabel(slot)}
+                  </option>
+                ))}
+              </select>
+            </QueryField>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-3">
+            <QueryButton type="submit" />
+            <QueryResetButton onClick={onReset} />
+          </div>
+        </form>
+
+        <div className="relative">
+          {listLoading && allRooms.length > 0 && (
+            <div className="absolute inset-x-0 top-0 z-10 border-t border-[var(--lxxl-border)] bg-white/80 px-5 py-3 text-sm text-[var(--lxxl-muted)] backdrop-blur-sm">
+              正在加载列表...
+            </div>
+          )}
+          {allRooms.length === 0 ? (
+            <EmptyState text={listLoading ? "正在加载列表..." : "暂无咨询室数据。"} />
+          ) : (
+            <>
+              <table className="w-full border-collapse text-sm">
+                <thead className="bg-[#FAF8F4] text-left text-[var(--lxxl-muted)]">
+                  <tr>
+                    <th className="px-5 py-3 font-medium">预约中心</th>
+                    <th className="px-5 py-3 font-medium">咨询室</th>
+                    <th className="px-5 py-3 font-medium">全局状态</th>
+                    <th className="px-5 py-3 font-medium">当前占用</th>
+                    <th className="px-5 py-3 font-medium">咨询师</th>
+                    <th className="px-5 py-3 font-medium">来访者</th>
+                    <th className="px-5 py-3 font-medium">操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((room) => {
+                    const snapshot = statusMap.get(`${room.centerId}-${room.roomCode}`);
+                    return (
+                      <tr key={`${room.centerId}-${room.roomCode}`} className="border-t border-[var(--lxxl-border)]">
+                        <td className="px-5 py-4">{room.centerName}</td>
+                        <td className="px-5 py-4">
+                          <div className="font-medium">{room.name}</div>
+                          <div className="mt-1 text-xs text-[var(--lxxl-muted)]">{room.roomCode}</div>
+                        </td>
+                        <td className="px-5 py-4">
+                          <Badge>{statusLabel(room.status)}</Badge>
+                        </td>
+                        <td className="px-5 py-4">
+                          <Badge tone={snapshot?.occupancy === "IN_SESSION" ? "gold" : "green"}>
+                            {statusLabel(snapshot?.occupancy)}
+                          </Badge>
+                        </td>
+                        <td className="px-5 py-4">
+                          <div>{snapshot?.counselorName || "-"}</div>
+                          {snapshot?.counselorMobile && (
+                            <div className="mt-1 text-xs text-[var(--lxxl-muted)]">{snapshot.counselorMobile}</div>
+                          )}
+                        </td>
+                        <td className="px-5 py-4">
+                          <div>{snapshot?.patientName || "-"}</div>
+                          {snapshot?.patientMobile && (
+                            <div className="mt-1 text-xs text-[var(--lxxl-muted)]">{snapshot.patientMobile}</div>
+                          )}
+                        </td>
+                        <td className="px-5 py-4">
+                          <TableActionButton onClick={() => onOpenRoom(room, snapshot)}>查看</TableActionButton>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              <Pagination
+                page={currentPage}
+                pageSize={pageSize}
+                total={allRooms.length}
+                onPageChange={onPageChange}
+                onPageSizeChange={onPageSizeChange}
+              />
+            </>
+          )}
+        </div>
+      </section>
+
+      {(detailLoading || selectedRoom) && (
+        <DetailDrawer title="咨询室详情" onClose={onCloseDetail}>
+          {detailLoading && !selectedRoom ? (
+            <div className="py-10 text-sm text-[var(--lxxl-muted)]">正在加载详情...</div>
+          ) : selectedRoom ? (
+            <RoomDetailPanel
+              actionLoading={actionLoading}
+              room={selectedRoom}
+              roomOptions={roomOptions}
+              snapshot={selectedSnapshot}
+              onChangeScheduleRoom={onChangeScheduleRoom}
+              onSaveRoom={onSaveRoom}
+            />
+          ) : null}
+        </DetailDrawer>
+      )}
+
+      {createOpen && (
+        <CreateRoomModal
+          actionLoading={actionLoading}
+          onClose={() => setCreateOpen(false)}
+          onSubmit={async (input) => {
+            const ok = await onAddRoom(input);
+            if (ok) {
+              setCreateOpen(false);
+            }
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+function RoomDetailPanel({
+  room,
+  snapshot,
+  roomOptions,
+  actionLoading,
+  onSaveRoom,
+  onChangeScheduleRoom,
+}: {
+  room: RoomDetail;
+  snapshot?: RoomStatus;
+  roomOptions?: ScheduleRoomOptions;
+  actionLoading: boolean;
+  onSaveRoom: (roomId: number, input: { name: string; status: string }) => Promise<void>;
+  onChangeScheduleRoom: (scheduleId: number, roomCode: string) => Promise<void>;
+}) {
+  const activeSnapshot = snapshot || room.current;
+  const scheduleId = activeSnapshot?.scheduleId || room.current?.scheduleId;
+  const [name, setName] = useState(room.name);
+  const [status, setStatus] = useState(room.status);
+  const [targetRoomCode, setTargetRoomCode] = useState("");
+
+  useEffect(() => {
+    setName(room.name);
+    setStatus(room.status);
+  }, [room.id, room.name, room.status]);
+
+  useEffect(() => {
+    const nextRoom = roomOptions?.options.find((option) => !option.isCurrent)?.roomCode || "";
+    setTargetRoomCode(nextRoom);
+  }, [roomOptions]);
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <div className="text-sm text-[var(--lxxl-muted)]">咨询室详情</div>
+        <h3 className="mt-2 text-lg font-semibold">{room.name}</h3>
+        <div className="mt-1 text-sm text-[var(--lxxl-muted)]">
+          {room.centerName} · {room.roomCode}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 text-sm">
+        <MiniStat label="全局状态" value={statusLabel(room.status)} />
+        <MiniStat label="当前占用" value={statusLabel(activeSnapshot?.occupancy)} />
+        <MiniStat label="咨询师" value={activeSnapshot?.counselorName || "-"} />
+        <MiniStat label="来访者" value={activeSnapshot?.patientName || "-"} />
+      </div>
+
+      <div className="rounded-xl border border-[var(--lxxl-border)] p-4">
+        <h4 className="text-sm font-semibold">联系方式</h4>
+        <div className="mt-3 grid gap-2 text-sm text-[var(--lxxl-muted)]">
+          <div>咨询师：{activeSnapshot?.counselorName || "-"} {activeSnapshot?.counselorMobile || ""}</div>
+          <div>来访者：{activeSnapshot?.patientName || "-"} {activeSnapshot?.patientMobile || ""}</div>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-[var(--lxxl-border)] p-4">
+        <h4 className="text-sm font-semibold">编辑咨询室</h4>
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <QueryField label="咨询室名称">
+            <input className={queryControlClass} value={name} onChange={(event) => setName(event.target.value)} />
+          </QueryField>
+          <QueryField label="状态">
+            <select className={queryControlClass} value={status} onChange={(event) => setStatus(event.target.value)}>
+              {ROOM_STATUS_OPTIONS.map((item) => (
+                <option key={item} value={item}>
+                  {statusLabel(item)}
+                </option>
+              ))}
+            </select>
+          </QueryField>
+        </div>
+        <button
+          className="mt-4 h-10 rounded-xl bg-[var(--lxxl-green)] px-4 text-sm font-medium text-white disabled:opacity-50"
+          type="button"
+          disabled={actionLoading || !room.id || !name.trim()}
+          onClick={() => room.id && onSaveRoom(room.id, { name: name.trim(), status })}
+        >
+          保存
+        </button>
+      </div>
+
+      <div className="rounded-xl border border-[var(--lxxl-border)] p-4">
+        <h4 className="text-sm font-semibold">调换咨询室</h4>
+        {scheduleId ? (
+          <div className="mt-3 space-y-3">
+            <div className="text-sm text-[var(--lxxl-muted)]">
+              当前预约：排期 #{scheduleId} · {formatDateTime(activeSnapshot?.startTime)} 至{" "}
+              {formatDateTime(activeSnapshot?.endTime)}
+            </div>
             <select
               className={queryControlClass}
-              value={filters.centerId}
-              onChange={(event) => setFilters((prev) => ({ ...prev, centerId: event.target.value }))}
+              value={targetRoomCode}
+              onChange={(event) => setTargetRoomCode(event.target.value)}
             >
-              <option value="">全部中心</option>
+              <option value="">选择可调换咨询室</option>
+              {(roomOptions?.options || []).map((option) => (
+                <option key={option.roomCode} value={option.roomCode} disabled={option.isCurrent}>
+                  {option.name}{option.isCurrent ? "（当前）" : ""}
+                </option>
+              ))}
+            </select>
+            <button
+              className="h-10 rounded-xl bg-[var(--lxxl-green)] px-4 text-sm font-medium text-white disabled:opacity-50"
+              type="button"
+              disabled={actionLoading || !targetRoomCode}
+              onClick={() => onChangeScheduleRoom(scheduleId, targetRoomCode)}
+            >
+              确认调换
+            </button>
+          </div>
+        ) : (
+          <div className="mt-3 text-sm text-[var(--lxxl-muted)]">当前时段没有已预约咨询，无需调换。</div>
+        )}
+      </div>
+
+      <div>
+        <h4 className="text-sm font-semibold">未来时段</h4>
+        <div className="mt-3 space-y-3">
+          {room.days.map((day) => (
+            <div key={day.date} className="rounded-xl border border-[var(--lxxl-border)]">
+              <div className="border-b border-[var(--lxxl-border)] px-4 py-3 text-sm font-medium">{day.date}</div>
+              <div className="divide-y divide-[var(--lxxl-border)]">
+                {day.slots.map((slot) => (
+                  <div key={`${day.date}-${slot.key}`} className="grid grid-cols-[110px_1fr] gap-3 px-4 py-3 text-xs">
+                    <div className="font-medium">{slot.timeLabel}</div>
+                    <div className="text-[var(--lxxl-muted)]">
+                      {slot.statusLabel || statusLabel(slot.occupancy)} · {slot.counselorName || "-"} ·{" "}
+                      {slot.patientName || "-"}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CreateRoomModal({
+  actionLoading,
+  onClose,
+  onSubmit,
+}: {
+  actionLoading: boolean;
+  onClose: () => void;
+  onSubmit: (input: { centerId: string; name: string; roomCode?: string; status: string }) => Promise<void>;
+}) {
+  const [centerId, setCenterId] = useState("yangpu");
+  const [name, setName] = useState("");
+  const [roomCode, setRoomCode] = useState("");
+  const [status, setStatus] = useState("AVAILABLE");
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/30 px-6">
+      <form
+        className="w-full max-w-lg rounded-2xl border border-[var(--lxxl-border)] bg-white p-6 shadow-2xl"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void onSubmit({ centerId, name: name.trim(), roomCode: roomCode.trim() || undefined, status });
+        }}
+      >
+        <h3 className="text-lg font-semibold">新增咨询室</h3>
+        <div className="mt-5 grid gap-4">
+          <QueryField label="预约中心">
+            <select className={queryControlClass} value={centerId} onChange={(event) => setCenterId(event.target.value)}>
               <option value="yangpu">杨浦预约中心</option>
               <option value="pudong">浦东预约中心</option>
             </select>
           </QueryField>
-
-          <QueryField label="日期">
-            <input
-              className={queryControlClass}
-              type="date"
-              value={filters.date}
-              onChange={(event) => setFilters((prev) => ({ ...prev, date: event.target.value }))}
-            />
+          <QueryField label="咨询室名称">
+            <input className={queryControlClass} placeholder="例如：咨询室 D" value={name} onChange={(event) => setName(event.target.value)} />
           </QueryField>
-
-          <QueryField label="时段">
-            <TimePicker
-              value={filters.timeSlot}
-              onChange={(value) => setFilters((prev) => ({ ...prev, timeSlot: value }))}
-            />
+          <QueryField label="咨询室编号">
+            <input className={queryControlClass} placeholder="可不填，系统自动生成" value={roomCode} onChange={(event) => setRoomCode(event.target.value)} />
+          </QueryField>
+          <QueryField label="初始状态">
+            <select className={queryControlClass} value={status} onChange={(event) => setStatus(event.target.value)}>
+              {ROOM_STATUS_OPTIONS.map((item) => (
+                <option key={item} value={item}>
+                  {statusLabel(item)}
+                </option>
+              ))}
+            </select>
           </QueryField>
         </div>
-
-        <div className="mt-4 flex flex-wrap gap-3">
-          <QueryButton type="submit" />
-          <QueryResetButton onClick={onReset} />
+        <div className="mt-6 flex justify-start gap-3">
+          <button
+            className="h-10 rounded-xl bg-[var(--lxxl-green)] px-4 text-sm font-medium text-white disabled:opacity-50"
+            type="submit"
+            disabled={actionLoading || !name.trim()}
+          >
+            新增
+          </button>
+          <button
+            className="h-10 rounded-xl border border-[var(--lxxl-border)] px-4 text-sm font-medium text-[var(--lxxl-muted)]"
+            type="button"
+            disabled={actionLoading}
+            onClick={onClose}
+          >
+            取消
+          </button>
         </div>
       </form>
-
-      <div className="relative">
-        {listLoading && allRooms.length > 0 && (
-          <div className="absolute inset-x-0 top-0 z-10 border-t border-[var(--lxxl-border)] bg-white/80 px-5 py-3 text-sm text-[var(--lxxl-muted)] backdrop-blur-sm">
-            正在加载列表...
-          </div>
-        )}
-        {allRooms.length === 0 ? (
-          <EmptyState text={listLoading ? "正在加载列表..." : "暂无咨询室数据。"} />
-        ) : (
-          <>
-            <table className="w-full border-collapse text-sm">
-              <thead className="bg-[#FAF8F4] text-left text-[var(--lxxl-muted)]">
-                <tr>
-                  <th className="px-5 py-3 font-medium">预约中心</th>
-                  <th className="px-5 py-3 font-medium">咨询室</th>
-                  <th className="px-5 py-3 font-medium">全局状态</th>
-                  <th className="px-5 py-3 font-medium">当前占用</th>
-                  <th className="px-5 py-3 font-medium">咨询师</th>
-                  <th className="px-5 py-3 font-medium">来访者</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((room) => {
-                  const snapshot = statusMap.get(`${room.centerId}-${room.roomCode}`);
-                  return (
-                    <tr key={`${room.centerId}-${room.roomCode}`} className="border-t border-[var(--lxxl-border)]">
-                      <td className="px-5 py-4">{room.centerName}</td>
-                      <td className="px-5 py-4">{room.name}</td>
-                      <td className="px-5 py-4">
-                        <Badge>{statusLabel(room.status)}</Badge>
-                      </td>
-                      <td className="px-5 py-4">
-                        <Badge tone={snapshot?.occupancy === "IN_SESSION" ? "gold" : "green"}>
-                          {statusLabel(snapshot?.occupancy)}
-                        </Badge>
-                      </td>
-                      <td className="px-5 py-4">{snapshot?.counselorName || "-"}</td>
-                      <td className="px-5 py-4">{snapshot?.patientName || "-"}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            <Pagination
-              page={currentPage}
-              pageSize={pageSize}
-              total={allRooms.length}
-              onPageChange={onPageChange}
-              onPageSizeChange={onPageSizeChange}
-            />
-          </>
-        )}
-      </div>
-    </section>
+    </div>
   );
+}
+
+function slotLabel(slot: string) {
+  const [hourText] = slot.split(":");
+  const hour = Number(hourText);
+  if (Number.isNaN(hour)) {
+    return slot;
+  }
+  return `${slot}-${String(hour).padStart(2, "0")}:50`;
 }

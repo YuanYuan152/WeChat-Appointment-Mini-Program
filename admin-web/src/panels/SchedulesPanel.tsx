@@ -10,6 +10,9 @@ export function SchedulesPanel({
   listLoading,
   selectedDate,
   setSelectedDate,
+  selectedKeyword,
+  setSelectedKeyword,
+  queryKeyword,
   page,
   pageSize,
   onSearch,
@@ -21,6 +24,9 @@ export function SchedulesPanel({
   listLoading: boolean;
   selectedDate: string;
   setSelectedDate: (value: string) => void;
+  selectedKeyword: string;
+  setSelectedKeyword: (value: string) => void;
+  queryKeyword: string;
   page: number;
   pageSize: number;
   onSearch: () => void;
@@ -31,7 +37,17 @@ export function SchedulesPanel({
   const rows = schedules?.counselors.flatMap((counselor) =>
     counselor.schedules.map((schedule) => ({ counselorName: counselor.counselorName, ...schedule })),
   ) || [];
-  const { currentPage, items } = getPageItems(rows, page, pageSize);
+  const normalizedKeyword = queryKeyword.trim().toLowerCase();
+  const filteredRows = normalizedKeyword
+    ? rows.filter((row) =>
+        [row.counselorName, row.patientName, row.centerName, row.roomName]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase()
+          .includes(normalizedKeyword),
+      )
+    : rows;
+  const { currentPage, items } = getPageItems(filteredRows, page, pageSize);
 
   return (
     <section className="rounded-xl border border-[var(--lxxl-border)] bg-white">
@@ -58,6 +74,14 @@ export function SchedulesPanel({
               onChange={(event) => setSelectedDate(event.target.value)}
             />
           </QueryField>
+          <QueryField label="姓名">
+            <input
+              className={queryControlClass}
+              placeholder="咨询师/来访者"
+              value={selectedKeyword}
+              onChange={(event) => setSelectedKeyword(event.target.value)}
+            />
+          </QueryField>
         </div>
 
         <div className="mt-4 flex flex-wrap gap-3">
@@ -71,7 +95,7 @@ export function SchedulesPanel({
             正在加载列表...
           </div>
         )}
-        {rows.length === 0 ? (
+        {filteredRows.length === 0 ? (
         <EmptyState text={listLoading ? "正在加载列表..." : "该日期暂无排期记录。"} />
       ) : (
         <>
@@ -106,7 +130,7 @@ export function SchedulesPanel({
           <Pagination
             page={currentPage}
             pageSize={pageSize}
-            total={rows.length}
+            total={filteredRows.length}
             onPageChange={onPageChange}
             onPageSizeChange={onPageSizeChange}
           />

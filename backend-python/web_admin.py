@@ -391,8 +391,19 @@ def operation_records(
         item["operatorName"] = _account_name(operator) if operator else "-"
         item["operatorContact"] = _account_contact(operator)
         item["operatorRoles"] = item_roles
-        if item.get("patientId") and not item.get("targetName"):
-            item["targetName"] = _account_name(accounts.get(item["patientId"]))
+        patient = accounts.get(item.get("patientId"))
+        counselor = accounts.get(item.get("counselorId"))
+        if patient:
+            item["patientName"] = _account_name(patient)
+            item["patientContact"] = _account_contact(patient)
+        if counselor:
+            item["counselorName"] = _counselor_name(accounts, item["counselorId"])
+            item["counselorContact"] = _account_contact(counselor)
+        if not item.get("targetName"):
+            if patient and counselor:
+                item["targetName"] = f"{_account_name(patient)} / {_account_name(counselor)}"
+            elif patient:
+                item["targetName"] = _account_name(patient)
         if item.get("counselorId"):
             item["counselorName"] = _counselor_name(accounts, item["counselorId"])
         text = " ".join(
@@ -436,7 +447,7 @@ def _user_summary(db: Session, account: AppAccount, roles: list[str]) -> dict[st
         "pendingExemptionCount": len([e for e in exemptions if e.Status == "PENDING"]),
         "consultationCount": len(consultations),
         "completedConsultationCount": len([c for c in consultations if c.Status == "DONE"]),
-        "cancelledConsultationCount": len([c for c in consultations if c.Status == "CANCELLED"]),
+        "cancelledConsultationCount": len([c for c in consultations if c.Status in ("CANCELLED", "CANCELED")]),
         "latestConsultationAt": max([c.StartTime for c in consultations if c.StartTime] or [None]),
         "createdAt": account.CreatedAt,
     }
@@ -573,6 +584,7 @@ def _counselor_summary(db: Session, account: AppAccount) -> dict[str, Any]:
     schedules = db.query(AppSchedule).filter(AppSchedule.CounselorId == account.Id).all()
     leave_requests = db.query(AppLeaveRequest).filter(AppLeaveRequest.CounselorId == account.Id).all()
     completed = [c for c in consultations if c.Status == "DONE"]
+    cancelled = [c for c in consultations if c.Status in ("CANCELLED", "CANCELED")]
     recorded_consultation_ids = {r.ConsultationId for r in records}
     return {
         "id": account.Id,
@@ -581,6 +593,7 @@ def _counselor_summary(db: Session, account: AppAccount) -> dict[str, Any]:
         "activeRole": account.ActiveRole,
         "consultationCount": len(consultations),
         "completedConsultationCount": len(completed),
+        "cancelledConsultationCount": len(cancelled),
         "caseRecordCount": len(records),
         "missingRecordCount": len([c for c in completed if c.Id not in recorded_consultation_ids]),
         "scheduleCount": len(schedules),

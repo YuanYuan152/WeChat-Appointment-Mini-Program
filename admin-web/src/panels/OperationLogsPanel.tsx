@@ -82,6 +82,7 @@ export function OperationLogsPanel({
               <option value="CONSULTATION">预约</option>
               <option value="CASE_RECORD">咨询记录</option>
               <option value="LEAVE_REQUEST">请假</option>
+              <option value="SCHEDULE_CANCEL">咨询师取消</option>
               <option value="CONTENT">内容</option>
               <option value="ROLE_SWITCH">角色切换</option>
             </select>
@@ -154,7 +155,32 @@ export function OperationLogsPanel({
                     </div>
                   </td>
                   <td className="px-5 py-4">
-                    {record.targetName || record.counselorName || `${record.targetType || "-"}#${record.targetId || "-"}`}
+                    <div className="font-medium">
+                      {record.targetName || record.counselorName || `${record.targetType || "-"}#${record.targetId || "-"}`}
+                    </div>
+                    {(record.patientName || record.counselorName) && (
+                      <div className="mt-1 text-xs leading-5 text-[var(--lxxl-muted)]">
+                        {record.patientName && (
+                          <div>
+                            来访：{record.patientName}
+                            {record.patientContact ? `（${record.patientContact}）` : ""}
+                          </div>
+                        )}
+                        {record.counselorName && (
+                          <div>
+                            咨询师：{record.counselorName}
+                            {record.counselorContact ? `（${record.counselorContact}）` : ""}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {(record.relatedOrderId || record.relatedConsultationId) && (
+                      <div className="mt-1 text-xs text-[var(--lxxl-muted)]">
+                        {record.relatedOrderId ? `订单 #${record.relatedOrderId}` : ""}
+                        {record.relatedOrderId && record.relatedConsultationId ? " · " : ""}
+                        {record.relatedConsultationId ? `咨询 #${record.relatedConsultationId}` : ""}
+                      </div>
+                    )}
                   </td>
                   <td className="px-5 py-4">{record.amount == null ? "-" : formatMoneyFromCents(record.amount)}</td>
                   <td className="px-5 py-4">

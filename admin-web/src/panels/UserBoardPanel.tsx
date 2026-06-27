@@ -118,18 +118,6 @@ const UserBoardListSection = memo(function UserBoardListSection({
               onChange={(event) => setFilters((prev) => ({ ...prev, keyword: event.target.value }))}
             />
           </QueryField>
-          <QueryField label="性别">
-            <select
-              className={`${queryControlClass} appearance-auto`}
-              value={filters.gender}
-              onChange={(event) => setFilters((prev) => ({ ...prev, gender: event.target.value }))}
-            >
-              <option value="">全部性别</option>
-              <option value="男">男</option>
-              <option value="女">女</option>
-              <option value="其他">其他</option>
-            </select>
-          </QueryField>
           <QueryField label="电话">
             <input
               className={queryControlClass}
@@ -286,10 +274,6 @@ function UserDetailPanel({ detail }: { detail: UserBoardDetail }) {
       <DetailList
         title="预约咨询室记录"
         items={detail.roomBookings.map(roomBookingText)}
-      />
-      <DetailList
-        title="更换咨询室记录"
-        items={[]}
       />
     </>
   );

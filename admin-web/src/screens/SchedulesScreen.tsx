@@ -22,6 +22,8 @@ function SchedulesScreenContent() {
   const [data, setData] = useState<ScreenData>({});
   const [selectedDate, setSelectedDate] = useState(() => getLocalDateValue());
   const [queryDate, setQueryDate] = useState(() => getLocalDateValue());
+  const [selectedKeyword, setSelectedKeyword] = useState("");
+  const [queryKeyword, setQueryKeyword] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [listLoading, setListLoading] = useState(false);
@@ -46,15 +48,19 @@ function SchedulesScreenContent() {
   const search = useCallback(() => {
     setPage(1);
     if (selectedDate === queryDate) {
+      setQueryKeyword(selectedKeyword.trim());
       void loadData();
       return;
     }
+    setQueryKeyword(selectedKeyword.trim());
     setQueryDate(selectedDate);
-  }, [loadData, queryDate, selectedDate]);
+  }, [loadData, queryDate, selectedDate, selectedKeyword]);
 
   const resetDate = useCallback(() => {
     const today = getLocalDateValue();
     setSelectedDate(today);
+    setSelectedKeyword("");
+    setQueryKeyword("");
     setPage(1);
     if (queryDate === today) {
       void loadData();
@@ -74,6 +80,9 @@ function SchedulesScreenContent() {
       listLoading={listLoading}
       selectedDate={selectedDate}
       setSelectedDate={setSelectedDate}
+      selectedKeyword={selectedKeyword}
+      setSelectedKeyword={setSelectedKeyword}
+      queryKeyword={queryKeyword}
       page={page}
       pageSize={pageSize}
       onSearch={search}
