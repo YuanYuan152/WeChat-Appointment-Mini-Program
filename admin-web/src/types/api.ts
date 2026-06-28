@@ -190,6 +190,8 @@ export interface RoomDetailSlot {
   scheduleStatus?: string | null;
 }
 
+export type RoomSlotManualStatus = "AVAILABLE" | "MAINTENANCE" | "DISABLED";
+
 export interface RoomDetailDay {
   date: string;
   slots: RoomDetailSlot[];
@@ -331,6 +333,15 @@ export interface OperationRecord {
   patientContact?: string | null;
   counselorName?: string | null;
   counselorContact?: string | null;
+  patientId?: number | null;
+  counselorId?: number | null;
+  scheduleId?: number | null;
+  centerName?: string | null;
+  roomName?: string | null;
+  startTime?: string | null;
+  endTime?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
   relatedOrderId?: number | null;
   relatedConsultationId?: number | null;
 }
@@ -422,12 +433,17 @@ export interface CounselorBoardDetail {
   profile: CounselorBoardSummary;
   consultations: Array<{
     id: number;
+    orderId?: number | null;
     patientId: number;
     patientName: string;
     patientMobile?: string | null;
+    scheduleId?: number | null;
     status: string;
     startTime?: string | null;
     endTime?: string | null;
+    note?: string | null;
+    centerName?: string | null;
+    roomName?: string | null;
     hasCaseRecord: boolean;
   }>;
   caseRecords: Array<{

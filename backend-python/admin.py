@@ -5,6 +5,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from auth import get_current_account
@@ -36,10 +37,19 @@ from leave_request_service import (
     build_leave_request_out,
     reject_leave_request,
 )
-from case_record_service import decode_photo_urls, case_record_has_content, decode_risk_assessment, decode_header_info
+from case_record_service import (
+    case_record_has_content,
+    case_record_header_info,
+    case_record_photo_urls,
+    case_record_risk_assessment,
+    decode_header_info,
+    decode_photo_urls,
+    decode_risk_assessment,
+)
+from model_compat import optional_model_value
 from refund_exemption_service import approve_refund_exemption, reject_refund_exemption
 from case_record_amendment_service import approve_amendment, reject_amendment
-from case_record_service import decode_photo_urls, snapshot_case_record
+from case_record_service import snapshot_case_record
 
 router = APIRouter(prefix="/api/mini/admin", tags=["Admin"])
 
@@ -231,7 +241,7 @@ def _build_exemption_admin_out(
         reason=row.Reason,
         screenshotUrl=row.ScreenshotUrl,
         status=row.Status,
-        rejectReason=row.RejectReason,
+        rejectReason=optional_model_value(row, "RejectReason"),
         consultationStartTime=consultation.StartTime if consultation else None,
         consultationStatus=consultation.Status if consultation else None,
         createdAt=row.CreatedAt,
@@ -339,9 +349,9 @@ def _build_amendment_admin_out(
         objective=row.Objective,
         assessment=row.Assessment,
         plan=row.Plan,
-        riskAssessment=decode_risk_assessment(row.RiskAssessment),
-        headerInfo=decode_header_info(row.HeaderInfo),
-        photoUrls=decode_photo_urls(row.PhotoUrls),
+        riskAssessment=decode_risk_assessment(optional_model_value(row, "RiskAssessment")),
+        headerInfo=decode_header_info(optional_model_value(row, "HeaderInfo")),
+        photoUrls=decode_photo_urls(optional_model_value(row, "PhotoUrls")),
     )
     return CaseRecordAmendmentAdminOut(
         id=row.Id,
@@ -351,7 +361,7 @@ def _build_amendment_admin_out(
         counselorName=counselor_name,
         reason=row.Reason,
         status=row.Status,
-        rejectReason=row.RejectReason,
+        rejectReason=optional_model_value(row, "RejectReason"),
         consultationStartTime=consultation.StartTime if consultation else None,
         createdAt=row.CreatedAt,
         reviewedAt=row.ReviewedAt,
@@ -375,7 +385,11 @@ def list_case_record_amendments(
     )
     if status and status.upper() != "ALL":
         q = q.filter(AppCaseRecordAmendmentRequest.Status == status.upper())
-    rows = q.limit(100).all()
+    try:
+        rows = q.limit(100).all()
+    except SQLAlchemyError:
+        db.rollback()
+        return []
     record_ids = [r.CaseRecordId for r in rows]
     consultation_ids = [r.ConsultationId for r in rows]
     records = {
@@ -810,7 +824,7 @@ def list_counselor_record_summaries(
             record = records_by_consultation.get(c.Id)
             if not record:
                 continue
-            photo_count = len(decode_photo_urls(record.PhotoUrls))
+            photo_count = len(case_record_photo_urls(record))
             if (
                 (record.Subjective or "").strip()
                 or (record.Objective or "").strip()
@@ -889,7 +903,7 @@ def list_counselor_consultation_records(
     items: List[AdminConsultationRecordOut] = []
     for c in consultations:
         record = records.get(c.Id)
-        photo_count = len(decode_photo_urls(record.PhotoUrls)) if record else 0
+        photo_count = len(case_record_photo_urls(record)) if record else 0
         subjective = (record.Subjective or "").strip() if record else ""
         has_record = bool(
             record
@@ -954,9 +968,9 @@ def get_admin_case_record(
         Objective=record.Objective,
         Assessment=record.Assessment,
         Plan=record.Plan,
-        RiskAssessment=decode_risk_assessment(record.RiskAssessment),
-        HeaderInfo=decode_header_info(record.HeaderInfo),
-        PhotoUrls=decode_photo_urls(record.PhotoUrls),
+        RiskAssessment=case_record_risk_assessment(record),
+        HeaderInfo=case_record_header_info(record),
+        PhotoUrls=case_record_photo_urls(record),
         CreatedAt=record.CreatedAt,
         UpdatedAt=record.UpdatedAt,
     )
@@ -990,9 +1004,9 @@ def list_admin_case_record_revisions(
             Objective=r.Objective,
             Assessment=r.Assessment,
             Plan=r.Plan,
-            RiskAssessment=decode_risk_assessment(r.RiskAssessment),
-            HeaderInfo=decode_header_info(r.HeaderInfo),
-            PhotoUrls=decode_photo_urls(r.PhotoUrls),
+            RiskAssessment=decode_risk_assessment(optional_model_value(r, "RiskAssessment")),
+            HeaderInfo=decode_header_info(optional_model_value(r, "HeaderInfo")),
+            PhotoUrls=decode_photo_urls(optional_model_value(r, "PhotoUrls")),
             RevisedAt=r.RevisedAt,
             RevisedBy=r.RevisedBy,
         )
@@ -1202,14 +1216,14 @@ def _admin_counselor_ids(db: Session) -> list[int]:
 def _admin_record_is_filled(record: Optional[AppCaseRecord]) -> bool:
     if not record:
         return False
-    photo_count = len(decode_photo_urls(record.PhotoUrls))
+    photo_count = len(case_record_photo_urls(record))
     return bool(
         (record.Subjective or "").strip()
         or (record.Objective or "").strip()
         or (record.Assessment or "").strip()
         or (record.Plan or "").strip()
-        or (record.RiskAssessment or "").strip()
-        or (record.HeaderInfo or "").strip()
+        or bool(case_record_risk_assessment(record))
+        or bool(case_record_header_info(record))
         or photo_count > 0
     )
 

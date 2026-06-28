@@ -20,6 +20,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
+from sqlalchemy import func
 from sqlalchemy.exc import ProgrammingError, OperationalError
 from sqlalchemy.orm import Session
 
@@ -283,7 +284,7 @@ def list_activities_public(
 ):
     now = datetime.utcnow()
     q = db.query(AppActivity).filter(AppActivity.IsActive == True)
-    if type:
+    if type and type.upper() != "ALL":
         q = q.filter(AppActivity.Type == type)
     rows = q.order_by(AppActivity.SortOrder.asc(), AppActivity.CreatedAt.desc()).all()
     return [
@@ -470,12 +471,12 @@ def ops_dashboard(
     _ops: AppAccount = Depends(require_ops),
     db: Session = Depends(get_db),
 ):
-    user_count = db.query(AccountModel).count()
-    order_count = db.query(AppOrder).count()
-    paid_orders = db.query(AppOrder).filter(AppOrder.Status == "PAID").count()
+    user_count = db.query(func.count(AccountModel.Id)).scalar() or 0
+    order_count = db.query(func.count(AppOrder.Id)).scalar() or 0
+    paid_orders = db.query(func.count(AppOrder.Id)).filter(AppOrder.Status == "PAID").scalar() or 0
     total_fee = sum((o.TotalFee or 0) for o in db.query(AppOrder).filter(AppOrder.Status == "PAID").all())
-    article_count = db.query(AppArticle).count()
-    activity_count = db.query(AppActivity).count()
+    article_count = db.query(func.count(AppArticle.Id)).scalar() or 0
+    activity_count = db.query(func.count(AppActivity.Id)).scalar() or 0
     return {
         "userCount": user_count,
         "orderCount": order_count,
@@ -504,7 +505,7 @@ def list_users(
             AccountModel.Mobile.contains(keyword) |
             AccountModel.Nickname.contains(keyword)
         )
-    total = q.count()
+    total = q.with_entities(func.count(AccountModel.Id)).scalar() or 0
     items = q.order_by(AccountModel.Id.desc()).offset((page - 1) * page_size).limit(page_size).all()
     return {
         "total": total,

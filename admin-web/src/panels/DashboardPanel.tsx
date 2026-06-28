@@ -57,17 +57,17 @@ export function DashboardPanel({ data, summaryRows }: { data: ScreenData; summar
         </section>
       </div>
       <aside className="rounded-xl border border-[var(--lxxl-border)] bg-white p-5">
-        <div className="text-sm text-[var(--lxxl-muted)]">咨询记录提交概览</div>
-        <h2 className="mt-2 text-lg font-semibold">近 30 天</h2>
+        <div className="text-sm text-[var(--lxxl-muted)]">咨询记录填写进度</div>
+        <h2 className="mt-2 text-lg font-semibold">近 30 天已完成咨询</h2>
         <div className="mt-5 space-y-3">
           {(data.counselorRecords || []).slice(0, 8).map((record) => (
             <div key={record.counselorId} className="rounded-xl bg-[#FAF8F4] p-4 text-sm">
               <div className="flex items-center justify-between">
                 <span className="font-medium">{record.counselorName}</span>
-                <Badge tone={record.missingCount > 0 ? "gold" : "green"}>缺 {record.missingCount}</Badge>
+                <Badge tone={record.missingCount > 0 ? "gold" : "green"}>待补记录 {record.missingCount}</Badge>
               </div>
               <div className="mt-2 text-xs text-[var(--lxxl-muted)]">
-                已完成 {record.completedCount}，已记录 {record.recordedCount}
+                已完成咨询 {record.completedCount} 次，已填写记录 {record.recordedCount} 份
               </div>
             </div>
           ))}

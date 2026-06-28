@@ -21,6 +21,9 @@ from sqlalchemy.exc import ProgrammingError, OperationalError
 from case_record_service import (
     apply_case_record_fields,
     case_record_has_content,
+    case_record_header_info,
+    case_record_photo_urls,
+    case_record_risk_assessment,
     decode_photo_urls,
     decode_risk_assessment,
     decode_header_info,
@@ -32,6 +35,7 @@ from case_record_service import (
     get_crisis_level_choice,
     notify_admins_crisis_report_if_needed,
 )
+from model_compat import optional_model_value
 from case_record_amendment_service import (
     latest_amendment_for_record,
     submit_amendment_request,
@@ -261,6 +265,9 @@ class CaseRecordOut(BaseModel):
         record: AppCaseRecord,
         amendment: Optional[AppCaseRecordAmendmentRequest] = None,
     ) -> "CaseRecordOut":
+        risk_assessment = case_record_risk_assessment(record)
+        header_info = case_record_header_info(record)
+        photo_urls = case_record_photo_urls(record)
         out = cls(
             Id=record.Id,
             ConsultationId=record.ConsultationId,
@@ -269,9 +276,9 @@ class CaseRecordOut(BaseModel):
             Objective=record.Objective,
             Assessment=record.Assessment,
             Plan=record.Plan,
-            RiskAssessment=decode_risk_assessment(record.RiskAssessment),
-            HeaderInfo=decode_header_info(record.HeaderInfo),
-            PhotoUrls=decode_photo_urls(record.PhotoUrls),
+            RiskAssessment=risk_assessment,
+            HeaderInfo=header_info,
+            PhotoUrls=photo_urls,
             CreatedAt=record.CreatedAt,
             UpdatedAt=record.UpdatedAt,
         )
@@ -279,7 +286,7 @@ class CaseRecordOut(BaseModel):
             out.AmendmentStatus = amendment.Status
             out.AmendmentId = amendment.Id
             if amendment.Status == "REJECTED":
-                out.AmendmentRejectReason = amendment.RejectReason
+                out.AmendmentRejectReason = optional_model_value(amendment, "RejectReason")
         return out
 
 
@@ -315,6 +322,9 @@ class CaseRecordRevisionOut(BaseModel):
 
     @classmethod
     def from_revision(cls, row: AppCaseRecordRevision) -> "CaseRecordRevisionOut":
+        risk_assessment = decode_risk_assessment(optional_model_value(row, "RiskAssessment"))
+        header_info = decode_header_info(optional_model_value(row, "HeaderInfo"))
+        photo_urls = decode_photo_urls(optional_model_value(row, "PhotoUrls"))
         return cls(
             Id=row.Id,
             CaseRecordId=row.CaseRecordId,
@@ -323,9 +333,9 @@ class CaseRecordRevisionOut(BaseModel):
             Objective=row.Objective,
             Assessment=row.Assessment,
             Plan=row.Plan,
-            RiskAssessment=decode_risk_assessment(row.RiskAssessment),
-            HeaderInfo=decode_header_info(row.HeaderInfo),
-            PhotoUrls=decode_photo_urls(row.PhotoUrls),
+            RiskAssessment=risk_assessment,
+            HeaderInfo=header_info,
+            PhotoUrls=photo_urls,
             RevisedAt=row.RevisedAt,
             RevisedBy=row.RevisedBy,
         )
@@ -1337,7 +1347,7 @@ def list_completed_consultations(
     result: List[CompletedConsultationOut] = []
     for c in consultations:
         record = records.get(c.Id)
-        photo_count = len(decode_photo_urls(record.PhotoUrls)) if record else 0
+        photo_count = len(case_record_photo_urls(record)) if record else 0
         has_content = case_record_has_content(record)
         result.append(
             CompletedConsultationOut(
@@ -1458,7 +1468,7 @@ def create_case_record(
     ).first()
     if existing:
         reject_if_case_record_locked(existing)
-        old_crisis_choice = get_crisis_level_choice(decode_risk_assessment(existing.RiskAssessment))
+        old_crisis_choice = get_crisis_level_choice(case_record_risk_assessment(existing))
         apply_case_record_fields(
             existing,
             subjective=body.subjective,
@@ -1771,7 +1781,7 @@ def counselor_stats_details(
                     id=record.Id,
                     title=patient_name,
                     subtitle=_format_dt_short(ref),
-                    extra=f"照片 {len(decode_photo_urls(record.PhotoUrls))} 张",
+                    extra=f"照片 {len(case_record_photo_urls(record))} 张",
                     consultationId=record.ConsultationId,
                     caseRecordId=record.Id,
                     status="FILLED",

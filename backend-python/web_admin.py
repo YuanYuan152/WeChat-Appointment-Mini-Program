@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from auth import get_current_account
 from database import get_db
+from model_compat import optional_model_value
 from models import (
     AppAccount,
     AppActivity,
@@ -178,6 +179,10 @@ def operation_records(
 
     records: list[dict[str, Any]] = []
     account_ids: set[int] = set()
+    all_consultations = db.query(AppConsultation).all()
+    consultations_by_id = {c.Id: c for c in all_consultations}
+    all_schedules = db.query(AppSchedule).all()
+    schedules_by_id = {s.Id: s for s in all_schedules}
 
     for row in db.query(AppRoleSwitchLog).all():
         account_ids.add(row.AccountId)
@@ -197,12 +202,8 @@ def operation_records(
         })
 
     exemptions = db.query(AppRefundExemption).all()
-    consultation_ids = {r.ConsultationId for r in exemptions}
-    consultations = {
-        c.Id: c for c in db.query(AppConsultation).filter(AppConsultation.Id.in_(consultation_ids)).all()
-    } if consultation_ids else {}
     for row in exemptions:
-        consultation = consultations.get(row.ConsultationId)
+        consultation = consultations_by_id.get(row.ConsultationId)
         if consultation:
             account_ids.update({consultation.PatientId, consultation.CounselorId})
         account_ids.add(row.AccountId)
@@ -224,6 +225,12 @@ def operation_records(
             "relatedConsultationId": row.ConsultationId,
             "patientId": consultation.PatientId if consultation else row.AccountId,
             "counselorId": consultation.CounselorId if consultation else None,
+            "scheduleId": consultation.ScheduleId if consultation else None,
+            "startTime": consultation.StartTime if consultation else None,
+            "endTime": consultation.EndTime if consultation else None,
+            "createdAt": row.CreatedAt,
+            "updatedAt": row.UpdatedAt,
+            **(_consultation_room_payload(consultation, schedules_by_id) if consultation else {}),
         })
 
     for row in db.query(AppOrder).all():
@@ -232,7 +239,7 @@ def operation_records(
             "id": f"order-{row.Id}",
             "occurredAt": row.PaidAt or row.UpdatedAt or row.CreatedAt,
             "actionType": "ORDER",
-            "actionLabel": "支付订单",
+            "actionLabel": "退款订单" if row.Status == "REFUNDED" else "取消订单" if row.Status == "CANCELLED" else "支付订单",
             "operatorId": row.AccountId,
             "operatorRole": "Patient",
             "targetType": "Order",
@@ -242,31 +249,51 @@ def operation_records(
             "amount": row.TotalFee,
             "status": row.Status,
             "relatedOrderId": row.Id,
+            "patientId": row.AccountId,
+            "scheduleId": row.SlotId,
+            "createdAt": row.CreatedAt,
+            "updatedAt": row.UpdatedAt,
         })
 
-    for row in db.query(AppConsultation).all():
+    for row in all_consultations:
         account_ids.update({row.PatientId, row.CounselorId})
+        room_payload = _consultation_room_payload(row, schedules_by_id)
+        is_cancelled = row.Status in ("CANCELLED", "CANCELED")
+        summary_parts = [
+            row.Note,
+            f"咨询时间：{row.StartTime.strftime('%Y-%m-%d %H:%M')}" if row.StartTime else None,
+            f"地点：{room_payload.get('centerName') or '-'} {room_payload.get('roomName') or ''}".strip(),
+        ]
         records.append({
             "id": f"consultation-{row.Id}",
             "occurredAt": row.UpdatedAt or row.CreatedAt,
             "actionType": "CONSULTATION",
-            "actionLabel": "预约记录",
+            "actionLabel": "取消预约" if is_cancelled else "预约记录",
             "operatorId": row.PatientId,
             "operatorRole": "Patient",
             "targetType": "Consultation",
             "targetId": row.Id,
             "targetName": None,
-            "summary": row.Note,
+            "summary": "；".join(part for part in summary_parts if part),
             "amount": None,
             "status": row.Status,
             "relatedOrderId": row.OrderId,
             "relatedConsultationId": row.Id,
             "patientId": row.PatientId,
             "counselorId": row.CounselorId,
+            "scheduleId": row.ScheduleId,
+            "startTime": row.StartTime,
+            "endTime": row.EndTime,
+            "createdAt": row.CreatedAt,
+            "updatedAt": row.UpdatedAt,
+            **room_payload,
         })
 
     for row in db.query(AppCaseRecord).all():
         account_ids.add(row.CounselorId)
+        consultation = consultations_by_id.get(row.ConsultationId)
+        if consultation:
+            account_ids.update({consultation.PatientId, consultation.CounselorId})
         records.append({
             "id": f"case-record-{row.Id}",
             "occurredAt": row.UpdatedAt or row.CreatedAt,
@@ -282,10 +309,18 @@ def operation_records(
             "status": "UPDATED" if row.UpdatedAt else "CREATED",
             "relatedConsultationId": row.ConsultationId,
             "counselorId": row.CounselorId,
+            "patientId": consultation.PatientId if consultation else None,
+            "scheduleId": consultation.ScheduleId if consultation else None,
+            "startTime": consultation.StartTime if consultation else None,
+            "endTime": consultation.EndTime if consultation else None,
+            "createdAt": row.CreatedAt,
+            "updatedAt": row.UpdatedAt,
+            **(_consultation_room_payload(consultation, schedules_by_id) if consultation else {}),
         })
 
     for row in db.query(AppLeaveRequest).all():
         account_ids.add(row.CounselorId)
+        schedule = schedules_by_id.get(row.ScheduleId)
         records.append({
             "id": f"leave-request-{row.Id}",
             "occurredAt": row.UpdatedAt or row.CreatedAt,
@@ -300,10 +335,20 @@ def operation_records(
             "amount": None,
             "status": row.Status,
             "counselorId": row.CounselorId,
+            "scheduleId": row.ScheduleId,
+            "startTime": schedule.StartTime if schedule else None,
+            "endTime": schedule.EndTime if schedule else None,
+            "createdAt": row.CreatedAt,
+            "updatedAt": row.UpdatedAt,
+            **(_room_payload(schedule) if schedule else {}),
         })
 
     for row in db.query(AppScheduleCancelLog).all():
         account_ids.add(row.CounselorId)
+        consultation = consultations_by_id.get(row.ConsultationId) if row.ConsultationId else None
+        schedule = schedules_by_id.get(row.ScheduleId)
+        if consultation:
+            account_ids.add(consultation.PatientId)
         records.append({
             "id": f"schedule-cancel-{row.Id}",
             "occurredAt": row.CreatedAt,
@@ -319,6 +364,12 @@ def operation_records(
             "status": "CANCELLED",
             "relatedConsultationId": row.ConsultationId,
             "counselorId": row.CounselorId,
+            "patientId": consultation.PatientId if consultation else None,
+            "scheduleId": row.ScheduleId,
+            "startTime": consultation.StartTime if consultation else (schedule.StartTime if schedule else None),
+            "endTime": consultation.EndTime if consultation else (schedule.EndTime if schedule else None),
+            "createdAt": row.CreatedAt,
+            **(_consultation_room_payload(consultation, schedules_by_id) if consultation else _room_payload(schedule)),
         })
 
     for row in db.query(AppBanner).all():
@@ -415,6 +466,15 @@ def operation_records(
                 item.get("status"),
                 item.get("actionLabel"),
                 item.get("operatorContact"),
+                item.get("patientName"),
+                item.get("patientContact"),
+                item.get("counselorName"),
+                item.get("counselorContact"),
+                item.get("centerName"),
+                item.get("roomName"),
+                item.get("relatedOrderId"),
+                item.get("relatedConsultationId"),
+                item.get("scheduleId"),
             ]
         ).lower()
         if keyword_norm and keyword_norm not in text:
@@ -546,7 +606,7 @@ def user_board_detail(
                 "amount": e.Amount,
                 "reason": e.Reason,
                 "status": e.Status,
-                "rejectReason": e.RejectReason,
+                "rejectReason": optional_model_value(e, "RejectReason"),
                 "reviewedAt": e.ReviewedAt,
                 "createdAt": e.CreatedAt,
             }
@@ -675,13 +735,17 @@ def counselor_board_detail(
         "consultations": [
             {
                 "id": c.Id,
+                "orderId": c.OrderId,
                 "patientId": c.PatientId,
                 "patientName": _account_name(patients.get(c.PatientId)),
                 "patientMobile": _account_contact(patients.get(c.PatientId)),
+                "scheduleId": c.ScheduleId,
                 "status": c.Status,
                 "startTime": c.StartTime,
                 "endTime": c.EndTime,
+                "note": c.Note,
                 "hasCaseRecord": c.Id in records_by_consultation,
+                **_consultation_room_payload(c, {s.Id: s for s in schedules}),
             }
             for c in consultations
         ],

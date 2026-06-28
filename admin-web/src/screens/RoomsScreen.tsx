@@ -8,13 +8,14 @@ import {
   fetchRoomDetail,
   fetchRoomsData,
   fetchScheduleRoomOptions,
+  saveRoomSlotStatuses,
   updateRoom,
 } from "@/services/rooms";
 import { AppRoute, useAppRoute } from "@/components/AppRoute";
 import { RoomsPanel } from "@/panels/RoomsPanel";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
 import { getLocalDateValue } from "@/lib/date";
-import type { Room, RoomDetail, RoomStatus, ScheduleRoomOptions } from "@/types/api";
+import type { Room, RoomDetail, RoomSlotManualStatus, RoomStatus, ScheduleRoomOptions } from "@/types/api";
 import type { RoomFilters, ScreenData } from "@/types/app";
 
 function getInitialRoomFilters(): RoomFilters {
@@ -94,16 +95,26 @@ function RoomsScreenContent() {
   }, []);
 
   const openRoomDetail = useCallback(async (room: Room, snapshot?: RoomStatus) => {
-    if (!room.id) {
-      showNotice("error", "该咨询室缺少数据库 ID，暂不能在 Web 端编辑。");
-      return;
-    }
     setSelectedSnapshot(snapshot);
     setSelectedRoom(undefined);
     setRoomOptions(undefined);
     setDetailLoading(true);
     try {
-      const detail = await fetchRoomDetail(room.id);
+      let roomId = room.id;
+      if (!roomId) {
+        const createdRoom = await createRoom({
+          centerId: room.centerId,
+          name: room.name,
+          roomCode: room.roomCode,
+          status: room.status || "AVAILABLE",
+        });
+        roomId = createdRoom.id || undefined;
+        if (!roomId) {
+          throw new Error("咨询室初始化失败，未返回数据库 ID");
+        }
+        void loadData();
+      }
+      const detail = await fetchRoomDetail(roomId);
       setSelectedRoom(detail);
       const scheduleId = snapshot?.scheduleId || detail.current?.scheduleId;
       if (scheduleId) {
@@ -119,7 +130,7 @@ function RoomsScreenContent() {
     } finally {
       setDetailLoading(false);
     }
-  }, [showNotice]);
+  }, [loadData, showNotice]);
 
   const closeDetail = useCallback(() => {
     setSelectedRoom(undefined);
@@ -175,6 +186,24 @@ function RoomsScreenContent() {
     }
   }, [loadData, selectedRoom, showNotice]);
 
+  const saveSlotStatuses = useCallback(
+    async (roomId: number, slots: Array<{ startTime: string; status: RoomSlotManualStatus }>) => {
+      setActionLoading(true);
+      try {
+        await saveRoomSlotStatuses(roomId, slots);
+        showNotice("success", "时段状态已保存");
+        const detail = await fetchRoomDetail(roomId);
+        setSelectedRoom(detail);
+        void loadData();
+      } catch (error) {
+        showNotice("error", error instanceof Error ? error.message : "时段状态保存失败");
+      } finally {
+        setActionLoading(false);
+      }
+    },
+    [loadData, showNotice],
+  );
+
   return (
     <RoomsPanel
       rooms={data.rooms}
@@ -194,6 +223,7 @@ function RoomsScreenContent() {
       onOpenRoom={openRoomDetail}
       onCloseDetail={closeDetail}
       onSaveRoom={saveRoom}
+      onSaveSlotStatuses={saveSlotStatuses}
       onAddRoom={addRoom}
       onChangeScheduleRoom={changeRoomForSchedule}
       onPageChange={setPage}

@@ -1,5 +1,12 @@
 import { apiRequest } from "@/lib/api";
-import type { ApiMessage, Room, RoomDetail, RoomStatusSnapshot, ScheduleRoomOptions } from "@/types/api";
+import type {
+  ApiMessage,
+  Room,
+  RoomDetail,
+  RoomSlotManualStatus,
+  RoomStatusSnapshot,
+  ScheduleRoomOptions,
+} from "@/types/api";
 import type { RoomFilters } from "@/types/app";
 
 function withQuery(path: string, params: URLSearchParams) {
@@ -53,6 +60,21 @@ export function updateRoom(roomId: number, input: { name?: string; status?: stri
     body: JSON.stringify({
       name: input.name,
       status: input.status,
+    }),
+  });
+}
+
+export function saveRoomSlotStatuses(
+  roomId: number,
+  slots: Array<{ startTime: string; status: RoomSlotManualStatus }>,
+) {
+  return apiRequest<ApiMessage>(`/api/mini/ops/rooms/${roomId}/slot-statuses`, {
+    method: "PUT",
+    body: JSON.stringify({
+      slots: slots.map((slot) => ({
+        start_time: slot.startTime,
+        status: slot.status,
+      })),
     }),
   });
 }

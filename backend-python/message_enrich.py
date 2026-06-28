@@ -5,6 +5,7 @@ from typing import Any, Dict, Optional
 
 from sqlalchemy.orm import Session
 
+from model_compat import optional_model_value
 from models import AppMessage, AppRefundExemption
 
 _ROOM_SUFFIX = re.compile(r"\s*·\s*.+(?:咨询室|室\s*[A-Z]?)$")
@@ -82,7 +83,7 @@ def _sync_exemption_payload(
     elif status == "REJECTED":
         title = "豁免申请未通过"
         related_type = "REFUND_EXEMPTION"
-        reason = (exemption.RejectReason or "").strip() or "未说明具体原因"
+        reason = (optional_model_value(exemption, "RejectReason") or "").strip() or "未说明具体原因"
         detail.update(
             {
                 "status": "REJECTED",

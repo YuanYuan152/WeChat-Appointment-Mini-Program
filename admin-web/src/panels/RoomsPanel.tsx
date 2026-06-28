@@ -16,11 +16,19 @@ import {
 import { getLocalDateValue } from "@/lib/date";
 import { formatDateTime, statusLabel } from "@/lib/format";
 import { getPageItems } from "@/lib/pagination";
-import type { Room, RoomDetail, RoomStatus, RoomStatusSnapshot, ScheduleRoomOptions } from "@/types/api";
+import type {
+  Room,
+  RoomDetail,
+  RoomDetailSlot,
+  RoomSlotManualStatus,
+  RoomStatus,
+  RoomStatusSnapshot,
+  ScheduleRoomOptions,
+} from "@/types/api";
 import type { RoomFilters } from "@/types/app";
 
 const FIXED_TIME_SLOTS = ["09:00", "10:00", "11:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00"];
-const ROOM_STATUS_OPTIONS = ["AVAILABLE", "MAINTENANCE", "DISABLED"];
+const ROOM_STATUS_OPTIONS: RoomSlotManualStatus[] = ["AVAILABLE", "MAINTENANCE", "DISABLED"];
 
 export function RoomsPanel({
   rooms,
@@ -40,6 +48,7 @@ export function RoomsPanel({
   onOpenRoom,
   onCloseDetail,
   onSaveRoom,
+  onSaveSlotStatuses,
   onAddRoom,
   onChangeScheduleRoom,
   onPageChange,
@@ -62,6 +71,10 @@ export function RoomsPanel({
   onOpenRoom: (room: Room, snapshot?: RoomStatus) => void;
   onCloseDetail: () => void;
   onSaveRoom: (roomId: number, input: { name: string; status: string }) => Promise<void>;
+  onSaveSlotStatuses: (
+    roomId: number,
+    slots: Array<{ startTime: string; status: RoomSlotManualStatus }>,
+  ) => Promise<void>;
   onAddRoom: (input: { centerId: string; name: string; roomCode?: string; status: string }) => Promise<boolean>;
   onChangeScheduleRoom: (scheduleId: number, roomCode: string) => Promise<void>;
   onPageChange: (page: number) => void;
@@ -229,6 +242,7 @@ export function RoomsPanel({
               snapshot={selectedSnapshot}
               onChangeScheduleRoom={onChangeScheduleRoom}
               onSaveRoom={onSaveRoom}
+              onSaveSlotStatuses={onSaveSlotStatuses}
             />
           ) : null}
         </DetailDrawer>
@@ -256,6 +270,7 @@ function RoomDetailPanel({
   roomOptions,
   actionLoading,
   onSaveRoom,
+  onSaveSlotStatuses,
   onChangeScheduleRoom,
 }: {
   room: RoomDetail;
@@ -263,6 +278,10 @@ function RoomDetailPanel({
   roomOptions?: ScheduleRoomOptions;
   actionLoading: boolean;
   onSaveRoom: (roomId: number, input: { name: string; status: string }) => Promise<void>;
+  onSaveSlotStatuses: (
+    roomId: number,
+    slots: Array<{ startTime: string; status: RoomSlotManualStatus }>,
+  ) => Promise<void>;
   onChangeScheduleRoom: (scheduleId: number, roomCode: string) => Promise<void>;
 }) {
   const activeSnapshot = snapshot || room.current;
@@ -270,6 +289,7 @@ function RoomDetailPanel({
   const [name, setName] = useState(room.name);
   const [status, setStatus] = useState(room.status);
   const [targetRoomCode, setTargetRoomCode] = useState("");
+  const [slotStatusDrafts, setSlotStatusDrafts] = useState<Record<string, RoomSlotManualStatus>>({});
 
   useEffect(() => {
     setName(room.name);
@@ -280,6 +300,30 @@ function RoomDetailPanel({
     const nextRoom = roomOptions?.options.find((option) => !option.isCurrent)?.roomCode || "";
     setTargetRoomCode(nextRoom);
   }, [roomOptions]);
+
+  useEffect(() => {
+    const next: Record<string, RoomSlotManualStatus> = {};
+    for (const day of room.days) {
+      for (const slot of day.slots) {
+        if (slot.startTime) {
+          next[slot.startTime] = normalizeSlotStatus(slot.manualStatus);
+        }
+      }
+    }
+    setSlotStatusDrafts(next);
+  }, [room.id, room.days]);
+
+  const changedSlots = room.days.flatMap((day) =>
+    day.slots
+      .filter((slot) => slot.startTime && slot.editable)
+      .map((slot) => ({
+        startTime: slot.startTime as string,
+        original: normalizeSlotStatus(slot.manualStatus),
+        status: slotStatusDrafts[slot.startTime as string] || normalizeSlotStatus(slot.manualStatus),
+      }))
+      .filter((slot) => slot.status !== slot.original)
+      .map(({ startTime, status: nextStatus }) => ({ startTime, status: nextStatus })),
+  );
 
   return (
     <div className="space-y-6">
@@ -367,21 +411,46 @@ function RoomDetailPanel({
       </div>
 
       <div>
-        <h4 className="text-sm font-semibold">未来时段</h4>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h4 className="text-sm font-semibold">未来时段</h4>
+            <p className="mt-1 text-xs text-[var(--lxxl-muted)]">
+              只维护固定时段状态；已有预约、已开始或已过去的时段不可改。
+            </p>
+          </div>
+          <button
+            className="h-10 rounded-xl bg-[var(--lxxl-green)] px-4 text-sm font-medium text-white disabled:opacity-50"
+            type="button"
+            disabled={actionLoading || !room.id || changedSlots.length === 0}
+            onClick={() => room.id && onSaveSlotStatuses(room.id, changedSlots)}
+          >
+            保存时段状态
+          </button>
+        </div>
         <div className="mt-3 space-y-3">
           {room.days.map((day) => (
             <div key={day.date} className="rounded-xl border border-[var(--lxxl-border)]">
               <div className="border-b border-[var(--lxxl-border)] px-4 py-3 text-sm font-medium">{day.date}</div>
               <div className="divide-y divide-[var(--lxxl-border)]">
-                {day.slots.map((slot) => (
-                  <div key={`${day.date}-${slot.key}`} className="grid grid-cols-[110px_1fr] gap-3 px-4 py-3 text-xs">
-                    <div className="font-medium">{slot.timeLabel}</div>
-                    <div className="text-[var(--lxxl-muted)]">
-                      {slot.statusLabel || statusLabel(slot.occupancy)} · {slot.counselorName || "-"} ·{" "}
-                      {slot.patientName || "-"}
-                    </div>
-                  </div>
-                ))}
+                {day.slots.map((slot) => {
+                  const draftStatus = slot.startTime
+                    ? slotStatusDrafts[slot.startTime] || normalizeSlotStatus(slot.manualStatus)
+                    : normalizeSlotStatus(slot.manualStatus);
+                  return (
+                    <RoomSlotRow
+                      key={`${day.date}-${slot.key}`}
+                      actionLoading={actionLoading}
+                      draftStatus={draftStatus}
+                      onChange={(nextStatus) => {
+                        if (!slot.startTime) {
+                          return;
+                        }
+                        setSlotStatusDrafts((prev) => ({ ...prev, [slot.startTime as string]: nextStatus }));
+                      }}
+                      slot={slot}
+                    />
+                  );
+                })}
               </div>
             </div>
           ))}
@@ -389,6 +458,62 @@ function RoomDetailPanel({
       </div>
     </div>
   );
+}
+
+function RoomSlotRow({
+  slot,
+  draftStatus,
+  actionLoading,
+  onChange,
+}: {
+  slot: RoomDetailSlot;
+  draftStatus: RoomSlotManualStatus;
+  actionLoading: boolean;
+  onChange: (status: RoomSlotManualStatus) => void;
+}) {
+  const locked = !slot.editable || slot.occupancy === "IN_SESSION";
+  const statusTone = slot.occupancy === "IN_SESSION" ? "gold" : slot.occupancy === "IDLE" ? "green" : "neutral";
+
+  return (
+    <div className="grid gap-3 px-4 py-3 text-xs sm:grid-cols-[120px_1fr_150px] sm:items-center">
+      <div>
+        <div className="font-medium text-[var(--lxxl-text)]">{slot.timeLabel}</div>
+        <div className="mt-1 text-[var(--lxxl-muted)]">{slot.past ? "已过时段" : locked ? "不可调整" : "可调整"}</div>
+      </div>
+      <div className="space-y-2 text-[var(--lxxl-muted)]">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge tone={statusTone}>{slot.statusLabel || statusLabel(slot.occupancy)}</Badge>
+          {slot.scheduleId ? <span>排期 #{slot.scheduleId}</span> : <span>暂无预约</span>}
+        </div>
+        <div className="grid gap-1 sm:grid-cols-2">
+          <div>
+            咨询师：{slot.counselorName || "-"}
+            {slot.counselorMobile ? `（${slot.counselorMobile}）` : ""}
+          </div>
+          <div>
+            来访者：{slot.patientName || "-"}
+            {slot.patientMobile ? `（${slot.patientMobile}）` : ""}
+          </div>
+        </div>
+      </div>
+      <select
+        className={`${queryControlClass} h-9`}
+        disabled={actionLoading || locked}
+        value={draftStatus}
+        onChange={(event) => onChange(event.target.value as RoomSlotManualStatus)}
+      >
+        {ROOM_STATUS_OPTIONS.map((item) => (
+          <option key={item} value={item}>
+            {statusLabel(item)}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function normalizeSlotStatus(status?: string | null): RoomSlotManualStatus {
+  return ROOM_STATUS_OPTIONS.includes(status as RoomSlotManualStatus) ? (status as RoomSlotManualStatus) : "AVAILABLE";
 }
 
 function CreateRoomModal({

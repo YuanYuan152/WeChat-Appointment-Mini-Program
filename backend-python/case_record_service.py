@@ -18,6 +18,7 @@ from case_record_risk_config import (
     should_notify_crisis_report,
 )
 from message import create_message
+from model_compat import optional_model_value
 from case_record_header_config import (
     empty_header_info,
     header_info_is_complete,
@@ -219,14 +220,17 @@ def build_default_header_info(
 
 
 def snapshot_case_record(record: AppCaseRecord) -> Dict[str, Any]:
+    risk_assessment = case_record_risk_assessment(record)
+    header_info = case_record_header_info(record)
+    photo_urls = case_record_photo_urls(record)
     return {
         "subjective": record.Subjective,
         "objective": record.Objective,
         "assessment": record.Assessment,
         "plan": record.Plan,
-        "risk_assessment": decode_risk_assessment(record.RiskAssessment),
-        "header_info": decode_header_info(record.HeaderInfo),
-        "photo_urls": decode_photo_urls(record.PhotoUrls),
+        "risk_assessment": risk_assessment,
+        "header_info": header_info,
+        "photo_urls": photo_urls,
     }
 
 
@@ -236,6 +240,9 @@ def save_case_record_revision(
     *,
     revised_by: int,
 ) -> None:
+    risk_assessment = optional_model_value(record, "RiskAssessment")
+    header_info = optional_model_value(record, "HeaderInfo")
+    photo_urls = optional_model_value(record, "PhotoUrls")
     db.add(
         AppCaseRecordRevision(
             CaseRecordId=record.Id,
@@ -245,9 +252,9 @@ def save_case_record_revision(
             Objective=record.Objective,
             Assessment=record.Assessment,
             Plan=record.Plan,
-            RiskAssessment=record.RiskAssessment,
-            HeaderInfo=record.HeaderInfo,
-            PhotoUrls=record.PhotoUrls,
+            RiskAssessment=risk_assessment,
+            HeaderInfo=header_info,
+            PhotoUrls=photo_urls,
             RevisedAt=datetime.utcnow(),
             RevisedBy=revised_by,
         )
@@ -292,16 +299,34 @@ def reject_if_case_record_locked(record: Optional[AppCaseRecord]) -> None:
 def case_record_has_content(record: Optional[AppCaseRecord]) -> bool:
     if not record:
         return False
-    photo_count = len(decode_photo_urls(record.PhotoUrls))
+    subjective = (record.Subjective or "").strip()
+    objective = (record.Objective or "").strip()
+    assessment = (record.Assessment or "").strip()
+    plan = (record.Plan or "").strip()
+    risk_assessment = case_record_risk_assessment(record)
+    header_info = case_record_header_info(record)
+    photo_count = len(case_record_photo_urls(record))
     return bool(
-        (record.Subjective or "").strip()
-        or (record.Objective or "").strip()
-        or (record.Assessment or "").strip()
-        or (record.Plan or "").strip()
-        or risk_assessment_is_complete(decode_risk_assessment(record.RiskAssessment))
-        or header_info_is_complete(decode_header_info(record.HeaderInfo))
+        subjective
+        or objective
+        or assessment
+        or plan
+        or risk_assessment_is_complete(risk_assessment)
+        or header_info_is_complete(header_info)
         or photo_count > 0
     )
+
+
+def case_record_photo_urls(record: Optional[AppCaseRecord]) -> List[str]:
+    return decode_photo_urls(optional_model_value(record, "PhotoUrls"))
+
+
+def case_record_risk_assessment(record: Optional[AppCaseRecord]) -> Optional[Dict[str, Any]]:
+    return decode_risk_assessment(optional_model_value(record, "RiskAssessment"))
+
+
+def case_record_header_info(record: Optional[AppCaseRecord]) -> Optional[Dict[str, str]]:
+    return decode_header_info(optional_model_value(record, "HeaderInfo"))
 
 
 def apply_case_record_fields(
@@ -394,7 +419,7 @@ def notify_admins_crisis_report_if_needed(
     old_crisis_choice: str = "",
 ) -> None:
     """个案风险评估第10题选 A/B/C 时，通知管理员/Ops 需上报。"""
-    risk = decode_risk_assessment(record.RiskAssessment)
+    risk = case_record_risk_assessment(record)
     new_choice = get_crisis_level_choice(risk)
     if not should_notify_crisis_report(old_crisis_choice, new_choice):
         return

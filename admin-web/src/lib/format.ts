@@ -58,7 +58,10 @@ export function statusLabel(status?: string | null) {
     APPROVED: "已通过",
     REJECTED: "已拒绝",
     PAID: "已支付",
+    REFUNDED: "已退款",
     DONE: "已完成",
+    CREATED: "已创建",
+    UPDATED: "已更新",
     CONFIRMED: "已确认",
     BOOKED: "已预约",
     AVAILABLE: "可用",
@@ -70,6 +73,8 @@ export function statusLabel(status?: string | null) {
     CANCELED: "已取消",
     OPEN: "未处理",
     CLOSED: "已处理",
+    ACTIVE: "启用",
+    INACTIVE: "停用",
   };
   return status ? labels[status] || status : "-";
 }

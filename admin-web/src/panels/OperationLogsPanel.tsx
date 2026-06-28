@@ -131,66 +131,90 @@ export function OperationLogsPanel({
         <EmptyState text={listLoading ? "正在加载列表..." : "暂无操作/业务记录。"} />
       ) : (
         <>
-          <table className="w-full border-collapse text-sm">
-            <thead className="bg-[#FAF8F4] text-left text-[var(--lxxl-muted)]">
-              <tr>
-                <th className="px-5 py-3 font-medium">时间</th>
-                <th className="px-5 py-3 font-medium">类型</th>
-                <th className="px-5 py-3 font-medium">操作人</th>
-                <th className="px-5 py-3 font-medium">对象</th>
-                <th className="px-5 py-3 font-medium">金额</th>
-                <th className="px-5 py-3 font-medium">状态</th>
-                <th className="px-5 py-3 font-medium">摘要</th>
-              </tr>
-            </thead>
-            <tbody>
-              {records.items.map((record) => (
-                <tr key={record.id} className="border-t border-[var(--lxxl-border)] align-top">
-                  <td className="px-5 py-4">{formatDateTime(record.occurredAt)}</td>
-                  <td className="px-5 py-4">{record.actionLabel}</td>
-                  <td className="px-5 py-4">
-                    <div className="font-medium">{record.operatorName || "-"}</div>
-                    <div className="mt-1 text-xs text-[var(--lxxl-muted)]">
-                      {record.operatorContact || roleLabel(record.operatorRole)}
-                    </div>
-                  </td>
-                  <td className="px-5 py-4">
-                    <div className="font-medium">
-                      {record.targetName || record.counselorName || `${record.targetType || "-"}#${record.targetId || "-"}`}
-                    </div>
-                    {(record.patientName || record.counselorName) && (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1180px] border-collapse text-sm">
+              <thead className="bg-[#FAF8F4] text-left text-[var(--lxxl-muted)]">
+                <tr>
+                  <th className="px-5 py-3 font-medium">时间</th>
+                  <th className="px-5 py-3 font-medium">操作类型</th>
+                  <th className="px-5 py-3 font-medium">操作人</th>
+                  <th className="px-5 py-3 font-medium">对象</th>
+                  <th className="px-5 py-3 font-medium">咨询信息</th>
+                  <th className="px-5 py-3 font-medium">金额</th>
+                  <th className="px-5 py-3 font-medium">状态</th>
+                  <th className="px-5 py-3 font-medium">摘要</th>
+                </tr>
+              </thead>
+              <tbody>
+                {records.items.map((record) => (
+                  <tr key={record.id} className="border-t border-[var(--lxxl-border)] align-top">
+                    <td className="px-5 py-4">
+                      <div>{formatDateTime(record.occurredAt)}</div>
+                      {(record.createdAt || record.updatedAt) && (
+                        <div className="mt-1 text-xs leading-5 text-[var(--lxxl-muted)]">
+                          {record.createdAt ? <div>创建：{formatDateTime(record.createdAt)}</div> : null}
+                          {record.updatedAt ? <div>更新：{formatDateTime(record.updatedAt)}</div> : null}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-5 py-4">
+                      <div className="font-medium">{record.actionLabel}</div>
+                      <div className="mt-1 text-xs text-[var(--lxxl-muted)]">{record.actionType}</div>
+                    </td>
+                    <td className="px-5 py-4">
+                      <div className="font-medium">{record.operatorName || "-"}</div>
                       <div className="mt-1 text-xs leading-5 text-[var(--lxxl-muted)]">
-                        {record.patientName && (
+                        <div>{record.operatorContact || "-"}</div>
+                        <div>{roleLabel(record.operatorRole)}</div>
+                        {record.operatorId ? <div>ID {record.operatorId}</div> : null}
+                      </div>
+                    </td>
+                    <td className="px-5 py-4">
+                      <div className="font-medium">
+                        {record.targetName || record.counselorName || `${record.targetType || "-"}#${record.targetId || "-"}`}
+                      </div>
+                      <div className="mt-1 text-xs leading-5 text-[var(--lxxl-muted)]">
+                        {record.patientName ? (
                           <div>
                             来访：{record.patientName}
                             {record.patientContact ? `（${record.patientContact}）` : ""}
                           </div>
-                        )}
-                        {record.counselorName && (
+                        ) : null}
+                        {record.counselorName ? (
                           <div>
                             咨询师：{record.counselorName}
                             {record.counselorContact ? `（${record.counselorContact}）` : ""}
                           </div>
-                        )}
+                        ) : null}
+                        {record.targetType || record.targetId ? (
+                          <div>
+                            {record.targetType || "对象"}
+                            {record.targetId ? ` #${record.targetId}` : ""}
+                          </div>
+                        ) : null}
                       </div>
-                    )}
-                    {(record.relatedOrderId || record.relatedConsultationId) && (
-                      <div className="mt-1 text-xs text-[var(--lxxl-muted)]">
-                        {record.relatedOrderId ? `订单 #${record.relatedOrderId}` : ""}
-                        {record.relatedOrderId && record.relatedConsultationId ? " · " : ""}
-                        {record.relatedConsultationId ? `咨询 #${record.relatedConsultationId}` : ""}
+                    </td>
+                    <td className="px-5 py-4 text-xs leading-5 text-[var(--lxxl-muted)]">
+                      <div>时间：{formatDateTime(record.startTime)} 至 {formatDateTime(record.endTime)}</div>
+                      <div>地点：{record.centerName || "-"} {record.roomName || ""}</div>
+                      <div>
+                        {record.relatedOrderId ? `订单 #${record.relatedOrderId}` : "订单 -"}
+                        {" · "}
+                        {record.relatedConsultationId ? `咨询 #${record.relatedConsultationId}` : "咨询 -"}
+                        {" · "}
+                        {record.scheduleId ? `排期 #${record.scheduleId}` : "排期 -"}
                       </div>
-                    )}
-                  </td>
-                  <td className="px-5 py-4">{record.amount == null ? "-" : formatMoneyFromCents(record.amount)}</td>
-                  <td className="px-5 py-4">
-                    <Badge>{statusLabel(record.status)}</Badge>
-                  </td>
-                  <td className="max-w-sm px-5 py-4 text-[var(--lxxl-muted)]">{record.summary || "-"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    </td>
+                    <td className="px-5 py-4">{record.amount == null ? "-" : formatMoneyFromCents(record.amount)}</td>
+                    <td className="px-5 py-4">
+                      <Badge>{statusLabel(record.status)}</Badge>
+                    </td>
+                    <td className="max-w-xs px-5 py-4 text-[var(--lxxl-muted)]">{record.summary || "-"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           <Pagination
             page={records.page}
             pageSize={records.pageSize}

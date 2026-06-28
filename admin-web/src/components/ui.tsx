@@ -121,7 +121,7 @@ export function Badge({
     gold: "bg-[#FBF3DF] text-[#967342]",
     red: "bg-[#FBE8E6] text-[#B34B43]",
   };
-  return <span className={`rounded-full px-3 py-1 text-xs font-medium ${styles[tone]}`}>{children}</span>;
+  return <span className={`whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium ${styles[tone]}`}>{children}</span>;
 }
 
 export function MiniStat({ label, value }: { label: string; value: ReactNode }) {

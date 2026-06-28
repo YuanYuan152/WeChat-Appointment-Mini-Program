@@ -169,7 +169,7 @@ const CounselorBoardListSection = memo(function CounselorBoardListSection({
                       <div className="flex items-center gap-2">
                         <span className="font-semibold">{record.caseRecordCount}</span>
                         <Badge tone={record.missingRecordCount > 0 ? "gold" : "green"}>
-                          缺 {record.missingRecordCount}
+                          待补记录 {record.missingRecordCount}
                         </Badge>
                       </div>
                     </td>
@@ -208,16 +208,37 @@ const CounselorBoardListSection = memo(function CounselorBoardListSection({
 });
 
 function CounselorDetailPanel({ detail }: { detail: CounselorBoardDetail }) {
+  const cancelledConsultations = detail.consultations.filter(
+    (item) => item.status === "CANCELLED" || item.status === "CANCELED",
+  );
   const consultationItems = detail.consultations.map((item) => ({
     label: `咨询 #${item.id} · ${formatDateTime(item.startTime)} 至 ${formatDateTime(item.endTime)} · ${
       item.patientName
     } · ${statusLabel(item.status)}`,
     detail: [
       `咨询ID：${item.id}`,
+      `订单ID：${item.orderId || "-"}`,
+      `排期ID：${item.scheduleId || "-"}`,
       `来访者：${item.patientName}${item.patientMobile ? `（${item.patientMobile}）` : ""}`,
       `状态：${statusLabel(item.status)}`,
       `时间：${formatDateTime(item.startTime)} 至 ${formatDateTime(item.endTime)}`,
+      `地点：${item.centerName || "-"} ${item.roomName || ""}`,
       `咨询记录：${item.hasCaseRecord ? "已填写" : "未填写"}`,
+      item.note ? `备注：${item.note}` : "备注：-",
+    ],
+  }));
+  const cancelledConsultationItems = cancelledConsultations.map((item) => ({
+    label: `取消咨询 #${item.id} · ${formatDateTime(item.startTime)} · ${item.patientName}`,
+    detail: [
+      `咨询ID：${item.id}`,
+      `订单ID：${item.orderId || "-"}`,
+      `排期ID：${item.scheduleId || "-"}`,
+      `来访者：${item.patientName}${item.patientMobile ? `（${item.patientMobile}）` : ""}`,
+      `状态：${statusLabel(item.status)}`,
+      `时间：${formatDateTime(item.startTime)} 至 ${formatDateTime(item.endTime)}`,
+      `地点：${item.centerName || "-"} ${item.roomName || ""}`,
+      `咨询记录：${item.hasCaseRecord ? "已填写" : "未填写"}`,
+      item.note ? `备注：${item.note}` : "备注：-",
     ],
   }));
   const caseRecordItems = detail.caseRecords.map((item) => ({
@@ -261,7 +282,7 @@ function CounselorDetailPanel({ detail }: { detail: CounselorBoardDetail }) {
       `咨询室：${item.centerName || "-"} ${item.roomName || ""}`,
     ],
   }));
-  const cancelItems = detail.scheduleCancelLogs.map((item) => ({
+  const cancelLogItems = detail.scheduleCancelLogs.map((item) => ({
     label: `取消 #${item.id} · 排期 #${item.scheduleId} · ${formatDateTime(item.createdAt)}`,
     detail: [
       `取消记录ID：${item.id}`,
@@ -281,7 +302,7 @@ function CounselorDetailPanel({ detail }: { detail: CounselorBoardDetail }) {
         <MiniStat label="咨询" value={detail.profile.consultationCount} />
         <MiniStat label="已完成" value={detail.profile.completedConsultationCount} />
         <MiniStat label="来访取消" value={detail.profile.cancelledConsultationCount} />
-        <MiniStat label="缺记录" value={detail.profile.missingRecordCount} />
+        <MiniStat label="待补记录" value={detail.profile.missingRecordCount} />
         <MiniStat label="个案记录" value={detail.profile.caseRecordCount} />
         <MiniStat label="请假" value={detail.profile.leaveRequestCount} />
         <MiniStat label="排期" value={detail.profile.scheduleCount} />
@@ -290,7 +311,8 @@ function CounselorDetailPanel({ detail }: { detail: CounselorBoardDetail }) {
       </div>
       <ClickableDetailList title="咨询明细" items={consultationItems} />
       <ClickableDetailList title="咨询记录" items={caseRecordItems} />
-      <ClickableDetailList title="来访取消记录" items={cancelItems} />
+      <ClickableDetailList title="来访取消记录" items={cancelledConsultationItems} />
+      <ClickableDetailList title="咨询师取消/请假取消日志" items={cancelLogItems} />
       <ClickableDetailList title="请假记录" items={leaveItems} />
       <ClickableDetailList title="排期记录" items={scheduleItems} />
       <ClickableDetailList title="使用咨询室记录" items={roomUsageItems} />
