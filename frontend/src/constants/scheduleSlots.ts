@@ -1,5 +1,5 @@
 /** 与后端 schedule_slots.py 对齐的标准咨询时间槽 */
-export const ROLLING_WINDOW_DAYS = 7
+export const ROLLING_WINDOW_DAYS = 30
 export const SLOT_DURATION_MINUTES = 50
 export const SLOT_START_HOURS = [9, 10, 11, 13, 14, 15, 16, 17, 18] as const
 

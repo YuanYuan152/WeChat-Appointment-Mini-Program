@@ -1,8 +1,8 @@
-<template>
+﻿<template>
   <view class="page-schedules">
     <view class="header">
-      <text class="title">挂课情况</text>
-      <text class="subtitle">查看各咨询师当日挂课与预约</text>
+      <text class="title">排期情况</text>
+      <text class="subtitle">查看各咨询师当日排期与预约</text>
     </view>
 
     <picker mode="date" :value="filterDate" @change="onDateChange">
@@ -21,7 +21,7 @@
         <text class="count">{{ c.scheduleCount }} 节</text>
       </view>
 
-      <view v-if="!c.schedules?.length" class="no-slot">当日暂无挂课</view>
+      <view v-if="!c.schedules?.length" class="no-slot">当日暂无排期</view>
       <view v-for="s in c.schedules" :key="s.scheduleId" class="slot-row">
         <view class="slot-time">
           <text>{{ formatTime(s.startTime) }} - {{ formatTime(s.endTime) }}</text>
@@ -73,7 +73,7 @@ const formatTime = (s: string) => (s ? s.slice(11, 16) : '')
 
 const statusLabel = (s: ScheduleItem) => {
   if (s.patientName || s.status === 'BOOKED') return '已预约'
-  if (s.status === 'AVAILABLE') return '已挂课'
+  if (s.status === 'AVAILABLE') return '已排期'
   return s.status
 }
 

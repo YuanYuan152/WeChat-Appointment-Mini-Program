@@ -1,4 +1,4 @@
-"""标准咨询时间槽与滚动 7 天挂课规则。"""
+﻿"""标准咨询时间槽与滚动排期窗口规则。"""
 from datetime import date, datetime, time, timedelta
 from typing import List, Optional, Tuple
 
@@ -8,7 +8,7 @@ from app_time import china_now
 from models import AppSchedule
 from schedule_meta import parse_center_id, parse_room_id
 
-ROLLING_WINDOW_DAYS = 7
+ROLLING_WINDOW_DAYS = 30
 SLOT_DURATION_MINUTES = 50
 # 每日标准时段（50 分钟/节，午休 12 点不排）
 SLOT_START_HOURS = [9, 10, 11, 13, 14, 15, 16, 17, 18]
@@ -51,7 +51,7 @@ def rolling_window_end(today: date) -> date:
 def rolling_window_datetime_bounds(
     today: Optional[date] = None,
 ) -> Tuple[datetime, datetime]:
-    """滚动 7 天时间窗（含起止边界），咨询师日历与来访者预约共用。"""
+    """滚动排期时间窗（含起止边界），咨询师日历与来访者预约共用。"""
     ref = today or china_now().date()
     start_bound = datetime.combine(ref, time.min)
     end_bound = datetime.combine(rolling_window_end(ref) + timedelta(days=1), time.min)
@@ -59,15 +59,15 @@ def rolling_window_datetime_bounds(
 
 
 def validate_slot_in_rolling_window(start: datetime, now: Optional[datetime] = None) -> None:
-    """滚动 7 天：今天起未来 7 天内；当天须未开始。"""
+    """滚动窗口内：今天起未来 N 天内；当天须未开始。"""
     now = now or china_now()
     today = now.date()
     end_date = rolling_window_end(today)
     slot_date = start.date()
     if slot_date < today or slot_date > end_date:
-        raise ValueError(f"仅可挂未来 {ROLLING_WINDOW_DAYS} 天内（{today.isoformat()} ~ {end_date.isoformat()}）的课")
+        raise ValueError(f"仅可排未来 {ROLLING_WINDOW_DAYS} 天内（{today.isoformat()} ~ {end_date.isoformat()}）的时段")
     if start <= now:
-        raise ValueError("该时段已开始或已过，无法挂课")
+        raise ValueError("该时段已开始或已过，无法排期")
 
 
 def is_aligned_standard_slot(start: datetime, end: datetime) -> bool:
@@ -158,7 +158,7 @@ def has_available_room_at_center(
     *,
     exclude_id: Optional[int] = None,
 ) -> bool:
-    """该中心该时段是否仍有可分配的咨询室（用于挂课时段可选判断）。"""
+    """该中心该时段是否仍有可分配的咨询室（用于排期时段可选判断）。"""
     occupied = paid_occupied_rooms_at_center(
         db, center_id, start_time, exclude_id=exclude_id,
     )

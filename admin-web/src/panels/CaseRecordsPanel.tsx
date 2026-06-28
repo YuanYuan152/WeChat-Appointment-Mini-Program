@@ -80,20 +80,20 @@ export function CaseRecordsPanel({
           <div className="space-y-4">
             {selectedCaseRecord && (
               <section className="rounded-xl border border-[var(--lxxl-border)] bg-[#FAF8F4] p-4">
-                <h4 className="text-sm font-semibold">记录 #{selectedCaseRecord.id}</h4>
+                <h4 className="text-sm font-semibold">记录 #{selectedCaseRecord.Id}</h4>
                 <div className="mt-2 text-xs leading-5 text-[var(--lxxl-muted)]">
-                  咨询 #{selectedCaseRecord.consultationId} · {selectedCaseRecord.patientName} · 创建{" "}
-                  {formatDateTime(selectedCaseRecord.createdAt)} · 更新 {formatDateTime(selectedCaseRecord.updatedAt)}
+                  咨询 #{selectedCaseRecord.ConsultationId} · {selectedCaseRecord.PatientName} · 创建{" "}
+                  {formatDateTime(selectedCaseRecord.CreatedAt)} · 更新 {formatDateTime(selectedCaseRecord.UpdatedAt)}
                 </div>
-                <RecordBlock title="主诉/主观描述" value={selectedCaseRecord.subjective} />
-                <RecordBlock title="客观记录" value={selectedCaseRecord.objective} />
-                <RecordBlock title="评估" value={selectedCaseRecord.assessment} />
-                <RecordBlock title="计划" value={selectedCaseRecord.plan} />
-                {selectedCaseRecord.photoUrls.length > 0 && (
+                <RecordBlock title="主诉/主观描述" value={selectedCaseRecord.Subjective} />
+                <RecordBlock title="客观记录" value={selectedCaseRecord.Objective} />
+                <RecordBlock title="评估" value={selectedCaseRecord.Assessment} />
+                <RecordBlock title="计划" value={selectedCaseRecord.Plan} />
+                {selectedCaseRecord.PhotoUrls.length > 0 && (
                   <div className="mt-4">
                     <div className="text-xs font-medium text-[var(--lxxl-muted)]">附件</div>
                     <div className="mt-2 space-y-1 text-xs text-[var(--lxxl-muted)]">
-                      {selectedCaseRecord.photoUrls.map((url) => (
+                      {selectedCaseRecord.PhotoUrls.map((url) => (
                         <div key={url}>{url}</div>
                       ))}
                     </div>

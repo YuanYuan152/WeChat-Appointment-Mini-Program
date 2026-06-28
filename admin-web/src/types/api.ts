@@ -242,21 +242,22 @@ export interface AdminConsultationRecord {
 }
 
 export interface AdminCaseRecordDetail {
-  id: number;
-  consultationId: number;
-  counselorId: number;
-  counselorName: string;
-  patientId: number;
-  patientName: string;
-  startTime?: string | null;
-  endTime?: string | null;
-  subjective?: string | null;
-  objective?: string | null;
-  assessment?: string | null;
-  plan?: string | null;
-  photoUrls: string[];
-  createdAt: string;
-  updatedAt?: string | null;
+  Id: number;
+  ConsultationId: number;
+  CounselorId: number;
+  CounselorName: string;
+  PatientName: string;
+  StartTime?: string | null;
+  EndTime?: string | null;
+  Subjective?: string | null;
+  Objective?: string | null;
+  Assessment?: string | null;
+  Plan?: string | null;
+  RiskAssessment?: Record<string, unknown> | null;
+  HeaderInfo?: Record<string, unknown> | null;
+  PhotoUrls: string[];
+  CreatedAt: string;
+  UpdatedAt?: string | null;
 }
 
 export interface MessageItem {

@@ -46,6 +46,18 @@ def can_visitor_cancel(status: str) -> bool:
     return status in ("PENDING", "CONFIRMED", "ONGOING")
 
 
+def refund_order_for_counselor_leave(db: Session, consultation: AppConsultation) -> bool:
+    """咨询师请假导致预约取消：已支付订单无条件全额退款。"""
+    if not consultation.OrderId:
+        return False
+    order = db.query(AppOrder).filter(AppOrder.Id == consultation.OrderId).first()
+    if order and order.Status == "PAID":
+        order.Status = "REFUNDED"
+        order.UpdatedAt = datetime.utcnow()
+        return True
+    return bool(order and order.Status == "REFUNDED")
+
+
 def cancel_consultation_for_visitor(
     db: Session,
     consultation: AppConsultation,

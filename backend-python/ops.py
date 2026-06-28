@@ -1,4 +1,4 @@
-"""
+﻿"""
 4.1 运营轻后台接口
 公开读取（小程序端）
   GET  /api/mini/ops/banners       有效 Banner 列表（按排序）
@@ -313,6 +313,10 @@ def create_activity(
         SortOrder=body.sort_order or 0,
     )
     db.add(activity)
+    db.flush()
+    from patient_message_service import notify_patients_new_activity
+
+    notify_patients_new_activity(db, activity)
     db.commit()
     db.refresh(activity)
     return activity
@@ -542,7 +546,7 @@ def get_user(
 
 
 # ---------------------------------------------------------------------------
-# 挂课总览 / 咨询室管理
+# 排期总览 / 咨询室管理
 # ---------------------------------------------------------------------------
 
 def _counselor_name(db: Session, counselor_id: int) -> str:
@@ -645,7 +649,7 @@ def _room_occupancy_at(
     }
 
 
-@router.get("/schedules/overview", summary="各咨询师挂课总览")
+@router.get("/schedules/overview", summary="各咨询师排期总览")
 def ops_schedules_overview(
     date: Optional[str] = Query(None, description="YYYY-MM-DD，默认今天"),
     _ops: AppAccount = Depends(require_ops),

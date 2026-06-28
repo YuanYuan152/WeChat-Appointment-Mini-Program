@@ -111,7 +111,6 @@ export function getMockConsultantFilterMetaResponse(): ApiResponse<{
         { label: '综合排序', value: 'default' },
         { label: '价格从低到高', value: 'price_asc' },
         { label: '价格从高到低', value: 'price_desc' },
-        { label: '评分优先', value: 'rating_desc' }
       ],
       provinces: [
         { label: '全部城市', value: '' },
@@ -261,7 +260,10 @@ export function getMockDoctorDetailJson(doctorId: string | number) {
         targetGroup: '成年人,青少年,家庭',
         consultHours: 1200,
         workYears: years,
-        mode: src.consultMethod
+        mode: src.consultMethod,
+        career: '4',
+        infoAuthenticityCommitted: true,
+        infoAuthenticityCommittedAt: '2026-01-15T10:00:00',
       },
       /** 咨询师可约中心（后续由咨询师端排班 API 注入） */
       availableCenterIds: ['yangpu', 'pudong'],

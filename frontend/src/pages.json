@@ -21,6 +21,15 @@
             }
         },
         {
+            "path": "pages/tab-slot/index",
+            "style": {
+                "navigationBarTitleText": "预约记录",
+                "navigationBarBackgroundColor": "#ffffff",
+                "navigationBarTextStyle": "black",
+                "backgroundColor": "#F7F5F2"
+            }
+        },
+        {
             "path": "pages/workbench/index",
             "style": {
                 "navigationBarTitleText": "工作台",
@@ -40,8 +49,8 @@
         {
             "path": "pages/consultant/list",
             "style": {
-                "navigationBarTitleText": "咨询师",
-                "navigationBarBackgroundColor": "#0D9488",
+                "navigationBarTitleText": "预约咨询师",
+                "navigationBarBackgroundColor": "#3D5A4E",
                 "navigationBarTextStyle": "white",
                 "navigationStyle": "custom",
                 "enablePullDownRefresh": true,
@@ -54,7 +63,8 @@
                 "navigationBarTitleText": "咨询师详情",
                 "navigationBarBackgroundColor": "#ffffff",
                 "navigationBarTextStyle": "black",
-                "navigationStyle": "custom"
+                "navigationStyle": "custom",
+                "backgroundColor": "#F7F5F2"
             }
         },
         {
@@ -70,13 +80,22 @@
             "style": {
                 "navigationBarTitleText": "个人信息",
                 "navigationBarBackgroundColor": "#ffffff",
-                "navigationBarTextStyle": "black"
+                "navigationBarTextStyle": "black",
+                "backgroundColor": "#F7F5F2"
             }
         },
         {
             "path": "pages/user/feedback",
             "style": {
                 "navigationBarTitleText": "意见反馈",
+                "navigationBarBackgroundColor": "#ffffff",
+                "navigationBarTextStyle": "black"
+            }
+        },
+        {
+            "path": "pages/user/favorites",
+            "style": {
+                "navigationBarTitleText": "我的收藏",
                 "navigationBarBackgroundColor": "#ffffff",
                 "navigationBarTextStyle": "black"
             }
@@ -142,6 +161,15 @@
             "style": {
                 "navigationBarTitleText": "联系我们",
                 "navigationBarBackgroundColor": "#ffffff",
+                "navigationBarTextStyle": "black",
+                "backgroundColor": "#F7F5F2"
+            }
+        },
+        {
+            "path": "pages/contact/index",
+            "style": {
+                "navigationBarTitleText": "联系我们",
+                "navigationBarBackgroundColor": "#ffffff",
                 "navigationBarTextStyle": "black"
             }
         },
@@ -150,7 +178,8 @@
             "style": {
                 "navigationBarTitleText": "济心理",
                 "navigationBarBackgroundColor": "#ffffff",
-                "navigationBarTextStyle": "black"
+                "navigationBarTextStyle": "black",
+                "backgroundColor": "#F7F5F2"
             }
         },
         {
@@ -188,13 +217,22 @@
                     "style": {
                         "navigationBarTitleText": "预约记录",
                         "navigationBarBackgroundColor": "#ffffff",
-                        "navigationBarTextStyle": "black"
+                        "navigationBarTextStyle": "black",
+                        "backgroundColor": "#F7F5F2"
                     }
                 },
                 {
                     "path": "refund-exemption/apply",
                     "style": {
                         "navigationBarTitleText": "申请豁免",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                },
+                {
+                    "path": "consultation-feedback/index",
+                    "style": {
+                        "navigationBarTitleText": "咨询反馈",
                         "navigationBarBackgroundColor": "#ffffff",
                         "navigationBarTextStyle": "black"
                     }
@@ -212,15 +250,26 @@
                     "style": {
                         "navigationBarTitleText": "编辑资料",
                         "navigationBarBackgroundColor": "#ffffff",
-                        "navigationBarTextStyle": "black"
+                        "navigationBarTextStyle": "black",
+                        "backgroundColor": "#F7F5F2"
                     }
                 },
                 {
                     "path": "messages/index",
                     "style": {
-                        "navigationBarTitleText": "消息中心",
+                        "navigationBarTitleText": "我的消息",
                         "navigationBarBackgroundColor": "#ffffff",
-                        "navigationBarTextStyle": "black"
+                        "navigationBarTextStyle": "black",
+                        "backgroundColor": "#F7F5F2"
+                    }
+                },
+                {
+                    "path": "messages/detail",
+                    "style": {
+                        "navigationBarTitleText": "消息详情",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black",
+                        "backgroundColor": "#F7F5F2"
                     }
                 }
             ]
@@ -303,6 +352,22 @@
                     }
                 },
                 {
+                    "path": "case-record-amendments/index",
+                    "style": {
+                        "navigationBarTitleText": "咨询记录修改审核",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                },
+                {
+                    "path": "leave-requests/index",
+                    "style": {
+                        "navigationBarTitleText": "咨询师请假审批",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                },
+                {
                     "path": "case-records/index",
                     "style": {
                         "navigationBarTitleText": "咨询记录",
@@ -319,9 +384,57 @@
                     }
                 },
                 {
+                    "path": "case-records/view",
+                    "style": {
+                        "navigationBarTitleText": "咨询记录详情",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                },
+                {
+                    "path": "patients/index",
+                    "style": {
+                        "navigationBarTitleText": "来访管理",
+                        "navigationBarBackgroundColor": "#3D5A4E",
+                        "navigationBarTextStyle": "white"
+                    }
+                },
+                {
+                    "path": "consultation-feedbacks/index",
+                    "style": {
+                        "navigationBarTitleText": "用户反馈",
+                        "navigationBarBackgroundColor": "#3D5A4E",
+                        "navigationBarTextStyle": "white"
+                    }
+                },
+                {
+                    "path": "users/index",
+                    "style": {
+                        "navigationBarTitleText": "用户管理",
+                        "navigationBarBackgroundColor": "#3D5A4E",
+                        "navigationBarTextStyle": "white"
+                    }
+                },
+                {
+                    "path": "counselors/detail",
+                    "style": {
+                        "navigationBarTitleText": "咨询师详情",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                },
+                {
+                    "path": "patients/detail",
+                    "style": {
+                        "navigationBarTitleText": "来访者详情",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                },
+                {
                     "path": "schedules/index",
                     "style": {
-                        "navigationBarTitleText": "挂课情况",
+                        "navigationBarTitleText": "排期情况",
                         "navigationBarBackgroundColor": "#ffffff",
                         "navigationBarTextStyle": "black"
                     }
@@ -489,7 +602,15 @@
                 {
                     "path": "case-record/edit",
                     "style": {
-                        "navigationBarTitleText": "咨询记录",
+                        "navigationBarTitleText": "填写咨询记录",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                },
+                {
+                    "path": "case-record/view",
+                    "style": {
+                        "navigationBarTitleText": "咨询记录详情",
                         "navigationBarBackgroundColor": "#ffffff",
                         "navigationBarTextStyle": "black"
                     }
@@ -499,7 +620,8 @@
                     "style": {
                         "navigationBarTitleText": "咨询师资料",
                         "navigationBarBackgroundColor": "#ffffff",
-                        "navigationBarTextStyle": "black"
+                        "navigationBarTextStyle": "black",
+                        "backgroundColor": "#F7F5F2"
                     }
                 },
                 {
@@ -517,6 +639,10 @@
         "pages/index/index": {
             "network": "all",
             "packages": ["patient"]
+        },
+        "pages/workbench/index": {
+            "network": "all",
+            "packages": ["ops", "counselor", "assistant"]
         }
     },
     "globalStyle": {
@@ -541,13 +667,13 @@
                 "text": "首页"
             },
             {
-                "pagePath": "pages/activity/list",
+                "pagePath": "pages/consultant/list",
                 "iconPath": "static/images/bottom2.png",
                 "selectedIconPath": "static/images/bottom2.png",
-                "text": "活动"
+                "text": "心理咨询"
             },
             {
-                "pagePath": "pages/workbench/index",
+                "pagePath": "pages/tab-slot/index",
                 "iconPath": "static/images/bottom3.png",
                 "selectedIconPath": "static/images/bottom3.png",
                 "text": "预约记录"
@@ -572,8 +698,12 @@
                 "path": "pages/auth/login"
             },
             {
-                "name": "工作台",
-                "path": "pages/workbench/index"
+                "name": "心理咨询",
+                "path": "pages/consultant/list"
+            },
+            {
+                "name": "预约记录",
+                "path": "pages/tab-slot/index"
             },
             {
                 "name": "搜索",

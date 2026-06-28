@@ -348,10 +348,16 @@ def common_counselor_detail(
         "field": new_rows[0].get("Field"),
         "introduce": new_rows[0].get("Introduce"),
         "billing": float(billing_cents),
+        "faceBilling": float(int(new_rows[0].get("FaceBilling") or 30000)),
         "consultHours": int(new_rows[0].get("ConsultHours") or 0),
         "workYears": int(new_rows[0].get("WorkYears") or 0),
         "career": new_rows[0].get("Career"),
         "qualification": new_rows[0].get("Qualification"),
+        "targetGroup": new_rows[0].get("TargetGroup"),
+        "mode": new_rows[0].get("Mode"),
+        "infoAuthenticityCommitted": bool(new_rows[0].get("InfoAuthenticityCommittedAt")),
+        "infoAuthenticityCommittedAt": new_rows[0].get("InfoAuthenticityCommittedAt"),
+        "infoAuthenticitySignerName": new_rows[0].get("InfoAuthenticitySignerName"),
         "timeSlots": time_slots,
         "availableCenterIds": sorted(center_ids),
         "hasAvailableTime": any(t.get("isBookable") for t in time_slots),
@@ -360,7 +366,7 @@ def common_counselor_detail(
     }
 
 
-@router.get("/counselors/{cid}/time-slots", summary="咨询师可预约时段（与挂课同步）")
+@router.get("/counselors/{cid}/time-slots", summary="咨询师可预约时段（与排期同步）")
 def common_counselor_time_slots(
     cid: int,
     db: Session = Depends(get_db),

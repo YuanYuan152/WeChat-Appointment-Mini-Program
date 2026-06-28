@@ -1,11 +1,11 @@
-/** 咨询师工作台时段展示（与后端 schedule_display 对齐） */
+﻿/** 咨询师工作台时段展示（与后端 schedule_display 对齐） */
 export type ScheduleDisplayStatus = 'OPEN' | 'BOOKED' | 'ON_LEAVE' | 'DONE' | 'EXPIRED' | 'CANCELLED'
 
 export const SCHEDULE_DISPLAY_META: Record<
   ScheduleDisplayStatus,
   { label: string; icon: string; color: string; bg: string }
 > = {
-  OPEN: { label: '已挂课', icon: '🟤', color: '#7A5C3A', bg: '#EDE4D4' },
+  OPEN: { label: '已排期', icon: '🟤', color: '#7A5C3A', bg: '#EDE4D4' },
   BOOKED: { label: '已预约', icon: '🟢', color: '#1F4034', bg: '#B8D4C8' },
   ON_LEAVE: { label: '已请假', icon: '🟠', color: '#C2410C', bg: '#FFEDD5' },
   DONE: { label: '已完成', icon: '✅', color: '#6B7280', bg: '#F3F4F6' },
@@ -14,8 +14,8 @@ export const SCHEDULE_DISPLAY_META: Record<
 }
 
 export const SCHEDULE_LEGEND = [
-  { key: 'OPEN', hint: '已挂课：来访者可见并可预约' },
+  { key: 'OPEN', hint: '已排期：来访者可见并可预约' },
   { key: 'BOOKED', hint: '已预约：来访者已支付' },
   { key: 'DONE', hint: '已完成：咨询已结束' },
-  { key: 'EMPTY', hint: '未挂课：该时段未开放（来访者不可见）' },
+  { key: 'EMPTY', hint: '未排期：该时段未开放（来访者不可见）' },
 ] as const

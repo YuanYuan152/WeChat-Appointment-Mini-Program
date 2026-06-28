@@ -1,4 +1,4 @@
-"""创建咨询师取消挂课沟通截图表 AppScheduleCancelLog（如不存在）。"""
+﻿"""创建咨询师取消排期沟通截图表 AppScheduleCancelLog（如不存在）。"""
 import pyodbc
 
 conn_str = (

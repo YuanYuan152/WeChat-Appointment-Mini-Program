@@ -9,10 +9,9 @@ PUT /api/mini/patient/registration  → 保存完整版登记表
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 
 from auth import get_current_account, AppAccount
 from consultation_cancel import (
@@ -29,6 +28,15 @@ from models import (
     AppCounselorProfile,
     AppSchedule,
     AppRefundExemption,
+    AppCounselorFavorite,
+    AppConsultationFeedback,
+    AppAccount,
+)
+from consultation_feedback import (
+    ALLOWED_IMPROVEMENTS,
+    encode_feedback,
+    feedback_detail,
+    feedback_summary,
 )
 from refund_exemption_service import (
     latest_exemptions_by_consultation,
@@ -198,6 +206,27 @@ class ConsultationOut(BaseModel):
     exemptionId: Optional[int] = None
     orderStatus: Optional[str] = None
     cancelSummary: Optional[str] = None
+    hasFeedback: bool = False
+    feedbackContent: Optional[str] = None
+    feedbackAt: Optional[datetime] = None
+    feedbackGoalScore: Optional[int] = None
+    feedbackRhythmScore: Optional[int] = None
+    feedbackImprovements: Optional[List[str]] = None
+
+
+class ConsultationFeedbackCreate(BaseModel):
+    goalScore: Optional[int] = Field(default=None, ge=1, le=5, description="目标达成 1-5 星")
+    rhythmScore: Optional[int] = Field(default=None, ge=1, le=5, description="议题节奏 1-5 星")
+    improvements: List[str] = Field(default_factory=list, description="需改进方面（多选，可空）")
+
+
+class ConsultationFeedbackOut(BaseModel):
+    consultationId: int
+    goalScore: Optional[int] = None
+    rhythmScore: Optional[int] = None
+    improvements: List[str] = []
+    summary: str
+    createdAt: datetime
 
 
 class CancelConsultationOut(BaseModel):
@@ -259,6 +288,14 @@ def get_my_consultations(
         db, consultation_ids, account_id=current_account.Id,
     )
 
+    feedback_map: dict[int, AppConsultationFeedback] = {}
+    if consultation_ids:
+        for fb in db.query(AppConsultationFeedback).filter(
+            AppConsultationFeedback.ConsultationId.in_(consultation_ids),
+            AppConsultationFeedback.AccountId == current_account.Id,
+        ).all():
+            feedback_map[fb.ConsultationId] = fb
+
     result: List[ConsultationOut] = []
     for r in rows:
         prof = counselor_map.get(r.CounselorId)
@@ -290,6 +327,8 @@ def get_my_consultations(
             else:
                 cancel_summary = "预约已取消，按规定不予退款"
         exemption = exemption_map.get(r.Id)
+        feedback = feedback_map.get(r.Id)
+        fb_detail = feedback_detail(feedback.Content) if feedback else None
 
         result.append(ConsultationOut(
             id=r.Id,
@@ -314,8 +353,72 @@ def get_my_consultations(
             exemptionId=exemption.Id if exemption else None,
             orderStatus=order_status,
             cancelSummary=cancel_summary,
+            hasFeedback=bool(feedback),
+            feedbackContent=feedback_summary(feedback.Content) if feedback else None,
+            feedbackAt=feedback.CreatedAt if feedback else None,
+            feedbackGoalScore=fb_detail.get("goalScore") or None if fb_detail else None,
+            feedbackRhythmScore=fb_detail.get("rhythmScore") or None if fb_detail else None,
+            feedbackImprovements=fb_detail.get("improvements") if fb_detail else None,
         ))
     return result
+
+
+@router.post(
+    "/consultations/{consultation_id}/feedback",
+    response_model=ConsultationFeedbackOut,
+    summary="提交已完成咨询的反馈",
+)
+def submit_consultation_feedback(
+    consultation_id: int,
+    body: ConsultationFeedbackCreate,
+    current_account: AppAccount = Depends(get_current_account),
+    db: Session = Depends(get_db),
+):
+    consultation = (
+        db.query(AppConsultation)
+        .filter(
+            AppConsultation.Id == consultation_id,
+            AppConsultation.PatientId == current_account.Id,
+        )
+        .first()
+    )
+    if not consultation:
+        raise HTTPException(status_code=404, detail="咨询记录不存在")
+    if consultation.Status != "DONE":
+        raise HTTPException(status_code=400, detail="仅已完成的咨询可提交反馈")
+
+    exists = (
+        db.query(AppConsultationFeedback)
+        .filter(AppConsultationFeedback.ConsultationId == consultation_id)
+        .first()
+    )
+    if exists:
+        raise HTTPException(status_code=400, detail="该咨询已提交过反馈")
+
+    improvements = [x.strip() for x in (body.improvements or []) if x and x.strip()]
+    invalid = [x for x in improvements if x not in ALLOWED_IMPROVEMENTS]
+    if invalid:
+        raise HTTPException(status_code=400, detail="包含无效的改进选项")
+
+    goal_score = body.goalScore if body.goalScore and body.goalScore > 0 else None
+    rhythm_score = body.rhythmScore if body.rhythmScore and body.rhythmScore > 0 else None
+    payload = encode_feedback(goal_score, rhythm_score, improvements)
+    row = AppConsultationFeedback(
+        ConsultationId=consultation_id,
+        AccountId=current_account.Id,
+        Content=payload,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return ConsultationFeedbackOut(
+        consultationId=consultation_id,
+        goalScore=goal_score,
+        rhythmScore=rhythm_score,
+        improvements=improvements,
+        summary=feedback_summary(payload) or "",
+        createdAt=row.CreatedAt,
+    )
 
 
 @router.post("/consultations/{consultation_id}/cancel", response_model=CancelConsultationOut, summary="取消咨询")
@@ -342,6 +445,14 @@ def cancel_my_consultation(
         raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+    from staff_message_service import notify_staff_appointment_cancelled
+    from counselor_message_service import notify_counselor_appointment_cancelled
+    from patient_message_service import notify_patient_appointment_cancelled
+
+    notify_patient_appointment_cancelled(db, row, refunded=refunded)
+    notify_staff_appointment_cancelled(db, row, refunded=refunded)
+    notify_counselor_appointment_cancelled(db, row, refunded=refunded)
 
     db.commit()
     return CancelConsultationOut(refunded=refunded, message=message)
@@ -400,6 +511,9 @@ def submit_refund_exemption(
     db.add(exemption)
     db.flush()
     notify_admins_new_exemption(db, exemption, row)
+    from patient_message_service import notify_patient_refund_exemption_pending
+
+    notify_patient_refund_exemption_pending(db, exemption, row)
     db.commit()
     db.refresh(exemption)
     return RefundExemptionOut(
@@ -554,3 +668,154 @@ def save_registration(
     db.commit()
     db.refresh(form)
     return _registration_to_dict(form)
+
+
+class CounselorFavoriteOut(BaseModel):
+    counselorId: int
+    name: str
+    title: Optional[str] = None
+    avatarUrl: Optional[str] = None
+    specialty: Optional[str] = None
+    billing: Optional[int] = None
+    workYears: Optional[int] = None
+    consultHours: Optional[int] = None
+    createdAt: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class FavoriteStatusOut(BaseModel):
+    favorited: bool
+    count: int = 0
+
+
+def _favorite_counselor_out(db: Session, counselor_id: int, created_at: datetime) -> CounselorFavoriteOut:
+    profile = (
+        db.query(AppCounselorProfile)
+        .filter(AppCounselorProfile.AccountId == counselor_id)
+        .first()
+    )
+    account = db.query(AppAccount).filter(AppAccount.Id == counselor_id).first()
+    name = "咨询师"
+    avatar = None
+    if profile:
+        name = profile.Name or name
+        avatar = profile.AvatarUrl
+    if account and not profile:
+        name = account.RealName or account.Nickname or name
+        avatar = account.AvatarUrl
+    return CounselorFavoriteOut(
+        counselorId=counselor_id,
+        name=name,
+        title=profile.Title if profile else None,
+        avatarUrl=avatar,
+        specialty=profile.Specialty if profile else None,
+        billing=int(profile.Billing or 0) if profile else None,
+        workYears=int(profile.WorkYears or 0) if profile else None,
+        consultHours=int(profile.ConsultHours or 0) if profile else None,
+        createdAt=created_at,
+    )
+
+
+@router.get("/favorites", response_model=List[CounselorFavoriteOut], summary="我的收藏咨询师")
+def list_favorites(
+    account: AppAccount = Depends(get_current_account),
+    db: Session = Depends(get_db),
+):
+    rows = (
+        db.query(AppCounselorFavorite)
+        .filter(AppCounselorFavorite.AccountId == account.Id)
+        .order_by(AppCounselorFavorite.CreatedAt.desc())
+        .all()
+    )
+    return [_favorite_counselor_out(db, r.CounselorId, r.CreatedAt) for r in rows]
+
+
+@router.get("/favorites/count", summary="收藏数量")
+def favorite_count(
+    account: AppAccount = Depends(get_current_account),
+    db: Session = Depends(get_db),
+):
+    count = (
+        db.query(AppCounselorFavorite)
+        .filter(AppCounselorFavorite.AccountId == account.Id)
+        .count()
+    )
+    return {"count": count}
+
+
+@router.get(
+    "/favorites/check/{counselor_id}",
+    response_model=FavoriteStatusOut,
+    summary="是否已收藏某咨询师",
+)
+def check_favorite(
+    counselor_id: int,
+    account: AppAccount = Depends(get_current_account),
+    db: Session = Depends(get_db),
+):
+    exists = (
+        db.query(AppCounselorFavorite)
+        .filter(
+            AppCounselorFavorite.AccountId == account.Id,
+            AppCounselorFavorite.CounselorId == counselor_id,
+        )
+        .first()
+    )
+    return FavoriteStatusOut(favorited=bool(exists))
+
+
+@router.post(
+    "/favorites/{counselor_id}",
+    response_model=FavoriteStatusOut,
+    summary="收藏咨询师",
+)
+def add_favorite(
+    counselor_id: int,
+    account: AppAccount = Depends(get_current_account),
+    db: Session = Depends(get_db),
+):
+    profile = (
+        db.query(AppCounselorProfile)
+        .filter(AppCounselorProfile.AccountId == counselor_id, AppCounselorProfile.IsActive == True)
+        .first()
+    )
+    if not profile:
+        raise HTTPException(status_code=404, detail="咨询师不存在")
+    existing = (
+        db.query(AppCounselorFavorite)
+        .filter(
+            AppCounselorFavorite.AccountId == account.Id,
+            AppCounselorFavorite.CounselorId == counselor_id,
+        )
+        .first()
+    )
+    if not existing:
+        db.add(AppCounselorFavorite(AccountId=account.Id, CounselorId=counselor_id))
+        db.commit()
+    return FavoriteStatusOut(favorited=True)
+
+
+@router.delete(
+    "/favorites/{counselor_id}",
+    response_model=FavoriteStatusOut,
+    summary="取消收藏咨询师",
+)
+def remove_favorite(
+    counselor_id: int,
+    account: AppAccount = Depends(get_current_account),
+    db: Session = Depends(get_db),
+):
+    row = (
+        db.query(AppCounselorFavorite)
+        .filter(
+            AppCounselorFavorite.AccountId == account.Id,
+            AppCounselorFavorite.CounselorId == counselor_id,
+        )
+        .first()
+    )
+    if row:
+        db.delete(row)
+        db.commit()
+    return FavoriteStatusOut(favorited=False)

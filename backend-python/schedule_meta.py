@@ -1,4 +1,4 @@
-"""预约中心、咨询室与排班 Note 字段解析（与前端 appointmentCenters / consultationRooms 对齐）。"""
+﻿"""预约中心、咨询室与排班 Note 字段解析（与前端 appointmentCenters / consultationRooms 对齐）。"""
 from typing import List, Optional, TypedDict
 
 from sqlalchemy.orm import Session
@@ -19,7 +19,7 @@ def is_video_center(center_id: Optional[str]) -> bool:
 def is_physical_center(center_id: Optional[str]) -> bool:
     return bool(center_id) and not is_video_center(center_id)
 
-# 每个中心 3 间咨询室（仅咨询师挂课使用，来访者预约不展示）
+# 每个中心 3 间咨询室（仅咨询师排期使用，来访者预约不展示）
 CONSULTATION_ROOMS: dict[str, List[dict[str, str]]] = {
     "yangpu": [
         {"id": "yangpu-r1", "name": "咨询室 A"},
@@ -90,7 +90,7 @@ def parse_room_id(note: Optional[str]) -> Optional[str]:
 
 
 def parse_pref_room_id(note: Optional[str]) -> Optional[str]:
-    """咨询师挂课时的咨询室偏好（pref:）。"""
+    """咨询师排期时的咨询室偏好（pref:）。"""
     for part in _note_parts(note):
         if part.lower().startswith("pref:"):
             val = part.split(":", 1)[1].strip()
@@ -136,7 +136,7 @@ def schedule_note(
     *,
     pref_room_id: Optional[str] = None,
 ) -> str:
-    """构建排班 Note。room_id 为付款后实际咨询室；pref_room_id 为挂课偏好。"""
+    """构建排班 Note。room_id 为付款后实际咨询室；pref_room_id 为排期偏好。"""
     parts = [f"center:{center_id}"]
     if pref_room_id:
         parts.append(f"pref:{pref_room_id}")
@@ -146,7 +146,7 @@ def schedule_note(
 
 
 def schedule_pref_note(center_id: str, pref_room_id: Optional[str] = None) -> str:
-    """挂课时仅记录中心与咨询室偏好，不占用咨询室。视频咨询不记录偏好。"""
+    """排期时仅记录中心与咨询室偏好，不占用咨询室。视频咨询不记录偏好。"""
     if is_video_center(center_id):
         return schedule_note(center_id)
     return schedule_note(center_id, pref_room_id=pref_room_id)

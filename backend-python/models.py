@@ -8,7 +8,7 @@ SQLAlchemy ORM 模型。
   避免出现 "???" 乱码。
 """
 
-from sqlalchemy import Column, Integer, String, DateTime, BigInteger, Boolean, Unicode, UnicodeText
+from sqlalchemy import Column, Integer, String, DateTime, BigInteger, Boolean, Unicode, UnicodeText, UniqueConstraint
 from sqlalchemy.sql import func
 from database import Base
 
@@ -31,6 +31,8 @@ class AppAccount(Base):
     IntakeAgreementSignedAt = Column(DateTime, nullable=True)
     IntakeIsAdult = Column(Boolean, nullable=True)
     IntakeSignatureUrl = Column(String(500), nullable=True)
+    PasswordHash = Column(String(255), nullable=True)
+    PreferenceTagsCompletedAt = Column(DateTime, nullable=True)
     IsActive = Column(Boolean, nullable=False, default=True, server_default="1")
     DeletedAt = Column(DateTime, nullable=True)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
@@ -104,6 +106,8 @@ class AppCaseRecord(Base):
     Objective = Column(UnicodeText, nullable=True)
     Assessment = Column(UnicodeText, nullable=True)
     Plan = Column(UnicodeText, nullable=True)
+    RiskAssessment = Column(UnicodeText, nullable=True)
+    HeaderInfo = Column(UnicodeText, nullable=True)
     PhotoUrls = Column(UnicodeText, nullable=True)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
     UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
@@ -121,9 +125,34 @@ class AppCaseRecordRevision(Base):
     Objective = Column(UnicodeText, nullable=True)
     Assessment = Column(UnicodeText, nullable=True)
     Plan = Column(UnicodeText, nullable=True)
+    RiskAssessment = Column(UnicodeText, nullable=True)
+    HeaderInfo = Column(UnicodeText, nullable=True)
     PhotoUrls = Column(UnicodeText, nullable=True)
     RevisedAt = Column(DateTime, default=func.now(), nullable=False)
     RevisedBy = Column(Integer, nullable=False)
+
+
+class AppCaseRecordAmendmentRequest(Base):
+    """咨询师提交的咨询记录修改申请，需管理员审核后生效。"""
+    __tablename__ = "AppCaseRecordAmendmentRequest"
+
+    Id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    CaseRecordId = Column(Integer, nullable=False, index=True)
+    ConsultationId = Column(Integer, nullable=False)
+    CounselorId = Column(Integer, nullable=False)
+    Subjective = Column(UnicodeText, nullable=False)
+    Objective = Column(UnicodeText, nullable=False)
+    Assessment = Column(UnicodeText, nullable=False)
+    Plan = Column(UnicodeText, nullable=False)
+    RiskAssessment = Column(UnicodeText, nullable=True)
+    HeaderInfo = Column(UnicodeText, nullable=True)
+    PhotoUrls = Column(UnicodeText, nullable=True)
+    Reason = Column(UnicodeText, nullable=True)
+    Status = Column(String(20), nullable=False, default="PENDING")
+    RejectReason = Column(UnicodeText, nullable=True)
+    ReviewedBy = Column(Integer, nullable=True)
+    ReviewedAt = Column(DateTime, nullable=True)
+    CreatedAt = Column(DateTime, default=func.now(), nullable=False)
 
 
 class AppTask(Base):
@@ -342,9 +371,14 @@ class AppCounselorProfile(Base):
     Introduce = Column(UnicodeText, nullable=True)
     Career = Column(UnicodeText, nullable=True)
     Qualification = Column(UnicodeText, nullable=True)
-    Billing = Column(Integer, nullable=False, default=0)
+    TargetGroup = Column(Unicode(500), nullable=True)
+    Mode = Column(Unicode(100), nullable=True)
+    Billing = Column(Integer, nullable=False, default=60000)
+    FaceBilling = Column(Integer, nullable=False, default=30000)
     ConsultHours = Column(Integer, nullable=False, default=0)
     WorkYears = Column(Integer, nullable=False, default=0)
+    InfoAuthenticityCommittedAt = Column(DateTime, nullable=True)
+    InfoAuthenticitySignerName = Column(Unicode(100), nullable=True)
     IsActive = Column(Boolean, nullable=False, default=True)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
     UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
@@ -376,7 +410,7 @@ class AppLeaveRequest(Base):
 
 
 class AppScheduleCancelLog(Base):
-    """咨询师取消已预约挂课（距开始≥24h）时留存沟通截图凭证。"""
+    """咨询师取消已预约排期（距开始≥24h）时留存沟通截图凭证。"""
     __tablename__ = "AppScheduleCancelLog"
 
     Id = Column(Integer, primary_key=True, index=True, autoincrement=True)
@@ -404,6 +438,17 @@ class AppRefundExemption(Base):
     UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
 
 
+class AppConsultationFeedback(Base):
+    """来访者对已完成咨询的反馈。"""
+    __tablename__ = "AppConsultationFeedback"
+
+    Id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    ConsultationId = Column(Integer, nullable=False, unique=True, index=True)
+    AccountId = Column(Integer, nullable=False, index=True)
+    Content = Column(UnicodeText, nullable=False)
+    CreatedAt = Column(DateTime, default=func.now(), nullable=False)
+
+
 class AppFeedback(Base):
     __tablename__ = "AppFeedback"
 
@@ -414,6 +459,20 @@ class AppFeedback(Base):
     Contact = Column(String(50), nullable=True)
     Status = Column(String(20), nullable=False, default="OPEN")
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
+
+
+class AppCounselorFavorite(Base):
+    """来访者收藏的咨询师。"""
+    __tablename__ = "AppCounselorFavorite"
+
+    Id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    AccountId = Column(Integer, nullable=False, index=True)
+    CounselorId = Column(Integer, nullable=False, index=True)
+    CreatedAt = Column(DateTime, default=func.now(), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("AccountId", "CounselorId", name="UQ_AppCounselorFavorite_Account_Counselor"),
+    )
 
 
 class AppConsultationRoom(Base):
@@ -451,3 +510,30 @@ class AppLoginSession(Base):
     SessionKey = Column(String(100), nullable=True)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
     ExpiresAt = Column(DateTime, nullable=False)
+
+
+class AppSmsVerification(Base):
+    """官网/Web 端短信验证码（与小程序微信手机号绑定并存）。"""
+    __tablename__ = "AppSmsVerification"
+
+    Id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    Mobile = Column(String(20), nullable=False, index=True)
+    Code = Column(String(10), nullable=False)
+    Purpose = Column(String(20), nullable=False, default="login")
+    ExpiresAt = Column(DateTime, nullable=False)
+    UsedAt = Column(DateTime, nullable=True)
+    CreatedAt = Column(DateTime, default=func.now(), nullable=False)
+
+
+class AppUserPreferenceTag(Base):
+    """用户自选偏好标签（个人人群 / 感兴趣的心理问题）。"""
+    __tablename__ = "AppUserPreferenceTag"
+    __table_args__ = (
+        UniqueConstraint("AccountId", "Category", "Tag", name="UQ_AppUserPreferenceTag_Account_Category_Tag"),
+    )
+
+    Id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    AccountId = Column(Integer, nullable=False, index=True)
+    Category = Column(String(20), nullable=False)  # personal | interest
+    Tag = Column(Unicode(50), nullable=False)
+    CreatedAt = Column(DateTime, default=func.now(), nullable=False)

@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { AuthApi, type UserInfo } from '@/apis/auth'
 import { setToken, clearToken, getToken } from '@/utils/auth'
-import { cacheRoleSnapshot, clearRoleSnapshot, syncTabBarByAuth } from '@/utils/tabBar'
+import { updateTabBarForRole } from '@/utils/tabBar'
 
 export const useUserStore = defineStore('user', {
   state: () => ({
@@ -40,15 +40,16 @@ export const useUserStore = defineStore('user', {
       this.userInfo = me
       this.roles = me.roles || []
       this.activeRole = me.activeRole || ''
-      cacheRoleSnapshot(me)
-      syncTabBarByAuth(me)
+      uni.setStorageSync('user_roles', JSON.stringify(this.roles))
+      if (me.activeRole) uni.setStorageSync('active_role', me.activeRole)
+      updateTabBarForRole(this.roles, this.activeRole)
     },
 
     async switchRole(role: string) {
       const res = await AuthApi.switchRole(role)
       this.activeRole = res.activeRole || role
-      cacheRoleSnapshot({ roles: this.roles, activeRole: this.activeRole })
-      syncTabBarByAuth({ roles: this.roles, activeRole: this.activeRole })
+      uni.setStorageSync('active_role', this.activeRole)
+      updateTabBarForRole(this.roles, this.activeRole)
       return res
     },
 
@@ -59,8 +60,9 @@ export const useUserStore = defineStore('user', {
       this.activeRole = ''
       this.isLogin = false
       clearToken()
-      clearRoleSnapshot()
-      syncTabBarByAuth()
+      uni.removeStorageSync('user_roles')
+      uni.removeStorageSync('active_role')
+      updateTabBarForRole([], 'Patient')
       uni.switchTab({ url: '/pages/index/index' })
     },
 

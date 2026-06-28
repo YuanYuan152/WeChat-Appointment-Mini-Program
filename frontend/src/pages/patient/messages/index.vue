@@ -1,87 +1,211 @@
 <template>
   <view class="page-messages">
-    <view class="toolbar">
-      <view class="filter" :class="{ active: !unreadOnly }" @click="setFilter(false)">全部</view>
-      <view class="filter" :class="{ active: unreadOnly }" @click="setFilter(true)">
-        未读
-        <text v-if="unreadCount > 0" class="badge">{{ unreadCount }}</text>
+    <view class="toolbar-card">
+      <view class="filter-section">
+        <view
+          class="filter-trigger"
+          :class="{ active: activeCategory !== 'ALL', open: filterOpen }"
+          @click="toggleFilter"
+        >
+          <text class="filter-prefix">消息类型</text>
+          <view class="filter-value-wrap">
+            <text class="filter-value">{{ currentCategoryLabel }}</text>
+            <text
+              v-if="activeCategory === 'UNREAD' && unreadCount > 0"
+              class="filter-badge"
+            >
+              {{ unreadCount > 99 ? '99+' : unreadCount }}
+            </text>
+            <text class="filter-arrow" :class="{ up: filterOpen }">▾</text>
+          </view>
+        </view>
+
+        <view v-if="filterOpen" class="filter-mask" @click="closeFilter" />
+        <view class="filter-dropdown" :class="{ show: filterOpen }">
+          <view
+            v-for="cat in categories"
+            :key="cat.value"
+            class="filter-option"
+            :class="{ selected: activeCategory === cat.value }"
+            @click="selectCategory(cat.value)"
+          >
+            <text class="option-label">{{ cat.label }}</text>
+            <view class="option-right">
+              <text
+                v-if="cat.value === 'UNREAD' && unreadCount > 0"
+                class="option-badge"
+              >
+                {{ unreadCount > 99 ? '99+' : unreadCount }}
+              </text>
+              <text v-if="activeCategory === cat.value" class="check-icon">✓</text>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <view v-if="showSearch" class="search-row">
+        <input
+          v-model="searchKeyword"
+          class="search-input"
+          type="text"
+          placeholder="搜索时间、姓名、消息类型..."
+          confirm-type="search"
+          @confirm="loadMessages"
+          @input="onSearchInput"
+        />
+        <text v-if="searchKeyword" class="search-clear" @click="clearSearch">清除</text>
       </view>
     </view>
 
-    <view v-if="messages.length === 0" class="empty-state">
+    <view v-if="loading" class="empty-state">
+      <text class="empty-desc">加载中...</text>
+    </view>
+    <view v-else-if="messages.length === 0" class="empty-state">
       <text class="empty-title">暂无消息</text>
-      <text class="empty-desc">预约、支付、咨询提醒会在这里显示</text>
+      <text class="empty-desc">{{ emptyHint }}</text>
     </view>
-
-    <view
-      v-for="item in messages"
-      :key="item.Id"
-      class="message-card"
-      :class="{ unread: !item.IsRead }"
-      @click="markRead(item)"
-    >
-      <view class="msg-head">
-        <view class="type-dot" :class="item.Type.toLowerCase()" />
-        <text class="msg-title">{{ item.Title }}</text>
-        <text v-if="!item.IsRead" class="unread-dot" />
+    <template v-else>
+      <view
+        v-for="item in messages"
+        :key="item.Id"
+        class="message-card"
+        :class="{ unread: !item.IsRead }"
+        @click="openMessage(item)"
+      >
+        <view class="msg-main">
+          <view class="msg-head">
+            <text class="msg-type-tag">{{ messageCategoryLabel(item) }}</text>
+            <text class="msg-title">{{ messageDisplayTitle(item) }}</text>
+            <text v-if="!item.IsRead" class="unread-dot" />
+          </view>
+          <text class="msg-summary">{{ messageSummary(item) }}</text>
+          <text class="msg-time">{{ formatTime(item.CreatedAt) }}</text>
+        </view>
+        <text class="msg-arrow">›</text>
       </view>
-      <text class="msg-content">{{ item.Content || '暂无详情' }}</text>
-      <view class="msg-foot">
-        <text class="msg-type">{{ typeLabel(item.Type) }}</text>
-        <text class="msg-time">{{ formatTime(item.CreatedAt) }}</text>
-      </view>
-    </view>
+    </template>
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref } from 'vue'
+import { onLoad, onShow } from '@dcloudio/uni-app'
+import { AuthApi } from '@/apis/auth'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
-
-interface MessageItem {
-  Id: number
-  Type: string
-  Title: string
-  Content?: string
-  RelatedType?: string
-  RelatedId?: number
-  IsRead: boolean
-  CreatedAt: string
-}
+import {
+  canSearchMessages,
+  getMessageCategoriesForRole,
+  isAdminOpsMessageInbox,
+  messageCategoryLabel,
+  messageDisplayTitle,
+  messageSummary,
+  resolveMessageNavigation,
+  sanitizeMessageCategoryForRole,
+  type MessageItem,
+} from '@/utils/message'
 
 const messages = ref<MessageItem[]>([])
-const unreadOnly = ref(false)
 const unreadCount = ref(0)
+const activeRole = ref('')
+const activeCategory = ref('ALL')
+const searchKeyword = ref('')
+const loading = ref(false)
+const filterOpen = ref(false)
 
-const typeLabel = (type: string) => ({
-  ORDER: '预约',
-  PAYMENT: '支付',
-  CONSULTATION: '咨询',
-  SYSTEM: '系统',
-  RISK: '风险',
-  REMIND: '提醒',
-}[type] || type)
+let searchTimer: ReturnType<typeof setTimeout> | null = null
+
+const categories = computed(() => getMessageCategoriesForRole(activeRole.value))
+const showSearch = computed(() => canSearchMessages(activeRole.value))
+const currentCategoryLabel = computed(() => {
+  const cat = categories.value.find(c => c.value === activeCategory.value)
+  return cat?.label || '全部'
+})
+const emptyHint = computed(() => {
+  if (searchKeyword.value.trim()) return '未找到匹配的消息，请换个关键词试试'
+  if (activeCategory.value === 'UNREAD') return '暂无未读消息'
+  const cat = categories.value.find(c => c.value === activeCategory.value)
+  if (cat && cat.value !== 'ALL') return `暂无「${cat.label}」类消息`
+  if (isAdminOpsMessageInbox(activeRole.value)) {
+    return '豁免申请、咨询师请假、记录修改、风险上报等通知会在这里显示'
+  }
+  return '预约、请假、取消等通知会在这里显示'
+})
 
 const formatTime = (dt: string) => dt ? dt.slice(0, 16).replace('T', ' ') : ''
+
+const loadActiveRole = async () => {
+  try {
+    const me = await AuthApi.getMe()
+    activeRole.value = me.activeRole || me.roles?.[0] || ''
+  } catch {
+    activeRole.value = ''
+  }
+}
 
 const loadUnreadCount = async () => {
   const res = await httpV2.get<{ count: number }>(API_ENDPOINTS.message.unreadCount, undefined, { showLoading: false })
   if (res.code === 0 && res.data) unreadCount.value = res.data.count || 0
 }
 
-const loadMessages = async () => {
-  const res = await httpV2.get<MessageItem[]>(
-    API_ENDPOINTS.message.list,
-    { unread_only: unreadOnly.value },
-    { showLoading: true }
-  )
-  if (res.code === 0 && res.data) messages.value = res.data
-  await loadUnreadCount()
+const buildListParams = () => {
+  const params: Record<string, string | boolean> = {}
+  if (activeCategory.value === 'UNREAD') {
+    params.unread_only = true
+    params.category = 'UNREAD'
+  } else if (activeCategory.value !== 'ALL') {
+    params.category = activeCategory.value
+  }
+  const q = searchKeyword.value.trim()
+  if (q && showSearch.value) params.q = q
+  return params
 }
 
-const setFilter = async (value: boolean) => {
-  unreadOnly.value = value
+const loadMessages = async () => {
+  loading.value = true
+  try {
+    const res = await httpV2.get<MessageItem[]>(
+      API_ENDPOINTS.message.list,
+      buildListParams(),
+      { showLoading: false },
+    )
+    if (res.code === 0 && res.data) {
+      messages.value = res.data
+    } else {
+      messages.value = []
+    }
+    await loadUnreadCount()
+  } finally {
+    loading.value = false
+  }
+}
+
+const toggleFilter = () => {
+  filterOpen.value = !filterOpen.value
+}
+
+const closeFilter = () => {
+  filterOpen.value = false
+}
+
+const selectCategory = async (value: string) => {
+  closeFilter()
+  const next = sanitizeMessageCategoryForRole(activeRole.value, value)
+  if (activeCategory.value === next) return
+  activeCategory.value = next
+  await loadMessages()
+}
+
+const onSearchInput = () => {
+  if (!showSearch.value) return
+  if (searchTimer) clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => {
+    loadMessages()
+  }, 400)
+}
+
+const clearSearch = async () => {
+  searchKeyword.value = ''
   await loadMessages()
 }
 
@@ -90,67 +214,234 @@ const markRead = async (item: MessageItem) => {
   const res = await httpV2.put<MessageItem>(
     API_ENDPOINTS.message.markRead(item.Id),
     undefined,
-    { showLoading: false }
+    { showLoading: false, showError: false },
   )
   if (res.code === 0) {
     item.IsRead = true
     if (unreadCount.value > 0) unreadCount.value -= 1
-    if (unreadOnly.value) messages.value = messages.value.filter(m => m.Id !== item.Id)
+    if (activeCategory.value === 'UNREAD') {
+      messages.value = messages.value.filter(m => m.Id !== item.Id)
+    }
   }
 }
 
-onMounted(loadMessages)
+const openMessage = async (item: MessageItem) => {
+  await markRead(item)
+  const url = resolveMessageNavigation(item, activeRole.value)
+  uni.navigateTo({
+    url,
+    fail: () => {
+      if (url.includes('case-record-amendments') || url.includes('refund-exemptions')) {
+        uni.showModal({
+          title: '页面未找到',
+          content: '请重启 pnpm dev:mp-weixin，并在微信开发者工具中点击「编译」刷新后重试。',
+          showCancel: false,
+        })
+        return
+      }
+      uni.navigateTo({ url: `/pages/patient/messages/detail?id=${item.Id}` })
+    },
+  })
+}
+
+onLoad(loadActiveRole)
+
+onShow(async () => {
+  await loadActiveRole()
+  activeCategory.value = sanitizeMessageCategoryForRole(activeRole.value, activeCategory.value)
+  await loadMessages()
+})
 </script>
 
 <style scoped>
 .page-messages {
   min-height: 100vh;
-  background: #F4F6F8;
+  background: #F7F5F2;
   padding: 28rpx;
+  box-sizing: border-box;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
-.toolbar {
-  display: flex;
-  gap: 16rpx;
-  margin-bottom: 28rpx;
-}
-
-.filter {
+.toolbar-card {
   position: relative;
-  padding: 14rpx 36rpx;
-  border-radius: 100rpx;
+  z-index: 20;
   background: #fff;
-  color: #6B7280;
-  font-size: 28rpx;
-  font-weight: 600;
-  box-shadow: 0 4rpx 16rpx rgba(15, 23, 42, 0.06);
+  border-radius: 32rpx;
+  margin-bottom: 24rpx;
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.02);
+  overflow: visible;
 }
 
-.filter.active {
-  background: #0D9488;
-  color: #fff;
+.filter-section {
+  position: relative;
 }
 
-.badge {
-  display: inline-flex;
+.filter-trigger {
+  display: flex;
   align-items: center;
-  justify-content: center;
-  min-width: 34rpx;
-  height: 34rpx;
+  justify-content: space-between;
+  padding: 24rpx 28rpx;
+  border-radius: 24rpx;
+}
+
+.filter-trigger.open {
+  border-radius: 24rpx 24rpx 0 0;
+}
+
+.filter-trigger.active .filter-value {
+  color: #3D5A4E;
+  font-weight: 700;
+}
+
+.filter-prefix {
+  flex-shrink: 0;
+  font-size: 28rpx;
+  color: #6B7280;
+  font-weight: 500;
+}
+
+.filter-value-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8rpx;
+  min-width: 0;
+}
+
+.filter-value {
+  font-size: 28rpx;
+  color: #1F2937;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.filter-badge {
+  min-width: 32rpx;
+  height: 32rpx;
   padding: 0 8rpx;
-  margin-left: 8rpx;
   border-radius: 100rpx;
   background: #EF4444;
   color: #fff;
   font-size: 20rpx;
+  line-height: 32rpx;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.filter-arrow {
+  flex-shrink: 0;
+  font-size: 24rpx;
+  color: #9CA3AF;
+  transition: transform 0.25s;
+}
+
+.filter-arrow.up {
+  transform: rotate(180deg);
+  color: #3D5A4E;
+}
+
+.filter-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 90;
+}
+
+.filter-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: #fff;
+  z-index: 95;
+  max-height: 0;
+  overflow: hidden;
+  border-radius: 0 0 24rpx 24rpx;
+  transition: max-height 0.25s ease;
+  box-shadow: 0 12rpx 32rpx rgba(15, 23, 42, 0.1);
+}
+
+.filter-dropdown.show {
+  max-height: 640rpx;
+  overflow-y: auto;
+}
+
+.filter-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 28rpx 32rpx;
+  border-top: 1rpx solid #F3F4F6;
+}
+
+.filter-option.selected .option-label {
+  color: #3D5A4E;
+  font-weight: 700;
+}
+
+.option-label {
+  font-size: 28rpx;
+  color: #374151;
+}
+
+.option-right {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.option-badge {
+  min-width: 32rpx;
+  height: 32rpx;
+  padding: 0 8rpx;
+  border-radius: 100rpx;
+  background: #FEE2E2;
+  color: #EF4444;
+  font-size: 20rpx;
+  line-height: 32rpx;
+  text-align: center;
+}
+
+.check-icon {
+  font-size: 28rpx;
+  color: #3D5A4E;
+  font-weight: 700;
+}
+
+.search-row {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 0 28rpx 24rpx;
+  border-top: 1rpx solid #F3F4F6;
+  padding-top: 20rpx;
+}
+
+.search-input {
+  flex: 1;
+  font-size: 28rpx;
+  color: #1F2937;
+}
+
+.search-clear {
+  flex-shrink: 0;
+  font-size: 26rpx;
+  color: #3D5A4E;
+  padding: 8rpx 12rpx;
 }
 
 .empty-state {
   background: #fff;
-  border-radius: 28rpx;
+  border-radius: 32rpx;
   padding: 80rpx 40rpx;
   text-align: center;
-  box-shadow: 0 4rpx 16rpx rgba(15, 23, 42, 0.06);
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.02);
 }
 
 .empty-title {
@@ -165,42 +456,46 @@ onMounted(loadMessages)
   margin-top: 12rpx;
   font-size: 26rpx;
   color: #9CA3AF;
+  line-height: 1.6;
 }
 
 .message-card {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
   background: #fff;
-  border-radius: 24rpx;
+  border-radius: 32rpx;
   padding: 28rpx;
   margin-bottom: 18rpx;
-  box-shadow: 0 4rpx 16rpx rgba(15, 23, 42, 0.06);
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.02);
   border-left: 8rpx solid transparent;
 }
 
 .message-card.unread {
-  border-left-color: #0D9488;
+  border-left-color: #3D5A4E;
+}
+
+.msg-main {
+  flex: 1;
+  min-width: 0;
 }
 
 .msg-head {
   display: flex;
   align-items: center;
-  gap: 12rpx;
-  margin-bottom: 14rpx;
+  gap: 10rpx;
+  margin-bottom: 10rpx;
 }
 
-.type-dot {
-  width: 18rpx;
-  height: 18rpx;
-  border-radius: 50%;
-  background: #9CA3AF;
+.msg-type-tag {
   flex-shrink: 0;
+  padding: 4rpx 12rpx;
+  border-radius: 8rpx;
+  background: #F0EDE8;
+  color: #3D5A4E;
+  font-size: 20rpx;
+  font-weight: 600;
 }
-
-.type-dot.payment { background: #F59E0B; }
-.type-dot.order { background: #3B82F6; }
-.type-dot.consultation { background: #0D9488; }
-.type-dot.system { background: #6B7280; }
-.type-dot.risk { background: #EF4444; }
-.type-dot.remind { background: #8B5CF6; }
 
 .msg-title {
   flex: 1;
@@ -220,23 +515,29 @@ onMounted(loadMessages)
   flex-shrink: 0;
 }
 
-.msg-content {
+.msg-summary {
   display: block;
-  font-size: 27rpx;
-  line-height: 1.7;
-  color: #4B5563;
-  margin-bottom: 18rpx;
-}
-
-.msg-foot {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.msg-type,
-.msg-time {
-  font-size: 23rpx;
+  font-size: 26rpx;
+  line-height: 1.6;
   color: #9CA3AF;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.msg-time {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 23rpx;
+  color: #D1D5DB;
+}
+
+.msg-arrow {
+  flex-shrink: 0;
+  font-size: 44rpx;
+  color: #D1D5DB;
+  font-weight: 300;
+  line-height: 1;
 }
 </style>
+

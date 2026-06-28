@@ -68,7 +68,7 @@
         <view class="quick-icon"><text class="quick-symbol">询</text></view>
         <text class="quick-label">了解咨询</text>
       </view>
-      <view class="quick-item" @tap="navigateTo('/pages/about/index')">
+      <view class="quick-item" @tap="navigateTo('/pages/contact/index')">
         <view class="quick-icon"><text class="quick-symbol">联</text></view>
         <text class="quick-label">联系我们</text>
       </view>
@@ -516,8 +516,8 @@ const handleJoinLive = (live: LiveStream) => {
 // tabBar 页面必须用 switchTab，不能用 navigateTo（否则 H5/小程序点击无反应）
 const TAB_BAR_PATHS = new Set([
   '/pages/index/index',
-  '/pages/activity/list',
-  '/pages/workbench/index',
+  '/pages/consultant/list',
+  '/pages/tab-slot/index',
   '/pages/theme/index',
   '/pages/user/profile'
 ])

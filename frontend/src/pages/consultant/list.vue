@@ -5,11 +5,7 @@
       <!-- 自定义导航栏 -->
       <view class="custom-navbar" :style="{ paddingTop: statusBarPx + 'px' }">
         <view class="navbar-content">
-          <view class="nav-left" @click="goBack">
-            <text class="nav-icon">‹</text>
-          </view>
-          <view class="nav-title">找咨询师</view>
-          <view class="nav-right"></view>
+          <view class="nav-title">预约咨询师</view>
         </view>
       </view>
 
@@ -37,7 +33,7 @@
             @click="toggleFilter('sort')"
           >
             <text class="filter-text">{{ currentSortLabel }}</text>
-            <text class="filter-arrow" :class="{ up: activeFilter === 'sort' }">▾</text>
+            <view class="filter-chevron" :class="{ up: activeFilter === 'sort' }" />
           </view>
           <view 
             class="filter-item" 
@@ -45,7 +41,7 @@
             @click="toggleFilter('city')"
           >
             <text class="filter-text">{{ currentCityLabel }}</text>
-            <text class="filter-arrow" :class="{ up: activeFilter === 'city' }">▾</text>
+            <view class="filter-chevron" :class="{ up: activeFilter === 'city' }" />
           </view>
           <view 
             class="filter-item" 
@@ -53,7 +49,7 @@
             @click="toggleFilter('price')"
           >
             <text class="filter-text">{{ currentPriceLabel }}</text>
-            <text class="filter-arrow" :class="{ up: activeFilter === 'price' }">▾</text>
+            <view class="filter-chevron" :class="{ up: activeFilter === 'price' }" />
           </view>
           <view 
             class="filter-item" 
@@ -61,12 +57,11 @@
             @click="toggleFilter('more')"
           >
             <text class="filter-text">筛选</text>
-            <text class="filter-icon-img">▼</text>
+            <view class="filter-chevron" :class="{ up: activeFilter === 'more' }" />
           </view>
         </view>
 
         <!-- 筛选下拉面板 -->
-        <view v-if="activeFilter" class="filter-dropdown-mask" @click="closeFilter"></view>
         <view class="filter-dropdown" :class="{ show: activeFilter }">
           <!-- 综合排序 -->
           <view v-if="activeFilter === 'sort'" class="dropdown-list">
@@ -149,6 +144,14 @@
       </view>
     </view>
 
+    <!-- 遮罩仅覆盖头部以下区域，避免压在筛选栏文字上 -->
+    <view
+      v-if="activeFilter"
+      class="filter-dropdown-mask"
+      :style="{ top: headerPlaceholderPx + 'px' }"
+      @tap="closeFilter"
+    />
+
     <!-- 占位符，防止内容被固定头部遮挡 -->
     <view class="header-placeholder" :style="{ height: headerPlaceholderPx + 'px' }"></view>
 
@@ -200,7 +203,10 @@
               <text class="price-num">{{ doctor.price || 500 }}</text>
               <text class="price-unit">/50分钟</text>
             </view>
-            <button class="book-btn" @click.stop="goToDetail(doctor.id)">立即预约</button>
+            <view class="doc-card-actions">
+              <button class="assistant-btn" @click.stop="openAssistantContact">联系助理</button>
+              <button class="book-btn" @click.stop="goToDetail(doctor.id)">立即预约</button>
+            </view>
           </view>
         </view>
 
@@ -215,6 +221,19 @@
         </view>
       </view>
     </view>
+
+    <!-- 联系助理 -->
+    <view v-if="showAssistantContact" class="modal-overlay" @tap="closeAssistantContact">
+      <view class="modal-content bottom-sheet" @tap.stop>
+        <view class="modal-header">
+          <text class="modal-title">联系助理</text>
+          <view class="modal-close" @click="closeAssistantContact">×</view>
+        </view>
+        <view class="modal-body">
+          <ContactUsContent :show-centers="false" compact />
+        </view>
+      </view>
+    </view>
   </view>
 </template>
 
@@ -225,6 +244,7 @@ import { doctorApi } from '@/apis/index'
 import type { Doctor } from '@/types'
 import { fixImageUrl } from '@/utils/image'
 import { getMockConsultantFilterMetaResponse } from '@/mocks/bookingDemo'
+import ContactUsContent from '@/components/ContactUsContent.vue'
 
 // 咨询师数据接口扩展
 interface Consultant extends Omit<Doctor, 'province'> {
@@ -244,6 +264,7 @@ const consultants = ref<Consultant[]>([])
 const loading = ref(false)
 const hasMore = ref(true)
 const searchKeyword = ref('')
+const showAssistantContact = ref(false)
 const statusBarPx = ref(_sys.statusBarHeight || 0)
 const headerPlaceholderPx = ref((_sys.statusBarHeight || 0) + uni.upx2px(88 + 124 + 88))
 
@@ -427,16 +448,12 @@ const goToDetail = (id: number | string) => {
   })
 }
 
-// 返回上一页
-const goBack = () => {
-  uni.navigateBack()
+const openAssistantContact = () => {
+  showAssistantContact.value = true
 }
 
-// 跳转到首页
-const goHome = () => {
-  uni.switchTab({
-    url: '/pages/index/index'
-  })
+const closeAssistantContact = () => {
+  showAssistantContact.value = false
 }
 
 // 图片加载错误处理
@@ -481,7 +498,7 @@ onPullDownRefresh(async () => {
 /* 顶级设计系统变量与重置 */
 .page-consultant-list {
   min-height: 100vh;
-  background-color: #F4F6F8;
+  background-color: #F7F5F2;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   padding-bottom: env(safe-area-inset-bottom);
 }
@@ -493,38 +510,20 @@ onPullDownRefresh(async () => {
   left: 0;
   right: 0;
   z-index: 100;
-  background: #ffffff;
-  box-shadow: 0 4rpx 24rpx rgba(0, 0, 0, 0.04);
+  background: #F7F5F2;
 }
 
 /* 自定义导航栏 */
 .custom-navbar {
-  background: #0D9488;
+  background: linear-gradient(135deg, #3D5A4E 0%, #4A6B5D 100%);
 }
 
 .navbar-content {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   height: 88rpx;
   padding: 0 32rpx;
-}
-
-.nav-left, .nav-right {
-  width: 80rpx;
-  display: flex;
-  align-items: center;
-}
-
-.nav-right {
-  justify-content: flex-end;
-}
-
-.nav-icon {
-  font-size: 64rpx;
-  color: #ffffff;
-  line-height: 1;
-  margin-top: -8rpx;
 }
 
 .nav-title {
@@ -535,8 +534,9 @@ onPullDownRefresh(async () => {
 
 /* 搜索栏 */
 .search-section {
-  background: #0D9488;
+  background: linear-gradient(135deg, #3D5A4E 0%, #4A6B5D 100%);
   padding: 16rpx 32rpx 32rpx;
+  border-radius: 0 0 48rpx 48rpx;
 }
 
 .search-bar-modern {
@@ -585,12 +585,20 @@ onPullDownRefresh(async () => {
 .filter-section {
   position: relative;
   background: #ffffff;
+  z-index: 1;
+  margin: 0 32rpx;
+  border-radius: 32rpx 32rpx 0 0;
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.02);
 }
 
 .filter-bar {
   display: flex;
   height: 88rpx;
   border-bottom: 1px solid #F3F4F6;
+  position: relative;
+  z-index: 2;
+  background: #ffffff;
+  border-radius: 32rpx 32rpx 0 0;
 }
 
 .filter-item {
@@ -608,41 +616,36 @@ onPullDownRefresh(async () => {
   transition: color 0.2s;
 }
 
-.filter-arrow {
-  font-size: 24rpx;
-  color: #9CA3AF;
-  transition: transform 0.3s;
+.filter-chevron {
+  width: 0;
+  height: 0;
+  border-left: 7rpx solid transparent;
+  border-right: 7rpx solid transparent;
+  border-top: 8rpx solid #9CA3AF;
+  flex-shrink: 0;
+  transition: transform 0.25s ease, border-top-color 0.2s;
 }
 
-.filter-arrow.up {
+.filter-chevron.up {
   transform: rotate(180deg);
 }
 
-.filter-icon-img {
-  width: 24rpx;
-  height: 24rpx;
-  opacity: 0.6;
+.filter-item.active .filter-text {
+  color: #3D5A4E;
 }
 
-.filter-item.active .filter-text,
-.filter-item.active .filter-arrow {
-  color: #0D9488;
-}
-
-.filter-item.active .filter-icon-img {
-  opacity: 1;
-  filter: sepia(1) hue-rotate(150deg) saturate(300%);
+.filter-item.active .filter-chevron {
+  border-top-color: #3D5A4E;
 }
 
 /* 筛选下拉面板 */
 .filter-dropdown-mask {
   position: fixed;
-  top: calc(88rpx + 124rpx + 88rpx + var(--status-bar-height, 0px));
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.4);
-  z-index: 90;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 98;
   animation: fadeIn 0.2s ease;
 }
 
@@ -657,16 +660,17 @@ onPullDownRefresh(async () => {
   left: 0;
   right: 0;
   background: #ffffff;
-  z-index: 95;
+  z-index: 3;
   max-height: 0;
   overflow: hidden;
   transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  border-radius: 0 0 32rpx 32rpx;
+  border-radius: 0 0 24rpx 24rpx;
 }
 
 .filter-dropdown.show {
   max-height: 800rpx;
-  box-shadow: 0 16rpx 32rpx rgba(0, 0, 0, 0.08);
+  box-shadow: 0 12rpx 24rpx rgba(0, 0, 0, 0.06);
+  border-top: 1px solid #F3F4F6;
 }
 
 .dropdown-list {
@@ -688,13 +692,13 @@ onPullDownRefresh(async () => {
 }
 
 .dropdown-item.selected {
-  color: #0D9488;
+  color: #3D5A4E;
   font-weight: 600;
-  background: #F0FDFA;
+  background: #F0EDE8;
 }
 
 .check-icon {
-  color: #0D9488;
+  color: #3D5A4E;
   font-size: 32rpx;
   font-weight: bold;
 }
@@ -732,9 +736,9 @@ onPullDownRefresh(async () => {
 }
 
 .panel-tag.active {
-  background: #F0FDFA;
-  color: #0D9488;
-  border-color: #0D9488;
+  background: #F0EDE8;
+  color: #3D5A4E;
+  border-color: #3D5A4E;
   font-weight: 600;
 }
 
@@ -760,7 +764,7 @@ onPullDownRefresh(async () => {
   flex: 1;
   height: 80rpx;
   line-height: 80rpx;
-  background: #0D9488;
+  background: #3D5A4E;
   color: #ffffff;
   font-size: 30rpx;
   font-weight: 600;
@@ -885,8 +889,8 @@ onPullDownRefresh(async () => {
 
 .doc-tag {
   font-size: 22rpx;
-  color: #0D9488;
-  background: #F0FDFA;
+  color: #3D5A4E;
+  background: #F0EDE8;
   padding: 6rpx 16rpx;
   border-radius: 100rpx;
 }
@@ -897,6 +901,13 @@ onPullDownRefresh(async () => {
   align-items: center;
   padding-top: 24rpx;
   border-top: 1px dashed #E5E7EB;
+}
+
+.doc-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  flex-shrink: 0;
 }
 
 .doc-price-box {
@@ -922,17 +933,87 @@ onPullDownRefresh(async () => {
   margin-left: 4rpx;
 }
 
-.book-btn {
-  background: #0D9488;
-  color: #ffffff;
-  font-size: 26rpx;
+.assistant-btn {
+  background: #fff;
+  color: #3D5A4E;
+  font-size: 22rpx;
   font-weight: 600;
-  height: 64rpx;
-  line-height: 64rpx;
-  padding: 0 40rpx;
+  height: 56rpx;
+  line-height: 56rpx;
+  padding: 0 24rpx;
   border-radius: 100rpx;
   margin: 0;
-  box-shadow: 0 4rpx 12rpx rgba(13, 148, 136, 0.2);
+  border: 2rpx solid #3D5A4E;
+}
+
+.assistant-btn::after {
+  border: none;
+}
+
+.book-btn {
+  background: #3D5A4E;
+  color: #ffffff;
+  font-size: 22rpx;
+  font-weight: 600;
+  height: 56rpx;
+  line-height: 56rpx;
+  padding: 0 28rpx;
+  border-radius: 100rpx;
+  margin: 0;
+  box-shadow: 0 4rpx 12rpx rgba(61, 90, 78, 0.25);
+}
+
+.book-btn::after {
+  border: none;
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10050;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.modal-content.bottom-sheet {
+  background: #fff;
+  border-radius: 32rpx 32rpx 0 0;
+  max-height: 85vh;
+  overflow: hidden;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 28rpx 32rpx;
+  border-bottom: 1rpx solid #F3F4F6;
+}
+
+.modal-title {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #1F2937;
+}
+
+.modal-close {
+  width: 56rpx;
+  height: 56rpx;
+  line-height: 56rpx;
+  text-align: center;
+  font-size: 40rpx;
+  color: #9CA3AF;
+}
+
+.modal-body {
+  padding: 0 32rpx calc(32rpx + env(safe-area-inset-bottom));
+  max-height: 70vh;
+  overflow-y: auto;
 }
 
 /* 加载状态 */

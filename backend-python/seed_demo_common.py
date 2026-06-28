@@ -71,7 +71,7 @@ DEMO_COUNSELORS = [
         "specialty": "亲子关系｜婚姻情感｜情绪压力",
         "field": "家庭治疗,婚姻情感,情绪压力,亲子关系",
         "introduce": "从业 9 年，专注家庭与亲密关系咨询，帮助来访者梳理情绪、重建沟通。",
-        "career": "曾任三甲医院心理科咨询师，长期接受专业督导，年均接案 600+ 小时。",
+        "career": "4",
         "qualification": "国家二级心理咨询师；中国心理学会注册系统助理心理师",
         "billing": 60000,
         "consult_hours": 3200,
@@ -449,9 +449,14 @@ def ensure_counselor_profile(db: Session, account_id: int, data: dict) -> None:
     row.Introduce = data["introduce"]
     row.Career = data.get("career")
     row.Qualification = data.get("qualification")
-    row.Billing = data["billing"]
+    row.TargetGroup = data.get("target_group", "成人,青少年,亲子家庭")
+    row.Mode = data.get("mode", "线上/线下")
+    row.Billing = data.get("billing") or 60000
+    row.FaceBilling = data.get("face_billing") or 30000
     row.ConsultHours = data["consult_hours"]
     row.WorkYears = data["work_years"]
+    row.InfoAuthenticitySignerName = data.get("name")
+    row.InfoAuthenticityCommittedAt = datetime.utcnow()
     row.IsActive = True
 
 

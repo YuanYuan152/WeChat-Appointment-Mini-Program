@@ -105,14 +105,20 @@ export const API_ENDPOINTS = {
     orderDetail: (id: number | string) => `/api/mini/patient/orders/${id}`,
     consultations: '/api/mini/patient/consultations',
     consultationCancel: (id: number | string) => `/api/mini/patient/consultations/${id}/cancel`,
+    consultationFeedback: (id: number | string) => `/api/mini/patient/consultations/${id}/feedback`,
     refundExemption: (id: number | string) => `/api/mini/patient/consultations/${id}/refund-exemption`,
     me: '/api/mini/patient/me',
     registration: '/api/mini/patient/registration',
+    favorites: '/api/mini/patient/favorites',
+    favoriteCheck: (id: number | string) => `/api/mini/patient/favorites/check/${id}`,
+    favoriteItem: (id: number | string) => `/api/mini/patient/favorites/${id}`,
+    favoritesCount: '/api/mini/patient/favorites/count',
   },
 
   // 消息中心（Batch B 后续填充）
   message: {
     list: '/api/mini/message/list',
+    detail: (id: number | string) => `/api/mini/message/${id}`,
     unreadCount: '/api/mini/message/unread-count',
     markRead: (id: number | string) => `/api/mini/message/${id}/read`,
     subscribe: '/api/mini/message/subscribe',
@@ -127,8 +133,14 @@ export const API_ENDPOINTS = {
     scheduleLeaveRequest: (id: number | string) => `/api/mini/counselor/schedules/${id}/leave-request`,
     consultations: '/api/mini/counselor/consultations',
     caseRecords: '/api/mini/counselor/case-records',
+    caseRecordFormDefaults: (consultationId: number | string) =>
+      `/api/mini/counselor/case-records/form-defaults?consultation_id=${consultationId}`,
+    caseRecordAmendmentRequest: (id: number | string) =>
+      `/api/mini/counselor/case-records/${id}/amendment-requests`,
     profile: '/api/mini/counselor/profile',
+    profileAuthenticityCommitment: '/api/mini/counselor/profile/authenticity-commitment',
     stats: '/api/mini/counselor/stats',
+    statsDetails: '/api/mini/counselor/stats/details',
   },
 
   // 助理工作台
@@ -163,8 +175,24 @@ export const API_ENDPOINTS = {
     refundExemptions: '/api/mini/admin/refund-exemptions',
     refundExemptionApprove: (id: number | string) => `/api/mini/admin/refund-exemptions/${id}/approve`,
     refundExemptionReject: (id: number | string) => `/api/mini/admin/refund-exemptions/${id}/reject`,
+    caseRecordAmendments: '/api/mini/admin/case-record-amendments',
+    caseRecordAmendmentApprove: (id: number | string) =>
+      `/api/mini/admin/case-record-amendments/${id}/approve`,
+    caseRecordAmendmentReject: (id: number | string) =>
+      `/api/mini/admin/case-record-amendments/${id}/reject`,
+    leaveRequests: '/api/mini/admin/leave-requests',
+    leaveRequestDetail: (id: number | string) => `/api/mini/admin/leave-requests/${id}`,
+    leaveRequestApprove: (id: number | string) => `/api/mini/admin/leave-requests/${id}/approve`,
+    leaveRequestReject: (id: number | string) => `/api/mini/admin/leave-requests/${id}/reject`,
     consultationRecordCounselors: '/api/mini/admin/consultation-records/counselors',
     consultationRecordDetail: (id: number | string) => `/api/mini/admin/consultation-records/counselors/${id}`,
+    consultationRecordView: (id: number | string) => `/api/mini/admin/consultation-records/records/${id}`,
+    consultationRecordRevisions: (id: number | string) => `/api/mini/admin/consultation-records/records/${id}/revisions`,
+    patients: '/api/mini/admin/patients',
+    patientDetail: (id: number | string) => `/api/mini/admin/patients/${id}`,
+    counselors: '/api/mini/admin/counselors',
+    counselorDetail: (id: number | string) => `/api/mini/admin/counselors/${id}`,
+    consultationFeedbacks: '/api/mini/admin/consultation-feedbacks',
   },
 
   // 意见反馈

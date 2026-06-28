@@ -1,8 +1,8 @@
-<template>
+﻿<template>
   <view class="page-schedule">
     <!-- 新增排班按钮 -->
     <view class="toolbar">
-      <button class="add-btn" @tap="openAddModal">+ 新建挂课</button>
+      <button class="add-btn" @tap="openAddModal">+ 新建排期</button>
     </view>
 
     <!-- 排班列表 -->
@@ -28,7 +28,7 @@
     <!-- 勿用遮罩 @click.self 关闭，选完日期后 picker 回调会误关弹窗 -->
     <view v-if="showAdd" class="modal-overlay" @touchmove.stop.prevent>
       <view class="modal-card" @tap.stop @touchmove.stop.prevent>
-        <text class="modal-title">新建挂课</text>
+        <text class="modal-title">新建排期</text>
 
         <view class="form-item">
           <text class="form-label">开始时间</text>
@@ -176,7 +176,7 @@ const formatToday = () => {
 }
 
 const statusLabel = (s: string) => ({
-  AVAILABLE: '已挂课',
+  AVAILABLE: '已排期',
   BOOKED: '已预约',
   CANCELLED: '已取消',
 }[s] || s)
@@ -243,7 +243,7 @@ const submitSchedule = async () => {
         roomId: NO_PREF,
       }
       await loadSchedules()
-      uni.showToast({ title: '挂课成功', icon: 'success' })
+      uni.showToast({ title: '排期成功', icon: 'success' })
     } else {
       uni.showToast({ title: res.msg || '添加失败', icon: 'none' })
     }

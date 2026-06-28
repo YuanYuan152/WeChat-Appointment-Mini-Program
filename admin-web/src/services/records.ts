@@ -20,7 +20,7 @@ export function fetchCounselorRecordDetails(counselorId: number, days = 30) {
 }
 
 export function fetchCaseRecordDetail(recordId: number) {
-  return apiRequest<AdminCaseRecordDetail>(`/api/mini/admin/consultation-records/${recordId}`);
+  return apiRequest<AdminCaseRecordDetail>(`/api/mini/admin/consultation-records/records/${recordId}`);
 }
 
 export function fetchOperationRecords(filters: OperationFilters, pagination: PaginationParams) {

@@ -58,17 +58,52 @@ def complete_paid_order(
     )
     if existing:
         existing.Note = consultation_note
+        db.flush()
+        from staff_message_service import notify_staff_new_appointment
+        from counselor_message_service import (
+            notify_counselor_new_appointment,
+            schedule_counselor_consultation_done_notice,
+            schedule_counselor_consultation_reminder,
+        )
+        from patient_message_service import (
+            notify_patient_appointment_success,
+            schedule_patient_consultation_reminder,
+        )
+
+        notify_staff_new_appointment(db, existing, order)
+        notify_counselor_new_appointment(db, existing)
+        schedule_counselor_consultation_reminder(db, existing)
+        schedule_counselor_consultation_done_notice(db, existing)
+        notify_patient_appointment_success(db, existing)
+        schedule_patient_consultation_reminder(db, existing)
         return
 
-    db.add(
-        AppConsultation(
-            OrderId=order.Id,
-            PatientId=order.AccountId,
-            CounselorId=schedule.CounselorId,
-            ScheduleId=schedule.Id,
-            Status="CONFIRMED",
-            StartTime=schedule.StartTime,
-            EndTime=schedule.EndTime,
-            Note=consultation_note,
-        )
+    consultation = AppConsultation(
+        OrderId=order.Id,
+        PatientId=order.AccountId,
+        CounselorId=schedule.CounselorId,
+        ScheduleId=schedule.Id,
+        Status="CONFIRMED",
+        StartTime=schedule.StartTime,
+        EndTime=schedule.EndTime,
+        Note=consultation_note,
     )
+    db.add(consultation)
+    db.flush()
+    from staff_message_service import notify_staff_new_appointment
+    from counselor_message_service import (
+        notify_counselor_new_appointment,
+        schedule_counselor_consultation_done_notice,
+        schedule_counselor_consultation_reminder,
+    )
+    from patient_message_service import (
+        notify_patient_appointment_success,
+        schedule_patient_consultation_reminder,
+    )
+
+    notify_staff_new_appointment(db, consultation, order)
+    notify_counselor_new_appointment(db, consultation)
+    schedule_counselor_consultation_reminder(db, consultation)
+    schedule_counselor_consultation_done_notice(db, consultation)
+    notify_patient_appointment_success(db, consultation)
+    schedule_patient_consultation_reminder(db, consultation)

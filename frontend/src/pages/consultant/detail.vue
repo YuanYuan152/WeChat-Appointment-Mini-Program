@@ -37,7 +37,10 @@
             @error="handleImageError"
           />
           <view class="hero-info">
-            <text class="hero-name">{{ doctor.name }}</text>
+            <view class="hero-name-row">
+              <text class="hero-name">{{ doctor.name }}</text>
+              <text class="hero-price">￥{{ doctor.price }}<text class="hero-price-unit">/次</text></text>
+            </view>
             <view class="hero-tags">
               <text class="hero-tag secondary">从业{{ doctor.workYears }}年</text>
             </view>
@@ -45,7 +48,7 @@
         </view>
       </view>
 
-      <!-- 悬浮数据卡片 -->
+      <!-- 悬浮数据卡片：从业年限 | 咨询时数 | 培训经历（4段） -->
       <view class="stats-card">
         <view class="stat-item">
           <text class="stat-value">{{ doctor.workYears }}<text class="stat-unit">年</text></text>
@@ -58,8 +61,8 @@
         </view>
         <view class="stat-divider"></view>
         <view class="stat-item">
-          <text class="stat-value price">￥{{ doctor.price }}</text>
-          <text class="stat-label">每次/50分钟</text>
+          <text class="stat-value">{{ trainingCount }}<text class="stat-unit">段</text></text>
+          <text class="stat-label">培训经历</text>
         </view>
       </view>
 
@@ -74,11 +77,6 @@
           class="tab-item" 
           :class="{ active: activeTab === 1 }"
           @click="scrollToSection(1)"
-        >咨询过程</view>
-        <view 
-          class="tab-item" 
-          :class="{ active: activeTab === 2 }"
-          @click="scrollToSection(2)"
         >预约</view>
       </view>
 
@@ -87,11 +85,6 @@
           <view class="info-block">
             <text class="block-title">简介</text>
             <text class="block-text quote-text">"{{ doctor.profile }}"</text>
-          </view>
-          
-          <view class="info-block">
-            <text class="block-title">个人介绍</text>
-            <text class="block-text">{{ doctor.description }}</text>
           </view>
           
           <view class="info-block">
@@ -114,24 +107,8 @@
           </view>
       </view>
 
-      <!-- 咨询过程区域 -->
-      <view class="content-section main-content-padding" id="section1">
-          <view class="info-block">
-            <text class="block-title">咨询过程</text>
-            <view class="process-card">
-              <text class="block-text">
-                咨询是以精神分析取向的心理咨询，这意味着当前状况的缓解可能不是一个很快的过程，但是你会通过这样一个逐步展开的咨询得到一个更深入的转变，无论是自我认识，还是自我的接纳和自尊的改善，以及生活的关系中的动力和快乐。
-                
-
-
-                但是可能也会在咨询的过程中体验到许多未曾感受的情感，这些也许会让你感觉到有一些难以耐受，但是所有这些我们可以去讨论，我也会和你在一起来经历这些。每次50分钟。前面的3-4次为初始访谈，每周的频率在1-2次，有些可以是3-4次。一个个短程的咨询在15-30次，中长程持续50-100次，长程在100次以上。如果你不喜欢精神分析，也可以采用人本主义聚焦疗法的方式，是从身体的感受入手来工作。所以需要通过一点点地增加对自己的身体的理解，来帮助自己解决困扰，增强自己对于自己的情绪及反应的领悟。会有一个更加自主性的过程。每次也是50分钟，频率一周1-2次。每次会包括聚焦和讨论。
-              </text>
-            </view>
-          </view>
-      </view>
-
       <!-- 预约区域：预约中心 + 可约时间 -->
-      <view class="content-section main-content-padding" id="section2">
+      <view class="content-section main-content-padding" id="section1">
         <view class="booking-section">
           <text class="block-title block-title--green">预约</text>
           <text class="booking-hint">请选择您合适的预约中心和时间段</text>
@@ -205,12 +182,37 @@
     </scroll-view>
 
     <!-- 底部悬浮预约栏 (Glassmorphism) -->
-    <view class="bottom-action-bar" :class="{ 'show': canProceedBooking }">
-      <view class="action-info">
-        <text class="action-label">合计</text>
-        <text class="action-price">￥{{ selectedSlot?.Price || doctor.price }}</text>
+    <view class="bottom-action-bar show">
+      <button
+        class="favorite-btn"
+        :class="{ active: isFavorited }"
+        @click="toggleFavorite"
+      >
+        <text class="favorite-icon">{{ isFavorited ? '♥' : '♡' }}</text>
+        <text>{{ isFavorited ? '已收藏' : '收藏' }}</text>
+      </button>
+      <view class="action-btns">
+        <button class="action-btn outline" @click="openAssistantContact">联系助理</button>
+        <button
+          class="action-btn"
+          :class="{ disabled: !canProceedBooking }"
+          :disabled="!canProceedBooking"
+          @click="makeAppointment"
+        >{{ canProceedBooking ? `立即预约 ￥${selectedSlot?.Price || doctor.price}` : '立即预约' }}</button>
       </view>
-      <button class="action-btn" @click="makeAppointment">立即预约</button>
+    </view>
+
+    <!-- 联系助理 -->
+    <view v-if="showAssistantContact" class="modal-overlay modern-modal modal-overlay--bottom" @tap="closeAssistantContact">
+      <view class="modal-content bottom-sheet assistant-sheet" @tap.stop>
+        <view class="modal-header-modern">
+          <text class="modal-title">联系助理</text>
+          <view class="modal-close-btn" @click="closeAssistantContact">×</view>
+        </view>
+        <view class="modal-body assistant-body">
+          <ContactUsContent :show-centers="false" compact />
+        </view>
+      </view>
     </view>
 
     <!-- 年龄确认弹框（居中） -->
@@ -359,7 +361,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed, nextTick } from 'vue'
-import { onShow } from '@dcloudio/uni-app'
+import { onShow, onLoad } from '@dcloudio/uni-app'
 import { API_V2_CONFIG, API_ENDPOINTS } from '@/config/api'
 import { doctorApi } from '@/apis'
 import { httpV2 } from '@/utils/http'
@@ -375,6 +377,8 @@ import {
   hasBookableSlotsInCenter,
   type BookingTimeSlot,
 } from '@/utils/bookingSlots'
+import ContactUsContent from '@/components/ContactUsContent.vue'
+import { isLoggedIn, handleRequireLogin } from '@/utils/auth'
 
 interface Doctor {
   id: number
@@ -385,6 +389,9 @@ interface Doctor {
   avatar: string
   description: string
   profile: string
+  career: string
+  joiner: string
+  trainingCount: number
   qualification: string
   field: string
   targetGroup: string
@@ -398,7 +405,7 @@ const activeTab = ref(0)
 const pageScrollTop = ref(0)
 /** 仅用于编程式滚动，不与 @scroll 双向绑定 */
 const scrollTopBinding = ref(0)
-const sectionOffsets = ref<number[]>([0, 0, 0])
+const sectionOffsets = ref<number[]>([0, 0])
 const isClickScrolling = ref(false)
 /** 吸顶 Tab 高度补偿（px） */
 const STICKY_TAB_OFFSET = 48
@@ -412,6 +419,9 @@ const doctor = ref<Doctor>({
   avatar: '',
   description: '',
   profile: '',
+  career: '',
+  joiner: '',
+  trainingCount: 0,
   qualification: '',
   field: '',
   targetGroup: '',
@@ -426,11 +436,15 @@ const selectedSlotId = ref<number>(-1)
 const hasAvailableTime = ref(false)
 /** 咨询师实际可约中心（API 注入；无则根据 timeSlots 推导） */
 const counselorCenterIds = ref<string[]>([])
+const isFavorited = ref(false)
+const favoriteLoading = ref(false)
+const routeDoctorId = ref<string | number>('')
 
 // 弹框状态
 const showAgeConfirm = ref(false)
 const showAgreement = ref(false)
 const showPayment = ref(false)
+const showAssistantContact = ref(false)
 const showSignatureCanvas = ref(false)
 /** 是否仍需首次协议签署（年龄确认 + 签字） */
 const needsIntakeAgreement = ref(true)
@@ -503,6 +517,35 @@ const doctorTargetGroups = computed(() => {
   return doctor.value.targetGroup ? doctor.value.targetGroup.split(',').map(g => g.trim()) : []
 })
 
+const parseTrainingSegments = (raw?: string): string[] => {
+  const text = raw?.trim()
+  if (!text) return []
+
+  let parts = text.split(/\n+/).map(p => p.trim()).filter(Boolean)
+  if (parts.length <= 1) {
+    parts = text.split(/[;；|｜]/).map(p => p.trim()).filter(Boolean)
+  }
+  if (parts.length <= 1) {
+    parts = text.split(/[。！？.!?]+/).map(p => p.trim()).filter(p => p.length > 1)
+  }
+  if (parts.length <= 1) {
+    parts = [text]
+  }
+  return parts
+}
+
+const trainingCount = computed(() => {
+  if (doctor.value.trainingCount != null && doctor.value.trainingCount > 0) {
+    return doctor.value.trainingCount
+  }
+  const merged = [doctor.value.career, doctor.value.joiner].filter(Boolean).join('\n').trim()
+  if (!merged) return 0
+  if (/^\d+$/.test(merged)) return Number(merged)
+  const match = merged.match(/(\d+)\s*段/)
+  if (match) return Number(match[1])
+  return parseTrainingSegments(merged).length
+})
+
 // 获取路由参数
 const getRouteParams = () => {
   const pages = getCurrentPages()
@@ -518,7 +561,10 @@ const mapDoctorDetail = (item: any): Doctor => ({
   price: Math.round(Number(item.billing || 0) / 100) || item.price || 500,
   avatar: item.avatarUrl || item.avatar || '',
   description: item.introduce || item.description || '暂无介绍',
-  profile: item.career || item.introduce || item.description || '暂无简介',
+  profile: item.profile || item.introduce || '暂无简介',
+  career: item.career || '',
+  joiner: item.joiner || '',
+  trainingCount: Number(item.trainingCount ?? item.trainingSegments ?? 0) || 0,
   qualification: item.qualification || '暂无资质信息',
   field: item.field || item.specialty || '',
   targetGroup: item.targetGroup || '成人,青少年,亲子家庭',
@@ -526,6 +572,56 @@ const mapDoctorDetail = (item: any): Doctor => ({
   workYears: Number(item.workYears || 0),
   mode: item.mode || '线上/线下'
 })
+
+const loadFavoriteStatus = async () => {
+  if (!doctor.value.id || !isLoggedIn()) {
+    isFavorited.value = false
+    return
+  }
+  try {
+    const res = await httpV2.get<{ favorited: boolean }>(
+      API_ENDPOINTS.patient.favoriteCheck(doctor.value.id),
+      undefined,
+      { showLoading: false, showError: false },
+    )
+    if (res.code === 0 && res.data) {
+      isFavorited.value = !!res.data.favorited
+    }
+  } catch {
+    // ignore
+  }
+}
+
+const toggleFavorite = () => {
+  if (!doctor.value.id) return
+  handleRequireLogin(async () => {
+    if (favoriteLoading.value) return
+    favoriteLoading.value = true
+    try {
+      if (isFavorited.value) {
+        const res = await httpV2.delete(API_ENDPOINTS.patient.favoriteItem(doctor.value.id))
+        if (res.code === 0) {
+          isFavorited.value = false
+          uni.showToast({ title: '已取消收藏', icon: 'none' })
+        } else {
+          uni.showToast({ title: res.msg || '操作失败', icon: 'none' })
+        }
+      } else {
+        const res = await httpV2.post(API_ENDPOINTS.patient.favoriteItem(doctor.value.id))
+        if (res.code === 0) {
+          isFavorited.value = true
+          uni.showToast({ title: '收藏成功', icon: 'success' })
+        } else {
+          uni.showToast({ title: res.msg || '操作失败', icon: 'none' })
+        }
+      }
+    } catch {
+      uni.showToast({ title: '操作失败', icon: 'none' })
+    } finally {
+      favoriteLoading.value = false
+    }
+  })
+}
 
 // 获取医生详情
 const loadBookingSlots = async (doctorId: string | number) => {
@@ -551,7 +647,7 @@ const loadBookingSlots = async (doctorId: string | number) => {
 const getDoctorDetail = async () => {
   try {
     const params = getRouteParams()
-    const doctorId = params.id || params.doctorId
+    const doctorId = routeDoctorId.value || params.id || params.doctorId
     const source = params.source
     
     console.log('获取医生详情，参数:', params)
@@ -570,6 +666,7 @@ const getDoctorDetail = async () => {
       const data = payload.data
       doctor.value = data.doctor
       applyBookingData(data)
+      await loadFavoriteStatus()
       setTimeout(() => updateSectionOffsets(), 300)
       return
     }
@@ -578,6 +675,7 @@ const getDoctorDetail = async () => {
     if (response.code === 0 && response.data) {
       doctor.value = mapDoctorDetail(response.data)
       applyBookingData(response.data)
+      await loadFavoriteStatus()
       setTimeout(() => updateSectionOffsets(), 300)
     } else {
       uni.showToast({
@@ -601,17 +699,16 @@ const updateSectionOffsets = () => {
       const query = uni.createSelectorQuery()
       query.select('#section0').boundingClientRect()
       query.select('#section1').boundingClientRect()
-      query.select('#section2').boundingClientRect()
       query.select('.content-area').boundingClientRect()
       query.select('.content-area').scrollOffset()
       query.exec((res) => {
-        if (!res || res.length < 5 || !res[0] || !res[3] || !res[4]) {
+        if (!res || res.length < 4 || !res[0] || !res[2] || !res[3]) {
           resolve()
           return
         }
-        const scrollViewTop = res[3].top
-        const currentScroll = res[4].scrollTop || 0
-        sectionOffsets.value = [0, 1, 2].map((i) => {
+        const scrollViewTop = res[2].top
+        const currentScroll = res[3].scrollTop || 0
+        sectionOffsets.value = [0, 1].map((i) => {
           const rect = res[i]
           if (!rect) return 0
           const offset = currentScroll + rect.top - scrollViewTop
@@ -646,15 +743,10 @@ const onScroll = (e: any) => {
   if (isClickScrolling.value) return
 
   const offsets = sectionOffsets.value
-  if (offsets.length < 3) return
+  if (offsets.length < 2) return
 
   const threshold = scrollTopValue + STICKY_TAB_OFFSET + 10
-  let currentIndex = 0
-  if (threshold >= offsets[2]) {
-    currentIndex = 2
-  } else if (threshold >= offsets[1]) {
-    currentIndex = 1
-  }
+  const currentIndex = threshold >= offsets[1] ? 1 : 0
 
   if (currentIndex !== activeTab.value) {
     activeTab.value = currentIndex
@@ -713,6 +805,14 @@ const loadIntakeStatus = async () => {
 const proceedToPayment = () => {
   payRulesAgreed.value = false
   showPayment.value = true
+}
+
+const openAssistantContact = () => {
+  showAssistantContact.value = true
+}
+
+const closeAssistantContact = () => {
+  showAssistantContact.value = false
 }
 
 // 预约：须先选预约中心 → 可约时间 →（首次）协议 → 支付成功
@@ -1185,37 +1285,43 @@ const goBackFromSignature = () => {
   // 只关闭绘制区域，保持其他状态不变
 }
 
-onMounted(() => {
-  resetSignatureForNewBooking()
+onLoad((opts) => {
+  routeDoctorId.value = opts?.id || opts?.doctorId || ''
   getDoctorDetail()
   if (uni.getStorageSync('token')) {
     loadIntakeStatus()
   }
-  setTimeout(() => updateSectionOffsets(), 500)
-  
-  // 计算内容区域高度
-  const systemInfo = uni.getSystemInfoSync()
-  const navbarHeight = 88 // 导航栏高度
-  const tabHeight = 44 // tab高度
-  const statusBarHeight = systemInfo.statusBarHeight || 0
-  contentHeight.value = systemInfo.windowHeight - navbarHeight - tabHeight - statusBarHeight
 })
 
 onShow(() => {
+  if (doctor.value.id) {
+    loadFavoriteStatus()
+  }
   const params = getRouteParams()
-  const doctorId = params.id || params.doctorId
+  const doctorId = routeDoctorId.value || params.id || params.doctorId
   if (doctorId && doctor.value.id) {
     loadBookingSlots(doctorId)
-  } else if (doctorId) {
+  } else if (doctorId && !doctor.value.id) {
     getDoctorDetail()
   }
+})
+
+onMounted(() => {
+  resetSignatureForNewBooking()
+  setTimeout(() => updateSectionOffsets(), 500)
+
+  const systemInfo = uni.getSystemInfoSync()
+  const navbarHeight = 88
+  const tabHeight = 44
+  const statusBarHeight = systemInfo.statusBarHeight || 0
+  contentHeight.value = systemInfo.windowHeight - navbarHeight - tabHeight - statusBarHeight
 })
 </script>
 
 <style>
 /* 顶级设计系统变量与重置 */
 .page-consultant-detail {
-  background-color: #F4F6F8;
+  background-color: #F7F5F2;
   position: relative;
   width: 100%;
   overflow-x: hidden;
@@ -1327,7 +1433,7 @@ onShow(() => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: linear-gradient(to bottom, rgba(0,0,0,0.2) 0%, #F4F6F8 100%);
+  background: linear-gradient(to bottom, rgba(0,0,0,0.2) 0%, #F7F5F2 100%);
 }
 
 .hero-content {
@@ -1355,13 +1461,34 @@ onShow(() => {
   padding-bottom: 10rpx;
 }
 
+.hero-name-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16rpx;
+  flex-wrap: wrap;
+  margin-bottom: 16rpx;
+}
+
 .hero-name {
   font-size: 48rpx;
   font-weight: 800;
   color: #1F2937;
-  display: block;
-  margin-bottom: 16rpx;
+  flex: 1;
   text-shadow: 0 2rpx 4rpx rgba(255,255,255,0.5);
+}
+
+.hero-price {
+  font-size: 36rpx;
+  font-weight: 800;
+  color: #F59E0B;
+  flex-shrink: 0;
+}
+
+.hero-price-unit {
+  font-size: 22rpx;
+  font-weight: 600;
+  color: #9CA3AF;
 }
 
 .hero-tags {
@@ -1379,9 +1506,9 @@ onShow(() => {
 }
 
 .hero-tag.primary {
-  background: rgba(13, 148, 136, 0.15);
-  color: #0D9488;
-  border: 1px solid rgba(13, 148, 136, 0.3);
+  background: rgba(61, 90, 78, 0.15);
+  color: #3D5A4E;
+  border: 1px solid rgba(61, 90, 78, 0.3);
 }
 
 .hero-tag.secondary {
@@ -1456,7 +1583,7 @@ onShow(() => {
   top: calc(88rpx + var(--status-bar-height, 0px));
   left: 0;
   right: 0;
-  background: rgba(244, 246, 248, 0.95);
+  background: rgba(247, 245, 242, 0.95);
   backdrop-filter: blur(20px);
   padding-top: 20rpx;
   padding-bottom: 20rpx;
@@ -1487,7 +1614,7 @@ onShow(() => {
   transform: translateX(-50%);
   width: 48rpx;
   height: 6rpx;
-  background: #0D9488;
+  background: #3D5A4E;
   border-radius: 6rpx 6rpx 0 0;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -1527,7 +1654,7 @@ onShow(() => {
   transform: translateY(-50%);
   width: 8rpx;
   height: 32rpx;
-  background: #0D9488;
+  background: #3D5A4E;
   border-radius: 8rpx;
 }
 
@@ -1558,11 +1685,11 @@ onShow(() => {
 }
 
 .block-title--green::before {
-  background: #0D9488;
+  background: #3D5A4E;
 }
 
 .block-title--orange::before {
-  background: #F59E0B;
+  background: #4A6B5D;
 }
 
 .block-title--sm {
@@ -1602,9 +1729,9 @@ onShow(() => {
 }
 
 .center-card.selected {
-  background: #FFFBEB;
-  border-color: #F59E0B;
-  box-shadow: 0 8rpx 24rpx rgba(245, 158, 11, 0.12);
+  background: #F0EDE8;
+  border-color: #3D5A4E;
+  box-shadow: 0 8rpx 24rpx rgba(61, 90, 78, 0.12);
 }
 
 .center-card.unavailable {
@@ -1643,8 +1770,8 @@ onShow(() => {
 
 .quote-text {
   font-style: italic;
-  color: #0D9488;
-  background: #F0FDFA;
+  color: #3D5A4E;
+  background: #F0EDE8;
   padding: 24rpx;
   border-radius: 16rpx;
   display: block;
@@ -1664,8 +1791,8 @@ onShow(() => {
 }
 
 .cloud-tag {
-  background: #F3F4F6;
-  color: #4B5563;
+  background: #F0EDE8;
+  color: #3D5A4E;
   padding: 12rpx 32rpx;
   border-radius: 100rpx;
   font-size: 26rpx;
@@ -1673,8 +1800,8 @@ onShow(() => {
 }
 
 .cloud-tag.alt {
-  background: #EFF6FF;
-  color: #3B82F6;
+  background: #F0EDE8;
+  color: #3D5A4E;
 }
 
 /* 可约时间 Grid */
@@ -1693,9 +1820,9 @@ onShow(() => {
 }
 
 .time-card.selected {
-  background: #F0FDFA;
-  border-color: #0D9488;
-  box-shadow: 0 8rpx 24rpx rgba(13, 148, 136, 0.1);
+  background: #F0EDE8;
+  border-color: #3D5A4E;
+  box-shadow: 0 8rpx 24rpx rgba(61, 90, 78, 0.1);
 }
 
 .time-card--booked {
@@ -1742,7 +1869,7 @@ onShow(() => {
 .tc-time {
   font-size: 32rpx;
   font-weight: 800;
-  color: #0D9488;
+  color: #3D5A4E;
 }
 
 .time-card-bot {
@@ -1770,13 +1897,13 @@ onShow(() => {
 }
 
 .time-card.selected .tc-radio {
-  border-color: #0D9488;
+  border-color: #3D5A4E;
 }
 
 .tc-radio-inner {
   width: 20rpx;
   height: 20rpx;
-  background: #0D9488;
+  background: #3D5A4E;
   border-radius: 50%;
 }
 
@@ -1808,7 +1935,7 @@ onShow(() => {
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  padding: 24rpx 40rpx calc(24rpx + env(safe-area-inset-bottom));
+  padding: 20rpx 32rpx calc(20rpx + env(safe-area-inset-bottom));
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -1828,6 +1955,8 @@ onShow(() => {
   display: flex;
   align-items: baseline;
   gap: 12rpx;
+  flex-shrink: 0;
+  margin-right: 16rpx;
 }
 
 .action-label {
@@ -1836,26 +1965,97 @@ onShow(() => {
 }
 
 .action-price {
-  font-size: 48rpx;
+  font-size: 36rpx;
   font-weight: 800;
   color: #F59E0B;
 }
 
+.action-btns {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  flex: 1;
+  justify-content: flex-end;
+}
+
+.favorite-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4rpx;
+  background: transparent;
+  border: none;
+  padding: 0 16rpx;
+  margin: 0;
+  flex-shrink: 0;
+  min-width: 88rpx;
+  color: #6B7280;
+  font-size: 22rpx;
+  line-height: 1.2;
+}
+
+.favorite-btn::after {
+  border: none;
+}
+
+.favorite-btn.active {
+  color: #EF4444;
+}
+
+.favorite-icon {
+  font-size: 44rpx;
+  line-height: 1;
+}
+
+.favorite-btn.active .favorite-icon {
+  color: #EF4444;
+}
+
 .action-btn {
-  background: linear-gradient(135deg, #0F766E 0%, #0D9488 100%);
+  flex: 0 0 auto;
+  min-width: 140rpx;
+  max-width: 168rpx;
+  background: linear-gradient(135deg, #3D5A4E 0%, #4A6B5D 100%);
   color: white;
-  font-size: 32rpx;
-  font-weight: 700;
-  padding: 0 60rpx;
-  height: 88rpx;
-  line-height: 88rpx;
+  font-size: 24rpx;
+  font-weight: 600;
+  padding: 0 20rpx;
+  height: 64rpx;
+  line-height: 64rpx;
   border-radius: 100rpx;
   margin: 0;
-  box-shadow: 0 8rpx 24rpx rgba(13, 148, 136, 0.3);
+  box-shadow: 0 6rpx 16rpx rgba(61, 90, 78, 0.25);
+}
+
+.action-btn::after {
+  border: none;
+}
+
+.action-btn.outline {
+  background: #fff;
+  color: #3D5A4E;
+  border: 2rpx solid #3D5A4E;
+  box-shadow: none;
+}
+
+.action-btn.disabled {
+  opacity: 0.45;
+  box-shadow: none;
 }
 
 .action-btn:active {
   transform: scale(0.96);
+}
+
+.assistant-sheet {
+  max-height: 85vh;
+}
+
+.assistant-body {
+  padding: 0 32rpx 32rpx;
+  max-height: 70vh;
+  overflow-y: auto;
 }
 
 /* 遮罩层：必须 fixed，否则会排在页面文档流最底部，无法盖住全屏 */
@@ -1970,7 +2170,7 @@ onShow(() => {
 }
 
 .btn-fill {
-  background: #0D9488;
+  background: #3D5A4E;
   color: white;
   font-size: 32rpx;
   font-weight: 600;
@@ -2186,7 +2386,7 @@ onShow(() => {
 }
 
 .sig-btn.fill {
-  background: #0D9488;
+  background: #3D5A4E;
   color: white;
 }
 
@@ -2263,7 +2463,7 @@ onShow(() => {
 }
 
 .pay-value.highlight {
-  color: #0D9488;
+  color: #3D5A4E;
 }
 
 .pay-warm-tips {
@@ -2334,8 +2534,8 @@ onShow(() => {
 }
 
 .pay-checkbox.checked {
-  background: #0D9488;
-  border-color: #0D9488;
+  background: #3D5A4E;
+  border-color: #3D5A4E;
 }
 
 .pay-check-icon {
@@ -2352,7 +2552,7 @@ onShow(() => {
 }
 
 .pay-agree-link {
-  color: #0D9488;
+  color: #3D5A4E;
   font-weight: 600;
 }
 </style>

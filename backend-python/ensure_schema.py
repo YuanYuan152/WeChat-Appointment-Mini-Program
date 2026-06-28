@@ -18,6 +18,8 @@ APP_ACCOUNT_COLUMNS = {
     "IntakeSignatureUrl": "VARCHAR(500) NULL",
     "IsActive": "BIT NOT NULL CONSTRAINT DF_AppAccount_IsActive DEFAULT 1",
     "DeletedAt": "DATETIME NULL",
+    "PasswordHash": "VARCHAR(255) NULL",
+    "PreferenceTagsCompletedAt": "DATETIME NULL",
 }
 
 APP_ORDER_COLUMNS = {
@@ -33,6 +35,26 @@ APP_REFUND_EXEMPTION_COLUMNS = {
 
 APP_CASE_RECORD_COLUMNS = {
     "PhotoUrls": "NVARCHAR(MAX) NULL",
+    "RiskAssessment": "NVARCHAR(MAX) NULL",
+    "HeaderInfo": "NVARCHAR(MAX) NULL",
+}
+
+APP_CASE_RECORD_REVISION_COLUMNS = {
+    "RiskAssessment": "NVARCHAR(MAX) NULL",
+    "HeaderInfo": "NVARCHAR(MAX) NULL",
+}
+
+APP_CASE_RECORD_AMENDMENT_COLUMNS = {
+    "RiskAssessment": "NVARCHAR(MAX) NULL",
+    "HeaderInfo": "NVARCHAR(MAX) NULL",
+}
+
+APP_COUNSELOR_PROFILE_COLUMNS = {
+    "TargetGroup": "NVARCHAR(500) NULL",
+    "Mode": "NVARCHAR(100) NULL",
+    "InfoAuthenticityCommittedAt": "DATETIME NULL",
+    "InfoAuthenticitySignerName": "NVARCHAR(100) NULL",
+    "FaceBilling": "INT NOT NULL CONSTRAINT DF_AppCounselorProfile_FaceBilling DEFAULT 30000",
 }
 
 
@@ -83,12 +105,49 @@ def ensure_case_record_columns():
     missing = [(name, ddl) for name, ddl in APP_CASE_RECORD_COLUMNS.items() if name not in existing]
     if not missing:
         print("[OK] AppCaseRecord columns already complete")
-        return
+    else:
+        with engine.begin() as conn:
+            for name, ddl in missing:
+                conn.execute(text(f"ALTER TABLE [dbo].[AppCaseRecord] ADD [{name}] {ddl}"))
+                print(f"[OK] Added AppCaseRecord.{name}")
 
-    with engine.begin() as conn:
-        for name, ddl in missing:
-            conn.execute(text(f"ALTER TABLE [dbo].[AppCaseRecord] ADD [{name}] {ddl}"))
-            print(f"[OK] Added AppCaseRecord.{name}")
+    if inspector.has_table("AppCaseRecordRevision"):
+        existing_rev = {column["name"] for column in inspector.get_columns("AppCaseRecordRevision")}
+        missing_rev = [
+            (name, ddl)
+            for name, ddl in APP_CASE_RECORD_REVISION_COLUMNS.items()
+            if name not in existing_rev
+        ]
+        if not missing_rev:
+            print("[OK] AppCaseRecordRevision columns already complete")
+        else:
+            with engine.begin() as conn:
+                for name, ddl in missing_rev:
+                    conn.execute(
+                        text(f"ALTER TABLE [dbo].[AppCaseRecordRevision] ADD [{name}] {ddl}")
+                    )
+                    print(f"[OK] Added AppCaseRecordRevision.{name}")
+
+    if inspector.has_table("AppCaseRecordAmendmentRequest"):
+        existing_amd = {
+            column["name"] for column in inspector.get_columns("AppCaseRecordAmendmentRequest")
+        }
+        missing_amd = [
+            (name, ddl)
+            for name, ddl in APP_CASE_RECORD_AMENDMENT_COLUMNS.items()
+            if name not in existing_amd
+        ]
+        if not missing_amd:
+            print("[OK] AppCaseRecordAmendmentRequest columns already complete")
+        else:
+            with engine.begin() as conn:
+                for name, ddl in missing_amd:
+                    conn.execute(
+                        text(
+                            f"ALTER TABLE [dbo].[AppCaseRecordAmendmentRequest] ADD [{name}] {ddl}"
+                        )
+                    )
+                    print(f"[OK] Added AppCaseRecordAmendmentRequest.{name}")
 
 
 def ensure_refund_exemption_columns():
@@ -110,6 +169,25 @@ def ensure_refund_exemption_columns():
             print(f"[OK] Added AppRefundExemption.{name}")
 
 
+def ensure_counselor_profile_columns():
+    inspector = inspect(engine)
+    if not inspector.has_table("AppCounselorProfile"):
+        return
+
+    existing = {column["name"] for column in inspector.get_columns("AppCounselorProfile")}
+    missing = [
+        (name, ddl) for name, ddl in APP_COUNSELOR_PROFILE_COLUMNS.items() if name not in existing
+    ]
+    if not missing:
+        print("[OK] AppCounselorProfile columns already complete")
+        return
+
+    with engine.begin() as conn:
+        for name, ddl in missing:
+            conn.execute(text(f"ALTER TABLE [dbo].[AppCounselorProfile] ADD [{name}] {ddl}"))
+            print(f"[OK] Added AppCounselorProfile.{name}")
+
+
 def print_summary():
     inspector = inspect(engine)
     tables = [name for name in inspector.get_table_names() if name.startswith("App")]
@@ -129,6 +207,7 @@ def main():
     ensure_app_order_columns()
     ensure_case_record_columns()
     ensure_refund_exemption_columns()
+    ensure_counselor_profile_columns()
     print_summary()
 
 
