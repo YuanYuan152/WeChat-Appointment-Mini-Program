@@ -3,18 +3,52 @@ import type { Role } from "@/types/api";
 import type { NavigationGroup, NavigationSection } from "@/types/app";
 
 export const sections: NavigationSection[] = [
-  { id: "dashboard", label: "总览", desc: "运营数据和待办", path: "/" },
-  { id: "messages", label: "我的消息", desc: "消息提醒和待处理事项", path: "/messages" },
-  { id: "roles", label: "用户与角色", desc: "管理员角色绑定", path: "/admin-roles", adminOnly: true },
-  { id: "refunds", label: "豁免审核", desc: "退款豁免处理", path: "/refund-exemptions" },
-  { id: "feedback", label: "用户反馈", desc: "查看用户反馈详情", path: "/feedback" },
-  { id: "content", label: "内容管理", desc: "Banner / 活动 / 文章", path: "/ops-content" },
-  { id: "schedules", label: "排期情况", desc: "咨询师排期总览", path: "/schedules" },
-  { id: "rooms", label: "咨询室情况", desc: "咨询室状态与占用", path: "/rooms" },
-  { id: "caseRecords", label: "咨询记录", desc: "记录提交概览", path: "/case-records" },
-  { id: "operationLogs", label: "操作记录", desc: "现有业务记录入口", path: "/operation-logs" },
-  { id: "userBoard", label: "用户管理", desc: "来访者和咨询师检索", path: "/user-board" },
-  { id: "counselorBoard", label: "咨询师看板", desc: "咨询师记录概览", path: "/counselor-board" },
+  { id: "dashboard", label: "总览", desc: "运营数据和待办", path: "/", allowedRoles: ["Admin", "Ops"] },
+  {
+    id: "messages",
+    label: "我的消息",
+    desc: "消息提醒和待处理事项",
+    path: "/messages",
+    allowedRoles: ["Admin", "Ops", "Counselor"],
+  },
+  {
+    id: "roles",
+    label: "用户与角色",
+    desc: "管理员角色绑定",
+    path: "/admin-roles",
+    adminOnly: true,
+    allowedRoles: ["Admin"],
+  },
+  { id: "refunds", label: "豁免审核", desc: "退款豁免处理", path: "/refund-exemptions", allowedRoles: ["Admin", "Ops"] },
+  { id: "feedback", label: "用户反馈", desc: "查看用户反馈详情", path: "/feedback", allowedRoles: ["Admin", "Ops"] },
+  { id: "content", label: "内容管理", desc: "Banner / 活动 / 文章", path: "/ops-content", allowedRoles: ["Admin", "Ops"] },
+  { id: "schedules", label: "排期情况", desc: "咨询师排期总览", path: "/schedules", allowedRoles: ["Admin", "Ops"] },
+  { id: "rooms", label: "咨询室情况", desc: "咨询室状态与占用", path: "/rooms", allowedRoles: ["Admin", "Ops"] },
+  { id: "caseRecords", label: "咨询记录", desc: "记录提交概览", path: "/case-records", allowedRoles: ["Admin", "Ops"] },
+  { id: "operationLogs", label: "操作记录", desc: "现有业务记录入口", path: "/operation-logs", allowedRoles: ["Admin", "Ops"] },
+  { id: "userBoard", label: "用户管理", desc: "来访者和咨询师检索", path: "/user-board", allowedRoles: ["Admin", "Ops"] },
+  { id: "counselorBoard", label: "咨询师看板", desc: "咨询师记录概览", path: "/counselor-board", allowedRoles: ["Admin", "Ops"] },
+  {
+    id: "counselorDashboard",
+    label: "个人看板",
+    desc: "咨询数据与明细",
+    path: "/counselor-dashboard",
+    allowedRoles: ["Counselor"],
+  },
+  {
+    id: "counselorSchedules",
+    label: "我的排期",
+    desc: "新增排期和请假",
+    path: "/counselor-schedules",
+    allowedRoles: ["Counselor"],
+  },
+  {
+    id: "counselorRecords",
+    label: "填写咨询记录",
+    desc: "记录填写与修改申请",
+    path: "/counselor-records",
+    allowedRoles: ["Counselor"],
+  },
 ];
 
 export const sectionPathById = Object.fromEntries(
@@ -27,6 +61,7 @@ export const navigationGroups: NavigationGroup[] = [
   { id: "business", label: "业务处理", sectionIds: ["refunds", "feedback", "caseRecords", "operationLogs"] },
   { id: "operation", label: "运营配置", sectionIds: ["content", "schedules", "rooms"] },
   { id: "boards", label: "数据看板", sectionIds: ["userBoard", "counselorBoard"] },
+  { id: "counselor", label: "咨询师工作台", sectionIds: ["counselorDashboard", "counselorSchedules", "counselorRecords"] },
 ];
 
 export function getSectionById(sectionId: NavigationSection["id"]) {
@@ -38,3 +73,26 @@ export function getNavigationGroupBySection(sectionId: NavigationSection["id"]) 
 }
 
 export const roles: Role[] = ["Patient", "Counselor", "Assistant", "Ops", "Admin"];
+
+export function canAccessSection(section: NavigationSection | undefined, rolesValue: Role[]) {
+  if (!section) {
+    return false;
+  }
+  if (section.adminOnly && !rolesValue.includes("Admin")) {
+    return false;
+  }
+  if (!section.allowedRoles || section.allowedRoles.length === 0) {
+    return true;
+  }
+  return rolesValue.some((role) => section.allowedRoles?.includes(role));
+}
+
+export function getDefaultSectionId(rolesValue: Role[]): NavigationSection["id"] {
+  if (rolesValue.some((role) => role === "Admin" || role === "Ops")) {
+    return "dashboard";
+  }
+  if (rolesValue.includes("Counselor")) {
+    return "counselorDashboard";
+  }
+  return "messages";
+}

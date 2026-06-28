@@ -2,6 +2,7 @@ import { apiRequest } from "@/lib/api";
 import type {
   AdminCaseRecordDetail,
   AdminConsultationRecord,
+  CaseRecordAmendment,
   CounselorRecordSummary,
   OperationRecord,
   PagedResult,
@@ -21,6 +22,21 @@ export function fetchCounselorRecordDetails(counselorId: number, days = 30) {
 
 export function fetchCaseRecordDetail(recordId: number) {
   return apiRequest<AdminCaseRecordDetail>(`/api/mini/admin/consultation-records/records/${recordId}`);
+}
+
+export function fetchCaseRecordAmendments(status = "PENDING") {
+  return apiRequest<CaseRecordAmendment[]>(`/api/mini/admin/case-record-amendments?status=${status}`);
+}
+
+export function approveCaseRecordAmendment(amendmentId: number) {
+  return apiRequest(`/api/mini/admin/case-record-amendments/${amendmentId}/approve`, { method: "POST" });
+}
+
+export function rejectCaseRecordAmendment(amendmentId: number, rejectReason: string) {
+  return apiRequest(`/api/mini/admin/case-record-amendments/${amendmentId}/reject`, {
+    method: "POST",
+    body: JSON.stringify({ reject_reason: rejectReason }),
+  });
 }
 
 export function fetchOperationRecords(filters: OperationFilters, pagination: PaginationParams) {

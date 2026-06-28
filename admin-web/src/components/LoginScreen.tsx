@@ -1,3 +1,4 @@
+import type { DevLoginCode } from "@/lib/api";
 import type { Notice } from "@/types/app";
 
 export function LoginScreen({
@@ -7,22 +8,22 @@ export function LoginScreen({
 }: {
   loading: boolean;
   notice: Notice | null;
-  onLogin: (code: "dev_admin" | "dev_ops") => Promise<void>;
+  onLogin: (code: DevLoginCode) => Promise<void>;
 }) {
   return (
     <main className="grid min-h-screen place-items-center bg-[var(--lxxl-bg)] px-6 text-[var(--lxxl-text)]">
       <section className="grid w-full max-w-5xl grid-cols-[1fr_420px] overflow-hidden rounded-2xl border border-[var(--lxxl-border)] bg-white shadow-sm">
         <div className="bg-[var(--lxxl-green)] p-10 text-white">
           <div className="text-sm opacity-75">连心心理</div>
-          <h1 className="mt-5 text-3xl font-semibold">Web 管理端</h1>
+          <h1 className="mt-5 text-3xl font-semibold">Web 工作台</h1>
           <p className="mt-4 max-w-xl text-sm leading-7 text-white/75">
-            为管理员和运营提供更适合桌面端处理的后台工作台。
+            为管理员、运营和咨询师提供更适合桌面端处理的工作台。
           </p>
           <div className="mt-10 grid grid-cols-2 gap-3 text-sm">
             <div className="rounded-xl bg-white/10 p-4">用户与角色管理</div>
             <div className="rounded-xl bg-white/10 p-4">预约和咨询记录</div>
             <div className="rounded-xl bg-white/10 p-4">内容与活动管理</div>
-            <div className="rounded-xl bg-white/10 p-4">数据看板</div>
+            <div className="rounded-xl bg-white/10 p-4">咨询师工作台</div>
           </div>
         </div>
         <div className="p-8">
@@ -51,6 +52,14 @@ export function LoginScreen({
               onClick={() => onLogin("dev_ops")}
             >
               以运营身份进入
+            </button>
+            <button
+              className="w-full rounded-xl border border-[var(--lxxl-border)] px-4 py-3 text-sm font-medium disabled:opacity-60"
+              disabled={loading}
+              type="button"
+              onClick={() => onLogin("dev_counselor")}
+            >
+              以咨询师身份进入
             </button>
           </div>
         </div>

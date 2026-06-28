@@ -259,7 +259,7 @@
     <!-- 已预约请假/取消：须上传沟通截图 -->
     <view v-if="showCancelBooked" class="notice-overlay" @touchmove.stop.prevent>
       <view class="cancel-booked-card" @tap.stop>
-        <text class="notice-title">{{ cancelBookedIsLeave ? '请假（取消已预约）' : '取消已预约挂课' }}</text>
+        <text class="notice-title">{{ cancelBookedIsLeave ? '请假（取消已预约）' : '取消已预约排期' }}</text>
         <text class="cancel-booked-tip">{{ cancelBookedTip }}</text>
         <view v-if="cancelBookedSlotText" class="detail-block">
           <text class="detail-label">咨询时段</text>
@@ -864,7 +864,7 @@ const selectTimeSlot = (ts: TimeSlotOpt) => {
     return
   }
   if (ts.counselorOccupied) {
-    uni.showToast({ title: '您在该时间槽已有挂课', icon: 'none' })
+    uni.showToast({ title: '您在该时间槽已有排期', icon: 'none' })
     return
   }
   form.value.slotKey = ts.key
@@ -990,8 +990,8 @@ const handleCancelSlot = (slot: CalendarSlot) => {
   }
 
   uni.showModal({
-    title: '取消挂课',
-    content: slot.cancelHint || '确认取消该挂课？',
+    title: '取消排期',
+    content: slot.cancelHint || '确认取消该排期？',
     success: async (res) => {
       if (!res.confirm) return
       const r = await httpV2.put(`/api/mini/counselor/schedules/${slot.id}`, { status: 'CANCELLED' })
@@ -1027,14 +1027,14 @@ const submitSlot = async () => {
     })
     if (res.code === 0) {
       showAdd.value = false
-      uni.showToast({ title: '挂课成功', icon: 'success' })
+      uni.showToast({ title: '排期成功', icon: 'success' })
       await refresh()
       await loadSlotOptions()
     } else {
-      uni.showToast({ title: res.msg || '挂课失败', icon: 'none' })
+      uni.showToast({ title: res.msg || '排期失败', icon: 'none' })
     }
   } catch (err: any) {
-    uni.showToast({ title: err?.message || '挂课失败', icon: 'none' })
+    uni.showToast({ title: err?.message || '排期失败', icon: 'none' })
   } finally {
     submitting.value = false
   }

@@ -3,10 +3,12 @@
 import { useEffect, useState } from "react";
 
 import {
+  canAccessSection,
   getNavigationGroupBySection,
   getSectionById,
   navigationGroups,
 } from "@/config/navigation";
+import type { CurrentUser } from "@/types/api";
 import type { SectionId } from "@/types/app";
 
 const EXPANDED_GROUPS_STORAGE_KEY = "lxxl-admin-web-main-menu-expanded-groups";
@@ -14,13 +16,13 @@ let cachedExpandedGroupIds: string[] | null = null;
 
 export function MainMenu({
   activeSection,
-  isAdmin,
+  currentUser,
   collapsed,
   onCollapsedChange,
   onChangeSection,
 }: {
   activeSection: SectionId;
-  isAdmin: boolean;
+  currentUser: CurrentUser;
   collapsed: boolean;
   onCollapsedChange: (collapsed: boolean) => void;
   onChangeSection: (section: SectionId) => void;
@@ -93,6 +95,12 @@ export function MainMenu({
 
       <nav className={`min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain py-4 ${collapsed ? "px-3" : "px-3"}`}>
         {navigationGroups.map((group) => {
+          const visibleSectionIds = group.sectionIds.filter((sectionId) =>
+            canAccessSection(getSectionById(sectionId), currentUser.roles),
+          );
+          if (visibleSectionIds.length === 0) {
+            return null;
+          }
           const expanded = expandedGroupIds.includes(group.id);
           const groupActive = group.id === activeGroupId;
 
@@ -122,12 +130,11 @@ export function MainMenu({
 
               {!collapsed && expanded && (
                 <div className="mt-1 space-y-1">
-                  {group.sectionIds.map((sectionId) => {
+                  {visibleSectionIds.map((sectionId) => {
                     const section = getSectionById(sectionId);
                     if (!section) {
                       return null;
                     }
-                    const disabled = section.adminOnly && !isAdmin;
                     const active = activeSection === section.id;
 
                     return (
@@ -137,8 +144,7 @@ export function MainMenu({
                           active
                             ? "bg-[var(--lxxl-green)] text-white"
                             : "text-[var(--lxxl-text)] hover:bg-[#F4F1EB]"
-                        } ${disabled ? "cursor-not-allowed opacity-45" : ""}`}
-                        disabled={disabled}
+                        }`}
                         title={section.label}
                         type="button"
                         onClick={() => onChangeSection(section.id)}

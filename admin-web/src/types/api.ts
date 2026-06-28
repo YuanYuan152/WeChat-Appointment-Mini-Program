@@ -260,6 +260,32 @@ export interface AdminCaseRecordDetail {
   UpdatedAt?: string | null;
 }
 
+export interface CaseRecordSnapshot {
+  subjective?: string | null;
+  objective?: string | null;
+  assessment?: string | null;
+  plan?: string | null;
+  riskAssessment?: Record<string, unknown> | null;
+  headerInfo?: Record<string, unknown> | null;
+  photoUrls: string[];
+}
+
+export interface CaseRecordAmendment {
+  id: number;
+  caseRecordId: number;
+  consultationId: number;
+  counselorId: number;
+  counselorName: string;
+  reason?: string | null;
+  status: string;
+  rejectReason?: string | null;
+  consultationStartTime?: string | null;
+  createdAt: string;
+  reviewedAt?: string | null;
+  current: CaseRecordSnapshot;
+  proposed: CaseRecordSnapshot;
+}
+
 export interface MessageItem {
   Id: number;
   AccountId: number;
@@ -442,6 +468,125 @@ export interface CounselorBoardDetail {
     screenshotUrl?: string | null;
     createdAt?: string | null;
   }>;
+}
+
+export interface CounselorDashboardStats {
+  totalConsultations?: number;
+  monthConsultations?: number;
+  pendingConsultations?: number;
+  doneConsultations?: number;
+  estimatedRevenue?: number;
+  completedOrderCount?: number;
+  completedOrderRevenue?: number;
+  caseRecordCount?: number;
+  totalAppointments?: number;
+  leaveCount?: number;
+}
+
+export interface CounselorDashboardDetailItem {
+  id: number;
+  title: string;
+  subtitle?: string | null;
+  extra?: string | null;
+  amount?: number | null;
+  consultationId?: number | null;
+  caseRecordId?: number | null;
+  status?: string | null;
+}
+
+export interface CounselorScheduleCalendarItem {
+  id: number;
+  startTime: string;
+  endTime: string;
+  status: string;
+  displayStatus: string;
+  displayLabel: string;
+  centerId?: string | null;
+  centerName?: string | null;
+  roomId?: string | null;
+  roomName?: string | null;
+  patientName?: string | null;
+  consultationId?: number | null;
+  consultationStatus?: string | null;
+  canCancel: boolean;
+  requiresLeave: boolean;
+  cancelHint?: string | null;
+  leaveRequestId?: number | null;
+  leaveReason?: string | null;
+  leaveSubmittedAt?: string | null;
+  leaveStatus?: string | null;
+  hasCaseRecord: boolean;
+  caseRecordId?: number | null;
+}
+
+export interface CounselorScheduleCalendar {
+  startDate: string;
+  days: number;
+  slots: CounselorScheduleCalendarItem[];
+}
+
+export interface CounselorSlotRoomOption {
+  roomId: string;
+  roomName: string;
+  available: boolean;
+  occupiedBySelf: boolean;
+  occupiedByOther: boolean;
+  otherCounselorId?: number | null;
+}
+
+export interface CounselorSlotOption {
+  key: string;
+  startTime: string;
+  endTime: string;
+  label: string;
+  past: boolean;
+  counselorOccupied: boolean;
+  counselorScheduleId?: number | null;
+  allRoomsFull: boolean;
+  rooms: CounselorSlotRoomOption[];
+}
+
+export interface CounselorSlotOptions {
+  date: string;
+  centerId: string;
+  centerName: string;
+  slots: CounselorSlotOption[];
+}
+
+export interface CounselorCompletedConsultation {
+  Id: number;
+  PatientId: number;
+  PatientName: string;
+  StartTime?: string | null;
+  EndTime?: string | null;
+  Note?: string | null;
+  CaseRecordId?: number | null;
+  HasRecord: boolean;
+  RecordUpdatedAt?: string | null;
+  PhotoCount: number;
+}
+
+export interface CounselorCaseRecord {
+  Id: number;
+  ConsultationId: number;
+  CounselorId: number;
+  Subjective?: string | null;
+  Objective?: string | null;
+  Assessment?: string | null;
+  Plan?: string | null;
+  RiskAssessment?: Record<string, unknown> | null;
+  HeaderInfo?: Record<string, string> | null;
+  PhotoUrls: string[];
+  CreatedAt: string;
+  UpdatedAt?: string | null;
+  AmendmentStatus?: string | null;
+  AmendmentId?: number | null;
+  AmendmentRejectReason?: string | null;
+}
+
+export interface CounselorCaseRecordFormDefaults {
+  ConsultationId: number;
+  HeaderInfo: Record<string, string>;
 }
 
 export interface ApiMessage {

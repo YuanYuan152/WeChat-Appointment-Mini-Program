@@ -5,11 +5,12 @@ import { useEffect } from "react";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { useRouter } from "next/navigation";
 
+import type { DevLoginCode } from "@/lib/api";
 import { clearStoredToken, fetchCurrentUser, getStoredToken, loginWithDevCode } from "@/lib/api";
 import { roleLabel } from "@/lib/format";
 import type { CurrentUser } from "@/types/api";
 
-import { sectionPathById, sections } from "@/config/navigation";
+import { canAccessSection, getDefaultSectionId, sectionPathById, sections } from "@/config/navigation";
 import type { Notice, SectionId } from "@/types/app";
 import { getMessage, roleText } from "@/lib/display";
 import { AppShell } from "./AppShell";
@@ -45,7 +46,8 @@ export function AppRoute({ sectionId, children }: { sectionId: SectionId; childr
   const [refreshKey, setRefreshKey] = useState(0);
 
   const isAdmin = currentUser?.roles.includes("Admin") ?? false;
-  const canEnterAdmin = currentUser?.roles.some((role) => role === "Admin" || role === "Ops") ?? false;
+  const canEnterWeb =
+    currentUser?.roles.some((role) => role === "Admin" || role === "Ops" || role === "Counselor") ?? false;
   const section = sections.find((item) => item.id === sectionId);
 
   const showNotice = useCallback((type: Notice["type"], text: string) => {
@@ -81,7 +83,7 @@ export function AppRoute({ sectionId, children }: { sectionId: SectionId; childr
     void boot();
   }, []);
 
-  const handleLogin = async (code: "dev_admin" | "dev_ops") => {
+  const handleLogin = async (code: DevLoginCode) => {
     setLoading(true);
     clearNotice();
     try {
@@ -89,7 +91,7 @@ export function AppRoute({ sectionId, children }: { sectionId: SectionId; childr
       const me = await fetchCurrentUser();
       setCurrentUser(me);
       showNotice("success", `已进入${roleLabel(me.activeRole)}`);
-      router.replace(sectionPathById[sectionId]);
+      router.replace(sectionPathById[getDefaultSectionId(me.roles)]);
     } catch (error) {
       showNotice("error", error instanceof Error ? error.message : "登录失败");
     } finally {
@@ -150,13 +152,13 @@ export function AppRoute({ sectionId, children }: { sectionId: SectionId; childr
     return <LoginScreen loading={loading} notice={notice} onLogin={handleLogin} />;
   }
 
-  if (!canEnterAdmin) {
+  if (!canEnterWeb) {
     return (
       <main className="grid min-h-screen place-items-center bg-[var(--lxxl-bg)] px-6 text-[var(--lxxl-text)]">
         <section className="w-full max-w-lg rounded-2xl border border-[var(--lxxl-border)] bg-white p-8">
           <h1 className="text-xl font-semibold">无法进入 Web 管理端</h1>
           <p className="mt-3 text-sm leading-6 text-[var(--lxxl-muted)]">
-            当前账号是 {roleText(currentUser.roles)}，仅管理员和运营角色可以进入。
+            当前账号是 {roleText(currentUser.roles)}，仅管理员、运营和咨询师角色可以进入。
           </p>
           <button
             className="mt-6 rounded-xl bg-[var(--lxxl-green)] px-5 py-2 text-sm font-medium text-white"
@@ -170,12 +172,11 @@ export function AppRoute({ sectionId, children }: { sectionId: SectionId; childr
     );
   }
 
-  if (section?.adminOnly && !isAdmin) {
+  if (!canAccessSection(section, currentUser.roles)) {
     return (
       <AppShell
         activeSection={sectionId}
         currentUser={currentUser}
-        isAdmin={isAdmin}
         loading={loading}
         notice={notice}
         onChangeSection={(nextSection) => router.push(sectionPathById[nextSection])}
@@ -184,7 +185,14 @@ export function AppRoute({ sectionId, children }: { sectionId: SectionId; childr
       >
         <section className="rounded-xl border border-[var(--lxxl-border)] bg-white p-8">
           <h2 className="text-lg font-semibold">没有访问权限</h2>
-          <p className="mt-3 text-sm text-[var(--lxxl-muted)]">当前页面只允许管理员访问。</p>
+          <p className="mt-3 text-sm text-[var(--lxxl-muted)]">当前角色不能访问这个页面。</p>
+          <button
+            className="mt-5 rounded-xl bg-[var(--lxxl-green)] px-4 py-2 text-sm font-medium text-white"
+            type="button"
+            onClick={() => router.replace(sectionPathById[getDefaultSectionId(currentUser.roles)])}
+          >
+            回到工作台
+          </button>
         </section>
       </AppShell>
     );
@@ -195,7 +203,6 @@ export function AppRoute({ sectionId, children }: { sectionId: SectionId; childr
       <AppShell
         activeSection={sectionId}
         currentUser={currentUser}
-        isAdmin={isAdmin}
         loading={loading}
         notice={notice}
         onChangeSection={(nextSection) => router.push(sectionPathById[nextSection])}

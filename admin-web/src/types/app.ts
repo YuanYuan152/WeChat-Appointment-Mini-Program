@@ -3,8 +3,15 @@ import type {
   AdminUser,
   Article,
   Banner,
+  CaseRecordAmendment,
   CounselorBoardDetail,
   CounselorBoardSummary,
+  CounselorCaseRecord,
+  CounselorCompletedConsultation,
+  CounselorDashboardDetailItem,
+  CounselorDashboardStats,
+  CounselorScheduleCalendar,
+  CounselorSlotOptions,
   FeedbackItem,
   MessageItem,
   CounselorRecordSummary,
@@ -17,6 +24,7 @@ import type {
   Room,
   RoomDetail,
   RoomStatusSnapshot,
+  Role,
   ScheduleRoomOptions,
   ScheduleOverview,
   UserBoardDetail,
@@ -35,7 +43,10 @@ export type SectionId =
   | "caseRecords"
   | "operationLogs"
   | "userBoard"
-  | "counselorBoard";
+  | "counselorBoard"
+  | "counselorDashboard"
+  | "counselorSchedules"
+  | "counselorRecords";
 
 export interface NavigationSection {
   id: SectionId;
@@ -43,6 +54,7 @@ export interface NavigationSection {
   desc: string;
   path: string;
   adminOnly?: boolean;
+  allowedRoles?: Role[];
 }
 
 export interface NavigationGroup {
@@ -68,11 +80,19 @@ export interface ScreenData {
   counselorRecords?: CounselorRecordSummary[];
   selectedCounselorRecords?: AdminConsultationRecord[];
   selectedCaseRecord?: AdminCaseRecordDetail;
+  caseRecordAmendments?: CaseRecordAmendment[];
   operationRecords?: PagedResult<OperationRecord>;
   userBoard?: PagedResult<UserBoardSummary>;
   selectedUserBoard?: UserBoardDetail;
   counselorBoard?: PagedResult<CounselorBoardSummary>;
   selectedCounselorBoard?: CounselorBoardDetail;
+  counselorDashboard?: CounselorDashboardStats;
+  counselorDashboardDetails?: CounselorDashboardDetailItem[];
+  counselorScheduleCalendar?: CounselorScheduleCalendar;
+  counselorSlotOptions?: CounselorSlotOptions;
+  counselorCompletedConsultations?: CounselorCompletedConsultation[];
+  counselorCaseRecords?: CounselorCaseRecord[];
+  selectedCounselorCaseRecord?: CounselorCaseRecord;
 }
 
 export interface Notice {

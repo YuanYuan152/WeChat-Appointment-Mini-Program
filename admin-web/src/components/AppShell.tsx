@@ -13,7 +13,6 @@ import { MainMenu } from "@/components/MainMenu";
 export function AppShell({
   activeSection,
   currentUser,
-  isAdmin,
   loading,
   notice,
   children,
@@ -23,7 +22,6 @@ export function AppShell({
 }: {
   activeSection: SectionId;
   currentUser: CurrentUser;
-  isAdmin: boolean;
   loading: boolean;
   notice: Notice | null;
   children: ReactNode;
@@ -35,7 +33,9 @@ export function AppShell({
   const activeGroup = getNavigationGroupBySection(activeSection);
   const activeSectionConfig = getSectionById(activeSection);
   const activeRoleText = roleLabel(
-    currentUser.activeRole || currentUser.roles.find((role) => role === "Admin" || role === "Ops") || currentUser.roles[0],
+    currentUser.activeRole ||
+      currentUser.roles.find((role) => role === "Admin" || role === "Ops" || role === "Counselor") ||
+      currentUser.roles[0],
   );
 
   return (
@@ -44,7 +44,7 @@ export function AppShell({
         <MainMenu
           activeSection={activeSection}
           collapsed={menuCollapsed}
-          isAdmin={isAdmin}
+          currentUser={currentUser}
           onChangeSection={onChangeSection}
           onCollapsedChange={setMenuCollapsed}
         />
