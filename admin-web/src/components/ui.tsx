@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 
 import { PAGE_SIZE_OPTIONS } from "@/config/pagination";
@@ -59,15 +60,23 @@ export function QueryField({
   label,
   children,
   className = "",
+  required = false,
+  error,
 }: {
   label: string;
   children: ReactNode;
   className?: string;
+  required?: boolean;
+  error?: string;
 }) {
   return (
     <label className={`block min-w-0 ${className}`}>
-      <span className="mb-2 block text-xs font-medium text-[var(--lxxl-muted)]">{label}</span>
+      <span className="mb-2 block text-xs font-medium text-[var(--lxxl-muted)]">
+        {label}
+        {required && <span className="ml-1 text-[#B34B43]">*</span>}
+      </span>
       {children}
+      {error && <span className="mt-2 block text-xs leading-5 text-[#A13F37]">{error}</span>}
     </label>
   );
 }
@@ -133,14 +142,56 @@ export function MiniStat({ label, value }: { label: string; value: ReactNode }) 
   );
 }
 
-export function DetailList({ title, items }: { title: string; items: string[] }) {
+export function CollapsibleSection({
+  title,
+  count,
+  children,
+  defaultOpen = false,
+  className = "",
+  bodyClassName = "",
+  onOpenChange,
+}: {
+  title: string;
+  count?: number;
+  children: ReactNode;
+  defaultOpen?: boolean;
+  className?: string;
+  bodyClassName?: string;
+  onOpenChange?: (open: boolean) => void;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const toggleOpen = () => {
+    const nextOpen = !open;
+    setOpen(nextOpen);
+    onOpenChange?.(nextOpen);
+  };
+
   return (
-    <div className="mt-6">
-      <h4 className="text-sm font-semibold">{title}</h4>
+    <div className={`mt-4 border-t border-[var(--lxxl-border)] ${className}`}>
+      <button
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-3 py-4 text-left transition hover:text-[var(--lxxl-green)]"
+        type="button"
+        onClick={toggleOpen}
+      >
+        <span className="min-w-0">
+          <span className="text-sm font-semibold">{title}</span>
+          {count != null && <span className="ml-2 text-xs font-normal text-[var(--lxxl-muted)]">{count} 条</span>}
+        </span>
+        <span className="shrink-0 text-sm font-medium text-[var(--lxxl-green)]">{open ? "收起" : "展开"}</span>
+      </button>
+      {open && <div className={`pb-4 ${bodyClassName}`}>{children}</div>}
+    </div>
+  );
+}
+
+export function DetailList({ title, items }: { title: string; items: ReactNode[] }) {
+  return (
+    <CollapsibleSection count={items.length} title={title}>
       {items.length === 0 ? (
-        <div className="mt-3 text-sm text-[var(--lxxl-muted)]">暂无记录</div>
+        <div className="text-sm text-[var(--lxxl-muted)]">暂无记录</div>
       ) : (
-        <div className="mt-3 space-y-2">
+        <div className="space-y-2">
           {items.map((item, index) => (
             <div
               key={`${title}-${index}`}
@@ -151,7 +202,7 @@ export function DetailList({ title, items }: { title: string; items: string[] })
           ))}
         </div>
       )}
-    </div>
+    </CollapsibleSection>
   );
 }
 

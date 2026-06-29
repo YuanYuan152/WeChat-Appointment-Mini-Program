@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 
 import { formatDateTime } from "@/lib/format";
-import type { CounselorCaseRecord, CounselorCompletedConsultation } from "@/types/api";
+import { API_BASE_URL } from "@/lib/api";
+import type { CounselorCaseRecord, CounselorCaseRecordRevision, CounselorCompletedConsultation } from "@/types/api";
 
 import {
   Badge,
@@ -30,23 +31,26 @@ export interface CounselorRecordFormState {
   reason: string;
   headerInfo: Record<string, string>;
   photoUrls: string[];
+  revisions?: CounselorCaseRecordRevision[];
   amendmentStatus?: string | null;
   amendmentRejectReason?: string | null;
 }
 
-const HEADER_FIELDS: Array<{ key: string; label: string }> = [
+export type CounselorRecordFormErrors = Record<string, string | undefined>;
+
+const HEADER_FIELDS: Array<{ key: string; label: string; editable?: boolean }> = [
   { key: "code", label: "代码" },
   { key: "gender", label: "性别" },
   { key: "consult_method", label: "咨询方式" },
   { key: "session_number", label: "咨询次数" },
-  { key: "start_year", label: "开始年份" },
-  { key: "start_month", label: "开始月份" },
-  { key: "start_day", label: "开始日期" },
-  { key: "start_hour", label: "开始小时" },
-  { key: "start_minute", label: "开始分钟" },
-  { key: "end_hour", label: "结束小时" },
-  { key: "end_minute", label: "结束分钟" },
-  { key: "counselor_signature", label: "咨询师签名" },
+  { key: "start_year", label: "咨询开始年份" },
+  { key: "start_month", label: "咨询开始月份" },
+  { key: "start_day", label: "咨询开始日期" },
+  { key: "start_hour", label: "咨询开始小时" },
+  { key: "start_minute", label: "咨询开始分钟" },
+  { key: "end_hour", label: "咨询结束小时" },
+  { key: "end_minute", label: "咨询结束分钟" },
+  { key: "counselor_signature", label: "咨询师签名", editable: true },
 ];
 
 const RISK_LEVEL_OPTIONS = [
@@ -56,13 +60,49 @@ const RISK_LEVEL_OPTIONS = [
   { value: "D", label: "无危机：一般咨询" },
 ] as const;
 
+type CaseRecordTextKey = "subjective" | "objective" | "assessment" | "plan";
+
+const CASE_RECORD_TEXT_FIELDS: Array<{
+  key: CaseRecordTextKey;
+  label: string;
+  hint?: string;
+  placeholder: string;
+}> = [
+  {
+    key: "subjective",
+    label: "患者情况记录（主观陈述）",
+    hint: "记录来访者本次陈述的主要内容、主诉与情绪状态。",
+    placeholder: "请记录来访者主观陈述...",
+  },
+  {
+    key: "objective",
+    label: "客观观察",
+    hint: "记录行为观察、情绪状态、量表结果或其它客观资料。",
+    placeholder: "请记录客观观察与测试结果...",
+  },
+  {
+    key: "assessment",
+    label: "评估分析",
+    hint: "记录风险等级判断、问题分析与咨询过程评估。",
+    placeholder: "请记录风险等级判断、问题分析与咨询过程评估...",
+  },
+  {
+    key: "plan",
+    label: "计划方向",
+    hint: "记录下次咨询方向、作业建议、处理措施或转介安排。",
+    placeholder: "请记录咨询要点与处理措施...",
+  },
+];
+
 export function CounselorRecordsPanel({
   consultations,
   records,
   selectedForm,
   listLoading,
   formLoading,
+  formErrors,
   setSelectedForm,
+  onClearFormError,
   onOpenCreate,
   onOpenView,
   onOpenAmend,
@@ -74,7 +114,9 @@ export function CounselorRecordsPanel({
   selectedForm?: CounselorRecordFormState;
   listLoading: boolean;
   formLoading: boolean;
+  formErrors: CounselorRecordFormErrors;
   setSelectedForm: Dispatch<SetStateAction<CounselorRecordFormState | undefined>>;
+  onClearFormError: (field: string) => void;
   onOpenCreate: (consultation: CounselorCompletedConsultation) => void;
   onOpenView: (recordId: number) => void;
   onOpenAmend: (recordId: number) => void;
@@ -251,7 +293,13 @@ export function CounselorRecordsPanel({
               )}
             </div>
             <div className="flex-1 overflow-auto px-6 py-5">
-              <RecordFormFields form={selectedForm} readonly={selectedForm.mode === "view"} setForm={setSelectedForm} />
+              <RecordFormFields
+                errors={formErrors}
+                form={selectedForm}
+                readonly={selectedForm.mode === "view"}
+                setForm={setSelectedForm}
+                onClearError={onClearFormError}
+              />
             </div>
             <div className="flex justify-start gap-3 border-t border-[var(--lxxl-border)] bg-white px-6 py-4">
               {selectedForm.mode !== "view" && (
@@ -269,16 +317,22 @@ export function CounselorRecordsPanel({
 }
 
 function RecordFormFields({
+  errors,
   form,
   readonly,
   setForm,
+  onClearError,
 }: {
+  errors: CounselorRecordFormErrors;
   form: CounselorRecordFormState;
   readonly: boolean;
   setForm: Dispatch<SetStateAction<CounselorRecordFormState | undefined>>;
+  onClearError: (field: string) => void;
 }) {
   const updateField = (field: keyof CounselorRecordFormState, value: string) => {
     setForm((prev) => (prev ? { ...prev, [field]: value } : prev));
+    onClearError(String(field));
+    onClearError("form");
   };
   const updateHeader = (key: string, value: string) => {
     setForm((prev) =>
@@ -289,54 +343,37 @@ function RecordFormFields({
           }
         : prev,
     );
+    onClearError(`header.${key}`);
+    onClearError("form");
   };
 
   return (
     <div className="space-y-6">
-      <div>
-        <h4 className="text-sm font-semibold">表头信息</h4>
-        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {HEADER_FIELDS.map((item) => (
-            <QueryField key={item.key} label={item.label}>
-              <input
-                className={queryControlClass}
-                readOnly={readonly}
-                value={form.headerInfo[item.key] || ""}
-                onChange={(event) => updateHeader(item.key, event.target.value)}
-              />
-            </QueryField>
-          ))}
+      {errors.form && (
+        <div className="rounded-xl border border-[#F0B8B2] bg-[#FFF4F2] px-4 py-3 text-sm leading-6 text-[#A13F37]">
+          {errors.form}
         </div>
+      )}
+      <div className="space-y-4">
+        {CASE_RECORD_TEXT_FIELDS.map((item) => (
+          <TextareaField
+            key={item.key}
+            error={errors[item.key]}
+            hint={item.hint}
+            label={item.label}
+            placeholder={item.placeholder}
+            required={!readonly}
+            readonly={readonly}
+            value={form[item.key]}
+            onChange={(value) => updateField(item.key, value)}
+          />
+        ))}
       </div>
 
-      <div className="grid grid-cols-1 gap-4">
-        <TextareaField
-          label="主观资料"
-          readonly={readonly}
-          value={form.subjective}
-          onChange={(value) => updateField("subjective", value)}
-        />
-        <TextareaField
-          label="客观资料"
-          readonly={readonly}
-          value={form.objective}
-          onChange={(value) => updateField("objective", value)}
-        />
-        <TextareaField
-          label="评估"
-          readonly={readonly}
-          value={form.assessment}
-          onChange={(value) => updateField("assessment", value)}
-        />
-        <TextareaField
-          label="计划"
-          readonly={readonly}
-          value={form.plan}
-          onChange={(value) => updateField("plan", value)}
-        />
-      </div>
+      <PhotoSection readonly={readonly} urls={form.photoUrls} />
+      {(form.revisions || []).length > 0 && <RevisionHistory revisions={form.revisions || []} />}
 
-      <QueryField label="风险/危机等级">
+      <QueryField error={errors.riskLevel} label="风险/危机等级" required={!readonly}>
         <select
           className={queryControlClass}
           disabled={readonly}
@@ -354,47 +391,172 @@ function RecordFormFields({
       {form.mode === "amend" && (
         <TextareaField
           label="修改原因"
+          error={errors.reason}
+          required={!readonly}
           readonly={readonly}
           value={form.reason}
           onChange={(value) => updateField("reason", value)}
         />
       )}
 
-      {form.photoUrls.length > 0 && (
+      <div className="border-t border-[var(--lxxl-border)] pt-5">
+        <h4 className="text-sm font-semibold">表头信息</h4>
+        <p className="mt-1 text-xs text-[var(--lxxl-muted)]">
+          咨询单信息已自动带入，系统生成字段不可修改。
+        </p>
+        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {HEADER_FIELDS.map((item) => {
+            const disabled = readonly || !item.editable;
+            return (
+              <QueryField
+                key={item.key}
+                error={errors[`header.${item.key}`]}
+                label={item.label}
+                required={!readonly}
+              >
+                <input
+                  className={`${queryControlClass} disabled:bg-[#F7F4EF] disabled:text-[var(--lxxl-muted)]`}
+                  disabled={disabled}
+                  value={form.headerInfo[item.key] || ""}
+                  onChange={(event) => updateHeader(item.key, event.target.value)}
+                />
+              </QueryField>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PhotoSection({ urls, readonly }: { urls: string[]; readonly: boolean }) {
+  const visibleUrls = urls.filter(Boolean);
+  return (
+    <section className="rounded-xl bg-[#FAF8F4] p-4">
+      <div className="flex items-end justify-between gap-4">
         <div>
-          <h4 className="text-sm font-semibold">附件</h4>
-          <div className="mt-3 grid grid-cols-2 gap-3">
-            {form.photoUrls.map((url) => (
-              <a key={url} className="text-xs text-[var(--lxxl-green)] underline" href={url} rel="noreferrer" target="_blank">
-                {url}
+          <h4 className="text-sm font-semibold">相关照片</h4>
+          <p className="mt-1 text-xs text-[var(--lxxl-muted)]">可上传咨询相关照片，最多 9 张。</p>
+        </div>
+        <span className="text-xs text-[var(--lxxl-muted)]">{visibleUrls.length}/9</span>
+      </div>
+      {visibleUrls.length === 0 && readonly ? (
+        <p className="mt-4 text-sm text-[var(--lxxl-muted)]">暂无相关照片</p>
+      ) : (
+        <div className="mt-4 grid grid-cols-3 gap-3 sm:grid-cols-4">
+          {visibleUrls.map((url) => {
+            const src = normalizePhotoUrl(url);
+            return (
+              <a
+                key={url}
+                className="group relative block aspect-square overflow-hidden rounded-lg border border-[var(--lxxl-border)] bg-white"
+                href={src}
+                rel="noreferrer"
+                target="_blank"
+              >
+                <img
+                  alt="咨询相关照片"
+                  className="h-full w-full object-cover transition group-hover:scale-105"
+                  src={src}
+                />
               </a>
-            ))}
-          </div>
+            );
+          })}
+          {!readonly && visibleUrls.length < 9 && (
+            <div className="flex aspect-square items-center justify-center rounded-lg border border-dashed border-[#D6D0C8] bg-white text-2xl text-[var(--lxxl-muted)]">
+              +
+            </div>
+          )}
         </div>
       )}
-    </div>
+    </section>
+  );
+}
+
+function RevisionHistory({ revisions }: { revisions: CounselorCaseRecordRevision[] }) {
+  return (
+    <section className="rounded-xl bg-[#FAF8F4] p-4">
+      <h4 className="text-sm font-semibold">修改历史</h4>
+      <div className="mt-3 space-y-3">
+        {revisions.map((revision) => (
+          <div key={revision.Id} className="rounded-xl bg-white p-4 text-sm leading-6">
+            <div className="text-xs text-[var(--lxxl-muted)]">{formatDateTime(revision.RevisedAt)}</div>
+            <RevisionLine label="患者情况" value={revision.Subjective} />
+            <RevisionLine label="客观观察" value={revision.Objective} />
+            <RevisionLine label="评估分析" value={revision.Assessment} />
+            <RevisionLine label="计划方向" value={revision.Plan} />
+            {(revision.PhotoUrls || []).length > 0 && (
+              <div className="mt-3 grid grid-cols-4 gap-2">
+                {revision.PhotoUrls.filter(Boolean).map((url) => {
+                  const src = normalizePhotoUrl(url);
+                  return (
+                    <a
+                      key={url}
+                      className="block aspect-square overflow-hidden rounded-lg border border-[var(--lxxl-border)]"
+                      href={src}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      <img alt="历史照片" className="h-full w-full object-cover" src={src} />
+                    </a>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
 function TextareaField({
   label,
+  hint,
+  error,
+  placeholder,
+  required,
   value,
   readonly,
   onChange,
 }: {
   label: string;
+  hint?: string;
+  error?: string;
+  placeholder?: string;
+  required?: boolean;
   value: string;
   readonly: boolean;
   onChange: (value: string) => void;
 }) {
   return (
-    <QueryField label={label}>
-      <textarea
-        className={`${queryControlClass} h-28 resize-none py-3`}
-        readOnly={readonly}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      />
-    </QueryField>
+    <section className="rounded-xl bg-[#FAF8F4] p-4">
+      <QueryField error={error} label={label} required={required}>
+        {hint && <p className="-mt-1 mb-2 text-xs leading-5 text-[var(--lxxl-muted)]">{hint}</p>}
+        <textarea
+          className={`${queryControlClass} min-h-32 resize-y bg-white py-3`}
+          placeholder={placeholder}
+          readOnly={readonly}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+        />
+      </QueryField>
+    </section>
   );
+}
+
+function RevisionLine({ label, value }: { label: string; value?: string | null }) {
+  return (
+    <div className="mt-2 whitespace-pre-wrap text-[var(--lxxl-muted)]">
+      <span className="font-medium text-[#2C2C2C]">{label}：</span>
+      {value || "-"}
+    </div>
+  );
+}
+
+function normalizePhotoUrl(url: string) {
+  if (/^(https?:|data:|blob:)/i.test(url)) {
+    return url;
+  }
+  return `${API_BASE_URL}${url.startsWith("/") ? url : `/${url}`}`;
 }

@@ -26,6 +26,42 @@ export function formatDateTime(value?: string | null) {
   });
 }
 
+export function formatFullDateTime(value?: string | null) {
+  if (!value) {
+    return "-";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleString("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+export function formatUtcFullDateTime(value?: string | null) {
+  if (!value) {
+    return "-";
+  }
+  const normalizedValue = /(?:z|[+-]\d{2}:?\d{2})$/i.test(value) ? value : `${value}Z`;
+  const date = new Date(normalizedValue);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleString("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export function formatDate(value?: string | null) {
   if (!value) {
     return "-";

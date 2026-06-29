@@ -452,6 +452,13 @@ export interface CounselorBoardDetail {
     createdAt?: string | null;
     updatedAt?: string | null;
     preview?: string | null;
+    patientName?: string | null;
+    patientMobile?: string | null;
+    status?: string | null;
+    startTime?: string | null;
+    endTime?: string | null;
+    centerName?: string | null;
+    roomName?: string | null;
   }>;
   leaveRequests: Array<{
     id: number;
@@ -460,6 +467,13 @@ export interface CounselorBoardDetail {
     status: string;
     createdAt?: string | null;
     updatedAt?: string | null;
+    startTime?: string | null;
+    endTime?: string | null;
+    centerName?: string | null;
+    roomName?: string | null;
+    patientName?: string | null;
+    patientMobile?: string | null;
+    consultationStatus?: string | null;
   }>;
   schedules: Array<{
     id: number;
@@ -468,6 +482,9 @@ export interface CounselorBoardDetail {
     endTime?: string | null;
     centerName?: string | null;
     roomName?: string | null;
+    patientName?: string | null;
+    patientMobile?: string | null;
+    consultationStatus?: string | null;
   }>;
   roomUsage: Array<{
     scheduleId: number;
@@ -476,6 +493,9 @@ export interface CounselorBoardDetail {
     status: string;
     centerName?: string | null;
     roomName?: string | null;
+    patientName?: string | null;
+    patientMobile?: string | null;
+    consultationStatus?: string | null;
   }>;
   scheduleCancelLogs: Array<{
     id: number;
@@ -483,6 +503,14 @@ export interface CounselorBoardDetail {
     consultationId?: number | null;
     screenshotUrl?: string | null;
     createdAt?: string | null;
+    patientName?: string | null;
+    patientMobile?: string | null;
+    status?: string | null;
+    startTime?: string | null;
+    endTime?: string | null;
+    centerName?: string | null;
+    roomName?: string | null;
+    consultationStatus?: string | null;
   }>;
 }
 
@@ -598,6 +626,21 @@ export interface CounselorCaseRecord {
   AmendmentStatus?: string | null;
   AmendmentId?: number | null;
   AmendmentRejectReason?: string | null;
+}
+
+export interface CounselorCaseRecordRevision {
+  Id: number;
+  CaseRecordId: number;
+  ConsultationId: number;
+  Subjective?: string | null;
+  Objective?: string | null;
+  Assessment?: string | null;
+  Plan?: string | null;
+  RiskAssessment?: Record<string, unknown> | null;
+  HeaderInfo?: Record<string, unknown> | null;
+  PhotoUrls: string[];
+  RevisedAt: string;
+  RevisedBy: number;
 }
 
 export interface CounselorCaseRecordFormDefaults {

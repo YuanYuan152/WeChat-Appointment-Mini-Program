@@ -56,9 +56,19 @@ function DashboardScreenContent() {
         status: room.patientName || statusLabel(room.occupancy),
         amount: room.counselorName || "-",
       }));
+    const missingRecords = data.counselorRecords
+      ?.filter((record) => record.missingCount > 0)
+      .slice(0, 4)
+      .map((record) => ({
+        time: "",
+        type: "待补咨询记录",
+        subject: record.counselorName,
+        status: `缺 ${record.missingCount}`,
+        amount: `已完成 ${record.completedCount} / 已写 ${record.recordedCount}`,
+      }));
 
-    return [...(pending || []), ...(rooms || [])].slice(0, 6);
-  }, [data.refunds, data.roomStatus]);
+    return [...(pending || []), ...(missingRecords || []), ...(rooms || [])].slice(0, 6);
+  }, [data.counselorRecords, data.refunds, data.roomStatus]);
 
   return <DashboardPanel data={data} summaryRows={summaryRows} />;
 }

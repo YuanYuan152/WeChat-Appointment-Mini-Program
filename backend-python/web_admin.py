@@ -161,6 +161,17 @@ def _within_range(value: Optional[datetime], start_at: Optional[datetime], end_a
     return True
 
 
+def _schedule_action_label(schedule: AppSchedule) -> str:
+    status = (schedule.Status or "").upper()
+    if status in ("CANCELLED", "CANCELED"):
+        return "取消排期"
+    if status == "BOOKED":
+        return "排期已预约"
+    if schedule.UpdatedAt and schedule.UpdatedAt != schedule.CreatedAt:
+        return "更新排期"
+    return "新建排期"
+
+
 @router.get("/operation-records", summary="Web 操作/业务记录聚合列表（不依赖新增审计表）")
 def operation_records(
     role: Optional[str] = Query(None, description="角色筛选：Admin/Ops/Counselor/Patient 等"),
@@ -287,6 +298,30 @@ def operation_records(
             "createdAt": row.CreatedAt,
             "updatedAt": row.UpdatedAt,
             **room_payload,
+        })
+
+    for row in all_schedules:
+        account_ids.add(row.CounselorId)
+        records.append({
+            "id": f"schedule-{row.Id}",
+            "occurredAt": row.UpdatedAt or row.CreatedAt,
+            "actionType": "SCHEDULE",
+            "actionLabel": _schedule_action_label(row),
+            "operatorId": row.CounselorId,
+            "operatorRole": "Counselor",
+            "targetType": "Schedule",
+            "targetId": row.Id,
+            "targetName": None,
+            "summary": row.Note,
+            "amount": None,
+            "status": row.Status,
+            "counselorId": row.CounselorId,
+            "scheduleId": row.Id,
+            "startTime": row.StartTime,
+            "endTime": row.EndTime,
+            "createdAt": row.CreatedAt,
+            "updatedAt": row.UpdatedAt,
+            **_room_payload(row),
         })
 
     for row in db.query(AppCaseRecord).all():
@@ -729,6 +764,42 @@ def counselor_board_detail(
         .order_by(AppScheduleCancelLog.CreatedAt.desc())
         .all()
     )
+    schedule_map = {s.Id: s for s in schedules}
+    consultations_by_id = {c.Id: c for c in consultations}
+    consultations_by_schedule_id = {c.ScheduleId: c for c in consultations if c.ScheduleId}
+
+    def consultation_business_payload(consultation: Optional[AppConsultation]) -> dict[str, Any]:
+        if not consultation:
+            return {
+                "patientName": None,
+                "patientMobile": None,
+                "status": None,
+                "startTime": None,
+                "endTime": None,
+                "centerName": None,
+                "roomName": None,
+            }
+        patient = patients.get(consultation.PatientId)
+        return {
+            "patientName": _account_name(patient),
+            "patientMobile": _account_contact(patient),
+            "status": consultation.Status,
+            "startTime": consultation.StartTime,
+            "endTime": consultation.EndTime,
+            **_consultation_room_payload(consultation, schedule_map),
+        }
+
+    def schedule_business_payload(schedule: Optional[AppSchedule]) -> dict[str, Any]:
+        consultation = consultations_by_schedule_id.get(schedule.Id) if schedule else None
+        patient = patients.get(consultation.PatientId) if consultation else None
+        return {
+            "startTime": schedule.StartTime if schedule else None,
+            "endTime": schedule.EndTime if schedule else None,
+            "patientName": _account_name(patient) if patient else None,
+            "patientMobile": _account_contact(patient),
+            "consultationStatus": consultation.Status if consultation else None,
+            **_room_payload(schedule),
+        }
 
     return {
         "profile": _counselor_summary(db, account),
@@ -745,7 +816,7 @@ def counselor_board_detail(
                 "endTime": c.EndTime,
                 "note": c.Note,
                 "hasCaseRecord": c.Id in records_by_consultation,
-                **_consultation_room_payload(c, {s.Id: s for s in schedules}),
+                **_consultation_room_payload(c, schedule_map),
             }
             for c in consultations
         ],
@@ -756,6 +827,7 @@ def counselor_board_detail(
                 "createdAt": r.CreatedAt,
                 "updatedAt": r.UpdatedAt,
                 "preview": (r.Subjective or r.Assessment or r.Plan or "")[:120],
+                **consultation_business_payload(consultations_by_id.get(r.ConsultationId)),
             }
             for r in records
         ],
@@ -767,6 +839,7 @@ def counselor_board_detail(
                 "status": r.Status,
                 "createdAt": r.CreatedAt,
                 "updatedAt": r.UpdatedAt,
+                **schedule_business_payload(schedule_map.get(r.ScheduleId)),
             }
             for r in leave_requests
         ],
@@ -774,19 +847,15 @@ def counselor_board_detail(
             {
                 "id": s.Id,
                 "status": s.Status,
-                "startTime": s.StartTime,
-                "endTime": s.EndTime,
-                **_room_payload(s),
+                **schedule_business_payload(s),
             }
             for s in schedules
         ],
         "roomUsage": [
             {
                 "scheduleId": s.Id,
-                "startTime": s.StartTime,
-                "endTime": s.EndTime,
                 "status": s.Status,
-                **_room_payload(s),
+                **schedule_business_payload(s),
             }
             for s in schedules if parse_room_id(s.Note)
         ],
@@ -797,6 +866,11 @@ def counselor_board_detail(
                 "consultationId": r.ConsultationId,
                 "screenshotUrl": r.ScreenshotUrl,
                 "createdAt": r.CreatedAt,
+                **(
+                    consultation_business_payload(consultations_by_id.get(r.ConsultationId))
+                    if r.ConsultationId
+                    else schedule_business_payload(schedule_map.get(r.ScheduleId))
+                ),
             }
             for r in cancel_logs
         ],

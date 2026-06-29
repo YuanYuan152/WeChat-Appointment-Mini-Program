@@ -9,7 +9,7 @@ import type {
 import { formatDateTime } from "@/lib/format";
 
 import { getPageItems } from "@/lib/pagination";
-import { Badge, EmptyState, Pagination, PanelHeader, TableActionButton } from "@/components/ui";
+import { Badge, CollapsibleSection, EmptyState, Pagination, PanelHeader, TableActionButton } from "@/components/ui";
 import { QueryButton, QueryField, QueryResetButton, queryControlClass } from "@/components/ui";
 import { DetailDrawer } from "@/components/boards/DetailDrawer";
 
@@ -21,7 +21,9 @@ export function CaseRecordsPanel({
   onPageSizeChange,
   selectedCounselorName,
   selectedRecords,
+  selectedRecordsLoading,
   selectedCaseRecord,
+  caseRecordLoading,
   amendments,
   amendmentStatus,
   setAmendmentStatus,
@@ -30,6 +32,7 @@ export function CaseRecordsPanel({
   onRejectAmendment,
   onOpenCounselor,
   onOpenCaseRecord,
+  onBackToRecordList,
   onCloseDetails,
 }: {
   records?: CounselorRecordSummary[];
@@ -39,7 +42,9 @@ export function CaseRecordsPanel({
   onPageSizeChange: (pageSize: number) => void;
   selectedCounselorName?: string | null;
   selectedRecords?: AdminConsultationRecord[];
+  selectedRecordsLoading?: boolean;
   selectedCaseRecord?: AdminCaseRecordDetail;
+  caseRecordLoading?: boolean;
   amendments?: CaseRecordAmendment[];
   amendmentStatus: string;
   setAmendmentStatus: (value: string) => void;
@@ -48,6 +53,7 @@ export function CaseRecordsPanel({
   onRejectAmendment: (amendmentId: number, rejectReason: string) => void;
   onOpenCounselor: (record: CounselorRecordSummary) => void;
   onOpenCaseRecord: (recordId: number) => void;
+  onBackToRecordList: () => void;
   onCloseDetails: () => void;
 }) {
   const allRecords = records || [];
@@ -173,61 +179,18 @@ export function CaseRecordsPanel({
           />
         </>
       )}
-      {selectedRecords && (
+      {selectedCounselorName && (
         <DetailDrawer title={`${selectedCounselorName || "咨询师"}咨询记录`} onClose={onCloseDetails}>
-          <div className="space-y-4">
-            {selectedCaseRecord && (
-              <section className="rounded-xl border border-[var(--lxxl-border)] bg-[#FAF8F4] p-4">
-                <h4 className="text-sm font-semibold">记录 #{selectedCaseRecord.Id}</h4>
-                <div className="mt-2 text-xs leading-5 text-[var(--lxxl-muted)]">
-                  咨询 #{selectedCaseRecord.ConsultationId} · {selectedCaseRecord.PatientName} · 创建{" "}
-                  {formatDateTime(selectedCaseRecord.CreatedAt)} · 更新 {formatDateTime(selectedCaseRecord.UpdatedAt)}
-                </div>
-                <RecordBlock title="主诉/主观描述" value={selectedCaseRecord.Subjective} />
-                <RecordBlock title="客观记录" value={selectedCaseRecord.Objective} />
-                <RecordBlock title="评估" value={selectedCaseRecord.Assessment} />
-                <RecordBlock title="计划" value={selectedCaseRecord.Plan} />
-                {selectedCaseRecord.PhotoUrls.length > 0 && (
-                  <div className="mt-4">
-                    <div className="text-xs font-medium text-[var(--lxxl-muted)]">附件</div>
-                    <div className="mt-2 space-y-1 text-xs text-[var(--lxxl-muted)]">
-                      {selectedCaseRecord.PhotoUrls.map((url) => (
-                        <div key={url}>{url}</div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </section>
-            )}
-
-            {selectedRecords.length === 0 ? (
-              <div className="text-sm text-[var(--lxxl-muted)]">暂无近 30 天咨询记录。</div>
-            ) : (
-              selectedRecords.map((item) => (
-                <section key={item.consultationId} className="rounded-xl border border-[var(--lxxl-border)] p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="text-sm font-semibold">{item.patientName}</div>
-                      <div className="mt-1 text-xs text-[var(--lxxl-muted)]">
-                        咨询 #{item.consultationId} · {formatDateTime(item.startTime)} 至 {formatDateTime(item.endTime)}
-                      </div>
-                      <div className="mt-2 text-xs text-[var(--lxxl-muted)]">
-                        {item.hasRecord ? `已写记录 · 更新 ${formatDateTime(item.recordUpdatedAt)}` : "未写记录"}
-                      </div>
-                      {item.subjectivePreview && (
-                        <div className="mt-3 rounded-lg bg-[#FAF8F4] p-3 text-xs leading-5 text-[var(--lxxl-muted)]">
-                          {item.subjectivePreview}
-                        </div>
-                      )}
-                    </div>
-                    {item.hasRecord && item.caseRecordId ? (
-                      <TableActionButton onClick={() => onOpenCaseRecord(item.caseRecordId!)}>查看记录</TableActionButton>
-                    ) : null}
-                  </div>
-                </section>
-              ))
-            )}
-          </div>
+          {selectedCaseRecord ? (
+            <CaseRecordDetailView record={selectedCaseRecord} onBack={onBackToRecordList} />
+          ) : (
+            <CounselorRecordListView
+              loading={selectedRecordsLoading}
+              openingRecord={caseRecordLoading}
+              records={selectedRecords || []}
+              onOpenCaseRecord={onOpenCaseRecord}
+            />
+          )}
         </DetailDrawer>
       )}
       {selectedAmendment && (
@@ -236,10 +199,14 @@ export function CaseRecordsPanel({
             {selectedAmendment.counselorName} · 咨询 #{selectedAmendment.consultationId} · 记录 #
             {selectedAmendment.caseRecordId}
           </div>
-          <RecordCompareBlock title="主观资料" current={selectedAmendment.current.subjective} proposed={selectedAmendment.proposed.subjective} />
-          <RecordCompareBlock title="客观资料" current={selectedAmendment.current.objective} proposed={selectedAmendment.proposed.objective} />
-          <RecordCompareBlock title="评估" current={selectedAmendment.current.assessment} proposed={selectedAmendment.proposed.assessment} />
-          <RecordCompareBlock title="计划" current={selectedAmendment.current.plan} proposed={selectedAmendment.proposed.plan} />
+          <RecordCompareBlock
+            title="患者情况记录（主观陈述）"
+            current={selectedAmendment.current.subjective}
+            proposed={selectedAmendment.proposed.subjective}
+          />
+          <RecordCompareBlock title="客观观察" current={selectedAmendment.current.objective} proposed={selectedAmendment.proposed.objective} />
+          <RecordCompareBlock title="评估分析" current={selectedAmendment.current.assessment} proposed={selectedAmendment.proposed.assessment} />
+          <RecordCompareBlock title="计划方向" current={selectedAmendment.current.plan} proposed={selectedAmendment.proposed.plan} />
           <div className="mt-6 text-sm">
             <div className="font-semibold">修改原因</div>
             <div className="mt-2 whitespace-pre-wrap text-[var(--lxxl-muted)]">{selectedAmendment.reason || "-"}</div>
@@ -289,12 +256,94 @@ export function CaseRecordsPanel({
   );
 }
 
+function CounselorRecordListView({
+  records,
+  loading,
+  openingRecord,
+  onOpenCaseRecord,
+}: {
+  records: AdminConsultationRecord[];
+  loading?: boolean;
+  openingRecord?: boolean;
+  onOpenCaseRecord: (recordId: number) => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="border-b border-[var(--lxxl-border)] pb-4">
+        <h4 className="text-base font-semibold">
+          近 30 天咨询记录 <span className="ml-2 text-sm font-normal text-[var(--lxxl-muted)]">{records.length} 条</span>
+        </h4>
+        <p className="mt-2 text-xs text-[var(--lxxl-muted)]">点击单条记录可查看咨询师已填写的完整咨询记录。</p>
+      </div>
+      {loading ? <div className="py-8 text-sm text-[var(--lxxl-muted)]">正在加载咨询记录...</div> : null}
+      {openingRecord ? (
+        <div className="rounded-xl bg-[#FAF8F4] px-4 py-3 text-sm text-[var(--lxxl-muted)]">正在打开咨询记录...</div>
+      ) : null}
+      {!loading && records.length === 0 ? (
+        <div className="py-8 text-sm text-[var(--lxxl-muted)]">暂无近 30 天咨询记录。</div>
+      ) : (
+        <div className="space-y-3">
+          {records.map((item) => (
+            <section key={item.consultationId} className="rounded-xl bg-[#FAF8F4] p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold">{item.patientName}</div>
+                  <div className="mt-1 text-xs text-[var(--lxxl-muted)]">
+                    {formatDateTime(item.startTime)} 至 {formatDateTime(item.endTime)}
+                  </div>
+                  <div className="mt-2 text-xs text-[var(--lxxl-muted)]">
+                    {item.hasRecord ? `已写记录 · 更新 ${formatDateTime(item.recordUpdatedAt)}` : "未写记录"}
+                  </div>
+                  {item.subjectivePreview && (
+                    <div className="mt-3 rounded-lg bg-white px-3 py-2 text-xs leading-5 text-[var(--lxxl-muted)]">
+                      {item.subjectivePreview}
+                    </div>
+                  )}
+                </div>
+                {item.hasRecord && item.caseRecordId ? (
+                  <TableActionButton disabled={openingRecord} onClick={() => onOpenCaseRecord(item.caseRecordId!)}>
+                    查看记录
+                  </TableActionButton>
+                ) : null}
+              </div>
+            </section>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CaseRecordDetailView({ record, onBack }: { record: AdminCaseRecordDetail; onBack: () => void }) {
+  return (
+    <div className="space-y-5">
+      <div className="flex items-start justify-between gap-4 border-b border-[var(--lxxl-border)] pb-4">
+        <div className="min-w-0">
+          <h4 className="text-base font-semibold">咨询记录详情</h4>
+          <p className="mt-2 text-xs leading-5 text-[var(--lxxl-muted)]">
+            {record.PatientName} · {formatDateTime(record.StartTime)} 至 {formatDateTime(record.EndTime)}
+          </p>
+          <p className="mt-1 text-xs leading-5 text-[var(--lxxl-muted)]">
+            创建 {formatDateTime(record.CreatedAt)} · 更新 {formatDateTime(record.UpdatedAt)}
+          </p>
+        </div>
+        <TableActionButton onClick={onBack}>返回记录列表</TableActionButton>
+      </div>
+      <RecordBlock title="患者情况记录（主观陈述）" value={record.Subjective} />
+      <RecordBlock title="客观观察" value={record.Objective} />
+      <RecordBlock title="评估分析" value={record.Assessment} />
+      <RecordBlock title="计划方向" value={record.Plan} />
+      {record.PhotoUrls.length > 0 && <RecordBlock title="相关照片" value={record.PhotoUrls.join("\n")} />}
+    </div>
+  );
+}
+
 function RecordBlock({ title, value }: { title: string; value?: string | null }) {
   return (
-    <div className="mt-4">
-      <div className="text-xs font-medium text-[var(--lxxl-muted)]">{title}</div>
-      <div className="mt-2 whitespace-pre-wrap text-sm leading-6">{value || "-"}</div>
-    </div>
+    <section className="border-t border-[var(--lxxl-border)] pt-4">
+      <h5 className="text-sm font-semibold">{title}</h5>
+      <div className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[var(--lxxl-muted)]">{value || "-"}</div>
+    </section>
   );
 }
 
@@ -308,8 +357,7 @@ function RecordCompareBlock({
   proposed?: string | null;
 }) {
   return (
-    <div className="mt-6">
-      <h4 className="text-sm font-semibold">{title}</h4>
+    <CollapsibleSection title={title}>
       <div className="mt-3 grid grid-cols-1 gap-3">
         <div className="rounded-xl bg-[#FAF8F4] p-3">
           <div className="text-xs font-medium text-[var(--lxxl-muted)]">当前内容</div>
@@ -320,6 +368,6 @@ function RecordCompareBlock({
           <div className="mt-2 whitespace-pre-wrap text-sm leading-6">{proposed || "-"}</div>
         </div>
       </div>
-    </div>
+    </CollapsibleSection>
   );
 }

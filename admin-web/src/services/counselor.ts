@@ -3,6 +3,7 @@ import type {
   ApiMessage,
   CounselorCaseRecord,
   CounselorCaseRecordFormDefaults,
+  CounselorCaseRecordRevision,
   CounselorCompletedConsultation,
   CounselorDashboardDetailItem,
   CounselorDashboardStats,
@@ -97,6 +98,10 @@ export function fetchCounselorCaseRecords() {
 
 export function fetchCounselorCaseRecord(recordId: number) {
   return apiRequest<CounselorCaseRecord>(`/api/mini/counselor/case-records/${recordId}`);
+}
+
+export function fetchCounselorCaseRecordRevisions(recordId: number) {
+  return apiRequest<CounselorCaseRecordRevision[]>(`/api/mini/counselor/case-records/${recordId}/revisions`);
 }
 
 export function fetchCounselorCaseRecordDefaults(consultationId: number) {

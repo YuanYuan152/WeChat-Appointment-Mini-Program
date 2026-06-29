@@ -25,16 +25,16 @@ export function DashboardPanel({ data, summaryRows }: { data: ScreenData; summar
           ))}
         </section>
         <section className="rounded-xl border border-[var(--lxxl-border)] bg-white">
-          <PanelHeader title="近期需要关注" description="由现有豁免、咨询室状态和咨询记录接口拼接。" />
+          <PanelHeader title="近期需要关注" description="展示待审核豁免、待补咨询记录和正在占用的咨询室。" />
           {summaryRows.length === 0 ? (
-            <EmptyState text="暂无近期记录，刷新后会读取后端现有业务数据。" />
+            <EmptyState text="暂无待处理事项。" />
           ) : (
             <table className="w-full border-collapse text-sm">
               <thead className="bg-[#FAF8F4] text-left text-[var(--lxxl-muted)]">
                 <tr>
                   <th className="px-5 py-3 font-medium">时间</th>
                   <th className="px-5 py-3 font-medium">类型</th>
-                  <th className="px-5 py-3 font-medium">对象</th>
+                  <th className="px-5 py-3 font-medium">相关人员/事项</th>
                   <th className="px-5 py-3 font-medium">金额/咨询师</th>
                   <th className="px-5 py-3 font-medium">状态</th>
                 </tr>

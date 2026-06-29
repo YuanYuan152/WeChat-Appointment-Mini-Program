@@ -6,6 +6,7 @@ import type { CounselorBoardDetail, CounselorBoardSummary, PagedResult } from "@
 import { DetailDrawer } from "@/components/boards/DetailDrawer";
 import {
   Badge,
+  CollapsibleSection,
   EmptyState,
   MiniStat,
   Pagination,
@@ -155,7 +156,6 @@ const CounselorBoardListSection = memo(function CounselorBoardListSection({
                   >
                     <td className="px-5 py-4">
                       <div className="font-semibold">{record.name}</div>
-                      <div className="mt-1 text-xs text-[var(--lxxl-muted)]">ID {record.id}</div>
                     </td>
                     <td className="px-5 py-4 text-[var(--lxxl-muted)]">{record.mobile || "-"}</td>
                     <td className="px-5 py-4">
@@ -207,55 +207,76 @@ const CounselorBoardListSection = memo(function CounselorBoardListSection({
   );
 });
 
+function compactMeta(parts: Array<string | null | undefined>) {
+  const visibleParts = parts.filter((part): part is string => Boolean(part && part !== "-"));
+  return visibleParts.length > 0 ? visibleParts.join(" · ") : "-";
+}
+
+function timeRangeLabel(startTime?: string | null, endTime?: string | null) {
+  if (!startTime && !endTime) {
+    return "时间未定";
+  }
+  return `${formatDateTime(startTime)} 至 ${formatDateTime(endTime)}`;
+}
+
+function placeLabel(centerName?: string | null, roomName?: string | null) {
+  return compactMeta([centerName, roomName]);
+}
+
+function patientLabel(patientName?: string | null, patientMobile?: string | null) {
+  const name = patientName || "来访者未填";
+  return patientMobile ? `${name}（${patientMobile}）` : name;
+}
+
 function CounselorDetailPanel({ detail }: { detail: CounselorBoardDetail }) {
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const cancelledConsultations = detail.consultations.filter(
     (item) => item.status === "CANCELLED" || item.status === "CANCELED",
   );
   const consultationItems = detail.consultations.map((item) => ({
-    label: `咨询 #${item.id} · ${formatDateTime(item.startTime)} 至 ${formatDateTime(item.endTime)} · ${
-      item.patientName
-    } · ${statusLabel(item.status)}`,
+    label: compactMeta([patientLabel(item.patientName, item.patientMobile), timeRangeLabel(item.startTime, item.endTime), statusLabel(item.status)]),
     detail: [
-      `咨询ID：${item.id}`,
-      `订单ID：${item.orderId || "-"}`,
-      `排期ID：${item.scheduleId || "-"}`,
       `来访者：${item.patientName}${item.patientMobile ? `（${item.patientMobile}）` : ""}`,
       `状态：${statusLabel(item.status)}`,
-      `时间：${formatDateTime(item.startTime)} 至 ${formatDateTime(item.endTime)}`,
-      `地点：${item.centerName || "-"} ${item.roomName || ""}`,
+      `咨询时间：${timeRangeLabel(item.startTime, item.endTime)}`,
+      `咨询地点：${placeLabel(item.centerName, item.roomName)}`,
       `咨询记录：${item.hasCaseRecord ? "已填写" : "未填写"}`,
       item.note ? `备注：${item.note}` : "备注：-",
     ],
   }));
   const cancelledConsultationItems = cancelledConsultations.map((item) => ({
-    label: `取消咨询 #${item.id} · ${formatDateTime(item.startTime)} · ${item.patientName}`,
+    label: compactMeta(["取消咨询", patientLabel(item.patientName, item.patientMobile), timeRangeLabel(item.startTime, item.endTime)]),
     detail: [
-      `咨询ID：${item.id}`,
-      `订单ID：${item.orderId || "-"}`,
-      `排期ID：${item.scheduleId || "-"}`,
       `来访者：${item.patientName}${item.patientMobile ? `（${item.patientMobile}）` : ""}`,
       `状态：${statusLabel(item.status)}`,
-      `时间：${formatDateTime(item.startTime)} 至 ${formatDateTime(item.endTime)}`,
-      `地点：${item.centerName || "-"} ${item.roomName || ""}`,
+      `咨询时间：${timeRangeLabel(item.startTime, item.endTime)}`,
+      `咨询地点：${placeLabel(item.centerName, item.roomName)}`,
       `咨询记录：${item.hasCaseRecord ? "已填写" : "未填写"}`,
       item.note ? `备注：${item.note}` : "备注：-",
     ],
   }));
   const caseRecordItems = detail.caseRecords.map((item) => ({
-    label: `记录 #${item.id} · 咨询 #${item.consultationId} · 更新 ${formatDateTime(item.updatedAt)}`,
+    label: compactMeta([
+      patientLabel(item.patientName, item.patientMobile),
+      timeRangeLabel(item.startTime, item.endTime),
+      item.updatedAt ? `更新 ${formatDateTime(item.updatedAt)}` : "未更新",
+    ]),
     detail: [
-      `记录ID：${item.id}`,
-      `咨询ID：${item.consultationId}`,
+      `来访者：${patientLabel(item.patientName, item.patientMobile)}`,
+      `咨询状态：${statusLabel(item.status)}`,
+      `咨询时间：${timeRangeLabel(item.startTime, item.endTime)}`,
+      `咨询地点：${placeLabel(item.centerName, item.roomName)}`,
       `创建时间：${formatDateTime(item.createdAt)}`,
       `更新时间：${formatDateTime(item.updatedAt)}`,
       item.preview ? `摘要：${item.preview}` : "摘要：-",
     ],
   }));
   const leaveItems = detail.leaveRequests.map((item) => ({
-    label: `请假 #${item.id} · 排期 #${item.scheduleId} · ${statusLabel(item.status)}`,
+    label: compactMeta(["请假", timeRangeLabel(item.startTime, item.endTime), statusLabel(item.status)]),
     detail: [
-      `请假ID：${item.id}`,
-      `排期ID：${item.scheduleId}`,
+      `关联来访：${item.patientName ? patientLabel(item.patientName, item.patientMobile) : "-"}`,
+      `排期时间：${timeRangeLabel(item.startTime, item.endTime)}`,
+      `排期地点：${placeLabel(item.centerName, item.roomName)}`,
       `提交时间：${formatDateTime(item.createdAt)}`,
       `更新时间：${formatDateTime(item.updatedAt)}`,
       `状态：${statusLabel(item.status)}`,
@@ -263,31 +284,42 @@ function CounselorDetailPanel({ detail }: { detail: CounselorBoardDetail }) {
     ],
   }));
   const scheduleItems = detail.schedules.map((item) => ({
-    label: `排期 #${item.id} · ${formatDateTime(item.startTime)} 至 ${formatDateTime(item.endTime)} · ${statusLabel(item.status)}`,
+    label: compactMeta([
+      "排期",
+      timeRangeLabel(item.startTime, item.endTime),
+      item.patientName ? patientLabel(item.patientName, item.patientMobile) : null,
+      statusLabel(item.status),
+    ]),
     detail: [
-      `排期ID：${item.id}`,
       `状态：${statusLabel(item.status)}`,
-      `时间：${formatDateTime(item.startTime)} 至 ${formatDateTime(item.endTime)}`,
-      `地点：${item.centerName || "-"} ${item.roomName || ""}`,
+      `排期时间：${timeRangeLabel(item.startTime, item.endTime)}`,
+      `排期地点：${placeLabel(item.centerName, item.roomName)}`,
+      `关联来访：${item.patientName ? patientLabel(item.patientName, item.patientMobile) : "-"}`,
     ],
   }));
   const roomUsageItems = detail.roomUsage.map((item) => ({
-    label: `排期 #${item.scheduleId} · ${formatDateTime(item.startTime)} 至 ${formatDateTime(item.endTime)} · ${
-      item.centerName || "-"
-    } ${item.roomName || ""}`,
+    label: compactMeta([
+      timeRangeLabel(item.startTime, item.endTime),
+      placeLabel(item.centerName, item.roomName),
+      item.patientName ? patientLabel(item.patientName, item.patientMobile) : null,
+    ]),
     detail: [
-      `排期ID：${item.scheduleId}`,
       `状态：${statusLabel(item.status)}`,
-      `时间：${formatDateTime(item.startTime)} 至 ${formatDateTime(item.endTime)}`,
-      `咨询室：${item.centerName || "-"} ${item.roomName || ""}`,
+      `使用时间：${timeRangeLabel(item.startTime, item.endTime)}`,
+      `咨询室：${placeLabel(item.centerName, item.roomName)}`,
+      `关联来访：${item.patientName ? patientLabel(item.patientName, item.patientMobile) : "-"}`,
     ],
   }));
   const cancelLogItems = detail.scheduleCancelLogs.map((item) => ({
-    label: `取消 #${item.id} · 排期 #${item.scheduleId} · ${formatDateTime(item.createdAt)}`,
+    label: compactMeta([
+      "取消排期",
+      item.startTime || item.endTime ? timeRangeLabel(item.startTime, item.endTime) : formatDateTime(item.createdAt),
+      item.patientName ? patientLabel(item.patientName, item.patientMobile) : null,
+    ]),
     detail: [
-      `取消记录ID：${item.id}`,
-      `排期ID：${item.scheduleId}`,
-      `咨询ID：${item.consultationId || "-"}`,
+      `关联来访：${item.patientName ? patientLabel(item.patientName, item.patientMobile) : "-"}`,
+      `排期时间：${timeRangeLabel(item.startTime, item.endTime)}`,
+      `排期地点：${placeLabel(item.centerName, item.roomName)}`,
       `提交时间：${formatDateTime(item.createdAt)}`,
       `沟通截图：${item.screenshotUrl || "-"}`,
     ],
@@ -309,13 +341,55 @@ function CounselorDetailPanel({ detail }: { detail: CounselorBoardDetail }) {
         <MiniStat label="已预约排班" value={detail.profile.bookedScheduleCount} />
         <MiniStat label="咨询室使用" value={detail.roomUsage.length} />
       </div>
-      <ClickableDetailList title="咨询明细" items={consultationItems} />
-      <ClickableDetailList title="咨询记录" items={caseRecordItems} />
-      <ClickableDetailList title="来访取消记录" items={cancelledConsultationItems} />
-      <ClickableDetailList title="咨询师取消/请假取消日志" items={cancelLogItems} />
-      <ClickableDetailList title="请假记录" items={leaveItems} />
-      <ClickableDetailList title="排期记录" items={scheduleItems} />
-      <ClickableDetailList title="使用咨询室记录" items={roomUsageItems} />
+      <ClickableDetailList
+        expandedKey={expandedKey}
+        items={consultationItems}
+        listKey={`counselor-${detail.profile.id}-consultations`}
+        onToggle={setExpandedKey}
+        title="咨询明细"
+      />
+      <ClickableDetailList
+        expandedKey={expandedKey}
+        items={caseRecordItems}
+        listKey={`counselor-${detail.profile.id}-case-records`}
+        onToggle={setExpandedKey}
+        title="咨询记录"
+      />
+      <ClickableDetailList
+        expandedKey={expandedKey}
+        items={cancelledConsultationItems}
+        listKey={`counselor-${detail.profile.id}-cancelled-consultations`}
+        onToggle={setExpandedKey}
+        title="来访取消记录"
+      />
+      <ClickableDetailList
+        expandedKey={expandedKey}
+        items={cancelLogItems}
+        listKey={`counselor-${detail.profile.id}-cancel-logs`}
+        onToggle={setExpandedKey}
+        title="咨询师取消/请假取消日志"
+      />
+      <ClickableDetailList
+        expandedKey={expandedKey}
+        items={leaveItems}
+        listKey={`counselor-${detail.profile.id}-leave-requests`}
+        onToggle={setExpandedKey}
+        title="请假记录"
+      />
+      <ClickableDetailList
+        expandedKey={expandedKey}
+        items={scheduleItems}
+        listKey={`counselor-${detail.profile.id}-schedules`}
+        onToggle={setExpandedKey}
+        title="排期记录"
+      />
+      <ClickableDetailList
+        expandedKey={expandedKey}
+        items={roomUsageItems}
+        listKey={`counselor-${detail.profile.id}-room-usage`}
+        onToggle={setExpandedKey}
+        title="使用咨询室记录"
+      />
     </>
   );
 }
@@ -323,40 +397,60 @@ function CounselorDetailPanel({ detail }: { detail: CounselorBoardDetail }) {
 function ClickableDetailList({
   title,
   items,
+  listKey,
+  expandedKey,
+  onToggle,
 }: {
   title: string;
   items: Array<{ label: string; detail: string[] }>;
+  listKey: string;
+  expandedKey: string | null;
+  onToggle: (key: string | null) => void;
 }) {
-  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
-  const selected = selectedIndex == null ? null : items[selectedIndex];
-
   return (
-    <div className="mt-6">
-      <h4 className="text-sm font-semibold">{title}</h4>
+    <CollapsibleSection
+      count={items.length}
+      title={title}
+      onOpenChange={(open) => {
+        if (!open && expandedKey?.startsWith(`${listKey}-`)) {
+          onToggle(null);
+        }
+      }}
+    >
       {items.length === 0 ? (
-        <div className="mt-3 text-sm text-[var(--lxxl-muted)]">暂无记录</div>
+        <div className="text-sm text-[var(--lxxl-muted)]">暂无记录</div>
       ) : (
-        <div className="mt-3 space-y-2">
-          {items.map((item, index) => (
-            <button
-              key={`${title}-${index}`}
-              className="block w-full rounded-xl bg-[#FAF8F4] p-3 text-left text-xs leading-5 text-[var(--lxxl-muted)] transition hover:bg-[#F4F1EB] hover:text-[var(--lxxl-text)]"
-              type="button"
-              onClick={() => setSelectedIndex(index)}
-            >
-              {item.label}
-            </button>
-          ))}
+        <div className="space-y-2">
+          {items.map((item, index) => {
+            const itemKey = `${listKey}-${index}`;
+            const expanded = expandedKey === itemKey;
+
+            return (
+              <div key={itemKey} className="overflow-hidden rounded-xl bg-[#FAF8F4]">
+                <button
+                  aria-expanded={expanded}
+                  className="flex w-full items-center justify-between gap-3 p-3 text-left text-xs leading-5 text-[var(--lxxl-muted)] transition hover:bg-[#F4F1EB] hover:text-[var(--lxxl-text)]"
+                  type="button"
+                  onClick={() => onToggle(expanded ? null : itemKey)}
+                >
+                  <span className="min-w-0 flex-1">{item.label}</span>
+                  <span className="shrink-0 text-sm font-medium text-[var(--lxxl-green)]">
+                    {expanded ? "收起" : "展开"}
+                  </span>
+                </button>
+                {expanded && (
+                  <div className="border-t border-[var(--lxxl-border)] bg-white p-3 text-xs leading-6 text-[var(--lxxl-muted)]">
+                    <div className="mb-1 font-medium text-[var(--lxxl-text)]">记录详情</div>
+                    {item.detail.map((line, detailIndex) => (
+                      <div key={`${itemKey}-detail-${detailIndex}`}>{line}</div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
-      {selected && (
-        <div className="mt-3 rounded-xl border border-[var(--lxxl-border)] bg-white p-3 text-xs leading-6 text-[var(--lxxl-muted)]">
-          <div className="mb-1 font-medium text-[var(--lxxl-text)]">记录详情</div>
-          {selected.detail.map((line, index) => (
-            <div key={`${title}-detail-${index}`}>{line}</div>
-          ))}
-        </div>
-      )}
-    </div>
+    </CollapsibleSection>
   );
 }

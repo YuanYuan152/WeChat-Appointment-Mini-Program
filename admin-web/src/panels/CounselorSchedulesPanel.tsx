@@ -71,19 +71,22 @@ export function CounselorSchedulesPanel({
   onSearch: () => void;
   onReset: () => void;
   onLoadSlots: () => void;
-  onCreate: (slot: CounselorSlotOption, roomId: string) => void;
+  onCreate: (slot: CounselorSlotOption, roomId: string) => Promise<boolean> | boolean;
   onCancel: (scheduleId: number, reason?: string) => void;
   onLeave: (scheduleId: number, reason: string) => void;
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
 }) {
+  const [createOpen, setCreateOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<
     | { type: "cancel"; schedule: CounselorScheduleCalendarItem }
     | { type: "leave"; schedule: CounselorScheduleCalendarItem }
     | null
   >(null);
   const [reason, setReason] = useState("");
-  const selectedSlot = slotOptions?.slots.find((slot) => slot.key === draft.slotKey);
+  const visibleSlotOptions =
+    slotOptions && slotOptions.date === draft.date && slotOptions.centerId === draft.centerId ? slotOptions : undefined;
+  const selectedSlot = visibleSlotOptions?.slots.find((slot) => slot.key === draft.slotKey);
   const availableRooms = selectedSlot?.rooms.filter((room) => room.available && !room.occupiedByOther) || [];
   const rows = calendar?.slots || [];
   const total = rows.length;
@@ -115,11 +118,16 @@ export function CounselorSchedulesPanel({
             onSearch();
           }}
         >
-          <div>
-            <h2 className="text-xl font-semibold tracking-normal">我的排期</h2>
-            <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">
-              查看自己的排期，新增可预约时段；已预约咨询可按规则取消或提交请假申请。
-            </p>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-semibold tracking-normal">我的排期</h2>
+              <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">
+                查看自己的排期；已预约咨询可按规则取消或提交请假申请。
+              </p>
+            </div>
+            <QueryButton className="w-28" type="button" onClick={() => setCreateOpen(true)}>
+              新增排期
+            </QueryButton>
           </div>
 
           <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -149,89 +157,6 @@ export function CounselorSchedulesPanel({
             <QueryResetButton onClick={onReset} />
           </div>
         </form>
-
-        <div className="border-t border-[var(--lxxl-border)] px-6 py-5 sm:px-7 lg:px-8">
-          <div className="flex flex-wrap items-end gap-4">
-            <QueryField label="新增日期" className="w-full sm:w-56">
-              <input
-                className={queryControlClass}
-                type="date"
-                value={draft.date}
-                onChange={(event) =>
-                  setDraft((prev) => ({ ...prev, date: event.target.value, slotKey: "", roomId: "" }))
-                }
-              />
-            </QueryField>
-            <QueryField label="预约中心" className="w-full sm:w-56">
-              <select
-                className={queryControlClass}
-                value={draft.centerId}
-                onChange={(event) =>
-                  setDraft((prev) => ({ ...prev, centerId: event.target.value, slotKey: "", roomId: "" }))
-                }
-              >
-                {COUNSELOR_CENTER_OPTIONS.map((item) => (
-                  <option key={item.value} value={item.value}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
-            </QueryField>
-            <QueryButton onClick={onLoadSlots}>{slotLoading ? "加载中" : "读取时段"}</QueryButton>
-          </div>
-
-          {slotOptions && (
-            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <QueryField label="时段">
-                <select
-                  className={queryControlClass}
-                  value={draft.slotKey}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, slotKey: event.target.value, roomId: "" }))}
-                >
-                  <option value="">请选择时段</option>
-                  {slotOptions.slots.map((slot) => (
-                    <option
-                      key={slot.key}
-                      disabled={slot.past || slot.counselorOccupied || slot.allRoomsFull}
-                      value={slot.key}
-                    >
-                      {slot.label}
-                      {slot.past ? "（已过期）" : slot.counselorOccupied ? "（已有排期）" : slot.allRoomsFull ? "（已约满）" : ""}
-                    </option>
-                  ))}
-                </select>
-              </QueryField>
-              {draft.centerId !== "video" && (
-                <QueryField label="咨询室">
-                  <select
-                    className={queryControlClass}
-                    value={draft.roomId}
-                    onChange={(event) => setDraft((prev) => ({ ...prev, roomId: event.target.value }))}
-                  >
-                    <option value="">无偏好</option>
-                    {availableRooms.map((room) => (
-                      <option key={room.roomId} value={room.roomId}>
-                        {room.roomName}
-                      </option>
-                    ))}
-                  </select>
-                </QueryField>
-              )}
-              <div className="flex items-end">
-                <QueryButton
-                  disabled={!selectedSlot || selectedSlot.past || selectedSlot.counselorOccupied || selectedSlot.allRoomsFull}
-                  onClick={() => {
-                    if (selectedSlot) {
-                      onCreate(selectedSlot, draft.roomId);
-                    }
-                  }}
-                >
-                  新增
-                </QueryButton>
-              </div>
-            </div>
-          )}
-        </div>
 
         <div className="relative">
           {listLoading && rows.length > 0 && (
@@ -314,6 +239,20 @@ export function CounselorSchedulesPanel({
         </div>
       </section>
 
+      {createOpen && (
+        <CreateScheduleModal
+          availableRooms={availableRooms}
+          draft={draft}
+          onClose={() => setCreateOpen(false)}
+          onCreate={onCreate}
+          onLoadSlots={onLoadSlots}
+          selectedSlot={selectedSlot}
+          setDraft={setDraft}
+          slotLoading={slotLoading}
+          slotOptions={visibleSlotOptions}
+        />
+      )}
+
       {pendingAction && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/30 px-6">
           <section className="w-full max-w-lg rounded-xl border border-[var(--lxxl-border)] bg-white p-6 shadow-xl">
@@ -351,5 +290,144 @@ export function CounselorSchedulesPanel({
         </div>
       )}
     </>
+  );
+}
+
+function CreateScheduleModal({
+  availableRooms,
+  draft,
+  onClose,
+  onCreate,
+  onLoadSlots,
+  selectedSlot,
+  setDraft,
+  slotLoading,
+  slotOptions,
+}: {
+  availableRooms: CounselorSlotOption["rooms"];
+  draft: CounselorScheduleDraft;
+  onClose: () => void;
+  onCreate: (slot: CounselorSlotOption, roomId: string) => Promise<boolean> | boolean;
+  onLoadSlots: () => void;
+  selectedSlot?: CounselorSlotOption;
+  setDraft: Dispatch<SetStateAction<CounselorScheduleDraft>>;
+  slotLoading: boolean;
+  slotOptions?: CounselorSlotOptions;
+}) {
+  const handleCreate = async () => {
+    if (!selectedSlot) {
+      return;
+    }
+    const created = await onCreate(selectedSlot, draft.roomId);
+    if (created) {
+      onClose();
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/30 px-6 py-6">
+      <section
+        aria-label="新增排期"
+        aria-modal="true"
+        className="w-full max-w-3xl overflow-hidden rounded-2xl border border-[var(--lxxl-border)] bg-white shadow-2xl"
+        role="dialog"
+      >
+        <div className="border-b border-[var(--lxxl-border)] px-6 py-5">
+          <h3 className="text-lg font-semibold">新增排期</h3>
+          <p className="mt-1 text-sm text-[var(--lxxl-muted)]">
+            选择日期和预约中心后读取可用时段，再确认新增。
+          </p>
+        </div>
+
+        <div className="space-y-5 px-6 py-5">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-[1fr_1fr_auto]">
+            <QueryField label="新增日期">
+              <input
+                className={queryControlClass}
+                type="date"
+                value={draft.date}
+                onChange={(event) =>
+                  setDraft((prev) => ({ ...prev, date: event.target.value, slotKey: "", roomId: "" }))
+                }
+              />
+            </QueryField>
+            <QueryField label="预约中心">
+              <select
+                className={queryControlClass}
+                value={draft.centerId}
+                onChange={(event) =>
+                  setDraft((prev) => ({ ...prev, centerId: event.target.value, slotKey: "", roomId: "" }))
+                }
+              >
+                {COUNSELOR_CENTER_OPTIONS.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </QueryField>
+            <div className="flex items-end">
+              <QueryButton className="w-28" disabled={slotLoading} onClick={onLoadSlots}>
+                {slotLoading ? "加载中" : "读取时段"}
+              </QueryButton>
+            </div>
+          </div>
+
+          {!slotOptions ? (
+            <div className="rounded-xl bg-[#FAF8F4] px-4 py-3 text-sm text-[var(--lxxl-muted)]">
+              请先读取当前日期和预约中心的可用时段。
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <QueryField label="时段">
+                <select
+                  className={queryControlClass}
+                  value={draft.slotKey}
+                  onChange={(event) => setDraft((prev) => ({ ...prev, slotKey: event.target.value, roomId: "" }))}
+                >
+                  <option value="">请选择时段</option>
+                  {slotOptions.slots.map((slot) => (
+                    <option
+                      key={slot.key}
+                      disabled={slot.past || slot.counselorOccupied || slot.allRoomsFull}
+                      value={slot.key}
+                    >
+                      {slot.label}
+                      {slot.past ? "（已过期）" : slot.counselorOccupied ? "（已有排期）" : slot.allRoomsFull ? "（已约满）" : ""}
+                    </option>
+                  ))}
+                </select>
+              </QueryField>
+              {draft.centerId !== "video" && (
+                <QueryField label="咨询室">
+                  <select
+                    className={queryControlClass}
+                    value={draft.roomId}
+                    onChange={(event) => setDraft((prev) => ({ ...prev, roomId: event.target.value }))}
+                  >
+                    <option value="">无偏好</option>
+                    {availableRooms.map((room) => (
+                      <option key={room.roomId} value={room.roomId}>
+                        {room.roomName}
+                      </option>
+                    ))}
+                  </select>
+                </QueryField>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-start gap-3 border-t border-[var(--lxxl-border)] px-6 py-4">
+          <QueryButton
+            disabled={!selectedSlot || selectedSlot.past || selectedSlot.counselorOccupied || selectedSlot.allRoomsFull}
+            onClick={handleCreate}
+          >
+            新增
+          </QueryButton>
+          <QueryResetButton onClick={onClose}>取消</QueryResetButton>
+        </div>
+      </section>
+    </div>
   );
 }

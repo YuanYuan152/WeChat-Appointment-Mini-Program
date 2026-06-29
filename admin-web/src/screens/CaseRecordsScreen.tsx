@@ -14,7 +14,7 @@ import { AppRoute, useAppRoute } from "@/components/AppRoute";
 import { CaseRecordsPanel } from "@/panels/CaseRecordsPanel";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
 import { getMessage } from "@/lib/display";
-import type { CounselorRecordSummary } from "@/types/api";
+import type { AdminCaseRecordDetail, AdminConsultationRecord, CounselorRecordSummary } from "@/types/api";
 import type { ScreenData } from "@/types/app";
 
 export function CaseRecordsScreen() {
@@ -29,6 +29,10 @@ function CaseRecordsScreenContent() {
   const { clearNotice, refreshKey, setLoading, showNotice } = useAppRoute();
   const [data, setData] = useState<ScreenData>({});
   const [selectedCounselorName, setSelectedCounselorName] = useState<string | null>(null);
+  const [selectedCounselorRecords, setSelectedCounselorRecords] = useState<AdminConsultationRecord[]>();
+  const [selectedCaseRecord, setSelectedCaseRecord] = useState<AdminCaseRecordDetail>();
+  const [selectedRecordsLoading, setSelectedRecordsLoading] = useState(false);
+  const [caseRecordLoading, setCaseRecordLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [amendmentStatus, setAmendmentStatus] = useState("PENDING");
@@ -54,40 +58,47 @@ function CaseRecordsScreenContent() {
 
   const openCounselor = useCallback(
     async (record: CounselorRecordSummary) => {
-      setLoading(true);
       clearNotice();
+      setSelectedCounselorName(record.counselorName);
+      setSelectedCounselorRecords(undefined);
+      setSelectedCaseRecord(undefined);
+      setSelectedRecordsLoading(true);
       try {
-        const selectedCounselorRecords = await fetchCounselorRecordDetails(record.counselorId);
-        setSelectedCounselorName(record.counselorName);
-        setData((prev) => ({ ...prev, selectedCounselorRecords, selectedCaseRecord: undefined }));
+        setSelectedCounselorRecords(await fetchCounselorRecordDetails(record.counselorId));
       } catch (error) {
         showNotice("error", error instanceof Error ? error.message : "咨询记录明细加载失败");
       } finally {
-        setLoading(false);
+        setSelectedRecordsLoading(false);
       }
     },
-    [clearNotice, setLoading, showNotice],
+    [clearNotice, showNotice],
   );
 
   const openCaseRecord = useCallback(
     async (recordId: number) => {
-      setLoading(true);
       clearNotice();
+      setCaseRecordLoading(true);
       try {
-        const selectedCaseRecord = await fetchCaseRecordDetail(recordId);
-        setData((prev) => ({ ...prev, selectedCaseRecord }));
+        setSelectedCaseRecord(await fetchCaseRecordDetail(recordId));
       } catch (error) {
         showNotice("error", error instanceof Error ? error.message : "咨询记录详情加载失败");
       } finally {
-        setLoading(false);
+        setCaseRecordLoading(false);
       }
     },
-    [clearNotice, setLoading, showNotice],
+    [clearNotice, showNotice],
   );
 
   const closeDetails = useCallback(() => {
     setSelectedCounselorName(null);
-    setData((prev) => ({ ...prev, selectedCounselorRecords: undefined, selectedCaseRecord: undefined }));
+    setSelectedCounselorRecords(undefined);
+    setSelectedCaseRecord(undefined);
+    setSelectedRecordsLoading(false);
+    setCaseRecordLoading(false);
+  }, []);
+
+  const backToRecordList = useCallback(() => {
+    setSelectedCaseRecord(undefined);
   }, []);
 
   const loadAmendments = useCallback(async () => {
@@ -149,8 +160,10 @@ function CaseRecordsScreenContent() {
         setPageSize(nextPageSize);
       }}
       selectedCounselorName={selectedCounselorName}
-      selectedRecords={data.selectedCounselorRecords}
-      selectedCaseRecord={data.selectedCaseRecord}
+      selectedRecords={selectedCounselorRecords}
+      selectedRecordsLoading={selectedRecordsLoading}
+      selectedCaseRecord={selectedCaseRecord}
+      caseRecordLoading={caseRecordLoading}
       amendments={data.caseRecordAmendments}
       amendmentStatus={amendmentStatus}
       setAmendmentStatus={setAmendmentStatus}
@@ -159,6 +172,7 @@ function CaseRecordsScreenContent() {
       onRejectAmendment={rejectAmendment}
       onOpenCounselor={openCounselor}
       onOpenCaseRecord={openCaseRecord}
+      onBackToRecordList={backToRecordList}
       onCloseDetails={closeDetails}
     />
   );

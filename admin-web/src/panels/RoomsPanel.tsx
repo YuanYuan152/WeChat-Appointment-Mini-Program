@@ -4,6 +4,7 @@ import type { Dispatch, SetStateAction } from "react";
 import { DetailDrawer } from "@/components/boards/DetailDrawer";
 import {
   Badge,
+  CollapsibleSection,
   EmptyState,
   MiniStat,
   Pagination,
@@ -342,16 +343,14 @@ function RoomDetailPanel({
         <MiniStat label="来访者" value={activeSnapshot?.patientName || "-"} />
       </div>
 
-      <div className="rounded-xl border border-[var(--lxxl-border)] p-4">
-        <h4 className="text-sm font-semibold">联系方式</h4>
+      <CollapsibleSection title="联系方式">
         <div className="mt-3 grid gap-2 text-sm text-[var(--lxxl-muted)]">
           <div>咨询师：{activeSnapshot?.counselorName || "-"} {activeSnapshot?.counselorMobile || ""}</div>
           <div>来访者：{activeSnapshot?.patientName || "-"} {activeSnapshot?.patientMobile || ""}</div>
         </div>
-      </div>
+      </CollapsibleSection>
 
-      <div className="rounded-xl border border-[var(--lxxl-border)] p-4">
-        <h4 className="text-sm font-semibold">编辑咨询室</h4>
+      <CollapsibleSection title="编辑咨询室">
         <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
           <QueryField label="咨询室名称">
             <input className={queryControlClass} value={name} onChange={(event) => setName(event.target.value)} />
@@ -374,10 +373,9 @@ function RoomDetailPanel({
         >
           保存
         </button>
-      </div>
+      </CollapsibleSection>
 
-      <div className="rounded-xl border border-[var(--lxxl-border)] p-4">
-        <h4 className="text-sm font-semibold">调换咨询室</h4>
+      <CollapsibleSection title="调换咨询室">
         {scheduleId ? (
           <div className="mt-3 space-y-3">
             <div className="text-sm text-[var(--lxxl-muted)]">
@@ -408,9 +406,9 @@ function RoomDetailPanel({
         ) : (
           <div className="mt-3 text-sm text-[var(--lxxl-muted)]">当前时段没有已预约咨询，无需调换。</div>
         )}
-      </div>
+      </CollapsibleSection>
 
-      <div>
+      <CollapsibleSection count={room.days.reduce((total, day) => total + day.slots.length, 0)} title="未来时段">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h4 className="text-sm font-semibold">未来时段</h4>
@@ -455,7 +453,7 @@ function RoomDetailPanel({
             </div>
           ))}
         </div>
-      </div>
+      </CollapsibleSection>
     </div>
   );
 }

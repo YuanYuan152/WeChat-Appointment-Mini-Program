@@ -200,14 +200,25 @@ function UserDetailPanel({ detail }: { detail: UserBoardDetail }) {
   const cancelledConsultations = detail.consultations.filter(
     (item) => item.status === "CANCELLED" || item.status === "CANCELED",
   );
-  const consultationText = (item: UserBoardDetail["consultations"][number]) =>
-    `${formatDateTime(item.startTime)} 至 ${formatDateTime(item.endTime)} · ${item.counselorName} · ${statusLabel(
-      item.status,
-    )} · ${item.centerName || "-"} ${item.roomName || ""}${item.note ? ` · ${item.note}` : ""}`;
-  const roomBookingText = (item: UserBoardDetail["roomBookings"][number]) =>
-    `咨询 #${item.consultationId} · ${formatDateTime(item.startTime)} 至 ${formatDateTime(item.endTime)} · ${
-      item.centerName || "-"
-    } ${item.roomName || ""}`;
+  const consultationCard = (item: UserBoardDetail["consultations"][number]) => {
+    const note = cleanBusinessNote(item.note);
+    return (
+      <DetailCard
+        title={`${timeRangeText(item.startTime, item.endTime)} · ${statusLabel(item.status)}`}
+        rows={[
+          ["咨询师", item.counselorName],
+          ["地点", placeText(item.centerName, item.roomName)],
+          ...(note ? ([["备注", note]] as Array<[string, string]>) : []),
+        ]}
+      />
+    );
+  };
+  const roomBookingCard = (item: UserBoardDetail["roomBookings"][number]) => (
+    <DetailCard
+      title={timeRangeText(item.startTime, item.endTime)}
+      rows={[["咨询室", placeText(item.centerName, item.roomName)]]}
+    />
+  );
 
   return (
     <>
@@ -228,53 +239,111 @@ function UserDetailPanel({ detail }: { detail: UserBoardDetail }) {
       </div>
       <DetailList
         title="预约记录"
-        items={detail.consultations.map(consultationText)}
+        items={detail.consultations.map(consultationCard)}
       />
       <DetailList
         title="完成预约记录"
-        items={completedConsultations.map(consultationText)}
+        items={completedConsultations.map(consultationCard)}
       />
       <DetailList
         title="取消预约记录"
-        items={cancelledConsultations.map(consultationText)}
+        items={cancelledConsultations.map(consultationCard)}
       />
       <DetailList
         title="订单记录"
         items={detail.orders.map(
-          (item) =>
-            `订单 #${item.id} · ${formatDateTime(item.createdAt)} · ${formatMoneyFromCents(item.totalFee)} · ${statusLabel(
-              item.status,
-            )}${item.outTradeNo ? ` · ${item.outTradeNo}` : ""}${item.description ? ` · ${item.description}` : ""}`,
+          (item) => (
+            <DetailCard
+              title={`${formatMoneyFromCents(item.totalFee)} · ${statusLabel(item.status)}`}
+              rows={[
+                ["创建时间", formatDateTime(item.createdAt)],
+                ...(item.paidAt ? ([["支付时间", formatDateTime(item.paidAt)]] as Array<[string, string]>) : []),
+                ...(item.outTradeNo ? ([["商户单号", item.outTradeNo]] as Array<[string, string]>) : []),
+                ...(cleanBusinessNote(item.description)
+                  ? ([["说明", cleanBusinessNote(item.description) || "-"]] as Array<[string, string]>)
+                  : []),
+              ]}
+            />
+          ),
         )}
       />
       <DetailList
         title="付款记录"
         items={detail.payments.map(
-          (item) => `付款 #${item.id} · ${formatDateTime(item.paidAt)} · ${formatMoneyFromCents(item.amount)} · ${statusLabel(item.status)}`,
+          (item) => (
+            <DetailCard
+              title={`${formatMoneyFromCents(item.amount)} · ${statusLabel(item.status)}`}
+              rows={[["支付时间", formatDateTime(item.paidAt)]]}
+            />
+          ),
         )}
       />
       <DetailList
         title="退款记录"
         items={detail.refunds.map(
-          (item) =>
-            `退款 #${item.id} · ${formatDateTime(item.updatedAt)} · ${formatMoneyFromCents(item.amount)} · ${statusLabel(
-              item.status,
-            )}`,
+          (item) => (
+            <DetailCard
+              title={`${formatMoneyFromCents(item.amount)} · ${statusLabel(item.status)}`}
+              rows={[["更新时间", formatDateTime(item.updatedAt)]]}
+            />
+          ),
         )}
       />
       <DetailList
         title="豁免记录"
         items={detail.exemptions.map(
-          (item) =>
-            `豁免 #${item.id} · ${formatDateTime(item.createdAt)} · ${formatMoneyFromCents(item.amount)} · ${statusLabel(
-              item.status,
-            )} · ${item.reason}${item.rejectReason ? ` · 拒绝原因：${item.rejectReason}` : ""}`,
+          (item) => (
+            <DetailCard
+              title={`${formatMoneyFromCents(item.amount)} · ${statusLabel(item.status)}`}
+              rows={[
+                ["提交时间", formatDateTime(item.createdAt)],
+                ...(item.reviewedAt ? ([["审核时间", formatDateTime(item.reviewedAt)]] as Array<[string, string]>) : []),
+                ["原因", item.reason || "-"],
+                ...(item.rejectReason ? ([["拒绝原因", item.rejectReason]] as Array<[string, string]>) : []),
+              ]}
+            />
+          ),
         )}
       />
       <DetailList
         title="预约咨询室记录"
-        items={detail.roomBookings.map(roomBookingText)}
+        items={detail.roomBookings.map(roomBookingCard)}
       />
     </>
+  );
+}
+
+function timeRangeText(startTime?: string | null, endTime?: string | null) {
+  return `${formatDateTime(startTime)} 至 ${formatDateTime(endTime)}`;
+}
+
+function placeText(centerName?: string | null, roomName?: string | null) {
+  return [centerName, roomName].filter(Boolean).join(" ") || "-";
+}
+
+function cleanBusinessNote(value?: string | null) {
+  if (!value) {
+    return "";
+  }
+  return value
+    .split(/[|；;]/)
+    .map((part) => part.trim())
+    .filter((part) => part && !part.startsWith("center:") && !part.startsWith("room:"))
+    .join(" · ");
+}
+
+function DetailCard({ title, rows }: { title: string; rows: Array<[string, string]> }) {
+  return (
+    <div className="space-y-2">
+      <div className="font-medium text-[var(--lxxl-text)]">{title}</div>
+      <div className="space-y-1">
+        {rows.map(([label, value]) => (
+          <div className="grid grid-cols-[4.5rem_1fr] gap-2" key={label}>
+            <span className="text-[var(--lxxl-muted)]">{label}</span>
+            <span className="text-[var(--lxxl-muted)]">{value || "-"}</span>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }

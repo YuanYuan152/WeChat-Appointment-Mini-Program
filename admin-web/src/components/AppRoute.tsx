@@ -38,6 +38,15 @@ export function useAppRoute() {
 }
 
 export function AppRoute({ sectionId, children }: { sectionId: SectionId; children: ReactNode }) {
+  const existingContext = useContext(AppRouteContext);
+  if (existingContext) {
+    return <>{children}</>;
+  }
+
+  return <AppRouteRoot sectionId={sectionId}>{children}</AppRouteRoot>;
+}
+
+function AppRouteRoot({ sectionId, children }: { sectionId: SectionId; children: ReactNode }) {
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [booting, setBooting] = useState(true);

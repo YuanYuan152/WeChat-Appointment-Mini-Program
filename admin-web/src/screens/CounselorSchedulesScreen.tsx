@@ -112,8 +112,10 @@ function CounselorSchedulesScreenContent() {
         showNotice("success", getMessage(result, "排期已新增"));
         await loadData();
         await loadSlots();
+        return true;
       } catch (error) {
         showNotice("error", error instanceof Error ? error.message : "新增排期失败");
+        return false;
       }
     },
     [clearNotice, draft.centerId, loadData, loadSlots, showNotice],

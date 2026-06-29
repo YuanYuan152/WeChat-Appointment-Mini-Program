@@ -9,7 +9,6 @@ import {
   QueryButton,
   QueryField,
   QueryResetButton,
-  TableActionButton,
   queryControlClass,
 } from "@/components/ui";
 
@@ -136,38 +135,31 @@ export function CounselorDashboardPanel({
           {detailLoading && !details ? (
             <div className="py-10 text-sm text-[var(--lxxl-muted)]">正在加载明细...</div>
           ) : details && details.length > 0 ? (
-            <table className="w-full border-collapse text-sm">
-              <thead className="bg-[#FAF8F4] text-left text-[var(--lxxl-muted)]">
-                <tr>
-                  <th className="px-4 py-3 font-medium">对象</th>
-                  <th className="px-4 py-3 font-medium">时间</th>
-                  <th className="px-4 py-3 font-medium">状态</th>
-                  <th className="px-4 py-3 font-medium">补充</th>
-                </tr>
-              </thead>
-              <tbody>
+            <div className="space-y-4">
+              <div className="border-b border-[var(--lxxl-border)] pb-4">
+                <h4 className="text-base font-semibold">
+                  {categoryLabel(selectedCategory)}明细
+                  <span className="ml-2 text-sm font-normal text-[var(--lxxl-muted)]">{details.length} 条</span>
+                </h4>
+              </div>
+              <div className="space-y-2">
                 {details.map((item) => (
-                  <tr key={`${selectedCategory}-${item.id}`} className="border-t border-[var(--lxxl-border)]">
-                    <td className="px-4 py-3 font-medium">{item.title}</td>
-                    <td className="px-4 py-3 text-[var(--lxxl-muted)]">{formatDateTime(item.subtitle)}</td>
-                    <td className="px-4 py-3 text-[var(--lxxl-muted)]">{statusLabel(item.status)}</td>
-                    <td className="px-4 py-3 text-[var(--lxxl-muted)]">
-                      {item.amount != null ? `${formatMoneyFromCents(item.amount)} · ` : ""}
-                      {item.extra || "-"}
-                    </td>
-                  </tr>
+                  <div key={`${selectedCategory}-${item.id}`} className="rounded-xl bg-[#FAF8F4] p-3 text-sm">
+                    <div className="font-medium">{item.title}</div>
+                    <div className="mt-2 grid gap-1 text-xs leading-5 text-[var(--lxxl-muted)]">
+                      <div>时间：{formatDateTime(item.subtitle)}</div>
+                      <div>状态：{statusLabel(item.status)}</div>
+                      <div>
+                        补充：{item.amount != null ? `${formatMoneyFromCents(item.amount)} · ` : ""}
+                        {item.extra || "-"}
+                      </div>
+                    </div>
+                  </div>
                 ))}
-              </tbody>
-            </table>
+              </div>
+            </div>
           ) : (
             <EmptyState text={detailLoading ? "正在加载明细..." : "暂无明细。"} />
-          )}
-          {details && details.length > 0 && (
-            <div className="mt-4">
-              <TableActionButton tone="muted" onClick={onCloseDetail}>
-                收起明细
-              </TableActionButton>
-            </div>
           )}
         </DetailDrawer>
       )}
