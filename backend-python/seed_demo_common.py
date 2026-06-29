@@ -4,6 +4,7 @@ seed_demo_*.py 公共常量与排班 Note 规则（与 auth.py / schedule_meta.p
 主入口：python seed_demo_data.py（增量写入，不清表）
 单角色脚本：seed_demo_counselor.py 等（会 clear_all_tables，仅用于隔离测试）
 """
+import json
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -16,6 +17,7 @@ from models import (
     AppCaseRecordRevision,
     AppConsultation,
     AppCounselorProfile,
+    AppMessage,
     AppOrder,
     AppRoleBinding,
     AppSchedule,
@@ -646,6 +648,63 @@ def ensure_demo_case_records(db: Session, patient_map: dict) -> None:
                     RevisedBy=consultation.CounselorId,
                 )
             )
+
+
+DEMO_ADMIN_CRISIS_MSG_TITLE = "【演示】个案风险需上报"
+
+
+def ensure_demo_admin_unread_crisis_message(db: Session) -> None:
+    """为管理员/Ops 保留一条未读风险上报演示消息，便于验证「我的消息」橘色提示条。"""
+    staff_open_ids = ("demo-openid-admin", "demo-openid-ops")
+    accounts = (
+        db.query(AppAccount)
+        .filter(AppAccount.OpenId.in_(staff_open_ids))
+        .all()
+    )
+    if not accounts:
+        return
+
+    summary = "李心怡 · 林小美 · 高风险（演示） · 来访 13800000010 · 咨询师 13800000001"
+    detail = {
+        "counselorName": "李心怡",
+        "counselorPhone": "13800000001",
+        "patientName": "林小美",
+        "patientPhone": "13800000010",
+        "caseRecordId": 1,
+        "consultationId": 1,
+        "crisisLevel": "A",
+        "crisisLevelLabel": "高风险",
+        "startTime": china_now().strftime("%Y-%m-%d %H:%M"),
+    }
+    content = json.dumps({"summary": summary, "detail": detail}, ensure_ascii=False)
+
+    for acc in accounts:
+        msg = (
+            db.query(AppMessage)
+            .filter(
+                AppMessage.AccountId == acc.Id,
+                AppMessage.Title == DEMO_ADMIN_CRISIS_MSG_TITLE,
+            )
+            .first()
+        )
+        if msg:
+            msg.IsRead = False
+            msg.ReadAt = None
+            msg.Content = content
+            msg.RelatedType = "CASE_RECORD_CRISIS_REPORT"
+            msg.Type = "RISK"
+            continue
+        db.add(
+            AppMessage(
+                AccountId=acc.Id,
+                Type="RISK",
+                Title=DEMO_ADMIN_CRISIS_MSG_TITLE,
+                Content=content,
+                RelatedType="CASE_RECORD_CRISIS_REPORT",
+                RelatedId=1,
+                IsRead=False,
+            )
+        )
 
 
 def legacy_patient_placeholder(db: Session) -> None:

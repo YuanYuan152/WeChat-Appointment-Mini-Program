@@ -1,3 +1,5 @@
+import { getDevWorkbenchRole, isMockLoginEnabled } from '@/utils/auth'
+
 export interface MessageItem {
   Id: number
   Type: string
@@ -185,6 +187,50 @@ export function isAdminOpsMessageInbox(role: string): boolean {
   return role === 'Admin' || role === 'Ops'
 }
 
+export function getStoredUserRoles(): string[] {
+  try {
+    return JSON.parse(uni.getStorageSync('user_roles') || '[]') as string[]
+  } catch {
+    return []
+  }
+}
+
+/** 当前账号是否使用管理员/Ops 消息收件箱（含多角色账号与开发联调角色） */
+export function hasAdminOpsMessageInbox(activeRole: string, roles?: string[]): boolean {
+  if (isAdminOpsMessageInbox(activeRole)) return true
+  const all = roles?.length ? roles : getStoredUserRoles()
+  if (all.includes('Admin') || all.includes('Ops')) return true
+  if (isMockLoginEnabled()) {
+    const devRole = getDevWorkbenchRole()
+    return devRole === 'Admin' || devRole === 'Ops'
+  }
+  return false
+}
+
+export function resolveMessageInboxRole(activeRole: string, roles?: string[]): string {
+  if (isMockLoginEnabled()) {
+    const devRole = getDevWorkbenchRole()
+    if (devRole && isAdminOpsMessageInbox(devRole)) {
+      const all = roles?.length ? roles : getStoredUserRoles()
+      if (!all.length || all.includes(devRole)) return devRole
+    }
+  }
+  if (isAdminOpsMessageInbox(activeRole)) return activeRole
+  const all = roles?.length ? roles : getStoredUserRoles()
+  if (all.includes('Admin')) return 'Admin'
+  if (all.includes('Ops')) return 'Ops'
+  return activeRole
+}
+
+export function isCrisisReportMessage(item: MessageItem): boolean {
+  if (item.RelatedType === 'CASE_RECORD_CRISIS_REPORT') return true
+  const title = item.Title || ''
+  if (title.includes('个案风险需上报')) return true
+  if (title.includes('风险需上报')) return true
+  if (item.Type === 'RISK' && title.includes('风险')) return true
+  return false
+}
+
 export function sanitizeMessageCategoryForRole(role: string, category: string): string {
   if (!isAdminOpsMessageInbox(role)) return category
   if (ADMIN_OPS_FORBIDDEN_FILTER_VALUES.has(category)) return 'ALL'
@@ -296,7 +342,7 @@ export function shouldOpenCaseRecordAmendmentReview(activeRole: string, item: Me
 
 export function shouldOpenCaseRecordCrisisReport(activeRole: string, item: MessageItem): boolean {
   if (!canReviewAsOpsAdmin(activeRole)) return false
-  return item.RelatedType === 'CASE_RECORD_CRISIS_REPORT'
+  return isCrisisReportMessage(item)
 }
 
 export const CASE_RECORD_AMENDMENT_REVIEW_PATH = '/pages/ops/case-record-amendments/index'

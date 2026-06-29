@@ -608,11 +608,6 @@ def _room_occupancy_at(
             "occupancy": "DISABLED", "label": "停用", "manualStatus": manual_status,
             "slotStartTime": status_slot_start,
         }
-    if manual_status == "MAINTENANCE":
-        return {
-            "occupancy": "MAINTENANCE", "label": "维护中", "manualStatus": manual_status,
-            "slotStartTime": status_slot_start,
-        }
 
     for s in active_schedules_at(db, status_slot_start):
         if parse_center_id(s.Note) != center_id or parse_room_id(s.Note) != room_code:
@@ -640,7 +635,7 @@ def _room_occupancy_at(
             "endTime": s.EndTime,
             "scheduleStatus": s.Status,
         }
-    idle_label = {"AVAILABLE": "可用", "MAINTENANCE": "维护中", "DISABLED": "停用"}.get(
+    idle_label = {"AVAILABLE": "可用", "DISABLED": "停用"}.get(
         manual_status, "可用",
     )
     return {
@@ -1121,7 +1116,7 @@ def create_room(
         raise HTTPException(status_code=400, detail="该咨询室编号已存在")
 
     status = body.status or "AVAILABLE"
-    if status not in ("AVAILABLE", "MAINTENANCE", "DISABLED"):
+    if status not in ("AVAILABLE", "DISABLED"):
         raise HTTPException(status_code=400, detail="无效的状态")
 
     row = AppConsultationRoom(
@@ -1155,13 +1150,13 @@ def update_room(
         raise HTTPException(status_code=404, detail="咨询室不存在")
 
     if body.status is not None:
-        if body.status not in ("AVAILABLE", "MAINTENANCE", "DISABLED"):
+        if body.status not in ("AVAILABLE", "DISABLED"):
             raise HTTPException(status_code=400, detail="无效的状态")
         now = china_now()
         occ = _room_occupancy_at(
             db, row.CenterId, row.RoomCode, now, row.Status, room_db_id=row.Id,
         )
-        if occ["occupancy"] not in ("IDLE", "MAINTENANCE", "DISABLED") and body.status != row.Status:
+        if occ["occupancy"] not in ("IDLE", "DISABLED") and body.status != row.Status:
             raise HTTPException(status_code=400, detail="咨询室使用中，无法修改状态")
         row.Status = body.status
 

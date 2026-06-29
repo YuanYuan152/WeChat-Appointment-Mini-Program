@@ -1,11 +1,29 @@
 """创建 AppConsultationRoom 表并写入默认咨询室。"""
 import pyodbc
 
+from config import settings
 from schedule_meta import CONSULTATION_ROOMS
 
-conn = pyodbc.connect(
-    "DRIVER={ODBC Driver 17 for SQL Server};SERVER=.\\SQLEXPRESS;DATABASE=lxxlBuild;Trusted_Connection=yes;"
-)
+
+def _conn_str() -> str:
+    server = settings.DB_SERVER
+    if not settings.DB_TRUSTED_CONNECTION and settings.DB_PORT:
+        server = f"{settings.DB_SERVER},{settings.DB_PORT}"
+    conn = (
+        f"DRIVER={{{settings.DB_DRIVER}}};"
+        f"SERVER={server};"
+        f"DATABASE={settings.DB_NAME};"
+    )
+    if settings.DB_TRUSTED_CONNECTION:
+        conn += "Trusted_Connection=yes;"
+    else:
+        conn += f"UID={settings.DB_USER};PWD={settings.DB_PASSWORD};"
+    if settings.DB_TRUST_SERVER_CERTIFICATE:
+        conn += "TrustServerCertificate=yes;"
+    return conn
+
+
+conn = pyodbc.connect(_conn_str())
 cur = conn.cursor()
 
 ddl = """
@@ -39,8 +57,9 @@ for center_id, rooms in CONSULTATION_ROOMS.items():
         if cur.fetchone()[0] == 0:
             cur.execute(
                 """
-                INSERT INTO AppConsultationRoom (CenterId, RoomCode, Name, Status, SortOrder)
-                VALUES (?, ?, ?, 'AVAILABLE', ?)
+                INSERT INTO AppConsultationRoom
+                    (CenterId, RoomCode, Name, Status, SortOrder, CreatedAt)
+                VALUES (?, ?, ?, 'AVAILABLE', ?, GETDATE())
                 """,
                 center_id,
                 room["id"],

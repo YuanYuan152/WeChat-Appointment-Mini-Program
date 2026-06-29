@@ -126,11 +126,15 @@ def list_messages(
 ):
     query = db.query(AppMessage).filter(AppMessage.AccountId == current_account.Id)
     active_role = getattr(current_account, "ActiveRole", None)
-    query = apply_admin_ops_inbox_scope(query, active_role)
+    query = apply_admin_ops_inbox_scope(
+        query, active_role, db=db, account_id=current_account.Id
+    )
     if unread_only or category == "UNREAD":
         query = query.filter(AppMessage.IsRead == False)
-    else:
-        query = apply_message_category(query, category, active_role)
+    if category and category not in ("ALL", "UNREAD"):
+        query = apply_message_category(
+            query, category, active_role, db=db, account_id=current_account.Id
+        )
     query = apply_message_search(query, q)
     rows = query.order_by(AppMessage.CreatedAt.desc()).limit(100).all()
     return [enrich_message(m, db) for m in rows]
@@ -138,6 +142,7 @@ def list_messages(
 
 @router.get("/unread-count", summary="未读消息数")
 def unread_count(
+    category: Optional[str] = Query(None, description="消息分类，如 case_record_crisis"),
     current_account: AppAccount = Depends(get_current_account),
     db: Session = Depends(get_db),
 ):
@@ -146,7 +151,13 @@ def unread_count(
         db.query(AppMessage)
         .filter(AppMessage.AccountId == current_account.Id, AppMessage.IsRead == False)
     )
-    query = apply_admin_ops_inbox_scope(query, active_role)
+    query = apply_admin_ops_inbox_scope(
+        query, active_role, db=db, account_id=current_account.Id
+    )
+    if category and category not in ("ALL", "UNREAD"):
+        query = apply_message_category(
+            query, category, active_role, db=db, account_id=current_account.Id
+        )
     count = query.count()
     return {"count": count}
 

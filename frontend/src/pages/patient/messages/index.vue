@@ -57,6 +57,21 @@
       </view>
     </view>
 
+    <view
+      v-if="showCrisisUnreadBanner"
+      class="crisis-unread-banner"
+      :class="{ 'is-zero': unreadCrisisCount <= 0 }"
+      @tap="openCrisisUnreadList"
+    >
+      <view class="crisis-banner-left">
+        <text class="crisis-alert-icon">!</text>
+        <text class="crisis-banner-text">
+          个案风险上报未读 {{ unreadCrisisCount }} 条
+        </text>
+      </view>
+      <text class="crisis-banner-arrow">›</text>
+    </view>
+
     <view v-if="loading" class="empty-state">
       <text class="empty-desc">加载中...</text>
     </view>
@@ -96,10 +111,12 @@ import { API_ENDPOINTS } from '@/config/api'
 import {
   canSearchMessages,
   getMessageCategoriesForRole,
-  isAdminOpsMessageInbox,
+  hasAdminOpsMessageInbox,
+  isCrisisReportMessage,
   messageCategoryLabel,
   messageDisplayTitle,
   messageSummary,
+  resolveMessageInboxRole,
   resolveMessageNavigation,
   sanitizeMessageCategoryForRole,
   type MessageItem,
@@ -107,7 +124,10 @@ import {
 
 const messages = ref<MessageItem[]>([])
 const unreadCount = ref(0)
+const unreadCrisisCount = ref(0)
+const crisisUnreadView = ref(false)
 const activeRole = ref('')
+const userRoles = ref<string[]>([])
 const activeCategory = ref('ALL')
 const searchKeyword = ref('')
 const loading = ref(false)
@@ -115,18 +135,23 @@ const filterOpen = ref(false)
 
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 
-const categories = computed(() => getMessageCategoriesForRole(activeRole.value))
-const showSearch = computed(() => canSearchMessages(activeRole.value))
+const inboxRole = computed(() => resolveMessageInboxRole(activeRole.value, userRoles.value))
+const isAdminOpsInbox = computed(() => hasAdminOpsMessageInbox(activeRole.value, userRoles.value))
+const categories = computed(() => getMessageCategoriesForRole(inboxRole.value))
+const showSearch = computed(() => canSearchMessages(inboxRole.value))
+const showCrisisUnreadBanner = computed(() => isAdminOpsInbox.value)
 const currentCategoryLabel = computed(() => {
+  if (crisisUnreadView.value) return '个案风险上报（未读）'
   const cat = categories.value.find(c => c.value === activeCategory.value)
   return cat?.label || '全部'
 })
 const emptyHint = computed(() => {
+  if (crisisUnreadView.value) return '暂无未读的个案风险上报消息'
   if (searchKeyword.value.trim()) return '未找到匹配的消息，请换个关键词试试'
   if (activeCategory.value === 'UNREAD') return '暂无未读消息'
   const cat = categories.value.find(c => c.value === activeCategory.value)
   if (cat && cat.value !== 'ALL') return `暂无「${cat.label}」类消息`
-  if (isAdminOpsMessageInbox(activeRole.value)) {
+  if (isAdminOpsInbox.value) {
     return '豁免申请、咨询师请假、记录修改、风险上报等通知会在这里显示'
   }
   return '预约、请假、取消等通知会在这里显示'
@@ -137,10 +162,80 @@ const formatTime = (dt: string) => dt ? dt.slice(0, 16).replace('T', ' ') : ''
 const loadActiveRole = async () => {
   try {
     const me = await AuthApi.getMe()
+    userRoles.value = me.roles || []
     activeRole.value = me.activeRole || me.roles?.[0] || ''
+    if (me.roles?.length) {
+      uni.setStorageSync('user_roles', JSON.stringify(me.roles))
+    }
+    if (me.activeRole) {
+      uni.setStorageSync('active_role', me.activeRole)
+    }
   } catch {
-    activeRole.value = ''
+    userRoles.value = []
+    activeRole.value = uni.getStorageSync('active_role') || ''
+    try {
+      userRoles.value = JSON.parse(uni.getStorageSync('user_roles') || '[]')
+    } catch {
+      userRoles.value = []
+    }
   }
+}
+
+const countUnreadCrisis = (items: MessageItem[]) =>
+  items.filter(item => isCrisisReportMessage(item) && !item.IsRead).length
+
+const loadUnreadCrisisCount = async () => {
+  if (!isAdminOpsInbox.value) {
+    unreadCrisisCount.value = 0
+    return
+  }
+
+  let count = 0
+
+  try {
+    const countRes = await httpV2.get<{ count: number }>(
+      API_ENDPOINTS.message.unreadCount,
+      { category: 'case_record_crisis' },
+      { showLoading: false, showError: false },
+    )
+    if (countRes.code === 0 && countRes.data && typeof countRes.data.count === 'number') {
+      count = countRes.data.count
+    }
+  } catch {
+    // ignore
+  }
+
+  if (count <= 0) {
+    try {
+      const listRes = await httpV2.get<MessageItem[]>(
+        API_ENDPOINTS.message.list,
+        { unread_only: true, category: 'case_record_crisis' },
+        { showLoading: false, showError: false },
+      )
+      if (listRes.code === 0 && Array.isArray(listRes.data)) {
+        count = countUnreadCrisis(listRes.data)
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  if (count <= 0) {
+    try {
+      const allUnreadRes = await httpV2.get<MessageItem[]>(
+        API_ENDPOINTS.message.list,
+        { unread_only: true },
+        { showLoading: false, showError: false },
+      )
+      if (allUnreadRes.code === 0 && Array.isArray(allUnreadRes.data)) {
+        count = countUnreadCrisis(allUnreadRes.data)
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  unreadCrisisCount.value = count
 }
 
 const loadUnreadCount = async () => {
@@ -150,7 +245,10 @@ const loadUnreadCount = async () => {
 
 const buildListParams = () => {
   const params: Record<string, string | boolean> = {}
-  if (activeCategory.value === 'UNREAD') {
+  if (crisisUnreadView.value) {
+    params.unread_only = true
+    params.category = 'case_record_crisis'
+  } else if (activeCategory.value === 'UNREAD') {
     params.unread_only = true
     params.category = 'UNREAD'
   } else if (activeCategory.value !== 'ALL') {
@@ -171,10 +269,15 @@ const loadMessages = async () => {
     )
     if (res.code === 0 && res.data) {
       messages.value = res.data
+      if (isAdminOpsInbox.value && !crisisUnreadView.value) {
+        const fromList = countUnreadCrisis(res.data)
+        unreadCrisisCount.value = Math.max(unreadCrisisCount.value, fromList)
+      }
     } else {
       messages.value = []
     }
     await loadUnreadCount()
+    await loadUnreadCrisisCount()
   } finally {
     loading.value = false
   }
@@ -190,9 +293,18 @@ const closeFilter = () => {
 
 const selectCategory = async (value: string) => {
   closeFilter()
-  const next = sanitizeMessageCategoryForRole(activeRole.value, value)
-  if (activeCategory.value === next) return
+  crisisUnreadView.value = false
+  const next = sanitizeMessageCategoryForRole(inboxRole.value, value)
+  if (activeCategory.value === next && !crisisUnreadView.value) return
   activeCategory.value = next
+  await loadMessages()
+}
+
+const openCrisisUnreadList = async () => {
+  crisisUnreadView.value = true
+  activeCategory.value = 'ALL'
+  searchKeyword.value = ''
+  closeFilter()
   await loadMessages()
 }
 
@@ -219,7 +331,10 @@ const markRead = async (item: MessageItem) => {
   if (res.code === 0) {
     item.IsRead = true
     if (unreadCount.value > 0) unreadCount.value -= 1
-    if (activeCategory.value === 'UNREAD') {
+    if (isCrisisReportMessage(item) && unreadCrisisCount.value > 0) {
+      unreadCrisisCount.value -= 1
+    }
+    if (activeCategory.value === 'UNREAD' || crisisUnreadView.value) {
       messages.value = messages.value.filter(m => m.Id !== item.Id)
     }
   }
@@ -227,7 +342,7 @@ const markRead = async (item: MessageItem) => {
 
 const openMessage = async (item: MessageItem) => {
   await markRead(item)
-  const url = resolveMessageNavigation(item, activeRole.value)
+  const url = resolveMessageNavigation(item, inboxRole.value)
   uni.navigateTo({
     url,
     fail: () => {
@@ -248,7 +363,8 @@ onLoad(loadActiveRole)
 
 onShow(async () => {
   await loadActiveRole()
-  activeCategory.value = sanitizeMessageCategoryForRole(activeRole.value, activeCategory.value)
+  activeCategory.value = sanitizeMessageCategoryForRole(inboxRole.value, activeCategory.value)
+  await loadUnreadCrisisCount()
   await loadMessages()
 })
 </script>
@@ -417,23 +533,87 @@ onShow(async () => {
 .search-row {
   display: flex;
   align-items: center;
-  gap: 16rpx;
-  padding: 0 28rpx 24rpx;
+  gap: 12rpx;
+  padding: 12rpx 28rpx 16rpx;
   border-top: 1rpx solid #F3F4F6;
-  padding-top: 20rpx;
 }
 
 .search-input {
   flex: 1;
-  font-size: 28rpx;
+  height: 56rpx;
+  line-height: 56rpx;
+  font-size: 26rpx;
   color: #1F2937;
 }
 
 .search-clear {
   flex-shrink: 0;
-  font-size: 26rpx;
+  font-size: 24rpx;
   color: #3D5A4E;
-  padding: 8rpx 12rpx;
+  padding: 4rpx 8rpx;
+}
+
+.crisis-unread-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24rpx;
+  padding: 20rpx 24rpx;
+  border-radius: 16rpx;
+  background: rgba(234, 88, 12, 0.14);
+  border: 1rpx solid rgba(234, 88, 12, 0.28);
+}
+
+.crisis-unread-banner.is-zero {
+  background: rgba(234, 88, 12, 0.08);
+  border-color: rgba(234, 88, 12, 0.18);
+}
+
+.crisis-unread-banner.is-zero .crisis-banner-text {
+  color: #EA580C;
+  font-weight: 600;
+}
+
+.crisis-unread-banner.is-zero .crisis-alert-icon {
+  background: rgba(234, 88, 12, 0.14);
+  color: #EA580C;
+}
+
+.crisis-banner-left {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  flex: 1;
+  min-width: 0;
+}
+
+.crisis-alert-icon {
+  width: 40rpx;
+  height: 40rpx;
+  line-height: 40rpx;
+  text-align: center;
+  border-radius: 50%;
+  background: rgba(234, 88, 12, 0.22);
+  color: #C2410C;
+  font-size: 28rpx;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.crisis-banner-text {
+  font-size: 26rpx;
+  font-weight: 700;
+  color: #C2410C;
+  line-height: 1.5;
+}
+
+.crisis-banner-arrow {
+  flex-shrink: 0;
+  font-size: 40rpx;
+  color: #EA580C;
+  font-weight: 300;
+  line-height: 1;
+  margin-left: 12rpx;
 }
 
 .empty-state {

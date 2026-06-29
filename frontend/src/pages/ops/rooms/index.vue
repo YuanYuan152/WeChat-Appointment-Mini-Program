@@ -147,23 +147,24 @@ const groupedCenters = computed(() => {
 
 const statusLabelMap: Record<string, string> = {
   AVAILABLE: '可用',
-  MAINTENANCE: '维护中',
   DISABLED: '停用',
 }
 
+const normalizeManualStatus = (status: string) =>
+  status === 'MAINTENANCE' ? 'DISABLED' : status
+
 const roomStatusLabel = (room: RoomSnapshot) => {
   if (room.occupancy === 'IN_SESSION') return '已预约'
-  return statusLabelMap[room.manualStatus] || '可用'
+  return statusLabelMap[normalizeManualStatus(room.manualStatus)] || '可用'
 }
 
 const tagClass = (room: RoomSnapshot) => {
   if (room.occupancy === 'IN_SESSION') return 'booked'
   const map: Record<string, string> = {
     AVAILABLE: 'available',
-    MAINTENANCE: 'maintenance',
     DISABLED: 'disabled',
   }
-  return map[room.manualStatus] || 'available'
+  return map[normalizeManualStatus(room.manualStatus)] || 'available'
 }
 
 const applyCurrentSlotFilter = () => {
@@ -346,7 +347,6 @@ onShow(() => {
 .room-name { font-size: 30rpx; font-weight: 600; color: #2C2C2C; }
 .status-tag { font-size: 22rpx; font-weight: 700; padding: 6rpx 16rpx; border-radius: 100rpx; }
 .status-tag.available { background: #E8E4DE; color: #3D5A4E; }
-.status-tag.maintenance { background: #F5EFE3; color: #8A6D3B; }
 .status-tag.disabled { background: #F0EDE8; color: #6B6560; }
 .status-tag.booked { background: #DBEAFE; color: #1D4ED8; }
 .room-extra { display: block; margin-top: 8rpx; font-size: 24rpx; color: #8A8A8A; }
