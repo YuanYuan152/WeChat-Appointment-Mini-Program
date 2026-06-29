@@ -54,8 +54,16 @@ export function ContentList({
       {items.length === 0 ? (
         <EmptyState text="暂无内容。" />
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[980px] border-collapse text-sm">
+        <div className="overflow-hidden">
+          <table className="w-full table-fixed border-collapse text-sm">
+            <colgroup>
+              <col className="w-[22%]" />
+              <col className="w-[12%]" />
+              <col className="w-[18%]" />
+              <col className="w-[16%]" />
+              <col className="w-[14%]" />
+              <col className="w-[18%]" />
+            </colgroup>
             <thead className="bg-[#FAF8F4] text-left text-[var(--lxxl-muted)]">
               <tr>
                 <th className="px-5 py-3 font-medium">标题</th>
@@ -63,7 +71,7 @@ export function ContentList({
                 <th className="px-5 py-3 font-medium">摘要</th>
                 <th className="px-5 py-3 font-medium">图片</th>
                 <th className="px-5 py-3 font-medium">创建时间</th>
-                <th className="px-5 py-3 font-medium">操作</th>
+                <th className="px-5 py-3 text-right font-medium">操作</th>
               </tr>
             </thead>
             <tbody>
@@ -72,17 +80,17 @@ export function ContentList({
                   key={item.id}
                   className="border-t border-[var(--lxxl-border)] align-top transition hover:bg-[#FAF8F4]"
                 >
-                  <td className="px-5 py-4 font-medium">{item.title}</td>
-                  <td className="px-5 py-4 text-[var(--lxxl-muted)]">{item.meta || "-"}</td>
-                  <td className="max-w-xs px-5 py-4 text-[var(--lxxl-muted)]">
+                  <td className="break-words px-5 py-4 font-medium">{item.title}</td>
+                  <td className="break-words px-5 py-4 text-[var(--lxxl-muted)]">{item.meta || "-"}</td>
+                  <td className="px-5 py-4 text-[var(--lxxl-muted)]">
                     <div className="line-clamp-2">{item.summary || "-"}</div>
                   </td>
                   <td className="px-5 py-4">
                     <ContentImageThumbnail imageUrl={item.imageUrl} title={item.title} />
                   </td>
-                  <td className="px-5 py-4 text-[var(--lxxl-muted)]">{formatDate(item.date)}</td>
-                  <td className="px-5 py-4">
-                    <div className="flex justify-end gap-3">
+                  <td className="whitespace-nowrap px-5 py-4 text-[var(--lxxl-muted)]">{formatDate(item.date)}</td>
+                  <td className="px-5 py-4 text-right">
+                    <div className="inline-flex justify-end gap-4 whitespace-nowrap">
                       <TableActionButton onClick={() => onEdit(item)}>
                         修改
                       </TableActionButton>

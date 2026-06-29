@@ -29,7 +29,8 @@ import type {
 import type { RoomFilters } from "@/types/app";
 
 const FIXED_TIME_SLOTS = ["09:00", "10:00", "11:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00"];
-const ROOM_STATUS_OPTIONS: RoomSlotManualStatus[] = ["AVAILABLE", "MAINTENANCE", "DISABLED"];
+type RoomEditableStatus = Exclude<RoomSlotManualStatus, "MAINTENANCE">;
+const ROOM_STATUS_OPTIONS: RoomEditableStatus[] = ["AVAILABLE", "DISABLED"];
 
 export function RoomsPanel({
   rooms,
@@ -169,16 +170,25 @@ export function RoomsPanel({
             <EmptyState text={listLoading ? "正在加载列表..." : "暂无咨询室数据。"} />
           ) : (
             <>
-              <table className="w-full border-collapse text-sm">
+              <table className="w-full table-fixed border-collapse text-sm">
+                <colgroup>
+                  <col className="w-[15%]" />
+                  <col className="w-[14%]" />
+                  <col className="w-[12%]" />
+                  <col className="w-[12%]" />
+                  <col className="w-[18%]" />
+                  <col className="w-[18%]" />
+                  <col className="w-[11%]" />
+                </colgroup>
                 <thead className="bg-[#FAF8F4] text-left text-[var(--lxxl-muted)]">
                   <tr>
                     <th className="px-5 py-3 font-medium">预约中心</th>
                     <th className="px-5 py-3 font-medium">咨询室</th>
-                    <th className="px-5 py-3 font-medium">全局状态</th>
-                    <th className="px-5 py-3 font-medium">当前占用</th>
+                    <th className="px-5 py-3 font-medium">咨询室状态</th>
+                    <th className="px-5 py-3 font-medium">时段状态</th>
                     <th className="px-5 py-3 font-medium">咨询师</th>
                     <th className="px-5 py-3 font-medium">来访者</th>
-                    <th className="px-5 py-3 font-medium">操作</th>
+                    <th className="px-5 py-3 text-right font-medium">操作</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -192,11 +202,11 @@ export function RoomsPanel({
                           <div className="mt-1 text-xs text-[var(--lxxl-muted)]">{room.roomCode}</div>
                         </td>
                         <td className="px-5 py-4">
-                          <Badge>{statusLabel(room.status)}</Badge>
+                          <Badge tone={roomStatusTone(room.status)}>{roomStatusLabel(room.status)}</Badge>
                         </td>
                         <td className="px-5 py-4">
                           <Badge tone={snapshot?.occupancy === "IN_SESSION" ? "gold" : "green"}>
-                            {statusLabel(snapshot?.occupancy)}
+                            {roomStatusLabel(snapshot?.occupancy)}
                           </Badge>
                         </td>
                         <td className="px-5 py-4">
@@ -211,7 +221,7 @@ export function RoomsPanel({
                             <div className="mt-1 text-xs text-[var(--lxxl-muted)]">{snapshot.patientMobile}</div>
                           )}
                         </td>
-                        <td className="px-5 py-4">
+                        <td className="px-5 py-4 text-right">
                           <TableActionButton onClick={() => onOpenRoom(room, snapshot)}>查看</TableActionButton>
                         </td>
                       </tr>
@@ -288,13 +298,13 @@ function RoomDetailPanel({
   const activeSnapshot = snapshot || room.current;
   const scheduleId = activeSnapshot?.scheduleId || room.current?.scheduleId;
   const [name, setName] = useState(room.name);
-  const [status, setStatus] = useState(room.status);
+  const [status, setStatus] = useState<RoomEditableStatus>(() => normalizeEditableRoomStatus(room.status));
   const [targetRoomCode, setTargetRoomCode] = useState("");
-  const [slotStatusDrafts, setSlotStatusDrafts] = useState<Record<string, RoomSlotManualStatus>>({});
+  const [slotStatusDrafts, setSlotStatusDrafts] = useState<Record<string, RoomEditableStatus>>({});
 
   useEffect(() => {
     setName(room.name);
-    setStatus(room.status);
+    setStatus(normalizeEditableRoomStatus(room.status));
   }, [room.id, room.name, room.status]);
 
   useEffect(() => {
@@ -303,7 +313,7 @@ function RoomDetailPanel({
   }, [roomOptions]);
 
   useEffect(() => {
-    const next: Record<string, RoomSlotManualStatus> = {};
+    const next: Record<string, RoomEditableStatus> = {};
     for (const day of room.days) {
       for (const slot of day.slots) {
         if (slot.startTime) {
@@ -337,8 +347,8 @@ function RoomDetailPanel({
       </div>
 
       <div className="grid grid-cols-2 gap-3 text-sm">
-        <MiniStat label="全局状态" value={statusLabel(room.status)} />
-        <MiniStat label="当前占用" value={statusLabel(activeSnapshot?.occupancy)} />
+        <MiniStat label="咨询室状态" value={roomStatusLabel(room.status)} />
+        <MiniStat label="当前时段" value={roomStatusLabel(activeSnapshot?.occupancy)} />
         <MiniStat label="咨询师" value={activeSnapshot?.counselorName || "-"} />
         <MiniStat label="来访者" value={activeSnapshot?.patientName || "-"} />
       </div>
@@ -356,10 +366,14 @@ function RoomDetailPanel({
             <input className={queryControlClass} value={name} onChange={(event) => setName(event.target.value)} />
           </QueryField>
           <QueryField label="状态">
-            <select className={queryControlClass} value={status} onChange={(event) => setStatus(event.target.value)}>
+            <select
+              className={queryControlClass}
+              value={status}
+              onChange={(event) => setStatus(event.target.value as RoomEditableStatus)}
+            >
               {ROOM_STATUS_OPTIONS.map((item) => (
                 <option key={item} value={item}>
-                  {statusLabel(item)}
+                  {roomStatusLabel(item)}
                 </option>
               ))}
             </select>
@@ -413,7 +427,7 @@ function RoomDetailPanel({
           <div>
             <h4 className="text-sm font-semibold">未来时段</h4>
             <p className="mt-1 text-xs text-[var(--lxxl-muted)]">
-              只维护固定时段状态；已有预约、已开始或已过去的时段不可改。
+              只维护固定时段的可用/停用状态；已预约、已开始或已过去的时段不可改。
             </p>
           </div>
           <button
@@ -465,12 +479,14 @@ function RoomSlotRow({
   onChange,
 }: {
   slot: RoomDetailSlot;
-  draftStatus: RoomSlotManualStatus;
+  draftStatus: RoomEditableStatus;
   actionLoading: boolean;
-  onChange: (status: RoomSlotManualStatus) => void;
+  onChange: (status: RoomEditableStatus) => void;
 }) {
   const locked = !slot.editable || slot.occupancy === "IN_SESSION";
   const statusTone = slot.occupancy === "IN_SESSION" ? "gold" : slot.occupancy === "IDLE" ? "green" : "neutral";
+  const displayStatus =
+    !slot.occupancy || slot.occupancy === "IDLE" ? roomStatusLabel(draftStatus) : roomStatusLabel(slot.occupancy);
 
   return (
     <div className="grid gap-3 px-4 py-3 text-xs sm:grid-cols-[120px_1fr_150px] sm:items-center">
@@ -480,7 +496,7 @@ function RoomSlotRow({
       </div>
       <div className="space-y-2 text-[var(--lxxl-muted)]">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge tone={statusTone}>{slot.statusLabel || statusLabel(slot.occupancy)}</Badge>
+          <Badge tone={statusTone}>{displayStatus}</Badge>
           {slot.scheduleId ? <span>排期 #{slot.scheduleId}</span> : <span>暂无预约</span>}
         </div>
         <div className="grid gap-1 sm:grid-cols-2">
@@ -498,11 +514,11 @@ function RoomSlotRow({
         className={`${queryControlClass} h-9`}
         disabled={actionLoading || locked}
         value={draftStatus}
-        onChange={(event) => onChange(event.target.value as RoomSlotManualStatus)}
+        onChange={(event) => onChange(event.target.value as RoomEditableStatus)}
       >
         {ROOM_STATUS_OPTIONS.map((item) => (
           <option key={item} value={item}>
-            {statusLabel(item)}
+            {roomStatusLabel(item)}
           </option>
         ))}
       </select>
@@ -510,8 +526,35 @@ function RoomSlotRow({
   );
 }
 
-function normalizeSlotStatus(status?: string | null): RoomSlotManualStatus {
-  return ROOM_STATUS_OPTIONS.includes(status as RoomSlotManualStatus) ? (status as RoomSlotManualStatus) : "AVAILABLE";
+function normalizeSlotStatus(status?: string | null): RoomEditableStatus {
+  return normalizeEditableRoomStatus(status);
+}
+
+function normalizeEditableRoomStatus(status?: string | null): RoomEditableStatus {
+  return status === "DISABLED" || status === "MAINTENANCE" ? "DISABLED" : "AVAILABLE";
+}
+
+function roomStatusLabel(status?: string | null) {
+  if (status === "BOOKED" || status === "IN_SESSION") {
+    return "已预约";
+  }
+  if (status === "DISABLED" || status === "MAINTENANCE") {
+    return "停用";
+  }
+  if (status === "AVAILABLE" || status === "IDLE") {
+    return "可用";
+  }
+  return statusLabel(status);
+}
+
+function roomStatusTone(status?: string | null) {
+  if (status === "BOOKED" || status === "IN_SESSION") {
+    return "gold";
+  }
+  if (status === "AVAILABLE" || status === "IDLE") {
+    return "green";
+  }
+  return "neutral";
 }
 
 function CreateRoomModal({
@@ -526,7 +569,7 @@ function CreateRoomModal({
   const [centerId, setCenterId] = useState("yangpu");
   const [name, setName] = useState("");
   const [roomCode, setRoomCode] = useState("");
-  const [status, setStatus] = useState("AVAILABLE");
+  const [status, setStatus] = useState<RoomEditableStatus>("AVAILABLE");
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/30 px-6">
@@ -552,10 +595,14 @@ function CreateRoomModal({
             <input className={queryControlClass} placeholder="可不填，系统自动生成" value={roomCode} onChange={(event) => setRoomCode(event.target.value)} />
           </QueryField>
           <QueryField label="初始状态">
-            <select className={queryControlClass} value={status} onChange={(event) => setStatus(event.target.value)}>
+            <select
+              className={queryControlClass}
+              value={status}
+              onChange={(event) => setStatus(event.target.value as RoomEditableStatus)}
+            >
               {ROOM_STATUS_OPTIONS.map((item) => (
                 <option key={item} value={item}>
-                  {statusLabel(item)}
+                  {roomStatusLabel(item)}
                 </option>
               ))}
             </select>
