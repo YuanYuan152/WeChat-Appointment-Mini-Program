@@ -451,6 +451,18 @@ class AppConsultationFeedback(Base):
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
 
 
+class AppPsychScaleResult(Base):
+    """来访者心理量表测评记录。"""
+    __tablename__ = "AppPsychScaleResult"
+
+    Id = Column(BigInteger, primary_key=True, index=True, autoincrement=True)
+    AccountId = Column(Integer, nullable=False, index=True)
+    ScaleType = Column(String(20), nullable=False, index=True)
+    Answers = Column(UnicodeText, nullable=False)
+    Total = Column(Integer, nullable=False)
+    CreatedAt = Column(DateTime, default=func.now(), nullable=False)
+
+
 class AppFeedback(Base):
     __tablename__ = "AppFeedback"
 

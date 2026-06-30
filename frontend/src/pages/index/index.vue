@@ -114,7 +114,7 @@
         <text class="section-title">探索服务</text>
       </view>
       <view class="service-list">
-        <view class="service-card" @tap="navigateTo('/pages/test/index')">
+        <view class="service-card" @tap="goPsychTest">
           <view class="service-icon"><text>测</text></view>
           <view class="service-body">
             <text class="service-name">心理测评</text>
@@ -219,6 +219,7 @@ import { ref, onMounted } from 'vue'
 import type { Banner, Doctor, Activity, LiveStream } from '@/types'
 import { homeApi } from '@/apis'
 import { fixArrayImageUrls } from '@/utils/image'
+import { handleRequireLogin } from '@/utils/auth'
 
 // 响应式数据
 const searchKeyword = ref('')
@@ -523,6 +524,12 @@ const TAB_BAR_PATHS = new Set([
 ])
 
 // 页面跳转
+const goPsychTest = () => {
+  handleRequireLogin(() => {
+    navigateTo('/pages/test/index')
+  }, '/pages/test/index')
+}
+
 const navigateTo = (url: string) => {
   if (!url.startsWith('/pages/')) {
     console.log('外部链接:', url)

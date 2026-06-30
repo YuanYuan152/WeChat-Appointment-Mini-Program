@@ -20,7 +20,7 @@
       </view>
 
       <view class="tip-card">
-        <text class="tip-text">点击可编辑的时段设置「可用 / 维护中 / 停用」，修改后请点击底部「保存」生效</text>
+        <text class="tip-text">点击可编辑的时段设置「可用 / 停用」，已预约时段仅可查看详情；修改后请点击底部「保存」生效</text>
       </view>
 
       <view class="legend-card">
@@ -150,7 +150,7 @@ import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
 import { formatDateLocal } from '@/constants/scheduleSlots'
 
-type ManualStatus = 'AVAILABLE' | 'MAINTENANCE' | 'DISABLED'
+type ManualStatus = 'AVAILABLE' | 'DISABLED'
 
 interface SlotItem {
   key: string
@@ -222,20 +222,17 @@ const pickerStatus = ref<ManualStatus>('AVAILABLE')
 
 const statusOptions = [
   { label: '可用', value: 'AVAILABLE' as ManualStatus },
-  { label: '维护中', value: 'MAINTENANCE' as ManualStatus },
   { label: '停用', value: 'DISABLED' as ManualStatus },
 ]
 
 const statusClass = (status: ManualStatus | 'IN_SESSION') => ({
   AVAILABLE: 'available',
-  MAINTENANCE: 'maintenance',
   DISABLED: 'disabled',
   IN_SESSION: 'in-session',
 }[status] || 'available')
 
 const manualStatusLabel = (status: ManualStatus) => ({
   AVAILABLE: '可用',
-  MAINTENANCE: '维护中',
   DISABLED: '停用',
 }[status] || status)
 
@@ -247,7 +244,6 @@ const legend = [
 const currentStatus = computed((): ManualStatus | 'IN_SESSION' => {
   const occ = detail.value?.current?.occupancy
   if (occ === 'IN_SESSION') return 'IN_SESSION'
-  if (occ === 'MAINTENANCE') return 'MAINTENANCE'
   if (occ === 'DISABLED') return 'DISABLED'
   return 'AVAILABLE'
 })
@@ -501,7 +497,6 @@ onLoad((opts) => {
   font-size: 24rpx; font-weight: 700; background: rgba(255,255,255,.2); color: #fff;
 }
 .current-tag.available { background: #D1FAE5; color: #065F46; }
-.current-tag.maintenance { background: #FEF3C7; color: #92400E; }
 .current-tag.disabled { background: #FEE2E2; color: #B91C1C; }
 .current-tag.in-session { background: #DBEAFE; color: #1D4ED8; }
 .info-card, .tip-card {
@@ -517,7 +512,6 @@ onLoad((opts) => {
 .legend-item { display: flex; align-items: center; gap: 10rpx; }
 .legend-dot { width: 20rpx; height: 20rpx; border-radius: 6rpx; }
 .legend-dot.available { background: #D1FAE5; }
-.legend-dot.maintenance { background: #FEF3C7; }
 .legend-dot.disabled { background: #FECACA; }
 .legend-dot.in-session { background: #BFDBFE; }
 .legend-text { font-size: 22rpx; color: #6B7280; }
@@ -536,7 +530,6 @@ onLoad((opts) => {
 }
 .slot-card.editable { border-style: dashed; }
 .slot-card.available { background: #ECFDF5; border-color: #A7F3D0; }
-.slot-card.maintenance { background: #FFFBEB; border-color: #FDE68A; }
 .slot-card.disabled { background: #FEF2F2; border-color: #FECACA; }
 .slot-card.in-session { background: #EFF6FF; border-color: #93C5FD; }
 .slot-card.in-session .slot-status { color: #1D4ED8; font-weight: 600; }

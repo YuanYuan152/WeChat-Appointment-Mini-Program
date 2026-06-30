@@ -7,7 +7,16 @@ from sqlalchemy.orm import Session
 
 from models import AppConsultationRoomSlot
 
-SLOT_STATUSES = ("AVAILABLE", "MAINTENANCE", "DISABLED")
+SLOT_STATUSES = ("AVAILABLE", "DISABLED")
+
+
+def normalize_manual_status(status: str) -> str:
+    """兼容历史 MAINTENANCE 数据，统一为可用/停用。"""
+    if status == "MAINTENANCE":
+        return "DISABLED"
+    if status in SLOT_STATUSES:
+        return status
+    return "AVAILABLE"
 
 
 def normalize_slot_start(dt: datetime) -> datetime:
@@ -36,7 +45,7 @@ def resolve_slot_manual_status(
         )
         for row in rows:
             if normalize_slot_start(row.StartTime) == start_norm:
-                return row.Status
+                return normalize_manual_status(row.Status)
     except (ProgrammingError, OperationalError):
         db.rollback()
     return default
@@ -64,7 +73,7 @@ def slot_status_map_for_room(
             .all()
         )
         overrides = {
-            normalize_slot_start(r.StartTime): r.Status for r in rows
+            normalize_slot_start(r.StartTime): normalize_manual_status(r.Status) for r in rows
         }
     except (ProgrammingError, OperationalError):
         db.rollback()

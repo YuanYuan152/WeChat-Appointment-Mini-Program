@@ -2,9 +2,9 @@
 from typing import Optional, Tuple
 
 from sqlalchemy import false, or_
-from sqlalchemy.orm import Query
+from sqlalchemy.orm import Query, Session
 
-from models import AppMessage
+from models import AppMessage, AppRoleBinding
 
 ADMIN_OPS_INBOX_RELATED_TYPES: Tuple[str, ...] = (
     "REFUND_EXEMPTION",
@@ -53,10 +53,20 @@ CATEGORY_KEYWORDS: dict[str, list[str]] = {
 }
 
 
-def apply_message_category(q: Query, category: Optional[str], active_role: Optional[str] = None) -> Query:
+def apply_message_category(
+    q: Query,
+    category: Optional[str],
+    active_role: Optional[str] = None,
+    *,
+    db: Optional[Session] = None,
+    account_id: Optional[int] = None,
+) -> Query:
     if not category or category in ("ALL", "UNREAD"):
         return q
-    if is_admin_ops_inbox_role(active_role) and category not in ADMIN_OPS_INBOX_CATEGORIES:
+    has_admin_ops = is_admin_ops_inbox_role(active_role)
+    if not has_admin_ops and db is not None and account_id is not None:
+        has_admin_ops = account_has_admin_ops_inbox(db, account_id, active_role)
+    if has_admin_ops and category not in ADMIN_OPS_INBOX_CATEGORIES:
         return q.filter(false())
     related_types = CATEGORY_RELATED_TYPES.get(category)
     if related_types:
@@ -94,8 +104,35 @@ def is_admin_ops_inbox_role(active_role: Optional[str]) -> bool:
     return active_role in ("Admin", "Ops")
 
 
-def apply_admin_ops_inbox_scope(q: Query, active_role: Optional[str]) -> Query:
+def account_has_admin_ops_inbox(
+    db: Session,
+    account_id: int,
+    active_role: Optional[str] = None,
+) -> bool:
+    if is_admin_ops_inbox_role(active_role):
+        return True
+    row = (
+        db.query(AppRoleBinding.AccountId)
+        .filter(
+            AppRoleBinding.AccountId == account_id,
+            AppRoleBinding.RoleType.in_(["Admin", "Ops"]),
+        )
+        .first()
+    )
+    return row is not None
+
+
+def apply_admin_ops_inbox_scope(
+    q: Query,
+    active_role: Optional[str],
+    *,
+    db: Optional[Session] = None,
+    account_id: Optional[int] = None,
+) -> Query:
     """管理员/Ops 我的消息仅展示：豁免、请假、记录修改、风险上报。"""
-    if not is_admin_ops_inbox_role(active_role):
+    use_scope = is_admin_ops_inbox_role(active_role)
+    if not use_scope and db is not None and account_id is not None:
+        use_scope = account_has_admin_ops_inbox(db, account_id, active_role)
+    if not use_scope:
         return q
     return q.filter(AppMessage.RelatedType.in_(ADMIN_OPS_INBOX_RELATED_TYPES))

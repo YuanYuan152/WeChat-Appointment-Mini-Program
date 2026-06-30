@@ -54,6 +54,13 @@
           <text class="menu-text">个人信息</text>
           <text class="menu-arrow">›</text>
         </view>
+        <view class="menu-item" @click="goScaleResults">
+          <view class="menu-icon-wrap bg-gold-light">
+            <text class="menu-icon text-gold">📊</text>
+          </view>
+          <text class="menu-text">我的量表</text>
+          <text class="menu-arrow">›</text>
+        </view>
         <view class="menu-item" @click="goRecordsTab">
           <view class="menu-icon-wrap bg-blue-light">
             <text class="menu-icon text-blue">📋</text>
@@ -415,6 +422,13 @@ const navigateTo = (url: string) => {
   uni.navigateTo({ url })
 }
 
+const goScaleResults = () => {
+  handleRequireLogin(
+    () => uni.navigateTo({ url: '/pages/test/results' }),
+    '/pages/test/results',
+  )
+}
+
 const goRecordsTab = () => {
   if (!isLoggedIn.value) {
     goLogin()
@@ -736,6 +750,9 @@ const handleDeleteAccount = () => {
 
 .bg-purple-light { background: #FAF5FF; }
 .text-purple { color: #8B5CF6; }
+
+.bg-gold-light { background: #FFFBEB; }
+.text-gold { color: #C9A96E; }
 
 .bg-gray-light { background: #F3F4F6; }
 .text-gray { color: #6B7280; }

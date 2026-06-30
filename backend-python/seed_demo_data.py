@@ -34,6 +34,7 @@ from seed_demo_common import (
     ensure_counselor_profile,
     ensure_counselor_slots,
     ensure_demo_case_records,
+    ensure_demo_admin_unread_crisis_message,
     ensure_patient_consultations,
     ensure_role,
     get_or_create_counselor_account,
@@ -164,6 +165,7 @@ def main():
             )
 
         ensure_demo_case_records(db, patient_map)
+        ensure_demo_admin_unread_crisis_message(db)
 
         db.commit()
         print("[OK] 演示助理/运营/管理员账号已写入（dev_assistant / dev_ops / dev_admin）")
