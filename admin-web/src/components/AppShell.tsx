@@ -15,6 +15,7 @@ export function AppShell({
   currentUser,
   loading,
   notice,
+  unreadMessageCount,
   children,
   onChangeSection,
   onLogout,
@@ -24,6 +25,7 @@ export function AppShell({
   currentUser: CurrentUser;
   loading: boolean;
   notice: Notice | null;
+  unreadMessageCount?: number;
   children: ReactNode;
   onChangeSection: (section: SectionId) => void;
   onLogout: () => void;
@@ -45,6 +47,7 @@ export function AppShell({
           activeSection={activeSection}
           collapsed={menuCollapsed}
           currentUser={currentUser}
+          unreadMessageCount={unreadMessageCount}
           onChangeSection={onChangeSection}
           onCollapsedChange={setMenuCollapsed}
         />

@@ -3,10 +3,15 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { fetchCounselorBoard, fetchCounselorBoardDetail } from "@/services/boards";
+import { fetchAdminCounselorIntro, updateAdminCounselorIntro } from "@/services/adminCounselors";
 import { AppRoute, useAppRoute } from "@/components/AppRoute";
 import { CounselorBoardPanel } from "@/panels/CounselorBoardPanel";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
-import type { CounselorBoardDetail } from "@/types/api";
+import type {
+  AdminCounselorIntroProfile,
+  AdminCounselorIntroUpdatePayload,
+  CounselorBoardDetail,
+} from "@/types/api";
 import type { ScreenData } from "@/types/app";
 
 export function CounselorBoardScreen() {
@@ -18,7 +23,7 @@ export function CounselorBoardScreen() {
 }
 
 function CounselorBoardScreenContent() {
-  const { clearNotice, refreshKey, showNotice } = useAppRoute();
+  const { clearNotice, isAdmin, refreshKey, showNotice } = useAppRoute();
   const [data, setData] = useState<ScreenData>({});
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
@@ -27,6 +32,10 @@ function CounselorBoardScreenContent() {
   const [draftKeyword, setDraftKeyword] = useState("");
   const [selectedCounselorBoard, setSelectedCounselorBoard] = useState<CounselorBoardDetail>();
   const [detailLoading, setDetailLoading] = useState(false);
+  const [introProfile, setIntroProfile] = useState<AdminCounselorIntroProfile>();
+  const [introLoading, setIntroLoading] = useState(false);
+  const [introSaving, setIntroSaving] = useState(false);
+  const [introError, setIntroError] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     setListLoading(true);
@@ -104,6 +113,69 @@ function CounselorBoardScreenContent() {
     setSelectedCounselorBoard(undefined);
   }, []);
 
+  const openIntroEditor = useCallback(async (accountId: number) => {
+    if (!isAdmin) {
+      showNotice("error", "只有管理员可以编辑咨询师介绍页");
+      return;
+    }
+    setIntroProfile(undefined);
+    setIntroError(null);
+    setIntroLoading(true);
+    try {
+      const profile = await fetchAdminCounselorIntro(accountId);
+      setIntroProfile(profile);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "介绍页资料加载失败";
+      setIntroError(message);
+      showNotice("error", message);
+    } finally {
+      setIntroLoading(false);
+    }
+  }, [isAdmin, showNotice]);
+
+  const closeIntroEditor = useCallback(() => {
+    setIntroLoading(false);
+    setIntroSaving(false);
+    setIntroProfile(undefined);
+    setIntroError(null);
+  }, []);
+
+  const saveIntro = useCallback(async (payload: AdminCounselorIntroUpdatePayload) => {
+    if (!introProfile) {
+      return;
+    }
+    setIntroSaving(true);
+    setIntroError(null);
+    try {
+      const savedProfile = await updateAdminCounselorIntro(introProfile.counselorId, payload);
+      setIntroProfile(savedProfile);
+      setData((prev) => ({
+        ...prev,
+        counselorBoard: prev.counselorBoard
+          ? {
+              ...prev.counselorBoard,
+              items: prev.counselorBoard.items.map((item) =>
+                item.id === savedProfile.counselorId ? { ...item, name: savedProfile.name } : item,
+              ),
+            }
+          : prev.counselorBoard,
+      }));
+      setSelectedCounselorBoard((prev) =>
+        prev && prev.profile.id === savedProfile.counselorId
+          ? { ...prev, profile: { ...prev.profile, name: savedProfile.name } }
+          : prev,
+      );
+      showNotice("success", "咨询师介绍页已保存");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "咨询师介绍页保存失败";
+      setIntroError(message);
+      showNotice("error", message);
+      throw error;
+    } finally {
+      setIntroSaving(false);
+    }
+  }, [introProfile, showNotice]);
+
   return (
     <CounselorBoardPanel
       records={data.counselorBoard}
@@ -118,6 +190,14 @@ function CounselorBoardScreenContent() {
       onPageSizeChange={changePageSize}
       onOpen={openCounselorDetail}
       onCloseDetail={closeDetail}
+      canEditIntro={isAdmin}
+      introProfile={introProfile}
+      introLoading={introLoading}
+      introSaving={introSaving}
+      introError={introError}
+      onOpenIntroEditor={openIntroEditor}
+      onCloseIntroEditor={closeIntroEditor}
+      onSaveIntro={saveIntro}
     />
   );
 }

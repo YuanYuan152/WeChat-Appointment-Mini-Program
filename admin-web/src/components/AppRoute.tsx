@@ -15,6 +15,7 @@ import type { Notice, SectionId } from "@/types/app";
 import { getMessage, roleText } from "@/lib/display";
 import { AppShell } from "./AppShell";
 import { LoginScreen } from "./LoginScreen";
+import { fetchUnreadMessageCount, MESSAGE_UNREAD_CHANGED_EVENT } from "@/services/messages";
 
 interface AppRouteContextValue {
   currentUser: CurrentUser;
@@ -53,6 +54,7 @@ function AppRouteRoot({ sectionId, children }: { sectionId: SectionId; children:
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [unreadMessageCount, setUnreadMessageCount] = useState(0);
 
   const isAdmin = currentUser?.roles.includes("Admin") ?? false;
   const canEnterWeb =
@@ -70,6 +72,19 @@ function AppRouteRoot({ sectionId, children }: { sectionId: SectionId; children:
   const requestRefresh = useCallback(() => {
     setRefreshKey((value) => value + 1);
   }, []);
+
+  const refreshUnreadMessageCount = useCallback(async () => {
+    if (!currentUser) {
+      setUnreadMessageCount(0);
+      return;
+    }
+    try {
+      const result = await fetchUnreadMessageCount();
+      setUnreadMessageCount(result.count || 0);
+    } catch {
+      setUnreadMessageCount(0);
+    }
+  }, [currentUser]);
 
   useEffect(() => {
     async function boot() {
@@ -92,6 +107,21 @@ function AppRouteRoot({ sectionId, children }: { sectionId: SectionId; children:
     void boot();
   }, []);
 
+  useEffect(() => {
+    void refreshUnreadMessageCount();
+  }, [refreshKey, refreshUnreadMessageCount]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.addEventListener(MESSAGE_UNREAD_CHANGED_EVENT, refreshUnreadMessageCount);
+    return () => {
+      window.removeEventListener(MESSAGE_UNREAD_CHANGED_EVENT, refreshUnreadMessageCount);
+    };
+  }, [refreshUnreadMessageCount]);
+
   const handleLogin = async (code: DevLoginCode) => {
     setLoading(true);
     clearNotice();
@@ -111,6 +141,7 @@ function AppRouteRoot({ sectionId, children }: { sectionId: SectionId; children:
   const handleLogout = () => {
     clearStoredToken();
     setCurrentUser(null);
+    setUnreadMessageCount(0);
     clearNotice();
     router.replace("/login");
   };
@@ -188,6 +219,7 @@ function AppRouteRoot({ sectionId, children }: { sectionId: SectionId; children:
         currentUser={currentUser}
         loading={loading}
         notice={notice}
+        unreadMessageCount={unreadMessageCount}
         onChangeSection={(nextSection) => router.push(sectionPathById[nextSection])}
         onLogout={handleLogout}
         onRefresh={requestRefresh}
@@ -214,6 +246,7 @@ function AppRouteRoot({ sectionId, children }: { sectionId: SectionId; children:
         currentUser={currentUser}
         loading={loading}
         notice={notice}
+        unreadMessageCount={unreadMessageCount}
         onChangeSection={(nextSection) => router.push(sectionPathById[nextSection])}
         onLogout={handleLogout}
         onRefresh={requestRefresh}

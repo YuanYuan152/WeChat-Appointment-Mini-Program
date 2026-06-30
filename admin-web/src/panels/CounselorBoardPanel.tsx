@@ -1,9 +1,16 @@
 import { memo, useState } from "react";
 
-import { formatDateTime, statusLabel } from "@/lib/format";
-import type { CounselorBoardDetail, CounselorBoardSummary, PagedResult } from "@/types/api";
+import { formatDateTime, formatMoneyFromCents, statusLabel } from "@/lib/format";
+import type {
+  AdminCounselorIntroProfile,
+  AdminCounselorIntroUpdatePayload,
+  CounselorBoardDetail,
+  CounselorBoardSummary,
+  PagedResult,
+} from "@/types/api";
 
 import { DetailDrawer } from "@/components/boards/DetailDrawer";
+import { CounselorIntroEditor } from "@/components/counselors/CounselorIntroEditor";
 import {
   Badge,
   CollapsibleSection,
@@ -30,6 +37,14 @@ export function CounselorBoardPanel({
   onPageSizeChange,
   onOpen,
   onCloseDetail,
+  canEditIntro,
+  introProfile,
+  introLoading,
+  introSaving,
+  introError,
+  onOpenIntroEditor,
+  onCloseIntroEditor,
+  onSaveIntro,
 }: {
   records?: PagedResult<CounselorBoardSummary>;
   listLoading: boolean;
@@ -43,6 +58,14 @@ export function CounselorBoardPanel({
   onPageSizeChange: (pageSize: number) => void;
   onOpen: (accountId: number) => void;
   onCloseDetail: () => void;
+  canEditIntro: boolean;
+  introProfile?: AdminCounselorIntroProfile;
+  introLoading: boolean;
+  introSaving: boolean;
+  introError: string | null;
+  onOpenIntroEditor: (accountId: number) => void;
+  onCloseIntroEditor: () => void;
+  onSaveIntro: (payload: AdminCounselorIntroUpdatePayload) => Promise<void>;
 }) {
   return (
     <>
@@ -54,6 +77,8 @@ export function CounselorBoardPanel({
         onPageSizeChange={onPageSizeChange}
         onReset={onReset}
         onSearch={onSearch}
+        canEditIntro={canEditIntro}
+        onOpenIntroEditor={onOpenIntroEditor}
         records={records}
         setKeyword={setKeyword}
       />
@@ -62,7 +87,30 @@ export function CounselorBoardPanel({
           {detailLoading && !selected ? (
             <div className="py-10 text-sm text-[var(--lxxl-muted)]">正在加载详情...</div>
           ) : selected ? (
-            <CounselorDetailPanel detail={selected} />
+            <CounselorDetailPanel
+              canEditIntro={canEditIntro}
+              detail={selected}
+              onEditIntro={() => onOpenIntroEditor(selected.profile.id)}
+            />
+          ) : null}
+        </DetailDrawer>
+      )}
+      {(introLoading || introProfile || introError) && (
+        <DetailDrawer footer={null} title="编辑咨询师介绍页" onClose={onCloseIntroEditor}>
+          {introLoading && !introProfile ? (
+            <div className="py-10 text-sm text-[var(--lxxl-muted)]">正在加载介绍页资料...</div>
+          ) : introError ? (
+            <div className="space-y-4 py-6 text-sm">
+              <div className="text-[#A13F37]">{introError}</div>
+              <TableActionButton onClick={onCloseIntroEditor}>关闭</TableActionButton>
+            </div>
+          ) : introProfile ? (
+            <CounselorIntroEditor
+              profile={introProfile}
+              saving={introSaving}
+              onCancel={onCloseIntroEditor}
+              onSave={onSaveIntro}
+            />
           ) : null}
         </DetailDrawer>
       )}
@@ -80,6 +128,8 @@ const CounselorBoardListSection = memo(function CounselorBoardListSection({
   onPageChange,
   onPageSizeChange,
   onOpen,
+  canEditIntro,
+  onOpenIntroEditor,
 }: {
   records?: PagedResult<CounselorBoardSummary>;
   listLoading: boolean;
@@ -90,6 +140,8 @@ const CounselorBoardListSection = memo(function CounselorBoardListSection({
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
   onOpen: (accountId: number) => void;
+  canEditIntro: boolean;
+  onOpenIntroEditor: (accountId: number) => void;
 }) {
   return (
     <section className="rounded-xl border border-[var(--lxxl-border)] bg-white">
@@ -101,9 +153,9 @@ const CounselorBoardListSection = memo(function CounselorBoardListSection({
         }}
       >
         <div>
-          <h2 className="text-xl font-semibold tracking-normal">咨询师看板</h2>
+          <h2 className="text-xl font-semibold tracking-normal">咨询师管理</h2>
           <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">
-            聚合咨询记录、请假、排班、咨询室使用记录。
+            管理咨询师介绍页资料，并查看咨询记录、请假、排期和咨询室使用记录。
           </p>
         </div>
 
@@ -184,9 +236,16 @@ const CounselorBoardListSection = memo(function CounselorBoardListSection({
                       {record.latestScheduleAt ? formatDateTime(record.latestScheduleAt) : "-"}
                     </td>
                     <td className="px-5 py-4">
-                      <TableActionButton onClick={() => onOpen(record.id)}>
-                        查看
-                      </TableActionButton>
+                      <div className="flex flex-wrap gap-3">
+                        {canEditIntro && (
+                          <TableActionButton onClick={() => onOpenIntroEditor(record.id)}>
+                            编辑介绍页
+                          </TableActionButton>
+                        )}
+                        <TableActionButton onClick={() => onOpen(record.id)}>
+                          查看
+                        </TableActionButton>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -228,11 +287,46 @@ function patientLabel(patientName?: string | null, patientMobile?: string | null
   return patientMobile ? `${name}（${patientMobile}）` : name;
 }
 
-function CounselorDetailPanel({ detail }: { detail: CounselorBoardDetail }) {
+function CounselorDetailPanel({
+  detail,
+  canEditIntro,
+  onEditIntro,
+}: {
+  detail: CounselorBoardDetail;
+  canEditIntro: boolean;
+  onEditIntro: () => void;
+}) {
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const visitors = detail.visitors ?? [];
   const cancelledConsultations = detail.consultations.filter(
     (item) => item.status === "CANCELLED" || item.status === "CANCELED",
   );
+  const visitorItems = visitors.map((item) => {
+    const latestAppointment = item.latestAppointment;
+    const latestLabel = latestAppointment
+      ? compactMeta([
+          timeRangeLabel(latestAppointment.startTime, latestAppointment.endTime),
+          statusLabel(latestAppointment.status),
+          placeLabel(latestAppointment.centerName, latestAppointment.roomName),
+        ])
+      : "-";
+
+    return {
+      label: compactMeta([
+        patientLabel(item.patientName, item.patientMobile),
+        `咨询 ${item.consultationCount} 次`,
+      ]),
+      detail: [
+        `来访者：${patientLabel(item.patientName, item.patientMobile)}`,
+        `咨询次数：${item.consultationCount}`,
+        `总预约次数：${item.appointmentCount}`,
+        `取消次数：${item.cancelledCount}`,
+        `付款金额：${formatMoneyFromCents(item.paidAmount)}`,
+        `最近预约：${latestLabel}`,
+        latestAppointment?.note ? `备注：${latestAppointment.note}` : "备注：-",
+      ],
+    };
+  });
   const consultationItems = detail.consultations.map((item) => ({
     label: compactMeta([patientLabel(item.patientName, item.patientMobile), timeRangeLabel(item.startTime, item.endTime), statusLabel(item.status)]),
     detail: [
@@ -327,9 +421,14 @@ function CounselorDetailPanel({ detail }: { detail: CounselorBoardDetail }) {
 
   return (
     <>
-      <div className="text-sm text-[var(--lxxl-muted)]">咨询师详情</div>
-      <h3 className="mt-2 text-lg font-semibold">{detail.profile.name}</h3>
-      <div className="mt-1 text-sm text-[var(--lxxl-muted)]">{detail.profile.mobile || "-"}</div>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <div className="text-sm text-[var(--lxxl-muted)]">咨询师详情</div>
+          <h3 className="mt-2 text-lg font-semibold">{detail.profile.name}</h3>
+          <div className="mt-1 text-sm text-[var(--lxxl-muted)]">{detail.profile.mobile || "-"}</div>
+        </div>
+        {canEditIntro && <TableActionButton onClick={onEditIntro}>编辑介绍页</TableActionButton>}
+      </div>
       <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
         <MiniStat label="咨询" value={detail.profile.consultationCount} />
         <MiniStat label="已完成" value={detail.profile.completedConsultationCount} />
@@ -340,7 +439,15 @@ function CounselorDetailPanel({ detail }: { detail: CounselorBoardDetail }) {
         <MiniStat label="排期" value={detail.profile.scheduleCount} />
         <MiniStat label="已预约排班" value={detail.profile.bookedScheduleCount} />
         <MiniStat label="咨询室使用" value={detail.roomUsage.length} />
+        <MiniStat label="来访人数" value={visitors.length} />
       </div>
+      <ClickableDetailList
+        expandedKey={expandedKey}
+        items={visitorItems}
+        listKey={`counselor-${detail.profile.id}-visitors`}
+        onToggle={setExpandedKey}
+        title="来访者"
+      />
       <ClickableDetailList
         expandedKey={expandedKey}
         items={consultationItems}

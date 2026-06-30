@@ -1,37 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 
 import { AppRoute, useAppRoute } from "@/components/AppRoute";
 import { MessagesPanel } from "@/panels/MessagesPanel";
-import { fetchMessages, markMessageRead } from "@/services/messages";
-import { sectionPathById } from "@/config/navigation";
-import type { MessageItem, Role } from "@/types/api";
-import type { ScreenData, SectionId } from "@/types/app";
-
-const relatedSectionMap: Record<string, SectionId> = {
-  REFUND_EXEMPTION: "refunds",
-  REFUND_EXEMPTION_PENDING: "refunds",
-  CASE_RECORD: "caseRecords",
-  CONSULTATION_RECORD: "caseRecords",
-  CASE_RECORD_AMENDMENT_PENDING: "caseRecords",
-  CASE_RECORD_CRISIS_REPORT: "caseRecords",
-  FEEDBACK: "feedback",
-  CONSULTATION: "operationLogs",
-  SCHEDULE: "schedules",
-  COUNSELOR_LEAVE: "schedules",
-};
-
-const counselorRelatedSectionMap: Record<string, SectionId> = {
-  COUNSELOR_APPOINTMENT_NEW: "counselorSchedules",
-  COUNSELOR_APPOINTMENT_CANCEL: "counselorSchedules",
-  COUNSELOR_CONSULTATION_REMIND: "counselorSchedules",
-  COUNSELOR_LEAVE_SUBMITTED: "counselorSchedules",
-  COUNSELOR_LEAVE_SUCCESS: "counselorSchedules",
-  COUNSELOR_CONSULTATION_DONE: "counselorRecords",
-  CASE_RECORD_AMENDMENT: "counselorRecords",
-};
+import type { MessageReadFilter } from "@/panels/MessagesPanel";
+import { fetchMessageDetail, fetchMessages, markMessageRead, MESSAGE_UNREAD_CHANGED_EVENT } from "@/services/messages";
+import type { MessageItem } from "@/types/api";
+import type { ScreenData } from "@/types/app";
 
 export function MessagesScreen() {
   return (
@@ -42,22 +18,30 @@ export function MessagesScreen() {
 }
 
 function MessagesScreenContent() {
-  const router = useRouter();
-  const { clearNotice, currentUser, refreshKey, runAction, setLoading, showNotice } = useAppRoute();
+  const { clearNotice, refreshKey, setLoading, showNotice } = useAppRoute();
   const [data, setData] = useState<ScreenData>({});
+  const [keyword, setKeyword] = useState("");
+  const [statusFilter, setStatusFilter] = useState<MessageReadFilter>("ALL");
+  const [appliedKeyword, setAppliedKeyword] = useState("");
+  const [appliedStatusFilter, setAppliedStatusFilter] = useState<MessageReadFilter>("ALL");
+  const [selectedMessage, setSelectedMessage] = useState<MessageItem | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     clearNotice();
     try {
-      const messages = await fetchMessages(false);
-      setData((prev) => ({ ...prev, messages }));
+      const unreadOnly = appliedStatusFilter === "UNREAD";
+      const messages = await fetchMessages({ unreadOnly, keyword: appliedKeyword });
+      setData((prev) => ({
+        ...prev,
+        messages: appliedStatusFilter === "READ" ? messages.filter((message) => message.IsRead) : messages,
+      }));
     } catch (error) {
       showNotice("error", error instanceof Error ? error.message : "消息加载失败");
     } finally {
       setLoading(false);
     }
-  }, [clearNotice, setLoading, showNotice]);
+  }, [appliedKeyword, appliedStatusFilter, clearNotice, setLoading, showNotice]);
 
   useEffect(() => {
     void loadData();
@@ -65,24 +49,52 @@ function MessagesScreenContent() {
 
   const openMessage = useCallback(
     async (message: MessageItem) => {
-      await runAction(() => markMessageRead(message.Id), "消息已标记为已读");
-      const targetSection = resolveMessageTarget(message.RelatedType, currentUser.roles);
-      if (targetSection) {
-        router.push(sectionPathById[targetSection]);
+      setLoading(true);
+      clearNotice();
+      try {
+        await markMessageRead(message.Id);
+        const detail = await fetchMessageDetail(message.Id);
+        window.dispatchEvent(new Event(MESSAGE_UNREAD_CHANGED_EVENT));
+        setSelectedMessage(detail);
+        setData((prev) => ({
+          ...prev,
+          messages: prev.messages?.map((item) =>
+            item.Id === message.Id ? { ...item, IsRead: true, ReadAt: detail.ReadAt || item.ReadAt } : item,
+          ),
+        }));
+      } catch (error) {
+        showNotice("error", error instanceof Error ? error.message : "消息详情加载失败");
+      } finally {
+        setLoading(false);
       }
     },
-    [currentUser.roles, router, runAction],
+    [clearNotice, setLoading, showNotice],
   );
 
-  return <MessagesPanel messages={data.messages} onOpen={openMessage} />;
-}
+  const searchMessages = useCallback(() => {
+    setAppliedKeyword(keyword.trim());
+    setAppliedStatusFilter(statusFilter);
+  }, [keyword, statusFilter]);
 
-function resolveMessageTarget(relatedType: string | null | undefined, roles: Role[]) {
-  if (!relatedType) {
-    return undefined;
-  }
-  if (roles.includes("Counselor") && !roles.some((role) => role === "Admin" || role === "Ops")) {
-    return counselorRelatedSectionMap[relatedType] || relatedSectionMap[relatedType];
-  }
-  return relatedSectionMap[relatedType] || counselorRelatedSectionMap[relatedType];
+  const resetSearch = useCallback(() => {
+    setKeyword("");
+    setStatusFilter("ALL");
+    setAppliedKeyword("");
+    setAppliedStatusFilter("ALL");
+  }, []);
+
+  return (
+    <MessagesPanel
+      keyword={keyword}
+      messages={data.messages}
+      selectedMessage={selectedMessage}
+      statusFilter={statusFilter}
+      onCloseDetail={() => setSelectedMessage(null)}
+      onKeywordChange={setKeyword}
+      onOpen={openMessage}
+      onReset={resetSearch}
+      onSearch={searchMessages}
+      onStatusFilterChange={setStatusFilter}
+    />
+  );
 }

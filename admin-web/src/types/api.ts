@@ -429,8 +429,66 @@ export interface CounselorBoardSummary {
   latestScheduleAt?: string | null;
 }
 
+export interface AdminCounselorIntroProfile {
+  counselorId: number;
+  name: string;
+  avatarUrl?: string | null;
+  title?: string | null;
+  specialty?: string | null;
+  field?: string | null;
+  introduce?: string | null;
+  career?: string | null;
+  qualification?: string | null;
+  targetGroup?: string | null;
+  mode?: string | null;
+  workYears: number;
+  consultHours: number;
+  billingYuan?: number | null;
+  faceBillingYuan?: number | null;
+  isActive: boolean;
+  infoAuthenticityCommitted?: boolean;
+  infoAuthenticityCommittedAt?: string | null;
+  infoAuthenticitySignerName?: string | null;
+}
+
+export interface AdminCounselorIntroUpdatePayload {
+  name: string;
+  avatarUrl?: string | null;
+  title?: string | null;
+  specialty?: string | null;
+  field?: string | null;
+  introduce?: string | null;
+  career?: string | null;
+  qualification?: string | null;
+  targetGroup?: string | null;
+  mode?: string | null;
+  workYears?: number;
+  consultHours?: number;
+  isActive?: boolean;
+}
+
 export interface CounselorBoardDetail {
   profile: CounselorBoardSummary;
+  visitors: Array<{
+    patientId: number;
+    patientName: string;
+    patientMobile?: string | null;
+    consultationCount: number;
+    appointmentCount: number;
+    cancelledCount: number;
+    paidAmount: number;
+    latestAppointment?: {
+      consultationId: number;
+      orderId?: number | null;
+      scheduleId?: number | null;
+      status: string;
+      startTime?: string | null;
+      endTime?: string | null;
+      note?: string | null;
+      centerName?: string | null;
+      roomName?: string | null;
+    } | null;
+  }>;
   consultations: Array<{
     id: number;
     orderId?: number | null;

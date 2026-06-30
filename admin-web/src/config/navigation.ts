@@ -27,7 +27,7 @@ export const sections: NavigationSection[] = [
   { id: "caseRecords", label: "咨询记录", desc: "记录提交概览", path: "/case-records", allowedRoles: ["Admin", "Ops"] },
   { id: "operationLogs", label: "操作记录", desc: "现有业务记录入口", path: "/operation-logs", allowedRoles: ["Admin", "Ops"] },
   { id: "userBoard", label: "用户管理", desc: "来访者和咨询师检索", path: "/user-board", allowedRoles: ["Admin", "Ops"] },
-  { id: "counselorBoard", label: "咨询师看板", desc: "咨询师记录概览", path: "/counselor-board", allowedRoles: ["Admin", "Ops"] },
+  { id: "counselorBoard", label: "咨询师管理", desc: "资料与记录管理", path: "/counselor-board", allowedRoles: ["Admin", "Ops"] },
   {
     id: "counselorDashboard",
     label: "个人看板",

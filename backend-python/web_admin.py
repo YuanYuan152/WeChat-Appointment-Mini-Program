@@ -767,6 +767,10 @@ def counselor_board_detail(
     schedule_map = {s.Id: s for s in schedules}
     consultations_by_id = {c.Id: c for c in consultations}
     consultations_by_schedule_id = {c.ScheduleId: c for c in consultations if c.ScheduleId}
+    order_ids = {c.OrderId for c in consultations if c.OrderId}
+    orders = {
+        o.Id: o for o in db.query(AppOrder).filter(AppOrder.Id.in_(order_ids)).all()
+    } if order_ids else {}
 
     def consultation_business_payload(consultation: Optional[AppConsultation]) -> dict[str, Any]:
         if not consultation:
@@ -801,8 +805,53 @@ def counselor_board_detail(
             **_room_payload(schedule),
         }
 
+    visitors_by_patient: dict[int, dict[str, Any]] = {}
+    for consultation in consultations:
+        patient = patients.get(consultation.PatientId)
+        visitor = visitors_by_patient.setdefault(
+            consultation.PatientId,
+            {
+                "patientId": consultation.PatientId,
+                "patientName": _account_name(patient),
+                "patientMobile": _account_contact(patient),
+                "consultationCount": 0,
+                "appointmentCount": 0,
+                "cancelledCount": 0,
+                "paidAmount": 0,
+                "latestAppointment": None,
+                "_countedOrderIds": set(),
+            },
+        )
+        visitor["consultationCount"] += 1
+        visitor["appointmentCount"] += 1
+        if consultation.Status in ("CANCELLED", "CANCELED"):
+            visitor["cancelledCount"] += 1
+        if consultation.OrderId and consultation.OrderId not in visitor["_countedOrderIds"]:
+            order = orders.get(consultation.OrderId)
+            if order and order.Status == "PAID":
+                visitor["paidAmount"] += order.TotalFee or 0
+            visitor["_countedOrderIds"].add(consultation.OrderId)
+        if not visitor["latestAppointment"]:
+            visitor["latestAppointment"] = {
+                "consultationId": consultation.Id,
+                "orderId": consultation.OrderId,
+                "scheduleId": consultation.ScheduleId,
+                "status": consultation.Status,
+                "startTime": consultation.StartTime,
+                "endTime": consultation.EndTime,
+                "note": consultation.Note,
+                **_consultation_room_payload(consultation, schedule_map),
+            }
+
+    visitors = []
+    for visitor in visitors_by_patient.values():
+        visitor.pop("_countedOrderIds", None)
+        visitors.append(visitor)
+    visitors.sort(key=lambda item: (-item["consultationCount"], item["patientName"]))
+
     return {
         "profile": _counselor_summary(db, account),
+        "visitors": visitors,
         "consultations": [
             {
                 "id": c.Id,

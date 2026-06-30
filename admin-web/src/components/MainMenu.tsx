@@ -18,12 +18,14 @@ export function MainMenu({
   activeSection,
   currentUser,
   collapsed,
+  unreadMessageCount = 0,
   onCollapsedChange,
   onChangeSection,
 }: {
   activeSection: SectionId;
   currentUser: CurrentUser;
   collapsed: boolean;
+  unreadMessageCount?: number;
   onCollapsedChange: (collapsed: boolean) => void;
   onChangeSection: (section: SectionId) => void;
 }) {
@@ -103,6 +105,7 @@ export function MainMenu({
           }
           const expanded = expandedGroupIds.includes(group.id);
           const groupActive = group.id === activeGroupId;
+          const groupHasUnreadMessages = unreadMessageCount > 0 && visibleSectionIds.includes("messages");
 
           return (
             <div key={group.id}>
@@ -124,7 +127,10 @@ export function MainMenu({
                   toggleGroup(group.id);
                 }}
               >
-                <span className={collapsed ? "whitespace-nowrap" : ""}>{group.label}</span>
+                <span className={`relative ${collapsed ? "whitespace-nowrap" : ""}`}>
+                  {group.label}
+                  {collapsed && groupHasUnreadMessages && <UnreadDot />}
+                </span>
                 {!collapsed && <ChevronIcon expanded={expanded} />}
               </button>
 
@@ -149,7 +155,10 @@ export function MainMenu({
                         type="button"
                         onClick={() => onChangeSection(section.id)}
                       >
-                        <span className="block text-sm font-medium">{section.label}</span>
+                        <span className="relative inline-block text-sm font-medium">
+                          {section.label}
+                          {section.id === "messages" && unreadMessageCount > 0 && <UnreadDot />}
+                        </span>
                         <span className={`mt-1 block text-xs ${active ? "text-white/75" : "text-[var(--lxxl-muted)]"}`}>
                           {section.desc}
                         </span>
@@ -163,6 +172,15 @@ export function MainMenu({
         })}
       </nav>
     </aside>
+  );
+}
+
+function UnreadDot() {
+  return (
+    <span
+      aria-label="有未读消息"
+      className="absolute -right-3 -top-1 h-2.5 w-2.5 rounded-full bg-[#D94A3A] ring-2 ring-white"
+    />
   );
 }
 

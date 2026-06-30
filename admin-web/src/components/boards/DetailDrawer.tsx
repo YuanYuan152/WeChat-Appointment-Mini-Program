@@ -6,11 +6,26 @@ export function DetailDrawer({
   title,
   children,
   onClose,
+  footer,
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
+  footer?: ReactNode | null;
 }) {
+  const resolvedFooter =
+    footer === undefined ? (
+      <button
+        className="rounded-xl border border-[var(--lxxl-border)] px-4 py-2 text-sm font-medium text-[var(--lxxl-muted)] transition hover:border-[var(--lxxl-green)] hover:text-[var(--lxxl-green)]"
+        type="button"
+        onClick={onClose}
+      >
+        关闭
+      </button>
+    ) : (
+      footer
+    );
+
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/30" role="presentation">
       <aside
@@ -23,15 +38,11 @@ export function DetailDrawer({
           <h3 className="text-lg font-semibold">{title}</h3>
         </div>
         <div className="flex-1 overflow-auto px-6 py-5">{children}</div>
-        <div className="flex justify-start border-t border-[var(--lxxl-border)] bg-white px-6 py-4">
-          <button
-            className="rounded-xl border border-[var(--lxxl-border)] px-4 py-2 text-sm font-medium text-[var(--lxxl-muted)] transition hover:border-[var(--lxxl-green)] hover:text-[var(--lxxl-green)]"
-            type="button"
-            onClick={onClose}
-          >
-            关闭
-          </button>
-        </div>
+        {resolvedFooter !== null && (
+          <div className="flex justify-start border-t border-[var(--lxxl-border)] bg-white px-6 py-4">
+            {resolvedFooter}
+          </div>
+        )}
       </aside>
     </div>
   );
