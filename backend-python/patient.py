@@ -7,7 +7,7 @@ GET /api/mini/patient/registration  → 获取完整版登记表
 PUT /api/mini/patient/registration  → 保存完整版登记表
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 from datetime import datetime
@@ -30,7 +30,14 @@ from models import (
     AppRefundExemption,
     AppCounselorFavorite,
     AppConsultationFeedback,
+    AppPsychScaleResult,
     AppAccount,
+)
+from psych_scale import (
+    encode_answers,
+    decode_answers,
+    result_dict,
+    validate_answers,
 )
 from consultation_feedback import (
     ALLOWED_IMPROVEMENTS,
@@ -819,3 +826,76 @@ def remove_favorite(
         db.delete(row)
         db.commit()
     return FavoriteStatusOut(favorited=False)
+
+
+class ScaleSubmitPayload(BaseModel):
+    scaleType: str = Field(..., description="PHQ9 或 GAD7")
+    answers: List[int] = Field(..., description="各题得分 0-3")
+
+
+class ScaleResultOut(BaseModel):
+    id: int
+    scaleType: str
+    scaleLabel: str
+    total: int
+    levelLabel: str
+    answers: List[int]
+    createdAt: datetime
+
+
+@router.get("/scales", response_model=List[ScaleResultOut], summary="我的量表测评记录")
+def list_my_scale_results(
+    scale_type: Optional[str] = Query(None, description="PHQ9 / GAD7"),
+    current_account: AppAccount = Depends(get_current_account),
+    db: Session = Depends(get_db),
+):
+    q = (
+        db.query(AppPsychScaleResult)
+        .filter(AppPsychScaleResult.AccountId == current_account.Id)
+        .order_by(AppPsychScaleResult.CreatedAt.desc())
+    )
+    if scale_type:
+        try:
+            from psych_scale import normalize_scale_type
+            key = normalize_scale_type(scale_type)
+            q = q.filter(AppPsychScaleResult.ScaleType == key)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="不支持的量表类型")
+    rows = q.limit(100).all()
+    return [
+        ScaleResultOut(
+            **result_dict(
+                r.Id,
+                r.ScaleType,
+                decode_answers(r.Answers),
+                int(r.Total),
+                r.CreatedAt,
+            )
+        )
+        for r in rows
+    ]
+
+
+@router.post("/scales", response_model=ScaleResultOut, summary="提交量表测评")
+def submit_scale_result(
+    body: ScaleSubmitPayload,
+    current_account: AppAccount = Depends(get_current_account),
+    db: Session = Depends(get_db),
+):
+    try:
+        key, answers, total = validate_answers(body.scaleType, body.answers)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    row = AppPsychScaleResult(
+        AccountId=current_account.Id,
+        ScaleType=key,
+        Answers=encode_answers(answers),
+        Total=total,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return ScaleResultOut(
+        **result_dict(row.Id, row.ScaleType, answers, total, row.CreatedAt)
+    )

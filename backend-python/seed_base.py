@@ -13,6 +13,7 @@ APP_TABLES_DELETE_ORDER = [
     "AppCaseRecordRevision",
     "AppCaseRecord",
     "AppConsultationFeedback",
+    "AppPsychScaleResult",
     "AppRefundExemption",
     "AppScheduleCancelLog",
     "AppLeaveRequest",

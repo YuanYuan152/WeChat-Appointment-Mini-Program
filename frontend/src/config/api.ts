@@ -109,6 +109,7 @@ export const API_ENDPOINTS = {
     refundExemption: (id: number | string) => `/api/mini/patient/consultations/${id}/refund-exemption`,
     me: '/api/mini/patient/me',
     registration: '/api/mini/patient/registration',
+    scales: '/api/mini/patient/scales',
     favorites: '/api/mini/patient/favorites',
     favoriteCheck: (id: number | string) => `/api/mini/patient/favorites/check/${id}`,
     favoriteItem: (id: number | string) => `/api/mini/patient/favorites/${id}`,
