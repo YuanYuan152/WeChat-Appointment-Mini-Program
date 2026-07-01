@@ -33,7 +33,7 @@
           v-if="!readonly"
           class="field-input"
           :value="modelValue.consult_method"
-          placeholder="如：视频咨询、杨浦预约中心"
+          placeholder="线下咨询 / 视频咨询"
           @input="onInput('consult_method', $event)"
         />
         <text v-else class="field-readonly">{{ modelValue.consult_method || '—' }}</text>
@@ -81,18 +81,6 @@
         ——
         {{ modelValue.end_hour || '—' }}时{{ modelValue.end_minute || '—' }}分
       </text>
-    </view>
-
-    <view class="signature-row">
-      <text class="field-label">咨询师签名<text v-if="required" class="required">*</text></text>
-      <input
-        v-if="!readonly"
-        class="field-input"
-        :value="modelValue.counselor_signature"
-        placeholder="请填写咨询师签名"
-        @input="onInput('counselor_signature', $event)"
-      />
-      <text v-else class="field-readonly">{{ modelValue.counselor_signature || '—' }}</text>
     </view>
   </view>
 </template>
@@ -152,8 +140,7 @@ const onInput = (key: keyof CaseRecordHeaderInfo, e: { detail?: { value?: string
 }
 
 .header-field,
-.time-row,
-.signature-row {
+.time-row {
   display: flex;
   flex-direction: column;
   gap: 6rpx;

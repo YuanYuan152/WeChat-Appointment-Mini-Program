@@ -98,16 +98,19 @@ def submit_amendment_request(
     if pending_amendment_for_record(db, record.Id):
         raise HTTPException(status_code=400, detail="已有待审核的修改申请，请等待审核结果")
 
+    from case_record_risk_config import apply_calculated_crisis_level
+    from case_record_service import encode_photo_urls
+
+    completed_risk = apply_calculated_crisis_level(risk_assessment)
+
     validate_case_record_required_fields(
         subjective=subjective,
         objective=objective,
         assessment=assessment,
         plan=plan,
-        risk_assessment=risk_assessment,
+        risk_assessment=completed_risk,
         header_info=header_info,
     )
-
-    from case_record_service import encode_photo_urls
 
     row = AppCaseRecordAmendmentRequest(
         CaseRecordId=record.Id,
@@ -117,7 +120,7 @@ def submit_amendment_request(
         Objective=objective.strip(),
         Assessment=assessment.strip(),
         Plan=plan.strip(),
-        RiskAssessment=encode_risk_assessment(risk_assessment),
+        RiskAssessment=encode_risk_assessment(completed_risk),
         HeaderInfo=encode_header_info(header_info),
         PhotoUrls=encode_photo_urls(photo_urls or []),
         Reason=(reason or "").strip() or None,

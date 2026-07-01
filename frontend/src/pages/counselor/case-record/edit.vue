@@ -86,6 +86,7 @@ import CaseRecordHeaderForm from '@/components/CaseRecordHeaderForm.vue'
 import {
   CASE_RECORD_FIELD_LABELS,
   createEmptyRiskAssessment,
+  applyCalculatedCrisisLevel,
   crisisLevelRequiresReport,
   normalizeRiskAssessment,
   riskAssessmentMissingLabel,
@@ -165,7 +166,7 @@ const loadExistingDraft = async (rid: number) => {
     assessment: res.data.Assessment ?? '',
     plan: res.data.Plan ?? '',
   }
-  riskAssessment.value = normalizeRiskAssessment(res.data.RiskAssessment)
+  riskAssessment.value = applyCalculatedCrisisLevel(normalizeRiskAssessment(res.data.RiskAssessment))
   if (res.data.ConsultationId) consultationId.value = res.data.ConsultationId
   if (headerInfoIsComplete(res.data.HeaderInfo)) {
     headerInfo.value = normalizeHeaderInfo(res.data.HeaderInfo)
@@ -209,7 +210,7 @@ const validateForm = () => {
 
 const buildPayload = () => ({
   ...form.value,
-  risk_assessment: riskAssessment.value,
+  risk_assessment: applyCalculatedCrisisLevel(riskAssessment.value),
   header_info: headerInfo.value,
   photo_urls: [],
 })
@@ -251,7 +252,8 @@ const save = async () => {
       ...buildPayload(),
     })
     if (res.code === 0) {
-      const needReport = crisisLevelRequiresReport(riskAssessment.value)
+      const submitted = applyCalculatedCrisisLevel(riskAssessment.value)
+      const needReport = crisisLevelRequiresReport(submitted)
       uni.showToast({
         title: needReport ? '提交成功，请完成上报' : '提交成功',
         icon: 'success',

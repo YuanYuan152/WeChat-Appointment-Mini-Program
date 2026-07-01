@@ -1,5 +1,9 @@
 /** 与后端 schedule_slots.py 对齐的标准咨询时间槽 */
 export const ROLLING_WINDOW_DAYS = 30
+/** 普通模式列表向前追溯天数（已完成咨询、咨询记录筛选） */
+export const PAST_WINDOW_DAYS = 30
+/** 普通模式总展示天数：过去 PAST + 未来 ROLLING */
+export const LIST_WINDOW_DAYS = ROLLING_WINDOW_DAYS + PAST_WINDOW_DAYS
 export const SLOT_DURATION_MINUTES = 50
 export const SLOT_START_HOURS = [9, 10, 11, 13, 14, 15, 16, 17, 18] as const
 

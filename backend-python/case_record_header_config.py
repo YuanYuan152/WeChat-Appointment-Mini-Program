@@ -13,7 +13,6 @@ HEADER_FIELD_KEYS: Tuple[str, ...] = (
     "start_minute",
     "end_hour",
     "end_minute",
-    "counselor_signature",
 )
 
 HEADER_FIELD_LABELS: Dict[str, str] = {
@@ -28,8 +27,10 @@ HEADER_FIELD_LABELS: Dict[str, str] = {
     "start_minute": "咨询开始分钟",
     "end_hour": "咨询结束小时",
     "end_minute": "咨询结束分钟",
-    "counselor_signature": "咨询师签名",
 }
+
+DEFAULT_OFFLINE_CONSULT_METHOD = "线下咨询"
+DEFAULT_VIDEO_CONSULT_METHOD = "视频咨询"
 
 
 def empty_header_info() -> Dict[str, str]:

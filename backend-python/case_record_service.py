@@ -9,7 +9,9 @@ from sqlalchemy.orm import Session
 from case_record_risk_config import (
     RISK_ITEM_IDS,
     RISK_ITEM_BY_ID,
+    EDITABLE_RISK_ITEM_IDS,
     VALID_CHOICES,
+    apply_calculated_crisis_level,
     get_crisis_level_choice,
     crisis_level_text_only,
     risk_item_allowed_choices,
@@ -23,6 +25,8 @@ from case_record_header_config import (
     header_info_is_complete,
     normalize_header_info,
     validate_header_info,
+    DEFAULT_OFFLINE_CONSULT_METHOD,
+    DEFAULT_VIDEO_CONSULT_METHOD,
 )
 from models import (
     AppAccount,
@@ -79,7 +83,7 @@ def risk_assessment_is_complete(data: Optional[Dict[str, Any]]) -> bool:
     items = data.get("items")
     if not isinstance(items, dict):
         return False
-    for item_id in RISK_ITEM_IDS:
+    for item_id in EDITABLE_RISK_ITEM_IDS:
         val = items.get(item_id)
         if not isinstance(val, dict):
             return False
@@ -88,22 +92,25 @@ def risk_assessment_is_complete(data: Optional[Dict[str, Any]]) -> bool:
             return False
         if risk_item_note_required(item_id, choice) and not str(val.get("note") or "").strip():
             return False
-    return True
+    completed = apply_calculated_crisis_level({"items": items})
+    crisis = (completed or {}).get("items", {}).get("crisis_level", {})
+    choice = normalize_risk_choice(str((crisis or {}).get("choice") or "").strip(), "crisis_level")
+    return choice in risk_item_allowed_choices("crisis_level")
 
 
 def validate_risk_assessment(data: Optional[Dict[str, Any]]) -> None:
+    if not data or not isinstance(data, dict) or not isinstance(data.get("items"), dict):
+        raise HTTPException(status_code=400, detail="请完成个案风险评估表")
+    items = data["items"]
+    for item_id in EDITABLE_RISK_ITEM_IDS:
+        cfg = RISK_ITEM_BY_ID[item_id]
+        val = items.get(item_id) or {}
+        choice = normalize_risk_choice(str(val.get("choice") or "").strip().upper(), item_id)
+        if choice not in risk_item_allowed_choices(item_id):
+            raise HTTPException(status_code=400, detail=f"请选择：{cfg['label']}")
+        if risk_item_note_required(item_id, choice) and not str(val.get("note") or "").strip():
+            raise HTTPException(status_code=400, detail=f"请填写：{cfg['label']}说明")
     if not risk_assessment_is_complete(data):
-        if not data or not isinstance(data, dict) or not isinstance(data.get("items"), dict):
-            raise HTTPException(status_code=400, detail="请完成个案风险评估表")
-        items = data["items"]
-        for item_id in RISK_ITEM_IDS:
-            cfg = RISK_ITEM_BY_ID[item_id]
-            val = items.get(item_id) or {}
-            choice = normalize_risk_choice(str(val.get("choice") or "").strip().upper(), item_id)
-            if choice not in risk_item_allowed_choices(item_id):
-                raise HTTPException(status_code=400, detail=f"请选择：{cfg['label']}")
-            if risk_item_note_required(item_id, choice) and not str(val.get("note") or "").strip():
-                raise HTTPException(status_code=400, detail=f"请填写：{cfg['label']}说明")
         raise HTTPException(status_code=400, detail="请完成个案风险评估表")
 
 
@@ -183,14 +190,9 @@ def build_default_header_info(
     schedule: Optional[AppSchedule],
     counselor_id: int,
 ) -> Dict[str, str]:
-    from schedule_meta import center_display_name
+    from schedule_meta import is_video_center
 
     patient = db.query(AppAccount).filter(AppAccount.Id == consultation.PatientId).first()
-    counselor_profile = (
-        db.query(AppCounselorProfile)
-        .filter(AppCounselorProfile.AccountId == counselor_id)
-        .first()
-    )
     order = (
         db.query(AppOrder).filter(AppOrder.Id == consultation.OrderId).first()
         if consultation.OrderId
@@ -205,7 +207,11 @@ def build_default_header_info(
     header = empty_header_info()
     header["code"] = str(patient.Id) if patient else ""
     header["gender"] = (patient.Gender or "").strip() if patient else ""
-    header["consult_method"] = center_display_name(center_id) or ""
+    header["consult_method"] = (
+        DEFAULT_VIDEO_CONSULT_METHOD
+        if is_video_center(center_id)
+        else DEFAULT_OFFLINE_CONSULT_METHOD
+    )
     header["session_number"] = _session_number(db, consultation)
     header["start_year"] = start_parts["year"]
     header["start_month"] = start_parts["month"]
@@ -214,7 +220,6 @@ def build_default_header_info(
     header["start_minute"] = start_parts["minute"]
     header["end_hour"] = end_parts["hour"]
     header["end_minute"] = end_parts["minute"]
-    header["counselor_signature"] = (counselor_profile.Name or "").strip() if counselor_profile else ""
     return header
 
 
@@ -280,7 +285,8 @@ def validate_case_record_required_fields(
     missing = [labels[key] for key, val in values.items() if not (val or "").strip()]
     if missing:
         raise HTTPException(status_code=400, detail=f"请填写：{'、'.join(missing)}")
-    validate_risk_assessment(risk_assessment)
+    completed_risk = apply_calculated_crisis_level(risk_assessment)
+    validate_risk_assessment(completed_risk)
 
 
 def reject_if_case_record_locked(record: Optional[AppCaseRecord]) -> None:
@@ -327,7 +333,9 @@ def apply_case_record_fields(
     if plan is not None:
         record.Plan = plan
     if risk_assessment_set:
-        record.RiskAssessment = encode_risk_assessment(risk_assessment)
+        record.RiskAssessment = encode_risk_assessment(
+            apply_calculated_crisis_level(risk_assessment),
+        )
     if header_info_set:
         record.HeaderInfo = encode_header_info(header_info)
     if photo_urls_set:

@@ -126,12 +126,12 @@ RISK_ASSESSMENT_ITEMS: List[Dict[str, Any]] = [
         "description": "",
         "options": {
             "A": "无",
-            "B": "有（具体说明）",
-            "C": OTHER_OPTION_LABEL,
+            "B": "有(无危机)",
+            "C": "有(并归类为危机)",
         },
         "choices": ["A", "B", "C"],
         "note_choices": {"B", "C"},
-        "other_choice": "C",
+        "note_required_choices": set(),
     },
     {
         "id": "family_history",
@@ -140,12 +140,12 @@ RISK_ASSESSMENT_ITEMS: List[Dict[str, Any]] = [
         "description": "",
         "options": {
             "A": "无",
-            "B": "有（具体说明）",
-            "C": OTHER_OPTION_LABEL,
+            "B": "有(无危机)",
+            "C": "有(并归类为危机)",
         },
         "choices": ["A", "B", "C"],
         "note_choices": {"B", "C"},
-        "other_choice": "C",
+        "note_required_choices": set(),
     },
     {
         "id": "medical_history",
@@ -154,12 +154,12 @@ RISK_ASSESSMENT_ITEMS: List[Dict[str, Any]] = [
         "description": "",
         "options": {
             "A": "无",
-            "B": "有（具体说明）",
-            "C": OTHER_OPTION_LABEL,
+            "B": "有(无危机)",
+            "C": "有(并归类为危机)",
         },
         "choices": ["A", "B", "C"],
         "note_choices": {"B", "C"},
-        "other_choice": "C",
+        "note_required_choices": set(),
     },
     {
         "id": "trauma_history",
@@ -168,12 +168,12 @@ RISK_ASSESSMENT_ITEMS: List[Dict[str, Any]] = [
         "description": "",
         "options": {
             "A": "无",
-            "B": "有（具体说明）",
-            "C": OTHER_OPTION_LABEL,
+            "B": "有(无危机)",
+            "C": "有(并归类为危机)",
         },
         "choices": ["A", "B", "C"],
         "note_choices": {"B", "C"},
-        "other_choice": "C",
+        "note_required_choices": set(),
     },
     {
         "id": "crisis_level",
@@ -218,6 +218,9 @@ def risk_item_note_required(item_id: str, choice: str) -> bool:
     cfg = RISK_ITEM_BY_ID.get(item_id)
     if not cfg:
         return False
+    required = cfg.get("note_required_choices")
+    if required is not None:
+        return choice in required
     note_choices: Set[str] = cfg.get("note_choices") or set()
     return choice in note_choices
 
@@ -232,6 +235,132 @@ def risk_choice_label(item_id: str, choice: str) -> str:
 
 
 CRISIS_REPORT_CHOICES: Tuple[str, ...] = ("A", "B", "C")
+
+EDITABLE_RISK_ITEM_IDS: Tuple[str, ...] = tuple(
+    item["id"] for item in RISK_ASSESSMENT_ITEMS if item["id"] != "crisis_level"
+)
+
+RISK_ITEM_GUIDE_HINTS: Dict[str, str] = {
+    "diagnosis": (
+        "【一级】选 D（重度）且无医生「配合心理咨询」建议；或访谈发现明显精神病性症状；"
+        "或项目8选 B 且为严重躯体疾病。\n"
+        "【二级】如项目1选 C 且项目3选 B 等组合，评估可能升级为一级风险。"
+    ),
+    "support_system": "【三级】选 B（一般）。\n【二级】选 D（没有）且项目3选 C 等组合时，评估可能升级。",
+    "self_harm": "【一级】选 D（重度）且处于发作期。\n【二级】选 C。\n【三级】选 B。",
+    "harm_others": "【一级】选 D。\n【二级】选 C。\n【三级】选 B。",
+    "self_care": "【二级】选 C（经常不能自我照顾）。\n【三级】选 B（偶尔不能自我照顾）。",
+    "stress_event": (
+        "【一级】选 C 且说明正在经历性虐待、暴力关系。\n"
+        "【三级】选 C（归类为危机）时纳入评估；选 B（无危机）不升级。"
+    ),
+    "family_history": "选 B/C 可填具体说明（选填）；选 C（归类为危机）时为三级风险。",
+    "medical_history": "【一级】选 C 且为严重疾病或急性发作。\n选 B（无危机）不升级。",
+    "trauma_history": "选 B/C 可填具体说明（选填）；选 C（归类为危机）时为三级风险。",
+    "crisis_level": "根据前 1–9 题选项，按下方风险等级说明规则自动评定，无需手动选择。",
+}
+
+
+def _risk_choice(items: Dict[str, Any], item_id: str) -> str:
+    val = items.get(item_id) or {}
+    if not isinstance(val, dict):
+        return ""
+    return normalize_risk_choice(str(val.get("choice") or "").strip(), item_id)
+
+
+def _risk_note(items: Dict[str, Any], item_id: str) -> str:
+    val = items.get(item_id) or {}
+    if not isinstance(val, dict):
+        return ""
+    return str(val.get("note") or "").strip()
+
+
+def _note_has_any(text: str, keywords: Tuple[str, ...]) -> bool:
+    return any(k in text for k in keywords)
+
+
+ABUSE_KEYWORDS = ("性虐待", "暴力关系", "家暴", "虐待")
+SEVERE_MEDICAL_KEYWORDS = ("急性", "发作", "癌症", "重型糖尿病", "甲亢", "免疫", "慢性疼痛")
+
+
+def _extract_editable_items(items: Dict[str, Any]) -> Dict[str, Any]:
+    """仅取 1–9 题，避免第 10 题旧值干扰计算。"""
+    return {
+        item_id: items.get(item_id) or {"choice": "", "note": ""}
+        for item_id in EDITABLE_RISK_ITEM_IDS
+    }
+
+
+def calculate_crisis_level(items: Dict[str, Any]) -> str:
+    """根据 1–9 题选项与说明，按风险等级说明规则计算第 10 题。"""
+    editable = _extract_editable_items(items)
+    diagnosis = _risk_choice(editable, "diagnosis")
+    support = _risk_choice(editable, "support_system")
+    self_harm = _risk_choice(editable, "self_harm")
+    harm_others = _risk_choice(editable, "harm_others")
+    self_care = _risk_choice(editable, "self_care")
+    stress = _risk_choice(editable, "stress_event")
+    family = _risk_choice(editable, "family_history")
+    medical = _risk_choice(editable, "medical_history")
+    trauma = _risk_choice(editable, "trauma_history")
+
+    diag_note = _risk_note(editable, "diagnosis")
+    stress_note = _risk_note(editable, "stress_event")
+    medical_note = _risk_note(editable, "medical_history")
+
+    if self_harm == "D":
+        return "A"
+    if harm_others == "D":
+        return "A"
+    if diagnosis == "D" and not _note_has_any(diag_note, ("配合心理咨询", "配合咨询")):
+        return "A"
+    if stress == "C" and _note_has_any(stress_note, ABUSE_KEYWORDS):
+        return "A"
+    if diagnosis == "D" and _note_has_any(diag_note, ("复发", "近期复发")):
+        return "A"
+    if medical == "C" and _note_has_any(medical_note, SEVERE_MEDICAL_KEYWORDS):
+        return "A"
+
+    if self_harm == "C":
+        return "B"
+    if harm_others == "C":
+        return "B"
+    if self_care == "C":
+        return "B"
+    if diagnosis == "C" and self_harm == "B":
+        return "B"
+    if support == "D" and self_harm == "C":
+        return "B"
+    if diagnosis == "D" and self_harm == "B":
+        return "B"
+
+    if support == "B":
+        return "C"
+    if self_harm == "B":
+        return "C"
+    if harm_others == "B":
+        return "C"
+    if self_care == "B":
+        return "C"
+    if stress == "C":
+        return "C"
+    if family == "C":
+        return "C"
+    if medical == "C":
+        return "C"
+    if trauma == "C":
+        return "C"
+
+    return "D"
+
+
+def apply_calculated_crisis_level(data: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if not data or not isinstance(data.get("items"), dict):
+        return data
+    items = dict(data["items"])
+    level = calculate_crisis_level(items)
+    items["crisis_level"] = {"choice": level, "note": ""}
+    return {"items": items}
 
 
 def get_crisis_level_choice(risk_assessment: Optional[Dict[str, Any]]) -> str:

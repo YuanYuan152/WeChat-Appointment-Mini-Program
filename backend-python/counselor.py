@@ -914,12 +914,18 @@ def schedule_slot_options(
 @router.get("/schedules/calendar", response_model=ScheduleCalendarOut, summary="滚动排期日历")
 def schedule_calendar(
     start: Optional[str] = Query(None, description="起始日期 YYYY-MM-DD，默认今天"),
-    days: int = Query(ROLLING_WINDOW_DAYS, ge=1, le=ROLLING_WINDOW_DAYS),
+    days: int = Query(ROLLING_WINDOW_DAYS, ge=1, le=ROLLING_WINDOW_DAYS * 2),
+    past_days: int = Query(
+        0,
+        ge=0,
+        le=ROLLING_WINDOW_DAYS,
+        description="向前追溯天数（用于普通模式查看已完成咨询/咨询记录筛选）",
+    ),
     month: Optional[str] = Query(None, description="按月查看 YYYY-MM（日历模式）"),
     counselor: AppAccount = Depends(require_counselor),
     db: Session = Depends(get_db),
 ):
-    """滚动窗口：从今天起连续 ROLLING_WINDOW_DAYS 天；或指定 month 查看整月。"""
+    """滚动窗口：默认从今天起连续 ROLLING_WINDOW_DAYS 天；可指定 past_days 包含历史已完成排期；或指定 month 查看整月。"""
     today = china_now().date()
 
     if month:
@@ -954,14 +960,18 @@ def schedule_calendar(
             slots=_calendar_items_for_schedules(db, schedules, counselor.Id),
         )
 
-    start_date = today
+    earliest_date = today - timedelta(days=past_days)
+    start_date = earliest_date
     if start:
         try:
             requested = date_type.fromisoformat(start)
         except ValueError:
             raise HTTPException(status_code=400, detail="start 格式应为 YYYY-MM-DD")
-        if requested < today or requested > rolling_window_end(today):
-            raise HTTPException(status_code=400, detail=f"仅可查看今天起 {ROLLING_WINDOW_DAYS} 天内日历")
+        if requested < earliest_date or requested > rolling_window_end(today):
+            raise HTTPException(
+                status_code=400,
+                detail=f"仅可查看 {earliest_date.isoformat()} ~ {rolling_window_end(today).isoformat()} 内日历",
+            )
         start_date = requested
 
     start_dt = datetime.combine(start_date, time.min)
@@ -978,9 +988,11 @@ def schedule_calendar(
         .all()
     )
 
+    total_days = (rolling_window_end(today) - start_date).days + 1
+
     return ScheduleCalendarOut(
         startDate=start_date.isoformat(),
-        days=days,
+        days=total_days,
         slots=_calendar_items_for_schedules(db, schedules, counselor.Id),
     )
 
