@@ -1,8 +1,8 @@
 <template>
   <view class="page-ops-home">
     <view class="hero-card">
-      <text class="hero-title">运营工作台</text>
-      <text class="hero-subtitle">管理排期、咨询室、Banner、活动、主题月、文章与用户</text>
+      <text class="hero-title">管理工作台</text>
+      <text class="hero-subtitle">咨询助理、咨询主任、管理员共用；管理排期、咨询室、内容与用户</text>
     </view>
 
     <view class="grid">
@@ -35,7 +35,7 @@ const entries = [
   { title: '主题月管理', desc: '按月发布主题内容', symbol: '月', tone: 'tone-green', path: '/pages/ops/themes/index' },
   { title: '文章管理', desc: '内容中心 / 知识科普', symbol: '文', tone: 'tone-muted', path: '/pages/ops/articles/index' },
   { title: '运营看板', desc: '关键指标与日活数据', symbol: '数', tone: 'tone-muted', path: '/pages/ops/dashboard/index' },
-  { title: '用户与角色', desc: '账号绑定与角色管理', symbol: '人', tone: 'tone-green', path: '/pages/ops/admin-roles/index' },
+  { title: '角色&权限绑定', desc: '为账号绑定角色并分配管理工作台权限', symbol: '人', tone: 'tone-green', path: '/pages/ops/admin-roles/index' },
   { title: '豁免申请审核', desc: '24小时内取消退款豁免 · 管理员', symbol: '审', tone: 'tone-gold', path: '/pages/ops/refund-exemptions/index' },
   { title: '咨询记录修改审核', desc: '咨询师提交的记录修改申请', symbol: '改', tone: 'tone-gold', path: '/pages/ops/case-record-amendments/index' },
   { title: '咨询师请假审批', desc: '查看请假详情与来访联系方式', symbol: '假', tone: 'tone-gold', path: '/pages/ops/leave-requests/index' },

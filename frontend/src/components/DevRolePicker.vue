@@ -25,7 +25,7 @@
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
 import { AuthApi } from '@/apis/auth'
-import { updateTabBarForRole } from '@/utils/tabBar'
+import { applyRoleAfterLogin, navigateToRoleHome } from '@/utils/roleLogin'
 import {
   DEV_LOGIN_ROLE_GROUPS,
   DEV_LOGIN_ROLES,
@@ -107,10 +107,9 @@ const selectRole = async (role: DevLoginRole) => {
   try {
     await AuthApi.wxLogin(getDevLoginCode())
     const me = await AuthApi.getMe()
-    uni.setStorageSync('user_roles', JSON.stringify(me.roles || []))
-    if (me.activeRole) uni.setStorageSync('active_role', me.activeRole)
-    updateTabBarForRole(me.roles, me.activeRole)
+    const activeRole = await applyRoleAfterLogin(me)
     emit('switched', role)
+    navigateToRoleHome(activeRole)
     uni.showToast({ title: `已切换为${label}`, icon: 'success' })
   } catch (err: any) {
     uni.showToast({ title: err?.message || '切换账号失败', icon: 'none' })

@@ -207,6 +207,11 @@ def main():
             ensure_demo_assistant_workspace(db, assistant.Id, patient_map, counselor_map)
         ensure_demo_user_feedback(db, patient_map)
         ensure_demo_admin_unread_crisis_message(db)
+        from staff_message_service import sync_staff_workbench_inbox_messages
+
+        synced = sync_staff_workbench_inbox_messages(db)
+        if synced:
+            print(f"[OK] 管理工作台收件箱消息已同步 {synced} 条（助理/主任/管理员一致）")
 
         db.commit()
         print("[OK] 演示助理/运营/管理员账号已写入（dev_assistant / dev_ops / dev_admin）")

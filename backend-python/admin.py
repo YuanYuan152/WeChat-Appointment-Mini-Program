@@ -1,14 +1,17 @@
 """管理员轻控制台：最小角色绑定/解绑能力。"""
 
+import re
 from datetime import datetime, timedelta
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
+from sqlalchemy import exists, not_, or_
 from sqlalchemy.orm import Session
 
-from auth import get_current_account
+from auth import get_current_account, AppAccount, _ensure_role_binding
 from database import get_db
+from staff_roles import STAFF_WORKBENCH_ROLES, account_has_staff_workbench, staff_workbench_account_ids
 from models import (
     AppAccount,
     AppCaseRecord,
@@ -18,8 +21,10 @@ from models import (
     AppConsultationFeedback,
     AppCounselorProfile,
     AppLeaveRequest,
+    AppLoginSession,
     AppRefundExemption,
     AppRoleBinding,
+    AppRoleSwitchLog,
     AppSchedule,
 )
 from consultation_feedback import feedback_detail, feedback_summary
@@ -40,8 +45,32 @@ from case_record_service import decode_photo_urls, case_record_has_content, deco
 from refund_exemption_service import approve_refund_exemption, reject_refund_exemption
 from case_record_amendment_service import approve_amendment, reject_amendment
 from case_record_service import decode_photo_urls, snapshot_case_record
+from user_role_meta import (
+    counselor_type_label,
+    patient_source_label,
+    validate_counselor_type,
+    validate_patient_source,
+)
+from role_active import list_account_roles, resolve_active_role, invalidate_user_sessions
+from patient_registration import (
+    DEFAULT_PATIENT_SOURCE,
+    ensure_default_patient_registration,
+    ensure_patient_role_binding,
+)
 
 router = APIRouter(prefix="/api/mini/admin", tags=["Admin"])
+
+
+def require_staff_workbench(
+    current_account: AppAccount = Depends(get_current_account),
+    db: Session = Depends(get_db),
+) -> AppAccount:
+    """咨询助理、咨询主任、管理员共用管理工作台。"""
+    if not account_has_staff_workbench(
+        db, current_account.Id, getattr(current_account, "ActiveRole", None)
+    ):
+        raise HTTPException(status_code=403, detail="无管理工作台权限")
+    return current_account
 
 
 def require_admin(
@@ -61,19 +90,174 @@ def require_ops_or_admin(
     current_account: AppAccount = Depends(get_current_account),
     db: Session = Depends(get_db),
 ) -> AppAccount:
-    """豁免审核等工作台能力：运营与管理员均可处理。"""
-    binding = db.query(AppRoleBinding).filter(
-        AppRoleBinding.AccountId == current_account.Id,
-        AppRoleBinding.RoleType.in_(["Ops", "Admin"]),
-    ).first()
-    if not binding:
-        raise HTTPException(status_code=403, detail="无运营/管理员权限")
-    return current_account
+    return require_staff_workbench(current_account, db)
 
 
 class BindRoleRequest(BaseModel):
     role: str
     target_id: Optional[int] = None
+    counselor_type: Optional[str] = None
+    patient_source: Optional[str] = None
+
+
+class CreateUserByMobileRequest(BaseModel):
+    mobile: str = Field(..., min_length=1, max_length=20)
+    role: str
+    nickname: Optional[str] = Field(None, max_length=100)
+    patient_source: Optional[str] = None
+    counselor_type: Optional[str] = None
+
+
+BINDABLE_ROLE_TYPES = frozenset({"Counselor", "Assistant", "Ops", "Patient", "Admin"})
+
+
+def _normalize_mobile(mobile: str) -> str:
+    digits = re.sub(r"\D", "", mobile or "")
+    if not re.fullmatch(r"1\d{10}", digits):
+        raise HTTPException(status_code=400, detail="请输入有效的11位手机号")
+    return digits
+
+
+def _revoked_log_exists():
+    return exists().where(
+        AppRoleSwitchLog.AccountId == AppAccount.Id,
+        AppRoleSwitchLog.ToRole == "REVOKED",
+    )
+
+
+def _role_binding_exists():
+    return exists().where(
+        AppRoleBinding.AccountId == AppAccount.Id,
+    )
+
+
+def _legacy_staff_revoked_clause():
+    """AccessRevokedAt 上线前删除的用户：有 REVOKED 日志且无角色绑定。"""
+    return _revoked_log_exists() & ~_role_binding_exists()
+
+
+def _is_staff_revoked(db: Session, account: AppAccount) -> bool:
+    if not account.IsActive:
+        return False
+    if getattr(account, "AccessRevokedAt", None):
+        return True
+    if db.query(AppRoleBinding).filter(AppRoleBinding.AccountId == account.Id).first():
+        return False
+    return (
+        db.query(AppRoleSwitchLog)
+        .filter(
+            AppRoleSwitchLog.AccountId == account.Id,
+            AppRoleSwitchLog.ToRole == "REVOKED",
+        )
+        .first()
+        is not None
+    )
+
+
+def _last_revoke_meta(db: Session, account_id: int, access_revoked_at=None) -> dict:
+    log = (
+        db.query(AppRoleSwitchLog)
+        .filter(
+            AppRoleSwitchLog.AccountId == account_id,
+            AppRoleSwitchLog.ToRole == "REVOKED",
+        )
+        .order_by(AppRoleSwitchLog.SwitchedAt.desc())
+        .first()
+    )
+    revoked_at = access_revoked_at or (log.SwitchedAt if log else None)
+    return {
+        "accessRevokedAt": revoked_at,
+        "revokedAt": revoked_at,
+        "formerActiveRole": log.FromRole if log else None,
+    }
+
+
+def _user_admin_out(db: Session, account: AppAccount) -> dict:
+    profile = (
+        db.query(AppCounselorProfile)
+        .filter(AppCounselorProfile.AccountId == account.Id)
+        .first()
+    )
+    access_revoked_at = getattr(account, "AccessRevokedAt", None)
+    out = {
+        "id": account.Id,
+        "mobile": account.Mobile,
+        "nickname": account.Nickname,
+        "activeRole": account.ActiveRole,
+        "patientSource": getattr(account, "PatientSource", None),
+        "patientSourceLabel": patient_source_label(getattr(account, "PatientSource", None)),
+        "counselorType": profile.CounselorType if profile else None,
+        "counselorTypeLabel": counselor_type_label(profile.CounselorType if profile else None),
+        "roles": [
+            b.RoleType
+            for b in db.query(AppRoleBinding).filter(AppRoleBinding.AccountId == account.Id).all()
+        ],
+        "createdAt": getattr(account, "CreatedAt", None),
+        "isSelfRegistered": getattr(account, "PatientSource", None) == DEFAULT_PATIENT_SOURCE,
+    }
+    if access_revoked_at or _is_staff_revoked(db, account):
+        out.update(_last_revoke_meta(db, account.Id, access_revoked_at))
+    return out
+
+
+def _set_counselor_profile_active(db: Session, account_id: int, is_active: bool) -> None:
+    profile = (
+        db.query(AppCounselorProfile)
+        .filter(AppCounselorProfile.AccountId == account_id)
+        .first()
+    )
+    if profile:
+        profile.IsActive = is_active
+        profile.UpdatedAt = datetime.utcnow()
+
+
+def _ensure_counselor_profile(
+    db: Session,
+    account: AppAccount,
+    counselor_type: str,
+) -> None:
+    profile = (
+        db.query(AppCounselorProfile)
+        .filter(AppCounselorProfile.AccountId == account.Id)
+        .first()
+    )
+    display_name = account.Nickname or account.RealName or f"咨询师{account.Mobile[-4:] if account.Mobile else account.Id}"
+    if not profile:
+        profile = AppCounselorProfile(
+            AccountId=account.Id,
+            Name=display_name,
+            CounselorType=counselor_type,
+            IsActive=True,
+        )
+        db.add(profile)
+    else:
+        profile.CounselorType = counselor_type
+        profile.IsActive = True
+        if not profile.Name:
+            profile.Name = display_name
+        profile.UpdatedAt = datetime.utcnow()
+
+
+def _restore_counselor_on_rebind(db: Session, account: AppAccount) -> None:
+    """解绑咨询师后再绑定：恢复档案可用状态，保留原有类型与历史数据。"""
+    profile = (
+        db.query(AppCounselorProfile)
+        .filter(AppCounselorProfile.AccountId == account.Id)
+        .first()
+    )
+    if profile:
+        profile.IsActive = True
+        profile.UpdatedAt = datetime.utcnow()
+        return
+    _ensure_counselor_profile(db, account, "PROFESSIONAL")
+
+
+def _restore_account_on_role_bind(db: Session, user: AppAccount, role: str) -> None:
+    """解绑后再绑定：恢复账号与角色访问，历史咨询/个案等数据始终保留。"""
+    user.IsActive = True
+    user.AccessRevokedAt = None
+    if role == "Counselor":
+        _restore_counselor_on_rebind(db, user)
 
 
 class RefundExemptionAdminOut(BaseModel):
@@ -131,63 +315,257 @@ class RejectCaseRecordAmendmentRequest(BaseModel):
 
 @router.get("/users", summary="管理员用户列表")
 def list_admin_users(
-    _admin: AppAccount = Depends(require_admin),
+    status: str = Query("active", description="active=在管用户，revoked=已删除用户"),
+    _admin: AppAccount = Depends(require_staff_workbench),
     db: Session = Depends(get_db),
 ):
-    users = db.query(AppAccount).order_by(AppAccount.Id.desc()).limit(100).all()
-    return [
-        {
-            "id": u.Id,
-            "mobile": u.Mobile,
-            "nickname": u.Nickname,
-            "activeRole": u.ActiveRole,
-            "roles": [
-                b.RoleType
-                for b in db.query(AppRoleBinding).filter(AppRoleBinding.AccountId == u.Id).all()
-            ],
-        }
-        for u in users
-    ]
+    if status not in {"active", "revoked"}:
+        raise HTTPException(status_code=400, detail="status 仅支持 active 或 revoked")
+
+    q = db.query(AppAccount).filter(AppAccount.IsActive == True)
+    legacy_revoked = _legacy_staff_revoked_clause()
+    if status == "active":
+        q = q.filter(AppAccount.AccessRevokedAt.is_(None), ~legacy_revoked)
+    else:
+        q = q.filter(or_(AppAccount.AccessRevokedAt.isnot(None), legacy_revoked))
+
+    users = q.order_by(AppAccount.Id.desc()).limit(100).all()
+    return [_user_admin_out(db, u) for u in users]
+
+
+@router.post("/users/by-mobile", summary="通过手机号添加用户并绑定角色")
+def create_user_by_mobile(
+    body: CreateUserByMobileRequest,
+    _admin: AppAccount = Depends(require_staff_workbench),
+    db: Session = Depends(get_db),
+):
+    mobile = _normalize_mobile(body.mobile)
+    if body.role not in BINDABLE_ROLE_TYPES:
+        raise HTTPException(status_code=400, detail="不支持绑定该角色")
+
+    patient_source: Optional[str] = None
+    counselor_type: Optional[str] = None
+    if body.role == "Patient":
+        try:
+            patient_source = validate_patient_source(body.patient_source)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+    elif body.role == "Counselor":
+        try:
+            counselor_type = validate_counselor_type(body.counselor_type)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    account = db.query(AppAccount).filter(AppAccount.Mobile == mobile).first()
+    created = False
+    if not account:
+        openid = f"admin_invite_{mobile}"
+        if db.query(AppAccount).filter(AppAccount.OpenId == openid).first():
+            raise HTTPException(status_code=400, detail="该手机号已存在待激活账号")
+        account = AppAccount(
+            OpenId=openid,
+            Mobile=mobile,
+            Nickname=body.nickname or f"用户{mobile[-4:]}",
+            ActiveRole=body.role,
+            IsActive=True,
+        )
+        db.add(account)
+        db.flush()
+        created = True
+    else:
+        if not account.IsActive:
+            raise HTTPException(status_code=400, detail="该手机号对应账号已注销")
+        if body.nickname:
+            account.Nickname = body.nickname
+        if getattr(account, "AccessRevokedAt", None):
+            account.AccessRevokedAt = None
+
+    if patient_source:
+        account.PatientSource = patient_source
+
+    ensure_patient_role_binding(db, account.Id)
+    _ensure_role_binding(db, account.Id, body.role)
+    _restore_account_on_role_bind(db, account, body.role)
+    if body.role == "Counselor" and counselor_type:
+        _ensure_counselor_profile(db, account, counselor_type)
+    elif body.role == "Counselor":
+        _restore_counselor_on_rebind(db, account)
+    roles = list_account_roles(db, account.Id)
+    account.ActiveRole = resolve_active_role(roles, body.role)
+    invalidate_user_sessions(db, account.Id)
+    account.UpdatedAt = datetime.utcnow()
+    db.commit()
+    db.refresh(account)
+
+    return {
+        **_user_admin_out(db, account),
+        "created": created,
+        "message": "用户已添加" if created else "已为现有用户绑定角色，重新登录后可恢复数据访问",
+    }
 
 
 @router.post("/users/{user_id}/roles", summary="绑定用户角色")
 def bind_user_role(
     user_id: int,
     body: BindRoleRequest,
-    _admin: AppAccount = Depends(require_admin),
+    _admin: AppAccount = Depends(require_staff_workbench),
     db: Session = Depends(get_db),
 ):
     user = db.query(AppAccount).filter(AppAccount.Id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
+    if body.role not in BINDABLE_ROLE_TYPES:
+        raise HTTPException(status_code=400, detail="不支持绑定该角色")
     existing = db.query(AppRoleBinding).filter(
         AppRoleBinding.AccountId == user_id,
         AppRoleBinding.RoleType == body.role,
     ).first()
     if existing:
         return {"message": "角色已存在"}
+
+    counselor_type: Optional[str] = None
+    if body.role == "Counselor":
+        try:
+            counselor_type = validate_counselor_type(body.counselor_type or "PROFESSIONAL")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+    elif body.role == "Patient" and body.patient_source:
+        try:
+            user.PatientSource = validate_patient_source(body.patient_source)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    ensure_patient_role_binding(db, user_id)
+    previous_active = user.ActiveRole
     binding = AppRoleBinding(AccountId=user_id, RoleType=body.role, TargetId=body.target_id)
     db.add(binding)
+    _restore_account_on_role_bind(db, user, body.role)
+    if body.role == "Counselor":
+        _ensure_counselor_profile(db, user, counselor_type or "PROFESSIONAL")
+    roles = list_account_roles(db, user_id)
+    user.ActiveRole = resolve_active_role(roles, body.role)
+    user.UpdatedAt = datetime.utcnow()
+    db.add(AppRoleSwitchLog(
+        AccountId=user_id,
+        FromRole=previous_active,
+        ToRole=body.role,
+    ))
+    invalidate_user_sessions(db, user_id)
     db.commit()
-    return {"message": "角色已绑定"}
+    return {"message": "角色已绑定，用户重新登录后即可恢复该角色数据访问"}
 
 
 @router.delete("/users/{user_id}/roles/{role}", summary="解绑用户角色")
 def unbind_user_role(
     user_id: int,
     role: str,
-    _admin: AppAccount = Depends(require_admin),
+    _admin: AppAccount = Depends(require_staff_workbench),
     db: Session = Depends(get_db),
 ):
+    """
+    单独解绑某一角色（非删除用户）：
+    - 仅移除该角色绑定，不删除账号与历史业务数据
+    - 咨询师解绑时停用档案展示，数据仍保留
+    - 后续重新绑定同角色后，用户登录可再次加载该角色数据
+    """
+    if role == "Patient":
+        raise HTTPException(status_code=400, detail="来访为默认基础角色，不可解绑")
+
     binding = db.query(AppRoleBinding).filter(
         AppRoleBinding.AccountId == user_id,
         AppRoleBinding.RoleType == role,
     ).first()
     if not binding:
         raise HTTPException(status_code=404, detail="角色绑定不存在")
+
+    user = db.query(AppAccount).filter(AppAccount.Id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+
+    previous_active = user.ActiveRole
     db.delete(binding)
+    if role == "Counselor":
+        _set_counselor_profile_active(db, user_id, False)
+
+    roles = list_account_roles(db, user_id)
+    prefer = None if user.ActiveRole == role else user.ActiveRole
+    user.ActiveRole = resolve_active_role(roles, prefer)
+    user.UpdatedAt = datetime.utcnow()
+    db.add(AppRoleSwitchLog(
+        AccountId=user_id,
+        FromRole=previous_active,
+        ToRole=f"UNBIND_{role}",
+    ))
+    invalidate_user_sessions(db, user_id)
     db.commit()
-    return {"message": "角色已解绑"}
+    return {"message": "角色已解绑，历史数据已保留，重新绑定后登录可恢复访问"}
+
+
+@router.delete("/users/{user_id}", summary="删除用户（彻底解绑权限，保留历史数据）")
+def revoke_user_access(
+    user_id: int,
+    request: Request,
+    admin: AppAccount = Depends(require_staff_workbench),
+    db: Session = Depends(get_db),
+):
+    """
+    工作人员将离职咨询师等账号「删除」时：
+    - 不物理删除 AppAccount，历史咨询/个案等数据保留
+    - 解绑该手机号下账号的全部角色
+    - 停用咨询师档案（若存在），使其不再出现在预约列表
+    - 失效全部登录会话，下次登录仅作为普通来访使用
+    """
+    if user_id == admin.Id:
+        raise HTTPException(status_code=400, detail="不能删除当前登录账号")
+
+    account = db.query(AppAccount).filter(AppAccount.Id == user_id).first()
+    if not account:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    if not account.IsActive:
+        raise HTTPException(status_code=400, detail="该账号已注销")
+    if getattr(account, "AccessRevokedAt", None):
+        raise HTTPException(status_code=400, detail="该用户已在已删除列表中")
+
+    bindings = db.query(AppRoleBinding).filter(AppRoleBinding.AccountId == user_id).all()
+    if not bindings:
+        if _is_staff_revoked(db, account):
+            raise HTTPException(status_code=400, detail="该用户已在已删除列表中")
+        raise HTTPException(status_code=400, detail="该用户已无绑定角色")
+
+    from_role = account.ActiveRole
+    removed_roles = [b.RoleType for b in bindings]
+
+    db.query(AppLoginSession).filter(
+        AppLoginSession.AccountId == user_id
+    ).delete(synchronize_session=False)
+
+    db.query(AppRoleBinding).filter(
+        AppRoleBinding.AccountId == user_id
+    ).delete(synchronize_session=False)
+
+    _set_counselor_profile_active(db, user_id, False)
+
+    now = datetime.utcnow()
+    account.ActiveRole = "Patient"
+    account.AccessRevokedAt = now
+    account.UpdatedAt = now
+
+    db.add(AppRoleSwitchLog(
+        AccountId=user_id,
+        FromRole=from_role,
+        ToRole="REVOKED",
+        Ip=request.client.host if request.client else None,
+        UserAgent=request.headers.get("user-agent", "")[:200] if request.headers else None,
+    ))
+
+    db.commit()
+    db.refresh(account)
+
+    return {
+        **_user_admin_out(db, account),
+        "removedRoles": removed_roles,
+        "message": "用户已移入已删除列表，权限已彻底解绑",
+    }
 
 
 def _build_exemption_admin_out(
@@ -1680,7 +2058,7 @@ def update_admin_counselor(
 @router.get("/leave-requests", summary="咨询师请假列表（管理员）")
 def list_leave_requests(
     status: str = Query("ALL", description="PENDING|APPROVED|REJECTED|ALL"),
-    _admin: AppAccount = Depends(require_admin),
+    _admin: AppAccount = Depends(require_staff_workbench),
     db: Session = Depends(get_db),
 ):
     q = db.query(AppLeaveRequest).order_by(AppLeaveRequest.CreatedAt.desc())
@@ -1693,7 +2071,7 @@ def list_leave_requests(
 @router.get("/leave-requests/{leave_id}", summary="咨询师请假详情（管理员）")
 def get_leave_request(
     leave_id: int,
-    _admin: AppAccount = Depends(require_admin),
+    _admin: AppAccount = Depends(require_staff_workbench),
     db: Session = Depends(get_db),
 ):
     row = db.query(AppLeaveRequest).filter(AppLeaveRequest.Id == leave_id).first()
@@ -1705,7 +2083,7 @@ def get_leave_request(
 @router.post("/leave-requests/{leave_id}/approve", summary="通过咨询师请假")
 def approve_leave_request_api(
     leave_id: int,
-    admin: AppAccount = Depends(require_admin),
+    admin: AppAccount = Depends(require_staff_workbench),
     db: Session = Depends(get_db),
 ):
     row = db.query(AppLeaveRequest).filter(AppLeaveRequest.Id == leave_id).first()
@@ -1722,7 +2100,7 @@ def approve_leave_request_api(
 @router.post("/leave-requests/{leave_id}/reject", summary="拒绝咨询师请假")
 def reject_leave_request_api(
     leave_id: int,
-    admin: AppAccount = Depends(require_admin),
+    admin: AppAccount = Depends(require_staff_workbench),
     db: Session = Depends(get_db),
 ):
     row = db.query(AppLeaveRequest).filter(AppLeaveRequest.Id == leave_id).first()

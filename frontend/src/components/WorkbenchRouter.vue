@@ -39,12 +39,12 @@
 import { onMounted, ref } from 'vue'
 import { AuthApi } from '@/apis/auth'
 import DevRolePicker from '@/components/DevRolePicker.vue'
+import { OPS_WORKBENCH_PATH, STAFF_OPS_WORKBENCH_ROLES } from '@/constants/roles'
+import { resolveWorkbenchRole } from '@/utils/roleLogin'
 import { updateTabBarForRole } from '@/utils/tabBar'
 import {
   getDevLoginCode,
-  getDevWorkbenchRole,
   isLoggedIn,
-  isMockLoginEnabled,
   resolveWxLoginCode,
 } from '@/utils/auth'
 
@@ -55,29 +55,15 @@ const errorMsg = ref('')
 
 const ROLE_ROUTES: Record<string, string> = {
   Counselor: '/pages/counselor/workbench/index',
-  Assistant: '/pages/assistant/workbench/index',
-  Ops: '/pages/ops/index/index',
-  Admin: '/pages/ops/index/index',
+  Assistant: OPS_WORKBENCH_PATH,
+  Ops: OPS_WORKBENCH_PATH,
+  Admin: OPS_WORKBENCH_PATH,
 }
 
-const WORKBENCH_ROLES = new Set(['Counselor', 'Assistant', 'Ops', 'Admin'])
-
-const resolveActiveRole = (roles: string[], activeRole?: string) => {
-  // 测试/开发联调：以 DevRolePicker 所选角色为准，避免多角色账号 ActiveRole 不一致
-  if (isMockLoginEnabled()) {
-    const devRole = getDevWorkbenchRole()
-    if (devRole && devRole !== 'Patient' && roles.includes(devRole)) return devRole
-  }
-  // 来访者主动切换为 Patient 时，不再按多角色优先级跳进工作台
-  if (activeRole === 'Patient') return 'Patient'
-  if (activeRole && WORKBENCH_ROLES.has(activeRole)) return activeRole
-  const priority = ['Counselor', 'Assistant', 'Ops', 'Admin']
-  return priority.find(role => roles.includes(role)) || 'Patient'
-}
+const WORKBENCH_ROLES = new Set(['Counselor', ...STAFF_OPS_WORKBENCH_ROLES])
 
 const goConsult = () => uni.switchTab({ url: '/pages/consultant/list' })
 const goRecords = () => uni.switchTab({ url: '/pages/tab-slot/index' })
-const goProfile = () => uni.switchTab({ url: '/pages/user/profile' })
 
 const goLogin = async () => {
   state.value = 'loading'
@@ -100,11 +86,9 @@ const routeToWorkbench = async () => {
   state.value = 'loading'
   try {
     const me = await AuthApi.getMe()
-    const role = resolveActiveRole(me.roles || [], me.activeRole)
+    const role = resolveWorkbenchRole(me.roles || [])
 
     uni.setStorageSync('user_roles', JSON.stringify(me.roles || []))
-    if (me.activeRole) uni.setStorageSync('active_role', me.activeRole)
-    updateTabBarForRole(me.roles, me.activeRole)
 
     if (!WORKBENCH_ROLES.has(role)) {
       state.value = 'patientBlocked'
@@ -114,6 +98,8 @@ const routeToWorkbench = async () => {
     if (role !== me.activeRole) {
       await AuthApi.switchRole(role)
     }
+    uni.setStorageSync('active_role', role)
+    updateTabBarForRole(me.roles)
 
     const target = ROLE_ROUTES[role]
     uni.redirectTo({ url: target })

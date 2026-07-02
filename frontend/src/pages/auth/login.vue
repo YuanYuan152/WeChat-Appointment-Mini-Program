@@ -55,7 +55,7 @@
 import { computed, ref, onMounted } from 'vue'
 import { AuthApi } from '@/apis/auth'
 import DevRolePicker from '@/components/DevRolePicker.vue'
-import { updateTabBarForRole } from '@/utils/tabBar'
+import { applyRoleAfterLogin, navigateToRoleHome } from '@/utils/roleLogin'
 import {
   DEV_LOGIN_ROLES,
   getDevLoginCode,
@@ -135,23 +135,17 @@ const handlePhoneAuth = async (e: any) => {
 }
 
 const afterLoginSuccess = async () => {
-  // 登录后拉取角色信息存入 storage，供路由守卫使用
   try {
     const me = await AuthApi.getMe()
-    uni.setStorageSync('user_roles', JSON.stringify(me.roles || []))
-    if (me.activeRole) uni.setStorageSync('active_role', me.activeRole)
-    updateTabBarForRole(me.roles, me.activeRole)
-  } catch { /* ignore */ }
-
-  setTimeout(() => {
-    const redirectUrl = uni.getStorageSync('redirectAfterLogin')
-    if (redirectUrl) {
-      uni.removeStorageSync('redirectAfterLogin')
-      uni.redirectTo({ url: redirectUrl })
-    } else {
-      goBack()
-    }
-  }, 1200)
+    const activeRole = await applyRoleAfterLogin(me)
+    const redirectUrl = uni.getStorageSync('redirectAfterLogin') as string | undefined
+    setTimeout(() => {
+      navigateToRoleHome(activeRole, redirectUrl || undefined)
+    }, 600)
+  } catch (err: any) {
+    uni.showToast({ title: err?.message || '登录后获取账号信息失败', icon: 'none' })
+    setTimeout(() => goBack(), 600)
+  }
 }
 
 const goBack = () => {

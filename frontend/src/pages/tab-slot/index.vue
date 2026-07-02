@@ -21,7 +21,7 @@ const workbenchRef = ref<InstanceType<typeof WorkbenchRouter> | null>(null)
 const syncMode = async () => {
   if (!isLoggedIn()) {
     mode.value = 'patient'
-    updateTabBarForRole([], 'Patient')
+    updateTabBarForRole([])
     uni.setNavigationBarTitle({ title: '预约记录' })
     return
   }
@@ -31,9 +31,9 @@ const syncMode = async () => {
     uni.setStorageSync('user_roles', JSON.stringify(me.roles || []))
     if (me.activeRole) uni.setStorageSync('active_role', me.activeRole)
 
-    const isPatient = resolveTabSlotIsPatient(me.roles, me.activeRole)
+    const isPatient = resolveTabSlotIsPatient(me.roles)
     mode.value = isPatient ? 'patient' : 'workbench'
-    updateTabBarForRole(me.roles, me.activeRole)
+    updateTabBarForRole(me.roles)
     uni.setNavigationBarTitle({ title: isPatient ? '预约记录' : '工作台' })
   } catch {
     mode.value = 'patient'

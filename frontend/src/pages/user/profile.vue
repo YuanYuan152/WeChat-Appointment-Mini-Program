@@ -159,6 +159,7 @@ import { AuthApi } from '@/apis/auth'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
 import { updateTabBarForRole } from '@/utils/tabBar'
+import { resolveHighestRole, roleLabel } from '@/constants/roles'
 
 interface UserInfo {
   name: string
@@ -191,14 +192,6 @@ const pendingRecordCount = ref(0)
 
 const isCounselor = computed(() => userRoles.value.includes('Counselor'))
 
-const ROLE_LABELS: Record<string, string> = {
-  Patient: '来访者',
-  Counselor: '咨询师',
-  Assistant: '助理',
-  Ops: '运营',
-  Admin: '管理员',
-}
-
 const PROFILE_EDIT_ROUTES: Record<string, string> = {
   Patient: '/pages/patient/profile/edit',
   Counselor: '/pages/user/info',
@@ -206,8 +199,6 @@ const PROFILE_EDIT_ROUTES: Record<string, string> = {
   Ops: '/pages/user/info',
   Admin: '/pages/user/info',
 }
-
-const roleLabel = (role: string) => ROLE_LABELS[role] || role
 
 const getProfileEditUrl = () =>
   PROFILE_EDIT_ROUTES[activeRole.value] || '/pages/user/info'
@@ -262,15 +253,15 @@ const loadUserInfo = async () => {
       phone: meData.mobile || '',
       avatar: meData.avatarUrl || '',
     }
-    activeRole.value = meData.activeRole || meData.roles?.[0] || ''
     userRoles.value = meData.roles || []
+    activeRole.value = resolveHighestRole(userRoles.value)
     if (meData.roles?.length) {
       uni.setStorageSync('user_roles', JSON.stringify(meData.roles))
     }
     if (meData.activeRole) {
       uni.setStorageSync('active_role', meData.activeRole)
     }
-    updateTabBarForRole(meData.roles, meData.activeRole)
+    updateTabBarForRole(meData.roles)
     await loadPendingRecordCount()
   } catch {
     // 网络异常时保留登录态，避免误清 token
@@ -492,7 +483,7 @@ const handleLogout = () => {
       uni.removeStorageSync('user_roles')
       uni.removeStorageSync('active_role')
       uni.removeStorageSync('redirectAfterLogin')
-      updateTabBarForRole([], 'Patient')
+      updateTabBarForRole([])
       isLoggedIn.value = false
       resetPageState()
       uni.showToast({ title: '已退出登录', icon: 'success' })

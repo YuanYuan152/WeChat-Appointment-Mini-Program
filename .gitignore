@@ -403,6 +403,7 @@ FodyWeavers.xsd
 /.idea
 
 # Python 虚拟环境与缓存
+venv/
 backend-python/venv/
 **/__pycache__/
 *.py[cod]

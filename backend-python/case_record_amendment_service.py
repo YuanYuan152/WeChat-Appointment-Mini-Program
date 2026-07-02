@@ -31,14 +31,11 @@ from models import (
 )
 
 
+from staff_roles import staff_workbench_account_ids
+
+
 def _ops_admin_account_ids(db: Session) -> List[int]:
-    rows = (
-        db.query(AppRoleBinding.AccountId)
-        .filter(AppRoleBinding.RoleType.in_(["Admin", "Ops"]))
-        .distinct()
-        .all()
-    )
-    return [r[0] for r in rows]
+    return staff_workbench_account_ids(db)
 
 
 def _counselor_display_name(db: Session, counselor_id: int) -> str:
@@ -157,16 +154,16 @@ def notify_admins_new_amendment(
         "startTime": start_time or None,
     }
     content = json.dumps({"summary": summary, "detail": detail}, ensure_ascii=False)
-    for admin_id in _ops_admin_account_ids(db):
-        create_message(
-            db,
-            admin_id,
-            "SYSTEM",
-            title,
-            content,
-            related_type="CASE_RECORD_AMENDMENT_PENDING",
-            related_id=amendment.Id,
-        )
+    from staff_message_service import notify_staff_workbench_inbox
+
+    notify_staff_workbench_inbox(
+        db,
+        type_="SYSTEM",
+        title=title,
+        content=content,
+        related_type="CASE_RECORD_AMENDMENT_PENDING",
+        related_id=amendment.Id,
+    )
 
 
 def _update_admin_pending_messages(
@@ -201,7 +198,7 @@ def _update_admin_pending_messages(
         .order_by(AppMessage.CreatedAt.asc())
         .all()
     )
-    admin_ids = set(_ops_admin_account_ids(db))
+    admin_ids = set(staff_workbench_account_ids(db))
     for row in rows:
         if row.AccountId not in admin_ids:
             continue

@@ -18,6 +18,7 @@ from models import (
     AppRefundExemption,
     AppRoleBinding,
 )
+from staff_roles import staff_workbench_account_ids
 
 
 def latest_exemptions_by_consultation(
@@ -64,13 +65,7 @@ def validate_exemption_submission(
 
 
 def _admin_account_ids(db: Session) -> List[int]:
-    rows = (
-        db.query(AppRoleBinding.AccountId)
-        .filter(AppRoleBinding.RoleType.in_(["Admin", "Ops"]))
-        .distinct()
-        .all()
-    )
-    return [r[0] for r in rows]
+    return staff_workbench_account_ids(db)
 
 
 def _patient_display_name(db: Session, account_id: int) -> str:
@@ -110,16 +105,16 @@ def notify_admins_new_exemption(
         "status": "PENDING",
     }
     content = json.dumps({"summary": summary, "detail": detail}, ensure_ascii=False)
-    for admin_id in _admin_account_ids(db):
-        create_message(
-            db,
-            admin_id,
-            "SYSTEM",
-            title,
-            content,
-            related_type="REFUND_EXEMPTION_PENDING",
-            related_id=exemption.Id,
-        )
+    from staff_message_service import notify_staff_workbench_inbox
+
+    notify_staff_workbench_inbox(
+        db,
+        type_="SYSTEM",
+        title=title,
+        content=content,
+        related_type="REFUND_EXEMPTION_PENDING",
+        related_id=exemption.Id,
+    )
 
 
 def notify_patient_exemption_result(

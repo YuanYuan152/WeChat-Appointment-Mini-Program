@@ -32,9 +32,11 @@ export const DEV_LOGIN_ROLE_GROUPS: {
   title: string
   roles: DevLoginRole[]
 }[] = [
-  { title: '来访者', roles: ['patient', 'patient_gang', 'patient_li'] },
+  { title: '来访', roles: ['patient', 'patient_gang', 'patient_li'] },
   { title: '咨询师', roles: ['counselor', 'counselor_zhang', 'counselor_wang', 'counselor_chen'] },
-  { title: '内部角色', roles: ['assistant', 'ops', 'admin'] },
+  { title: '咨询助理', roles: ['assistant'] },
+  { title: '咨询主任', roles: ['ops'] },
+  { title: '管理员', roles: ['admin'] },
 ]
 
 export const DEV_LOGIN_ROLES: {
@@ -50,8 +52,8 @@ export const DEV_LOGIN_ROLES: {
   { role: 'counselor_zhang', label: '咨询师·张明远', code: 'dev_counselor_zhangmingyuan', seedHint: 'seed_demo_data.py' },
   { role: 'counselor_wang', label: '咨询师·王婉清', code: 'dev_counselor_wangwanqing', seedHint: 'seed_demo_data.py' },
   { role: 'counselor_chen', label: '咨询师·陈启明', code: 'dev_counselor_chenqiming', seedHint: 'seed_demo_data.py' },
-  { role: 'assistant', label: '助理', code: 'dev_assistant', seedHint: 'seed_demo_data.py' },
-  { role: 'ops', label: '运营', code: 'dev_ops', seedHint: 'seed_demo_data.py' },
+  { role: 'assistant', label: '咨询助理', code: 'dev_assistant', seedHint: 'seed_demo_data.py' },
+  { role: 'ops', label: '咨询主任', code: 'dev_ops', seedHint: 'seed_demo_data.py' },
   { role: 'admin', label: '管理员', code: 'dev_admin', seedHint: 'seed_demo_data.py' },
 ]
 

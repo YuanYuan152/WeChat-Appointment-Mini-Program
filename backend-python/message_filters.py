@@ -4,7 +4,8 @@ from typing import Optional, Tuple
 from sqlalchemy import false, or_
 from sqlalchemy.orm import Query, Session
 
-from models import AppMessage, AppRoleBinding
+from models import AppMessage
+from staff_roles import STAFF_WORKBENCH_ROLES, account_has_staff_workbench
 
 ADMIN_OPS_INBOX_RELATED_TYPES: Tuple[str, ...] = (
     "REFUND_EXEMPTION",
@@ -101,7 +102,7 @@ def apply_message_search(q: Query, keyword: Optional[str]) -> Query:
 
 
 def is_admin_ops_inbox_role(active_role: Optional[str]) -> bool:
-    return active_role in ("Admin", "Ops")
+    return active_role in STAFF_WORKBENCH_ROLES
 
 
 def account_has_admin_ops_inbox(
@@ -109,17 +110,7 @@ def account_has_admin_ops_inbox(
     account_id: int,
     active_role: Optional[str] = None,
 ) -> bool:
-    if is_admin_ops_inbox_role(active_role):
-        return True
-    row = (
-        db.query(AppRoleBinding.AccountId)
-        .filter(
-            AppRoleBinding.AccountId == account_id,
-            AppRoleBinding.RoleType.in_(["Admin", "Ops"]),
-        )
-        .first()
-    )
-    return row is not None
+    return account_has_staff_workbench(db, account_id, active_role)
 
 
 def apply_admin_ops_inbox_scope(

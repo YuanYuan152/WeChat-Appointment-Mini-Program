@@ -38,6 +38,7 @@ from models import (
     AppRoleBinding,
     AppSchedule,
 )
+from staff_roles import staff_workbench_account_ids
 
 
 def encode_photo_urls(urls: Optional[List[str]]) -> Optional[str]:
@@ -359,13 +360,7 @@ def ensure_consultation_done_for_record(
 
 
 def _ops_admin_account_ids(db: Session) -> List[int]:
-    rows = (
-        db.query(AppRoleBinding.AccountId)
-        .filter(AppRoleBinding.RoleType.in_(["Admin", "Ops"]))
-        .distinct()
-        .all()
-    )
-    return [r[0] for r in rows]
+    return staff_workbench_account_ids(db)
 
 
 def _counselor_display_name(db: Session, counselor_id: int) -> str:
@@ -448,13 +443,13 @@ def notify_admins_crisis_report_if_needed(
         "startTime": start_time or None,
     }
     content = json.dumps({"summary": summary, "detail": detail}, ensure_ascii=False)
-    for admin_id in _ops_admin_account_ids(db):
-        create_message(
-            db,
-            admin_id,
-            "RISK",
-            title,
-            content,
-            related_type="CASE_RECORD_CRISIS_REPORT",
-            related_id=record.Id,
-        )
+    from staff_message_service import notify_staff_workbench_inbox
+
+    notify_staff_workbench_inbox(
+        db,
+        type_="RISK",
+        title=title,
+        content=content,
+        related_type="CASE_RECORD_CRISIS_REPORT",
+        related_id=record.Id,
+    )

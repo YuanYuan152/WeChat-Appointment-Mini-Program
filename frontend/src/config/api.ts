@@ -172,6 +172,8 @@ export const API_ENDPOINTS = {
   // 管理员
   admin: {
     users: '/api/mini/admin/users',
+    createUserByMobile: '/api/mini/admin/users/by-mobile',
+    deleteUser: (uid: number | string) => `/api/mini/admin/users/${uid}`,
     bindRole: (uid: number | string) => `/api/mini/admin/users/${uid}/roles`,
     refundExemptions: '/api/mini/admin/refund-exemptions',
     refundExemptionApprove: (id: number | string) => `/api/mini/admin/refund-exemptions/${id}/approve`,

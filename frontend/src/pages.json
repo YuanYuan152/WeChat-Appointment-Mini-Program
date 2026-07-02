@@ -378,7 +378,7 @@
                 {
                     "path": "admin-roles/index",
                     "style": {
-                        "navigationBarTitleText": "角色管理",
+                        "navigationBarTitleText": "角色&权限绑定",
                         "navigationBarBackgroundColor": "#ffffff",
                         "navigationBarTextStyle": "black"
                     }

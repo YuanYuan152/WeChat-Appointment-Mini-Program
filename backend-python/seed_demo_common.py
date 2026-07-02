@@ -828,6 +828,8 @@ def get_or_create_staff_account(
         account.RealName = nickname
         account.ActiveRole = active_role
         account.IsActive = True
+        if hasattr(account, "AccessRevokedAt"):
+            account.AccessRevokedAt = None
         return account
     account = AppAccount(
         OpenId=open_id,
@@ -1096,8 +1098,12 @@ DEMO_ADMIN_CRISIS_MSG_TITLE = "【演示】个案风险需上报"
 
 
 def ensure_demo_admin_unread_crisis_message(db: Session) -> None:
-    """为管理员/Ops 保留一条未读风险上报演示消息，便于验证「我的消息」橘色提示条。"""
-    staff_open_ids = ("demo-openid-admin", "demo-openid-ops")
+    """为管理工作台全员保留一条未读风险上报演示消息，便于验证「我的消息」橘色提示条。"""
+    staff_open_ids = (
+        "demo-openid-assistant",
+        "demo-openid-ops",
+        "demo-openid-admin",
+    )
     accounts = (
         db.query(AppAccount)
         .filter(AppAccount.OpenId.in_(staff_open_ids))
