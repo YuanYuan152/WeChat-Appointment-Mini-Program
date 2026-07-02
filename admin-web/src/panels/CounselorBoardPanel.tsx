@@ -527,16 +527,16 @@ function ClickableDetailList({
       {items.length === 0 ? (
         <div className="text-sm text-[var(--lxxl-muted)]">暂无记录</div>
       ) : (
-        <div className="space-y-2">
+        <div className="divide-y divide-[var(--lxxl-border)] border-y border-[var(--lxxl-border)]">
           {items.map((item, index) => {
             const itemKey = `${listKey}-${index}`;
             const expanded = expandedKey === itemKey;
 
             return (
-              <div key={itemKey} className="overflow-hidden rounded-xl bg-[#FAF8F4]">
+              <div key={itemKey}>
                 <button
                   aria-expanded={expanded}
-                  className="flex w-full items-center justify-between gap-3 p-3 text-left text-xs leading-5 text-[var(--lxxl-muted)] transition hover:bg-[#F4F1EB] hover:text-[var(--lxxl-text)]"
+                  className="flex w-full items-center justify-between gap-3 py-3 text-left text-xs leading-5 text-[var(--lxxl-muted)] transition hover:text-[var(--lxxl-text)]"
                   type="button"
                   onClick={() => onToggle(expanded ? null : itemKey)}
                 >
@@ -546,7 +546,7 @@ function ClickableDetailList({
                   </span>
                 </button>
                 {expanded && (
-                  <div className="border-t border-[var(--lxxl-border)] bg-white p-3 text-xs leading-6 text-[var(--lxxl-muted)]">
+                  <div className="pb-4 text-xs leading-6 text-[var(--lxxl-muted)]">
                     <div className="mb-1 font-medium text-[var(--lxxl-text)]">记录详情</div>
                     {item.detail.map((line, detailIndex) => (
                       <div key={`${itemKey}-detail-${detailIndex}`}>{line}</div>

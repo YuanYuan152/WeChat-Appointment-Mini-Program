@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   canAccessSection,
@@ -13,6 +13,7 @@ import type { SectionId } from "@/types/app";
 
 const EXPANDED_GROUPS_STORAGE_KEY = "lxxl-admin-web-main-menu-expanded-groups";
 let cachedExpandedGroupIds: string[] | null = null;
+let cachedMenuScrollTop = 0;
 
 export function MainMenu({
   activeSection,
@@ -30,6 +31,7 @@ export function MainMenu({
   onChangeSection: (section: SectionId) => void;
 }) {
   const activeGroupId = getNavigationGroupBySection(activeSection)?.id;
+  const navRef = useRef<HTMLElement | null>(null);
   const [expandedGroupIds, setExpandedGroupIds] = useState<string[]>(
     () => cachedExpandedGroupIds ?? [],
   );
@@ -57,6 +59,16 @@ export function MainMenu({
       window.localStorage.setItem(EXPANDED_GROUPS_STORAGE_KEY, JSON.stringify(expandedGroupIds));
     }
   }, [expandedGroupIds, expandedStateReady]);
+
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav) {
+      return;
+    }
+    requestAnimationFrame(() => {
+      nav.scrollTop = cachedMenuScrollTop;
+    });
+  }, []);
 
   const toggleGroup = (groupId: string) => {
     setExpandedGroupIds((current) =>
@@ -95,7 +107,13 @@ export function MainMenu({
         </button>
       </div>
 
-      <nav className={`min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain py-4 ${collapsed ? "px-3" : "px-3"}`}>
+      <nav
+        ref={navRef}
+        className={`min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain py-4 ${collapsed ? "px-3" : "px-3"}`}
+        onScroll={(event) => {
+          cachedMenuScrollTop = event.currentTarget.scrollTop;
+        }}
+      >
         {navigationGroups.map((group) => {
           const visibleSectionIds = group.sectionIds.filter((sectionId) =>
             canAccessSection(getSectionById(sectionId), currentUser.roles),

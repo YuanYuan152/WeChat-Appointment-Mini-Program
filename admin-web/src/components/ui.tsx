@@ -191,11 +191,11 @@ export function DetailList({ title, items }: { title: string; items: ReactNode[]
       {items.length === 0 ? (
         <div className="text-sm text-[var(--lxxl-muted)]">暂无记录</div>
       ) : (
-        <div className="space-y-2">
+        <div className="divide-y divide-[var(--lxxl-border)] border-y border-[var(--lxxl-border)]">
           {items.map((item, index) => (
             <div
               key={`${title}-${index}`}
-              className="rounded-xl bg-[#FAF8F4] p-3 text-xs leading-5 text-[var(--lxxl-muted)]"
+              className="py-3 text-xs leading-5 text-[var(--lxxl-muted)]"
             >
               {item}
             </div>

@@ -22,6 +22,7 @@ const actionTypeLabels: Record<string, string> = {
   CASE_RECORD: "咨询记录",
   LEAVE_REQUEST: "请假申请",
   SCHEDULE_CANCEL: "排期取消",
+  ROOM: "咨询室管理",
   CONTENT: "内容管理",
   ROLE_SWITCH: "角色切换",
 };
@@ -34,6 +35,8 @@ const targetTypeLabels: Record<string, string> = {
   RefundExemption: "豁免申请",
   LeaveRequest: "请假申请",
   Schedule: "排期",
+  ConsultationRoom: "咨询室",
+  RoomSlot: "咨询室时段",
   Banner: "Banner",
   Activity: "活动公告",
   Article: "文章",
@@ -244,6 +247,7 @@ export function OperationLogsPanel({
               <option value="CASE_RECORD">咨询记录</option>
               <option value="LEAVE_REQUEST">请假</option>
               <option value="SCHEDULE_CANCEL">咨询师取消</option>
+              <option value="ROOM">咨询室管理</option>
               <option value="CONTENT">内容</option>
               <option value="ROLE_SWITCH">角色切换</option>
             </select>

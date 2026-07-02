@@ -3,7 +3,15 @@ import { formatDateTime, formatMoneyFromCents } from "@/lib/format";
 import type { ScreenData, SummaryRow } from "@/types/app";
 import { Badge, EmptyState, PanelHeader } from "@/components/ui";
 
-export function DashboardPanel({ data, summaryRows }: { data: ScreenData; summaryRows: SummaryRow[] }) {
+export function DashboardPanel({
+  data,
+  loading,
+  summaryRows,
+}: {
+  data: ScreenData;
+  loading?: boolean;
+  summaryRows: SummaryRow[];
+}) {
   const stats = data.dashboard;
   const metrics = [
     { label: "用户数", value: stats?.userCount ?? "-", helper: "AppAccount" },
@@ -15,6 +23,11 @@ export function DashboardPanel({ data, summaryRows }: { data: ScreenData; summar
   return (
     <div className="grid grid-cols-[1fr_360px] gap-6">
       <div className="min-w-0 space-y-6">
+        {loading && (
+          <div className="rounded-xl border border-[var(--lxxl-border)] bg-white px-5 py-3 text-sm text-[var(--lxxl-muted)]">
+            正在刷新总览数据...
+          </div>
+        )}
         <section className="grid grid-cols-4 gap-4">
           {metrics.map((metric) => (
             <div key={metric.label} className="rounded-xl border border-[var(--lxxl-border)] bg-white p-5">

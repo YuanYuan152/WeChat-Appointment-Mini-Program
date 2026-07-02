@@ -1,4 +1,5 @@
 import { apiRequest } from "@/lib/api";
+import type { RiskAssessmentData } from "@/constants/caseRecordRiskAssessment";
 import type {
   ApiMessage,
   CounselorCaseRecord,
@@ -25,7 +26,7 @@ export interface CounselorCaseRecordPayload {
   objective: string;
   assessment: string;
   plan: string;
-  risk_assessment: Record<string, unknown>;
+  risk_assessment: RiskAssessmentData;
   header_info: Record<string, string>;
   photo_urls?: string[];
 }

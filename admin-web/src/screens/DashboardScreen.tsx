@@ -18,8 +18,9 @@ export function DashboardScreen() {
 }
 
 function DashboardScreenContent() {
-  const { clearNotice, refreshKey, setLoading, showNotice } = useAppRoute();
+  const { clearNotice, refreshKey, showNotice } = useAppRoute();
   const [data, setData] = useState<ScreenData>({});
+  const [loading, setLoading] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -70,5 +71,5 @@ function DashboardScreenContent() {
     return [...(pending || []), ...(missingRecords || []), ...(rooms || [])].slice(0, 6);
   }, [data.counselorRecords, data.refunds, data.roomStatus]);
 
-  return <DashboardPanel data={data} summaryRows={summaryRows} />;
+  return <DashboardPanel data={data} loading={loading} summaryRows={summaryRows} />;
 }

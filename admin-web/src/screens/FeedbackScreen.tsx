@@ -16,13 +16,14 @@ export function FeedbackScreen() {
 }
 
 function FeedbackScreenContent() {
-  const { clearNotice, refreshKey, setLoading, showNotice } = useAppRoute();
+  const { clearNotice, refreshKey, showNotice } = useAppRoute();
   const [data, setData] = useState<ScreenData>({});
   const [status, setStatus] = useState("ALL");
   const [queryStatus, setQueryStatus] = useState("ALL");
+  const [listLoading, setListLoading] = useState(false);
 
   const loadData = useCallback(async () => {
-    setLoading(true);
+    setListLoading(true);
     clearNotice();
     try {
       const feedbacks = await fetchFeedbacks(queryStatus);
@@ -30,9 +31,9 @@ function FeedbackScreenContent() {
     } catch (error) {
       showNotice("error", error instanceof Error ? error.message : "用户反馈加载失败");
     } finally {
-      setLoading(false);
+      setListLoading(false);
     }
-  }, [clearNotice, queryStatus, setLoading, showNotice]);
+  }, [clearNotice, queryStatus, showNotice]);
 
   useEffect(() => {
     void loadData();
@@ -46,5 +47,13 @@ function FeedbackScreenContent() {
     setQueryStatus(status);
   }, [loadData, queryStatus, status]);
 
-  return <FeedbackPanel feedbacks={data.feedbacks} status={status} setStatus={setStatus} onSearch={search} />;
+  return (
+    <FeedbackPanel
+      feedbacks={data.feedbacks}
+      listLoading={listLoading}
+      status={status}
+      setStatus={setStatus}
+      onSearch={search}
+    />
+  );
 }

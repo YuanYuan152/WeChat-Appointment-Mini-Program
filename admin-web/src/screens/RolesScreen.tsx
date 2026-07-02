@@ -19,13 +19,14 @@ export function RolesScreen() {
 }
 
 function RolesScreenContent() {
-  const { clearNotice, refreshKey, runAction, setLoading, showNotice } = useAppRoute();
+  const { clearNotice, refreshKey, showNotice } = useAppRoute();
   const [data, setData] = useState<ScreenData>({});
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [listLoading, setListLoading] = useState(false);
 
   const loadData = useCallback(async () => {
-    setLoading(true);
+    setListLoading(true);
     clearNotice();
     try {
       const adminUsers = await fetchAdminUsers();
@@ -33,37 +34,52 @@ function RolesScreenContent() {
     } catch (error) {
       showNotice("error", error instanceof Error ? error.message : "用户与角色加载失败");
     } finally {
-      setLoading(false);
+      setListLoading(false);
     }
-  }, [clearNotice, setLoading, showNotice]);
+  }, [clearNotice, showNotice]);
 
   useEffect(() => {
     void loadData();
   }, [loadData, refreshKey]);
 
-  const updateRoles = (userId: number, currentRoles: Role[], nextRoles: Role[]) =>
-    runAction(async () => {
+  const updateRoles = (userId: number, currentRoles: Role[], nextRoles: Role[]) => {
+    async function runUpdate() {
       const currentRoleSet = new Set(currentRoles);
       const nextRoleSet = new Set(nextRoles);
       const rolesToBind = nextRoles.filter((role) => !currentRoleSet.has(role));
       const rolesToUnbind = currentRoles.filter((role) => !nextRoleSet.has(role));
 
       if (rolesToBind.length === 0 && rolesToUnbind.length === 0) {
-        return { msg: "角色无变化" };
+        showNotice("success", "角色无变化");
+        return;
       }
 
-      for (const role of rolesToBind) {
-        await bindUserRole(userId, role);
+      setListLoading(true);
+      clearNotice();
+      try {
+        for (const role of rolesToBind) {
+          await bindUserRole(userId, role);
+        }
+        for (const role of rolesToUnbind) {
+          await unbindUserRole(userId, role);
+        }
+        const adminUsers = await fetchAdminUsers();
+        setData((prev) => ({ ...prev, adminUsers }));
+        showNotice("success", "角色已更新");
+      } catch (error) {
+        showNotice("error", error instanceof Error ? error.message : "角色更新失败");
+      } finally {
+        setListLoading(false);
       }
-      for (const role of rolesToUnbind) {
-        await unbindUserRole(userId, role);
-      }
-      return { msg: "角色已更新" };
-    }, "角色已更新");
+    }
+
+    void runUpdate();
+  };
 
   return (
     <RolesPanel
       users={data.adminUsers}
+      listLoading={listLoading}
       page={page}
       pageSize={pageSize}
       onPageChange={setPage}

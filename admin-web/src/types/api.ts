@@ -70,6 +70,30 @@ export interface PagedResult<T> {
   items: T[];
 }
 
+export type CompletedOrderImportStatus = "IMPORTED" | "SKIPPED" | "FAILED";
+
+export interface CompletedOrderImportRowResult {
+  rowNumber: number;
+  status: CompletedOrderImportStatus;
+  message: string;
+  patientName?: string | null;
+  counselorName?: string | null;
+  startTime?: string | null;
+  endTime?: string | null;
+  amount?: number | null;
+  orderId?: number | null;
+  consultationId?: number | null;
+}
+
+export interface CompletedOrderImportResult {
+  message?: string;
+  totalRows: number;
+  importedCount: number;
+  skippedCount: number;
+  failedCount: number;
+  rows: CompletedOrderImportRowResult[];
+}
+
 export interface Banner {
   Id: number;
   Title: string;

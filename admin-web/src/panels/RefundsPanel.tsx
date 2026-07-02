@@ -17,6 +17,7 @@ export function RefundsPanel({
   refunds,
   page,
   pageSize,
+  listLoading,
   onPageChange,
   onPageSizeChange,
   status,
@@ -28,6 +29,7 @@ export function RefundsPanel({
   refunds?: RefundExemption[];
   page: number;
   pageSize: number;
+  listLoading: boolean;
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
   status: string;
@@ -78,11 +80,17 @@ export function RefundsPanel({
           <QueryButton type="submit" />
         </div>
       </form>
-      {!visibleRefunds || visibleRefunds.length === 0 ? (
-        <EmptyState text="暂无豁免申请。" />
-      ) : (
-        <>
-          <table className="w-full border-collapse text-sm">
+      <div className="relative">
+        {listLoading && refunds && refunds.length > 0 && (
+          <div className="absolute inset-x-0 top-0 z-10 border-t border-[var(--lxxl-border)] bg-white/80 px-5 py-3 text-sm text-[var(--lxxl-muted)] backdrop-blur-sm">
+            正在加载列表...
+          </div>
+        )}
+        {!visibleRefunds || visibleRefunds.length === 0 ? (
+          <EmptyState text={listLoading ? "正在加载列表..." : "暂无豁免申请。"} />
+        ) : (
+          <>
+            <table className="w-full border-collapse text-sm">
             <thead className="bg-[#FAF8F4] text-left text-[var(--lxxl-muted)]">
               <tr>
                 <th className="px-5 py-3 font-medium">提交时间</th>
@@ -135,16 +143,17 @@ export function RefundsPanel({
                 </tr>
               ))}
             </tbody>
-          </table>
-          <Pagination
-            page={currentPage}
-            pageSize={pageSize}
-            total={total}
-            onPageChange={onPageChange}
-            onPageSizeChange={onPageSizeChange}
-          />
-        </>
-      )}
+            </table>
+            <Pagination
+              page={currentPage}
+              pageSize={pageSize}
+              total={total}
+              onPageChange={onPageChange}
+              onPageSizeChange={onPageSizeChange}
+            />
+          </>
+        )}
+      </div>
       {rejectTarget && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/30 px-4 py-6">
           <form

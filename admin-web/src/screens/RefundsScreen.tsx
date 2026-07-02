@@ -6,6 +6,7 @@ import { approveRefundExemption, fetchRefundExemptions, rejectRefundExemption } 
 import { AppRoute, useAppRoute } from "@/components/AppRoute";
 import { RefundsPanel } from "@/panels/RefundsPanel";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
+import { getMessage } from "@/lib/display";
 import type { ScreenData } from "@/types/app";
 
 export function RefundsScreen() {
@@ -17,15 +18,16 @@ export function RefundsScreen() {
 }
 
 function RefundsScreenContent() {
-  const { clearNotice, refreshKey, runAction, setLoading, showNotice } = useAppRoute();
+  const { clearNotice, refreshKey, showNotice } = useAppRoute();
   const [data, setData] = useState<ScreenData>({});
   const [status, setStatus] = useState("ALL");
   const [queryStatus, setQueryStatus] = useState("ALL");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [listLoading, setListLoading] = useState(false);
 
   const loadData = useCallback(async () => {
-    setLoading(true);
+    setListLoading(true);
     clearNotice();
     try {
       const refunds = await fetchRefundExemptions(queryStatus as "ALL" | "PENDING" | "APPROVED" | "REJECTED");
@@ -33,9 +35,9 @@ function RefundsScreenContent() {
     } catch (error) {
       showNotice("error", error instanceof Error ? error.message : "豁免审核加载失败");
     } finally {
-      setLoading(false);
+      setListLoading(false);
     }
-  }, [clearNotice, queryStatus, setLoading, showNotice]);
+  }, [clearNotice, queryStatus, showNotice]);
 
   useEffect(() => {
     void loadData();
@@ -50,11 +52,48 @@ function RefundsScreenContent() {
     setQueryStatus(status);
   }, [loadData, queryStatus, status]);
 
+  const approve = useCallback(
+    async (id: number) => {
+      setListLoading(true);
+      clearNotice();
+      try {
+        const result = await approveRefundExemption(id);
+        const refunds = await fetchRefundExemptions(queryStatus as "ALL" | "PENDING" | "APPROVED" | "REJECTED");
+        setData((prev) => ({ ...prev, refunds }));
+        showNotice("success", getMessage(result, "已通过豁免申请"));
+      } catch (error) {
+        showNotice("error", error instanceof Error ? error.message : "通过豁免申请失败");
+      } finally {
+        setListLoading(false);
+      }
+    },
+    [clearNotice, queryStatus, showNotice],
+  );
+
+  const reject = useCallback(
+    async (id: number, reason: string) => {
+      setListLoading(true);
+      clearNotice();
+      try {
+        const result = await rejectRefundExemption(id, reason);
+        const refunds = await fetchRefundExemptions(queryStatus as "ALL" | "PENDING" | "APPROVED" | "REJECTED");
+        setData((prev) => ({ ...prev, refunds }));
+        showNotice("success", getMessage(result, "已拒绝豁免申请"));
+      } catch (error) {
+        showNotice("error", error instanceof Error ? error.message : "拒绝豁免申请失败");
+      } finally {
+        setListLoading(false);
+      }
+    },
+    [clearNotice, queryStatus, showNotice],
+  );
+
   return (
     <RefundsPanel
       refunds={data.refunds}
       page={page}
       pageSize={pageSize}
+      listLoading={listLoading}
       status={status}
       setStatus={setStatus}
       onSearch={search}
@@ -63,8 +102,8 @@ function RefundsScreenContent() {
         setPage(1);
         setPageSize(nextPageSize);
       }}
-      onApprove={(id) => runAction(() => approveRefundExemption(id), "已通过豁免申请")}
-      onReject={(id, reason) => runAction(() => rejectRefundExemption(id, reason), "已拒绝豁免申请")}
+      onApprove={approve}
+      onReject={reject}
     />
   );
 }

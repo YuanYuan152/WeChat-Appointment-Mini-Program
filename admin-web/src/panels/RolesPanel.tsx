@@ -18,6 +18,7 @@ import {
 
 export function RolesPanel({
   users,
+  listLoading,
   page,
   pageSize,
   onPageChange,
@@ -25,6 +26,7 @@ export function RolesPanel({
   onUpdateRoles,
 }: {
   users?: AdminUser[];
+  listLoading?: boolean;
   page: number;
   pageSize: number;
   onPageChange: (page: number) => void;
@@ -103,10 +105,16 @@ export function RolesPanel({
           <QueryResetButton onClick={resetQuery} />
         </div>
       </form>
-      {!users ? (
-        <EmptyState text="暂无数据或当前账号没有管理员权限。" />
-      ) : (
-        <>
+      <div className="relative">
+        {listLoading && users && (
+          <div className="absolute inset-x-0 top-0 z-10 border-t border-[var(--lxxl-border)] bg-white/80 px-5 py-3 text-sm text-[var(--lxxl-muted)] backdrop-blur-sm">
+            正在加载列表...
+          </div>
+        )}
+        {!users ? (
+          <EmptyState text={listLoading ? "正在加载列表..." : "暂无数据或当前账号没有管理员权限。"} />
+        ) : (
+          <>
           <table className="w-full border-collapse text-sm">
             <thead className="bg-[#FAF8F4] text-left text-[var(--lxxl-muted)]">
               <tr>
@@ -160,8 +168,9 @@ export function RolesPanel({
             onPageChange={onPageChange}
             onPageSizeChange={onPageSizeChange}
           />
-        </>
-      )}
+          </>
+        )}
+      </div>
       {editingUser && (
         <RoleEditModal
           user={editingUser}

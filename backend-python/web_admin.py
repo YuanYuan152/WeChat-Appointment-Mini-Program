@@ -1,14 +1,20 @@
 """Web 管理端聚合接口。
 
-这些接口只读取现有 App* 表，不创建或修改数据库表。它们用于 Web 管理端
-把小程序后台里分散的业务数据整理成更适合桌面端查看的列表和看板。
+大部分接口只读取现有 App* 表，不创建或修改数据库表。导入类接口只写入
+现有订单、排期、咨询和用户表，用于把线下整理的数据接入当前业务模型。
 """
 
-from datetime import datetime, time
+import hashlib
+import re
+import zipfile
+from datetime import date, datetime, time, timedelta
+from io import BytesIO
 from typing import Any, Optional
+from xml.etree import ElementTree as ET
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy import or_
+from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.orm import Session
 
 from auth import get_current_account
@@ -21,6 +27,9 @@ from models import (
     AppBanner,
     AppCaseRecord,
     AppConsultation,
+    AppConsultationRoom,
+    AppConsultationRoomSlot,
+    AppCounselorProfile,
     AppLeaveRequest,
     AppOrder,
     AppRefundExemption,
@@ -30,6 +39,7 @@ from models import (
     AppScheduleCancelLog,
 )
 from schedule_meta import center_display_name, parse_center_id, parse_room_id, room_display_name
+from schedule_meta import schedule_note
 
 router = APIRouter(prefix="/api/web/admin", tags=["WebAdmin"])
 
@@ -170,6 +180,501 @@ def _schedule_action_label(schedule: AppSchedule) -> str:
     if schedule.UpdatedAt and schedule.UpdatedAt != schedule.CreatedAt:
         return "更新排期"
     return "新建排期"
+
+
+REQUIRED_IMPORT_HEADERS = {"日期", "时间", "咨询师", "来访者", "付费金额"}
+PHONE_PATTERN = re.compile(r"1[3-9]\d{9}")
+
+
+def _strip_value(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value).strip()
+
+
+def _extract_name_and_phone(raw: Any) -> tuple[str, Optional[str]]:
+    text = _strip_value(raw)
+    phone_match = PHONE_PATTERN.search(text)
+    phone = phone_match.group(0) if phone_match else None
+    name = PHONE_PATTERN.sub("", text).replace("（", "(").replace("）", ")")
+    name = re.sub(r"[\s,，/|;；()（）-]+", " ", name).strip()
+    return name or text, phone
+
+
+def _excel_serial_datetime(value: float) -> datetime:
+    return datetime(1899, 12, 30) + timedelta(days=float(value))
+
+
+def _parse_import_date(value: Any, field: str) -> date:
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if isinstance(value, (int, float)):
+        return _excel_serial_datetime(float(value)).date()
+
+    text = _strip_value(value)
+    if not text:
+        raise ValueError(f"{field}不能为空")
+    for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%Y.%m.%d", "%m/%d/%Y", "%m/%d/%y"):
+        try:
+            return datetime.strptime(text, fmt).date()
+        except ValueError:
+            pass
+    try:
+        return datetime.fromisoformat(text).date()
+    except ValueError:
+        raise ValueError(f"{field}格式无法识别")
+
+
+def _parse_import_time(value: Any) -> time:
+    if isinstance(value, datetime):
+        return value.time().replace(second=0, microsecond=0)
+    if isinstance(value, time):
+        return value.replace(second=0, microsecond=0)
+    if isinstance(value, (int, float)):
+        return _excel_serial_datetime(float(value)).time().replace(second=0, microsecond=0)
+
+    text = _strip_value(value)
+    if not text:
+        raise ValueError("时间不能为空")
+    for fmt in ("%H:%M", "%H:%M:%S"):
+        try:
+            return datetime.strptime(text, fmt).time().replace(second=0, microsecond=0)
+        except ValueError:
+            pass
+    raise ValueError("时间格式无法识别")
+
+
+def _parse_optional_datetime(value: Any) -> Optional[datetime]:
+    if value is None or _strip_value(value) == "":
+        return None
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, date):
+        return datetime.combine(value, time.min)
+    if isinstance(value, (int, float)):
+        return _excel_serial_datetime(float(value))
+    text = _strip_value(value)
+    for fmt in ("%Y-%m-%d %H:%M", "%Y/%m/%d %H:%M", "%Y-%m-%d", "%Y/%m/%d", "%m/%d/%Y"):
+        try:
+            return datetime.strptime(text, fmt)
+        except ValueError:
+            pass
+    try:
+        return datetime.fromisoformat(text)
+    except ValueError:
+        return None
+
+
+def _parse_amount_cents(value: Any) -> int:
+    text = _strip_value(value).replace(",", "").replace("￥", "").replace("¥", "")
+    if not text:
+        raise ValueError("付费金额不能为空")
+    try:
+        amount = float(text)
+    except ValueError:
+        raise ValueError("付费金额格式无法识别")
+    if amount < 0:
+        raise ValueError("付费金额不能为负数")
+    return int(round(amount * 100))
+
+
+def _parse_duration_minutes(value: Any) -> int:
+    text = _strip_value(value)
+    if not text:
+        return 50
+    try:
+        hours = float(text)
+    except ValueError:
+        return 50
+    if hours <= 0:
+        return 50
+    if abs(hours - 1) < 0.001:
+        return 50
+    return max(1, int(round(hours * 60)))
+
+
+def _resolve_center_id(kind: Any, location: Any, room: Any) -> Optional[str]:
+    text = " ".join([_strip_value(kind), _strip_value(location), _strip_value(room)]).lower()
+    if any(keyword in text for keyword in ("线上", "视频", "video", "online")):
+        return "video"
+    if "杨浦" in text or "yangpu" in text:
+        return "yangpu"
+    if "浦东" in text or "pudong" in text:
+        return "pudong"
+    return None
+
+
+def _resolve_room_id(center_id: Optional[str], room: Any) -> Optional[str]:
+    if not center_id or center_id == "video":
+        return None
+    text = _strip_value(room)
+    if not text:
+        return None
+    lowered = text.lower()
+    if lowered.startswith(f"{center_id}-r"):
+        return lowered
+    if "a" in lowered or "Ａ" in text or "一" in text:
+        return f"{center_id}-r1"
+    if "b" in lowered or "Ｂ" in text or "二" in text:
+        return f"{center_id}-r2"
+    if "c" in lowered or "Ｃ" in text or "三" in text:
+        return f"{center_id}-r3"
+    match = re.search(r"([123])", text)
+    if match:
+        return f"{center_id}-r{match.group(1)}"
+    return None
+
+
+def _xlsx_col_index(ref: str) -> int:
+    letters = "".join(ch for ch in ref if ch.isalpha())
+    value = 0
+    for ch in letters:
+        value = value * 26 + (ord(ch.upper()) - ord("A") + 1)
+    return value - 1
+
+
+def _xlsx_text_from_node(node: ET.Element) -> str:
+    return "".join(text_node.text or "" for text_node in node.iter() if text_node.tag.endswith("}t"))
+
+
+def _xlsx_cell_value(cell: ET.Element, shared_strings: list[str]) -> Any:
+    cell_type = cell.attrib.get("t")
+    value_node = next((child for child in cell if child.tag.endswith("}v")), None)
+
+    if cell_type == "inlineStr":
+        inline_node = next((child for child in cell if child.tag.endswith("}is")), None)
+        return _xlsx_text_from_node(inline_node) if inline_node is not None else ""
+
+    if value_node is None or value_node.text is None:
+        return None
+
+    raw = value_node.text
+    if cell_type == "s":
+        try:
+            return shared_strings[int(raw)]
+        except (ValueError, IndexError):
+            return raw
+    if cell_type == "b":
+        return raw == "1"
+    try:
+        number = float(raw)
+    except ValueError:
+        return raw
+    return int(number) if number.is_integer() else number
+
+
+def _read_xlsx_rows(file_bytes: bytes) -> list[list[Any]]:
+    try:
+        with zipfile.ZipFile(BytesIO(file_bytes)) as workbook:
+            shared_strings: list[str] = []
+            if "xl/sharedStrings.xml" in workbook.namelist():
+                shared_root = ET.fromstring(workbook.read("xl/sharedStrings.xml"))
+                shared_strings = [_xlsx_text_from_node(item) for item in shared_root if item.tag.endswith("}si")]
+
+            workbook_root = ET.fromstring(workbook.read("xl/workbook.xml"))
+            first_sheet = next(node for node in workbook_root.iter() if node.tag.endswith("}sheet"))
+            rel_id = first_sheet.attrib.get("{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id")
+            rel_root = ET.fromstring(workbook.read("xl/_rels/workbook.xml.rels"))
+            target = None
+            for rel in rel_root:
+                if rel.attrib.get("Id") == rel_id:
+                    target = rel.attrib.get("Target")
+                    break
+            if not target:
+                raise ValueError("未找到第一个工作表")
+            sheet_path = f"xl/{target.lstrip('/')}" if not target.startswith("xl/") else target
+            sheet_root = ET.fromstring(workbook.read(sheet_path))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"无法读取 Excel 文件：{exc}") from exc
+
+    rows: list[list[Any]] = []
+    for row_node in sheet_root.iter():
+        if not row_node.tag.endswith("}row"):
+            continue
+        row_values: list[Any] = []
+        for cell in row_node:
+            if not cell.tag.endswith("}c"):
+                continue
+            ref = cell.attrib.get("r", "")
+            index = _xlsx_col_index(ref)
+            while len(row_values) <= index:
+                row_values.append(None)
+            row_values[index] = _xlsx_cell_value(cell, shared_strings)
+        rows.append(row_values)
+    return rows
+
+
+def _normalize_import_headers(row: list[Any]) -> list[str]:
+    return [_strip_value(value).replace(" ", "") for value in row]
+
+
+def _row_value(row_map: dict[str, Any], *headers: str) -> Any:
+    for header in headers:
+        if header in row_map:
+            return row_map.get(header)
+    return None
+
+
+def _ensure_role_binding(db: Session, account_id: int, role_type: str) -> None:
+    exists = db.query(AppRoleBinding).filter(
+        AppRoleBinding.AccountId == account_id,
+        AppRoleBinding.RoleType == role_type,
+    ).first()
+    if not exists:
+        db.add(AppRoleBinding(AccountId=account_id, RoleType=role_type))
+
+
+def _find_counselor_for_import(db: Session, raw: Any) -> Optional[AppAccount]:
+    name, mobile = _extract_name_and_phone(raw)
+    query = (
+        db.query(AppAccount)
+        .join(AppRoleBinding, AppRoleBinding.AccountId == AppAccount.Id)
+        .filter(AppRoleBinding.RoleType == "Counselor")
+    )
+    if mobile:
+        by_mobile = query.filter(AppAccount.Mobile == mobile).first()
+        if by_mobile:
+            return by_mobile
+    if name:
+        by_account = query.filter(or_(AppAccount.RealName == name, AppAccount.Nickname == name)).first()
+        if by_account:
+            return by_account
+        profile = db.query(AppCounselorProfile).filter(AppCounselorProfile.Name == name).first()
+        if profile:
+            return db.query(AppAccount).filter(AppAccount.Id == profile.AccountId).first()
+    return None
+
+
+def _find_or_create_patient_for_import(db: Session, raw: Any) -> AppAccount:
+    name, mobile = _extract_name_and_phone(raw)
+    if not name:
+        raise ValueError("来访者不能为空")
+    identity = mobile or name
+    import_open_id = f"import-patient-{hashlib.sha1(identity.encode('utf-8')).hexdigest()[:24]}"
+
+    account = None
+    if mobile:
+        account = db.query(AppAccount).filter(AppAccount.Mobile == mobile).first()
+    if not account:
+        account = (
+            db.query(AppAccount)
+            .join(AppRoleBinding, AppRoleBinding.AccountId == AppAccount.Id)
+            .filter(AppRoleBinding.RoleType == "Patient")
+            .filter(or_(AppAccount.RealName == name, AppAccount.Nickname == name))
+            .first()
+        )
+    if not account:
+        account = AppAccount(
+            OpenId=import_open_id,
+            RealName=name,
+            Nickname=name,
+            Mobile=mobile,
+            ActiveRole="Patient",
+        )
+        db.add(account)
+        db.flush()
+    _ensure_role_binding(db, account.Id, "Patient")
+    if name and not account.RealName:
+        account.RealName = name
+    if mobile and not account.Mobile:
+        account.Mobile = mobile
+    return account
+
+
+def _import_description(row_map: dict[str, Any], counselor_name: str, patient_name: str) -> str:
+    parts = [f"导入完成订单：{patient_name}/{counselor_name}"]
+    for header in ("付费状况", "付费方式", "次数", "咨询时数", "助理", "目前阶段", "最后咨询次数", "总时长", "备注", "取消备注"):
+        value = _strip_value(row_map.get(header))
+        if value:
+            parts.append(f"{header}:{value}")
+    return "；".join(parts)[:200]
+
+
+def _import_completed_order_row(db: Session, row_number: int, row_map: dict[str, Any]) -> dict[str, Any]:
+    consultation_date = _parse_import_date(_row_value(row_map, "日期"), "日期")
+    consultation_time = _parse_import_time(_row_value(row_map, "时间"))
+    start_at = datetime.combine(consultation_date, consultation_time)
+    duration_minutes = _parse_duration_minutes(_row_value(row_map, "咨询时数"))
+    end_at = start_at + timedelta(minutes=duration_minutes)
+    paid_at = _parse_optional_datetime(_row_value(row_map, "付费时间")) or start_at
+    amount = _parse_amount_cents(_row_value(row_map, "付费金额"))
+
+    counselor = _find_counselor_for_import(db, _row_value(row_map, "咨询师"))
+    if not counselor:
+        raise ValueError(f"未找到咨询师：{_strip_value(_row_value(row_map, '咨询师'))}")
+    patient = _find_or_create_patient_for_import(db, _row_value(row_map, "来访者"))
+
+    center_id = _resolve_center_id(_row_value(row_map, "形式"), _row_value(row_map, "地点"), _row_value(row_map, "咨询室"))
+    if not center_id:
+        raise ValueError("无法识别咨询地点，请在“形式/地点/咨询室”中填写线上、杨浦或浦东")
+    room_id = _resolve_room_id(center_id, _row_value(row_map, "咨询室"))
+    note = schedule_note(center_id, None if center_id == "video" else room_id)
+
+    existing_consultation = db.query(AppConsultation).filter(
+        AppConsultation.PatientId == patient.Id,
+        AppConsultation.CounselorId == counselor.Id,
+        AppConsultation.StartTime == start_at,
+    ).first()
+    if existing_consultation:
+        return {
+            "rowNumber": row_number,
+            "status": "SKIPPED",
+            "message": "同一来访者、咨询师和开始时间的咨询已存在",
+            "patientName": _account_name(patient),
+            "counselorName": _account_name(counselor),
+            "startTime": start_at,
+            "endTime": existing_consultation.EndTime,
+            "amount": amount,
+            "orderId": existing_consultation.OrderId,
+            "consultationId": existing_consultation.Id,
+        }
+
+    unique_key = f"{patient.Id}|{counselor.Id}|{start_at.isoformat()}|{amount}"
+    out_trade_no = f"IMPORT-{hashlib.sha1(unique_key.encode('utf-8')).hexdigest()[:24].upper()}"
+    existing_order = db.query(AppOrder).filter(AppOrder.OutTradeNo == out_trade_no).first()
+    if existing_order:
+        return {
+            "rowNumber": row_number,
+            "status": "SKIPPED",
+            "message": "导入订单号已存在",
+            "patientName": _account_name(patient),
+            "counselorName": _account_name(counselor),
+            "startTime": start_at,
+            "endTime": end_at,
+            "amount": amount,
+            "orderId": existing_order.Id,
+            "consultationId": None,
+        }
+
+    schedule = db.query(AppSchedule).filter(
+        AppSchedule.CounselorId == counselor.Id,
+        AppSchedule.StartTime == start_at,
+    ).first()
+    if not schedule:
+        schedule = AppSchedule(
+            CounselorId=counselor.Id,
+            StartTime=start_at,
+            EndTime=end_at,
+            Status="BOOKED",
+            Note=note,
+            CreatedAt=start_at,
+        )
+        db.add(schedule)
+        db.flush()
+    else:
+        active = db.query(AppConsultation).filter(
+            AppConsultation.ScheduleId == schedule.Id,
+            AppConsultation.Status.in_(["PENDING", "CONFIRMED", "ONGOING", "DONE"]),
+        ).first()
+        if active:
+            raise ValueError(f"该咨询师在 {start_at:%Y-%m-%d %H:%M} 已有咨询记录")
+        schedule.EndTime = end_at
+        schedule.Status = "BOOKED"
+        schedule.Note = note
+
+    order = AppOrder(
+        AccountId=patient.Id,
+        SlotId=schedule.Id,
+        OutTradeNo=out_trade_no,
+        TransactionId=f"IMPORT-{row_number}",
+        TotalFee=amount,
+        Status="PAID",
+        Description=_import_description(row_map, _account_name(counselor), _account_name(patient)),
+        CreatedAt=paid_at,
+        PaidAt=paid_at,
+    )
+    db.add(order)
+    db.flush()
+
+    consultation = AppConsultation(
+        OrderId=order.Id,
+        PatientId=patient.Id,
+        CounselorId=counselor.Id,
+        ScheduleId=schedule.Id,
+        Status="DONE",
+        StartTime=start_at,
+        EndTime=end_at,
+        Note=note,
+        CreatedAt=start_at,
+        UpdatedAt=end_at,
+    )
+    db.add(consultation)
+    db.flush()
+
+    return {
+        "rowNumber": row_number,
+        "status": "IMPORTED",
+        "message": "已导入为完成订单",
+        "patientName": _account_name(patient),
+        "counselorName": _account_name(counselor),
+        "startTime": start_at,
+        "endTime": end_at,
+        "amount": amount,
+        "orderId": order.Id,
+        "consultationId": consultation.Id,
+    }
+
+
+@router.post("/data-import/completed-orders", summary="导入历史完成订单")
+async def import_completed_orders(
+    file: UploadFile = File(...),
+    _admin: AppAccount = Depends(require_ops_or_admin),
+    db: Session = Depends(get_db),
+):
+    filename = file.filename or ""
+    if not filename.lower().endswith(".xlsx"):
+        raise HTTPException(status_code=400, detail="请上传 .xlsx 格式文件")
+
+    rows = _read_xlsx_rows(await file.read())
+    if len(rows) < 2:
+        raise HTTPException(status_code=400, detail="导入文件没有可导入的数据行")
+
+    headers = _normalize_import_headers(rows[0])
+    header_set = {header for header in headers if header}
+    missing_headers = sorted(REQUIRED_IMPORT_HEADERS - header_set)
+    if missing_headers:
+        raise HTTPException(status_code=400, detail=f"缺少必填表头：{', '.join(missing_headers)}")
+
+    results: list[dict[str, Any]] = []
+    for index, row in enumerate(rows[1:], start=2):
+        if not any(_strip_value(cell) for cell in row):
+            continue
+        row_map = {header: row[pos] if pos < len(row) else None for pos, header in enumerate(headers) if header}
+        try:
+            result = _import_completed_order_row(db, index, row_map)
+            results.append(result)
+        except Exception as exc:
+            db.rollback()
+            results.append({
+                "rowNumber": index,
+                "status": "FAILED",
+                "message": str(exc),
+                "patientName": _strip_value(_row_value(row_map, "来访者")) or None,
+                "counselorName": _strip_value(_row_value(row_map, "咨询师")) or None,
+                "startTime": None,
+                "endTime": None,
+                "amount": None,
+                "orderId": None,
+                "consultationId": None,
+            })
+        else:
+            db.commit()
+
+    imported = len([item for item in results if item["status"] == "IMPORTED"])
+    skipped = len([item for item in results if item["status"] == "SKIPPED"])
+    failed = len([item for item in results if item["status"] == "FAILED"])
+    return {
+        "message": f"导入完成：成功 {imported} 条，跳过 {skipped} 条，失败 {failed} 条",
+        "totalRows": len(results),
+        "importedCount": imported,
+        "skippedCount": skipped,
+        "failedCount": failed,
+        "rows": results,
+    }
 
 
 @router.get("/operation-records", summary="Web 操作/业务记录聚合列表（不依赖新增审计表）")
@@ -405,6 +910,68 @@ def operation_records(
             "endTime": consultation.EndTime if consultation else (schedule.EndTime if schedule else None),
             "createdAt": row.CreatedAt,
             **(_consultation_room_payload(consultation, schedules_by_id) if consultation else _room_payload(schedule)),
+        })
+
+    try:
+        rooms = db.query(AppConsultationRoom).all()
+    except (OperationalError, ProgrammingError):
+        db.rollback()
+        rooms = []
+    rooms_by_id = {room.Id: room for room in rooms}
+    for row in rooms:
+        records.append({
+            "id": f"consultation-room-{row.Id}",
+            "occurredAt": row.UpdatedAt or row.CreatedAt,
+            "actionType": "ROOM",
+            "actionLabel": "更新咨询室" if row.UpdatedAt else "新增咨询室",
+            "operatorId": None,
+            "operatorRole": "Ops",
+            "targetType": "ConsultationRoom",
+            "targetId": row.Id,
+            "targetName": f"{center_display_name(row.CenterId)} {row.Name}",
+            "summary": f"咨询室编号：{row.RoomCode}",
+            "amount": None,
+            "status": row.Status,
+            "centerId": row.CenterId,
+            "centerName": center_display_name(row.CenterId),
+            "roomId": row.RoomCode,
+            "roomName": row.Name,
+            "createdAt": row.CreatedAt,
+            "updatedAt": row.UpdatedAt,
+        })
+
+    try:
+        room_slots = db.query(AppConsultationRoomSlot).all()
+    except (OperationalError, ProgrammingError):
+        db.rollback()
+        room_slots = []
+
+    for row in room_slots:
+        room = rooms_by_id.get(row.RoomId)
+        records.append({
+            "id": f"consultation-room-slot-{row.Id}",
+            "occurredAt": row.UpdatedAt or row.CreatedAt,
+            "actionType": "ROOM",
+            "actionLabel": "更新咨询室时段",
+            "operatorId": None,
+            "operatorRole": "Ops",
+            "targetType": "RoomSlot",
+            "targetId": row.Id,
+            "targetName": (
+                f"{center_display_name(room.CenterId)} {room.Name} {row.StartTime.strftime('%Y-%m-%d %H:%M')}"
+                if room else f"咨询室时段 {row.StartTime.strftime('%Y-%m-%d %H:%M')}"
+            ),
+            "summary": f"时段状态：{row.Status}",
+            "amount": None,
+            "status": row.Status,
+            "centerId": room.CenterId if room else None,
+            "centerName": center_display_name(room.CenterId) if room else None,
+            "roomId": room.RoomCode if room else None,
+            "roomName": room.Name if room else None,
+            "startTime": row.StartTime,
+            "endTime": row.StartTime + timedelta(minutes=50),
+            "createdAt": row.CreatedAt,
+            "updatedAt": row.UpdatedAt,
         })
 
     for row in db.query(AppBanner).all():

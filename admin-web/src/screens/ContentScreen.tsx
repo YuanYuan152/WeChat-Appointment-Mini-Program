@@ -6,6 +6,7 @@ import { createContent, deleteContent, fetchContentData, updateContent } from "@
 import { AppRoute, useAppRoute } from "@/components/AppRoute";
 import { ContentPanel } from "@/panels/ContentPanel";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
+import { getMessage } from "@/lib/display";
 import type { ScreenData, ContentDraft, ContentKind } from "@/types/app";
 
 export function ContentScreen() {
@@ -17,11 +18,12 @@ export function ContentScreen() {
 }
 
 function ContentScreenContent() {
-  const { clearNotice, refreshKey, runAction, setLoading, showNotice } = useAppRoute();
+  const { clearNotice, refreshKey, showNotice } = useAppRoute();
   const [data, setData] = useState<ScreenData>({});
   const [activeKind, setActiveKind] = useState<ContentKind>("banner");
   const [articlePage, setArticlePage] = useState(1);
   const [articlePageSize, setArticlePageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [listLoading, setListLoading] = useState(false);
   const [contentDraft, setContentDraft] = useState<ContentDraft>({
     kind: "banner",
     title: "",
@@ -29,21 +31,42 @@ function ContentScreenContent() {
     imageUrl: "",
   });
 
+  const refreshContentData = useCallback(async () => {
+    const contentData = await fetchContentData(activeKind, {
+      page: articlePage,
+      pageSize: articlePageSize,
+    });
+    setData((prev) => ({ ...prev, ...contentData }));
+  }, [activeKind, articlePage, articlePageSize]);
+
   const loadData = useCallback(async () => {
-    setLoading(true);
+    setListLoading(true);
     clearNotice();
     try {
-      const contentData = await fetchContentData(activeKind, {
-        page: articlePage,
-        pageSize: articlePageSize,
-      });
-      setData((prev) => ({ ...prev, ...contentData }));
+      await refreshContentData();
     } catch (error) {
       showNotice("error", error instanceof Error ? error.message : "内容管理加载失败");
     } finally {
-      setLoading(false);
+      setListLoading(false);
     }
-  }, [activeKind, articlePage, articlePageSize, clearNotice, setLoading, showNotice]);
+  }, [clearNotice, refreshContentData, showNotice]);
+
+  const runContentAction = useCallback(
+    async (action: () => Promise<unknown>, successMessage: string, errorMessage: string) => {
+      setListLoading(true);
+      clearNotice();
+      try {
+        const result = await action();
+        await refreshContentData();
+        showNotice("success", getMessage(result, successMessage));
+      } catch (error) {
+        showNotice("error", error instanceof Error ? error.message : errorMessage);
+      } finally {
+        setListLoading(false);
+      }
+    },
+    [clearNotice, refreshContentData, showNotice],
+  );
 
   useEffect(() => {
     void loadData();
@@ -52,6 +75,7 @@ function ContentScreenContent() {
   return (
     <ContentPanel
       data={data}
+      listLoading={listLoading}
       draft={contentDraft}
       setDraft={setContentDraft}
       activeKind={activeKind}
@@ -69,9 +93,9 @@ function ContentScreenContent() {
         setArticlePage(1);
         setArticlePageSize(nextPageSize);
       }}
-      onCreate={() => runAction(() => createContent(contentDraft), "内容已新增")}
-      onUpdate={(id) => runAction(() => updateContent(activeKind, id, contentDraft), "内容已修改")}
-      onDelete={(kind, id) => runAction(() => deleteContent(kind, id), "内容已删除")}
+      onCreate={() => runContentAction(() => createContent(contentDraft), "内容已新增", "新增内容失败")}
+      onUpdate={(id) => runContentAction(() => updateContent(activeKind, id, contentDraft), "内容已修改", "修改内容失败")}
+      onDelete={(kind, id) => runContentAction(() => deleteContent(kind, id), "内容已删除", "删除内容失败")}
     />
   );
 }

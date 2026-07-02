@@ -14,7 +14,12 @@
         </view>
       </view>
 
-      <view class="option-list">
+      <view v-if="item.id === 'crisis_level'" class="calculated-box">
+        <text class="calculated-label">{{ crisisLevelText }}</text>
+        <text class="calculated-hint">系统根据前 9 项自动计算，不可手动修改</text>
+      </view>
+
+      <view v-else class="option-list">
         <view
           v-for="opt in displayOptions(item)"
           :key="opt.choice"
@@ -52,11 +57,13 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import {
   RISK_ASSESSMENT_ITEMS,
   RISK_LEVEL_GUIDE,
-  CRISIS_REPORT_CHOICES,
-  crisisLevelReportPrompt,
+  calculateCrisisLevelChoice,
+  formatRiskChoiceDisplay,
+  normalizeRiskAssessment,
   normalizeRiskChoice,
   type RiskAssessmentData,
   type RiskAssessmentItemConfig,
@@ -75,7 +82,7 @@ const props = withDefaults(
     readonly: false,
     required: true,
     title: '个案风险评估表',
-    hint: '请逐项选择对应选项；选「其他」项时请填写文字说明',
+    hint: '请逐项选择对应选项；第 10 项由系统根据前 9 项自动计算',
   },
 )
 
@@ -89,7 +96,13 @@ interface DisplayOption {
 }
 
 const getChoice = (itemId: string): RiskChoice =>
-  normalizeRiskChoice(props.modelValue.items[itemId]?.choice ?? '', itemId)
+  itemId === 'crisis_level'
+    ? calculateCrisisLevelChoice(props.modelValue)
+    : normalizeRiskChoice(props.modelValue.items[itemId]?.choice ?? '', itemId)
+
+const crisisLevelText = computed(() =>
+  formatRiskChoiceDisplay('crisis_level', calculateCrisisLevelChoice(props.modelValue)),
+)
 
 const optionContent = (item: RiskAssessmentItemConfig, choice: RiskChoice): string =>
   item.options[choice as 'A' | 'B' | 'C' | 'D' | 'E'] ?? choice
@@ -128,27 +141,16 @@ const patchItem = (itemId: string, patch: Partial<{ choice: RiskChoice; note: st
       },
     },
   }
-  emit('update:modelValue', next)
+  emit('update:modelValue', normalizeRiskAssessment(next))
 }
 
 const selectChoice = (itemId: string, choice: RiskChoice) => {
-  if (props.readonly) return
+  if (props.readonly || itemId === 'crisis_level') return
   const prev = props.modelValue.items[itemId]
   patchItem(itemId, {
     choice,
     note: prev?.choice === choice ? (prev.note ?? '') : '',
   })
-  if (
-    itemId === 'crisis_level'
-    && CRISIS_REPORT_CHOICES.includes(choice)
-  ) {
-    uni.showModal({
-      title: '请上报',
-      content: crisisLevelReportPrompt(choice),
-      showCancel: false,
-      confirmText: '我知道了',
-    })
-  }
 }
 
 const onNoteInput = (itemId: string, e: { detail?: { value?: string } }) => {
@@ -255,6 +257,29 @@ const onNoteInput = (itemId: string, e: { detail?: { value?: string } }) => {
 
 .option-item.readonly {
   pointer-events: none;
+}
+
+.calculated-box {
+  padding: 20rpx;
+  border: 1rpx solid #D7E4DD;
+  border-radius: 16rpx;
+  background: #F0F5F3;
+}
+
+.calculated-label {
+  display: block;
+  font-size: 26rpx;
+  font-weight: 700;
+  color: #2F4D42;
+  line-height: 1.5;
+}
+
+.calculated-hint {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: #6B7280;
+  line-height: 1.5;
 }
 
 .option-mark {

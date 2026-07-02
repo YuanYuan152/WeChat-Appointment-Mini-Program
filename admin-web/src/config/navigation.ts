@@ -26,6 +26,7 @@ export const sections: NavigationSection[] = [
   { id: "rooms", label: "咨询室情况", desc: "咨询室状态与占用", path: "/rooms", allowedRoles: ["Admin", "Ops"] },
   { id: "caseRecords", label: "咨询记录", desc: "记录提交概览", path: "/case-records", allowedRoles: ["Admin", "Ops"] },
   { id: "operationLogs", label: "操作记录", desc: "现有业务记录入口", path: "/operation-logs", allowedRoles: ["Admin", "Ops"] },
+  { id: "dataImport", label: "数据导入", desc: "导入完成订单", path: "/data-import", allowedRoles: ["Admin", "Ops"] },
   { id: "userBoard", label: "用户管理", desc: "来访者和咨询师检索", path: "/user-board", allowedRoles: ["Admin", "Ops"] },
   { id: "counselorBoard", label: "咨询师管理", desc: "资料与记录管理", path: "/counselor-board", allowedRoles: ["Admin", "Ops"] },
   {
@@ -58,7 +59,7 @@ export const sectionPathById = Object.fromEntries(
 export const navigationGroups: NavigationGroup[] = [
   { id: "overview", label: "工作台", sectionIds: ["dashboard", "messages"] },
   { id: "admin", label: "权限管理", sectionIds: ["roles"] },
-  { id: "business", label: "业务处理", sectionIds: ["refunds", "feedback", "caseRecords", "operationLogs"] },
+  { id: "business", label: "业务处理", sectionIds: ["refunds", "feedback", "caseRecords", "operationLogs", "dataImport"] },
   { id: "operation", label: "运营配置", sectionIds: ["content", "schedules", "rooms"] },
   { id: "boards", label: "数据看板", sectionIds: ["userBoard", "counselorBoard"] },
   { id: "counselor", label: "咨询师工作台", sectionIds: ["counselorDashboard", "counselorSchedules", "counselorRecords"] },

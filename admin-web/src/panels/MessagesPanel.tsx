@@ -21,22 +21,34 @@ type MessagePayload = {
 export type MessageReadFilter = "ALL" | "UNREAD" | "READ";
 
 export function MessagesPanel({
+  crisisUnreadActive,
+  crisisUnreadCount,
+  detailLoading,
+  listLoading,
   messages,
   keyword,
   selectedMessage,
+  showCrisisBanner,
   statusFilter,
   onCloseDetail,
+  onOpenCrisisUnread,
   onKeywordChange,
   onOpen,
   onReset,
   onSearch,
   onStatusFilterChange,
 }: {
+  crisisUnreadActive?: boolean;
+  crisisUnreadCount?: number;
+  detailLoading?: boolean;
+  listLoading?: boolean;
   messages?: MessageItem[];
   keyword: string;
   selectedMessage?: MessageItem | null;
+  showCrisisBanner?: boolean;
   statusFilter: MessageReadFilter;
   onCloseDetail: () => void;
+  onOpenCrisisUnread?: () => void;
   onKeywordChange: (value: string) => void;
   onOpen: (message: MessageItem) => void;
   onReset: () => void;
@@ -45,7 +57,8 @@ export function MessagesPanel({
 }) {
   const items = messages || [];
   const crisisMessages = items.filter(isCrisisReportMessage);
-  const unreadCrisisCount = crisisMessages.filter((item) => !item.IsRead).length;
+  const currentListCrisisCount = crisisMessages.length;
+  const unreadCrisisCount = crisisUnreadCount ?? crisisMessages.filter((item) => !item.IsRead).length;
 
   return (
     <section className="rounded-xl border border-[var(--lxxl-border)] bg-white">
@@ -83,14 +96,15 @@ export function MessagesPanel({
           <QueryResetButton onClick={onReset}>重置</QueryResetButton>
         </div>
       </form>
-      {crisisMessages.length > 0 && (
-        <div
-          className={`mx-6 mt-5 flex items-center justify-between gap-4 rounded-xl border px-4 py-3 text-sm ${
+      {showCrisisBanner && (
+        <button
+          className={`mx-6 mt-5 flex w-[calc(100%-3rem)] items-center justify-between gap-4 rounded-xl border px-4 py-3 text-left text-sm transition hover:brightness-[0.98] ${
             unreadCrisisCount > 0
               ? "border-[#F3B18D] bg-[#FFF2EA] text-[#A94616]"
               : "border-[#F1D3C2] bg-[#FFF8F3] text-[#C45A1A]"
           }`}
-          role="status"
+          type="button"
+          onClick={onOpenCrisisUnread}
         >
           <div className="flex min-w-0 items-center gap-3">
             <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#F8D9C9] text-base font-bold text-[#C2410C]">
@@ -98,94 +112,117 @@ export function MessagesPanel({
             </span>
             <div className="min-w-0">
               <div className="font-semibold">个案风险上报未读 {unreadCrisisCount} 条</div>
-              <div className="mt-0.5 text-xs opacity-80">风险消息会在列表中高亮，请优先跟进。</div>
+              <div className="mt-0.5 text-xs opacity-80">
+                {crisisUnreadActive ? "正在查看未读风险上报消息。" : "点击查看未读风险上报消息，风险消息会在列表中高亮。"}
+              </div>
             </div>
           </div>
-          <div className="shrink-0 text-xs font-medium">共 {crisisMessages.length} 条</div>
-        </div>
+          <div className="shrink-0 text-xs font-medium">
+            当前列表 {currentListCrisisCount} 条
+          </div>
+        </button>
       )}
-      {items.length === 0 ? (
-        <EmptyState text="暂无消息。" />
-      ) : (
-        <table className="w-full table-fixed border-collapse text-sm">
-          <colgroup>
-            <col className="w-[10%]" />
-            <col className="w-[17%]" />
-            <col className="w-[36%]" />
-            <col className="w-[16%]" />
-            <col className="w-[12%]" />
-            <col className="w-[9%]" />
-          </colgroup>
-          <thead className="bg-[#FAF8F4] text-left text-[var(--lxxl-muted)]">
-            <tr>
-              <th className="px-5 py-3 font-medium">状态</th>
-              <th className="px-5 py-3 font-medium">标题</th>
-              <th className="px-5 py-3 font-medium">内容</th>
-              <th className="px-5 py-3 font-medium">关联</th>
-              <th className="px-5 py-3 font-medium">时间</th>
-              <th className="px-5 py-3 text-right font-medium">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((item) => {
-              const display = getMessageDisplay(item);
-              const isCrisis = isCrisisReportMessage(item);
-              return (
-                <tr
-                  key={item.Id}
-                  className={`border-t border-[var(--lxxl-border)] align-top ${
-                    isCrisis ? "bg-[#FFF8F3]" : ""
-                  }`}
-                >
-                  <td className="px-5 py-4">
-                    <div className="flex flex-col items-start gap-2">
-                      <Badge tone={item.IsRead ? "neutral" : "gold"}>{item.IsRead ? "已读" : "未读"}</Badge>
-                      {isCrisis && <Badge tone="red">风险上报</Badge>}
-                    </div>
-                  </td>
-                  <td className="break-words px-5 py-4">
-                    <div className="space-y-2">
-                      <Badge tone={isCrisis ? "red" : "green"}>{display.categoryLabel}</Badge>
-                      <div className={`font-medium ${isCrisis ? "text-[#A94616]" : ""}`}>
-                        {display.title}
+      <div className="relative">
+        {listLoading && items.length > 0 && (
+          <div className="absolute inset-x-0 top-0 z-10 border-t border-[var(--lxxl-border)] bg-white/80 px-5 py-3 text-sm text-[var(--lxxl-muted)] backdrop-blur-sm">
+            正在加载列表...
+          </div>
+        )}
+        {items.length === 0 ? (
+          <EmptyState text={listLoading ? "正在加载列表..." : "暂无消息。"} />
+        ) : (
+          <table className="w-full table-fixed border-collapse text-sm">
+            <colgroup>
+              <col className="w-[10%]" />
+              <col className="w-[17%]" />
+              <col className="w-[36%]" />
+              <col className="w-[16%]" />
+              <col className="w-[12%]" />
+              <col className="w-[9%]" />
+            </colgroup>
+            <thead className="bg-[#FAF8F4] text-left text-[var(--lxxl-muted)]">
+              <tr>
+                <th className="px-5 py-3 font-medium">状态</th>
+                <th className="px-5 py-3 font-medium">标题</th>
+                <th className="px-5 py-3 font-medium">内容</th>
+                <th className="px-5 py-3 font-medium">关联</th>
+                <th className="px-5 py-3 font-medium">时间</th>
+                <th className="px-5 py-3 text-right font-medium">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item) => {
+                const display = getMessageDisplay(item);
+                const isCrisis = isCrisisReportMessage(item);
+                return (
+                  <tr
+                    key={item.Id}
+                    className={`border-t border-[var(--lxxl-border)] align-top ${
+                      isCrisis ? "bg-[#FFF8F3]" : ""
+                    }`}
+                  >
+                    <td className="px-5 py-4">
+                      <div className="flex flex-col items-start gap-2">
+                        <Badge tone={item.IsRead ? "neutral" : "gold"}>{item.IsRead ? "已读" : "未读"}</Badge>
+                        {isCrisis && <Badge tone="red">风险上报</Badge>}
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-5 py-4">
-                    <div className="space-y-2">
-                      <div className="line-clamp-2 break-words text-[var(--lxxl-text)]">{display.summary}</div>
-                      {display.details.length > 0 && (
-                        <div className="space-y-1 text-xs leading-5 text-[var(--lxxl-muted)]">
-                          {display.details.map((detail) => (
-                            <div key={detail.label} className="grid grid-cols-[64px_minmax(0,1fr)] gap-2">
-                              <span>{detail.label}</span>
-                              <span className="min-w-0 break-words">{detail.value}</span>
-                            </div>
-                          ))}
+                    </td>
+                    <td className="break-words px-5 py-4">
+                      <div className="space-y-2">
+                        <Badge tone={isCrisis ? "red" : "green"}>{display.categoryLabel}</Badge>
+                        <div className={`font-medium ${isCrisis ? "text-[#A94616]" : ""}`}>
+                          {display.title}
                         </div>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-5 py-4 text-[var(--lxxl-muted)]">
-                    <div className="break-words text-[var(--lxxl-text)]">{display.relatedLabel}</div>
-                    {display.relatedId && <div className="mt-1 text-xs">编号 {display.relatedId}</div>}
-                  </td>
-                  <td className="whitespace-nowrap px-5 py-4 text-[var(--lxxl-muted)]">{formatDateTime(item.CreatedAt)}</td>
-                  <td className="px-5 py-4 text-right">
-                    <TableActionButton onClick={() => onOpen(item)}>查看</TableActionButton>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                      </div>
+                    </td>
+                    <td className="px-5 py-4">
+                      <div className="space-y-2">
+                        <div className="line-clamp-2 break-words text-[var(--lxxl-text)]">{display.summary}</div>
+                        {display.details.length > 0 && (
+                          <div className="space-y-1 text-xs leading-5 text-[var(--lxxl-muted)]">
+                            {display.details.map((detail) => (
+                              <div key={detail.label} className="grid grid-cols-[64px_minmax(0,1fr)] gap-2">
+                                <span>{detail.label}</span>
+                                <span className="min-w-0 break-words">{detail.value}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-5 py-4 text-[var(--lxxl-muted)]">
+                      <div className="break-words text-[var(--lxxl-text)]">{display.relatedLabel}</div>
+                      {display.relatedId && <div className="mt-1 text-xs">编号 {display.relatedId}</div>}
+                    </td>
+                    <td className="whitespace-nowrap px-5 py-4 text-[var(--lxxl-muted)]">
+                      {formatDateTime(item.CreatedAt)}
+                    </td>
+                    <td className="px-5 py-4 text-right">
+                      <TableActionButton onClick={() => onOpen(item)}>查看</TableActionButton>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+      {selectedMessage && (
+        <MessageDetailDrawer loading={detailLoading} message={selectedMessage} onClose={onCloseDetail} />
       )}
-      {selectedMessage && <MessageDetailDrawer message={selectedMessage} onClose={onCloseDetail} />}
     </section>
   );
 }
 
-function MessageDetailDrawer({ message, onClose }: { message: MessageItem; onClose: () => void }) {
+function MessageDetailDrawer({
+  loading,
+  message,
+  onClose,
+}: {
+  loading?: boolean;
+  message: MessageItem;
+  onClose: () => void;
+}) {
   const display = getMessageDisplay(message);
   const detail = parseMessagePayload(message.Content)?.detail || {};
   const sections = buildMessageDetailSections(message, detail, display.summary);
@@ -194,6 +231,11 @@ function MessageDetailDrawer({ message, onClose }: { message: MessageItem; onClo
   return (
     <DetailDrawer title={`${display.title}详情`} onClose={onClose}>
       <div className="space-y-6">
+        {loading && (
+          <div className="rounded-lg border border-[var(--lxxl-border)] bg-[#FAF8F4] px-4 py-3 text-sm text-[var(--lxxl-muted)]">
+            正在加载最新消息详情...
+          </div>
+        )}
         <section className="border-b border-[var(--lxxl-border)] pb-5">
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <Badge tone={message.IsRead ? "neutral" : "gold"}>{message.IsRead ? "已读" : "未读"}</Badge>

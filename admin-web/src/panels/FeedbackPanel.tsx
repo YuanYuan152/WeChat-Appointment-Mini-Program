@@ -5,11 +5,13 @@ import { Badge, EmptyState, QueryButton, QueryField, queryControlClass } from "@
 
 export function FeedbackPanel({
   feedbacks,
+  listLoading,
   status,
   setStatus,
   onSearch,
 }: {
   feedbacks?: FeedbackItem[];
+  listLoading?: boolean;
   status: string;
   setStatus: (status: string) => void;
   onSearch: () => void;
@@ -43,39 +45,46 @@ export function FeedbackPanel({
         </div>
       </form>
 
-      {items.length === 0 ? (
-        <EmptyState text="暂无用户反馈。" />
-      ) : (
-        <table className="w-full border-collapse text-sm">
-          <thead className="bg-[#FAF8F4] text-left text-[var(--lxxl-muted)]">
-            <tr>
-              <th className="px-5 py-3 font-medium">提交时间</th>
-              <th className="px-5 py-3 font-medium">用户</th>
-              <th className="px-5 py-3 font-medium">类型</th>
-              <th className="px-5 py-3 font-medium">反馈内容</th>
-              <th className="px-5 py-3 font-medium">联系方式</th>
-              <th className="px-5 py-3 font-medium">状态</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((item) => (
-              <tr key={item.id} className="border-t border-[var(--lxxl-border)] align-top">
-                <td className="px-5 py-4 text-[var(--lxxl-muted)]">{formatDateTime(item.createdAt)}</td>
-                <td className="px-5 py-4">
-                  <div className="font-medium">{item.userName || `用户#${item.accountId}`}</div>
-                  <div className="mt-1 text-xs text-[var(--lxxl-muted)]">{item.userMobile || "-"}</div>
-                </td>
-                <td className="px-5 py-4">{item.category || "其他"}</td>
-                <td className="max-w-lg px-5 py-4 text-[var(--lxxl-muted)]">{item.content}</td>
-                <td className="px-5 py-4 text-[var(--lxxl-muted)]">{item.contact || "-"}</td>
-                <td className="px-5 py-4">
-                  <Badge tone={item.status === "OPEN" ? "gold" : "green"}>{statusLabel(item.status)}</Badge>
-                </td>
+      <div className="relative">
+        {listLoading && items.length > 0 && (
+          <div className="absolute inset-x-0 top-0 z-10 border-t border-[var(--lxxl-border)] bg-white/80 px-5 py-3 text-sm text-[var(--lxxl-muted)] backdrop-blur-sm">
+            正在加载列表...
+          </div>
+        )}
+        {items.length === 0 ? (
+          <EmptyState text={listLoading ? "正在加载列表..." : "暂无用户反馈。"} />
+        ) : (
+          <table className="w-full border-collapse text-sm">
+            <thead className="bg-[#FAF8F4] text-left text-[var(--lxxl-muted)]">
+              <tr>
+                <th className="px-5 py-3 font-medium">提交时间</th>
+                <th className="px-5 py-3 font-medium">用户</th>
+                <th className="px-5 py-3 font-medium">类型</th>
+                <th className="px-5 py-3 font-medium">反馈内容</th>
+                <th className="px-5 py-3 font-medium">联系方式</th>
+                <th className="px-5 py-3 font-medium">状态</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+            </thead>
+            <tbody>
+              {items.map((item) => (
+                <tr key={item.id} className="border-t border-[var(--lxxl-border)] align-top">
+                  <td className="px-5 py-4 text-[var(--lxxl-muted)]">{formatDateTime(item.createdAt)}</td>
+                  <td className="px-5 py-4">
+                    <div className="font-medium">{item.userName || `用户#${item.accountId}`}</div>
+                    <div className="mt-1 text-xs text-[var(--lxxl-muted)]">{item.userMobile || "-"}</div>
+                  </td>
+                  <td className="px-5 py-4">{item.category || "其他"}</td>
+                  <td className="max-w-lg px-5 py-4 text-[var(--lxxl-muted)]">{item.content}</td>
+                  <td className="px-5 py-4 text-[var(--lxxl-muted)]">{item.contact || "-"}</td>
+                  <td className="px-5 py-4">
+                    <Badge tone={item.status === "OPEN" ? "gold" : "green"}>{statusLabel(item.status)}</Badge>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
     </section>
   );
 }

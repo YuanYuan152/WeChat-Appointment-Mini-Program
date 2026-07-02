@@ -55,7 +55,9 @@ export function ContentCreateModal({
 
         <div className="space-y-4 px-6 py-5">
           <label className="block">
-            <span className="text-sm font-medium">标题</span>
+            <span className="text-sm font-medium">
+              标题 <span className="text-[#B94A48]">*</span>
+            </span>
             <input
               className="mt-2 h-11 w-full rounded-xl border border-[var(--lxxl-border)] px-3 text-sm outline-none transition focus:border-[var(--lxxl-green)]"
               placeholder="请输入标题"
@@ -77,7 +79,9 @@ export function ContentCreateModal({
           )}
 
           <label className="block">
-            <span className="text-sm font-medium">图片地址{activeKind === "banner" ? "（必填）" : ""}</span>
+            <span className="text-sm font-medium">
+              图片地址{activeKind === "banner" && <span className="ml-1 text-[#B94A48]">*</span>}
+            </span>
             <input
               className="mt-2 h-11 w-full rounded-xl border border-[var(--lxxl-border)] px-3 text-sm outline-none transition focus:border-[var(--lxxl-green)]"
               placeholder={activeKind === "banner" ? "请输入 Banner 图片地址" : "请输入图片地址"}

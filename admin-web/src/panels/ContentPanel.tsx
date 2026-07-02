@@ -11,6 +11,7 @@ import { getPageItems } from "@/lib/pagination";
 
 export function ContentPanel({
   data,
+  listLoading,
   draft,
   setDraft,
   activeKind,
@@ -24,6 +25,7 @@ export function ContentPanel({
   onDelete,
 }: {
   data: ScreenData;
+  listLoading: boolean;
   draft: ContentDraft;
   setDraft: Dispatch<SetStateAction<ContentDraft>>;
   activeKind: ContentKind;
@@ -59,38 +61,45 @@ export function ContentPanel({
         }}
       />
 
-      <ContentList
-        title={getContentKindLabel(activeKind)}
-        items={visibleItems}
-        total={articleTotal ?? activeItems.length}
-        page={articleCurrentPage ?? localPageData.currentPage}
-        pageSize={articleCurrentPageSize ?? localPageSize}
-        onCreateClick={() => {
-          setEditingId(null);
-          resetDraft();
-          setCreateOpen(true);
-        }}
-        onEdit={(item) => {
-          setEditingId(item.id);
-          setDraft({
-            kind: activeKind,
-            title: item.title,
-            summary: item.summary || "",
-            imageUrl: item.imageUrl || "",
-          });
-          setCreateOpen(true);
-        }}
-        onDelete={(id) => onDelete(activeKind, id)}
-        onPageChange={activeKind === "article" ? onArticlePageChange : setLocalPage}
-        onPageSizeChange={
-          activeKind === "article"
-            ? onArticlePageSizeChange
-            : (nextPageSize) => {
-                setLocalPage(1);
-                setLocalPageSize(nextPageSize);
-              }
-        }
-      />
+      <div className="relative">
+        {listLoading && (
+          <div className="absolute inset-x-0 top-0 z-10 border-t border-[var(--lxxl-border)] bg-white/80 px-5 py-3 text-sm text-[var(--lxxl-muted)] backdrop-blur-sm">
+            正在加载列表...
+          </div>
+        )}
+        <ContentList
+          title={getContentKindLabel(activeKind)}
+          items={visibleItems}
+          total={articleTotal ?? activeItems.length}
+          page={articleCurrentPage ?? localPageData.currentPage}
+          pageSize={articleCurrentPageSize ?? localPageSize}
+          onCreateClick={() => {
+            setEditingId(null);
+            resetDraft();
+            setCreateOpen(true);
+          }}
+          onEdit={(item) => {
+            setEditingId(item.id);
+            setDraft({
+              kind: activeKind,
+              title: item.title,
+              summary: item.summary || "",
+              imageUrl: item.imageUrl || "",
+            });
+            setCreateOpen(true);
+          }}
+          onDelete={(id) => onDelete(activeKind, id)}
+          onPageChange={activeKind === "article" ? onArticlePageChange : setLocalPage}
+          onPageSizeChange={
+            activeKind === "article"
+              ? onArticlePageSizeChange
+              : (nextPageSize) => {
+                  setLocalPage(1);
+                  setLocalPageSize(nextPageSize);
+                }
+          }
+        />
+      </div>
 
       <ContentCreateModal
         open={createOpen}

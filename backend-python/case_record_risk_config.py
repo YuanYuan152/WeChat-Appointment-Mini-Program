@@ -192,8 +192,31 @@ RISK_ASSESSMENT_ITEMS: List[Dict[str, Any]] = [
 ]
 
 RISK_ITEM_IDS: List[str] = [item["id"] for item in RISK_ASSESSMENT_ITEMS]
+RISK_SCALE_ITEM_IDS: List[str] = [item["id"] for item in RISK_ASSESSMENT_ITEMS if item["id"] != "crisis_level"]
 
 RISK_ITEM_BY_ID: Dict[str, Dict[str, Any]] = {item["id"]: item for item in RISK_ASSESSMENT_ITEMS}
+
+
+def _risk_item_value(risk_assessment: Optional[Dict[str, Any]], item_id: str) -> Dict[str, Any]:
+    if not risk_assessment or not isinstance(risk_assessment.get("items"), dict):
+        return {}
+    val = risk_assessment["items"].get(item_id) or {}
+    return val if isinstance(val, dict) else {}
+
+
+def _risk_choice(risk_assessment: Optional[Dict[str, Any]], item_id: str) -> str:
+    val = _risk_item_value(risk_assessment, item_id)
+    return normalize_risk_choice(str(val.get("choice") or "").strip(), item_id)
+
+
+def _risk_note(risk_assessment: Optional[Dict[str, Any]], item_id: str) -> str:
+    val = _risk_item_value(risk_assessment, item_id)
+    return str(val.get("note") or "").strip()
+
+
+def _note_has_any(note: str, keywords: Tuple[str, ...]) -> bool:
+    lowered = note.lower()
+    return any(keyword.lower() in lowered for keyword in keywords)
 
 
 def normalize_risk_choice(choice: str, item_id: Optional[str] = None) -> str:
@@ -231,16 +254,88 @@ def risk_choice_label(item_id: str, choice: str) -> str:
     return f"{choice}. {text}"
 
 
+def calculate_crisis_level_choice(risk_assessment: Optional[Dict[str, Any]]) -> str:
+    """根据风险评估表 1-9 项自动计算第 10 项风险/危机等级。"""
+    diagnosis = _risk_choice(risk_assessment, "diagnosis")
+    support = _risk_choice(risk_assessment, "support_system")
+    self_harm = _risk_choice(risk_assessment, "self_harm")
+    harm_others = _risk_choice(risk_assessment, "harm_others")
+    self_care = _risk_choice(risk_assessment, "self_care")
+    stress_event = _risk_choice(risk_assessment, "stress_event")
+    medical_history = _risk_choice(risk_assessment, "medical_history")
+    stress_note = _risk_note(risk_assessment, "stress_event")
+    medical_note = _risk_note(risk_assessment, "medical_history")
+
+    severe_stress = _note_has_any(
+        stress_note,
+        ("性虐待", "性侵", "强奸", "暴力关系", "家暴", "暴力"),
+    )
+    severe_medical = _note_has_any(
+        medical_note,
+        ("癌", "重型糖尿病", "甲亢", "免疫系统", "性病", "慢性疼痛", "急性发作", "严重"),
+    )
+
+    if (
+        diagnosis == "D"
+        or self_harm == "D"
+        or harm_others == "D"
+        or self_care == "D"
+        or (stress_event == "B" and severe_stress)
+        or (medical_history == "B" and severe_medical)
+    ):
+        return "A"
+
+    if (
+        self_harm == "C"
+        or harm_others == "C"
+        or self_care == "C"
+        or (diagnosis == "C" and self_harm == "B")
+        or (support == "D" and self_harm in {"B", "C"})
+    ):
+        return "B"
+
+    if (
+        support in {"B", "C", "D"}
+        or self_harm == "B"
+        or harm_others == "B"
+        or self_care == "B"
+        or stress_event in {"B", "C"}
+    ):
+        return "C"
+
+    return "D"
+
+
+def normalize_risk_assessment_with_calculated_level(
+    risk_assessment: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """规范化风险评估表，并强制用 1-9 项计算第 10 项。"""
+    raw_items = risk_assessment.get("items") if isinstance(risk_assessment, dict) else {}
+    if not isinstance(raw_items, dict):
+        raw_items = {}
+
+    normalized: Dict[str, Any] = {"items": {}}
+    for item_id in RISK_SCALE_ITEM_IDS:
+        val = raw_items.get(item_id) or {}
+        if not isinstance(val, dict):
+            val = {}
+        normalized["items"][item_id] = {
+            "choice": normalize_risk_choice(str(val.get("choice") or "").strip(), item_id),
+            "note": str(val.get("note") or "").strip(),
+        }
+
+    normalized["items"]["crisis_level"] = {
+        "choice": calculate_crisis_level_choice(normalized),
+        "note": "",
+    }
+    return normalized
+
+
 CRISIS_REPORT_CHOICES: Tuple[str, ...] = ("A", "B", "C")
 
 
 def get_crisis_level_choice(risk_assessment: Optional[Dict[str, Any]]) -> str:
-    if not risk_assessment or not isinstance(risk_assessment.get("items"), dict):
-        return ""
-    val = risk_assessment["items"].get("crisis_level") or {}
-    if not isinstance(val, dict):
-        return ""
-    return normalize_risk_choice(str(val.get("choice") or "").strip(), "crisis_level")
+    return calculate_crisis_level_choice(risk_assessment)
 
 
 def crisis_level_label(choice: str) -> str:

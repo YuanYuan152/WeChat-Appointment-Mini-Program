@@ -25,6 +25,8 @@ export function CaseRecordsPanel({
   selectedCaseRecord,
   caseRecordLoading,
   amendments,
+  amendmentsLoading,
+  recordsLoading,
   amendmentStatus,
   setAmendmentStatus,
   onLoadAmendments,
@@ -46,6 +48,8 @@ export function CaseRecordsPanel({
   selectedCaseRecord?: AdminCaseRecordDetail;
   caseRecordLoading?: boolean;
   amendments?: CaseRecordAmendment[];
+  amendmentsLoading?: boolean;
+  recordsLoading?: boolean;
   amendmentStatus: string;
   setAmendmentStatus: (value: string) => void;
   onLoadAmendments: () => void;
@@ -87,64 +91,84 @@ export function CaseRecordsPanel({
             咨询师提交修改申请后，管理员可查看变更内容并通过或驳回。
           </p>
         </div>
-        {!amendments || amendments.length === 0 ? (
-          <div className="py-8 text-sm text-[var(--lxxl-muted)]">暂无修改申请。</div>
-        ) : (
-          <table className="mt-4 w-full border-collapse text-sm">
-            <thead className="bg-[#FAF8F4] text-left text-[var(--lxxl-muted)]">
-              <tr>
-                <th className="px-5 py-3 font-medium">提交时间</th>
-                <th className="px-5 py-3 font-medium">咨询师</th>
-                <th className="px-5 py-3 font-medium">咨询/记录</th>
-                <th className="px-5 py-3 font-medium">原因</th>
-                <th className="px-5 py-3 font-medium">状态</th>
-                <th className="px-5 py-3 font-medium">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {amendments.map((item) => (
-                <tr key={item.id} className="border-t border-[var(--lxxl-border)]">
-                  <td className="px-5 py-4 text-[var(--lxxl-muted)]">{formatDateTime(item.createdAt)}</td>
-                  <td className="px-5 py-4 font-medium">{item.counselorName}</td>
-                  <td className="px-5 py-4 text-[var(--lxxl-muted)]">
-                    咨询 #{item.consultationId} · 记录 #{item.caseRecordId}
-                  </td>
-                  <td className="max-w-xs px-5 py-4 text-[var(--lxxl-muted)]">{item.reason || "-"}</td>
-                  <td className="px-5 py-4">
-                    <Badge tone={item.status === "REJECTED" ? "red" : item.status === "APPROVED" ? "green" : "gold"}>
-                      {item.status}
-                    </Badge>
-                  </td>
-                  <td className="px-5 py-4">
-                    <div className="flex flex-wrap gap-3">
-                      <TableActionButton onClick={() => setSelectedAmendment(item)}>查看</TableActionButton>
-                      {item.status === "PENDING" && (
-                        <>
-                          <TableActionButton onClick={() => onApproveAmendment(item.id)}>通过</TableActionButton>
-                          <TableActionButton
-                            tone="danger"
-                            onClick={() => {
-                              setRejectingAmendment(item);
-                              setRejectReason("");
-                            }}
-                          >
-                            驳回
-                          </TableActionButton>
-                        </>
-                      )}
-                    </div>
-                  </td>
+        <div className="relative">
+          {amendmentsLoading && amendments && amendments.length > 0 && (
+            <div className="absolute inset-x-0 top-0 z-10 border-t border-[var(--lxxl-border)] bg-white/80 px-5 py-3 text-sm text-[var(--lxxl-muted)] backdrop-blur-sm">
+              正在刷新修改申请...
+            </div>
+          )}
+          {!amendments || amendments.length === 0 ? (
+            <div className="py-8 text-sm text-[var(--lxxl-muted)]">
+              {amendmentsLoading ? "正在加载修改申请..." : "暂无修改申请。"}
+            </div>
+          ) : (
+            <table className="mt-4 w-full border-collapse text-sm">
+              <thead className="bg-[#FAF8F4] text-left text-[var(--lxxl-muted)]">
+                <tr>
+                  <th className="px-5 py-3 font-medium">提交时间</th>
+                  <th className="px-5 py-3 font-medium">咨询师</th>
+                  <th className="px-5 py-3 font-medium">咨询/记录</th>
+                  <th className="px-5 py-3 font-medium">原因</th>
+                  <th className="px-5 py-3 font-medium">状态</th>
+                  <th className="px-5 py-3 font-medium">操作</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+              </thead>
+              <tbody>
+                {amendments.map((item) => (
+                  <tr key={item.id} className="border-t border-[var(--lxxl-border)]">
+                    <td className="px-5 py-4 text-[var(--lxxl-muted)]">{formatDateTime(item.createdAt)}</td>
+                    <td className="px-5 py-4 font-medium">{item.counselorName}</td>
+                    <td className="px-5 py-4 text-[var(--lxxl-muted)]">
+                      咨询 #{item.consultationId} · 记录 #{item.caseRecordId}
+                    </td>
+                    <td className="max-w-xs px-5 py-4 text-[var(--lxxl-muted)]">{item.reason || "-"}</td>
+                    <td className="px-5 py-4">
+                      <Badge tone={item.status === "REJECTED" ? "red" : item.status === "APPROVED" ? "green" : "gold"}>
+                        {item.status}
+                      </Badge>
+                    </td>
+                    <td className="px-5 py-4">
+                      <div className="flex flex-wrap gap-3">
+                        <TableActionButton disabled={amendmentsLoading} onClick={() => setSelectedAmendment(item)}>
+                          查看
+                        </TableActionButton>
+                        {item.status === "PENDING" && (
+                          <>
+                            <TableActionButton disabled={amendmentsLoading} onClick={() => onApproveAmendment(item.id)}>
+                              通过
+                            </TableActionButton>
+                            <TableActionButton
+                              disabled={amendmentsLoading}
+                              tone="danger"
+                              onClick={() => {
+                                setRejectingAmendment(item);
+                                setRejectReason("");
+                              }}
+                            >
+                              驳回
+                            </TableActionButton>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
       </div>
-      {allRecords.length === 0 ? (
-        <EmptyState text="暂无咨询记录概览。" />
-      ) : (
-        <>
-          <table className="w-full border-collapse text-sm">
+      <div className="relative">
+        {recordsLoading && allRecords.length > 0 && (
+          <div className="absolute inset-x-0 top-0 z-10 border-t border-[var(--lxxl-border)] bg-white/80 px-5 py-3 text-sm text-[var(--lxxl-muted)] backdrop-blur-sm">
+            正在刷新记录概览...
+          </div>
+        )}
+        {allRecords.length === 0 ? (
+          <EmptyState text={recordsLoading ? "正在加载咨询记录概览..." : "暂无咨询记录概览。"} />
+        ) : (
+          <>
+            <table className="w-full border-collapse text-sm">
             <thead className="bg-[#FAF8F4] text-left text-[var(--lxxl-muted)]">
               <tr>
                 <th className="px-5 py-3 font-medium">咨询师</th>
@@ -169,16 +193,17 @@ export function CaseRecordsPanel({
                 </tr>
               ))}
             </tbody>
-          </table>
-          <Pagination
-            page={currentPage}
-            pageSize={pageSize}
-            total={allRecords.length}
-            onPageChange={onPageChange}
-            onPageSizeChange={onPageSizeChange}
-          />
-        </>
-      )}
+            </table>
+            <Pagination
+              page={currentPage}
+              pageSize={pageSize}
+              total={allRecords.length}
+              onPageChange={onPageChange}
+              onPageSizeChange={onPageSizeChange}
+            />
+          </>
+        )}
+      </div>
       {selectedCounselorName && (
         <DetailDrawer title={`${selectedCounselorName || "咨询师"}咨询记录`} onClose={onCloseDetails}>
           {selectedCaseRecord ? (

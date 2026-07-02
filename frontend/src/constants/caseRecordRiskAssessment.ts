@@ -192,6 +192,8 @@ export const CASE_RECORD_FIELD_LABELS = {
   riskAssessment: '个案风险评估表',
 } as const
 
+export const RISK_SCALE_ITEMS = RISK_ASSESSMENT_ITEMS.filter(item => item.id !== 'crisis_level')
+
 export const createEmptyRiskAssessment = (): RiskAssessmentData => ({
   items: Object.fromEntries(
     RISK_ASSESSMENT_ITEMS.map(item => [item.id, { choice: '', note: '' }]),
@@ -204,7 +206,7 @@ export const OTHER_OPTION_LABEL = '其他'
 export const CRISIS_REPORT_CHOICES: RiskChoice[] = ['A', 'B', 'C']
 
 export const getCrisisLevelChoice = (data?: RiskAssessmentData | null): RiskChoice =>
-  normalizeRiskChoice(data?.items.crisis_level?.choice ?? '', 'crisis_level')
+  calculateCrisisLevelChoice(data)
 
 export const crisisLevelRequiresReport = (data?: RiskAssessmentData | null): boolean =>
   CRISIS_REPORT_CHOICES.includes(getCrisisLevelChoice(data))
@@ -212,24 +214,96 @@ export const crisisLevelRequiresReport = (data?: RiskAssessmentData | null): boo
 export const crisisLevelReportPrompt = (choice: RiskChoice): string => {
   const item = RISK_ASSESSMENT_ITEMS.find(i => i.id === 'crisis_level')
   const text = item?.options[choice as 'A' | 'B' | 'C'] ?? ''
-  return `您选择了「${choice}. ${text}」，请按规定完成上报。`
+  return `系统自动计算为「${choice}. ${text}」，请按规定完成上报。`
 }
 
 /** @deprecated 使用 OTHER_OPTION_LABEL */
 export const E_OPTION_LABEL = OTHER_OPTION_LABEL
 
-export const normalizeRiskChoice = (choice: RiskChoice, itemId?: string): RiskChoice => {
-  if (!choice) return ''
+export const normalizeRiskChoice = (choice?: RiskChoice | string, itemId?: string): RiskChoice => {
+  const normalized = String(choice || '').trim().toUpperCase() as RiskChoice
+  if (!normalized) return ''
   const item = itemId ? RISK_ASSESSMENT_ITEMS.find(i => i.id === itemId) : undefined
-  if (item?.otherChoice === 'C' && (choice === 'E' || choice === 'OTHER')) return 'C'
-  if (choice === 'OTHER') return 'E'
-  return choice
+  if (item?.otherChoice === 'C' && (normalized === 'E' || normalized === 'OTHER')) return 'C'
+  if (normalized === 'OTHER') return 'E'
+  return normalized
+}
+
+const noteHasAny = (note: string, keywords: string[]) => {
+  const lower = note.toLowerCase()
+  return keywords.some(keyword => lower.includes(keyword.toLowerCase()))
+}
+
+const choiceOf = (data: RiskAssessmentData | null | undefined, itemId: string) =>
+  normalizeRiskChoice(data?.items?.[itemId]?.choice || '', itemId)
+
+const noteOf = (data: RiskAssessmentData | null | undefined, itemId: string) =>
+  String(data?.items?.[itemId]?.note || '').trim()
+
+export const calculateCrisisLevelChoice = (data?: RiskAssessmentData | null): 'A' | 'B' | 'C' | 'D' => {
+  const diagnosis = choiceOf(data, 'diagnosis')
+  const support = choiceOf(data, 'support_system')
+  const selfHarm = choiceOf(data, 'self_harm')
+  const harmOthers = choiceOf(data, 'harm_others')
+  const selfCare = choiceOf(data, 'self_care')
+  const stressEvent = choiceOf(data, 'stress_event')
+  const medicalHistory = choiceOf(data, 'medical_history')
+  const severeStress = noteHasAny(noteOf(data, 'stress_event'), ['性虐待', '性侵', '强奸', '暴力关系', '家暴', '暴力'])
+  const severeMedical = noteHasAny(noteOf(data, 'medical_history'), [
+    '癌',
+    '重型糖尿病',
+    '甲亢',
+    '免疫系统',
+    '性病',
+    '慢性疼痛',
+    '急性发作',
+    '严重',
+  ])
+
+  if (
+    diagnosis === 'D'
+    || selfHarm === 'D'
+    || harmOthers === 'D'
+    || selfCare === 'D'
+    || (stressEvent === 'B' && severeStress)
+    || (medicalHistory === 'B' && severeMedical)
+  ) {
+    return 'A'
+  }
+
+  if (
+    selfHarm === 'C'
+    || harmOthers === 'C'
+    || selfCare === 'C'
+    || (diagnosis === 'C' && selfHarm === 'B')
+    || (support === 'D' && selfHarm === 'B')
+  ) {
+    return 'B'
+  }
+
+  if (
+    support === 'B'
+    || support === 'C'
+    || support === 'D'
+    || selfHarm === 'B'
+    || harmOthers === 'B'
+    || selfCare === 'B'
+    || stressEvent === 'B'
+    || stressEvent === 'C'
+  ) {
+    return 'C'
+  }
+
+  return 'D'
 }
 
 export const normalizeRiskAssessment = (raw?: RiskAssessmentData | null): RiskAssessmentData => {
   const base = createEmptyRiskAssessment()
-  if (!raw?.items) return base
-  for (const item of RISK_ASSESSMENT_ITEMS) {
+  if (!raw?.items) {
+    base.items.crisis_level = { choice: calculateCrisisLevelChoice(base), note: '' }
+    return base
+  }
+  for (const item of RISK_SCALE_ITEMS) {
     const val = raw.items[item.id]
     if (val?.choice) {
       base.items[item.id] = {
@@ -238,12 +312,13 @@ export const normalizeRiskAssessment = (raw?: RiskAssessmentData | null): RiskAs
       }
     }
   }
+  base.items.crisis_level = { choice: calculateCrisisLevelChoice(base), note: '' }
   return base
 }
 
 export const riskAssessmentIsComplete = (data?: RiskAssessmentData | null): boolean => {
   if (!data?.items) return false
-  return RISK_ASSESSMENT_ITEMS.every(item => {
+  return RISK_SCALE_ITEMS.every(item => {
     const val = data.items[item.id]
     if (!val?.choice) return false
     const choice = normalizeRiskChoice(val.choice, item.id)
@@ -254,11 +329,11 @@ export const riskAssessmentIsComplete = (data?: RiskAssessmentData | null): bool
 }
 
 export const riskAssessmentMissingLabel = (data?: RiskAssessmentData | null): string | null => {
-  if (!data?.items) return RISK_ASSESSMENT_ITEMS[0]?.label ?? '个案风险评估'
-  for (const item of RISK_ASSESSMENT_ITEMS) {
+  if (!data?.items) return RISK_SCALE_ITEMS[0]?.label ?? '个案风险评估'
+  for (const item of RISK_SCALE_ITEMS) {
     const val = data.items[item.id]
-    if (!val?.choice) return `${item.index}. ${item.label}`
-    const choice = normalizeRiskChoice(val.choice, item.id)
+    const choice = normalizeRiskChoice(val?.choice, item.id)
+    if (!choice || !item.choices.includes(choice)) return `${item.index}. ${item.label}`
     if (item.noteChoices.includes(choice) && !String(val.note ?? '').trim()) {
       return `${item.index}. ${item.label}（请填写说明）`
     }

@@ -3,6 +3,17 @@ import type { Dispatch, SetStateAction } from "react";
 
 import { formatDateTime } from "@/lib/format";
 import { API_BASE_URL } from "@/lib/api";
+import {
+  RISK_ASSESSMENT_ITEMS,
+  RISK_LEVEL_GUIDE,
+  calculateCrisisLevelChoice,
+  formatRiskChoiceDisplay,
+  normalizeRiskAssessment,
+  normalizeRiskChoice,
+  type RiskAssessmentData,
+  type RiskAssessmentItemConfig,
+  type RiskChoice,
+} from "@/constants/caseRecordRiskAssessment";
 import type { CounselorCaseRecord, CounselorCaseRecordRevision, CounselorCompletedConsultation } from "@/types/api";
 
 import {
@@ -27,7 +38,7 @@ export interface CounselorRecordFormState {
   objective: string;
   assessment: string;
   plan: string;
-  riskLevel: "A" | "B" | "C" | "D";
+  riskAssessment: RiskAssessmentData;
   reason: string;
   headerInfo: Record<string, string>;
   photoUrls: string[];
@@ -52,13 +63,6 @@ const HEADER_FIELDS: Array<{ key: string; label: string; editable?: boolean }> =
   { key: "end_minute", label: "咨询结束分钟" },
   { key: "counselor_signature", label: "咨询师签名", editable: true },
 ];
-
-const RISK_LEVEL_OPTIONS = [
-  { value: "A", label: "一级风险/危机：转介处理" },
-  { value: "B", label: "二级风险/危机：上报同心理咨询中心/督导/危机干预小组" },
-  { value: "C", label: "三级风险/危机：告知相关联系人并讨论安全计划" },
-  { value: "D", label: "无危机：一般咨询" },
-] as const;
 
 type CaseRecordTextKey = "subjective" | "objective" | "assessment" | "plan";
 
@@ -346,6 +350,24 @@ function RecordFormFields({
     onClearError(`header.${key}`);
     onClearError("form");
   };
+  const updateRiskItem = (itemId: string, patch: Partial<{ choice: RiskChoice; note: string }>) => {
+    setForm((prev) => {
+      if (!prev) return prev;
+      const nextAssessment = normalizeRiskAssessment({
+        items: {
+          ...prev.riskAssessment.items,
+          [itemId]: {
+            choice: patch.choice ?? prev.riskAssessment.items[itemId]?.choice ?? "",
+            note: patch.note ?? prev.riskAssessment.items[itemId]?.note ?? "",
+          },
+        },
+      });
+      return { ...prev, riskAssessment: nextAssessment };
+    });
+    onClearError("riskAssessment");
+    onClearError(`risk.${itemId}`);
+    onClearError("form");
+  };
 
   return (
     <div className="space-y-6">
@@ -373,20 +395,12 @@ function RecordFormFields({
       <PhotoSection readonly={readonly} urls={form.photoUrls} />
       {(form.revisions || []).length > 0 && <RevisionHistory revisions={form.revisions || []} />}
 
-      <QueryField error={errors.riskLevel} label="风险/危机等级" required={!readonly}>
-        <select
-          className={queryControlClass}
-          disabled={readonly}
-          value={form.riskLevel}
-          onChange={(event) => updateField("riskLevel", event.target.value)}
-        >
-          {RISK_LEVEL_OPTIONS.map((item) => (
-            <option key={item.value} value={item.value}>
-              {item.label}
-            </option>
-          ))}
-        </select>
-      </QueryField>
+      <RiskAssessmentFormSection
+        error={errors.riskAssessment}
+        readonly={readonly}
+        value={form.riskAssessment}
+        onChange={updateRiskItem}
+      />
 
       {form.mode === "amend" && (
         <TextareaField
@@ -427,6 +441,174 @@ function RecordFormFields({
       </div>
     </div>
   );
+}
+
+function RiskAssessmentFormSection({
+  error,
+  readonly,
+  value,
+  onChange,
+}: {
+  error?: string;
+  readonly: boolean;
+  value: RiskAssessmentData;
+  onChange: (itemId: string, patch: Partial<{ choice: RiskChoice; note: string }>) => void;
+}) {
+  const normalized = normalizeRiskAssessment(value);
+  const crisisChoice = calculateCrisisLevelChoice(normalized);
+  const crisisItem = RISK_ASSESSMENT_ITEMS.find((item) => item.id === "crisis_level");
+
+  return (
+    <section className="rounded-xl border border-[var(--lxxl-border)] bg-white p-4">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h4 className="text-sm font-semibold">
+            个案风险评估表{!readonly && <span className="ml-1 text-[#B94A48]">*</span>}
+          </h4>
+          <p className="mt-1 text-xs leading-5 text-[var(--lxxl-muted)]">
+            请逐项选择对应选项；第 10 项由系统根据前 9 项自动计算，不可手动修改。
+          </p>
+        </div>
+        {crisisItem && (
+          <span className={`rounded-full px-3 py-1 text-xs font-semibold ${riskLevelToneClass(crisisChoice)}`}>
+            {formatRiskChoiceDisplay(crisisItem.id, crisisChoice)}
+          </span>
+        )}
+      </div>
+      {error && (
+        <div className="mt-3 rounded-lg border border-[#F0B8B2] bg-[#FFF4F2] px-3 py-2 text-sm text-[#A13F37]">
+          {error}
+        </div>
+      )}
+
+      <div className="mt-4 space-y-4">
+        {RISK_ASSESSMENT_ITEMS.map((item) => {
+          if (item.id === "crisis_level") {
+            return <CalculatedRiskLevel key={item.id} choice={crisisChoice} item={item} />;
+          }
+          return (
+            <RiskQuestion
+              key={item.id}
+              item={item}
+              readonly={readonly}
+              value={normalized.items[item.id] || { choice: "", note: "" }}
+              onChange={onChange}
+            />
+          );
+        })}
+      </div>
+
+      <details className="mt-4 rounded-lg bg-[#FAF8F4] p-3 text-xs leading-6 text-[var(--lxxl-muted)]">
+        <summary className="cursor-pointer font-semibold text-[#3D5A4E]">风险等级说明</summary>
+        <div className="mt-2 whitespace-pre-wrap">{RISK_LEVEL_GUIDE}</div>
+      </details>
+    </section>
+  );
+}
+
+function RiskQuestion({
+  item,
+  readonly,
+  value,
+  onChange,
+}: {
+  item: RiskAssessmentItemConfig;
+  readonly: boolean;
+  value: { choice: RiskChoice; note?: string };
+  onChange: (itemId: string, patch: Partial<{ choice: RiskChoice; note: string }>) => void;
+}) {
+  const selectedChoice = normalizeRiskChoice(value.choice || "", item.id);
+  const displayChoices = readonly && selectedChoice ? item.choices.filter((choice) => choice === selectedChoice) : item.choices;
+  const needsNote = selectedChoice && item.noteChoices.includes(selectedChoice);
+
+  return (
+    <div className="border-t border-[var(--lxxl-border)] pt-4 first:border-t-0 first:pt-0">
+      <div className="flex items-start gap-3">
+        <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#3D5A4E] text-xs font-semibold text-white">
+          {item.index}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-semibold text-[#2C2C2C]">
+            {item.label}
+            {!readonly && <span className="ml-1 text-[#B94A48]">*</span>}
+          </div>
+          {item.description && <p className="mt-1 text-xs leading-5 text-[var(--lxxl-muted)]">{item.description}</p>}
+          <div className="mt-3 grid grid-cols-1 gap-2">
+            {displayChoices.map((choice) => {
+              const normalizedChoice = normalizeRiskChoice(choice, item.id);
+              const active = selectedChoice === normalizedChoice;
+              return (
+                <button
+                  key={choice}
+                  className={`rounded-lg border px-3 py-2 text-left text-sm leading-6 transition ${
+                    active
+                      ? "border-[#3D5A4E] bg-[#EEF5F1] text-[#2F4D42]"
+                      : "border-[var(--lxxl-border)] bg-white text-[#2C2C2C] hover:border-[#C9D5CE]"
+                  } ${readonly ? "cursor-default hover:border-[var(--lxxl-border)]" : ""}`}
+                  disabled={readonly}
+                  type="button"
+                  onClick={() => onChange(item.id, { choice: normalizedChoice, note: selectedChoice === normalizedChoice ? value.note || "" : "" })}
+                >
+                  {formatRiskChoiceDisplay(item.id, normalizedChoice)}
+                </button>
+              );
+            })}
+          </div>
+          {needsNote && (
+            <div className="mt-3">
+              {readonly ? (
+                <div className="rounded-lg bg-[#FAF8F4] px-3 py-2 text-sm leading-6 text-[var(--lxxl-muted)]">
+                  {value.note?.trim() || "-"}
+                </div>
+              ) : (
+                <textarea
+                  className={`${queryControlClass} min-h-20 resize-y py-3 text-sm`}
+                  placeholder="请填写具体说明"
+                  value={value.note || ""}
+                  onChange={(event) => onChange(item.id, { note: event.target.value })}
+                />
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CalculatedRiskLevel({
+  choice,
+  item,
+}: {
+  choice: "A" | "B" | "C" | "D";
+  item: RiskAssessmentItemConfig;
+}) {
+  return (
+    <div className="border-t border-[var(--lxxl-border)] pt-4">
+      <div className="flex items-start gap-3">
+        <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#3D5A4E] text-xs font-semibold text-white">
+          {item.index}
+        </span>
+        <div className="min-w-0 flex-1 rounded-lg bg-[#FAF8F4] px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold text-[#2C2C2C]">{item.label}</div>
+              <p className="mt-1 text-xs text-[var(--lxxl-muted)]">系统根据前 9 项自动计算，不可手动修改。</p>
+            </div>
+            <span className={`rounded-full px-3 py-1 text-xs font-semibold ${riskLevelToneClass(choice)}`}>
+              {formatRiskChoiceDisplay(item.id, choice)}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function riskLevelToneClass(choice: RiskChoice) {
+  if (choice === "A" || choice === "B") return "bg-[#FFF1ED] text-[#A13F37]";
+  if (choice === "C") return "bg-[#FFF6DE] text-[#8A6A1E]";
+  return "bg-[#EAF4EE] text-[#2F4D42]";
 }
 
 function PhotoSection({ urls, readonly }: { urls: string[]; readonly: boolean }) {

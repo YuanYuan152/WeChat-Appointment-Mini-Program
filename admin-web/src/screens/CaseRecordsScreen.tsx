@@ -26,11 +26,13 @@ export function CaseRecordsScreen() {
 }
 
 function CaseRecordsScreenContent() {
-  const { clearNotice, refreshKey, setLoading, showNotice } = useAppRoute();
+  const { clearNotice, refreshKey, showNotice } = useAppRoute();
   const [data, setData] = useState<ScreenData>({});
   const [selectedCounselorName, setSelectedCounselorName] = useState<string | null>(null);
   const [selectedCounselorRecords, setSelectedCounselorRecords] = useState<AdminConsultationRecord[]>();
   const [selectedCaseRecord, setSelectedCaseRecord] = useState<AdminCaseRecordDetail>();
+  const [recordsLoading, setRecordsLoading] = useState(false);
+  const [amendmentsLoading, setAmendmentsLoading] = useState(false);
   const [selectedRecordsLoading, setSelectedRecordsLoading] = useState(false);
   const [caseRecordLoading, setCaseRecordLoading] = useState(false);
   const [page, setPage] = useState(1);
@@ -39,7 +41,8 @@ function CaseRecordsScreenContent() {
   const [appliedAmendmentStatus, setAppliedAmendmentStatus] = useState("PENDING");
 
   const loadData = useCallback(async () => {
-    setLoading(true);
+    setRecordsLoading(true);
+    setAmendmentsLoading(true);
     clearNotice();
     try {
       const counselorRecords = await fetchCounselorRecordSummary();
@@ -48,9 +51,10 @@ function CaseRecordsScreenContent() {
     } catch (error) {
       showNotice("error", error instanceof Error ? error.message : "咨询记录加载失败");
     } finally {
-      setLoading(false);
+      setRecordsLoading(false);
+      setAmendmentsLoading(false);
     }
-  }, [appliedAmendmentStatus, clearNotice, setLoading, showNotice]);
+  }, [appliedAmendmentStatus, clearNotice, showNotice]);
 
   useEffect(() => {
     void loadData();
@@ -102,7 +106,7 @@ function CaseRecordsScreenContent() {
   }, []);
 
   const loadAmendments = useCallback(async () => {
-    setLoading(true);
+    setAmendmentsLoading(true);
     clearNotice();
     try {
       const caseRecordAmendments = await fetchCaseRecordAmendments(amendmentStatus);
@@ -111,13 +115,13 @@ function CaseRecordsScreenContent() {
     } catch (error) {
       showNotice("error", error instanceof Error ? error.message : "修改审核加载失败");
     } finally {
-      setLoading(false);
+      setAmendmentsLoading(false);
     }
-  }, [amendmentStatus, clearNotice, setLoading, showNotice]);
+  }, [amendmentStatus, clearNotice, showNotice]);
 
   const approveAmendment = useCallback(
     async (amendmentId: number) => {
-      setLoading(true);
+      setAmendmentsLoading(true);
       clearNotice();
       try {
         const result = await approveCaseRecordAmendment(amendmentId);
@@ -126,15 +130,15 @@ function CaseRecordsScreenContent() {
       } catch (error) {
         showNotice("error", error instanceof Error ? error.message : "通过修改申请失败");
       } finally {
-        setLoading(false);
+        setAmendmentsLoading(false);
       }
     },
-    [clearNotice, loadData, setLoading, showNotice],
+    [clearNotice, loadData, showNotice],
   );
 
   const rejectAmendment = useCallback(
     async (amendmentId: number, rejectReason: string) => {
-      setLoading(true);
+      setAmendmentsLoading(true);
       clearNotice();
       try {
         const result = await rejectCaseRecordAmendment(amendmentId, rejectReason);
@@ -143,10 +147,10 @@ function CaseRecordsScreenContent() {
       } catch (error) {
         showNotice("error", error instanceof Error ? error.message : "驳回修改申请失败");
       } finally {
-        setLoading(false);
+        setAmendmentsLoading(false);
       }
     },
-    [clearNotice, loadData, setLoading, showNotice],
+    [clearNotice, loadData, showNotice],
   );
 
   return (
@@ -165,6 +169,8 @@ function CaseRecordsScreenContent() {
       selectedCaseRecord={selectedCaseRecord}
       caseRecordLoading={caseRecordLoading}
       amendments={data.caseRecordAmendments}
+      amendmentsLoading={amendmentsLoading}
+      recordsLoading={recordsLoading}
       amendmentStatus={amendmentStatus}
       setAmendmentStatus={setAmendmentStatus}
       onLoadAmendments={loadAmendments}

@@ -7,14 +7,14 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from case_record_risk_config import (
-    RISK_ITEM_IDS,
+    RISK_SCALE_ITEM_IDS,
     RISK_ITEM_BY_ID,
-    VALID_CHOICES,
     get_crisis_level_choice,
     crisis_level_text_only,
     risk_item_allowed_choices,
     risk_item_note_required,
     normalize_risk_choice,
+    normalize_risk_assessment_with_calculated_level,
     should_notify_crisis_report,
 )
 from message import create_message
@@ -59,7 +59,7 @@ def decode_photo_urls(raw: Optional[str]) -> List[str]:
 def encode_risk_assessment(data: Optional[Dict[str, Any]]) -> Optional[str]:
     if not data:
         return None
-    return json.dumps(data, ensure_ascii=False)
+    return json.dumps(normalize_case_record_risk_assessment(data), ensure_ascii=False)
 
 
 def decode_risk_assessment(raw: Optional[str]) -> Optional[Dict[str, Any]]:
@@ -80,7 +80,7 @@ def risk_assessment_is_complete(data: Optional[Dict[str, Any]]) -> bool:
     items = data.get("items")
     if not isinstance(items, dict):
         return False
-    for item_id in RISK_ITEM_IDS:
+    for item_id in RISK_SCALE_ITEM_IDS:
         val = items.get(item_id)
         if not isinstance(val, dict):
             return False
@@ -97,7 +97,7 @@ def validate_risk_assessment(data: Optional[Dict[str, Any]]) -> None:
         if not data or not isinstance(data, dict) or not isinstance(data.get("items"), dict):
             raise HTTPException(status_code=400, detail="请完成个案风险评估表")
         items = data["items"]
-        for item_id in RISK_ITEM_IDS:
+        for item_id in RISK_SCALE_ITEM_IDS:
             cfg = RISK_ITEM_BY_ID[item_id]
             val = items.get(item_id) or {}
             choice = normalize_risk_choice(str(val.get("choice") or "").strip().upper(), item_id)
@@ -106,6 +106,10 @@ def validate_risk_assessment(data: Optional[Dict[str, Any]]) -> None:
             if risk_item_note_required(item_id, choice) and not str(val.get("note") or "").strip():
                 raise HTTPException(status_code=400, detail=f"请填写：{cfg['label']}说明")
         raise HTTPException(status_code=400, detail="请完成个案风险评估表")
+
+
+def normalize_case_record_risk_assessment(data: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    return normalize_risk_assessment_with_calculated_level(data)
 
 
 def encode_header_info(data: Optional[Dict[str, Any]]) -> Optional[str]:

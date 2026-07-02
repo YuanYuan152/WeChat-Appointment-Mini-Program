@@ -5,7 +5,13 @@ import { useCallback, useEffect, useState } from "react";
 import { AppRoute, useAppRoute } from "@/components/AppRoute";
 import { MessagesPanel } from "@/panels/MessagesPanel";
 import type { MessageReadFilter } from "@/panels/MessagesPanel";
-import { fetchMessageDetail, fetchMessages, markMessageRead, MESSAGE_UNREAD_CHANGED_EVENT } from "@/services/messages";
+import {
+  fetchMessageDetail,
+  fetchMessages,
+  fetchUnreadMessageCount,
+  markMessageRead,
+  MESSAGE_UNREAD_CHANGED_EVENT,
+} from "@/services/messages";
 import type { MessageItem } from "@/types/api";
 import type { ScreenData } from "@/types/app";
 
@@ -18,20 +24,38 @@ export function MessagesScreen() {
 }
 
 function MessagesScreenContent() {
-  const { clearNotice, refreshKey, setLoading, showNotice } = useAppRoute();
+  const { clearNotice, currentUser, refreshKey, showNotice } = useAppRoute();
   const [data, setData] = useState<ScreenData>({});
   const [keyword, setKeyword] = useState("");
   const [statusFilter, setStatusFilter] = useState<MessageReadFilter>("ALL");
   const [appliedKeyword, setAppliedKeyword] = useState("");
   const [appliedStatusFilter, setAppliedStatusFilter] = useState<MessageReadFilter>("ALL");
+  const [appliedCategory, setAppliedCategory] = useState("");
+  const [crisisUnreadCount, setCrisisUnreadCount] = useState(0);
   const [selectedMessage, setSelectedMessage] = useState<MessageItem | null>(null);
+  const [listLoading, setListLoading] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const showCrisisBanner = currentUser.roles.includes("Admin") || currentUser.roles.includes("Ops");
+
+  const loadCrisisUnreadCount = useCallback(async () => {
+    if (!showCrisisBanner) {
+      setCrisisUnreadCount(0);
+      return;
+    }
+    try {
+      const result = await fetchUnreadMessageCount("case_record_crisis");
+      setCrisisUnreadCount(result.count || 0);
+    } catch {
+      setCrisisUnreadCount(0);
+    }
+  }, [showCrisisBanner]);
 
   const loadData = useCallback(async () => {
-    setLoading(true);
+    setListLoading(true);
     clearNotice();
     try {
       const unreadOnly = appliedStatusFilter === "UNREAD";
-      const messages = await fetchMessages({ unreadOnly, keyword: appliedKeyword });
+      const messages = await fetchMessages({ unreadOnly, category: appliedCategory, keyword: appliedKeyword });
       setData((prev) => ({
         ...prev,
         messages: appliedStatusFilter === "READ" ? messages.filter((message) => message.IsRead) : messages,
@@ -39,22 +63,25 @@ function MessagesScreenContent() {
     } catch (error) {
       showNotice("error", error instanceof Error ? error.message : "消息加载失败");
     } finally {
-      setLoading(false);
+      setListLoading(false);
     }
-  }, [appliedKeyword, appliedStatusFilter, clearNotice, setLoading, showNotice]);
+  }, [appliedCategory, appliedKeyword, appliedStatusFilter, clearNotice, showNotice]);
 
   useEffect(() => {
     void loadData();
-  }, [loadData, refreshKey]);
+    void loadCrisisUnreadCount();
+  }, [loadData, loadCrisisUnreadCount, refreshKey]);
 
   const openMessage = useCallback(
     async (message: MessageItem) => {
-      setLoading(true);
+      setSelectedMessage(message);
+      setDetailLoading(true);
       clearNotice();
       try {
         await markMessageRead(message.Id);
         const detail = await fetchMessageDetail(message.Id);
         window.dispatchEvent(new Event(MESSAGE_UNREAD_CHANGED_EVENT));
+        await loadCrisisUnreadCount();
         setSelectedMessage(detail);
         setData((prev) => ({
           ...prev,
@@ -65,13 +92,14 @@ function MessagesScreenContent() {
       } catch (error) {
         showNotice("error", error instanceof Error ? error.message : "消息详情加载失败");
       } finally {
-        setLoading(false);
+        setDetailLoading(false);
       }
     },
-    [clearNotice, setLoading, showNotice],
+    [clearNotice, loadCrisisUnreadCount, showNotice],
   );
 
   const searchMessages = useCallback(() => {
+    setAppliedCategory("");
     setAppliedKeyword(keyword.trim());
     setAppliedStatusFilter(statusFilter);
   }, [keyword, statusFilter]);
@@ -79,17 +107,32 @@ function MessagesScreenContent() {
   const resetSearch = useCallback(() => {
     setKeyword("");
     setStatusFilter("ALL");
+    setAppliedCategory("");
     setAppliedKeyword("");
     setAppliedStatusFilter("ALL");
   }, []);
 
+  const openCrisisUnreadList = useCallback(() => {
+    setKeyword("");
+    setStatusFilter("UNREAD");
+    setAppliedKeyword("");
+    setAppliedStatusFilter("UNREAD");
+    setAppliedCategory("case_record_crisis");
+  }, []);
+
   return (
     <MessagesPanel
+      crisisUnreadActive={appliedCategory === "case_record_crisis"}
+      crisisUnreadCount={crisisUnreadCount}
+      detailLoading={detailLoading}
       keyword={keyword}
+      listLoading={listLoading}
       messages={data.messages}
       selectedMessage={selectedMessage}
+      showCrisisBanner={showCrisisBanner}
       statusFilter={statusFilter}
       onCloseDetail={() => setSelectedMessage(null)}
+      onOpenCrisisUnread={openCrisisUnreadList}
       onKeywordChange={setKeyword}
       onOpen={openMessage}
       onReset={resetSearch}

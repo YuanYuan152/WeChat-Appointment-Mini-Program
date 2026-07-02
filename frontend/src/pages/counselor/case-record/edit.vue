@@ -209,7 +209,7 @@ const validateForm = () => {
 
 const buildPayload = () => ({
   ...form.value,
-  risk_assessment: riskAssessment.value,
+  risk_assessment: normalizeRiskAssessment(riskAssessment.value),
   header_info: headerInfo.value,
   photo_urls: [],
 })
@@ -251,7 +251,7 @@ const save = async () => {
       ...buildPayload(),
     })
     if (res.code === 0) {
-      const needReport = crisisLevelRequiresReport(riskAssessment.value)
+      const needReport = crisisLevelRequiresReport(normalizeRiskAssessment(riskAssessment.value))
       uni.showToast({
         title: needReport ? '提交成功，请完成上报' : '提交成功',
         icon: 'success',

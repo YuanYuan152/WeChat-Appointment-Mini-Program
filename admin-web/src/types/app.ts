@@ -12,6 +12,7 @@ import type {
   CounselorDashboardStats,
   CounselorScheduleCalendar,
   CounselorSlotOptions,
+  CompletedOrderImportResult,
   FeedbackItem,
   MessageItem,
   CounselorRecordSummary,
@@ -42,6 +43,7 @@ export type SectionId =
   | "rooms"
   | "caseRecords"
   | "operationLogs"
+  | "dataImport"
   | "userBoard"
   | "counselorBoard"
   | "counselorDashboard"
@@ -82,6 +84,7 @@ export interface ScreenData {
   selectedCaseRecord?: AdminCaseRecordDetail;
   caseRecordAmendments?: CaseRecordAmendment[];
   operationRecords?: PagedResult<OperationRecord>;
+  completedOrderImport?: CompletedOrderImportResult;
   userBoard?: PagedResult<UserBoardSummary>;
   selectedUserBoard?: UserBoardDetail;
   counselorBoard?: PagedResult<CounselorBoardSummary>;

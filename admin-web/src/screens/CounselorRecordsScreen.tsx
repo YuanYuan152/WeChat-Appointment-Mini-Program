@@ -17,6 +17,12 @@ import {
   fetchCounselorCompletedConsultations,
   requestCounselorCaseRecordAmendment,
 } from "@/services/counselor";
+import {
+  createEmptyRiskAssessment,
+  crisisLevelRequiresReport,
+  normalizeRiskAssessment,
+  riskAssessmentMissingLabel,
+} from "@/constants/caseRecordRiskAssessment";
 import type { CounselorCaseRecord, CounselorCaseRecordRevision, CounselorCompletedConsultation } from "@/types/api";
 import type { ScreenData } from "@/types/app";
 
@@ -71,7 +77,7 @@ function CounselorRecordsScreenContent() {
           objective: "",
           assessment: "",
           plan: "",
-          riskLevel: "D",
+          riskAssessment: createEmptyRiskAssessment(),
           reason: "",
           headerInfo: defaults.HeaderInfo,
           photoUrls: [],
@@ -151,13 +157,18 @@ function CounselorRecordsScreenContent() {
         objective: selectedForm.objective,
         assessment: selectedForm.assessment,
         plan: selectedForm.plan,
-        risk_assessment: buildRiskAssessment(selectedForm.riskLevel),
+        risk_assessment: normalizeRiskAssessment(selectedForm.riskAssessment),
         header_info: selectedForm.headerInfo,
         photo_urls: selectedForm.photoUrls,
       };
       if (selectedForm.mode === "create") {
         await createCounselorCaseRecord(payload);
-        showNotice("success", "咨询记录已提交");
+        showNotice(
+          "success",
+          crisisLevelRequiresReport(selectedForm.riskAssessment)
+            ? "咨询记录已提交，已生成风险上报提醒"
+            : "咨询记录已提交",
+        );
       } else if (selectedForm.mode === "amend" && selectedForm.recordId) {
         await requestCounselorCaseRecordAmendment(selectedForm.recordId, {
           ...payload,
@@ -209,7 +220,7 @@ function buildFormFromRecord(
     objective: record.Objective || "",
     assessment: record.Assessment || "",
     plan: record.Plan || "",
-    riskLevel: extractRiskLevel(record.RiskAssessment),
+    riskAssessment: normalizeRiskAssessment(record.RiskAssessment),
     reason: "",
     headerInfo: mergeHeaderInfo(defaultHeaderInfo, record.HeaderInfo),
     photoUrls: record.PhotoUrls || [],
@@ -271,6 +282,11 @@ function validateForm(form: CounselorRecordFormState): CounselorRecordFormErrors
     }
   }
 
+  const riskMissing = riskAssessmentMissingLabel(form.riskAssessment);
+  if (riskMissing) {
+    errors.riskAssessment = `请完成：${riskMissing}`;
+  }
+
   if (form.mode === "amend" && !form.reason.trim()) {
     errors.reason = "请填写修改原因";
   }
@@ -287,33 +303,4 @@ function mergeHeaderInfo(
     merged[key] = recordHeader?.[key] || defaults?.[key] || "";
   }
   return merged;
-}
-
-function extractRiskLevel(riskAssessment?: Record<string, unknown> | null): "A" | "B" | "C" | "D" {
-  const items = riskAssessment?.items;
-  if (!items || typeof items !== "object") {
-    return "D";
-  }
-  const crisis = (items as Record<string, unknown>).crisis_level;
-  if (!crisis || typeof crisis !== "object") {
-    return "D";
-  }
-  const choice = (crisis as { choice?: unknown }).choice;
-  return choice === "A" || choice === "B" || choice === "C" || choice === "D" ? choice : "D";
-}
-
-function buildRiskAssessment(riskLevel: "A" | "B" | "C" | "D") {
-  const items: Record<string, { choice: string; note: string }> = {
-    diagnosis: { choice: "A", note: "" },
-    support_system: { choice: "A", note: "" },
-    self_harm: { choice: "A", note: "" },
-    harm_others: { choice: "A", note: "" },
-    self_care: { choice: "A", note: "" },
-    stress_event: { choice: "A", note: "" },
-    family_history: { choice: "A", note: "" },
-    medical_history: { choice: "A", note: "" },
-    trauma_history: { choice: "A", note: "" },
-    crisis_level: { choice: riskLevel, note: "" },
-  };
-  return { items };
 }
