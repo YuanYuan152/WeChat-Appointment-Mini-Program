@@ -974,15 +974,15 @@ onShow(load)
 
   border-radius: 100rpx;
 
-  background: #F5EFE3;
+  background: #E8E4DE;
 
-  border: 1rpx solid #E8DCC8;
+  border: 1rpx solid #D4CFC6;
 
 }
 
 .role-chip-base {
-  background: #ECFDF5;
-  border-color: #A7F3D0;
+  background: #F0EDE8;
+  border-color: #E8E4DE;
 }
 
 
@@ -991,10 +991,15 @@ onShow(load)
 
   font-size: 24rpx;
 
-  color: #8A6D3B;
+  color: #3D5A4E;
 
   font-weight: 600;
 
+}
+
+.role-chip-base .role-text {
+  color: #6B9080;
+  font-weight: 500;
 }
 
 
@@ -1003,7 +1008,7 @@ onShow(load)
 
   font-size: 28rpx;
 
-  color: #C9A96E;
+  color: #6B9080;
 
   line-height: 1;
 

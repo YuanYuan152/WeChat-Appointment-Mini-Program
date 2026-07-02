@@ -144,6 +144,27 @@ def get_current_account(
         raise HTTPException(status_code=401, detail="账号已注销")
     return account
 
+
+def get_optional_account(
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+) -> Optional[AppAccount]:
+    """可选鉴权：未登录或 Token 无效时返回 None，不抛错。"""
+    if not authorization or not authorization.startswith("Bearer "):
+        return None
+    try:
+        token = authorization[7:]
+        payload = decode_token(token)
+        account_id = payload.get("sub")
+        if not account_id:
+            return None
+        account = db.query(AppAccount).filter(AppAccount.Id == int(account_id)).first()
+        if not account or getattr(account, "IsActive", True) is False:
+            return None
+        return account
+    except HTTPException:
+        return None
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------

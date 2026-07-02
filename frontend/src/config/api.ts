@@ -196,6 +196,13 @@ export const API_ENDPOINTS = {
     counselors: '/api/mini/admin/counselors',
     counselorDetail: (id: number | string) => `/api/mini/admin/counselors/${id}`,
     consultationFeedbacks: '/api/mini/admin/consultation-feedbacks',
+    pricingCounselors: '/api/mini/admin/pricing/counselors',
+    pricingCounselorBase: (counselorId: number | string) =>
+      `/api/mini/admin/pricing/counselors/${counselorId}`,
+    pricingCounselorPatients: (counselorId: number | string) =>
+      `/api/mini/admin/pricing/counselors/${counselorId}/patients`,
+    pricingCounselorPatientUpdate: (counselorId: number | string, patientId: number | string) =>
+      `/api/mini/admin/pricing/counselors/${counselorId}/patients/${patientId}`,
   },
 
   // 意见反馈

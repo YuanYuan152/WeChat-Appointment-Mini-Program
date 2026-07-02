@@ -24,6 +24,7 @@ from models import AppAccount, AppOrder, AppSchedule
 from config import settings
 from payment_service import complete_paid_order
 from intake_agreement import attach_intake_to_order
+from pricing_service import resolve_display_price_cents
 
 router = APIRouter(prefix="/api/payment", tags=["Payment"])
 
@@ -108,6 +109,13 @@ def _create_pending_order(
     schedule = db.query(AppSchedule).filter(AppSchedule.Id == req.slot_id).first()
     if not schedule or schedule.Status != "AVAILABLE":
         raise HTTPException(status_code=400, detail="该时段已被预约或不存在")
+
+    expected_fee = resolve_display_price_cents(db, account.Id, schedule.CounselorId)
+    if req.total_fee != expected_fee:
+        raise HTTPException(
+            status_code=400,
+            detail=f"价格已变更，请刷新后重试（应付 {expected_fee / 100:.0f} 元）",
+        )
 
     order = AppOrder(
         AccountId=account.Id,

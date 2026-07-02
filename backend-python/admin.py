@@ -51,6 +51,7 @@ from user_role_meta import (
     validate_counselor_type,
     validate_patient_source,
 )
+from pricing_service import default_base_price_cents_for_type
 from role_active import list_account_roles, resolve_active_role, invalidate_user_sessions
 from patient_registration import (
     DEFAULT_PATIENT_SOURCE,
@@ -227,6 +228,7 @@ def _ensure_counselor_profile(
             AccountId=account.Id,
             Name=display_name,
             CounselorType=counselor_type,
+            Billing=default_base_price_cents_for_type(counselor_type),
             IsActive=True,
         )
         db.add(profile)
@@ -2112,3 +2114,104 @@ def reject_leave_request_api(
         raise HTTPException(status_code=400, detail=str(e))
     db.commit()
     return {"message": "已拒绝请假申请", "status": "REJECTED"}
+
+
+# ---------------------------------------------------------------------------
+# 定价管理（管理员）
+# ---------------------------------------------------------------------------
+
+
+class AdminPricingUpdatePayload(BaseModel):
+    adjustmentYuan: int = Field(..., ge=-99999, le=99999, description="手动调价（元，可正可负）")
+    shareMode: Optional[str] = Field(None, description="AMOUNT | PERCENT，空则默认全额分成给咨询师")
+    revenueShareYuan: Optional[int] = Field(None, ge=0, le=99999)
+    revenueSharePercent: Optional[int] = Field(None, ge=0, le=100)
+
+
+class AdminCounselorBasePricePayload(BaseModel):
+    basePriceYuan: int = Field(..., ge=0, le=99999, description="咨询师统一基础价（元）")
+
+
+@router.get("/pricing/counselors", summary="定价管理：咨询师列表（含统一基础价）")
+def list_pricing_counselors(
+    keyword: Optional[str] = Query(None),
+    _admin: AppAccount = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    from pricing_service import list_counselor_pricing_summaries
+
+    items = list_counselor_pricing_summaries(db, keyword=keyword)
+    return {"total": len(items), "items": items}
+
+
+@router.put("/pricing/counselors/{counselor_id}", summary="更新咨询师统一基础价")
+def update_pricing_counselor_base(
+    counselor_id: int,
+    body: AdminCounselorBasePricePayload,
+    _admin: AppAccount = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    from pricing_service import counselor_pricing_summary, update_counselor_base_price_cents
+
+    try:
+        update_counselor_base_price_cents(db, counselor_id, body.basePriceYuan * 100)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    db.commit()
+    return counselor_pricing_summary(db, counselor_id)
+
+
+@router.get("/pricing/counselors/{counselor_id}/patients", summary="某咨询师下来访调价列表")
+def list_pricing_counselor_patients(
+    counselor_id: int,
+    keyword: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
+    _admin: AppAccount = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    from pricing_service import counselor_pricing_summary, get_counselor_profile, list_counselor_patient_pricing
+
+    if not get_counselor_profile(db, counselor_id):
+        raise HTTPException(status_code=404, detail="咨询师不存在")
+    items, total = list_counselor_patient_pricing(
+        db,
+        counselor_id,
+        keyword=keyword,
+        page=page,
+        page_size=page_size,
+    )
+    return {
+        "counselor": counselor_pricing_summary(db, counselor_id),
+        "total": total,
+        "page": page,
+        "pageSize": page_size,
+        "items": items,
+    }
+
+
+@router.put("/pricing/counselors/{counselor_id}/patients/{patient_id}", summary="更新来访调价与分成")
+def update_pricing_counselor_patient(
+    counselor_id: int,
+    patient_id: int,
+    body: AdminPricingUpdatePayload,
+    _admin: AppAccount = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    from pricing_service import pricing_breakdown, upsert_patient_pricing
+
+    try:
+        upsert_patient_pricing(
+            db,
+            counselor_id,
+            patient_id,
+            adjustment_cents=body.adjustmentYuan * 100,
+            share_mode=body.shareMode or None,
+            revenue_share_cents=body.revenueShareYuan * 100 if body.revenueShareYuan is not None else None,
+            revenue_share_percent=body.revenueSharePercent,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    db.commit()
+    return pricing_breakdown(db, patient_id, counselor_id)

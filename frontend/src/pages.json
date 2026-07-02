@@ -392,6 +392,22 @@
                     }
                 },
                 {
+                    "path": "pricing/index",
+                    "style": {
+                        "navigationBarTitleText": "定价管理",
+                        "navigationBarBackgroundColor": "#3D5A4E",
+                        "navigationBarTextStyle": "white"
+                    }
+                },
+                {
+                    "path": "pricing/patients",
+                    "style": {
+                        "navigationBarTitleText": "来访定价",
+                        "navigationBarBackgroundColor": "#3D5A4E",
+                        "navigationBarTextStyle": "white"
+                    }
+                },
+                {
                     "path": "case-record-amendments/index",
                     "style": {
                         "navigationBarTitleText": "咨询记录修改审核",

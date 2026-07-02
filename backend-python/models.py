@@ -552,3 +552,25 @@ class AppUserPreferenceTag(Base):
     Category = Column(String(20), nullable=False)  # personal | interest
     Tag = Column(Unicode(50), nullable=False)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
+
+
+class AppCounselorPatientPricing(Base):
+    """咨询师对特定来访的调价与分成配置。"""
+    __tablename__ = "AppCounselorPatientPricing"
+    __table_args__ = (
+        UniqueConstraint(
+            "CounselorAccountId",
+            "PatientAccountId",
+            name="UQ_AppCounselorPatientPricing_Counselor_Patient",
+        ),
+    )
+
+    Id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    CounselorAccountId = Column(Integer, nullable=False, index=True)
+    PatientAccountId = Column(Integer, nullable=False, index=True)
+    AdjustmentCents = Column(Integer, nullable=False, default=0)
+    ShareMode = Column(String(20), nullable=True)  # AMOUNT | PERCENT
+    RevenueShareCents = Column(Integer, nullable=True)
+    RevenueSharePercent = Column(Integer, nullable=True)
+    CreatedAt = Column(DateTime, default=func.now(), nullable=False)
+    UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
