@@ -378,7 +378,7 @@ def common_counselor_time_slots(
         id=cid,
     )
     if not rows:
-        raise HTTPException(status_code=404, detail="咨询师不存在或未开通排班")
+        raise HTTPException(status_code=404, detail="咨询师不存在或未开通排期")
     billing_cents = int(rows[0].get("Billing") or 0)
     time_slots, center_ids = counselor_booking_time_slots(
         db, cid, billing_cents=billing_cents,

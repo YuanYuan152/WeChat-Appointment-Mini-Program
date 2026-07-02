@@ -26,10 +26,13 @@ from models import (
     AppArticle,
     AppBanner,
     AppCaseRecord,
+    AppCaseRecordAmendmentRequest,
     AppConsultation,
+    AppConsultationFeedback,
     AppConsultationRoom,
     AppConsultationRoomSlot,
     AppCounselorProfile,
+    AppFeedback,
     AppLeaveRequest,
     AppOrder,
     AppRefundExemption,
@@ -38,6 +41,7 @@ from models import (
     AppSchedule,
     AppScheduleCancelLog,
 )
+from consultation_feedback import feedback_summary
 from schedule_meta import center_display_name, parse_center_id, parse_room_id, room_display_name
 from schedule_meta import schedule_note
 
@@ -82,7 +86,7 @@ def _day_end(value: Optional[str]) -> Optional[datetime]:
 def _account_name(account: Optional[AppAccount]) -> str:
     if not account:
         return "-"
-    return account.RealName or account.Nickname or account.Mobile or f"用户#{account.Id}"
+    return account.RealName or account.Nickname or account.Mobile or "未留姓名用户"
 
 
 def _account_contact(account: Optional[AppAccount]) -> Optional[str]:
@@ -858,6 +862,40 @@ def operation_records(
             **(_consultation_room_payload(consultation, schedules_by_id) if consultation else {}),
         })
 
+    for row in db.query(AppCaseRecordAmendmentRequest).all():
+        consultation = consultations_by_id.get(row.ConsultationId)
+        reviewed_by = optional_model_value(row, "ReviewedBy")
+        reviewed_at = optional_model_value(row, "ReviewedAt")
+        reject_reason = optional_model_value(row, "RejectReason")
+        account_ids.add(row.CounselorId)
+        if reviewed_by:
+            account_ids.add(reviewed_by)
+        if consultation:
+            account_ids.update({consultation.PatientId, consultation.CounselorId})
+        records.append({
+            "id": f"case-record-amendment-{row.Id}",
+            "occurredAt": reviewed_at or row.CreatedAt,
+            "actionType": "CASE_RECORD_AMENDMENT",
+            "actionLabel": "咨询记录修改审核" if reviewed_by else "咨询记录修改申请",
+            "operatorId": reviewed_by or row.CounselorId,
+            "operatorRole": "Admin/Ops" if reviewed_by else "Counselor",
+            "targetType": "CaseRecordAmendment",
+            "targetId": row.Id,
+            "targetName": None,
+            "summary": row.Reason or reject_reason or (row.Subjective or row.Assessment or row.Plan or "")[:120],
+            "amount": None,
+            "status": row.Status,
+            "relatedConsultationId": row.ConsultationId,
+            "counselorId": row.CounselorId,
+            "patientId": consultation.PatientId if consultation else None,
+            "scheduleId": consultation.ScheduleId if consultation else None,
+            "startTime": consultation.StartTime if consultation else None,
+            "endTime": consultation.EndTime if consultation else None,
+            "createdAt": row.CreatedAt,
+            "updatedAt": reviewed_at,
+            **(_consultation_room_payload(consultation, schedules_by_id) if consultation else {}),
+        })
+
     for row in db.query(AppLeaveRequest).all():
         account_ids.add(row.CounselorId)
         schedule = schedules_by_id.get(row.ScheduleId)
@@ -910,6 +948,55 @@ def operation_records(
             "endTime": consultation.EndTime if consultation else (schedule.EndTime if schedule else None),
             "createdAt": row.CreatedAt,
             **(_consultation_room_payload(consultation, schedules_by_id) if consultation else _room_payload(schedule)),
+        })
+
+    for row in db.query(AppFeedback).all():
+        updated_at = optional_model_value(row, "UpdatedAt", row.CreatedAt)
+        account_ids.add(row.AccountId)
+        records.append({
+            "id": f"feedback-{row.Id}",
+            "occurredAt": updated_at or row.CreatedAt,
+            "actionType": "FEEDBACK",
+            "actionLabel": "用户反馈",
+            "operatorId": row.AccountId,
+            "operatorRole": "Patient",
+            "targetType": "Feedback",
+            "targetId": row.Id,
+            "targetName": row.Category or "用户反馈",
+            "summary": row.Content,
+            "amount": None,
+            "status": row.Status,
+            "patientId": row.AccountId,
+            "createdAt": row.CreatedAt,
+            "updatedAt": updated_at,
+        })
+
+    for row in db.query(AppConsultationFeedback).all():
+        consultation = consultations_by_id.get(row.ConsultationId)
+        account_ids.add(row.AccountId)
+        if consultation:
+            account_ids.update({consultation.PatientId, consultation.CounselorId})
+        records.append({
+            "id": f"consultation-feedback-{row.Id}",
+            "occurredAt": row.CreatedAt,
+            "actionType": "CONSULTATION_FEEDBACK",
+            "actionLabel": "咨询反馈",
+            "operatorId": row.AccountId,
+            "operatorRole": "Patient",
+            "targetType": "ConsultationFeedback",
+            "targetId": row.Id,
+            "targetName": None,
+            "summary": feedback_summary(row.Content) or row.Content,
+            "amount": None,
+            "status": "SUBMITTED",
+            "relatedConsultationId": row.ConsultationId,
+            "patientId": consultation.PatientId if consultation else row.AccountId,
+            "counselorId": consultation.CounselorId if consultation else None,
+            "scheduleId": consultation.ScheduleId if consultation else None,
+            "startTime": consultation.StartTime if consultation else None,
+            "endTime": consultation.EndTime if consultation else None,
+            "createdAt": row.CreatedAt,
+            **(_consultation_room_payload(consultation, schedules_by_id) if consultation else {}),
         })
 
     try:

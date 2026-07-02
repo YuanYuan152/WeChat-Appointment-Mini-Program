@@ -1,4 +1,4 @@
-﻿"""预约中心、咨询室与排班 Note 字段解析（与前端 appointmentCenters / consultationRooms 对齐）。"""
+﻿"""预约中心、咨询室与排期 Note 字段解析（与前端 appointmentCenters / consultationRooms 对齐）。"""
 from typing import List, Optional, TypedDict
 
 from sqlalchemy.orm import Session
@@ -144,7 +144,7 @@ def schedule_note(
     *,
     pref_room_id: Optional[str] = None,
 ) -> str:
-    """构建排班 Note。room_id 为付款后实际咨询室；pref_room_id 为排期偏好。"""
+    """构建排期 Note。room_id 为付款后实际咨询室；pref_room_id 为排期偏好。"""
     parts = [f"center:{center_id}"]
     if pref_room_id:
         parts.append(f"pref:{pref_room_id}")

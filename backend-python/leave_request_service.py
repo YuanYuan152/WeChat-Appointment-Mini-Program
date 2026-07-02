@@ -27,8 +27,8 @@ from schedule_meta import (
 def _account_name(db: Session, account_id: int) -> str:
     acc = db.query(AppAccount).filter(AppAccount.Id == account_id).first()
     if not acc:
-        return f"用户#{account_id}"
-    return acc.RealName or acc.Nickname or acc.Mobile or f"用户#{account_id}"
+        return "未留姓名用户"
+    return acc.RealName or acc.Nickname or acc.Mobile or "未留姓名用户"
 
 
 def _counselor_name(db: Session, counselor_id: int) -> str:
@@ -128,7 +128,7 @@ def approve_leave_request(
 
     schedule = db.query(AppSchedule).filter(AppSchedule.Id == leave.ScheduleId).first()
     if not schedule:
-        raise ValueError("关联排班不存在")
+        raise ValueError("关联排期不存在")
 
     consultation = (
         db.query(AppConsultation)

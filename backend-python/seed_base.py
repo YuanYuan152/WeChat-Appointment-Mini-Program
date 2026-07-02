@@ -90,7 +90,7 @@ def utc_now() -> datetime:
 
 
 def days_from_now(days: int, hour: int = 10, minute: int = 0) -> datetime:
-    """与业务排班一致，使用中国时区当前时间推算。"""
+    """与业务排期一致，使用中国时区当前时间推算。"""
     return (china_now() + timedelta(days=days)).replace(
         hour=hour, minute=minute, second=0, microsecond=0
     )

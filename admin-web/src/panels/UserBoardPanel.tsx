@@ -140,56 +140,56 @@ const UserBoardListSection = memo(function UserBoardListSection({
           </div>
         )}
         {!users || users.items.length === 0 ? (
-        <EmptyState text={listLoading ? "正在加载列表..." : "暂无用户数据。"} />
-      ) : (
-        <>
-          <table className="w-full border-collapse text-sm">
-            <thead className="bg-[#FAF8F4] text-left text-[var(--lxxl-muted)]">
-              <tr>
-                <th className="px-5 py-3 font-medium">用户</th>
-                <th className="px-5 py-3 font-medium">手机</th>
-                <th className="px-5 py-3 font-medium">订单/金额</th>
-                <th className="px-5 py-3 font-medium">预约</th>
-                <th className="px-5 py-3 font-medium">退款/豁免</th>
-                <th className="px-5 py-3 font-medium">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.items.map((user) => (
-                <tr key={user.id} className="border-t border-[var(--lxxl-border)]">
-                  <td className="px-5 py-4">
-                    <div className="font-medium">{user.name}</div>
-                    <div className="mt-1 text-xs text-[var(--lxxl-muted)]">{roleText(user.roles)}</div>
-                  </td>
-                  <td className="px-5 py-4">{user.mobile || "-"}</td>
-                  <td className="px-5 py-4">
-                    {user.orderCount} / {formatMoneyFromCents(user.paidAmount)}
-                  </td>
-                  <td className="px-5 py-4">
-                    总 {user.consultationCount}，完成 {user.completedConsultationCount}，取消{" "}
-                    {user.cancelledConsultationCount}
-                  </td>
-                  <td className="px-5 py-4">
-                    退款 {user.refundCount}，豁免 {user.exemptionCount}
-                  </td>
-                  <td className="px-5 py-4">
-                    <TableActionButton onClick={() => onOpen(user.id)}>
-                      查看
-                    </TableActionButton>
-                  </td>
+          <EmptyState text={listLoading ? "正在加载列表..." : "暂无用户数据。"} />
+        ) : (
+          <>
+            <table className="w-full border-collapse text-sm">
+              <thead className="bg-[#FAF8F4] text-left text-[var(--lxxl-muted)]">
+                <tr>
+                  <th className="px-5 py-3 font-medium">用户</th>
+                  <th className="px-5 py-3 font-medium">手机</th>
+                  <th className="px-5 py-3 font-medium">订单/金额</th>
+                  <th className="px-5 py-3 font-medium">预约</th>
+                  <th className="px-5 py-3 font-medium">退款/豁免</th>
+                  <th className="px-5 py-3 font-medium">操作</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          <Pagination
-            page={users.page}
-            pageSize={users.pageSize}
-            total={users.total}
-            onPageChange={onPageChange}
-            onPageSizeChange={onPageSizeChange}
-          />
-        </>
-      )}
+              </thead>
+              <tbody>
+                {users.items.map((user) => (
+                  <tr key={user.id} className="border-t border-[var(--lxxl-border)]">
+                    <td className="px-5 py-4">
+                      <div className="font-medium">{user.name}</div>
+                      <div className="mt-1 text-xs text-[var(--lxxl-muted)]">{roleText(user.roles)}</div>
+                    </td>
+                    <td className="px-5 py-4">{user.mobile || "-"}</td>
+                    <td className="px-5 py-4">
+                      {user.orderCount} / {formatMoneyFromCents(user.paidAmount)}
+                    </td>
+                    <td className="px-5 py-4">
+                      总 {user.consultationCount}，完成 {user.completedConsultationCount}，取消{" "}
+                      {user.cancelledConsultationCount}
+                    </td>
+                    <td className="px-5 py-4">
+                      退款 {user.refundCount}，豁免 {user.exemptionCount}
+                    </td>
+                    <td className="px-5 py-4">
+                      <TableActionButton onClick={() => onOpen(user.id)}>
+                        查看
+                      </TableActionButton>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <Pagination
+              page={users.page}
+              pageSize={users.pageSize}
+              total={users.total}
+              onPageChange={onPageChange}
+              onPageSizeChange={onPageSizeChange}
+            />
+          </>
+        )}
       </div>
     </section>
   );

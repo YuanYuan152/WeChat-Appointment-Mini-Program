@@ -1,3 +1,5 @@
+import { useEffect, useMemo, useState } from "react";
+
 import { formatDateTime, formatMoneyFromCents, statusLabel } from "@/lib/format";
 import type { CounselorDashboardDetailItem, CounselorDashboardStats } from "@/types/api";
 import type { CounselorDashboardCategory, CounselorDashboardPeriod } from "@/services/counselor";
@@ -28,7 +30,6 @@ const CATEGORY_OPTIONS: Array<{
   { key: "orders", label: "完成订单", valueKey: "completedOrderCount", amountKey: "completedOrderRevenue" },
   { key: "case-records", label: "咨询记录", valueKey: "caseRecordCount" },
   { key: "appointments", label: "预约咨询", valueKey: "totalAppointments" },
-  { key: "leaves", label: "请假申请", valueKey: "leaveCount" },
 ];
 
 export function CounselorDashboardPanel({
@@ -56,6 +57,45 @@ export function CounselorDashboardPanel({
   onOpenCategory: (category: CounselorDashboardCategory) => void;
   onCloseDetail: () => void;
 }) {
+  const [detailKeywordDraft, setDetailKeywordDraft] = useState("");
+  const [detailStatusDraft, setDetailStatusDraft] = useState("ALL");
+  const [detailKeyword, setDetailKeyword] = useState("");
+  const [detailStatus, setDetailStatus] = useState("ALL");
+  const [activeDetailId, setActiveDetailId] = useState<number | null>(null);
+
+  useEffect(() => {
+    setDetailKeywordDraft("");
+    setDetailStatusDraft("ALL");
+    setDetailKeyword("");
+    setDetailStatus("ALL");
+    setActiveDetailId(null);
+  }, [selectedCategory]);
+
+  const statusOptions = useMemo(() => {
+    const values = new Set<string>();
+    for (const item of details || []) {
+      if (item.status) {
+        values.add(item.status);
+      }
+    }
+    return Array.from(values);
+  }, [details]);
+
+  const filteredDetails = useMemo(() => {
+    const keyword = detailKeyword.trim().toLowerCase();
+    return (details || []).filter((item) => {
+      if (detailStatus !== "ALL" && item.status !== detailStatus) {
+        return false;
+      }
+      if (!keyword) {
+        return true;
+      }
+      return [item.title, item.subtitle, item.extra, item.status, item.amount != null ? formatMoneyFromCents(item.amount) : ""]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(keyword));
+    });
+  }, [detailKeyword, detailStatus, details]);
+
   return (
     <>
       <section className="rounded-xl border border-[var(--lxxl-border)] bg-white">
@@ -69,7 +109,7 @@ export function CounselorDashboardPanel({
           <div>
             <h2 className="text-xl font-semibold tracking-normal">个人看板</h2>
             <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">
-              查看自己的咨询、订单、咨询记录和请假数据，点击数据卡片查看明细。
+              查看自己的咨询、订单和咨询记录数据，点击数据卡片查看明细。
             </p>
           </div>
 
@@ -136,26 +176,98 @@ export function CounselorDashboardPanel({
             <div className="py-10 text-sm text-[var(--lxxl-muted)]">正在加载明细...</div>
           ) : details && details.length > 0 ? (
             <div className="space-y-4">
-              <div className="border-b border-[var(--lxxl-border)] pb-4">
+              <form
+                className="border-b border-[var(--lxxl-border)] pb-4"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  setDetailKeyword(detailKeywordDraft.trim());
+                  setDetailStatus(detailStatusDraft);
+                  setActiveDetailId(null);
+                }}
+              >
                 <h4 className="text-base font-semibold">
                   {categoryLabel(selectedCategory)}明细
-                  <span className="ml-2 text-sm font-normal text-[var(--lxxl-muted)]">{details.length} 条</span>
+                  <span className="ml-2 text-sm font-normal text-[var(--lxxl-muted)]">
+                    {filteredDetails.length} / {details.length} 条
+                  </span>
                 </h4>
-              </div>
+                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <QueryField label="关键词">
+                    <input
+                      className={queryControlClass}
+                      placeholder="来访者、时间、状态"
+                      value={detailKeywordDraft}
+                      onChange={(event) => setDetailKeywordDraft(event.target.value)}
+                    />
+                  </QueryField>
+                  <QueryField label="状态">
+                    <select
+                      className={queryControlClass}
+                      value={detailStatusDraft}
+                      onChange={(event) => setDetailStatusDraft(event.target.value)}
+                    >
+                      <option value="ALL">全部状态</option>
+                      {statusOptions.map((status) => (
+                        <option key={status} value={status}>
+                          {statusLabel(status)}
+                        </option>
+                      ))}
+                    </select>
+                  </QueryField>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-3">
+                  <QueryButton type="submit" />
+                  <QueryResetButton
+                    onClick={() => {
+                      setDetailKeywordDraft("");
+                      setDetailStatusDraft("ALL");
+                      setDetailKeyword("");
+                      setDetailStatus("ALL");
+                      setActiveDetailId(null);
+                    }}
+                  />
+                </div>
+              </form>
               <div className="space-y-2">
-                {details.map((item) => (
-                  <div key={`${selectedCategory}-${item.id}`} className="rounded-xl bg-[#FAF8F4] p-3 text-sm">
-                    <div className="font-medium">{item.title}</div>
-                    <div className="mt-2 grid gap-1 text-xs leading-5 text-[var(--lxxl-muted)]">
-                      <div>时间：{formatDateTime(item.subtitle)}</div>
-                      <div>状态：{statusLabel(item.status)}</div>
-                      <div>
-                        补充：{item.amount != null ? `${formatMoneyFromCents(item.amount)} · ` : ""}
-                        {item.extra || "-"}
+                {filteredDetails.length === 0 ? (
+                  <EmptyState text="没有符合筛选条件的明细。" />
+                ) : (
+                  filteredDetails.map((item) => {
+                    const active = activeDetailId === item.id;
+                    return (
+                      <div key={`${selectedCategory}-${item.id}`} className="border-b border-[var(--lxxl-border)] py-3 last:border-b-0">
+                        <button
+                          className="flex w-full items-start justify-between gap-4 text-left text-sm"
+                          type="button"
+                          onClick={() => setActiveDetailId(active ? null : item.id)}
+                        >
+                          <span className="min-w-0">
+                            <span className="block font-semibold text-[#2C2C2C]">{item.title}</span>
+                            <span className="mt-1 block text-xs leading-5 text-[var(--lxxl-muted)]">
+                              {formatDateTime(item.subtitle)}
+                              {item.status ? ` · ${statusLabel(item.status)}` : ""}
+                              {item.amount != null ? ` · ${formatMoneyFromCents(item.amount)}` : ""}
+                            </span>
+                          </span>
+                          <span className="shrink-0 text-sm font-medium text-[var(--lxxl-green)]">
+                            {active ? "收起" : "查看详情"}
+                          </span>
+                        </button>
+                        {active && (
+                          <div className="mt-3 rounded-xl bg-[#FAF8F4] px-4 py-3 text-sm leading-6 text-[var(--lxxl-muted)]">
+                            <DetailLine label="来访者" value={item.title} />
+                            <DetailLine label="时间" value={formatDateTime(item.subtitle)} />
+                            <DetailLine label="状态" value={statusLabel(item.status)} />
+                            {item.amount != null && <DetailLine label="金额" value={formatMoneyFromCents(item.amount)} />}
+                            {item.extra && <DetailLine label="补充信息" value={item.extra} />}
+                            {item.consultationId != null && <DetailLine label="关联咨询" value={`咨询单 ${item.consultationId}`} />}
+                            {item.caseRecordId != null && <DetailLine label="关联记录" value={`咨询记录 ${item.caseRecordId}`} />}
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  </div>
-                ))}
+                    );
+                  })
+                )}
               </div>
             </div>
           ) : (
@@ -164,6 +276,15 @@ export function CounselorDashboardPanel({
         </DetailDrawer>
       )}
     </>
+  );
+}
+
+function DetailLine({ label, value }: { label: string; value?: string | null }) {
+  return (
+    <div className="grid grid-cols-[72px_1fr] gap-3">
+      <span className="text-[var(--lxxl-muted)]">{label}</span>
+      <span className="text-[#2C2C2C]">{value || "-"}</span>
+    </div>
   );
 }
 

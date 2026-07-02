@@ -1,11 +1,13 @@
 import { DetailDrawer } from "@/components/boards/DetailDrawer";
 import { formatDateTime, formatFullDateTime, statusLabel } from "@/lib/format";
+import { getPageItems } from "@/lib/pagination";
 import type { MessageItem } from "@/types/api";
 
 import {
   Badge,
   EmptyState,
   PanelHeader,
+  Pagination,
   QueryButton,
   QueryField,
   QueryResetButton,
@@ -19,6 +21,38 @@ type MessagePayload = {
 };
 
 export type MessageReadFilter = "ALL" | "UNREAD" | "READ";
+export type MessageCategoryFilter =
+  | "ALL"
+  | "case_record_crisis"
+  | "exemption"
+  | "counselor_leave"
+  | "case_record_amendment"
+  | "appointment_new"
+  | "appointment_cancel"
+  | "appointment_remind"
+  | "leave_submitted"
+  | "consultation_done"
+  | "activity"
+  | "leave_notice";
+
+const adminMessageCategoryOptions: Array<{ value: MessageCategoryFilter; label: string }> = [
+  { value: "ALL", label: "全部类型" },
+  { value: "case_record_crisis", label: "风险上报" },
+  { value: "exemption", label: "豁免审核" },
+  { value: "counselor_leave", label: "咨询师请假" },
+  { value: "case_record_amendment", label: "咨询记录修改" },
+];
+
+const staffMessageCategoryOptions: Array<{ value: MessageCategoryFilter; label: string }> = [
+  { value: "ALL", label: "全部类型" },
+  { value: "appointment_new", label: "新预约" },
+  { value: "appointment_cancel", label: "预约取消" },
+  { value: "appointment_remind", label: "咨询提醒" },
+  { value: "leave_submitted", label: "请假结果" },
+  { value: "consultation_done", label: "咨询完成" },
+  { value: "activity", label: "活动提醒" },
+  { value: "leave_notice", label: "咨询师请假" },
+];
 
 export function MessagesPanel({
   crisisUnreadCount,
@@ -26,12 +60,18 @@ export function MessagesPanel({
   listLoading,
   messages,
   keyword,
+  categoryFilter,
+  page,
+  pageSize,
   selectedMessage,
   showCrisisBanner,
   statusFilter,
   onCloseDetail,
   onKeywordChange,
+  onCategoryFilterChange,
   onOpen,
+  onPageChange,
+  onPageSizeChange,
   onReset,
   onSearch,
   onStatusFilterChange,
@@ -41,20 +81,28 @@ export function MessagesPanel({
   listLoading?: boolean;
   messages?: MessageItem[];
   keyword: string;
+  categoryFilter: MessageCategoryFilter;
+  page: number;
+  pageSize: number;
   selectedMessage?: MessageItem | null;
   showCrisisBanner?: boolean;
   statusFilter: MessageReadFilter;
   onCloseDetail: () => void;
   onKeywordChange: (value: string) => void;
+  onCategoryFilterChange: (value: MessageCategoryFilter) => void;
   onOpen: (message: MessageItem) => void;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (pageSize: number) => void;
   onReset: () => void;
   onSearch: () => void;
   onStatusFilterChange: (value: MessageReadFilter) => void;
 }) {
   const items = messages || [];
+  const { currentPage, items: pageItems } = getPageItems(items, page, pageSize);
   const crisisMessages = items.filter(isCrisisReportMessage);
   const currentListCrisisCount = crisisMessages.length;
   const unreadCrisisCount = crisisUnreadCount ?? crisisMessages.filter((item) => !item.IsRead).length;
+  const categoryOptions = showCrisisBanner ? adminMessageCategoryOptions : staffMessageCategoryOptions;
 
   return (
     <section className="rounded-xl border border-[var(--lxxl-border)] bg-white">
@@ -76,6 +124,19 @@ export function MessagesPanel({
               <option value="ALL">全部</option>
               <option value="UNREAD">未读</option>
               <option value="READ">已读</option>
+            </select>
+          </QueryField>
+          <QueryField label="消息类型">
+            <select
+              className={queryControlClass}
+              value={categoryFilter}
+              onChange={(event) => onCategoryFilterChange(event.target.value as MessageCategoryFilter)}
+            >
+              {categoryOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </QueryField>
           <QueryField label="关键词">
@@ -146,7 +207,7 @@ export function MessagesPanel({
               </tr>
             </thead>
             <tbody>
-              {items.map((item) => {
+              {pageItems.map((item) => {
                 const display = getMessageDisplay(item);
                 const isCrisis = isCrisisReportMessage(item);
                 return (
@@ -187,7 +248,6 @@ export function MessagesPanel({
                     </td>
                     <td className="px-5 py-4 text-[var(--lxxl-muted)]">
                       <div className="break-words text-[var(--lxxl-text)]">{display.relatedLabel}</div>
-                      {display.relatedId && <div className="mt-1 text-xs">编号 {display.relatedId}</div>}
                     </td>
                     <td className="whitespace-nowrap px-5 py-4 text-[var(--lxxl-muted)]">
                       {formatDateTime(item.CreatedAt)}
@@ -200,6 +260,15 @@ export function MessagesPanel({
               })}
             </tbody>
           </table>
+        )}
+        {items.length > 0 && (
+          <Pagination
+            page={currentPage}
+            pageSize={pageSize}
+            total={items.length}
+            onPageChange={onPageChange}
+            onPageSizeChange={onPageSizeChange}
+          />
         )}
       </div>
       {selectedMessage && (
@@ -326,8 +395,7 @@ function compactRows(rows: DetailRow[]) {
 }
 
 function relatedBusinessText(message: MessageItem) {
-  const label = relatedTypeLabel(message.RelatedType);
-  return message.RelatedId ? `${label} #${message.RelatedId}` : label;
+  return relatedTypeLabel(message.RelatedType);
 }
 
 function detailText(detail: Record<string, unknown>, key: string) {
@@ -468,7 +536,6 @@ function getMessageDisplay(item: MessageItem) {
     summary,
     details,
     relatedLabel: relatedTypeLabel(item.RelatedType),
-    relatedId: item.RelatedId || undefined,
   };
 }
 
@@ -578,9 +645,9 @@ function isCrisisReportMessage(item: MessageItem) {
 
 function humanizeText(value: string) {
   return value
-    .replace(/记录#(\d+)/g, "咨询记录 $1")
-    .replace(/排期\s*#(\d+)/g, "排期 $1")
-    .replace(/咨询\s*#(\d+)/g, "咨询 $1")
+    .replace(/记录\s*#?\d+/g, "咨询记录")
+    .replace(/排期\s*#?\d+/g, "排期")
+    .replace(/咨询\s*#?\d+/g, "咨询")
     .replace(/_/g, " ");
 }
 

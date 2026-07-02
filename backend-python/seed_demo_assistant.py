@@ -122,7 +122,7 @@ def seed(db):
             AppTask(
                 AssistantId=assistant.Id,
                 Type="APPOINTMENT",
-                Title="协调李心怡下周排班空档",
+                Title="协调李心怡下周排期空档",
                 Content="患者希望预约工作日晚间时段，需与咨询师确认。",
                 RelatedId=counselor.Id,
                 Priority="NORMAL",

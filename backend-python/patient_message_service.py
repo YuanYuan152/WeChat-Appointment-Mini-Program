@@ -53,8 +53,8 @@ def _counselor_display_name(db: Session, counselor_id: int) -> str:
         return prof.Name
     acc = db.query(AppAccount).filter(AppAccount.Id == counselor_id).first()
     if acc:
-        return acc.RealName or acc.Nickname or f"咨询师#{counselor_id}"
-    return f"咨询师#{counselor_id}"
+        return acc.RealName or acc.Nickname or acc.Mobile or "未留姓名咨询师"
+    return "未留姓名咨询师"
 
 
 def _appointment_center_name(note: Optional[str]) -> str:

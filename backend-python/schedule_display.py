@@ -1,4 +1,4 @@
-﻿"""排班展示状态：与来访者预约系统联动。"""
+﻿"""排期展示状态：与来访者预约系统联动。"""
 from typing import Optional
 
 from consultation_cancel import has_appointment_started

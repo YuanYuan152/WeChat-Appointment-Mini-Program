@@ -43,6 +43,7 @@ export function CounselorSchedulesPanel({
   slotOptions,
   listLoading,
   slotLoading,
+  slotError,
   query,
   draft,
   page,
@@ -51,6 +52,7 @@ export function CounselorSchedulesPanel({
   setDraft,
   onSearch,
   onReset,
+  onClearSlotError,
   onLoadSlots,
   onCreate,
   onCancel,
@@ -62,6 +64,7 @@ export function CounselorSchedulesPanel({
   slotOptions?: CounselorSlotOptions;
   listLoading: boolean;
   slotLoading: boolean;
+  slotError?: string | null;
   query: CounselorScheduleQuery;
   draft: CounselorScheduleDraft;
   page: number;
@@ -70,7 +73,8 @@ export function CounselorSchedulesPanel({
   setDraft: Dispatch<SetStateAction<CounselorScheduleDraft>>;
   onSearch: () => void;
   onReset: () => void;
-  onLoadSlots: () => void;
+  onClearSlotError: () => void;
+  onLoadSlots: () => Promise<boolean> | boolean;
   onCreate: (slot: CounselorSlotOption, roomId: string) => Promise<boolean> | boolean;
   onCancel: (scheduleId: number, reason?: string) => void;
   onLeave: (scheduleId: number, reason: string) => void;
@@ -125,7 +129,14 @@ export function CounselorSchedulesPanel({
                 查看自己的排期；已预约咨询可按规则取消或提交请假申请。
               </p>
             </div>
-            <QueryButton className="w-28" type="button" onClick={() => setCreateOpen(true)}>
+            <QueryButton
+              className="w-28"
+              type="button"
+              onClick={() => {
+                onClearSlotError();
+                setCreateOpen(true);
+              }}
+            >
               新增排期
             </QueryButton>
           </div>
@@ -243,11 +254,15 @@ export function CounselorSchedulesPanel({
         <CreateScheduleModal
           availableRooms={availableRooms}
           draft={draft}
-          onClose={() => setCreateOpen(false)}
+          onClose={() => {
+            onClearSlotError();
+            setCreateOpen(false);
+          }}
           onCreate={onCreate}
           onLoadSlots={onLoadSlots}
           selectedSlot={selectedSlot}
           setDraft={setDraft}
+          slotError={slotError}
           slotLoading={slotLoading}
           slotOptions={visibleSlotOptions}
         />
@@ -301,6 +316,7 @@ function CreateScheduleModal({
   onLoadSlots,
   selectedSlot,
   setDraft,
+  slotError,
   slotLoading,
   slotOptions,
 }: {
@@ -308,9 +324,10 @@ function CreateScheduleModal({
   draft: CounselorScheduleDraft;
   onClose: () => void;
   onCreate: (slot: CounselorSlotOption, roomId: string) => Promise<boolean> | boolean;
-  onLoadSlots: () => void;
+  onLoadSlots: () => Promise<boolean> | boolean;
   selectedSlot?: CounselorSlotOption;
   setDraft: Dispatch<SetStateAction<CounselorScheduleDraft>>;
+  slotError?: string | null;
   slotLoading: boolean;
   slotOptions?: CounselorSlotOptions;
 }) {
@@ -372,6 +389,12 @@ function CreateScheduleModal({
               </QueryButton>
             </div>
           </div>
+
+          {slotError && (
+            <div className="rounded-xl border border-[#F3C9BB] bg-[#FFF4EF] px-4 py-3 text-sm leading-6 text-[#C7542F]">
+              {slotError}
+            </div>
+          )}
 
           {!slotOptions ? (
             <div className="rounded-xl bg-[#FAF8F4] px-4 py-3 text-sm text-[var(--lxxl-muted)]">

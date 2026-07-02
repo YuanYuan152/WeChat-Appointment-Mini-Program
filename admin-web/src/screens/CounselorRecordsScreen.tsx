@@ -215,7 +215,7 @@ function buildFormFromRecord(
     mode,
     consultationId: record.ConsultationId,
     recordId: record.Id,
-    title: mode === "view" ? `查看咨询记录 #${record.Id}` : `申请修改咨询记录 #${record.Id}`,
+    title: mode === "view" ? "查看咨询记录" : "申请修改咨询记录",
     subjective: record.Subjective || "",
     objective: record.Objective || "",
     assessment: record.Assessment || "",
@@ -242,7 +242,6 @@ const HEADER_FIELD_KEYS = [
   "start_minute",
   "end_hour",
   "end_minute",
-  "counselor_signature",
 ] as const;
 
 const HEADER_FIELD_LABELS: Record<(typeof HEADER_FIELD_KEYS)[number], string> = {
@@ -257,7 +256,6 @@ const HEADER_FIELD_LABELS: Record<(typeof HEADER_FIELD_KEYS)[number], string> = 
   start_minute: "咨询开始分钟",
   end_hour: "咨询结束小时",
   end_minute: "咨询结束分钟",
-  counselor_signature: "咨询师签名",
 };
 
 function validateForm(form: CounselorRecordFormState): CounselorRecordFormErrors {

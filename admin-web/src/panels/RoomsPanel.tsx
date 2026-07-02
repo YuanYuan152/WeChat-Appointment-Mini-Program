@@ -393,7 +393,7 @@ function RoomDetailPanel({
         {scheduleId ? (
           <div className="mt-3 space-y-3">
             <div className="text-sm text-[var(--lxxl-muted)]">
-              当前预约：排期 #{scheduleId} · {formatDateTime(activeSnapshot?.startTime)} 至{" "}
+              当前预约：{formatDateTime(activeSnapshot?.startTime)} 至{" "}
               {formatDateTime(activeSnapshot?.endTime)}
             </div>
             <select
@@ -497,7 +497,7 @@ function RoomSlotRow({
       <div className="space-y-2 text-[var(--lxxl-muted)]">
         <div className="flex flex-wrap items-center gap-2">
           <Badge tone={statusTone}>{displayStatus}</Badge>
-          {slot.scheduleId ? <span>排期 #{slot.scheduleId}</span> : <span>暂无预约</span>}
+          {slot.scheduleId ? <span>当前有预约</span> : <span>暂无预约</span>}
         </div>
         <div className="grid gap-1 sm:grid-cols-2">
           <div>
@@ -591,7 +591,7 @@ function CreateRoomModal({
           <QueryField label="咨询室名称">
             <input className={queryControlClass} placeholder="例如：咨询室 D" value={name} onChange={(event) => setName(event.target.value)} />
           </QueryField>
-          <QueryField label="咨询室编号">
+          <QueryField label="咨询室代码">
             <input className={queryControlClass} placeholder="可不填，系统自动生成" value={roomCode} onChange={(event) => setRoomCode(event.target.value)} />
           </QueryField>
           <QueryField label="初始状态">

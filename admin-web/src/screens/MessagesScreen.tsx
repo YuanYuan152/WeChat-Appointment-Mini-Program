@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { AppRoute, useAppRoute } from "@/components/AppRoute";
 import { MessagesPanel } from "@/panels/MessagesPanel";
+import type { MessageCategoryFilter } from "@/panels/MessagesPanel";
 import type { MessageReadFilter } from "@/panels/MessagesPanel";
 import {
   fetchMessageDetail,
@@ -28,8 +29,12 @@ function MessagesScreenContent() {
   const [data, setData] = useState<ScreenData>({});
   const [keyword, setKeyword] = useState("");
   const [statusFilter, setStatusFilter] = useState<MessageReadFilter>("ALL");
+  const [categoryFilter, setCategoryFilter] = useState<MessageCategoryFilter>("ALL");
   const [appliedKeyword, setAppliedKeyword] = useState("");
   const [appliedStatusFilter, setAppliedStatusFilter] = useState<MessageReadFilter>("ALL");
+  const [appliedCategoryFilter, setAppliedCategoryFilter] = useState<MessageCategoryFilter>("ALL");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [crisisUnreadCount, setCrisisUnreadCount] = useState(0);
   const [selectedMessage, setSelectedMessage] = useState<MessageItem | null>(null);
   const [listLoading, setListLoading] = useState(false);
@@ -54,7 +59,11 @@ function MessagesScreenContent() {
     clearNotice();
     try {
       const unreadOnly = appliedStatusFilter === "UNREAD";
-      const messages = await fetchMessages({ unreadOnly, keyword: appliedKeyword });
+      const messages = await fetchMessages({
+        unreadOnly,
+        keyword: appliedKeyword,
+        category: appliedCategoryFilter === "ALL" ? undefined : appliedCategoryFilter,
+      });
       setData((prev) => ({
         ...prev,
         messages: appliedStatusFilter === "READ" ? messages.filter((message) => message.IsRead) : messages,
@@ -64,7 +73,7 @@ function MessagesScreenContent() {
     } finally {
       setListLoading(false);
     }
-  }, [appliedKeyword, appliedStatusFilter, clearNotice, showNotice]);
+  }, [appliedCategoryFilter, appliedKeyword, appliedStatusFilter, clearNotice, showNotice]);
 
   useEffect(() => {
     void loadData();
@@ -98,30 +107,44 @@ function MessagesScreenContent() {
   );
 
   const searchMessages = useCallback(() => {
+    setPage(1);
     setAppliedKeyword(keyword.trim());
     setAppliedStatusFilter(statusFilter);
-  }, [keyword, statusFilter]);
+    setAppliedCategoryFilter(categoryFilter);
+  }, [categoryFilter, keyword, statusFilter]);
 
   const resetSearch = useCallback(() => {
     setKeyword("");
     setStatusFilter("ALL");
+    setCategoryFilter("ALL");
     setAppliedKeyword("");
     setAppliedStatusFilter("ALL");
+    setAppliedCategoryFilter("ALL");
+    setPage(1);
   }, []);
 
   return (
     <MessagesPanel
       crisisUnreadCount={crisisUnreadCount}
       detailLoading={detailLoading}
+      categoryFilter={categoryFilter}
       keyword={keyword}
       listLoading={listLoading}
       messages={data.messages}
+      page={page}
+      pageSize={pageSize}
       selectedMessage={selectedMessage}
       showCrisisBanner={showCrisisBanner}
       statusFilter={statusFilter}
       onCloseDetail={() => setSelectedMessage(null)}
+      onCategoryFilterChange={setCategoryFilter}
       onKeywordChange={setKeyword}
       onOpen={openMessage}
+      onPageChange={setPage}
+      onPageSizeChange={(nextPageSize) => {
+        setPageSize(nextPageSize);
+        setPage(1);
+      }}
       onReset={resetSearch}
       onSearch={searchMessages}
       onStatusFilterChange={setStatusFilter}

@@ -185,8 +185,19 @@ const CounselorBoardListSection = memo(function CounselorBoardListSection({
         <EmptyState text={listLoading ? "正在加载列表..." : "暂无咨询师数据。"} />
       ) : (
         <>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[960px] border-collapse text-sm">
+          <div className="overflow-hidden">
+            <table className="w-full table-fixed border-collapse text-sm">
+              <colgroup>
+                <col className="w-[12%]" />
+                <col className="w-[12%]" />
+                <col className="w-[9%]" />
+                <col className="w-[8%]" />
+                <col className="w-[13%]" />
+                <col className="w-[7%]" />
+                <col className="w-[10%]" />
+                <col className="w-[13%]" />
+                <col className="w-[16%]" />
+              </colgroup>
               <thead className="bg-[#FAF8F4] text-left text-[var(--lxxl-muted)]">
                 <tr>
                   <th className="px-5 py-3 font-medium">咨询师</th>
@@ -195,9 +206,9 @@ const CounselorBoardListSection = memo(function CounselorBoardListSection({
                   <th className="px-5 py-3 font-medium">来访取消</th>
                   <th className="px-5 py-3 font-medium">咨询记录</th>
                   <th className="px-5 py-3 font-medium">请假</th>
-                  <th className="px-5 py-3 font-medium">排班</th>
-                  <th className="px-5 py-3 font-medium">最近排班</th>
-                  <th className="px-5 py-3 font-medium">操作</th>
+                  <th className="px-5 py-3 font-medium">排期</th>
+                  <th className="px-5 py-3 font-medium">最近排期</th>
+                  <th className="px-5 py-3 text-right font-medium">操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -207,9 +218,15 @@ const CounselorBoardListSection = memo(function CounselorBoardListSection({
                     className="border-t border-[var(--lxxl-border)] transition hover:bg-[#FAF8F4]"
                   >
                     <td className="px-5 py-4">
-                      <div className="font-semibold">{record.name}</div>
+                      <div className="truncate font-semibold" title={record.name}>
+                        {record.name}
+                      </div>
                     </td>
-                    <td className="px-5 py-4 text-[var(--lxxl-muted)]">{record.mobile || "-"}</td>
+                    <td className="px-5 py-4 text-[var(--lxxl-muted)]">
+                      <div className="truncate" title={record.mobile || "-"}>
+                        {record.mobile || "-"}
+                      </div>
+                    </td>
                     <td className="px-5 py-4">
                       <div className="font-semibold">{record.consultationCount}</div>
                       <div className="mt-1 text-xs text-[var(--lxxl-muted)]">
@@ -233,10 +250,12 @@ const CounselorBoardListSection = memo(function CounselorBoardListSection({
                       </div>
                     </td>
                     <td className="px-5 py-4 text-[var(--lxxl-muted)]">
-                      {record.latestScheduleAt ? formatDateTime(record.latestScheduleAt) : "-"}
+                      <div className="truncate" title={record.latestScheduleAt ? formatDateTime(record.latestScheduleAt) : "-"}>
+                        {record.latestScheduleAt ? formatDateTime(record.latestScheduleAt) : "-"}
+                      </div>
                     </td>
-                    <td className="px-5 py-4">
-                      <div className="flex flex-wrap gap-3">
+                    <td className="px-5 py-4 text-right">
+                      <div className="flex flex-wrap justify-end gap-3">
                         {canEditIntro && (
                           <TableActionButton onClick={() => onOpenIntroEditor(record.id)}>
                             编辑介绍页
@@ -437,7 +456,7 @@ function CounselorDetailPanel({
         <MiniStat label="个案记录" value={detail.profile.caseRecordCount} />
         <MiniStat label="请假" value={detail.profile.leaveRequestCount} />
         <MiniStat label="排期" value={detail.profile.scheduleCount} />
-        <MiniStat label="已预约排班" value={detail.profile.bookedScheduleCount} />
+        <MiniStat label="已预约排期" value={detail.profile.bookedScheduleCount} />
         <MiniStat label="咨询室使用" value={detail.roomUsage.length} />
         <MiniStat label="来访人数" value={visitors.length} />
       </div>

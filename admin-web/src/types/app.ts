@@ -143,4 +143,5 @@ export interface SummaryRow {
   subject: string;
   status: string;
   amount: string;
+  tone?: "green" | "gold" | "red" | "neutral";
 }

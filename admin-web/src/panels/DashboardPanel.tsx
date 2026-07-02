@@ -16,8 +16,8 @@ export function DashboardPanel({
   const metrics = [
     { label: "用户数", value: stats?.userCount ?? "-", helper: "AppAccount" },
     { label: "订单数", value: stats?.orderCount ?? "-", helper: `已支付 ${stats?.paidOrderCount ?? "-"}` },
-    { label: "已支付金额", value: formatMoneyFromCents(stats?.paidAmount), helper: "PAID 订单合计" },
-    { label: "待审核豁免", value: data.refunds?.length ?? "-", helper: "PENDING" },
+    { label: "已支付金额", value: formatMoneyFromCents(stats?.paidAmount), helper: "已支付订单合计" },
+    { label: "待审核豁免", value: data.refunds?.length ?? "-", helper: "等待管理员处理" },
   ];
 
   return (
@@ -60,7 +60,7 @@ export function DashboardPanel({
                     <td className="px-5 py-4">{row.subject}</td>
                     <td className="px-5 py-4">{row.amount}</td>
                     <td className="px-5 py-4">
-                      <Badge tone="green">{row.status}</Badge>
+                      <Badge tone={row.tone || "green"}>{row.status}</Badge>
                     </td>
                   </tr>
                 ))}

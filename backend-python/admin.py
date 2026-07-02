@@ -222,12 +222,15 @@ def _build_exemption_admin_out(
     counselor_name = (
         (prof.Name if prof and prof.Name else None)
         or (counselor_acc.Nickname if counselor_acc else None)
-        or f"咨询师#{counselor_id}"
+        or (counselor_acc.RealName if counselor_acc else None)
+        or (counselor_acc.Mobile if counselor_acc else None)
+        or "未留姓名咨询师"
     )
     patient_name = (
         (patient.RealName if patient and patient.RealName else None)
         or (patient.Nickname if patient else None)
-        or f"用户#{row.AccountId}"
+        or (patient.Mobile if patient else None)
+        or "未留姓名用户"
     )
     return RefundExemptionAdminOut(
         id=row.Id,
@@ -341,7 +344,9 @@ def _build_amendment_admin_out(
     counselor_name = (
         (prof.Name if prof and prof.Name else None)
         or (acc.Nickname if acc else None)
-        or f"咨询师#{row.CounselorId}"
+        or (acc.RealName if acc else None)
+        or (acc.Mobile if acc else None)
+        or "未留姓名咨询师"
     )
     current = _snapshot_to_out(snapshot_case_record(record)) if record else CaseRecordSnapshotOut()
     proposed = CaseRecordSnapshotOut(
@@ -472,8 +477,8 @@ def _admin_counselor_name(db: Session, counselor_id: int) -> str:
         return prof.Name
     acc = db.query(AppAccount).filter(AppAccount.Id == counselor_id).first()
     if not acc:
-        return f"咨询师#{counselor_id}"
-    return acc.RealName or acc.Nickname or acc.Mobile or f"咨询师#{counselor_id}"
+        return "未留姓名咨询师"
+    return acc.RealName or acc.Nickname or acc.Mobile or "未留姓名咨询师"
 
 
 # 来访管理仅展示纯来访者，排除工作人员账号
@@ -839,7 +844,8 @@ def list_counselor_record_summaries(
             (profile.Name if profile else None)
             or (account.Nickname if account else None)
             or (account.RealName if account else None)
-            or f"咨询师#{cid}"
+            or (account.Mobile if account else None)
+            or "未留姓名咨询师"
         )
         completed = len(cons)
         result.append(
@@ -1480,7 +1486,8 @@ def list_admin_counselors(
             (prof.Name if prof else None)
             or (acc.Nickname if acc else None)
             or (acc.RealName if acc else None)
-            or f"咨询师#{cid}"
+            or (acc.Mobile if acc else None)
+            or "未留姓名咨询师"
         )
         cons = cons_by_counselor.get(cid, [])
         scheds = schedules_by_counselor.get(cid, [])

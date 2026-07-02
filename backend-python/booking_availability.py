@@ -50,7 +50,7 @@ def query_counselor_schedules_for_booking(
     db: Session,
     counselor_id: int,
 ) -> List[AppSchedule]:
-    """查询滚动窗口内对外展示的排班（排除已取消）。"""
+    """查询滚动窗口内对外展示的排期（排除已取消）。"""
     start_bound, end_bound = rolling_window_datetime_bounds()
     return (
         db.query(AppSchedule)

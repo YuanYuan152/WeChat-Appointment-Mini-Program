@@ -57,12 +57,12 @@ export function ContentList({
         <div className="overflow-hidden">
           <table className="w-full table-fixed border-collapse text-sm">
             <colgroup>
-              <col className="w-[22%]" />
-              <col className="w-[12%]" />
-              <col className="w-[18%]" />
-              <col className="w-[16%]" />
+              <col className="w-[24%]" />
+              <col className="w-[11%]" />
+              <col className="w-[21%]" />
               <col className="w-[14%]" />
-              <col className="w-[18%]" />
+              <col className="w-[14%]" />
+              <col className="w-[16%]" />
             </colgroup>
             <thead className="bg-[#FAF8F4] text-left text-[var(--lxxl-muted)]">
               <tr>
@@ -71,7 +71,7 @@ export function ContentList({
                 <th className="px-5 py-3 font-medium">摘要</th>
                 <th className="px-5 py-3 font-medium">图片</th>
                 <th className="px-5 py-3 font-medium">创建时间</th>
-                <th className="px-5 py-3 text-right font-medium">操作</th>
+                <th className="px-6 py-3 text-right font-medium">操作</th>
               </tr>
             </thead>
             <tbody>
@@ -80,7 +80,11 @@ export function ContentList({
                   key={item.id}
                   className="border-t border-[var(--lxxl-border)] align-top transition hover:bg-[#FAF8F4]"
                 >
-                  <td className="break-words px-5 py-4 font-medium">{item.title}</td>
+                  <td className="min-w-0 px-5 py-4 font-medium">
+                    <div className="line-clamp-2 break-words" title={item.title}>
+                      {item.title}
+                    </div>
+                  </td>
                   <td className="break-words px-5 py-4 text-[var(--lxxl-muted)]">{item.meta || "-"}</td>
                   <td className="px-5 py-4 text-[var(--lxxl-muted)]">
                     <div className="line-clamp-2">{item.summary || "-"}</div>
@@ -89,7 +93,7 @@ export function ContentList({
                     <ContentImageThumbnail imageUrl={item.imageUrl} title={item.title} />
                   </td>
                   <td className="whitespace-nowrap px-5 py-4 text-[var(--lxxl-muted)]">{formatDate(item.date)}</td>
-                  <td className="px-5 py-4 text-right">
+                  <td className="px-6 py-4 text-right">
                     <div className="inline-flex justify-end gap-4 whitespace-nowrap">
                       <TableActionButton onClick={() => onEdit(item)}>
                         修改

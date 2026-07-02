@@ -14,7 +14,7 @@ export function getName(user: AdminUser | CurrentUser | UserBoardSummary | null 
   if ("nickname" in user && user.nickname) {
     return user.nickname;
   }
-  return user.mobile || `用户#${user.id}`;
+  return user.mobile || "未留姓名用户";
 }
 
 export function getMessage(payload: unknown, fallback = "操作已完成") {

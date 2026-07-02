@@ -121,7 +121,7 @@ export function SchedulesPanel({
                   <td className="px-5 py-4">{row.roomName || row.roomId || "-"}</td>
                   <td className="px-5 py-4">{row.patientName || "-"}</td>
                   <td className="px-5 py-4">
-                    <Badge tone="green">{statusLabel(row.status)}</Badge>
+                    <Badge tone="green">{scheduleStatusLabel(row.status)}</Badge>
                   </td>
                 </tr>
               ))}
@@ -139,4 +139,11 @@ export function SchedulesPanel({
       </div>
     </section>
   );
+}
+
+function scheduleStatusLabel(status?: string | null) {
+  if (status === "AVAILABLE") {
+    return "可排期";
+  }
+  return statusLabel(status);
 }

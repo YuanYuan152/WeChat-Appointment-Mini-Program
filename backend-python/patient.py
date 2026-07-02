@@ -312,7 +312,13 @@ def get_my_consultations(
     for r in rows:
         prof = counselor_map.get(r.CounselorId)
         acc = accounts.get(r.CounselorId)
-        name = (prof.Name if prof and prof.Name else None) or (acc.Nickname if acc else None) or f"咨询师#{r.CounselorId}"
+        name = (
+            (prof.Name if prof and prof.Name else None)
+            or (acc.Nickname if acc else None)
+            or (acc.RealName if acc else None)
+            or (acc.Mobile if acc else None)
+            or "未留姓名咨询师"
+        )
         avatar = (prof.AvatarUrl if prof and prof.AvatarUrl else None) or (acc.AvatarUrl if acc else None)
 
         sched = schedule_map.get(r.ScheduleId) if r.ScheduleId else None

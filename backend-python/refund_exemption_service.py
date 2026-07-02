@@ -76,8 +76,8 @@ def _admin_account_ids(db: Session) -> List[int]:
 def _patient_display_name(db: Session, account_id: int) -> str:
     acc = db.query(AppAccount).filter(AppAccount.Id == account_id).first()
     if not acc:
-        return f"用户#{account_id}"
-    return acc.RealName or acc.Nickname or acc.Mobile or f"用户#{account_id}"
+        return "未留姓名用户"
+    return acc.RealName or acc.Nickname or acc.Mobile or "未留姓名用户"
 
 
 def _counselor_display_name(db: Session, counselor_id: int) -> str:
@@ -86,8 +86,8 @@ def _counselor_display_name(db: Session, counselor_id: int) -> str:
         return prof.Name
     acc = db.query(AppAccount).filter(AppAccount.Id == counselor_id).first()
     if acc:
-        return acc.Nickname or acc.RealName or f"咨询师#{counselor_id}"
-    return f"咨询师#{counselor_id}"
+        return acc.Nickname or acc.RealName or acc.Mobile or "未留姓名咨询师"
+    return "未留姓名咨询师"
 
 
 def notify_admins_new_exemption(

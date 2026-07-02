@@ -45,6 +45,7 @@ function CounselorSchedulesScreenContent() {
   const [draft, setDraft] = useState(INITIAL_DRAFT);
   const [listLoading, setListLoading] = useState(false);
   const [slotLoading, setSlotLoading] = useState(false);
+  const [slotError, setSlotError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
@@ -87,21 +88,25 @@ function CounselorSchedulesScreenContent() {
 
   const loadSlots = useCallback(async () => {
     setSlotLoading(true);
-    clearNotice();
+    setSlotError(null);
     try {
       const counselorSlotOptions = await fetchCounselorSlotOptions(draft.date, draft.centerId);
       setData((prev) => ({ ...prev, counselorSlotOptions }));
       setDraft((prev) => ({ ...prev, slotKey: "", roomId: "" }));
+      return true;
     } catch (error) {
-      showNotice("error", error instanceof Error ? error.message : "可排时段加载失败");
+      setSlotError(error instanceof Error ? error.message : "可排时段加载失败");
+      setData((prev) => ({ ...prev, counselorSlotOptions: undefined }));
+      return false;
     } finally {
       setSlotLoading(false);
     }
-  }, [clearNotice, draft.centerId, draft.date, showNotice]);
+  }, [draft.centerId, draft.date]);
 
   const createSchedule = useCallback(
     async (slot: CounselorSlotOption, roomId: string) => {
       clearNotice();
+      setSlotError(null);
       try {
         const result = await createCounselorSchedule({
           start_time: slot.startTime,
@@ -160,6 +165,7 @@ function CounselorSchedulesScreenContent() {
       slotOptions={data.counselorSlotOptions}
       listLoading={listLoading}
       slotLoading={slotLoading}
+      slotError={slotError}
       query={draftFilters}
       draft={draft}
       page={page}
@@ -168,6 +174,7 @@ function CounselorSchedulesScreenContent() {
       setDraft={setDraft}
       onSearch={search}
       onReset={reset}
+      onClearSlotError={() => setSlotError(null)}
       onLoadSlots={loadSlots}
       onCreate={createSchedule}
       onCancel={cancelSchedule}

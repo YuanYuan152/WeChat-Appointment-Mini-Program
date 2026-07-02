@@ -6,6 +6,14 @@ import type {
   CaseRecordAmendment,
   CounselorRecordSummary,
 } from "@/types/api";
+import {
+  RISK_ASSESSMENT_ITEMS,
+  formatRiskChoiceDisplay,
+  normalizeRiskAssessment,
+  normalizeRiskChoice,
+  type RiskAssessmentData,
+} from "@/constants/caseRecordRiskAssessment";
+import { API_BASE_URL } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 
 import { getPageItems } from "@/lib/pagination";
@@ -107,7 +115,7 @@ export function CaseRecordsPanel({
                 <tr>
                   <th className="px-5 py-3 font-medium">提交时间</th>
                   <th className="px-5 py-3 font-medium">咨询师</th>
-                  <th className="px-5 py-3 font-medium">咨询/记录</th>
+                  <th className="px-5 py-3 font-medium">咨询时间</th>
                   <th className="px-5 py-3 font-medium">原因</th>
                   <th className="px-5 py-3 font-medium">状态</th>
                   <th className="px-5 py-3 font-medium">操作</th>
@@ -118,9 +126,7 @@ export function CaseRecordsPanel({
                   <tr key={item.id} className="border-t border-[var(--lxxl-border)]">
                     <td className="px-5 py-4 text-[var(--lxxl-muted)]">{formatDateTime(item.createdAt)}</td>
                     <td className="px-5 py-4 font-medium">{item.counselorName}</td>
-                    <td className="px-5 py-4 text-[var(--lxxl-muted)]">
-                      咨询 #{item.consultationId} · 记录 #{item.caseRecordId}
-                    </td>
+                    <td className="px-5 py-4 text-[var(--lxxl-muted)]">{amendmentConsultationTime(item)}</td>
                     <td className="max-w-xs px-5 py-4 text-[var(--lxxl-muted)]">{item.reason || "-"}</td>
                     <td className="px-5 py-4">
                       <Badge tone={item.status === "REJECTED" ? "red" : item.status === "APPROVED" ? "green" : "gold"}>
@@ -219,10 +225,9 @@ export function CaseRecordsPanel({
         </DetailDrawer>
       )}
       {selectedAmendment && (
-        <DetailDrawer title={`修改申请 #${selectedAmendment.id}`} onClose={() => setSelectedAmendment(null)}>
+        <DetailDrawer title="咨询记录修改申请" onClose={() => setSelectedAmendment(null)}>
           <div className="text-sm text-[var(--lxxl-muted)]">
-            {selectedAmendment.counselorName} · 咨询 #{selectedAmendment.consultationId} · 记录 #
-            {selectedAmendment.caseRecordId}
+            咨询师：{selectedAmendment.counselorName} · 咨询时间：{amendmentConsultationTime(selectedAmendment)}
           </div>
           <RecordCompareBlock
             title="患者情况记录（主观陈述）"
@@ -243,7 +248,7 @@ export function CaseRecordsPanel({
           <section className="w-full max-w-lg rounded-xl border border-[var(--lxxl-border)] bg-white p-6 shadow-xl">
             <h3 className="text-lg font-semibold">驳回修改申请</h3>
             <p className="mt-2 text-sm text-[var(--lxxl-muted)]">
-              {rejectingAmendment.counselorName} · 记录 #{rejectingAmendment.caseRecordId}
+              {rejectingAmendment.counselorName} · {amendmentConsultationTime(rejectingAmendment)}
             </p>
             <label className="mt-5 block">
               <span className="mb-2 block text-xs font-medium text-[var(--lxxl-muted)]">驳回原因</span>
@@ -279,6 +284,10 @@ export function CaseRecordsPanel({
       )}
     </section>
   );
+}
+
+function amendmentConsultationTime(item: CaseRecordAmendment) {
+  return item.consultationStartTime ? formatDateTime(item.consultationStartTime) : "-";
 }
 
 function CounselorRecordListView({
@@ -340,6 +349,8 @@ function CounselorRecordListView({
 }
 
 function CaseRecordDetailView({ record, onBack }: { record: AdminCaseRecordDetail; onBack: () => void }) {
+  const riskAssessment = record.RiskAssessment ? normalizeRiskAssessment(record.RiskAssessment) : null;
+
   return (
     <div className="space-y-5">
       <div className="flex items-start justify-between gap-4 border-b border-[var(--lxxl-border)] pb-4">
@@ -358,7 +369,8 @@ function CaseRecordDetailView({ record, onBack }: { record: AdminCaseRecordDetai
       <RecordBlock title="客观观察" value={record.Objective} />
       <RecordBlock title="评估分析" value={record.Assessment} />
       <RecordBlock title="计划方向" value={record.Plan} />
-      {record.PhotoUrls.length > 0 && <RecordBlock title="相关照片" value={record.PhotoUrls.join("\n")} />}
+      <RiskAssessmentBlock value={riskAssessment} />
+      {record.PhotoUrls.length > 0 && <RecordPhotos urls={record.PhotoUrls} />}
     </div>
   );
 }
@@ -370,6 +382,69 @@ function RecordBlock({ title, value }: { title: string; value?: string | null })
       <div className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[var(--lxxl-muted)]">{value || "-"}</div>
     </section>
   );
+}
+
+function RiskAssessmentBlock({ value }: { value: RiskAssessmentData | null }) {
+  if (!value) {
+    return <RecordBlock title="风险/危机评估" value="暂无风险评估" />;
+  }
+
+  return (
+    <section className="border-t border-[var(--lxxl-border)] pt-4">
+      <h5 className="text-sm font-semibold">风险/危机评估</h5>
+      <div className="mt-3 space-y-2">
+        {RISK_ASSESSMENT_ITEMS.map((item) => {
+          const entry = value.items[item.id];
+          const choice = normalizeRiskChoice(entry?.choice || "", item.id);
+          const note = entry?.note || "";
+          return (
+            <div key={item.id} className="rounded-xl bg-[#FAF8F4] px-3 py-2 text-sm leading-6">
+              <div className="font-medium text-[var(--lxxl-text)]">
+                {item.index}. {item.label}
+              </div>
+              <div className="mt-1 text-[var(--lxxl-muted)]">{formatRiskChoiceDisplay(item.id, choice, note)}</div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function RecordPhotos({ urls }: { urls: string[] }) {
+  return (
+    <section className="border-t border-[var(--lxxl-border)] pt-4">
+      <h5 className="text-sm font-semibold">相关照片</h5>
+      <div className="mt-3 grid grid-cols-3 gap-3">
+        {urls.filter(Boolean).map((url, index) => {
+          const src = normalizePhotoUrl(url);
+          return (
+            <a
+              key={`${url}-${index}`}
+              className="group block aspect-square overflow-hidden rounded-xl border border-[var(--lxxl-border)] bg-[#FAF8F4]"
+              href={src}
+              rel="noreferrer"
+              target="_blank"
+            >
+              <img
+                alt={`咨询记录照片 ${index + 1}`}
+                className="h-full w-full object-cover transition group-hover:scale-105"
+                src={src}
+              />
+            </a>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function normalizePhotoUrl(url: string) {
+  const value = url.trim();
+  if (/^(https?:|data:|blob:)/i.test(value)) {
+    return value;
+  }
+  return `${API_BASE_URL}${value.startsWith("/") ? value : `/${value}`}`;
 }
 
 function RecordCompareBlock({

@@ -51,7 +51,7 @@ def require_ops_or_admin(
 def _account_name(account: Optional[AppAccount]) -> Optional[str]:
     if not account:
         return None
-    return account.RealName or account.Nickname or account.Mobile or f"用户#{account.Id}"
+    return account.RealName or account.Nickname or account.Mobile or "未留姓名用户"
 
 
 @router.post("", response_model=FeedbackOut, summary="提交意见反馈")

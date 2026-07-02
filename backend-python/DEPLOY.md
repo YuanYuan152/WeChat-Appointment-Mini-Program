@@ -63,6 +63,6 @@ python test_core_flow.py
 | 支付 | `/api/payment/wechat` | 统一下单、支付回调 |
 | 上传 | `/api/upload` | 文件上传 |
 | 患者 | `/api/mini/patient` | 订单列表 |
-| 咨询师 | `/api/mini/counselor` | 排班、咨询单、个案记录 |
+| 咨询师 | `/api/mini/counselor` | 排期、咨询单、个案记录 |
 | 助理 | `/api/mini/assistant` | 任务、风险提醒、排期总览 |
 | 运营 | `/api/mini/ops` | Banner、活动/公告、用户管理 |

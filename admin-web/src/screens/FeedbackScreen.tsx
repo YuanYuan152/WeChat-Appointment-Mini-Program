@@ -18,8 +18,12 @@ export function FeedbackScreen() {
 function FeedbackScreenContent() {
   const { clearNotice, refreshKey, showNotice } = useAppRoute();
   const [data, setData] = useState<ScreenData>({});
+  const [keyword, setKeyword] = useState("");
+  const [queryKeyword, setQueryKeyword] = useState("");
   const [status, setStatus] = useState("ALL");
   const [queryStatus, setQueryStatus] = useState("ALL");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [listLoading, setListLoading] = useState(false);
 
   const loadData = useCallback(async () => {
@@ -40,20 +44,45 @@ function FeedbackScreenContent() {
   }, [loadData, refreshKey]);
 
   const search = useCallback(() => {
-    if (status === queryStatus) {
+    setPage(1);
+    if (status === queryStatus && keyword === queryKeyword) {
       void loadData();
       return;
     }
+    setQueryKeyword(keyword);
     setQueryStatus(status);
-  }, [loadData, queryStatus, status]);
+  }, [keyword, loadData, queryKeyword, queryStatus, status]);
+
+  const reset = useCallback(() => {
+    setKeyword("");
+    setQueryKeyword("");
+    setStatus("ALL");
+    setPage(1);
+    if (queryStatus === "ALL") {
+      void loadData();
+      return;
+    }
+    setQueryStatus("ALL");
+  }, [loadData, queryStatus]);
 
   return (
     <FeedbackPanel
       feedbacks={data.feedbacks}
       listLoading={listLoading}
+      keyword={keyword}
+      setKeyword={setKeyword}
+      queryKeyword={queryKeyword}
       status={status}
       setStatus={setStatus}
+      page={page}
+      pageSize={pageSize}
       onSearch={search}
+      onReset={reset}
+      onPageChange={setPage}
+      onPageSizeChange={(nextPageSize) => {
+        setPageSize(nextPageSize);
+        setPage(1);
+      }}
     />
   );
 }

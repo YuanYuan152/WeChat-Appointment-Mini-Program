@@ -30,7 +30,7 @@ def assign_room_for_payment(
     center_id: str,
 ) -> str:
     """
-    为已付款排班分配咨询室。
+    为已付款排期分配咨询室。
     偏好室空闲则分配偏好室，否则从未被付款占用的咨询室中随机选择。
     """
     rooms = get_consultation_rooms(db, center_id)
@@ -62,10 +62,10 @@ def apply_room_assignment(
     schedule: AppSchedule,
     center_id: Optional[str] = None,
 ) -> Optional[str]:
-    """分配咨询室并写回排班 Note，返回实际咨询室 id；视频咨询返回 None。"""
+    """分配咨询室并写回排期 Note，返回实际咨询室 id；视频咨询返回 None。"""
     resolved_center = center_id or parse_center_id(schedule.Note)
     if not resolved_center:
-        raise ValueError("排班未指定预约中心，无法分配咨询室")
+        raise ValueError("排期未指定预约中心，无法分配咨询室")
     if is_video_center(resolved_center):
         return None
 

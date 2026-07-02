@@ -559,7 +559,9 @@ def _counselor_name(db: Session, counselor_id: int) -> str:
     if profile and profile.Name:
         return profile.Name
     acc = db.query(AccountModel).filter(AccountModel.Id == counselor_id).first()
-    return acc.Nickname if acc and acc.Nickname else f"咨询师#{counselor_id}"
+    if acc:
+        return acc.Nickname or acc.RealName or acc.Mobile or "未留姓名咨询师"
+    return "未留姓名咨询师"
 
 
 def _account_mobile(db: Session, account_id: int) -> Optional[str]:
@@ -979,7 +981,7 @@ def _available_rooms_for_schedule(
     *,
     exclude_current: bool = False,
 ) -> List[dict]:
-    """返回该排班时段同中心可更换的咨询室列表。"""
+    """返回该排期时段同中心可更换的咨询室列表。"""
     center_id = parse_center_id(schedule.Note)
     if not center_id:
         return []
@@ -1020,7 +1022,7 @@ def schedule_room_options(
 ):
     schedule = db.query(AppSchedule).filter(AppSchedule.Id == schedule_id).first()
     if not schedule:
-        raise HTTPException(status_code=404, detail="排班不存在")
+        raise HTTPException(status_code=404, detail="排期不存在")
     if schedule.Status != "BOOKED" or not parse_room_id(schedule.Note):
         raise HTTPException(status_code=400, detail="该时段未预约或尚未分配咨询室")
 
@@ -1048,13 +1050,13 @@ def change_schedule_room(
 ):
     schedule = db.query(AppSchedule).filter(AppSchedule.Id == schedule_id).first()
     if not schedule:
-        raise HTTPException(status_code=404, detail="排班不存在")
+        raise HTTPException(status_code=404, detail="排期不存在")
     if schedule.Status != "BOOKED" or not parse_room_id(schedule.Note):
         raise HTTPException(status_code=400, detail="该时段未预约或尚未分配咨询室")
 
     center_id = parse_center_id(schedule.Note)
     if not center_id:
-        raise HTTPException(status_code=400, detail="排班未指定预约中心")
+        raise HTTPException(status_code=400, detail="排期未指定预约中心")
 
     current_room = parse_room_id(schedule.Note)
     new_room = body.room_code.strip()

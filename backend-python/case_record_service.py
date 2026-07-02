@@ -30,7 +30,6 @@ from models import (
     AppCaseRecord,
     AppCaseRecordRevision,
     AppConsultation,
-    AppCounselorProfile,
     AppOrder,
     AppRoleBinding,
     AppSchedule,
@@ -191,11 +190,6 @@ def build_default_header_info(
     from schedule_meta import center_display_name
 
     patient = db.query(AppAccount).filter(AppAccount.Id == consultation.PatientId).first()
-    counselor_profile = (
-        db.query(AppCounselorProfile)
-        .filter(AppCounselorProfile.AccountId == counselor_id)
-        .first()
-    )
     order = (
         db.query(AppOrder).filter(AppOrder.Id == consultation.OrderId).first()
         if consultation.OrderId
@@ -219,7 +213,6 @@ def build_default_header_info(
     header["start_minute"] = start_parts["minute"]
     header["end_hour"] = end_parts["hour"]
     header["end_minute"] = end_parts["minute"]
-    header["counselor_signature"] = (counselor_profile.Name or "").strip() if counselor_profile else ""
     return header
 
 
@@ -399,15 +392,15 @@ def _counselor_display_name(db: Session, counselor_id: int) -> str:
         return prof.Name
     acc = db.query(AppAccount).filter(AppAccount.Id == counselor_id).first()
     if acc:
-        return acc.Nickname or acc.RealName or f"咨询师#{counselor_id}"
-    return f"咨询师#{counselor_id}"
+        return acc.Nickname or acc.RealName or acc.Mobile or "未留姓名咨询师"
+    return "未留姓名咨询师"
 
 
 def _patient_display_name(db: Session, patient_id: int) -> str:
     acc = db.query(AppAccount).filter(AppAccount.Id == patient_id).first()
     if not acc:
-        return f"来访者#{patient_id}"
-    return acc.RealName or acc.Nickname or acc.Mobile or f"来访者#{patient_id}"
+        return "未留姓名来访者"
+    return acc.RealName or acc.Nickname or acc.Mobile or "未留姓名来访者"
 
 
 def _account_phone(db: Session, account_id: int) -> str:

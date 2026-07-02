@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 
 import { formatDateTime } from "@/lib/format";
@@ -61,10 +61,17 @@ const HEADER_FIELDS: Array<{ key: string; label: string; editable?: boolean }> =
   { key: "start_minute", label: "咨询开始分钟" },
   { key: "end_hour", label: "咨询结束小时" },
   { key: "end_minute", label: "咨询结束分钟" },
-  { key: "counselor_signature", label: "咨询师签名", editable: true },
 ];
 
 type CaseRecordTextKey = "subjective" | "objective" | "assessment" | "plan";
+type ConsultationRecordStatusFilter = "ALL" | "PENDING" | "FILLED" | "AMENDED";
+
+const CONSULTATION_RECORD_STATUS_OPTIONS: Array<{ value: ConsultationRecordStatusFilter; label: string }> = [
+  { value: "ALL", label: "全部状态" },
+  { value: "PENDING", label: "待填写" },
+  { value: "FILLED", label: "已填写" },
+  { value: "AMENDED", label: "已修改" },
+];
 
 const CASE_RECORD_TEXT_FIELDS: Array<{
   key: CaseRecordTextKey;
@@ -129,18 +136,49 @@ export function CounselorRecordsPanel({
 }) {
   const [consultationPage, setConsultationPage] = useState(1);
   const [consultationPageSize, setConsultationPageSize] = useState(20);
-  const [recordPage, setRecordPage] = useState(1);
-  const [recordPageSize, setRecordPageSize] = useState(20);
+  const [keywordDraft, setKeywordDraft] = useState("");
+  const [statusDraft, setStatusDraft] = useState<ConsultationRecordStatusFilter>("ALL");
+  const [keyword, setKeyword] = useState("");
+  const [statusFilter, setStatusFilter] = useState<ConsultationRecordStatusFilter>("ALL");
   const consultationRows = consultations || [];
   const recordRows = records || [];
+  const recordById = useMemo(() => {
+    const map = new Map<number, CounselorCaseRecord>();
+    for (const record of recordRows) {
+      map.set(record.Id, record);
+    }
+    return map;
+  }, [recordRows]);
+  const filteredConsultationRows = useMemo(() => {
+    const normalizedKeyword = keyword.trim().toLowerCase();
+    return consultationRows.filter((item) => {
+      const record = item.CaseRecordId ? recordById.get(item.CaseRecordId) : undefined;
+      if (!matchesConsultationRecordStatus(item, record, statusFilter)) {
+        return false;
+      }
+      if (!normalizedKeyword) {
+        return true;
+      }
+      return [
+        item.PatientName,
+        item.StartTime,
+        item.EndTime,
+        item.Note,
+        record?.AmendmentStatus,
+        item.HasRecord ? "已填写" : "待填写",
+      ]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(normalizedKeyword));
+    });
+  }, [consultationRows, keyword, recordById, statusFilter]);
   const pagedConsultations = useMemo(() => {
     const start = (consultationPage - 1) * consultationPageSize;
-    return consultationRows.slice(start, start + consultationPageSize);
-  }, [consultationPage, consultationPageSize, consultationRows]);
-  const pagedRecords = useMemo(() => {
-    const start = (recordPage - 1) * recordPageSize;
-    return recordRows.slice(start, start + recordPageSize);
-  }, [recordPage, recordPageSize, recordRows]);
+    return filteredConsultationRows.slice(start, start + consultationPageSize);
+  }, [consultationPage, consultationPageSize, filteredConsultationRows]);
+
+  useEffect(() => {
+    setConsultationPage(1);
+  }, [keyword, statusFilter]);
 
   return (
     <>
@@ -158,12 +196,58 @@ export function CounselorRecordsPanel({
               正在加载咨询记录...
             </div>
           )}
-          <div className="px-6 py-5 sm:px-7 lg:px-8">
-            <h3 className="text-base font-semibold">已完成咨询</h3>
-            <p className="mt-1 text-sm text-[var(--lxxl-muted)]">选择未填写记录的咨询进行填写。</p>
-          </div>
+          <form
+            className="px-6 py-5 sm:px-7 lg:px-8"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setKeyword(keywordDraft.trim());
+              setStatusFilter(statusDraft);
+            }}
+          >
+            <h3 className="text-base font-semibold">咨询记录列表</h3>
+            <p className="mt-1 text-sm text-[var(--lxxl-muted)]">
+              筛选待填写、已填写和已修改记录；选择单条咨询进行填写、查看或申请修改。
+            </p>
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <QueryField label="关键词">
+                <input
+                  className={queryControlClass}
+                  placeholder="来访者姓名、时间"
+                  value={keywordDraft}
+                  onChange={(event) => setKeywordDraft(event.target.value)}
+                />
+              </QueryField>
+              <QueryField label="记录状态">
+                <select
+                  className={queryControlClass}
+                  value={statusDraft}
+                  onChange={(event) => setStatusDraft(event.target.value as ConsultationRecordStatusFilter)}
+                >
+                  {CONSULTATION_RECORD_STATUS_OPTIONS.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </QueryField>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <QueryButton type="submit" />
+              <QueryResetButton
+                onClick={() => {
+                  setKeywordDraft("");
+                  setStatusDraft("ALL");
+                  setKeyword("");
+                  setStatusFilter("ALL");
+                }}
+              />
+            </div>
+          </form>
+
           {consultationRows.length === 0 ? (
             <EmptyState text={listLoading ? "正在加载咨询..." : "暂无可填写咨询。"} />
+          ) : filteredConsultationRows.length === 0 ? (
+            <EmptyState text="没有符合筛选条件的咨询记录。" />
           ) : (
             <>
               <table className="w-full border-collapse text-sm">
@@ -177,104 +261,47 @@ export function CounselorRecordsPanel({
                   </tr>
                 </thead>
                 <tbody>
-                  {pagedConsultations.map((item) => (
-                    <tr key={item.Id} className="border-t border-[var(--lxxl-border)]">
-                      <td className="px-5 py-4 font-medium">{item.PatientName}</td>
-                      <td className="px-5 py-4 text-[var(--lxxl-muted)]">
-                        {formatDateTime(item.StartTime)} 至 {formatDateTime(item.EndTime)}
-                      </td>
-                      <td className="px-5 py-4">
-                        <Badge tone={item.HasRecord ? "green" : "gold"}>{item.HasRecord ? "已填写" : "待填写"}</Badge>
-                      </td>
-                      <td className="px-5 py-4 text-[var(--lxxl-muted)]">{formatDateTime(item.RecordUpdatedAt)}</td>
-                      <td className="px-5 py-4">
-                        <div className="flex flex-wrap gap-3">
-                          {item.CaseRecordId ? (
-                            <>
-                              <TableActionButton onClick={() => onOpenView(item.CaseRecordId || 0)}>
-                                查看
-                              </TableActionButton>
-                              <TableActionButton onClick={() => onOpenAmend(item.CaseRecordId || 0)}>
-                                申请修改
-                              </TableActionButton>
-                            </>
-                          ) : (
-                            <TableActionButton onClick={() => onOpenCreate(item)}>填写</TableActionButton>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                  {pagedConsultations.map((item) => {
+                    const record = item.CaseRecordId ? recordById.get(item.CaseRecordId) : undefined;
+                    return (
+                      <tr key={item.Id} className="border-t border-[var(--lxxl-border)]">
+                        <td className="px-5 py-4 font-medium">{item.PatientName}</td>
+                        <td className="px-5 py-4 text-[var(--lxxl-muted)]">
+                          {formatDateTime(item.StartTime)} 至 {formatDateTime(item.EndTime)}
+                        </td>
+                        <td className="px-5 py-4">{renderRecordStatusBadge(item, record)}</td>
+                        <td className="px-5 py-4 text-[var(--lxxl-muted)]">
+                          {formatDateTime(item.RecordUpdatedAt || record?.UpdatedAt)}
+                        </td>
+                        <td className="px-5 py-4">
+                          <div className="flex flex-wrap gap-3">
+                            {item.CaseRecordId ? (
+                              <>
+                                <TableActionButton onClick={() => onOpenView(item.CaseRecordId || 0)}>
+                                  查看
+                                </TableActionButton>
+                                <TableActionButton onClick={() => onOpenAmend(item.CaseRecordId || 0)}>
+                                  申请修改
+                                </TableActionButton>
+                              </>
+                            ) : (
+                              <TableActionButton onClick={() => onOpenCreate(item)}>填写</TableActionButton>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
               <Pagination
                 page={consultationPage}
                 pageSize={consultationPageSize}
-                total={consultationRows.length}
+                total={filteredConsultationRows.length}
                 onPageChange={setConsultationPage}
                 onPageSizeChange={(next) => {
                   setConsultationPage(1);
                   setConsultationPageSize(next);
-                }}
-              />
-            </>
-          )}
-        </div>
-
-        <div className="border-t border-[var(--lxxl-border)]">
-          <div className="px-6 py-5 sm:px-7 lg:px-8">
-            <h3 className="text-base font-semibold">已提交记录</h3>
-            <p className="mt-1 text-sm text-[var(--lxxl-muted)]">查看已提交内容、修改申请状态和时间戳。</p>
-          </div>
-          {recordRows.length === 0 ? (
-            <EmptyState text={listLoading ? "正在加载记录..." : "暂无已提交记录。"} />
-          ) : (
-            <>
-              <table className="w-full border-collapse text-sm">
-                <thead className="bg-[#FAF8F4] text-left text-[var(--lxxl-muted)]">
-                  <tr>
-                    <th className="px-5 py-3 font-medium">记录</th>
-                    <th className="px-5 py-3 font-medium">咨询</th>
-                    <th className="px-5 py-3 font-medium">创建时间</th>
-                    <th className="px-5 py-3 font-medium">更新时间</th>
-                    <th className="px-5 py-3 font-medium">修改申请</th>
-                    <th className="px-5 py-3 font-medium">操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pagedRecords.map((item) => (
-                    <tr key={item.Id} className="border-t border-[var(--lxxl-border)]">
-                      <td className="px-5 py-4 font-medium">记录 #{item.Id}</td>
-                      <td className="px-5 py-4 text-[var(--lxxl-muted)]">咨询 #{item.ConsultationId}</td>
-                      <td className="px-5 py-4 text-[var(--lxxl-muted)]">{formatDateTime(item.CreatedAt)}</td>
-                      <td className="px-5 py-4 text-[var(--lxxl-muted)]">{formatDateTime(item.UpdatedAt)}</td>
-                      <td className="px-5 py-4">
-                        {item.AmendmentStatus ? (
-                          <Badge tone={item.AmendmentStatus === "REJECTED" ? "red" : item.AmendmentStatus === "APPROVED" ? "green" : "gold"}>
-                            {item.AmendmentStatus}
-                          </Badge>
-                        ) : (
-                          <span className="text-[var(--lxxl-muted)]">-</span>
-                        )}
-                      </td>
-                      <td className="px-5 py-4">
-                        <div className="flex flex-wrap gap-3">
-                          <TableActionButton onClick={() => onOpenView(item.Id)}>查看</TableActionButton>
-                          <TableActionButton onClick={() => onOpenAmend(item.Id)}>申请修改</TableActionButton>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <Pagination
-                page={recordPage}
-                pageSize={recordPageSize}
-                total={recordRows.length}
-                onPageChange={setRecordPage}
-                onPageSizeChange={(next) => {
-                  setRecordPage(1);
-                  setRecordPageSize(next);
                 }}
               />
             </>
@@ -318,6 +345,47 @@ export function CounselorRecordsPanel({
       )}
     </>
   );
+}
+
+function matchesConsultationRecordStatus(
+  consultation: CounselorCompletedConsultation,
+  record: CounselorCaseRecord | undefined,
+  statusFilter: ConsultationRecordStatusFilter,
+) {
+  if (statusFilter === "ALL") {
+    return true;
+  }
+  if (statusFilter === "PENDING") {
+    return !consultation.HasRecord && !consultation.CaseRecordId;
+  }
+  if (statusFilter === "AMENDED") {
+    return Boolean(record?.AmendmentStatus);
+  }
+  return consultation.HasRecord && Boolean(consultation.CaseRecordId) && !record?.AmendmentStatus;
+}
+
+function renderRecordStatusBadge(
+  consultation: CounselorCompletedConsultation,
+  record: CounselorCaseRecord | undefined,
+) {
+  if (!consultation.HasRecord && !consultation.CaseRecordId) {
+    return <Badge tone="gold">待填写</Badge>;
+  }
+  if (record?.AmendmentStatus) {
+    const label = amendmentStatusLabel(record.AmendmentStatus);
+    const tone = record.AmendmentStatus === "REJECTED" ? "red" : record.AmendmentStatus === "APPROVED" ? "green" : "gold";
+    return <Badge tone={tone}>{label}</Badge>;
+  }
+  return <Badge tone="green">已填写</Badge>;
+}
+
+function amendmentStatusLabel(status: string) {
+  const labels: Record<string, string> = {
+    PENDING: "修改待审核",
+    APPROVED: "已修改",
+    REJECTED: "修改被驳回",
+  };
+  return labels[status] || status;
 }
 
 function RecordFormFields({
@@ -498,10 +566,10 @@ function RiskAssessmentFormSection({
         })}
       </div>
 
-      <details className="mt-4 rounded-lg bg-[#FAF8F4] p-3 text-xs leading-6 text-[var(--lxxl-muted)]">
-        <summary className="cursor-pointer font-semibold text-[#3D5A4E]">风险等级说明</summary>
+      <div className="mt-4 rounded-lg bg-[#FAF8F4] p-3 text-xs leading-6 text-[var(--lxxl-muted)]">
+        <div className="font-semibold text-[#3D5A4E]">风险等级说明</div>
         <div className="mt-2 whitespace-pre-wrap">{RISK_LEVEL_GUIDE}</div>
-      </details>
+      </div>
     </section>
   );
 }

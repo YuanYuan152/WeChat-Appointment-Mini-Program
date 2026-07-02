@@ -1,4 +1,4 @@
-"""支付成功后：订单 PAID、排班 BOOKED、分配咨询室并创建咨询单。"""
+"""支付成功后：订单 PAID、排期 BOOKED、分配咨询室并创建咨询单。"""
 from datetime import datetime
 from typing import Optional
 
@@ -36,7 +36,7 @@ def complete_paid_order(
 
     resolved_center = center_id or parse_center_id(schedule.Note)
     if not resolved_center:
-        raise ValueError("排班未指定预约中心，无法完成付款")
+        raise ValueError("排期未指定预约中心，无法完成付款")
 
     if is_video_center(resolved_center):
         consultation_note = schedule_note(resolved_center)

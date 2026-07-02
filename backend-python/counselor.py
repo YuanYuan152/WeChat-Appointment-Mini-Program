@@ -1,8 +1,8 @@
 """
 3.1 咨询师工作台接口
-GET  /api/mini/counselor/schedules          今日及近期排班
-POST /api/mini/counselor/schedules          新增排班
-PUT  /api/mini/counselor/schedules/{id}     修改排班（取消/备注）
+GET  /api/mini/counselor/schedules          今日及近期排期
+POST /api/mini/counselor/schedules          新增排期
+PUT  /api/mini/counselor/schedules/{id}     修改排期（取消/备注）
 GET  /api/mini/counselor/consultations      咨询单列表（按状态筛选）
 PUT  /api/mini/counselor/consultations/{id} 更新咨询单状态（确认/完成/取消）
 GET  /api/mini/counselor/consultations/completed 已完成咨询（含个案记录摘要）
@@ -520,7 +520,7 @@ def _compute_dashboard_stats(
 
 
 # ---------------------------------------------------------------------------
-# 排班接口
+# 排期接口
 # ---------------------------------------------------------------------------
 
 def _build_schedule_note(body: ScheduleCreate) -> Optional[str]:
@@ -775,7 +775,7 @@ def _calendar_items_for_schedules(
         patient = patients.get(display_cons.PatientId) if display_cons else None
         patient_name = None
         if patient:
-            patient_name = patient.RealName or patient.Nickname or f"来访者#{patient.Id}"
+            patient_name = patient.RealName or patient.Nickname or patient.Mobile or "未留姓名来访者"
 
         if leave_row:
             display = "ON_LEAVE"
@@ -823,7 +823,7 @@ def _calendar_items_for_schedules(
     return items
 
 
-@router.get("/schedules", response_model=List[ScheduleOut], summary="获取排班列表")
+@router.get("/schedules", response_model=List[ScheduleOut], summary="获取排期列表")
 def list_schedules(
     counselor: AppAccount = Depends(require_counselor),
     db: Session = Depends(get_db),
@@ -1051,7 +1051,7 @@ def create_schedule(
     return schedule
 
 
-@router.put("/schedules/{schedule_id}", response_model=ScheduleOut, summary="更新/取消排班")
+@router.put("/schedules/{schedule_id}", response_model=ScheduleOut, summary="更新/取消排期")
 def update_schedule(
     schedule_id: int,
     body: ScheduleUpdate,
@@ -1063,7 +1063,7 @@ def update_schedule(
         AppSchedule.CounselorId == counselor.Id,
     ).first()
     if not schedule:
-        raise HTTPException(status_code=404, detail="排班不存在")
+        raise HTTPException(status_code=404, detail="排期不存在")
 
     if body.status == "CANCELLED":
         consultation = (
@@ -1131,7 +1131,7 @@ def submit_leave_request(
         AppSchedule.CounselorId == counselor.Id,
     ).first()
     if not schedule:
-        raise HTTPException(status_code=404, detail="排班不存在")
+        raise HTTPException(status_code=404, detail="排期不存在")
     consultation = (
         db.query(AppConsultation)
         .filter(
@@ -1852,7 +1852,7 @@ def counselor_stats_details(
             items.append(
                 DashboardDetailItem(
                     id=row.Id,
-                    title=slot_text or f"排期 #{row.ScheduleId}",
+                    title=slot_text or "排期记录",
                     subtitle=_format_dt_short(row.CreatedAt),
                     extra=status_labels.get(row.Status, row.Status),
                     status=row.Status,

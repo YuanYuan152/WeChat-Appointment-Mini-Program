@@ -222,9 +222,9 @@ function ImportResultRow({ row }: { row: CompletedOrderImportRowResult }) {
         <div>{row.message}</div>
         {(row.orderId || row.consultationId) && (
           <div className="mt-1 text-xs">
-            {row.orderId ? `订单 ${row.orderId}` : ""}
-            {row.orderId && row.consultationId ? " · " : ""}
-            {row.consultationId ? `咨询 ${row.consultationId}` : ""}
+            已生成{row.orderId ? "订单" : ""}
+            {row.orderId && row.consultationId ? "和" : ""}
+            {row.consultationId ? "咨询记录" : ""}
           </div>
         )}
       </td>

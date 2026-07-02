@@ -33,6 +33,8 @@ def optional_model_value(obj: Any, attr: str, default: Any = None) -> Any:
         return default
     try:
         value = getattr(obj, attr)
+    except AttributeError:
+        return default
     except SQLAlchemyError as exc:
         if not _is_missing_column_error(exc, attr):
             raise
