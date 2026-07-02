@@ -135,7 +135,23 @@
         {
             "path": "pages/test/results",
             "style": {
-                "navigationBarTitleText": "我的量表结果",
+                "navigationBarTitleText": "我的测评报告",
+                "navigationBarBackgroundColor": "#ffffff",
+                "navigationBarTextStyle": "black"
+            }
+        },
+        {
+            "path": "pages/test/result-detail",
+            "style": {
+                "navigationBarTitleText": "测评报告",
+                "navigationBarBackgroundColor": "#ffffff",
+                "navigationBarTextStyle": "black"
+            }
+        },
+        {
+            "path": "pages/test/webview",
+            "style": {
+                "navigationBarTitleText": "心理测评",
                 "navigationBarBackgroundColor": "#ffffff",
                 "navigationBarTextStyle": "black"
             }

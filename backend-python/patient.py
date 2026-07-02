@@ -839,6 +839,9 @@ class ScaleResultOut(BaseModel):
     scaleLabel: str
     total: int
     levelLabel: str
+    description: str = ""
+    suggestions: List[str] = Field(default_factory=list)
+    resultSummary: str = ""
     answers: List[int]
     createdAt: datetime
 

@@ -69,9 +69,10 @@ const submit = async () => {
       answers: answers.value,
     })
     if (res.code === 0 && res.data) {
+      uni.setStorageSync('last_scale_result', res.data)
       uni.showToast({ title: '提交成功', icon: 'success' })
       setTimeout(() => {
-        uni.redirectTo({ url: '/pages/test/results' })
+        uni.redirectTo({ url: `/pages/test/result-detail?id=${res.data.id}` })
       }, 800)
     } else {
       uni.showToast({ title: res.msg || '提交失败', icon: 'none' })

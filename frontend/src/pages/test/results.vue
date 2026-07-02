@@ -15,35 +15,25 @@
       <text>请先登录查看量表结果</text>
       <button class="login-btn" @click="goLogin">去登录</button>
     </view>
-    <view v-else-if="items.length === 0" class="empty">暂无{{ activeTabLabel }}记录</view>
+    <view v-else-if="items.length === 0" class="empty">
+      <text class="empty-icon">📋</text>
+      <text>暂无{{ activeTabLabel }}记录</text>
+      <text class="empty-hint">完成 PHQ-9 / GAD-7 测评后，报告将保存在此处</text>
+      <button class="login-btn" @click="goHub">去做测评</button>
+    </view>
     <view v-else class="list">
       <view v-for="item in items" :key="item.id" class="card" @tap="openDetail(item)">
+        <view class="card-badge">小程序量表</view>
         <view class="card-head">
           <text class="name">{{ item.scaleLabel }}</text>
           <text class="time">{{ formatDT(item.createdAt) }}</text>
         </view>
+        <text class="summary">{{ item.resultSummary }}</text>
         <view class="score-row">
           <text class="score">总分 {{ item.total }}</text>
           <text class="level">{{ item.levelLabel }}</text>
         </view>
-      </view>
-    </view>
-
-    <view v-if="showDetail && detail" class="overlay" @touchmove.stop.prevent>
-      <view class="detail-card" @tap.stop>
-        <text class="detail-title">{{ detail.scaleLabel }}</text>
-        <text class="detail-sub">提交于 {{ formatDT(detail.createdAt) }}</text>
-        <view class="summary-box">
-          <text class="summary-score">{{ detail.total }} 分</text>
-          <text class="summary-level">{{ detail.levelLabel }}</text>
-        </view>
-        <view class="answers-block">
-          <view v-for="(q, idx) in questionsFor(detail.scaleType)" :key="idx" class="answer-row">
-            <text class="a-q">{{ idx + 1 }}. {{ q }}</text>
-            <text class="a-v">得分 {{ detail.answers[idx] ?? '—' }}</text>
-          </view>
-        </view>
-        <button class="close-btn" @click="showDetail = false">关闭</button>
+        <text class="view-link">查看报告 ›</text>
       </view>
     </view>
 
@@ -57,7 +47,7 @@ import { onShow } from '@dcloudio/uni-app'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
 import { isLoggedIn as checkLogin } from '@/utils/auth'
-import { getScaleMeta, type ScaleResult } from '@/constants/psychScales'
+import { enrichScaleResult, type ScaleResult } from '@/constants/psychScales'
 
 const tabs = [
   { value: 'ALL', label: '全部' },
@@ -69,17 +59,10 @@ const loading = ref(false)
 const isLoggedIn = ref(false)
 const activeTab = ref('ALL')
 const items = ref<ScaleResult[]>([])
-const showDetail = ref(false)
-const detail = ref<ScaleResult | null>(null)
 
 const activeTabLabel = computed(() => tabs.find(t => t.value === activeTab.value)?.label || '')
 
 const formatDT = (dt?: string) => (dt ? dt.slice(0, 16).replace('T', ' ') : '—')
-
-const questionsFor = (type: string) => {
-  const meta = getScaleMeta(type)
-  return meta?.questions || []
-}
 
 const switchTab = (v: string) => {
   activeTab.value = v
@@ -97,15 +80,16 @@ const load = async () => {
     const params: Record<string, string> = {}
     if (activeTab.value !== 'ALL') params.scale_type = activeTab.value
     const res = await httpV2.get<ScaleResult[]>(API_ENDPOINTS.patient.scales, params)
-    if (res.code === 0 && Array.isArray(res.data)) items.value = res.data
+    if (res.code === 0 && Array.isArray(res.data)) {
+      items.value = res.data.map(enrichScaleResult)
+    }
   } finally {
     loading.value = false
   }
 }
 
 const openDetail = (item: ScaleResult) => {
-  detail.value = item
-  showDetail.value = true
+  uni.navigateTo({ url: `/pages/test/result-detail?id=${item.id}` })
 }
 
 const goLogin = () => {
@@ -130,7 +114,9 @@ onShow(load)
   color: #6B6560;
 }
 .filter-tab.active { background: #3D5A4E; color: #fff; font-weight: 600; }
-.empty { text-align: center; padding: 80rpx 0; color: #9CA3AF; font-size: 28rpx; }
+.empty { text-align: center; padding: 80rpx 32rpx; color: #9CA3AF; font-size: 28rpx; }
+.empty-icon { display: block; font-size: 64rpx; margin-bottom: 16rpx; }
+.empty-hint { display: block; margin-top: 12rpx; font-size: 24rpx; line-height: 1.6; }
 .login-btn {
   margin-top: 24rpx;
   background: #3D5A4E;
@@ -147,57 +133,23 @@ onShow(load)
   box-shadow: 0 4rpx 16rpx rgba(0,0,0,0.04);
 }
 .card:active { opacity: 0.92; }
-.card-head { display: flex; justify-content: space-between; gap: 16rpx; margin-bottom: 12rpx; }
+.card-badge {
+  display: inline-block;
+  font-size: 20rpx;
+  color: #3D5A4E;
+  background: rgba(61,90,78,0.1);
+  padding: 4rpx 12rpx;
+  border-radius: 999rpx;
+  margin-bottom: 12rpx;
+}
+.card-head { display: flex; justify-content: space-between; gap: 16rpx; margin-bottom: 8rpx; }
 .name { font-size: 30rpx; font-weight: 600; color: #2C2C2C; }
 .time { font-size: 22rpx; color: #9CA3AF; flex-shrink: 0; }
+.summary { display: block; font-size: 26rpx; color: #3D5A4E; font-weight: 600; margin-bottom: 12rpx; }
 .score-row { display: flex; align-items: center; gap: 16rpx; }
 .score { font-size: 32rpx; font-weight: 700; color: #3D5A4E; }
 .level { font-size: 24rpx; color: #047857; background: #D1FAE5; padding: 4rpx 14rpx; border-radius: 999rpx; }
-.overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.45);
-  z-index: 100;
-  display: flex;
-  align-items: flex-end;
-}
-.detail-card {
-  width: 100%;
-  max-height: 85vh;
-  overflow-y: auto;
-  background: #fff;
-  border-radius: 32rpx 32rpx 0 0;
-  padding: 36rpx 32rpx 48rpx;
-  box-sizing: border-box;
-}
-.detail-title { display: block; font-size: 34rpx; font-weight: 700; color: #2C2C2C; }
-.detail-sub { display: block; margin-top: 8rpx; font-size: 24rpx; color: #9CA3AF; }
-.summary-box {
-  margin: 24rpx 0;
-  padding: 28rpx;
-  background: #F0FDFA;
-  border-radius: 16rpx;
-  text-align: center;
-}
-.summary-score { display: block; font-size: 48rpx; font-weight: 800; color: #3D5A4E; }
-.summary-level { display: block; margin-top: 8rpx; font-size: 28rpx; color: #047857; }
-.answer-row {
-  padding: 16rpx 0;
-  border-bottom: 1rpx solid #F3F4F6;
-}
-.a-q { display: block; font-size: 26rpx; color: #374151; line-height: 1.6; }
-.a-v { display: block; margin-top: 6rpx; font-size: 24rpx; color: #6B7280; }
-.close-btn {
-  width: 100%;
-  height: 88rpx;
-  line-height: 88rpx;
-  margin-top: 24rpx;
-  background: #3D5A4E;
-  color: #fff;
-  border-radius: 100rpx;
-  font-size: 30rpx;
-}
-.close-btn::after { border: none; }
+.view-link { display: block; margin-top: 16rpx; font-size: 26rpx; color: #3D5A4E; font-weight: 600; }
 .fab {
   position: fixed;
   left: 32rpx;
