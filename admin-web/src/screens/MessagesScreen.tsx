@@ -30,7 +30,6 @@ function MessagesScreenContent() {
   const [statusFilter, setStatusFilter] = useState<MessageReadFilter>("ALL");
   const [appliedKeyword, setAppliedKeyword] = useState("");
   const [appliedStatusFilter, setAppliedStatusFilter] = useState<MessageReadFilter>("ALL");
-  const [appliedCategory, setAppliedCategory] = useState("");
   const [crisisUnreadCount, setCrisisUnreadCount] = useState(0);
   const [selectedMessage, setSelectedMessage] = useState<MessageItem | null>(null);
   const [listLoading, setListLoading] = useState(false);
@@ -55,7 +54,7 @@ function MessagesScreenContent() {
     clearNotice();
     try {
       const unreadOnly = appliedStatusFilter === "UNREAD";
-      const messages = await fetchMessages({ unreadOnly, category: appliedCategory, keyword: appliedKeyword });
+      const messages = await fetchMessages({ unreadOnly, keyword: appliedKeyword });
       setData((prev) => ({
         ...prev,
         messages: appliedStatusFilter === "READ" ? messages.filter((message) => message.IsRead) : messages,
@@ -65,7 +64,7 @@ function MessagesScreenContent() {
     } finally {
       setListLoading(false);
     }
-  }, [appliedCategory, appliedKeyword, appliedStatusFilter, clearNotice, showNotice]);
+  }, [appliedKeyword, appliedStatusFilter, clearNotice, showNotice]);
 
   useEffect(() => {
     void loadData();
@@ -99,7 +98,6 @@ function MessagesScreenContent() {
   );
 
   const searchMessages = useCallback(() => {
-    setAppliedCategory("");
     setAppliedKeyword(keyword.trim());
     setAppliedStatusFilter(statusFilter);
   }, [keyword, statusFilter]);
@@ -107,22 +105,12 @@ function MessagesScreenContent() {
   const resetSearch = useCallback(() => {
     setKeyword("");
     setStatusFilter("ALL");
-    setAppliedCategory("");
     setAppliedKeyword("");
     setAppliedStatusFilter("ALL");
   }, []);
 
-  const openCrisisUnreadList = useCallback(() => {
-    setKeyword("");
-    setStatusFilter("UNREAD");
-    setAppliedKeyword("");
-    setAppliedStatusFilter("UNREAD");
-    setAppliedCategory("case_record_crisis");
-  }, []);
-
   return (
     <MessagesPanel
-      crisisUnreadActive={appliedCategory === "case_record_crisis"}
       crisisUnreadCount={crisisUnreadCount}
       detailLoading={detailLoading}
       keyword={keyword}
@@ -132,7 +120,6 @@ function MessagesScreenContent() {
       showCrisisBanner={showCrisisBanner}
       statusFilter={statusFilter}
       onCloseDetail={() => setSelectedMessage(null)}
-      onOpenCrisisUnread={openCrisisUnreadList}
       onKeywordChange={setKeyword}
       onOpen={openMessage}
       onReset={resetSearch}

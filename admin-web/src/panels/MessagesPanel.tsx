@@ -21,7 +21,6 @@ type MessagePayload = {
 export type MessageReadFilter = "ALL" | "UNREAD" | "READ";
 
 export function MessagesPanel({
-  crisisUnreadActive,
   crisisUnreadCount,
   detailLoading,
   listLoading,
@@ -31,14 +30,12 @@ export function MessagesPanel({
   showCrisisBanner,
   statusFilter,
   onCloseDetail,
-  onOpenCrisisUnread,
   onKeywordChange,
   onOpen,
   onReset,
   onSearch,
   onStatusFilterChange,
 }: {
-  crisisUnreadActive?: boolean;
   crisisUnreadCount?: number;
   detailLoading?: boolean;
   listLoading?: boolean;
@@ -48,7 +45,6 @@ export function MessagesPanel({
   showCrisisBanner?: boolean;
   statusFilter: MessageReadFilter;
   onCloseDetail: () => void;
-  onOpenCrisisUnread?: () => void;
   onKeywordChange: (value: string) => void;
   onOpen: (message: MessageItem) => void;
   onReset: () => void;
@@ -97,30 +93,29 @@ export function MessagesPanel({
         </div>
       </form>
       {showCrisisBanner && (
-        <button
-          className={`mx-6 mt-5 flex w-[calc(100%-3rem)] items-center justify-between gap-4 rounded-xl border px-4 py-3 text-left text-sm transition hover:brightness-[0.98] ${
+        <div
+          aria-live="polite"
+          className={`mx-6 my-5 flex w-[calc(100%-3rem)] items-center justify-between gap-5 rounded-xl border px-5 py-4 text-sm ${
             unreadCrisisCount > 0
               ? "border-[#F3B18D] bg-[#FFF2EA] text-[#A94616]"
               : "border-[#F1D3C2] bg-[#FFF8F3] text-[#C45A1A]"
           }`}
-          type="button"
-          onClick={onOpenCrisisUnread}
         >
-          <div className="flex min-w-0 items-center gap-3">
+          <div className="flex min-w-0 items-start gap-3">
             <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#F8D9C9] text-base font-bold text-[#C2410C]">
               !
             </span>
             <div className="min-w-0">
               <div className="font-semibold">个案风险上报未读 {unreadCrisisCount} 条</div>
-              <div className="mt-0.5 text-xs opacity-80">
-                {crisisUnreadActive ? "正在查看未读风险上报消息。" : "点击查看未读风险上报消息，风险消息会在列表中高亮。"}
+              <div className="mt-1 text-xs leading-5 opacity-80">
+                风险上报消息会在列表中高亮，可通过读取状态和关键词筛选定位。
               </div>
             </div>
           </div>
           <div className="shrink-0 text-xs font-medium">
             当前列表 {currentListCrisisCount} 条
           </div>
-        </button>
+        </div>
       )}
       <div className="relative">
         {listLoading && items.length > 0 && (
