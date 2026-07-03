@@ -552,6 +552,12 @@ def bind_user_role(
             counselor_type = validate_counselor_type(body.counselor_type or "PROFESSIONAL")
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if existing:
+            _ensure_counselor_profile(db, user, counselor_type)
+            user.UpdatedAt = datetime.utcnow()
+            invalidate_user_sessions(db, user_id)
+            db.commit()
+            return {"message": "咨询师类型已更新"}
     elif body.role == "Patient":
         if not body.patient_source:
             raise HTTPException(status_code=400, detail="请选择来访来源")
