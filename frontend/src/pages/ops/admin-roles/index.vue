@@ -6,7 +6,7 @@
 
       <text class="title">角色&权限绑定</text>
 
-      <text class="subtitle">新用户注册后默认为来访；可在此追加咨询师等角色，用户下次登录将进入对应界面</text>
+      <text class="subtitle">新用户注册后默认为来访；绑定「来访」时可选择来源（含公益来访）；绑定咨询师等角色后用户下次登录将进入对应界面</text>
 
     </view>
 
@@ -17,117 +17,88 @@
       <view class="search-bar">
 
         <input
-
           v-model="keyword"
-
           class="search-input"
-
           type="text"
-
-          placeholder="搜索用户 ID、用户名或手机号"
-
+          placeholder="搜索用户 ID、姓名、手机号或咨询师名"
           confirm-type="search"
-
+          @confirm="reloadUsers"
         />
-
       </view>
-
-      <view v-if="listTab === 'active'" class="add-btn" @tap="openAddModal">+ 添加用户</view>
-
+      <view class="search-btn" @tap="reloadUsers">搜索</view>
+      <view class="add-btn" @tap="openAddModal">+ 添加用户</view>
     </view>
-
-
-
-    <view class="list-tabs">
-      <view
-        class="list-tab"
-        :class="{ active: listTab === 'active' }"
-        @tap="switchListTab('active')"
-      >
-        用户列表
-      </view>
-      <view
-        class="list-tab"
-        :class="{ active: listTab === 'revoked' }"
-        @tap="switchListTab('revoked')"
-      >
-        已删除用户
-      </view>
-    </view>
-
-
 
     <view v-if="loading" class="empty">加载中...</view>
-    <view v-else-if="filteredUsers.length === 0" class="empty">
-      {{ keyword.trim()
-        ? '未找到匹配用户'
-        : (listTab === 'revoked' ? '暂无已删除用户' : '暂无用户数据') }}
+    <view v-else-if="users.length === 0" class="empty">
+      {{ keyword.trim() ? '未找到匹配用户' : '暂无用户数据' }}
     </view>
     <view v-else class="list">
-      <view v-for="u in filteredUsers" :key="u.id" class="card" :class="{ revoked: listTab === 'revoked' }">
+      <view v-for="u in users" :key="u.id" class="card" :class="{ legacy: u.isLegacyOnly }">
         <view class="card-head">
           <view class="head-main">
-            <text class="name">{{ u.nickname || u.mobile || '未命名用户' }}</text>
-            <text class="uid">ID {{ u.id }}{{ u.mobile ? ' · ' + u.mobile : '' }}</text>
+            <text class="name">{{ u.displayName || u.nickname || u.mobile || '未命名用户' }}</text>
+            <text class="uid">
+              {{ u.isLegacyOnly ? `旧系统 ID ${u.legacyDoctorId}` : `ID ${u.id}` }}{{ u.mobile ? ' · ' + u.mobile : '' }}
+            </text>
             <text v-if="u.patientSourceLabel" class="meta-line">来访来源：{{ u.patientSourceLabel }}</text>
             <text v-if="u.counselorTypeLabel" class="meta-line">咨询师类型：{{ u.counselorTypeLabel }}</text>
             <text v-if="u.createdAt" class="meta-line">注册时间：{{ formatCreatedAt(u.createdAt) }}</text>
-            <text v-if="listTab === 'revoked' && u.revokedAt" class="meta-line">删除时间：{{ formatRevokedAt(u.revokedAt) }}</text>
-            <text v-if="listTab === 'revoked' && u.formerActiveRole" class="meta-line">原角色：{{ roleLabel(u.formerActiveRole) }}</text>
           </view>
-          <text v-if="listTab === 'active' && u.activeRole" class="active-tag">当前：{{ roleLabel(u.activeRole) }}</text>
-          <text v-else-if="listTab === 'revoked'" class="revoked-tag">已删除</text>
+          <text v-if="u.isLegacyOnly" class="legacy-tag">旧系统 · 待绑定</text>
+          <text v-else-if="u.activeRole || u.roles?.length" class="active-tag">当前：{{ currentRoleDisplayLabel(u) }}</text>
         </view>
 
+        <view v-if="u.isLegacyOnly" class="legacy-actions">
+          <text class="legacy-tip">该咨询师仅在旧系统中，请通过手机号添加为系统用户后绑定角色。</text>
+          <view class="legacy-bind-btn" @tap="openAddFromLegacy(u)">添加并绑定</view>
+        </view>
+
+        <template v-else>
         <view
-          v-if="listTab === 'active' && u.roles?.length && u.id !== currentUserId"
+          v-if="u.roles?.length && u.id !== currentUserId"
           class="delete-user-btn"
           @tap="deleteUser(u)"
         >
           删除用户
         </view>
 
-        <template v-if="listTab === 'active'">
-          <view class="section-label">已绑定角色</view>
-          <view v-if="displayRoles(u).length" class="roles">
-            <view
-              v-for="r in displayRoles(u)"
-              :key="r"
-              class="role-chip"
-              :class="{ 'role-chip-base': r === 'Patient' }"
-              @tap="r !== 'Patient' ? removeRole(u.id, r) : undefined"
-            >
-              <text class="role-text">{{ roleLabel(r) }}{{ r === 'Patient' ? '（基础）' : '' }}</text>
-              <text v-if="r !== 'Patient'" class="role-remove">×</text>
+        <view class="section-label">已绑定角色</view>
+        <view v-if="displayRoles(u).length" class="roles">
+          <view
+            v-for="r in displayRoles(u)"
+            :key="r"
+            class="role-chip"
+            :class="{ 'role-chip-base': r === 'Patient' }"
+            @tap="r !== 'Patient' ? removeRole(u.id, r) : undefined"
+          >
+            <text class="role-text">{{ roleLabel(r) }}{{ r === 'Patient' ? '（基础）' : '' }}</text>
+            <text v-if="r !== 'Patient'" class="role-remove">×</text>
+          </view>
+        </view>
+        <text v-else class="no-role">暂未绑定角色</text>
+
+        <view class="bind-row">
+          <picker
+            :range="roleLabels"
+            :value="pickerIndex(u.id)"
+            @change="e => selectRole(u.id, Number(e.detail.value))"
+          >
+            <view class="picker-row">
+              <text class="picker-text">{{ selectedLabel(u.id) }}</text>
+              <text class="picker-arrow">▾</text>
             </view>
-          </view>
-          <text v-else class="no-role">暂未绑定角色</text>
-
-          <view class="bind-row">
-            <picker
-              :range="roleLabels"
-              :value="pickerIndex(u.id)"
-              @change="e => selectRole(u.id, Number(e.detail.value))"
-            >
-              <view class="picker-row">
-                <text class="picker-text">{{ selectedLabel(u.id) }}</text>
-                <text class="picker-arrow">▾</text>
-              </view>
-            </picker>
-            <view class="bind-btn" @tap="bindRole(u.id)">绑定</view>
-          </view>
+          </picker>
+          <view class="bind-btn" @tap="bindRole(u.id)">绑定</view>
+        </view>
         </template>
-
-        <text v-else class="revoked-tip">权限已解绑，历史数据已保留；可通过「添加用户」重新绑定角色。</text>
       </view>
     </view>
 
-
+    <view v-if="!loading && hasMore" class="load-more" @tap="loadMore">加载更多（{{ users.length }}/{{ total }}）</view>
 
     <view class="footer-tip">
-      {{ listTab === 'active'
-        ? '点击角色标签可解绑单个角色（历史数据保留，重新绑定后登录可恢复）；「删除用户」将移入已删除列表并彻底解绑权限。'
-        : '已删除用户不再出现在用户列表，再次添加时可恢复权限。' }}
+      列表包含全部系统账号及尚未迁移的旧系统咨询师。搜索支持 ID、手机号、昵称与咨询师档案姓名。
     </view>
 
 
@@ -262,10 +233,12 @@ import { httpV2 } from '@/utils/http'
 
 import { API_ENDPOINTS } from '@/config/api'
 
-import { ROLE_OPTIONS, roleLabel } from '@/constants/roles'
+import { ROLE_OPTIONS, roleLabel, resolveHighestRole } from '@/constants/roles'
 import {
   COUNSELOR_TYPE_OPTIONS,
   PATIENT_SOURCE_OPTIONS,
+  counselorTypeLabel,
+  isCharityPatientSource,
 } from '@/constants/userRoleMeta'
 import { useUserStore } from '@/store/user'
 
@@ -273,7 +246,10 @@ interface AdminUser {
   id: number
   nickname?: string
   mobile?: string
+  displayName?: string
+  counselorName?: string
   activeRole?: string
+  activeRoleLabel?: string
   roles?: string[]
   patientSource?: string
   patientSourceLabel?: string
@@ -281,13 +257,16 @@ interface AdminUser {
   counselorTypeLabel?: string
   createdAt?: string
   isSelfRegistered?: boolean
-  revokedAt?: string
-  formerActiveRole?: string
+  isLegacyOnly?: boolean
+  legacyDoctorId?: number
 }
 
-type ListTab = 'active' | 'revoked'
-
-
+interface AdminUsersResponse {
+  items: AdminUser[]
+  total: number
+  page: number
+  pageSize: number
+}
 
 const roleLabels = ROLE_OPTIONS.map(r => r.label)
 const roleValues = ROLE_OPTIONS.map(r => r.value)
@@ -300,8 +279,13 @@ const addSelectedRole = computed(() => roleValues[addForm.roleIndex] || roleValu
 
 const users = ref<AdminUser[]>([])
 const loading = ref(false)
+const loadingMore = ref(false)
 const keyword = ref('')
-const listTab = ref<ListTab>('active')
+const total = ref(0)
+const page = ref(1)
+const pageSize = 100
+
+const hasMore = computed(() => users.value.length < total.value)
 
 const selected = reactive<Record<number, string>>({})
 
@@ -319,30 +303,67 @@ const addForm = reactive({
 
 
 
-const filteredUsers = computed(() => {
+const reloadUsers = () => {
+  page.value = 1
+  load(true)
+}
 
-  const q = keyword.value.trim().toLowerCase()
+const loadMore = () => {
+  if (!hasMore.value || loadingMore.value) return
+  page.value += 1
+  load(false)
+}
 
-  if (!q) return users.value
+const load = async (reset = true) => {
+  if (reset) {
+    page.value = 1
+    loading.value = true
+  } else {
+    loadingMore.value = true
+  }
 
-  return users.value.filter(u => {
+  if (!userStore.userInfo) {
+    try {
+      await userStore.fetchUserInfo()
+    } catch {
+      // ignore
+    }
+  }
 
-    const parts = [
-      String(u.id),
-      u.nickname || '',
-      u.mobile || '',
-      ...(u.roles || []).map(roleLabel),
-      u.formerActiveRole ? roleLabel(u.formerActiveRole) : '',
-      u.revokedAt ? formatRevokedAt(u.revokedAt) : '',
-    ]
+  try {
+    const params: Record<string, string | number> = {
+      page: page.value,
+      page_size: pageSize,
+    }
+    const q = keyword.value.trim()
+    if (q) params.keyword = q
 
-    return parts.some(p => p.toLowerCase().includes(q))
+    const res = await httpV2.get<AdminUsersResponse>(
+      API_ENDPOINTS.admin.users,
+      params,
+      { showLoading: false },
+    )
 
-  })
-
-})
-
-
+    if (res.code === 0 && res.data) {
+      total.value = res.data.total || 0
+      const next = res.data.items || []
+      users.value = reset ? next : [...users.value, ...next]
+    } else if (reset) {
+      users.value = []
+      total.value = 0
+      uni.showToast({ title: res.msg || '加载失败', icon: 'none' })
+    }
+  } catch {
+    if (reset) {
+      users.value = []
+      total.value = 0
+    }
+    uni.showToast({ title: '加载失败', icon: 'none' })
+  } finally {
+    loading.value = false
+    loadingMore.value = false
+  }
+}
 
 const pickerIndex = (uid: number) => {
 
@@ -368,7 +389,7 @@ const selectedLabel = (uid: number) => {
 
 
 
-const formatRevokedAt = (value: string) => {
+const formatDateTime = (value: string) => {
   const d = new Date(value)
   if (Number.isNaN(d.getTime())) return value
   const pad = (n: number) => String(n).padStart(2, '0')
@@ -377,7 +398,20 @@ const formatRevokedAt = (value: string) => {
 
 const formatCreatedAt = (value?: string) => {
   if (!value) return ''
-  return formatRevokedAt(value)
+  return formatDateTime(value)
+}
+
+/** 管理列表右上角「当前」：取最高已绑定角色；咨询师展示具体类型（公益/专业） */
+const currentRoleDisplayLabel = (user: AdminUser) => {
+  if (user.activeRoleLabel) return user.activeRoleLabel
+  const highest = resolveHighestRole(user.roles)
+  if (highest === 'Counselor') {
+    return user.counselorTypeLabel || counselorTypeLabel(user.counselorType) || roleLabel('Counselor')
+  }
+  if (highest === 'Patient' && isCharityPatientSource(user.patientSource)) {
+    return user.patientSourceLabel || '公益来访'
+  }
+  return roleLabel(user.activeRole || highest)
 }
 
 const ROLE_DISPLAY_ORDER = ['Patient', 'Counselor', 'Assistant', 'Ops', 'Admin']
@@ -388,6 +422,17 @@ const displayRoles = (user: AdminUser) => {
     (a, b) => ROLE_DISPLAY_ORDER.indexOf(a) - ROLE_DISPLAY_ORDER.indexOf(b),
   )
 }
+
+const pickPatientSource = (): Promise<string | null> =>
+  new Promise((resolve) => {
+    uni.showActionSheet({
+      itemList: patientSourceLabels,
+      success: (res) => {
+        resolve(PATIENT_SOURCE_OPTIONS[res.tapIndex]?.value ?? null)
+      },
+      fail: () => resolve(null),
+    })
+  })
 
 const pickCounselorType = (): Promise<string | null> =>
   new Promise((resolve) => {
@@ -400,59 +445,14 @@ const pickCounselorType = (): Promise<string | null> =>
     })
   })
 
-const switchListTab = (tab: ListTab) => {
-  if (listTab.value === tab) return
-  listTab.value = tab
-  keyword.value = ''
-  load()
+const openAddFromLegacy = (user: AdminUser) => {
+  addForm.mobile = (user.mobile || '').replace(/\D/g, '')
+  addForm.nickname = user.displayName || user.nickname || ''
+  addForm.roleIndex = Math.max(0, roleValues.indexOf('Counselor'))
+  addForm.patientSourceIndex = 0
+  addForm.counselorTypeIndex = 0
+  showAddModal.value = true
 }
-
-const load = async () => {
-  if (!userStore.userInfo) {
-    try {
-      await userStore.fetchUserInfo()
-    } catch {
-      // 忽略，删除按钮会通过 currentUserId 为空而不展示自身限制外的逻辑
-    }
-  }
-
-  loading.value = true
-
-  try {
-
-    const res = await httpV2.get<AdminUser[]>(
-      API_ENDPOINTS.admin.users,
-      { status: listTab.value },
-      { showLoading: false },
-    )
-
-    if (res.code === 0 && res.data) {
-
-      users.value = res.data
-
-    } else {
-
-      users.value = []
-
-      uni.showToast({ title: res.msg || '加载失败', icon: 'none' })
-
-    }
-
-  } catch {
-
-    users.value = []
-
-    uni.showToast({ title: '加载失败', icon: 'none' })
-
-  } finally {
-
-    loading.value = false
-
-  }
-
-}
-
-
 
 const openAddModal = () => {
   addForm.mobile = ''
@@ -531,7 +531,7 @@ const submitAddUser = async () => {
 
       showAddModal.value = false
 
-      await load()
+      await load(true)
 
       const msg = res.data?.message || (res.data?.created ? '用户已添加' : '已绑定角色')
 
@@ -583,14 +583,13 @@ const bindRole = async (uid: number) => {
 
   }
 
+  const payload: { role: string; counselor_type?: string; patient_source?: string } = { role }
+
   if (role === 'Patient') {
-    uni.showToast({ title: '新用户注册时已默认绑定来访，无需重复绑定', icon: 'none' })
-    return
-  }
-
-  const payload: { role: string; counselor_type?: string } = { role }
-
-  if (role === 'Counselor') {
+    const patientSource = await pickPatientSource()
+    if (!patientSource) return
+    payload.patient_source = patientSource
+  } else if (role === 'Counselor') {
     const counselorType = await pickCounselorType()
     if (!counselorType) return
     payload.counselor_type = counselorType
@@ -602,13 +601,13 @@ const bindRole = async (uid: number) => {
 
     delete selected[uid]
 
-    await load()
+    await load(true)
 
-    uni.showToast({ title: '已绑定', icon: 'success' })
+    uni.showToast({ title: (res.data as { message?: string })?.message || res.msg || '已绑定', icon: 'success' })
 
   } else {
 
-    uni.showToast({ title: res.msg || '绑定失败', icon: 'none' })
+    uni.showToast({ title: res.msg || res.data?.message || '绑定失败', icon: 'none' })
 
   }
 
@@ -628,7 +627,7 @@ const removeRole = (uid: number, role: string) => {
       if (!res.confirm) return
       const del = await httpV2.delete(`${API_ENDPOINTS.admin.bindRole(uid)}/${role}`)
       if (del.code === 0) {
-        await load()
+        await load(true)
         uni.showToast({ title: '已解绑', icon: 'success' })
       } else {
         uni.showToast({ title: del.msg || '解绑失败', icon: 'none' })
@@ -639,10 +638,9 @@ const removeRole = (uid: number, role: string) => {
 
 const deleteUser = (user: AdminUser) => {
   const name = user.nickname || user.mobile || `用户 ${user.id}`
-  const roleText = (user.roles || []).map(roleLabel).join('、') || '无'
   uni.showModal({
     title: '确认删除用户',
-    content: `确定删除「${name}」吗？\n\n将彻底解绑其全部角色（${roleText}），并移入「已删除用户」列表。历史咨询数据会保留，该用户再次登录时仅作为普通来访使用。`,
+    content: `确定永久删除「${name}」吗？\n\n该操作不可恢复，账号及角色绑定将从系统中彻底移除。若该用户存在咨询记录或已支付订单，将无法删除。`,
     confirmText: '删除',
     confirmColor: '#B91C1C',
     success: async (res) => {
@@ -650,7 +648,7 @@ const deleteUser = (user: AdminUser) => {
       const del = await httpV2.delete(API_ENDPOINTS.admin.deleteUser(user.id))
       if (del.code === 0) {
         delete selected[user.id]
-        await load()
+        await load(true)
         uni.showToast({ title: del.data?.message || '已删除用户', icon: 'success' })
       } else {
         uni.showToast({ title: del.msg || '删除失败', icon: 'none' })
@@ -659,9 +657,9 @@ const deleteUser = (user: AdminUser) => {
   })
 }
 
-onMounted(load)
+onMounted(() => load(true))
 
-onShow(load)
+onShow(() => load(true))
 
 </script>
 
@@ -734,7 +732,70 @@ onShow(load)
 
 
 .toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+  margin-bottom: 24rpx;
+  align-items: center;
+}
+
+.search-bar {
+  flex: 1;
+  min-width: 200rpx;
+}
+
+.search-btn {
+  flex-shrink: 0;
+  padding: 0 28rpx;
+  line-height: 88rpx;
+  background: #E8E4DE;
+  color: #3D5A4E;
+  border-radius: 16rpx;
+  font-size: 28rpx;
+  font-weight: 600;
+}
+
+.load-more {
+  text-align: center;
+  padding: 28rpx;
+  font-size: 28rpx;
+  color: #3D5A4E;
+  font-weight: 600;
+}
+
+.card.legacy {
+  border: 1rpx dashed #D4CFC6;
+  background: #FFFCF7;
+}
+
+.legacy-tag {
+  font-size: 22rpx;
+  color: #B45309;
+  background: #FEF3C7;
+  padding: 6rpx 16rpx;
+  border-radius: 100rpx;
+}
+
+.legacy-actions {
+  margin-top: 16rpx;
+}
+
+.legacy-tip {
+  display: block;
+  font-size: 24rpx;
+  color: #9CA3AF;
+  line-height: 1.5;
   margin-bottom: 16rpx;
+}
+
+.legacy-bind-btn {
+  display: inline-block;
+  font-size: 26rpx;
+  color: #fff;
+  background: #3D5A4E;
+  padding: 16rpx 32rpx;
+  border-radius: 100rpx;
+  font-weight: 600;
 }
 
 .list-tabs {

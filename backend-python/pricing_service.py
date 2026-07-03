@@ -28,6 +28,7 @@ VISITOR_EXCLUDED_ROLES = frozenset({"Counselor", "Assistant", "Ops", "Admin"})
 
 SHARE_MODE_AMOUNT = "AMOUNT"
 SHARE_MODE_PERCENT = "PERCENT"
+DEFAULT_SHARE_PERCENT_OF_BASE = 50  # 未单独配置时，咨询师分成 = 基础价 × 50%
 
 
 def default_base_price_cents_for_type(counselor_type: Optional[str]) -> int:
@@ -41,7 +42,10 @@ def is_legacy_unset_billing(profile: AppCounselorProfile) -> bool:
     billing = int(profile.Billing or 0)
     if billing <= 0:
         return True
-    if (profile.CounselorType or "") == "CHARITY" and billing == MODEL_DEFAULT_BILLING_CENTS:
+    counselor_type = (profile.CounselorType or "") or "PROFESSIONAL"
+    if counselor_type == "CHARITY":
+        return billing != CHARITY_BASE_LOW_CENTS
+    if billing == MODEL_DEFAULT_BILLING_CENTS:
         return True
     return False
 
@@ -127,15 +131,52 @@ def count_patient_completed_low_price_orders(db: Session, patient_account_id: in
     )
 
 
+def sync_counselor_profile_billing_for_type(profile: AppCounselorProfile) -> None:
+    """创建/绑定咨询师时，按类型同步档案中的基础价字段。"""
+    counselor_type = (profile.CounselorType or "") or "PROFESSIONAL"
+    if counselor_type == "CHARITY":
+        profile.Billing = CHARITY_BASE_LOW_CENTS
+        return
+    if is_legacy_unset_billing(profile):
+        profile.Billing = default_base_price_cents_for_type(counselor_type)
+
+
+def _pick_canonical_counselor_profile(
+    profiles: list[AppCounselorProfile],
+) -> Optional[AppCounselorProfile]:
+    """同一账号多条档案时，优先保留已设类型（公益优先）且最近更新的那条。"""
+    if not profiles:
+        return None
+    if len(profiles) == 1:
+        return profiles[0]
+
+    def rank(p: AppCounselorProfile) -> tuple:
+        ctype = (p.CounselorType or "").strip()
+        has_type = 0 if ctype else 1
+        is_charity = 0 if ctype == "CHARITY" else 1
+        updated = p.UpdatedAt or p.CreatedAt
+        ts = updated.timestamp() if updated else 0
+        return (has_type, is_charity, -ts, -int(p.Id or 0))
+
+    return min(profiles, key=rank)
+
+
 def get_counselor_profile(db: Session, counselor_account_id: int) -> Optional[AppCounselorProfile]:
-    return (
+    rows = (
         db.query(AppCounselorProfile)
         .filter(
             AppCounselorProfile.AccountId == counselor_account_id,
             AppCounselorProfile.IsActive == True,
         )
-        .first()
+        .all()
     )
+    if not rows:
+        rows = (
+            db.query(AppCounselorProfile)
+            .filter(AppCounselorProfile.AccountId == counselor_account_id)
+            .all()
+        )
+    return _pick_canonical_counselor_profile(rows)
 
 
 def resolve_counselor_base_price_cents(db: Session, counselor_account_id: int) -> int:
@@ -226,9 +267,10 @@ def resolve_revenue_share_cents(
     if display <= 0:
         return 0
 
+    base = resolve_counselor_base_price_cents(db, counselor_account_id)
     row = get_pricing_override(db, counselor_account_id, patient_account_id)
     if not row or not row.ShareMode:
-        return display
+        return int(base * DEFAULT_SHARE_PERCENT_OF_BASE / 100)
 
     if row.ShareMode == SHARE_MODE_AMOUNT:
         amount = int(row.RevenueShareCents or 0)
@@ -239,7 +281,7 @@ def resolve_revenue_share_cents(
         percent = max(0, min(percent, 100))
         return int(display * percent / 100)
 
-    return display
+    return int(base * DEFAULT_SHARE_PERCENT_OF_BASE / 100)
 
 
 def resolve_default_display_price_cents(db: Session, counselor_account_id: int) -> int:
@@ -293,13 +335,9 @@ def list_counselor_pricing_summaries(
     *,
     keyword: Optional[str] = None,
 ) -> list[Dict[str, Any]]:
-    profiles = (
-        db.query(AppCounselorProfile)
-        .filter(AppCounselorProfile.IsActive == True)
-        .order_by(AppCounselorProfile.Name.asc(), AppCounselorProfile.Id.asc())
-        .all()
-    )
-    rows = [counselor_pricing_summary(db, int(p.AccountId)) for p in profiles]
+    from counselor_identity_service import counselor_account_ids
+
+    rows = [counselor_pricing_summary(db, cid) for cid in counselor_account_ids(db)]
     if keyword:
         kw = keyword.strip().lower()
         if kw:

@@ -3,7 +3,7 @@
     <view class="hero-card">
       <text class="hero-title">定价管理</text>
       <text class="hero-subtitle">
-        第一级设置咨询师统一基础价（对所有来访生效）；点击进入咨询师后再管理各来访的调价与分成。
+        第一级设置咨询师统一基础价（对所有来访生效）；点击进入咨询师后再进行个性化价格调整。
       </text>
     </view>
 
@@ -11,6 +11,7 @@
       <text class="rule-title">默认基础价</text>
       <text class="rule-line">· 公益咨询师：¥100（基础价仍为 ¥100 时，来访完成 2 次 ¥100 订单后系统自动 +¥400 调价）</text>
       <text class="rule-line">· 专业咨询师：¥600</text>
+      <text class="rule-line">· 默认分成比例：基础价格的 50%</text>
       <text class="rule-line">· 可在下方直接修改各咨询师基础价，修改后对该咨询师全部来访生效</text>
     </view>
 
@@ -30,7 +31,7 @@
     <view v-else-if="items.length === 0" class="empty">暂无咨询师</view>
     <view v-else class="list">
       <view v-for="row in items" :key="row.counselorId" class="card">
-        <view class="card-main" @tap="goPatients(row)">
+        <view class="card-main">
           <view class="head-row">
             <text class="name">{{ row.counselorName }}</text>
             <text class="type-tag">{{ row.counselorTypeLabel }}</text>
@@ -41,10 +42,10 @@
             <text class="base-value">¥{{ row.basePriceYuan }}</text>
             <text v-if="row.usingDefaultBase" class="default-hint">类型默认</text>
           </view>
-          <text class="enter-hint">点击进入 · 管理各来访调价与分成 ›</text>
         </view>
         <view class="card-actions">
-          <view class="action-btn" @tap.stop="openEditBase(row)">改基础价</view>
+          <view class="action-btn" @tap="openEditBase(row)">基础价</view>
+          <view class="action-btn primary" @tap="goPatients(row)">个性化调价</view>
         </view>
       </view>
     </view>
@@ -61,6 +62,7 @@
             type="number"
             placeholder="请输入基础价格"
           />
+          <text class="form-hint">修改前：¥{{ editing.basePriceYuan }}</text>
           <text class="form-hint">类型默认：¥{{ editing.defaultBasePriceYuan }}</text>
         </view>
         <view class="modal-btns">
@@ -256,7 +258,7 @@ onShow(reload)
   box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.03);
 }
 
-.card-main:active { opacity: 0.92; }
+.card-main:active { opacity: 1; }
 
 .head-row {
   display: flex;
@@ -309,25 +311,30 @@ onShow(reload)
   color: #9CA3AF;
 }
 
-.enter-hint {
-  display: block;
-  margin-top: 16rpx;
-  font-size: 24rpx;
-  color: #6B9080;
-}
-
 .card-actions {
-  margin-top: 16rpx;
-  padding-top: 16rpx;
+  display: flex;
+  gap: 16rpx;
+  margin-top: 20rpx;
+  padding-top: 20rpx;
   border-top: 1rpx solid #F0EDE8;
 }
 
 .action-btn {
-  display: inline-block;
-  font-size: 26rpx;
+  flex: 1;
+  text-align: center;
+  font-size: 28rpx;
   color: #3D5A4E;
   font-weight: 600;
-  padding: 8rpx 0;
+  padding: 20rpx 0;
+  border-radius: 16rpx;
+  background: #F7F5F2;
+  border: 1rpx solid #E8E4DE;
+}
+
+.action-btn.primary {
+  background: #3D5A4E;
+  color: #fff;
+  border-color: #3D5A4E;
 }
 
 .overlay {

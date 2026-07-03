@@ -783,12 +783,14 @@ def add_favorite(
     account: AppAccount = Depends(get_current_account),
     db: Session = Depends(get_db),
 ):
-    profile = (
-        db.query(AppCounselorProfile)
-        .filter(AppCounselorProfile.AccountId == counselor_id, AppCounselorProfile.IsActive == True)
-        .first()
-    )
-    if not profile:
+    from pricing_service import get_counselor_profile
+    from user_role_meta import counselor_visible_to_patient
+
+    profile = get_counselor_profile(db, counselor_id)
+    if not profile or not counselor_visible_to_patient(
+        profile.CounselorType,
+        getattr(account, "PatientSource", None),
+    ):
         raise HTTPException(status_code=404, detail="咨询师不存在")
     existing = (
         db.query(AppCounselorFavorite)

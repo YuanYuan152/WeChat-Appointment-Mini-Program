@@ -23,8 +23,9 @@ from database import get_db
 from models import AppAccount, AppOrder, AppSchedule
 from config import settings
 from payment_service import complete_paid_order
+from pricing_service import get_counselor_profile, resolve_display_price_cents
+from user_role_meta import counselor_visible_to_patient
 from intake_agreement import attach_intake_to_order
-from pricing_service import resolve_display_price_cents
 
 router = APIRouter(prefix="/api/payment", tags=["Payment"])
 
@@ -109,6 +110,13 @@ def _create_pending_order(
     schedule = db.query(AppSchedule).filter(AppSchedule.Id == req.slot_id).first()
     if not schedule or schedule.Status != "AVAILABLE":
         raise HTTPException(status_code=400, detail="该时段已被预约或不存在")
+
+    profile = get_counselor_profile(db, schedule.CounselorId)
+    if not profile or not counselor_visible_to_patient(
+        profile.CounselorType,
+        getattr(account, "PatientSource", None),
+    ):
+        raise HTTPException(status_code=403, detail="您无法预约该咨询师")
 
     expected_fee = resolve_display_price_cents(db, account.Id, schedule.CounselorId)
     if req.total_fee != expected_fee:

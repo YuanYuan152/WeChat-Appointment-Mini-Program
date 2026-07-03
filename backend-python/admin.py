@@ -47,11 +47,26 @@ from case_record_amendment_service import approve_amendment, reject_amendment
 from case_record_service import decode_photo_urls, snapshot_case_record
 from user_role_meta import (
     counselor_type_label,
+    is_charity_patient_source,
     patient_source_label,
     validate_counselor_type,
     validate_patient_source,
 )
-from pricing_service import default_base_price_cents_for_type
+from account_deletion_service import hard_delete_account
+from counselor_identity_service import (
+    apply_legacy_doctor_to_profile,
+    dedupe_counselor_profiles,
+    find_legacy_doctor_by_name,
+    link_counselor_role_to_legacy_doctor,
+    list_legacy_unlinked_doctors,
+    reconcile_existing_counselor_legacy_links,
+    resolve_legacy_doctor_for_account,
+)
+from pricing_service import (
+    default_base_price_cents_for_type,
+    get_counselor_profile,
+    sync_counselor_profile_billing_for_type,
+)
 from role_active import list_account_roles, resolve_active_role, invalidate_user_sessions
 from patient_registration import (
     DEFAULT_PATIENT_SOURCE,
@@ -174,25 +189,42 @@ def _last_revoke_meta(db: Session, account_id: int, access_revoked_at=None) -> d
 
 
 def _user_admin_out(db: Session, account: AppAccount) -> dict:
-    profile = (
-        db.query(AppCounselorProfile)
-        .filter(AppCounselorProfile.AccountId == account.Id)
-        .first()
-    )
+    profile = get_counselor_profile(db, account.Id)
     access_revoked_at = getattr(account, "AccessRevokedAt", None)
+    counselor_name = (profile.Name if profile else None) or None
+    display_name = (
+        counselor_name
+        or account.Nickname
+        or account.RealName
+        or (f"用户{account.Mobile[-4:]}" if account.Mobile else None)
+        or f"用户{account.Id}"
+    )
+    roles = [
+        b.RoleType
+        for b in db.query(AppRoleBinding).filter(AppRoleBinding.AccountId == account.Id).all()
+    ]
+    active_role = resolve_active_role(roles, account.ActiveRole)
+    counselor_type = profile.CounselorType if profile else None
+    if active_role == "Counselor" and counselor_type:
+        active_role_label = counselor_type_label(counselor_type)
+    elif active_role == "Patient" and is_charity_patient_source(getattr(account, "PatientSource", None)):
+        active_role_label = patient_source_label(getattr(account, "PatientSource", None))
+    else:
+        active_role_label = None
     out = {
         "id": account.Id,
         "mobile": account.Mobile,
         "nickname": account.Nickname,
-        "activeRole": account.ActiveRole,
+        "displayName": display_name,
+        "counselorName": counselor_name,
+        "activeRole": active_role,
+        "activeRoleLabel": active_role_label,
         "patientSource": getattr(account, "PatientSource", None),
         "patientSourceLabel": patient_source_label(getattr(account, "PatientSource", None)),
-        "counselorType": profile.CounselorType if profile else None,
-        "counselorTypeLabel": counselor_type_label(profile.CounselorType if profile else None),
-        "roles": [
-            b.RoleType
-            for b in db.query(AppRoleBinding).filter(AppRoleBinding.AccountId == account.Id).all()
-        ],
+        "isCharityPatient": is_charity_patient_source(getattr(account, "PatientSource", None)),
+        "counselorType": counselor_type,
+        "counselorTypeLabel": counselor_type_label(counselor_type),
+        "roles": roles,
         "createdAt": getattr(account, "CreatedAt", None),
         "isSelfRegistered": getattr(account, "PatientSource", None) == DEFAULT_PATIENT_SOURCE,
     }
@@ -217,12 +249,19 @@ def _ensure_counselor_profile(
     account: AppAccount,
     counselor_type: str,
 ) -> None:
-    profile = (
-        db.query(AppCounselorProfile)
-        .filter(AppCounselorProfile.AccountId == account.Id)
-        .first()
+    dedupe_counselor_profiles(db, account.Id)
+    profile = get_counselor_profile(db, account.Id)
+    legacy_doc = resolve_legacy_doctor_for_account(
+        db,
+        account,
+        preferred_name=account.Nickname or account.RealName,
     )
-    display_name = account.Nickname or account.RealName or f"咨询师{account.Mobile[-4:] if account.Mobile else account.Id}"
+    display_name = (
+        account.Nickname
+        or account.RealName
+        or (legacy_doc.get("name") if legacy_doc else None)
+        or f"咨询师{account.Mobile[-4:] if account.Mobile else account.Id}"
+    )
     if not profile:
         profile = AppCounselorProfile(
             AccountId=account.Id,
@@ -238,6 +277,38 @@ def _ensure_counselor_profile(
         if not profile.Name:
             profile.Name = display_name
         profile.UpdatedAt = datetime.utcnow()
+    if legacy_doc:
+        apply_legacy_doctor_to_profile(
+            profile,
+            legacy_doc,
+            skip_billing=(counselor_type == "CHARITY"),
+        )
+    sync_counselor_profile_billing_for_type(profile)
+    link_counselor_role_to_legacy_doctor(db, account, legacy_doc)
+
+
+def _assert_no_duplicate_counselor_name(
+    db: Session,
+    name: Optional[str],
+    *,
+    exclude_account_id: Optional[int] = None,
+) -> None:
+    """同名且已有活跃咨询师档案时，拒绝重复创建。"""
+    normalized = (name or "").strip()
+    if not normalized:
+        return
+    q = db.query(AppCounselorProfile).filter(
+        AppCounselorProfile.IsActive == True,
+        AppCounselorProfile.Name == normalized,
+    )
+    if exclude_account_id:
+        q = q.filter(AppCounselorProfile.AccountId != exclude_account_id)
+    existing = q.first()
+    if existing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"已存在同名咨询师（账号 ID {existing.AccountId}），请直接为该账号绑定角色，勿重复创建",
+        )
 
 
 def _restore_counselor_on_rebind(db: Session, account: AppAccount) -> None:
@@ -250,6 +321,7 @@ def _restore_counselor_on_rebind(db: Session, account: AppAccount) -> None:
     if profile:
         profile.IsActive = True
         profile.UpdatedAt = datetime.utcnow()
+        link_counselor_role_to_legacy_doctor(db, account)
         return
     _ensure_counselor_profile(db, account, "PROFESSIONAL")
 
@@ -317,22 +389,57 @@ class RejectCaseRecordAmendmentRequest(BaseModel):
 
 @router.get("/users", summary="管理员用户列表")
 def list_admin_users(
-    status: str = Query("active", description="active=在管用户，revoked=已删除用户"),
+    keyword: Optional[str] = Query(None, description="搜索 ID、手机号、昵称或咨询师姓名"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(100, ge=1, le=500),
     _admin: AppAccount = Depends(require_staff_workbench),
     db: Session = Depends(get_db),
 ):
-    if status not in {"active", "revoked"}:
-        raise HTTPException(status_code=400, detail="status 仅支持 active 或 revoked")
+    kw = (keyword or "").strip()
+    if page == 1 and not kw:
+        reconcile_existing_counselor_legacy_links(db)
+        db.commit()
 
-    q = db.query(AppAccount).filter(AppAccount.IsActive == True)
-    legacy_revoked = _legacy_staff_revoked_clause()
-    if status == "active":
-        q = q.filter(AppAccount.AccessRevokedAt.is_(None), ~legacy_revoked)
-    else:
-        q = q.filter(or_(AppAccount.AccessRevokedAt.isnot(None), legacy_revoked))
+    q = db.query(AppAccount)
+    if kw:
+        profile_account_ids = [
+            row[0]
+            for row in db.query(AppCounselorProfile.AccountId)
+            .filter(AppCounselorProfile.Name.like(f"%{kw}%"))
+            .distinct()
+            .all()
+        ]
+        filters = [
+            AppAccount.Mobile.like(f"%{kw}%"),
+            AppAccount.Nickname.like(f"%{kw}%"),
+            AppAccount.RealName.like(f"%{kw}%"),
+        ]
+        if kw.isdigit():
+            filters.append(AppAccount.Id == int(kw))
+        if profile_account_ids:
+            filters.append(AppAccount.Id.in_(profile_account_ids))
+        q = q.filter(or_(*filters))
 
-    users = q.order_by(AppAccount.Id.desc()).limit(100).all()
-    return [_user_admin_out(db, u) for u in users]
+    total = q.count()
+    accounts = (
+        q.order_by(AppAccount.Id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+    items = [_user_admin_out(db, u) for u in accounts]
+
+    if page == 1:
+        legacy_items = list_legacy_unlinked_doctors(db, kw or None)
+        items.extend(legacy_items)
+        total += len(legacy_items)
+
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "pageSize": page_size,
+    }
 
 
 @router.post("/users/by-mobile", summary="通过手机号添加用户并绑定角色")
@@ -359,6 +466,22 @@ def create_user_by_mobile(
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     account = db.query(AppAccount).filter(AppAccount.Mobile == mobile).first()
+    if body.role == "Counselor" and body.nickname:
+        counselor_name = body.nickname.strip()
+        _assert_no_duplicate_counselor_name(
+            db,
+            counselor_name,
+            exclude_account_id=account.Id if account else None,
+        )
+        if not account:
+            legacy_by_name = find_legacy_doctor_by_name(db, counselor_name)
+            if legacy_by_name:
+                legacy_tel = re.sub(r"\D", "", legacy_by_name.get("tel") or "")
+                if legacy_tel and legacy_tel != mobile:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"旧系统已有同名咨询师，请使用其手机号 {legacy_tel} 添加，勿重复创建",
+                    )
     created = False
     if not account:
         openid = f"admin_invite_{mobile}"
@@ -422,8 +545,6 @@ def bind_user_role(
         AppRoleBinding.AccountId == user_id,
         AppRoleBinding.RoleType == body.role,
     ).first()
-    if existing:
-        return {"message": "角色已存在"}
 
     counselor_type: Optional[str] = None
     if body.role == "Counselor":
@@ -431,11 +552,21 @@ def bind_user_role(
             counselor_type = validate_counselor_type(body.counselor_type or "PROFESSIONAL")
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-    elif body.role == "Patient" and body.patient_source:
+    elif body.role == "Patient":
+        if not body.patient_source:
+            raise HTTPException(status_code=400, detail="请选择来访来源")
         try:
             user.PatientSource = validate_patient_source(body.patient_source)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        ensure_patient_role_binding(db, user_id)
+        if existing:
+            user.UpdatedAt = datetime.utcnow()
+            db.commit()
+            return {"message": "来访来源已更新"}
+
+    if existing:
+        return {"message": "角色已存在"}
 
     ensure_patient_role_binding(db, user_id)
     previous_active = user.ActiveRole
@@ -503,19 +634,16 @@ def unbind_user_role(
     return {"message": "角色已解绑，历史数据已保留，重新绑定后登录可恢复访问"}
 
 
-@router.delete("/users/{user_id}", summary="删除用户（彻底解绑权限，保留历史数据）")
-def revoke_user_access(
+@router.delete("/users/{user_id}", summary="删除用户（物理删除账号）")
+def delete_user_account(
     user_id: int,
-    request: Request,
     admin: AppAccount = Depends(require_staff_workbench),
     db: Session = Depends(get_db),
 ):
     """
-    工作人员将离职咨询师等账号「删除」时：
-    - 不物理删除 AppAccount，历史咨询/个案等数据保留
-    - 解绑该手机号下账号的全部角色
-    - 停用咨询师档案（若存在），使其不再出现在预约列表
-    - 失效全部登录会话，下次登录仅作为普通来访使用
+    物理删除用户账号：
+    - 从数据库中彻底移除 AppAccount 及会话、角色、档案等附属数据
+    - 若存在咨询记录、个案或已支付订单，则拒绝删除（需解绑角色保留历史）
     """
     if user_id == admin.Id:
         raise HTTPException(status_code=400, detail="不能删除当前登录账号")
@@ -523,51 +651,14 @@ def revoke_user_access(
     account = db.query(AppAccount).filter(AppAccount.Id == user_id).first()
     if not account:
         raise HTTPException(status_code=404, detail="用户不存在")
-    if not account.IsActive:
-        raise HTTPException(status_code=400, detail="该账号已注销")
-    if getattr(account, "AccessRevokedAt", None):
-        raise HTTPException(status_code=400, detail="该用户已在已删除列表中")
 
-    bindings = db.query(AppRoleBinding).filter(AppRoleBinding.AccountId == user_id).all()
-    if not bindings:
-        if _is_staff_revoked(db, account):
-            raise HTTPException(status_code=400, detail="该用户已在已删除列表中")
-        raise HTTPException(status_code=400, detail="该用户已无绑定角色")
-
-    from_role = account.ActiveRole
-    removed_roles = [b.RoleType for b in bindings]
-
-    db.query(AppLoginSession).filter(
-        AppLoginSession.AccountId == user_id
-    ).delete(synchronize_session=False)
-
-    db.query(AppRoleBinding).filter(
-        AppRoleBinding.AccountId == user_id
-    ).delete(synchronize_session=False)
-
-    _set_counselor_profile_active(db, user_id, False)
-
-    now = datetime.utcnow()
-    account.ActiveRole = "Patient"
-    account.AccessRevokedAt = now
-    account.UpdatedAt = now
-
-    db.add(AppRoleSwitchLog(
-        AccountId=user_id,
-        FromRole=from_role,
-        ToRole="REVOKED",
-        Ip=request.client.host if request.client else None,
-        UserAgent=request.headers.get("user-agent", "")[:200] if request.headers else None,
-    ))
+    try:
+        hard_delete_account(db, user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     db.commit()
-    db.refresh(account)
-
-    return {
-        **_user_admin_out(db, account),
-        "removedRoles": removed_roles,
-        "message": "用户已移入已删除列表，权限已彻底解绑",
-    }
+    return {"message": "用户已永久删除", "deletedUserId": user_id}
 
 
 def _build_exemption_admin_out(
@@ -2123,7 +2214,7 @@ def reject_leave_request_api(
 
 class AdminPricingUpdatePayload(BaseModel):
     adjustmentYuan: int = Field(..., ge=-99999, le=99999, description="手动调价（元，可正可负）")
-    shareMode: Optional[str] = Field(None, description="AMOUNT | PERCENT，空则默认全额分成给咨询师")
+    shareMode: Optional[str] = Field(None, description="AMOUNT | PERCENT，空则默认基础价的 50% 分成")
     revenueShareYuan: Optional[int] = Field(None, ge=0, le=99999)
     revenueSharePercent: Optional[int] = Field(None, ge=0, le=100)
 
@@ -2139,6 +2230,10 @@ def list_pricing_counselors(
     db: Session = Depends(get_db),
 ):
     from pricing_service import list_counselor_pricing_summaries
+
+    if not (keyword or "").strip():
+        reconcile_existing_counselor_legacy_links(db)
+        db.commit()
 
     items = list_counselor_pricing_summaries(db, keyword=keyword)
     return {"total": len(items), "items": items}

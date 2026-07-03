@@ -6,7 +6,7 @@
         统一基础价 ¥{{ counselor?.basePriceYuan ?? '—' }} · {{ counselor?.counselorTypeLabel }}
         <text v-if="counselor?.usingDefaultBase">（默认）</text>
       </text>
-      <text class="banner-tip">共 {{ total }} 位来访 · 以下管理各来访对本咨询师的调价与分成</text>
+      <text class="banner-tip">共 {{ total }} 位来访 · 以下为个性化价格调整</text>
     </view>
 
     <view class="toolbar">
@@ -61,7 +61,7 @@
             <text class="cell-value">¥{{ row.revenueShareYuan }}</text>
             <text v-if="row.shareMode === 'PERCENT'" class="cell-sub">{{ row.revenueSharePercent }}%</text>
             <text v-else-if="row.shareMode === 'AMOUNT'" class="cell-sub">固定金额</text>
-            <text v-else class="cell-sub">默认全额</text>
+            <text v-else class="cell-sub">默认 50%（基础价）</text>
           </view>
         </view>
       </view>
@@ -84,17 +84,21 @@
         <view class="form-group">
           <text class="form-label">手动调价（元，可正可负）</text>
           <input v-model="form.adjustmentYuan" class="form-input" type="number" placeholder="如 -50 或 100" />
+          <text class="form-hint">修改前：{{ formatAdjustment(editing.manualAdjustmentYuan) }}</text>
         </view>
 
         <view class="preview-row">
           <text class="preview-label">显示价格（预览）</text>
           <text class="preview-value accent">¥{{ previewDisplayYuan }}</text>
         </view>
+        <text class="form-hint preview-before">修改前显示价格：¥{{ editing.displayPriceYuan }}</text>
 
         <view class="form-group">
           <text class="form-label">分成方式</text>
+          <view v-if="!form.shareMode" class="form-hint share-default-hint">
+            当前使用系统默认：基础价格的 50%（¥{{ defaultShareYuan }}）
+          </view>
           <view class="share-tabs">
-            <view class="share-tab" :class="{ active: form.shareMode === '' }" @tap="form.shareMode = ''">默认全额</view>
             <view class="share-tab" :class="{ active: form.shareMode === 'AMOUNT' }" @tap="form.shareMode = 'AMOUNT'">固定金额</view>
             <view class="share-tab" :class="{ active: form.shareMode === 'PERCENT' }" @tap="form.shareMode = 'PERCENT'">占比</view>
           </view>
@@ -103,11 +107,21 @@
         <view v-if="form.shareMode === 'AMOUNT'" class="form-group">
           <text class="form-label">分成金额（元）</text>
           <input v-model="form.revenueShareYuan" class="form-input" type="number" />
+          <text v-if="originalShareMode === 'AMOUNT'" class="form-hint">修改前：¥{{ editing.revenueShareYuan }}</text>
+          <text v-else-if="!originalShareMode" class="form-hint">修改前：系统默认 ¥{{ defaultShareYuan }}（基础价 50%）</text>
+          <text class="form-hint">预览分成：¥{{ previewShareYuan }} · 占显示价格 {{ previewSharePercent }}%</text>
         </view>
 
         <view v-if="form.shareMode === 'PERCENT'" class="form-group">
           <text class="form-label">分成占比（0–100%）</text>
-          <input v-model="form.revenueSharePercent" class="form-input" type="number" />
+          <view class="input-with-suffix">
+            <input v-model="form.revenueSharePercent" class="form-input suffix-input" type="number" />
+            <text class="input-suffix">%</text>
+          </view>
+          <text v-if="originalShareMode === 'PERCENT' && editing.revenueSharePercent != null" class="form-hint">
+            修改前：{{ editing.revenueSharePercent }}%
+          </text>
+          <text v-else-if="!originalShareMode" class="form-hint">修改前：系统默认 50%（¥{{ defaultShareYuan }}）</text>
           <text class="form-hint">预览分成：¥{{ previewShareYuan }}</text>
         </view>
 
@@ -167,13 +181,21 @@ const pageSize = 50
 
 const hasMore = computed(() => items.value.length < total.value)
 
+const DEFAULT_SHARE_PERCENT = 50
+
 const showEdit = ref(false)
 const editing = ref<PatientPricingRow | null>(null)
+const originalShareMode = ref('' as '' | 'AMOUNT' | 'PERCENT')
 const form = reactive({
   adjustmentYuan: '0',
   shareMode: '' as '' | 'AMOUNT' | 'PERCENT',
   revenueShareYuan: '',
   revenueSharePercent: '',
+})
+
+const defaultShareYuan = computed(() => {
+  if (!editing.value) return 0
+  return Math.floor(editing.value.basePriceYuan * DEFAULT_SHARE_PERCENT / 100)
 })
 
 const previewDisplayYuan = computed(() => {
@@ -191,7 +213,23 @@ const previewShareYuan = computed(() => {
     const pct = Math.max(0, Math.min(Number(form.revenueSharePercent) || 0, 100))
     return Math.floor(display * pct / 100)
   }
-  return display
+  return defaultShareYuan.value
+})
+
+const previewSharePercent = computed(() => {
+  const display = previewDisplayYuan.value
+  if (display <= 0) return 0
+  if (form.shareMode === 'AMOUNT') {
+    const amount = Number(form.revenueShareYuan) || 0
+    return Math.round(Math.max(0, Math.min(amount, display)) / display * 100)
+  }
+  if (form.shareMode === 'PERCENT') {
+    return Math.max(0, Math.min(Number(form.revenueSharePercent) || 0, 100))
+  }
+  if (editing.value && editing.value.basePriceYuan > 0) {
+    return Math.round(defaultShareYuan.value / display * 100)
+  }
+  return DEFAULT_SHARE_PERCENT
 })
 
 const formatAdjustment = (v: number) => (v > 0 ? `+¥${v}` : v < 0 ? `-¥${Math.abs(v)}` : '¥0')
@@ -245,6 +283,7 @@ const loadMore = async () => {
 
 const openEdit = (row: PatientPricingRow) => {
   editing.value = row
+  originalShareMode.value = (row.shareMode as typeof form.shareMode) || ''
   form.adjustmentYuan = String(row.manualAdjustmentYuan)
   form.shareMode = (row.shareMode as typeof form.shareMode) || ''
   form.revenueShareYuan = row.shareMode === 'AMOUNT' ? String(row.revenueShareYuan) : ''
@@ -256,6 +295,7 @@ const openEdit = (row: PatientPricingRow) => {
 const closeEdit = () => {
   showEdit.value = false
   editing.value = null
+  originalShareMode.value = ''
 }
 
 const saveEdit = async () => {
@@ -559,6 +599,38 @@ onShow(() => reload(true))
   color: #3D5A4E;
   font-weight: 600;
   border-color: #3D5A4E;
+}
+
+.share-default-hint {
+  margin-bottom: 12rpx;
+}
+
+.preview-before {
+  display: block;
+  margin: -8rpx 0 16rpx;
+}
+
+.input-with-suffix {
+  display: flex;
+  align-items: center;
+  background: #F7F5F2;
+  border-radius: 16rpx;
+  border: 1rpx solid #E8E4DE;
+  overflow: hidden;
+}
+
+.suffix-input {
+  flex: 1;
+  border: none !important;
+  background: transparent !important;
+}
+
+.input-suffix {
+  flex-shrink: 0;
+  padding: 0 24rpx;
+  font-size: 28rpx;
+  color: #6B7280;
+  font-weight: 600;
 }
 
 .modal-btns {
