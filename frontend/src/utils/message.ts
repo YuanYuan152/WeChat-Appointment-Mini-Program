@@ -1,4 +1,5 @@
 import { getDevWorkbenchRole, isMockLoginEnabled } from '@/utils/auth'
+import { STAFF_OPS_WORKBENCH_ROLES, usesOpsWorkbench } from '@/constants/roles'
 
 export interface MessageItem {
   Id: number
@@ -48,10 +49,10 @@ export function isCaseRecordAmendmentPendingMessage(item: MessageItem): boolean 
 }
 
 export function canReviewAsOpsAdmin(activeRole: string): boolean {
-  if (activeRole === 'Admin' || activeRole === 'Ops') return true
+  if (usesOpsWorkbench(activeRole)) return true
   try {
     const roles = JSON.parse(uni.getStorageSync('user_roles') || '[]') as string[]
-    return roles.includes('Admin') || roles.includes('Ops')
+    return STAFF_OPS_WORKBENCH_ROLES.some(r => roles.includes(r))
   } catch {
     return false
   }
@@ -113,7 +114,7 @@ export function getLeaveRequestId(item: MessageItem): number | null {
 }
 
 export function shouldOpenLeaveApproval(activeRole: string, item: MessageItem): boolean {
-  return activeRole === 'Admin' && item.RelatedType === 'COUNSELOR_LEAVE' && !!getLeaveRequestId(item)
+  return canReviewAsOpsAdmin(activeRole) && item.RelatedType === 'COUNSELOR_LEAVE' && !!getLeaveRequestId(item)
 }
 
 export const MESSAGE_TYPE_LABELS: Record<string, string> = {
@@ -184,7 +185,7 @@ export const ADMIN_OPS_MESSAGE_CATEGORIES: MessageCategoryOption[] = [
 const ADMIN_OPS_FORBIDDEN_FILTER_VALUES = new Set(['appointment_new', 'appointment_cancel'])
 
 export function isAdminOpsMessageInbox(role: string): boolean {
-  return role === 'Admin' || role === 'Ops'
+  return usesOpsWorkbench(role)
 }
 
 export function getStoredUserRoles(): string[] {
@@ -199,10 +200,10 @@ export function getStoredUserRoles(): string[] {
 export function hasAdminOpsMessageInbox(activeRole: string, roles?: string[]): boolean {
   if (isAdminOpsMessageInbox(activeRole)) return true
   const all = roles?.length ? roles : getStoredUserRoles()
-  if (all.includes('Admin') || all.includes('Ops')) return true
+  if (STAFF_OPS_WORKBENCH_ROLES.some(r => all.includes(r))) return true
   if (isMockLoginEnabled()) {
     const devRole = getDevWorkbenchRole()
-    return devRole === 'Admin' || devRole === 'Ops'
+    return !!devRole && usesOpsWorkbench(devRole)
   }
   return false
 }
@@ -210,7 +211,7 @@ export function hasAdminOpsMessageInbox(activeRole: string, roles?: string[]): b
 export function resolveMessageInboxRole(activeRole: string, roles?: string[]): string {
   if (isMockLoginEnabled()) {
     const devRole = getDevWorkbenchRole()
-    if (devRole && isAdminOpsMessageInbox(devRole)) {
+    if (devRole && usesOpsWorkbench(devRole)) {
       const all = roles?.length ? roles : getStoredUserRoles()
       if (!all.length || all.includes(devRole)) return devRole
     }
@@ -219,6 +220,7 @@ export function resolveMessageInboxRole(activeRole: string, roles?: string[]): s
   const all = roles?.length ? roles : getStoredUserRoles()
   if (all.includes('Admin')) return 'Admin'
   if (all.includes('Ops')) return 'Ops'
+  if (all.includes('Assistant')) return 'Assistant'
   return activeRole
 }
 

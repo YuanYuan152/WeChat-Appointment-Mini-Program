@@ -11,12 +11,13 @@ from models import (
     AppConsultation,
     AppCounselorProfile,
     AppLeaveRequest,
+    AppMessage,
     AppOrder,
     AppRefundExemption,
     AppRoleBinding,
     AppSchedule,
 )
-from refund_exemption_service import latest_exemptions_by_consultation
+from message_filters import ADMIN_OPS_INBOX_RELATED_TYPES
 from schedule_meta import (
     center_display_name,
     display_room_id,
@@ -24,6 +25,8 @@ from schedule_meta import (
     parse_center_id,
     room_display_name,
 )
+from staff_roles import staff_workbench_account_ids
+from refund_exemption_service import latest_exemptions_by_consultation
 
 
 def _assistant_account_ids(db: Session) -> List[int]:
@@ -37,13 +40,7 @@ def _assistant_account_ids(db: Session) -> List[int]:
 
 
 def _admin_ops_account_ids(db: Session) -> List[int]:
-    rows = (
-        db.query(AppRoleBinding.AccountId)
-        .filter(AppRoleBinding.RoleType.in_(["Admin", "Ops"]))
-        .distinct()
-        .all()
-    )
-    return [r[0] for r in rows]
+    return staff_workbench_account_ids(db)
 
 
 def _staff_account_ids(db: Session) -> List[int]:
@@ -319,5 +316,79 @@ def notify_staff_counselor_leave(
         content=_message_payload(summary, detail),
         related_type="COUNSELOR_LEAVE",
         related_id=leave_request_id or schedule.Id,
-        account_ids=_staff_account_ids(db),
+        account_ids=staff_workbench_account_ids(db),
     )
+
+
+def notify_staff_workbench_inbox(
+    db: Session,
+    *,
+    type_: str,
+    title: str,
+    content: str,
+    related_type: str,
+    related_id: Optional[int],
+) -> None:
+    """向管理工作台全员（助理/主任/管理员）投递同一条收件箱消息。"""
+    _notify_staff(
+        db,
+        type_=type_,
+        title=title,
+        content=content,
+        related_type=related_type,
+        related_id=related_id,
+        account_ids=staff_workbench_account_ids(db),
+    )
+
+
+def sync_staff_workbench_inbox_messages(db: Session) -> int:
+    """将管理工作台收件箱消息对齐到全员账号（合并现有消息后复制缺失项）。"""
+    staff_ids = staff_workbench_account_ids(db)
+    if not staff_ids:
+        return 0
+
+    templates: dict[tuple, AppMessage] = {}
+    for acc_id in staff_ids:
+        rows = (
+            db.query(AppMessage)
+            .filter(
+                AppMessage.AccountId == acc_id,
+                AppMessage.RelatedType.in_(ADMIN_OPS_INBOX_RELATED_TYPES),
+            )
+            .all()
+        )
+        for msg in rows:
+            key = (msg.RelatedType, msg.RelatedId, msg.Title, msg.Type)
+            prev = templates.get(key)
+            if prev is None or (msg.CreatedAt or datetime.min) > (prev.CreatedAt or datetime.min):
+                templates[key] = msg
+
+    created = 0
+    for acc_id in staff_ids:
+        existing = {
+            (m.RelatedType, m.RelatedId, m.Title, m.Type)
+            for m in db.query(AppMessage)
+            .filter(
+                AppMessage.AccountId == acc_id,
+                AppMessage.RelatedType.in_(ADMIN_OPS_INBOX_RELATED_TYPES),
+            )
+            .all()
+        }
+        for key, tmpl in templates.items():
+            if key in existing:
+                continue
+            db.add(
+                AppMessage(
+                    AccountId=acc_id,
+                    Type=tmpl.Type,
+                    Title=tmpl.Title,
+                    Content=tmpl.Content,
+                    RelatedType=tmpl.RelatedType,
+                    RelatedId=tmpl.RelatedId,
+                    IsRead=tmpl.IsRead,
+                    ReadAt=tmpl.ReadAt,
+                    CreatedAt=tmpl.CreatedAt,
+                )
+            )
+            created += 1
+    return created

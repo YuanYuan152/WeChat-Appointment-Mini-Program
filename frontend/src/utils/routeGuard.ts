@@ -2,9 +2,9 @@ import { getToken } from './auth'
 
 const ROLE_ROUTE_MAP: Record<string, string[]> = {
   '/pages/counselor/': ['Counselor'],
-  '/pages/assistant/': ['Assistant'],
-  '/pages/ops/': ['Ops', 'Admin'],
-  '/pages/admin-webview/': ['Admin', 'Ops'],
+  '/pages/assistant/': ['Assistant', 'Ops', 'Admin'],
+  '/pages/ops/': ['Assistant', 'Ops', 'Admin'],
+  '/pages/admin-webview/': ['Assistant', 'Ops', 'Admin'],
 }
 
 function getRequiredRoles(url: string): string[] | null {

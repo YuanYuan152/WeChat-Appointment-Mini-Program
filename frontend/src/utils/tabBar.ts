@@ -1,21 +1,9 @@
-import { getDevWorkbenchRole, isMockLoginEnabled } from '@/utils/auth'
+import { resolveHighestRole } from '@/constants/roles'
 
-const WORKBENCH_ROLES = new Set(['Counselor', 'Assistant', 'Ops', 'Admin'])
-/** tabBar 第三项：来访者=预约记录，其他角色=工作台 */
-export const TAB_SLOT_INDEX = 2
+/** tabBar 第三项：来访者=预约记录，其他角色=工作台 */export const TAB_SLOT_INDEX = 2
 
-export function resolveTabSlotIsPatient(roles?: string[], activeRole?: string): boolean {
-  if (!roles?.length) return true
-
-  if (isMockLoginEnabled()) {
-    const devRole = getDevWorkbenchRole()
-    if (devRole) return devRole === 'Patient'
-  }
-
-  if (activeRole === 'Patient') return true
-  if (activeRole && WORKBENCH_ROLES.has(activeRole)) return false
-
-  return !roles.some((role) => WORKBENCH_ROLES.has(role))
+export function resolveTabSlotIsPatient(roles?: string[]): boolean {
+  return resolveHighestRole(roles) === 'Patient'
 }
 
 export function readStoredRoles(): string[] {
@@ -29,10 +17,9 @@ export function readStoredRoles(): string[] {
   }
 }
 
-export function updateTabBarForRole(roles?: string[], activeRole?: string) {
+export function updateTabBarForRole(roles?: string[]) {
   const roleList = roles ?? readStoredRoles()
-  const currentRole = activeRole ?? ((uni.getStorageSync('active_role') as string) || '')
-  const isPatient = resolveTabSlotIsPatient(roleList, currentRole || undefined)
+  const isPatient = resolveTabSlotIsPatient(roleList)
 
   uni.setTabBarItem({
     index: TAB_SLOT_INDEX,

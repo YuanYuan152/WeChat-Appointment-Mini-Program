@@ -35,7 +35,9 @@ class AppAccount(Base):
     # new_design 新增字段；本地旧库可能暂未执行 ensure_schema.py，默认查询时先不拉取这些列。
     PasswordHash = deferred(Column(String(255), nullable=True))
     PreferenceTagsCompletedAt = deferred(Column(DateTime, nullable=True))
-    IsActive = deferred(Column(Boolean, nullable=True))
+    PatientSource = deferred(Column(String(50), nullable=True))
+    AccessRevokedAt = deferred(Column(DateTime, nullable=True))
+    IsActive = deferred(Column(Boolean, nullable=False, default=True, server_default="1"))
     DeletedAt = deferred(Column(DateTime, nullable=True))
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
     UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
@@ -381,6 +383,7 @@ class AppCounselorProfile(Base):
     WorkYears = Column(Integer, nullable=False, default=0)
     InfoAuthenticityCommittedAt = deferred(Column(DateTime, nullable=True))
     InfoAuthenticitySignerName = deferred(Column(Unicode(100), nullable=True))
+    CounselorType = deferred(Column(String(50), nullable=True))
     IsActive = Column(Boolean, nullable=False, default=True)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
     UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
@@ -551,3 +554,25 @@ class AppUserPreferenceTag(Base):
     Category = Column(String(20), nullable=False)  # personal | interest
     Tag = Column(Unicode(50), nullable=False)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
+
+
+class AppCounselorPatientPricing(Base):
+    """咨询师对特定来访的调价与分成配置。"""
+    __tablename__ = "AppCounselorPatientPricing"
+    __table_args__ = (
+        UniqueConstraint(
+            "CounselorAccountId",
+            "PatientAccountId",
+            name="UQ_AppCounselorPatientPricing_Counselor_Patient",
+        ),
+    )
+
+    Id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    CounselorAccountId = Column(Integer, nullable=False, index=True)
+    PatientAccountId = Column(Integer, nullable=False, index=True)
+    AdjustmentCents = Column(Integer, nullable=False, default=0)
+    ShareMode = Column(String(20), nullable=True)  # AMOUNT | PERCENT
+    RevenueShareCents = Column(Integer, nullable=True)
+    RevenueSharePercent = Column(Integer, nullable=True)
+    CreatedAt = Column(DateTime, default=func.now(), nullable=False)
+    UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())

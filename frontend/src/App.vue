@@ -18,7 +18,7 @@ onLaunch(() => {
 // 应用显示时执行
 onShow(() => {
   console.log('App Show')
-  updateTabBarForRole(readStoredRoles(), uni.getStorageSync('active_role') || undefined)
+  updateTabBarForRole(readStoredRoles())
 })
 
 // 应用隐藏时执行

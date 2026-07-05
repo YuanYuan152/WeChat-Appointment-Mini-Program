@@ -1,90 +1,1393 @@
 <template>
+
   <view class="page-admin-roles">
-    <view v-for="u in users" :key="u.id" class="user-card">
-      <view class="head">
-        <text class="name">#{{ u.id }} {{ u.nickname || u.mobile || '未命名用户' }}</text>
-        <text class="active">{{ u.activeRole || '-' }}</text>
+
+    <view class="header">
+
+      <text class="title">角色&权限绑定</text>
+
+      <text class="subtitle">新用户注册后默认为来访；绑定「来访」时可选择来源（含公益来访）；绑定咨询师等角色后用户下次登录将进入对应界面</text>
+
+    </view>
+
+
+
+    <view class="toolbar">
+
+      <view class="search-bar">
+
+        <input
+          v-model="keyword"
+          class="search-input"
+          type="text"
+          placeholder="搜索用户 ID、姓名、手机号或咨询师名"
+          confirm-type="search"
+          @confirm="reloadUsers"
+        />
       </view>
-      <view class="roles">
-        <text v-for="r in u.roles" :key="r" class="role" @click="removeRole(u.id, r)">{{ r }} ×</text>
-      </view>
-      <view class="add-row">
-        <picker :range="roles" @change="e => selectRole(u.id, e.detail.value)">
-          <view class="picker">选择角色</view>
-        </picker>
-        <button class="bind-btn" @click="bindRole(u.id)">绑定</button>
+      <view class="search-btn" @tap="reloadUsers">搜索</view>
+      <view class="add-btn" @tap="openAddModal">+ 添加用户</view>
+    </view>
+
+    <view v-if="loading" class="empty">加载中...</view>
+    <view v-else-if="users.length === 0" class="empty">
+      {{ keyword.trim() ? '未找到匹配用户' : '暂无用户数据' }}
+    </view>
+    <view v-else class="list">
+      <view v-for="u in users" :key="u.id" class="card" :class="{ legacy: u.isLegacyOnly }">
+        <view class="card-head">
+          <view class="head-main">
+            <text class="name">{{ u.displayName || u.nickname || u.mobile || '未命名用户' }}</text>
+            <text class="uid">
+              {{ u.isLegacyOnly ? `旧系统 ID ${u.legacyDoctorId}` : `ID ${u.id}` }}{{ u.mobile ? ' · ' + u.mobile : '' }}
+            </text>
+            <text v-if="u.patientSourceLabel" class="meta-line">来访来源：{{ u.patientSourceLabel }}</text>
+            <text v-if="u.counselorTypeLabel" class="meta-line">咨询师类型：{{ u.counselorTypeLabel }}</text>
+            <text v-if="u.createdAt" class="meta-line">注册时间：{{ formatCreatedAt(u.createdAt) }}</text>
+          </view>
+          <text v-if="u.isLegacyOnly" class="legacy-tag">旧系统 · 待绑定</text>
+          <text v-else-if="u.activeRole || u.roles?.length" class="active-tag">当前：{{ currentRoleDisplayLabel(u) }}</text>
+        </view>
+
+        <view v-if="u.isLegacyOnly" class="legacy-actions">
+          <text class="legacy-tip">该咨询师仅在旧系统中，请通过手机号添加为系统用户后绑定角色。</text>
+          <view class="legacy-bind-btn" @tap="openAddFromLegacy(u)">添加并绑定</view>
+        </view>
+
+        <template v-else>
+        <view
+          v-if="u.roles?.length && u.id !== currentUserId"
+          class="delete-user-btn"
+          @tap="deleteUser(u)"
+        >
+          删除用户
+        </view>
+
+        <view class="section-label">已绑定角色</view>
+        <view v-if="displayRoles(u).length" class="roles">
+          <view
+            v-for="r in displayRoles(u)"
+            :key="r"
+            class="role-chip"
+            :class="{ 'role-chip-base': r === 'Patient' }"
+            @tap="r !== 'Patient' ? removeRole(u.id, r) : undefined"
+          >
+            <text class="role-text">{{ roleLabel(r) }}{{ r === 'Patient' ? '（基础）' : '' }}</text>
+            <text v-if="r !== 'Patient'" class="role-remove">×</text>
+          </view>
+        </view>
+        <text v-else class="no-role">暂未绑定角色</text>
+
+        <view class="bind-row">
+          <picker
+            :range="roleLabels"
+            :value="pickerIndex(u.id)"
+            @change="e => selectRole(u.id, Number(e.detail.value))"
+          >
+            <view class="picker-row">
+              <text class="picker-text">{{ selectedLabel(u.id) }}</text>
+              <text class="picker-arrow">▾</text>
+            </view>
+          </picker>
+          <view class="bind-btn" @tap="bindRole(u.id)">绑定</view>
+        </view>
+        </template>
       </view>
     </view>
+
+    <view v-if="!loading && hasMore" class="load-more" @tap="loadMore">加载更多（{{ users.length }}/{{ total }}）</view>
+
+    <view class="footer-tip">
+      列表包含全部系统账号及尚未迁移的旧系统咨询师。搜索支持 ID、手机号、昵称与咨询师档案姓名。
+    </view>
+
+
+
+    <view v-if="showAddModal" class="modal-overlay" @touchmove.stop.prevent>
+
+      <view class="modal-card" @tap.stop @touchmove.stop.prevent>
+
+        <text class="modal-title">添加用户</text>
+
+        <text class="modal-sub">通过手机号创建或查找用户，并绑定角色与权限</text>
+
+
+
+        <view class="form-group form-group--input" @tap.stop>
+          <text class="form-label">手机号 *</text>
+
+          <input
+            v-model="addForm.mobile"
+            class="form-input"
+            placeholder-class="form-input-ph"
+            type="number"
+            maxlength="11"
+            placeholder="11 位手机号"
+          />
+
+        </view>
+
+
+
+        <view class="form-group">
+
+          <text class="form-label">角色 *</text>
+
+          <picker
+
+            :range="roleLabels"
+
+            :value="addForm.roleIndex"
+
+            @change="e => addForm.roleIndex = Number(e.detail.value)"
+
+          >
+
+            <view class="picker-row modal-picker">
+
+              <text class="picker-text">{{ roleLabels[addForm.roleIndex] || '选择角色' }}</text>
+
+              <text class="picker-arrow">▾</text>
+
+            </view>
+
+          </picker>
+
+        </view>
+
+
+
+        <view v-if="addSelectedRole === 'Patient'" class="form-group">
+          <text class="form-label">来访来源 *</text>
+          <picker
+            :range="patientSourceLabels"
+            :value="addForm.patientSourceIndex"
+            @change="e => addForm.patientSourceIndex = Number(e.detail.value)"
+          >
+            <view class="picker-row modal-picker">
+              <text class="picker-text">{{ patientSourceLabels[addForm.patientSourceIndex] || '请选择来源' }}</text>
+              <text class="picker-arrow">▾</text>
+            </view>
+          </picker>
+        </view>
+
+
+
+        <view v-if="addSelectedRole === 'Counselor'" class="form-group">
+          <text class="form-label">咨询师类型 *</text>
+          <picker
+            :range="counselorTypeLabels"
+            :value="addForm.counselorTypeIndex"
+            @change="e => addForm.counselorTypeIndex = Number(e.detail.value)"
+          >
+            <view class="picker-row modal-picker">
+              <text class="picker-text">{{ counselorTypeLabels[addForm.counselorTypeIndex] || '请选择类型' }}</text>
+              <text class="picker-arrow">▾</text>
+            </view>
+          </picker>
+        </view>
+
+
+
+        <view class="form-group form-group--input" @tap.stop>
+          <text class="form-label">用户名（选填）</text>
+
+          <input
+            v-model="addForm.nickname"
+            class="form-input"
+            placeholder-class="form-input-ph"
+            type="text"
+            maxlength="20"
+            placeholder="请输入用户名，不填则自动生成"
+          />
+
+        </view>
+
+
+
+        <view class="modal-btns">
+
+          <button class="modal-btn cancel" @tap.stop="showAddModal = false">取消</button>
+
+          <button class="modal-btn confirm" :loading="adding" @tap.stop="submitAddUser">确认添加</button>
+
+        </view>
+
+      </view>
+
+    </view>
+
   </view>
+
 </template>
 
+
+
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+
+import { computed, onMounted, reactive, ref } from 'vue'
+
+import { onShow } from '@dcloudio/uni-app'
+
 import { httpV2 } from '@/utils/http'
+
 import { API_ENDPOINTS } from '@/config/api'
 
-const roles = ['Patient', 'Counselor', 'Assistant', 'Ops', 'Admin']
-const users = ref<any[]>([])
+import { ROLE_OPTIONS, roleLabel, resolveHighestRole } from '@/constants/roles'
+import {
+  COUNSELOR_TYPE_OPTIONS,
+  PATIENT_SOURCE_OPTIONS,
+  counselorTypeLabel,
+  isCharityPatientSource,
+} from '@/constants/userRoleMeta'
+import { useUserStore } from '@/store/user'
+
+interface AdminUser {
+  id: number
+  nickname?: string
+  mobile?: string
+  displayName?: string
+  counselorName?: string
+  activeRole?: string
+  activeRoleLabel?: string
+  roles?: string[]
+  patientSource?: string
+  patientSourceLabel?: string
+  counselorType?: string
+  counselorTypeLabel?: string
+  createdAt?: string
+  isSelfRegistered?: boolean
+  isLegacyOnly?: boolean
+  legacyDoctorId?: number
+}
+
+interface AdminUsersResponse {
+  items: AdminUser[]
+  total: number
+  page: number
+  pageSize: number
+}
+
+const roleLabels = ROLE_OPTIONS.map(r => r.label)
+const roleValues = ROLE_OPTIONS.map(r => r.value)
+const patientSourceLabels = PATIENT_SOURCE_OPTIONS.map(o => o.label)
+const counselorTypeLabels = COUNSELOR_TYPE_OPTIONS.map(o => o.label)
+
+const userStore = useUserStore()
+const currentUserId = computed(() => userStore.userId)
+const addSelectedRole = computed(() => roleValues[addForm.roleIndex] || roleValues[0])
+
+const users = ref<AdminUser[]>([])
+const loading = ref(false)
+const loadingMore = ref(false)
+const keyword = ref('')
+const total = ref(0)
+const page = ref(1)
+const pageSize = 100
+
+const hasMore = computed(() => users.value.length < total.value)
+
 const selected = reactive<Record<number, string>>({})
 
-const load = async () => {
-  const res = await httpV2.get<any[]>(API_ENDPOINTS.admin.users)
-  if (res.code === 0 && res.data) users.value = res.data
+const showAddModal = ref(false)
+
+const adding = ref(false)
+
+const addForm = reactive({
+  mobile: '',
+  roleIndex: 0,
+  nickname: '',
+  patientSourceIndex: 0,
+  counselorTypeIndex: 0,
+})
+
+
+
+const reloadUsers = () => {
+  page.value = 1
+  load(true)
 }
 
-const selectRole = (uid: number, idx: number) => {
-  selected[uid] = roles[Number(idx)]
+const loadMore = () => {
+  if (!hasMore.value || loadingMore.value) return
+  page.value += 1
+  load(false)
 }
 
-const bindRole = async (uid: number) => {
-  const role = selected[uid]
+const load = async (reset = true) => {
+  if (reset) {
+    page.value = 1
+    loading.value = true
+  } else {
+    loadingMore.value = true
+  }
+
+  if (!userStore.userInfo) {
+    try {
+      await userStore.fetchUserInfo()
+    } catch {
+      // ignore
+    }
+  }
+
+  try {
+    const params: Record<string, string | number> = {
+      page: page.value,
+      page_size: pageSize,
+    }
+    const q = keyword.value.trim()
+    if (q) params.keyword = q
+
+    const res = await httpV2.get<AdminUsersResponse>(
+      API_ENDPOINTS.admin.users,
+      params,
+      { showLoading: false },
+    )
+
+    if (res.code === 0 && res.data) {
+      total.value = res.data.total || 0
+      const next = res.data.items || []
+      users.value = reset ? next : [...users.value, ...next]
+    } else if (reset) {
+      users.value = []
+      total.value = 0
+      uni.showToast({ title: res.msg || '加载失败', icon: 'none' })
+    }
+  } catch {
+    if (reset) {
+      users.value = []
+      total.value = 0
+    }
+    uni.showToast({ title: '加载失败', icon: 'none' })
+  } finally {
+    loading.value = false
+    loadingMore.value = false
+  }
+}
+
+const pickerIndex = (uid: number) => {
+
+  const val = selected[uid]
+
+  if (!val) return 0
+
+  const idx = roleValues.indexOf(val as typeof roleValues[number])
+
+  return idx >= 0 ? idx : 0
+
+}
+
+
+
+const selectedLabel = (uid: number) => {
+
+  const val = selected[uid]
+
+  return val ? roleLabel(val) : '选择角色'
+
+}
+
+
+
+const formatDateTime = (value: string) => {
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return value
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+const formatCreatedAt = (value?: string) => {
+  if (!value) return ''
+  return formatDateTime(value)
+}
+
+/** 管理列表右上角「当前」：取最高已绑定角色；咨询师展示具体类型（公益/专业） */
+const currentRoleDisplayLabel = (user: AdminUser) => {
+  if (user.activeRoleLabel) return user.activeRoleLabel
+  const highest = resolveHighestRole(user.roles)
+  if (highest === 'Counselor') {
+    return user.counselorTypeLabel || counselorTypeLabel(user.counselorType) || roleLabel('Counselor')
+  }
+  if (highest === 'Patient' && isCharityPatientSource(user.patientSource)) {
+    return user.patientSourceLabel || '公益来访'
+  }
+  return roleLabel(user.activeRole || highest)
+}
+
+const ROLE_DISPLAY_ORDER = ['Patient', 'Counselor', 'Assistant', 'Ops', 'Admin']
+
+const displayRoles = (user: AdminUser) => {
+  const roles = user.roles || []
+  return [...roles].sort(
+    (a, b) => ROLE_DISPLAY_ORDER.indexOf(a) - ROLE_DISPLAY_ORDER.indexOf(b),
+  )
+}
+
+const pickPatientSource = (): Promise<string | null> =>
+  new Promise((resolve) => {
+    uni.showActionSheet({
+      itemList: patientSourceLabels,
+      success: (res) => {
+        resolve(PATIENT_SOURCE_OPTIONS[res.tapIndex]?.value ?? null)
+      },
+      fail: () => resolve(null),
+    })
+  })
+
+const pickCounselorType = (): Promise<string | null> =>
+  new Promise((resolve) => {
+    uni.showActionSheet({
+      itemList: counselorTypeLabels,
+      success: (res) => {
+        resolve(COUNSELOR_TYPE_OPTIONS[res.tapIndex]?.value ?? null)
+      },
+      fail: () => resolve(null),
+    })
+  })
+
+const openAddFromLegacy = (user: AdminUser) => {
+  addForm.mobile = (user.mobile || '').replace(/\D/g, '')
+  addForm.nickname = user.displayName || user.nickname || ''
+  addForm.roleIndex = Math.max(0, roleValues.indexOf('Counselor'))
+  addForm.patientSourceIndex = 0
+  addForm.counselorTypeIndex = 0
+  showAddModal.value = true
+}
+
+const openAddModal = () => {
+  addForm.mobile = ''
+  addForm.roleIndex = 0
+  addForm.nickname = ''
+  addForm.patientSourceIndex = 0
+  addForm.counselorTypeIndex = 0
+  showAddModal.value = true
+}
+
+
+
+const submitAddUser = async () => {
+
+  const mobile = addForm.mobile.trim().replace(/\D/g, '')
+
+  if (!/^1\d{10}$/.test(mobile)) {
+
+    uni.showToast({ title: '请输入有效的11位手机号', icon: 'none' })
+
+    return
+
+  }
+
+  const role = roleValues[addForm.roleIndex]
   if (!role) {
     uni.showToast({ title: '请选择角色', icon: 'none' })
     return
   }
-  const res = await httpV2.post(API_ENDPOINTS.admin.bindRole(uid), { role })
-  if (res.code === 0) {
-    await load()
-    uni.showToast({ title: '已绑定', icon: 'success' })
+
+  const nickname = addForm.nickname.trim()
+
+  if (role === 'Patient') {
+    const patientSource = PATIENT_SOURCE_OPTIONS[addForm.patientSourceIndex]?.value
+    if (!patientSource) {
+      uni.showToast({ title: '请选择来访来源', icon: 'none' })
+      return
+    }
+  } else if (role === 'Counselor') {
+    const counselorType = COUNSELOR_TYPE_OPTIONS[addForm.counselorTypeIndex]?.value
+    if (!counselorType) {
+      uni.showToast({ title: '请选择咨询师类型', icon: 'none' })
+      return
+    }
   }
+
+  adding.value = true
+  try {
+    const payload: {
+      mobile: string
+      role: string
+      nickname?: string
+      patient_source?: string
+      counselor_type?: string
+    } = { mobile, role }
+
+    if (nickname) payload.nickname = nickname
+
+    if (role === 'Patient') {
+      payload.patient_source = PATIENT_SOURCE_OPTIONS[addForm.patientSourceIndex]!.value
+    } else if (role === 'Counselor') {
+      payload.counselor_type = COUNSELOR_TYPE_OPTIONS[addForm.counselorTypeIndex]!.value
+    }
+
+
+
+    const res = await httpV2.post<AdminUser & { message?: string; created?: boolean }>(
+
+      API_ENDPOINTS.admin.createUserByMobile,
+
+      payload,
+
+    )
+
+    if (res.code === 0) {
+
+      showAddModal.value = false
+
+      await load(true)
+
+      const msg = res.data?.message || (res.data?.created ? '用户已添加' : '已绑定角色')
+
+      uni.showToast({ title: msg, icon: 'success' })
+
+      if (res.data?.mobile) {
+
+        keyword.value = res.data.mobile
+
+      }
+
+    } else {
+
+      uni.showToast({ title: res.msg || '添加失败', icon: 'none' })
+
+    }
+
+  } catch {
+
+    uni.showToast({ title: '添加失败', icon: 'none' })
+
+  } finally {
+
+    adding.value = false
+
+  }
+
 }
 
+
+
+const selectRole = (uid: number, idx: number) => {
+
+  selected[uid] = roleValues[idx] || roleValues[0]
+
+}
+
+
+
+const bindRole = async (uid: number) => {
+
+  const role = selected[uid]
+
+  if (!role) {
+
+    uni.showToast({ title: '请选择角色', icon: 'none' })
+
+    return
+
+  }
+
+  const payload: { role: string; counselor_type?: string; patient_source?: string } = { role }
+
+  if (role === 'Patient') {
+    const patientSource = await pickPatientSource()
+    if (!patientSource) return
+    payload.patient_source = patientSource
+  } else if (role === 'Counselor') {
+    const counselorType = await pickCounselorType()
+    if (!counselorType) return
+    payload.counselor_type = counselorType
+  }
+
+  const res = await httpV2.post(API_ENDPOINTS.admin.bindRole(uid), payload)
+
+  if (res.code === 0) {
+
+    delete selected[uid]
+
+    await load(true)
+
+    uni.showToast({ title: (res.data as { message?: string })?.message || res.msg || '已绑定', icon: 'success' })
+
+  } else {
+
+    uni.showToast({ title: res.msg || res.data?.message || '绑定失败', icon: 'none' })
+
+  }
+
+}
+
+
+
 const removeRole = (uid: number, role: string) => {
+  if (role === 'Patient') {
+    uni.showToast({ title: '来访为默认基础角色，不可解绑', icon: 'none' })
+    return
+  }
   uni.showModal({
     title: '确认解绑',
-    content: `是否解绑 ${role}？`,
+    content: `是否解绑「${roleLabel(role)}」？`,
     success: async (res) => {
       if (!res.confirm) return
-      await httpV2.delete(`${API_ENDPOINTS.admin.bindRole(uid)}/${role}`)
-      await load()
-    }
+      const del = await httpV2.delete(`${API_ENDPOINTS.admin.bindRole(uid)}/${role}`)
+      if (del.code === 0) {
+        await load(true)
+        uni.showToast({ title: '已解绑', icon: 'success' })
+      } else {
+        uni.showToast({ title: del.msg || '解绑失败', icon: 'none' })
+      }
+    },
   })
 }
 
-onMounted(load)
+const deleteUser = (user: AdminUser) => {
+  const name = user.nickname || user.mobile || `用户 ${user.id}`
+  uni.showModal({
+    title: '确认删除用户',
+    content: `确定永久删除「${name}」吗？\n\n该操作不可恢复，账号及角色绑定将从系统中彻底移除。若该用户存在咨询记录或已支付订单，将无法删除。`,
+    confirmText: '删除',
+    confirmColor: '#B91C1C',
+    success: async (res) => {
+      if (!res.confirm) return
+      const del = await httpV2.delete(API_ENDPOINTS.admin.deleteUser(user.id))
+      if (del.code === 0) {
+        delete selected[user.id]
+        await load(true)
+        uni.showToast({ title: del.data?.message || '已删除用户', icon: 'success' })
+      } else {
+        uni.showToast({ title: del.msg || '删除失败', icon: 'none' })
+      }
+    },
+  })
+}
+
+onMounted(() => load(true))
+
+onShow(() => load(true))
+
 </script>
 
+
+
 <style scoped>
-.page-admin-roles { min-height: 100vh; background: #F4F6F8; padding: 28rpx; }
-.user-card {
-  background: #fff; border-radius: 24rpx; padding: 28rpx; margin-bottom: 18rpx;
-  box-shadow: 0 4rpx 16rpx rgba(15, 23, 42, 0.06);
+
+.page-admin-roles {
+
+  min-height: 100vh;
+
+  background: #F7F5F2;
+
+  padding: 32rpx;
+
+  padding-bottom: 48rpx;
+
+  box-sizing: border-box;
+
 }
-.head { display: flex; justify-content: space-between; gap: 20rpx; }
-.name { font-size: 30rpx; font-weight: 800; color: #1F2937; }
-.active { font-size: 24rpx; color: #7C3AED; }
-.roles { display: flex; flex-wrap: wrap; gap: 12rpx; margin-top: 20rpx; }
-.role {
-  padding: 8rpx 18rpx; border-radius: 100rpx; background: #EEF2FF;
-  color: #4F46E5; font-size: 24rpx;
+
+
+
+.header {
+
+  background: linear-gradient(135deg, #3D5A4E, #2F4A40);
+
+  border-radius: 24rpx;
+
+  padding: 40rpx 32rpx;
+
+  margin-bottom: 24rpx;
+
+  box-shadow: 0 8rpx 32rpx rgba(61, 90, 78, 0.15);
+
 }
-.add-row { display: flex; gap: 16rpx; margin-top: 22rpx; }
-.picker {
-  flex: 1; background: #F9FAFB; border-radius: 16rpx; padding: 18rpx 24rpx;
-  font-size: 27rpx; color: #4B5563;
+
+
+
+.title {
+
+  display: block;
+
+  font-size: 36rpx;
+
+  font-weight: 600;
+
+  color: #fff;
+
+  letter-spacing: 1rpx;
+
 }
+
+
+
+.subtitle {
+
+  display: block;
+
+  margin-top: 10rpx;
+
+  font-size: 24rpx;
+
+  color: rgba(255, 255, 255, 0.82);
+
+  line-height: 1.6;
+
+}
+
+
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+  margin-bottom: 24rpx;
+  align-items: center;
+}
+
+.search-bar {
+  flex: 1;
+  min-width: 200rpx;
+}
+
+.search-btn {
+  flex-shrink: 0;
+  padding: 0 28rpx;
+  line-height: 88rpx;
+  background: #E8E4DE;
+  color: #3D5A4E;
+  border-radius: 16rpx;
+  font-size: 28rpx;
+  font-weight: 600;
+}
+
+.load-more {
+  text-align: center;
+  padding: 28rpx;
+  font-size: 28rpx;
+  color: #3D5A4E;
+  font-weight: 600;
+}
+
+.card.legacy {
+  border: 1rpx dashed #D4CFC6;
+  background: #FFFCF7;
+}
+
+.legacy-tag {
+  font-size: 22rpx;
+  color: #B45309;
+  background: #FEF3C7;
+  padding: 6rpx 16rpx;
+  border-radius: 100rpx;
+}
+
+.legacy-actions {
+  margin-top: 16rpx;
+}
+
+.legacy-tip {
+  display: block;
+  font-size: 24rpx;
+  color: #9CA3AF;
+  line-height: 1.5;
+  margin-bottom: 16rpx;
+}
+
+.legacy-bind-btn {
+  display: inline-block;
+  font-size: 26rpx;
+  color: #fff;
+  background: #3D5A4E;
+  padding: 16rpx 32rpx;
+  border-radius: 100rpx;
+  font-weight: 600;
+}
+
+.list-tabs {
+  display: flex;
+  gap: 16rpx;
+  margin-bottom: 24rpx;
+}
+
+.list-tab {
+  flex: 1;
+  text-align: center;
+  padding: 18rpx 0;
+  border-radius: 16rpx;
+  font-size: 28rpx;
+  color: #6B7280;
+  background: #fff;
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.03);
+}
+
+.list-tab.active {
+  color: #fff;
+  background: #3D5A4E;
+  font-weight: 600;
+}
+
+.card.revoked {
+  border: 1rpx solid #F3DADA;
+  background: #FFFBFB;
+}
+
+.revoked-tag {
+  flex-shrink: 0;
+  font-size: 22rpx;
+  font-weight: 600;
+  color: #B91C1C;
+  background: #FEE2E2;
+  padding: 8rpx 18rpx;
+  border-radius: 100rpx;
+}
+
+.revoked-tip {
+  display: block;
+  margin-top: 20rpx;
+  font-size: 24rpx;
+  color: #9CA3AF;
+  line-height: 1.6;
+}
+
+
+
+.search-bar {
+
+  margin-bottom: 16rpx;
+
+}
+
+
+
+.search-input {
+  width: 100%;
+  box-sizing: border-box;
+  display: block;
+  height: 88rpx;
+  min-height: 88rpx;
+  line-height: 88rpx;
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 0 24rpx;
+  font-size: 28rpx;
+  color: #2C2C2C;
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.03);
+}
+
+
+
+.add-btn {
+
+  background: #3D5A4E;
+
+  color: #fff;
+
+  border-radius: 16rpx;
+
+  padding: 20rpx 0;
+
+  text-align: center;
+
+  font-size: 28rpx;
+
+  font-weight: 600;
+
+  box-shadow: 0 4rpx 16rpx rgba(61, 90, 78, 0.2);
+
+}
+
+
+
+.empty {
+
+  text-align: center;
+
+  padding: 80rpx 0;
+
+  color: #9CA3AF;
+
+  font-size: 28rpx;
+
+}
+
+
+
+.card {
+
+  background: #fff;
+
+  border-radius: 20rpx;
+
+  padding: 28rpx;
+
+  margin-bottom: 20rpx;
+
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.03);
+
+}
+
+
+
+.card-head {
+
+  display: flex;
+
+  justify-content: space-between;
+
+  align-items: flex-start;
+
+  gap: 16rpx;
+
+}
+
+
+
+.head-main {
+
+  flex: 1;
+
+  min-width: 0;
+
+}
+
+
+
+.name {
+
+  display: block;
+
+  font-size: 30rpx;
+
+  font-weight: 600;
+
+  color: #2C2C2C;
+
+}
+
+
+
+.uid {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 24rpx;
+  color: #9CA3AF;
+}
+
+.meta-line {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 24rpx;
+  color: #6B7280;
+}
+
+
+
+.active-tag {
+  flex-shrink: 0;
+  font-size: 22rpx;
+  font-weight: 600;
+  color: #3D5A4E;
+  background: #E8E4DE;
+  padding: 8rpx 18rpx;
+  border-radius: 100rpx;
+}
+
+.delete-user-btn {
+  margin-top: 16rpx;
+  align-self: flex-start;
+  font-size: 24rpx;
+  color: #B91C1C;
+  padding: 8rpx 0;
+}
+
+
+
+.section-label {
+
+  margin-top: 24rpx;
+
+  margin-bottom: 12rpx;
+
+  font-size: 24rpx;
+
+  color: #8A8A8A;
+
+}
+
+
+
+.roles {
+
+  display: flex;
+
+  flex-wrap: wrap;
+
+  gap: 12rpx;
+
+}
+
+
+
+.role-chip {
+
+  display: inline-flex;
+
+  align-items: center;
+
+  gap: 8rpx;
+
+  padding: 10rpx 18rpx;
+
+  border-radius: 100rpx;
+
+  background: #E8E4DE;
+
+  border: 1rpx solid #D4CFC6;
+
+}
+
+.role-chip-base {
+  background: #F0EDE8;
+  border-color: #E8E4DE;
+}
+
+
+
+.role-text {
+
+  font-size: 24rpx;
+
+  color: #3D5A4E;
+
+  font-weight: 600;
+
+}
+
+.role-chip-base .role-text {
+  color: #6B9080;
+  font-weight: 500;
+}
+
+
+
+.role-remove {
+
+  font-size: 28rpx;
+
+  color: #6B9080;
+
+  line-height: 1;
+
+}
+
+
+
+.no-role {
+
+  display: block;
+
+  font-size: 26rpx;
+
+  color: #9CA3AF;
+
+}
+
+
+
+.bind-row {
+
+  display: flex;
+
+  gap: 16rpx;
+
+  margin-top: 24rpx;
+
+  align-items: stretch;
+
+}
+
+
+
+.picker-row {
+
+  flex: 1;
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: space-between;
+
+  background: #F7F5F2;
+
+  border-radius: 16rpx;
+
+  padding: 20rpx 24rpx;
+
+  border: 1rpx solid #E8E4DE;
+
+}
+
+
+
+.picker-text {
+
+  font-size: 28rpx;
+
+  color: #374151;
+
+}
+
+
+
+.picker-arrow {
+
+  font-size: 24rpx;
+
+  color: #9CA3AF;
+
+}
+
+
+
 .bind-btn {
-  width: 140rpx; height: 68rpx; line-height: 68rpx; margin: 0; border: none;
-  border-radius: 100rpx; background: #7C3AED; color: #fff; font-size: 26rpx;
+
+  flex-shrink: 0;
+
+  background: #3D5A4E;
+
+  color: #fff;
+
+  border-radius: 16rpx;
+
+  padding: 0 32rpx;
+
+  line-height: 80rpx;
+
+  font-size: 28rpx;
+
+  font-weight: 600;
+
 }
+
+
+
+.bind-row picker {
+
+  flex: 1;
+
+}
+
+
+
+.footer-tip {
+
+  margin-top: 12rpx;
+
+  padding: 24rpx;
+
+  border-radius: 16rpx;
+
+  background: #E8E4DE;
+
+  color: #3D5A4E;
+
+  font-size: 22rpx;
+
+  line-height: 1.6;
+
+  text-align: center;
+
+}
+
+
+
+.modal-overlay {
+
+  position: fixed;
+
+  inset: 0;
+
+  background: rgba(0, 0, 0, 0.45);
+
+  z-index: 1000;
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  padding: 32rpx;
+
+  box-sizing: border-box;
+
+}
+
+
+
+.modal-card {
+
+  width: 100%;
+
+  max-width: 640rpx;
+
+  background: #fff;
+
+  border-radius: 24rpx;
+
+  padding: 40rpx 32rpx;
+
+  box-sizing: border-box;
+
+}
+
+
+
+.modal-title {
+
+  display: block;
+
+  font-size: 34rpx;
+
+  font-weight: 700;
+
+  color: #2C2C2C;
+
+}
+
+
+
+.modal-sub {
+
+  display: block;
+
+  margin-top: 8rpx;
+
+  margin-bottom: 32rpx;
+
+  font-size: 24rpx;
+
+  color: #9CA3AF;
+
+  line-height: 1.5;
+
+}
+
+
+
+.form-group {
+  margin-bottom: 24rpx;
+}
+
+.form-group--input {
+  position: relative;
+  z-index: 2;
+}
+
+
+
+.form-label {
+
+  display: block;
+
+  margin-bottom: 12rpx;
+
+  font-size: 26rpx;
+
+  color: #6B7280;
+
+  font-weight: 600;
+
+}
+
+
+
+.form-input {
+  width: 100%;
+  box-sizing: border-box;
+  display: block;
+  height: 88rpx;
+  min-height: 88rpx;
+  line-height: 88rpx;
+  background: #F7F5F2;
+  border-radius: 16rpx;
+  padding: 0 24rpx;
+  font-size: 28rpx;
+  color: #2C2C2C;
+  border: 1rpx solid #E8E4DE;
+}
+
+.form-input-ph {
+  color: #9CA3AF;
+  font-size: 28rpx;
+  line-height: 88rpx;
+}
+
+
+
+.modal-picker {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 88rpx;
+  height: 88rpx;
+}
+
+
+
+.modal-btns {
+
+  display: flex;
+
+  gap: 20rpx;
+
+  margin-top: 36rpx;
+
+}
+
+
+
+.modal-btn {
+
+  flex: 1;
+
+  height: 88rpx;
+
+  line-height: 88rpx;
+
+  border-radius: 100rpx;
+
+  font-size: 28rpx;
+
+  font-weight: 600;
+
+  margin: 0;
+
+}
+
+
+
+.modal-btn::after {
+
+  border: none;
+
+}
+
+
+
+.modal-btn.cancel {
+
+  background: #F3F4F6;
+
+  color: #6B7280;
+
+}
+
+
+
+.modal-btn.confirm {
+
+  background: #3D5A4E;
+
+  color: #fff;
+
+}
+
 </style>
+
+

@@ -135,7 +135,23 @@
         {
             "path": "pages/test/results",
             "style": {
-                "navigationBarTitleText": "我的量表结果",
+                "navigationBarTitleText": "我的测评报告",
+                "navigationBarBackgroundColor": "#ffffff",
+                "navigationBarTextStyle": "black"
+            }
+        },
+        {
+            "path": "pages/test/result-detail",
+            "style": {
+                "navigationBarTitleText": "测评报告",
+                "navigationBarBackgroundColor": "#ffffff",
+                "navigationBarTextStyle": "black"
+            }
+        },
+        {
+            "path": "pages/test/webview",
+            "style": {
+                "navigationBarTitleText": "心理测评",
                 "navigationBarBackgroundColor": "#ffffff",
                 "navigationBarTextStyle": "black"
             }
@@ -362,7 +378,7 @@
                 {
                     "path": "admin-roles/index",
                     "style": {
-                        "navigationBarTitleText": "角色管理",
+                        "navigationBarTitleText": "角色&权限绑定",
                         "navigationBarBackgroundColor": "#ffffff",
                         "navigationBarTextStyle": "black"
                     }
@@ -373,6 +389,22 @@
                         "navigationBarTitleText": "豁免申请审核",
                         "navigationBarBackgroundColor": "#ffffff",
                         "navigationBarTextStyle": "black"
+                    }
+                },
+                {
+                    "path": "pricing/index",
+                    "style": {
+                        "navigationBarTitleText": "定价管理",
+                        "navigationBarBackgroundColor": "#3D5A4E",
+                        "navigationBarTextStyle": "white"
+                    }
+                },
+                {
+                    "path": "pricing/patients",
+                    "style": {
+                        "navigationBarTitleText": "个性化价格调整",
+                        "navigationBarBackgroundColor": "#3D5A4E",
+                        "navigationBarTextStyle": "white"
                     }
                 },
                 {

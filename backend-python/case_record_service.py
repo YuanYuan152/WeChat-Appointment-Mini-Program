@@ -7,8 +7,9 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from case_record_risk_config import (
-    RISK_SCALE_ITEM_IDS,
     RISK_ITEM_BY_ID,
+    EDITABLE_RISK_ITEM_IDS,
+    apply_calculated_crisis_level,
     get_crisis_level_choice,
     crisis_level_text_only,
     risk_item_allowed_choices,
@@ -24,6 +25,8 @@ from case_record_header_config import (
     header_info_is_complete,
     normalize_header_info,
     validate_header_info,
+    DEFAULT_OFFLINE_CONSULT_METHOD,
+    DEFAULT_VIDEO_CONSULT_METHOD,
 )
 from models import (
     AppAccount,
@@ -34,6 +37,7 @@ from models import (
     AppRoleBinding,
     AppSchedule,
 )
+from staff_roles import staff_workbench_account_ids
 
 
 def encode_photo_urls(urls: Optional[List[str]]) -> Optional[str]:
@@ -79,7 +83,7 @@ def risk_assessment_is_complete(data: Optional[Dict[str, Any]]) -> bool:
     items = data.get("items")
     if not isinstance(items, dict):
         return False
-    for item_id in RISK_SCALE_ITEM_IDS:
+    for item_id in EDITABLE_RISK_ITEM_IDS:
         val = items.get(item_id)
         if not isinstance(val, dict):
             return False
@@ -88,22 +92,25 @@ def risk_assessment_is_complete(data: Optional[Dict[str, Any]]) -> bool:
             return False
         if risk_item_note_required(item_id, choice) and not str(val.get("note") or "").strip():
             return False
-    return True
+    completed = apply_calculated_crisis_level({"items": items})
+    crisis = (completed or {}).get("items", {}).get("crisis_level", {})
+    choice = normalize_risk_choice(str((crisis or {}).get("choice") or "").strip(), "crisis_level")
+    return choice in risk_item_allowed_choices("crisis_level")
 
 
 def validate_risk_assessment(data: Optional[Dict[str, Any]]) -> None:
+    if not data or not isinstance(data, dict) or not isinstance(data.get("items"), dict):
+        raise HTTPException(status_code=400, detail="请完成个案风险评估表")
+    items = data["items"]
+    for item_id in EDITABLE_RISK_ITEM_IDS:
+        cfg = RISK_ITEM_BY_ID[item_id]
+        val = items.get(item_id) or {}
+        choice = normalize_risk_choice(str(val.get("choice") or "").strip().upper(), item_id)
+        if choice not in risk_item_allowed_choices(item_id):
+            raise HTTPException(status_code=400, detail=f"请选择：{cfg['label']}")
+        if risk_item_note_required(item_id, choice) and not str(val.get("note") or "").strip():
+            raise HTTPException(status_code=400, detail=f"请填写：{cfg['label']}说明")
     if not risk_assessment_is_complete(data):
-        if not data or not isinstance(data, dict) or not isinstance(data.get("items"), dict):
-            raise HTTPException(status_code=400, detail="请完成个案风险评估表")
-        items = data["items"]
-        for item_id in RISK_SCALE_ITEM_IDS:
-            cfg = RISK_ITEM_BY_ID[item_id]
-            val = items.get(item_id) or {}
-            choice = normalize_risk_choice(str(val.get("choice") or "").strip().upper(), item_id)
-            if choice not in risk_item_allowed_choices(item_id):
-                raise HTTPException(status_code=400, detail=f"请选择：{cfg['label']}")
-            if risk_item_note_required(item_id, choice) and not str(val.get("note") or "").strip():
-                raise HTTPException(status_code=400, detail=f"请填写：{cfg['label']}说明")
         raise HTTPException(status_code=400, detail="请完成个案风险评估表")
 
 
@@ -187,7 +194,7 @@ def build_default_header_info(
     schedule: Optional[AppSchedule],
     counselor_id: int,
 ) -> Dict[str, str]:
-    from schedule_meta import center_display_name
+    from schedule_meta import is_video_center
 
     patient = db.query(AppAccount).filter(AppAccount.Id == consultation.PatientId).first()
     order = (
@@ -204,7 +211,11 @@ def build_default_header_info(
     header = empty_header_info()
     header["code"] = str(patient.Id) if patient else ""
     header["gender"] = (patient.Gender or "").strip() if patient else ""
-    header["consult_method"] = center_display_name(center_id) or ""
+    header["consult_method"] = (
+        DEFAULT_VIDEO_CONSULT_METHOD
+        if is_video_center(center_id)
+        else DEFAULT_OFFLINE_CONSULT_METHOD
+    )
     header["session_number"] = _session_number(db, consultation)
     header["start_year"] = start_parts["year"]
     header["start_month"] = start_parts["month"]
@@ -284,7 +295,8 @@ def validate_case_record_required_fields(
     missing = [labels[key] for key, val in values.items() if not (val or "").strip()]
     if missing:
         raise HTTPException(status_code=400, detail=f"请填写：{'、'.join(missing)}")
-    validate_risk_assessment(risk_assessment)
+    completed_risk = apply_calculated_crisis_level(risk_assessment)
+    validate_risk_assessment(completed_risk)
 
 
 def reject_if_case_record_locked(record: Optional[AppCaseRecord]) -> None:
@@ -349,7 +361,9 @@ def apply_case_record_fields(
     if plan is not None:
         record.Plan = plan
     if risk_assessment_set:
-        record.RiskAssessment = encode_risk_assessment(risk_assessment)
+        record.RiskAssessment = encode_risk_assessment(
+            apply_calculated_crisis_level(risk_assessment),
+        )
     if header_info_set:
         record.HeaderInfo = encode_header_info(header_info)
     if photo_urls_set:
@@ -373,13 +387,7 @@ def ensure_consultation_done_for_record(
 
 
 def _ops_admin_account_ids(db: Session) -> List[int]:
-    rows = (
-        db.query(AppRoleBinding.AccountId)
-        .filter(AppRoleBinding.RoleType.in_(["Admin", "Ops"]))
-        .distinct()
-        .all()
-    )
-    return [r[0] for r in rows]
+    return staff_workbench_account_ids(db)
 
 
 def _counselor_display_name(db: Session, counselor_id: int) -> str:
@@ -462,13 +470,13 @@ def notify_admins_crisis_report_if_needed(
         "startTime": start_time or None,
     }
     content = json.dumps({"summary": summary, "detail": detail}, ensure_ascii=False)
-    for admin_id in _ops_admin_account_ids(db):
-        create_message(
-            db,
-            admin_id,
-            "RISK",
-            title,
-            content,
-            related_type="CASE_RECORD_CRISIS_REPORT",
-            related_id=record.Id,
-        )
+    from staff_message_service import notify_staff_workbench_inbox
+
+    notify_staff_workbench_inbox(
+        db,
+        type_="RISK",
+        title=title,
+        content=content,
+        related_type="CASE_RECORD_CRISIS_REPORT",
+        related_id=record.Id,
+    )

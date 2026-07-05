@@ -924,12 +924,18 @@ def schedule_slot_options(
 @router.get("/schedules/calendar", response_model=ScheduleCalendarOut, summary="滚动排期日历")
 def schedule_calendar(
     start: Optional[str] = Query(None, description="起始日期 YYYY-MM-DD，默认今天"),
-    days: int = Query(ROLLING_WINDOW_DAYS, ge=1, le=ROLLING_WINDOW_DAYS),
+    days: int = Query(ROLLING_WINDOW_DAYS, ge=1, le=ROLLING_WINDOW_DAYS * 2),
+    past_days: int = Query(
+        0,
+        ge=0,
+        le=ROLLING_WINDOW_DAYS,
+        description="向前追溯天数（用于普通模式查看已完成咨询/咨询记录筛选）",
+    ),
     month: Optional[str] = Query(None, description="按月查看 YYYY-MM（日历模式）"),
     counselor: AppAccount = Depends(require_counselor),
     db: Session = Depends(get_db),
 ):
-    """排期查询：可按起始日期查看任意连续窗口；新增排期仍由写接口限制未来窗口。"""
+    """排期查询：可按起始日期查看连续窗口；month 可查看整月。"""
     today = china_now().date()
 
     if month:
@@ -964,7 +970,8 @@ def schedule_calendar(
             slots=_calendar_items_for_schedules(db, schedules, counselor.Id),
         )
 
-    start_date = today
+    earliest_date = today - timedelta(days=past_days)
+    start_date = earliest_date
     if start:
         try:
             requested = date_type.fromisoformat(start)
@@ -986,9 +993,11 @@ def schedule_calendar(
         .all()
     )
 
+    total_days = (rolling_window_end(today) - start_date).days + 1
+
     return ScheduleCalendarOut(
         startDate=start_date.isoformat(),
-        days=days,
+        days=total_days,
         slots=_calendar_items_for_schedules(db, schedules, counselor.Id),
     )
 

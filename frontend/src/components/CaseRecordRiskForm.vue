@@ -3,7 +3,7 @@
     <text v-if="title" class="risk-title">{{ title }}</text>
     <text v-if="hint" class="risk-hint">{{ hint }}</text>
 
-    <view v-for="item in RISK_ASSESSMENT_ITEMS" :key="item.id" class="risk-row">
+    <view v-for="item in editableItems" :key="item.id" class="risk-row">
       <view class="risk-head">
         <text class="risk-index">{{ item.index }}</text>
         <view class="risk-head-text">
@@ -14,12 +14,9 @@
         </view>
       </view>
 
-      <view v-if="item.id === 'crisis_level'" class="calculated-box">
-        <text class="calculated-label">{{ crisisLevelText }}</text>
-        <text class="calculated-hint">系统根据前 9 项自动计算，不可手动修改</text>
-      </view>
+      <text v-if="itemGuideHint(item.id)" class="item-guide-hint">{{ itemGuideHint(item.id) }}</text>
 
-      <view v-else class="option-list">
+      <view class="option-list">
         <view
           v-for="opt in displayOptions(item)"
           :key="opt.choice"
@@ -49,8 +46,25 @@
       </view>
     </view>
 
+    <view v-if="crisisItem" class="risk-row crisis-row">
+      <view class="risk-head">
+        <text class="risk-index">{{ crisisItem.index }}</text>
+        <view class="risk-head-text">
+          <text class="risk-label">{{ crisisItem.label }}</text>
+          <text class="risk-desc">系统根据前 1–9 题自动评定，无需手动选择</text>
+        </view>
+      </view>
+      <text v-if="itemGuideHint('crisis_level')" class="item-guide-hint">{{ itemGuideHint('crisis_level') }}</text>
+      <view class="crisis-result" :class="`crisis-result--${computedCrisisLevel || 'none'}`">
+        <text v-if="computedCrisisLevel" class="crisis-result-text">
+          {{ computedCrisisLabel }}
+        </text>
+        <text v-else class="crisis-result-placeholder">请先完成前 1–9 题，系统将自动计算本项</text>
+      </view>
+    </view>
+
     <view class="guide-box">
-      <text class="guide-title">风险等级说明</text>
+      <text class="guide-title">风险等级说明（评定规则参考）</text>
       <text class="guide-text">{{ RISK_LEVEL_GUIDE }}</text>
     </view>
   </view>
@@ -61,9 +75,10 @@ import { computed } from 'vue'
 import {
   RISK_ASSESSMENT_ITEMS,
   RISK_LEVEL_GUIDE,
-  calculateCrisisLevelChoice,
-  formatRiskChoiceDisplay,
-  normalizeRiskAssessment,
+  RISK_ITEM_GUIDE_HINTS,
+  EDITABLE_RISK_ITEM_IDS,
+  applyCalculatedCrisisLevel,
+  calculateCrisisLevel,
   normalizeRiskChoice,
   type RiskAssessmentData,
   type RiskAssessmentItemConfig,
@@ -82,7 +97,7 @@ const props = withDefaults(
     readonly: false,
     required: true,
     title: '个案风险评估表',
-    hint: '请逐项选择对应选项；第 10 项由系统根据前 9 项自动计算',
+    hint: '请逐项选择 1–9 题；选「其他」或需说明项时请填写文字；第 10 题由系统自动评定',
   },
 )
 
@@ -95,14 +110,34 @@ interface DisplayOption {
   label: string
 }
 
-const getChoice = (itemId: string): RiskChoice =>
-  itemId === 'crisis_level'
-    ? calculateCrisisLevelChoice(props.modelValue)
-    : normalizeRiskChoice(props.modelValue.items[itemId]?.choice ?? '', itemId)
-
-const crisisLevelText = computed(() =>
-  formatRiskChoiceDisplay('crisis_level', calculateCrisisLevelChoice(props.modelValue)),
+const editableItems = computed(() =>
+  RISK_ASSESSMENT_ITEMS.filter(item => item.id !== 'crisis_level'),
 )
+
+const crisisItem = computed(() =>
+  RISK_ASSESSMENT_ITEMS.find(item => item.id === 'crisis_level'),
+)
+
+const getChoice = (itemId: string): RiskChoice =>
+  normalizeRiskChoice(props.modelValue.items[itemId]?.choice ?? '', itemId)
+
+const allEditableAnswered = computed(() =>
+  EDITABLE_RISK_ITEM_IDS.every(id => !!getChoice(id)),
+)
+
+const computedCrisisLevel = computed((): RiskChoice => {
+  if (!props.modelValue?.items || !allEditableAnswered.value) return ''
+  return calculateCrisisLevel(props.modelValue)
+})
+
+const computedCrisisLabel = computed(() => {
+  const level = computedCrisisLevel.value
+  if (!level || !crisisItem.value) return ''
+  const text = crisisItem.value.options[level as 'A' | 'B' | 'C' | 'D'] ?? level
+  return `${level}. ${text}`
+})
+
+const itemGuideHint = (itemId: string) => RISK_ITEM_GUIDE_HINTS[itemId] || ''
 
 const optionContent = (item: RiskAssessmentItemConfig, choice: RiskChoice): string =>
   item.options[choice as 'A' | 'B' | 'C' | 'D' | 'E'] ?? choice
@@ -126,9 +161,16 @@ const needsNote = (item: RiskAssessmentItemConfig, choice: RiskChoice) => {
 }
 
 const notePlaceholder = (item: RiskAssessmentItemConfig, choice: RiskChoice) => {
+  if (item.noteRequiredChoices?.length === 0 && item.noteChoices.includes(choice)) {
+    return '请填写具体说明（选填）'
+  }
   if (item.otherChoice === 'C' && choice === 'C') return '请填写其他说明'
   if (item.otherChoice === 'E' && choice === 'E') return '请填写其他说明'
   return '请填写具体说明'
+}
+
+const emitWithCrisis = (next: RiskAssessmentData) => {
+  emit('update:modelValue', applyCalculatedCrisisLevel(next))
 }
 
 const patchItem = (itemId: string, patch: Partial<{ choice: RiskChoice; note: string }>) => {
@@ -141,15 +183,17 @@ const patchItem = (itemId: string, patch: Partial<{ choice: RiskChoice; note: st
       },
     },
   }
-  emit('update:modelValue', normalizeRiskAssessment(next))
+  emitWithCrisis(next)
 }
 
 const selectChoice = (itemId: string, choice: RiskChoice) => {
   if (props.readonly || itemId === 'crisis_level') return
   const prev = props.modelValue.items[itemId]
+  const normalized = normalizeRiskChoice(choice, itemId)
+  const keepNote = prev?.choice === normalized
   patchItem(itemId, {
-    choice,
-    note: prev?.choice === choice ? (prev.note ?? '') : '',
+    choice: normalized,
+    note: keepNote ? (prev?.note ?? '') : '',
   })
 }
 
@@ -186,14 +230,18 @@ const onNoteInput = (itemId: string, e: { detail?: { value?: string } }) => {
   border-bottom: 1rpx solid #F0EDE8;
 }
 
-.risk-row:last-of-type {
+.crisis-row {
+  background: #F8FAFC;
+  margin: 8rpx -8rpx 0;
+  padding: 24rpx 8rpx;
+  border-radius: 12rpx;
   border-bottom: none;
 }
 
 .risk-head {
   display: flex;
   gap: 16rpx;
-  margin-bottom: 16rpx;
+  margin-bottom: 12rpx;
 }
 
 .risk-index {
@@ -229,6 +277,19 @@ const onNoteInput = (itemId: string, e: { detail?: { value?: string } }) => {
   line-height: 1.5;
 }
 
+.item-guide-hint {
+  display: block;
+  margin-bottom: 16rpx;
+  padding: 16rpx;
+  background: #FFFBEB;
+  border-radius: 10rpx;
+  border-left: 4rpx solid #F59E0B;
+  font-size: 22rpx;
+  color: #92400E;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
 .required {
   color: #DC2626;
   margin-left: 4rpx;
@@ -257,29 +318,6 @@ const onNoteInput = (itemId: string, e: { detail?: { value?: string } }) => {
 
 .option-item.readonly {
   pointer-events: none;
-}
-
-.calculated-box {
-  padding: 20rpx;
-  border: 1rpx solid #D7E4DD;
-  border-radius: 16rpx;
-  background: #F0F5F3;
-}
-
-.calculated-label {
-  display: block;
-  font-size: 26rpx;
-  font-weight: 700;
-  color: #2F4D42;
-  line-height: 1.5;
-}
-
-.calculated-hint {
-  display: block;
-  margin-top: 8rpx;
-  font-size: 22rpx;
-  color: #6B7280;
-  line-height: 1.5;
 }
 
 .option-mark {
@@ -325,6 +363,46 @@ const onNoteInput = (itemId: string, e: { detail?: { value?: string } }) => {
   color: #374151;
   line-height: 1.6;
   white-space: pre-wrap;
+}
+
+.crisis-result {
+  padding: 20rpx;
+  border-radius: 12rpx;
+  border: 1rpx solid #E5E7EB;
+  background: #fff;
+}
+
+.crisis-result--A {
+  border-color: #FCA5A5;
+  background: #FEF2F2;
+}
+
+.crisis-result--B {
+  border-color: #FDBA74;
+  background: #FFF7ED;
+}
+
+.crisis-result--C {
+  border-color: #FDE047;
+  background: #FEFCE8;
+}
+
+.crisis-result--D {
+  border-color: #86EFAC;
+  background: #F0FDF4;
+}
+
+.crisis-result-text {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #1F2937;
+  line-height: 1.6;
+}
+
+.crisis-result-placeholder {
+  font-size: 24rpx;
+  color: #9CA3AF;
+  line-height: 1.5;
 }
 
 .guide-box {

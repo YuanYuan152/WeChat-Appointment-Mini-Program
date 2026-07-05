@@ -3,7 +3,7 @@
     <view class="header-card">
       <view>
         <text class="greeting">咨询师工作台</text>
-        <text class="date-text">{{ viewMode === 'list' ? `滚动${ROLLING_WINDOW_DAYS}天：${rollingRangeText}` : `${calendarMonthLabel} 排期日历` }}</text>
+        <text class="date-text">{{ viewMode === 'list' ? `近${LIST_WINDOW_DAYS}天：${rollingRangeText}` : `${calendarMonthLabel} 排期日历` }}</text>
       </view>
     </view>
 
@@ -325,7 +325,7 @@ import { fixImageUrl } from '@/utils/image'
 import { API_ENDPOINTS } from '@/config/api'
 import { APPOINTMENT_CENTERS, isVideoCenter } from '@/constants/appointmentCenters'
 import { SCHEDULE_DISPLAY_META, type ScheduleDisplayStatus } from '@/constants/scheduleDisplay'
-import { formatDateLocal, ROLLING_WINDOW_DAYS, addDays } from '@/constants/scheduleSlots'
+import { formatDateLocal, ROLLING_WINDOW_DAYS, PAST_WINDOW_DAYS, LIST_WINDOW_DAYS, addDays } from '@/constants/scheduleSlots'
 import { openCounselorCaseRecord } from '@/utils/case-record'
 
 interface RoomOpt {
@@ -516,7 +516,9 @@ const legend = [
 const meta = (status: ScheduleDisplayStatus) =>
   SCHEDULE_DISPLAY_META[status] || SCHEDULE_DISPLAY_META.OPEN
 
-const rollingRangeText = computed(() => `${minDate.value} ~ ${maxDate.value}`)
+const listWindowStart = computed(() => addDays(minDate.value, -PAST_WINDOW_DAYS))
+const listWindowEnd = computed(() => addDays(minDate.value, ROLLING_WINDOW_DAYS - 1))
+const rollingRangeText = computed(() => `${listWindowStart.value} ~ ${listWindowEnd.value}`)
 
 const cancelScreenshotPreview = computed(() => fixImageUrl(cancelScreenshotUrl.value))
 
@@ -624,7 +626,8 @@ const slotPassesListFilters = (slot: CalendarSlot) =>
   && slotMatchesStatusFilter(slot, listStatusFilter.value)
 
 const groupedDays = computed(() => {
-  const today = minDate.value
+  const startDate = listWindowStart.value
+  const endDate = listWindowEnd.value
   const byDate = new Map<string, CalendarSlot[]>()
   for (const s of slots.value) {
     if (s.displayStatus === 'CANCELLED' && !s.leaveRequestId) continue
@@ -634,16 +637,15 @@ const groupedDays = computed(() => {
     byDate.get(date)!.push(s)
   }
   const days: { date: string; label: string; slots: CalendarSlot[] }[] = []
-  for (let i = 0; i < ROLLING_WINDOW_DAYS; i++) {
-    const d = new Date(`${today}T00:00:00`)
-    d.setDate(d.getDate() + i)
-    const y = d.getFullYear()
-    const m = String(d.getMonth() + 1).padStart(2, '0')
-    const day = String(d.getDate()).padStart(2, '0')
-    const date = `${y}-${m}-${day}`
-    const daySlots = (byDate.get(date) || []).slice().sort((a, b) => a.startTime.localeCompare(b.startTime))
-    if (listFilterActive.value && daySlots.length === 0) continue
-    days.push({ date, label: weekdayLabel(date), slots: daySlots })
+  let cursor = startDate
+  while (cursor <= endDate) {
+    const daySlots = (byDate.get(cursor) || []).slice().sort((a, b) => a.startTime.localeCompare(b.startTime))
+    if (listFilterActive.value && daySlots.length === 0) {
+      cursor = addDays(cursor, 1)
+      continue
+    }
+    days.push({ date: cursor, label: weekdayLabel(cursor), slots: daySlots })
+    cursor = addDays(cursor, 1)
   }
   return days
 })
@@ -789,7 +791,11 @@ const loadCalendar = async () => {
   try {
     const res = await httpV2.get<{ slots: CalendarSlot[] }>(
       API_ENDPOINTS.counselor.scheduleCalendar,
-      { start: minDate.value, days: ROLLING_WINDOW_DAYS },
+      {
+        start: listWindowStart.value,
+        past_days: PAST_WINDOW_DAYS,
+        days: LIST_WINDOW_DAYS,
+      },
       { showLoading: false, showError: false },
     )
     if (res.code === 0 && res.data) {

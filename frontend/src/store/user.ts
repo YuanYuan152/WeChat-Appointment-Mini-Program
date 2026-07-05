@@ -42,14 +42,14 @@ export const useUserStore = defineStore('user', {
       this.activeRole = me.activeRole || ''
       uni.setStorageSync('user_roles', JSON.stringify(this.roles))
       if (me.activeRole) uni.setStorageSync('active_role', me.activeRole)
-      updateTabBarForRole(this.roles, this.activeRole)
+      updateTabBarForRole(this.roles)
     },
 
     async switchRole(role: string) {
       const res = await AuthApi.switchRole(role)
       this.activeRole = res.activeRole || role
       uni.setStorageSync('active_role', this.activeRole)
-      updateTabBarForRole(this.roles, this.activeRole)
+      updateTabBarForRole(this.roles)
       return res
     },
 
@@ -62,7 +62,7 @@ export const useUserStore = defineStore('user', {
       clearToken()
       uni.removeStorageSync('user_roles')
       uni.removeStorageSync('active_role')
-      updateTabBarForRole([], 'Patient')
+      updateTabBarForRole([])
       uni.switchTab({ url: '/pages/index/index' })
     },
 

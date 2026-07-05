@@ -29,6 +29,9 @@ HEADER_FIELD_LABELS: Dict[str, str] = {
     "end_minute": "咨询结束分钟",
 }
 
+DEFAULT_OFFLINE_CONSULT_METHOD = "线下咨询"
+DEFAULT_VIDEO_CONSULT_METHOD = "视频咨询"
+
 
 def empty_header_info() -> Dict[str, str]:
     return {key: "" for key in HEADER_FIELD_KEYS}

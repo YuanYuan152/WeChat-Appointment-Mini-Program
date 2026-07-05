@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 
 from auth import get_current_account, AppAccount
 from database import get_db
+from staff_roles import STAFF_WORKBENCH_ROLES, account_has_staff_workbench
 from models import (
     AppBanner, AppActivity, AppArticle, AppOrder, AppRoleBinding,
     AppAccount as AccountModel, AppSchedule, AppCounselorProfile,
@@ -63,12 +64,10 @@ def require_ops(
     current_account: AppAccount = Depends(get_current_account),
     db: Session = Depends(get_db),
 ) -> AppAccount:
-    binding = db.query(AppRoleBinding).filter(
-        AppRoleBinding.AccountId == current_account.Id,
-        AppRoleBinding.RoleType.in_(["Ops", "Admin"]),
-    ).first()
-    if not binding:
-        raise HTTPException(status_code=403, detail="无运营权限")
+    if not account_has_staff_workbench(
+        db, current_account.Id, getattr(current_account, "ActiveRole", None)
+    ):
+        raise HTTPException(status_code=403, detail="无管理工作台权限")
     return current_account
 
 

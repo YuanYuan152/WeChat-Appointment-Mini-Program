@@ -11,6 +11,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from database import get_db
 from models import AppAccount, AppLoginSession, AppRoleBinding, AppRoleSwitchLog
 from config import settings
+from role_active import resolve_active_role
+from patient_registration import ensure_default_patient_registration
 
 router = APIRouter(prefix="/api/mini/auth", tags=["Auth"])
 
@@ -151,6 +153,27 @@ def get_current_account(
         raise HTTPException(status_code=401, detail="账号已注销")
     return account
 
+
+def get_optional_account(
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+) -> Optional[AppAccount]:
+    """可选鉴权：未登录或 Token 无效时返回 None，不抛错。"""
+    if not authorization or not authorization.startswith("Bearer "):
+        return None
+    try:
+        token = authorization[7:]
+        payload = decode_token(token)
+        account_id = payload.get("sub")
+        if not account_id:
+            return None
+        account = db.query(AppAccount).filter(AppAccount.Id == int(account_id)).first()
+        if not account or getattr(account, "IsActive", True) is False:
+            return None
+        return account
+    except HTTPException:
+        return None
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
@@ -163,6 +186,22 @@ def _ensure_role_binding(db: Session, account_id: int, role: str) -> None:
     )
     if not exists:
         db.add(AppRoleBinding(AccountId=account_id, RoleType=role, TargetId=account_id))
+
+
+def _restore_demo_staff_on_mock_login(
+    db: Session, account: AppAccount, code: str, openid: str
+) -> None:
+    """本地 mock 登录时，若演示员工账号曾被解绑/删除，自动恢复绑定（与 seed 一致）。"""
+    staff_role = DEV_MOCK_CODE_ACTIVE_ROLES.get(code)
+    if staff_role not in {"Assistant", "Ops", "Admin"}:
+        return
+    account.IsActive = True
+    if hasattr(account, "AccessRevokedAt"):
+        account.AccessRevokedAt = None
+    _ensure_role_binding(db, account.Id, "Patient")
+    _ensure_role_binding(db, account.Id, staff_role)
+    account.ActiveRole = staff_role
+    db.commit()
 
 
 @router.post("/login", response_model=LoginResponse, summary="微信小程序一键登录")
@@ -211,7 +250,7 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
             account.OpenId = openid
 
     if not account:
-        account = AppAccount(OpenId=openid, UnionId=unionid)
+        account = AppAccount(OpenId=openid, UnionId=unionid, ActiveRole="Patient")
         db.add(account)
         db.commit()
         db.refresh(account)
@@ -229,6 +268,11 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
             account.UnionId = unionid
             db.commit()
 
+    # 所有账号登录时确保具备来访基础身份（含首次注册与历史未绑定账号）
+    if ensure_default_patient_registration(db, account):
+        db.commit()
+        db.refresh(account)
+
     if use_mock_login:
         if not _account_is_active(account):
             raise HTTPException(
@@ -237,8 +281,12 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
             )
         target_role = DEV_MOCK_CODE_ACTIVE_ROLES.get(request.code)
         if target_role:
-            account.ActiveRole = target_role
-            _ensure_role_binding(db, account.Id, target_role)
+            _restore_demo_staff_on_mock_login(db, account, request.code, openid)
+            bindings = db.query(AppRoleBinding).filter(
+                AppRoleBinding.AccountId == account.Id
+            ).all()
+            role_names = [b.RoleType for b in bindings]
+            account.ActiveRole = resolve_active_role(role_names)
             db.commit()
 
     token, expire = create_access_token({"sub": str(account.Id), "openid": openid})
@@ -298,12 +346,23 @@ def get_me(
     current_account: AppAccount = Depends(get_current_account),
     db: Session = Depends(get_db),
 ):
+    if ensure_default_patient_registration(db, current_account):
+        current_account.UpdatedAt = datetime.utcnow()
+        db.commit()
+        db.refresh(current_account)
+
     bindings = db.query(AppRoleBinding).filter(
         AppRoleBinding.AccountId == current_account.Id
     ).all()
     roles = [b.RoleType for b in bindings]
 
-    active_role = getattr(current_account, "ActiveRole", None) or (roles[0] if roles else "Patient")
+    stored = getattr(current_account, "ActiveRole", None)
+    active_role = resolve_active_role(roles, stored)
+    if active_role != stored:
+        current_account.ActiveRole = active_role
+        current_account.UpdatedAt = datetime.utcnow()
+        db.commit()
+        db.refresh(current_account)
 
     return UserInfo(
         id=current_account.Id,

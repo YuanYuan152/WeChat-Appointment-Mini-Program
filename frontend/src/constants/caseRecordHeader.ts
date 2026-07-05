@@ -12,7 +12,6 @@ export interface CaseRecordHeaderInfo {
   start_minute: string
   end_hour: string
   end_minute: string
-  counselor_signature: string
 }
 
 export const HEADER_FIELD_KEYS: (keyof CaseRecordHeaderInfo)[] = [
@@ -27,7 +26,6 @@ export const HEADER_FIELD_KEYS: (keyof CaseRecordHeaderInfo)[] = [
   'start_minute',
   'end_hour',
   'end_minute',
-  'counselor_signature',
 ]
 
 export const HEADER_FIELD_LABELS: Record<keyof CaseRecordHeaderInfo, string> = {
@@ -42,8 +40,10 @@ export const HEADER_FIELD_LABELS: Record<keyof CaseRecordHeaderInfo, string> = {
   start_minute: '咨询开始分钟',
   end_hour: '咨询结束小时',
   end_minute: '咨询结束分钟',
-  counselor_signature: '咨询师签名',
 }
+
+export const DEFAULT_OFFLINE_CONSULT_METHOD = '线下咨询'
+export const DEFAULT_VIDEO_CONSULT_METHOD = '视频咨询'
 
 export const createEmptyHeaderInfo = (): CaseRecordHeaderInfo => ({
   code: '',
@@ -57,7 +57,6 @@ export const createEmptyHeaderInfo = (): CaseRecordHeaderInfo => ({
   start_minute: '',
   end_hour: '',
   end_minute: '',
-  counselor_signature: '',
 })
 
 export const normalizeHeaderInfo = (raw?: Partial<CaseRecordHeaderInfo> | null): CaseRecordHeaderInfo => {
@@ -89,7 +88,6 @@ export const formatHeaderInfoText = (data?: CaseRecordHeaderInfo | null): string
     `咨询方式：${h.consult_method || '—'}`,
     `咨询次数：第${h.session_number || '—'}次`,
     `咨询时间：${h.start_year || '—'}年${h.start_month || '—'}月${h.start_day || '—'}日 ${h.start_hour || '—'}时${h.start_minute || '—'}分 — ${h.end_hour || '—'}时${h.end_minute || '—'}分`,
-    `咨询师签名：${h.counselor_signature || '—'}`,
   ]
   return lines.join('\n')
 }

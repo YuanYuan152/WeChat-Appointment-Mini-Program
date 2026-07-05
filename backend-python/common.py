@@ -16,8 +16,20 @@ from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from database import get_db
 from config import settings
-from models import AppBanner, AppActivity, AppArticle, AppCounselorProfile
+from auth import get_optional_account
+from models import AppAccount, AppBanner, AppActivity, AppArticle, AppCounselorProfile
 from booking_availability import counselor_booking_time_slots
+from pricing_service import (
+    get_counselor_profile,
+    resolve_default_display_price_cents,
+    resolve_display_price_cents,
+)
+from user_role_meta import counselor_visible_to_patient
+from counselor_identity_service import (
+    legacy_doctor_ids_covered_by_new_system,
+    reconcile_existing_counselor_legacy_links,
+    _normalize_counselor_name,
+)
 
 router = APIRouter(prefix="/api/mini/common", tags=["Common"])
 
@@ -218,7 +230,8 @@ def _legacy_doctor_to_dict(row: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _counselor_profile_dict(r: AppCounselorProfile) -> Dict[str, Any]:
+def _counselor_profile_dict(r: AppCounselorProfile, billing_cents: Optional[int] = None) -> Dict[str, Any]:
+    billing = float(billing_cents if billing_cents is not None else (r.Billing or 0))
     return {
         "id": int(r.AccountId or r.Id or 0),
         "name": r.Name,
@@ -227,7 +240,7 @@ def _counselor_profile_dict(r: AppCounselorProfile) -> Dict[str, Any]:
         "specialty": r.Specialty,
         "field": r.Field,
         "introduce": r.Introduce,
-        "billing": float(r.Billing or 0),
+        "billing": billing,
         "consultHours": int(r.ConsultHours or 0),
         "workYears": int(r.WorkYears or 0),
         "province": "线下/线上",
@@ -235,7 +248,37 @@ def _counselor_profile_dict(r: AppCounselorProfile) -> Dict[str, Any]:
     }
 
 
-def _query_counselor_profiles(db: Session, keyword: Optional[str] = None) -> List[Dict[str, Any]]:
+def _resolve_counselor_billing_cents(
+    db: Session,
+    counselor_id: int,
+    patient_account: Optional[AppAccount],
+) -> int:
+    if patient_account:
+        return resolve_display_price_cents(db, patient_account.Id, counselor_id)
+    return resolve_default_display_price_cents(db, counselor_id)
+
+
+def _patient_source_for_visibility(patient_account: Optional[AppAccount]) -> Optional[str]:
+    if not patient_account:
+        return None
+    return getattr(patient_account, "PatientSource", None)
+
+
+def _counselor_visible_to_viewer(
+    counselor_type: Optional[str],
+    patient_account: Optional[AppAccount],
+) -> bool:
+    return counselor_visible_to_patient(
+        counselor_type,
+        _patient_source_for_visibility(patient_account),
+    )
+
+
+def _query_counselor_profiles(
+    db: Session,
+    keyword: Optional[str] = None,
+    patient_account: Optional[AppAccount] = None,
+) -> List[Dict[str, Any]]:
     """AppCounselorProfile 列表，支持姓名/擅长/领域/简介关键词搜索。"""
     try:
         q = db.query(AppCounselorProfile).filter(AppCounselorProfile.IsActive == True)
@@ -251,7 +294,21 @@ def _query_counselor_profiles(db: Session, keyword: Optional[str] = None) -> Lis
                 )
             )
         rows = q.order_by(AppCounselorProfile.WorkYears.desc(), AppCounselorProfile.Id.desc()).all()
-        return [_counselor_profile_dict(r) for r in rows]
+        result = []
+        seen_accounts: set[int] = set()
+        for r in rows:
+            cid = int(r.AccountId or r.Id or 0)
+            if not cid or cid in seen_accounts:
+                continue
+            profile = get_counselor_profile(db, cid)
+            if not profile:
+                continue
+            if not _counselor_visible_to_viewer(profile.CounselorType, patient_account):
+                continue
+            seen_accounts.add(cid)
+            billing_cents = _resolve_counselor_billing_cents(db, cid, patient_account)
+            result.append(_counselor_profile_dict(profile, billing_cents))
+        return result
     except Exception:
         return []
 
@@ -261,6 +318,7 @@ def common_counselors(
     keyword: Optional[str] = Query(None, description="搜索姓名/擅长"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    current_account: Optional[AppAccount] = Depends(get_optional_account),
     db: Session = Depends(get_db),
 ):
     if keyword is not None:
@@ -268,7 +326,14 @@ def common_counselors(
         if not keyword or keyword.lower() == "undefined":
             keyword = None
 
-    new_dicts = _query_counselor_profiles(db, keyword)
+    new_dicts = _query_counselor_profiles(db, keyword, current_account)
+
+    if page == 1:
+        try:
+            reconcile_existing_counselor_legacy_links(db)
+            db.commit()
+        except Exception:
+            db.rollback()
 
     legacy_items: List[Dict[str, Any]] = []
     if not settings.SKIP_LEGACY_QUERIES:
@@ -286,6 +351,14 @@ def common_counselors(
             **params,
         )
         legacy_items = [_legacy_doctor_to_dict(r) for r in legacy_rows]
+        covered_legacy_ids = legacy_doctor_ids_covered_by_new_system(db)
+        new_names = {_normalize_counselor_name(d.get("name")) for d in new_dicts if d.get("name")}
+        legacy_items = [
+            item
+            for item in legacy_items
+            if item["id"] not in covered_legacy_ids
+            and _normalize_counselor_name(item.get("name")) not in new_names
+        ]
 
     merged = new_dicts + legacy_items
     total = len(merged)
@@ -303,6 +376,7 @@ def common_counselors(
 def common_counselor_detail(
     cid: int,
     source: str = Query("AppCounselorProfile"),
+    current_account: Optional[AppAccount] = Depends(get_optional_account),
     db: Session = Depends(get_db),
 ):
     if source == "T_Doctor":
@@ -333,20 +407,24 @@ def common_counselor_detail(
         id=cid,
     )
     if not new_rows:
-        return common_counselor_detail(cid=cid, source="T_Doctor", db=db)
+        return common_counselor_detail(cid=cid, source="T_Doctor", db=db, current_account=current_account)
 
-    billing_cents = int(new_rows[0].get("Billing") or 0)
+    profile = get_counselor_profile(db, cid)
+    if not profile or not _counselor_visible_to_viewer(profile.CounselorType, current_account):
+        raise HTTPException(status_code=404, detail="咨询师不存在")
+
+    billing_cents = _resolve_counselor_billing_cents(db, cid, current_account)
     time_slots, center_ids = counselor_booking_time_slots(
         db, cid, billing_cents=billing_cents,
     )
     return {
         "id": cid,
-        "name": new_rows[0].get("Name"),
-        "avatarUrl": new_rows[0].get("AvatarUrl"),
-        "title": new_rows[0].get("Title"),
-        "specialty": new_rows[0].get("Specialty"),
-        "field": new_rows[0].get("Field"),
-        "introduce": new_rows[0].get("Introduce"),
+        "name": profile.Name or new_rows[0].get("Name"),
+        "avatarUrl": profile.AvatarUrl or new_rows[0].get("AvatarUrl"),
+        "title": profile.Title or new_rows[0].get("Title"),
+        "specialty": profile.Specialty or new_rows[0].get("Specialty"),
+        "field": profile.Field or new_rows[0].get("Field"),
+        "introduce": profile.Introduce or new_rows[0].get("Introduce"),
         "billing": float(billing_cents),
         "faceBilling": float(int(new_rows[0].get("FaceBilling") or 30000)),
         "consultHours": int(new_rows[0].get("ConsultHours") or 0),
@@ -369,17 +447,14 @@ def common_counselor_detail(
 @router.get("/counselors/{cid}/time-slots", summary="咨询师可预约时段（与排期同步）")
 def common_counselor_time_slots(
     cid: int,
+    current_account: Optional[AppAccount] = Depends(get_optional_account),
     db: Session = Depends(get_db),
 ):
     """轻量接口：仅返回预约时段，供预约页刷新。"""
-    rows = _safe_legacy_query(
-        db,
-        "SELECT Billing FROM AppCounselorProfile WHERE AccountId = :id AND IsActive = 1",
-        id=cid,
-    )
-    if not rows:
+    profile = get_counselor_profile(db, cid)
+    if not profile or not _counselor_visible_to_viewer(profile.CounselorType, current_account):
         raise HTTPException(status_code=404, detail="咨询师不存在或未开通排期")
-    billing_cents = int(rows[0].get("Billing") or 0)
+    billing_cents = _resolve_counselor_billing_cents(db, cid, current_account)
     time_slots, center_ids = counselor_booking_time_slots(
         db, cid, billing_cents=billing_cents,
     )
@@ -406,7 +481,7 @@ def common_search(
 
     if type in (None, "counselor"):
         result["counselors"] = common_counselors(
-            keyword=q.strip(), page=1, page_size=20, db=db
+            keyword=q.strip(), page=1, page_size=20, db=db, current_account=None
         )["items"]
 
     if type in (None, "article"):
