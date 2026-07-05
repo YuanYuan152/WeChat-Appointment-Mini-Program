@@ -935,7 +935,7 @@ def schedule_calendar(
     counselor: AppAccount = Depends(require_counselor),
     db: Session = Depends(get_db),
 ):
-    """排期查询：可按起始日期查看连续窗口；month 可查看整月。"""
+    """滚动窗口：默认从今天起连续 ROLLING_WINDOW_DAYS 天；可指定 past_days 包含历史已完成排期；或指定 month 查看整月。"""
     today = china_now().date()
 
     if month:
@@ -977,10 +977,15 @@ def schedule_calendar(
             requested = date_type.fromisoformat(start)
         except ValueError:
             raise HTTPException(status_code=400, detail="start 格式应为 YYYY-MM-DD")
+        if requested < earliest_date or requested > rolling_window_end(today):
+            raise HTTPException(
+                status_code=400,
+                detail=f"仅可查看 {earliest_date.isoformat()} ~ {rolling_window_end(today).isoformat()} 内日历",
+            )
         start_date = requested
 
     start_dt = datetime.combine(start_date, time.min)
-    end_dt = datetime.combine(start_date + timedelta(days=days), time.min)
+    _, end_dt = rolling_window_datetime_bounds(today)
 
     schedules = (
         db.query(AppSchedule)
