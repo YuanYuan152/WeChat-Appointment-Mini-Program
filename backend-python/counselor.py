@@ -1637,7 +1637,7 @@ def sign_authenticity_commitment(
     counselor: AppAccount = Depends(require_counselor),
     db: Session = Depends(get_db),
 ):
-    raise HTTPException(status_code=403, detail="咨询师资料由平台统一维护，请联系运营人员更新")
+    raise HTTPException(status_code=403, detail="咨询师资料由平台统一维护，请联系运营更新")
 
 
 @router.put("/profile", summary="更新咨询师个人资料")
@@ -1646,7 +1646,7 @@ def update_profile(
     counselor: AppAccount = Depends(require_counselor),
     db: Session = Depends(get_db),
 ):
-    raise HTTPException(status_code=403, detail="咨询师资料由平台统一维护，请联系运营人员更新")
+    raise HTTPException(status_code=403, detail="咨询师资料由平台统一维护，请联系运营更新")
 
 
 @router.get("/stats", summary="咨询师统计看板")

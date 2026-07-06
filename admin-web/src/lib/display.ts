@@ -11,6 +11,9 @@ export function getName(user: AdminUser | CurrentUser | UserBoardSummary | null 
   if ("realName" in user && user.realName) {
     return user.realName;
   }
+  if ("displayName" in user && user.displayName) {
+    return user.displayName;
+  }
   if ("nickname" in user && user.nickname) {
     return user.nickname;
   }

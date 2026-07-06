@@ -4,10 +4,17 @@ import { useCallback, useEffect, useState } from "react";
 
 import type { Role } from "@/types/api";
 
-import { bindUserRole, fetchAdminUsers, unbindUserRole } from "@/services/roles";
+import {
+  bindUserRole,
+  createUserByMobile,
+  fetchAdminUsers,
+  type CreateUserByMobilePayload,
+  unbindUserRole,
+} from "@/services/roles";
 import { AppRoute, useAppRoute } from "@/components/AppRoute";
 import { RolesPanel } from "@/panels/RolesPanel";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
+import { getMessage } from "@/lib/display";
 import type { ScreenData } from "@/types/app";
 
 export function RolesScreen() {
@@ -19,11 +26,12 @@ export function RolesScreen() {
 }
 
 function RolesScreenContent() {
-  const { clearNotice, refreshKey, showNotice } = useAppRoute();
+  const { clearNotice, currentUser, refreshKey, showNotice } = useAppRoute();
   const [data, setData] = useState<ScreenData>({});
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [listLoading, setListLoading] = useState(false);
+  const [createLoading, setCreateLoading] = useState(false);
 
   const loadData = useCallback(async () => {
     setListLoading(true);
@@ -76,17 +84,34 @@ function RolesScreenContent() {
     void runUpdate();
   };
 
+  const createUser = async (payload: CreateUserByMobilePayload) => {
+    setCreateLoading(true);
+    clearNotice();
+    try {
+      const result = await createUserByMobile(payload);
+      const adminUsers = await fetchAdminUsers();
+      setData((prev) => ({ ...prev, adminUsers }));
+      setPage(1);
+      showNotice("success", getMessage(result, result.created ? "用户已添加" : "已绑定角色"));
+    } finally {
+      setCreateLoading(false);
+    }
+  };
+
   return (
     <RolesPanel
       users={data.adminUsers}
+      currentUserRoles={currentUser.roles}
       listLoading={listLoading}
       page={page}
       pageSize={pageSize}
+      createLoading={createLoading}
       onPageChange={setPage}
       onPageSizeChange={(nextPageSize) => {
         setPage(1);
         setPageSize(nextPageSize);
       }}
+      onCreateUser={createUser}
       onUpdateRoles={updateRoles}
     />
   );

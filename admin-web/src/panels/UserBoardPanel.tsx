@@ -254,6 +254,7 @@ function UserDetailPanel({ detail }: { detail: UserBoardDetail }) {
         items={detail.orders.map(
           (item) => (
             <DetailCard
+              key={`order-${item.id}`}
               title={`${formatMoneyFromCents(item.totalFee)} · ${statusLabel(item.status)}`}
               rows={[
                 ["创建时间", formatDateTime(item.createdAt)],
@@ -272,6 +273,7 @@ function UserDetailPanel({ detail }: { detail: UserBoardDetail }) {
         items={detail.payments.map(
           (item) => (
             <DetailCard
+              key={`payment-${item.id}`}
               title={`${formatMoneyFromCents(item.amount)} · ${statusLabel(item.status)}`}
               rows={[["支付时间", formatDateTime(item.paidAt)]]}
             />
@@ -283,6 +285,7 @@ function UserDetailPanel({ detail }: { detail: UserBoardDetail }) {
         items={detail.refunds.map(
           (item) => (
             <DetailCard
+              key={`refund-${item.id}`}
               title={`${formatMoneyFromCents(item.amount)} · ${statusLabel(item.status)}`}
               rows={[["更新时间", formatDateTime(item.updatedAt)]]}
             />
@@ -294,6 +297,7 @@ function UserDetailPanel({ detail }: { detail: UserBoardDetail }) {
         items={detail.exemptions.map(
           (item) => (
             <DetailCard
+              key={`exemption-${item.id}`}
               title={`${formatMoneyFromCents(item.amount)} · ${statusLabel(item.status)}`}
               rows={[
                 ["提交时间", formatDateTime(item.createdAt)],

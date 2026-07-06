@@ -20,6 +20,8 @@ export interface Doctor {
   province: string
   description?: string
   price?: number
+  needsNegotiation?: boolean
+  priceLabel?: string
 }
 
 // 轮播图类型
@@ -141,4 +143,4 @@ export interface HomeData {
   doctors: Doctor[]
   activities: Activity[]
   liveStreams: LiveStream[]
-} 
+}

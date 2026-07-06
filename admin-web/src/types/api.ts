@@ -49,8 +49,100 @@ export interface AdminUser {
   id: number;
   mobile?: string | null;
   nickname?: string | null;
+  displayName?: string | null;
+  counselorName?: string | null;
   activeRole?: string | null;
+  activeRoleLabel?: string | null;
+  patientSource?: string | null;
+  patientSourceLabel?: string | null;
+  counselorType?: string | null;
+  counselorTypeLabel?: string | null;
   roles: Role[];
+  created?: boolean;
+  message?: string;
+}
+
+export interface AdminUsersResponse {
+  items: AdminUser[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface PricingCounselorSummary {
+  counselorId: number;
+  counselorName: string;
+  counselorType?: string | null;
+  counselorTypeLabel?: string | null;
+  basePriceCents: number;
+  basePriceYuan: number;
+  defaultBasePriceYuan: number;
+  defaultRevenueShareCents?: number;
+  defaultRevenueShareYuan?: number;
+  defaultSharePercent?: number;
+  usingDefaultBase?: boolean;
+  patientCount: number;
+  totalPatientCount: number;
+  configuredPatientCount: number;
+  completedConsultationCount?: number;
+  charityNegotiationThreshold?: number;
+  needsNegotiation?: boolean;
+  priceLabel?: string | null;
+}
+
+export interface PricingCounselorListResponse {
+  total: number;
+  items: PricingCounselorSummary[];
+}
+
+export interface PricingPatientRow {
+  patientId: number;
+  patientName: string;
+  patientMobile?: string | null;
+  counselorId: number;
+  counselorName: string;
+  counselorType?: string | null;
+  lowPriceOrderCount: number;
+  totalCompletedConsultations: number;
+  counselorCompletedConsultations: number;
+  completedCharityConsultationCount?: number;
+  charityNegotiationThreshold?: number;
+  needsNegotiation?: boolean;
+  priceLabel?: string | null;
+  basePriceCents: number;
+  basePriceYuan: number;
+  manualAdjustmentCents: number;
+  manualAdjustmentYuan: number;
+  autoAdjustmentCents: number;
+  autoAdjustmentYuan: number;
+  adjustmentCents: number;
+  adjustmentYuan: number;
+  displayPriceCents: number;
+  displayPriceYuan: number;
+  revenueShareCents: number;
+  revenueShareYuan: number;
+  shareMode?: "AMOUNT" | "PERCENT" | null;
+  revenueShareAmountCents?: number | null;
+  revenueSharePercent?: number | null;
+}
+
+export interface PricingPatientListResponse {
+  counselor: PricingCounselorSummary;
+  total: number;
+  page: number;
+  pageSize: number;
+  items: PricingPatientRow[];
+}
+
+export interface PricingCounselorUpdatePayload {
+  basePriceYuan: number;
+  defaultRevenueShareYuan: number;
+}
+
+export interface PricingPatientUpdatePayload {
+  adjustmentYuan: number;
+  shareMode: "AMOUNT";
+  revenueShareYuan: number;
 }
 
 export interface OpsUser {

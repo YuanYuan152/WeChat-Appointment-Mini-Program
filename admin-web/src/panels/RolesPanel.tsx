@@ -1,10 +1,13 @@
 import { type FormEvent, useMemo, useState } from "react";
 
+import { getManageableRoles } from "@/config/userRoleMeta";
 import { roleLabel } from "@/lib/format";
 import type { AdminUser, Role } from "@/types/api";
 
 import { getName } from "@/lib/display";
 import { getPageItems } from "@/lib/pagination";
+import type { CreateUserByMobilePayload } from "@/services/roles";
+import { RoleCreateModal } from "@/components/roles/RoleCreateModal";
 import { RoleEditModal } from "@/components/roles/RoleEditModal";
 import {
   EmptyState,
@@ -18,26 +21,35 @@ import {
 
 export function RolesPanel({
   users,
+  currentUserRoles,
   listLoading,
   page,
   pageSize,
+  createLoading,
   onPageChange,
   onPageSizeChange,
+  onCreateUser,
   onUpdateRoles,
 }: {
   users?: AdminUser[];
+  currentUserRoles: Role[];
   listLoading?: boolean;
   page: number;
   pageSize: number;
+  createLoading?: boolean;
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
+  onCreateUser: (payload: CreateUserByMobilePayload) => Promise<void>;
   onUpdateRoles: (userId: number, currentRoles: Role[], nextRoles: Role[]) => void;
 }) {
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
+  const [creating, setCreating] = useState(false);
   const [selectedRoles, setSelectedRoles] = useState<Role[]>([]);
   const [keywordInput, setKeywordInput] = useState("");
   const [keyword, setKeyword] = useState("");
   const allUsers = useMemo(() => users || [], [users]);
+  const manageableRoleOptions = useMemo(() => getManageableRoles(currentUserRoles), [currentUserRoles]);
+  const manageableRoles = useMemo(() => manageableRoleOptions.map((option) => option.value), [manageableRoleOptions]);
   const filteredUsers = useMemo(() => {
     const normalizedKeyword = keyword.trim().toLowerCase();
     if (!normalizedKeyword) {
@@ -84,11 +96,21 @@ export function RolesPanel({
   return (
     <section className="rounded-xl border border-[var(--lxxl-border)] bg-white">
       <form className="px-6 py-5 sm:px-7 lg:px-8" onSubmit={submitQuery}>
-        <div>
-          <h2 className="text-xl font-semibold tracking-normal">用户与角色</h2>
-          <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">
-            复用 `/api/mini/admin/users*`，只允许 Admin 操作。
-          </p>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-semibold tracking-normal">用户与角色</h2>
+            <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">
+              管理员可按手机号创建账号并绑定角色；已有账号会复用原数据。
+            </p>
+          </div>
+          <button
+            className="h-10 rounded-xl bg-[var(--lxxl-green)] px-5 text-sm font-medium text-white transition hover:bg-[var(--lxxl-green-dark)] disabled:cursor-not-allowed disabled:opacity-45"
+            type="button"
+            disabled={manageableRoleOptions.length === 0}
+            onClick={() => setCreating(true)}
+          >
+            新建角色
+          </button>
         </div>
         <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <QueryField label="姓名/电话">
@@ -137,7 +159,15 @@ export function RolesPanel({
                 <tr key={user.id} className="border-t border-[var(--lxxl-border)] align-top">
                   <td className="px-5 py-4">{getName(user)}</td>
                   <td className="px-5 py-4">{user.mobile || "-"}</td>
-                  <td className="px-5 py-4">{roleLabel(user.activeRole)}</td>
+                  <td className="px-5 py-4">
+                    <div>{user.activeRoleLabel || roleLabel(user.activeRole)}</div>
+                    {user.patientSourceLabel && (
+                      <div className="mt-1 text-xs text-[var(--lxxl-muted)]">来访来源：{user.patientSourceLabel}</div>
+                    )}
+                    {user.counselorTypeLabel && (
+                      <div className="mt-1 text-xs text-[var(--lxxl-muted)]">咨询师类型：{user.counselorTypeLabel}</div>
+                    )}
+                  </td>
                   <td className="px-5 py-4">
                     <div className="flex flex-wrap gap-2">
                       {user.roles.length > 0 ? (
@@ -174,10 +204,19 @@ export function RolesPanel({
       {editingUser && (
         <RoleEditModal
           user={editingUser}
+          manageableRoles={manageableRoles}
           selectedRoles={selectedRoles}
           onChange={setSelectedRoles}
           onClose={closeEditor}
           onSave={saveRoles}
+        />
+      )}
+      {creating && (
+        <RoleCreateModal
+          roleOptions={manageableRoleOptions}
+          submitting={createLoading}
+          onClose={() => setCreating(false)}
+          onCreate={onCreateUser}
         />
       )}
     </section>

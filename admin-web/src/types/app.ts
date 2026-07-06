@@ -41,6 +41,7 @@ export type SectionId =
   | "content"
   | "schedules"
   | "rooms"
+  | "pricing"
   | "caseRecords"
   | "operationLogs"
   | "dataImport"

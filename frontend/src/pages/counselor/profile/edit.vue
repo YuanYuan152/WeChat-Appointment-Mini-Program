@@ -6,7 +6,7 @@
 
     <template v-else>
       <view class="notice-bar">
-        <text class="notice-text">咨询师对外展示资料由平台统一维护，如需修改请联系运营人员</text>
+        <text class="notice-text">咨询师对外展示资料由平台统一维护，如需修改请联系运营</text>
       </view>
 
       <view class="profile-card">

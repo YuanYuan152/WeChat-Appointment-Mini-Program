@@ -428,3 +428,4 @@ lxxl/Web.config
 backend-python/.env
 frontend/.env
 frontend/.env.production
+.pnpm-store/

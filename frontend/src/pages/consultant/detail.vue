@@ -39,7 +39,8 @@
           <view class="hero-info">
             <view class="hero-name-row">
               <text class="hero-name">{{ doctor.name }}</text>
-              <text class="hero-price">￥{{ doctor.price }}<text class="hero-price-unit">/次</text></text>
+              <text v-if="doctor.needsNegotiation" class="hero-price hero-price--negotiation">{{ doctor.priceLabel || '需议价' }}</text>
+              <text v-else class="hero-price">￥{{ doctor.price }}<text class="hero-price-unit">/次</text></text>
             </view>
             <view class="hero-tags">
               <text class="hero-tag secondary">从业{{ doctor.workYears }}年</text>
@@ -163,7 +164,7 @@
                   <text class="tc-time">{{ slot.startHH }}-{{ slot.endHH }}</text>
                 </view>
                 <view class="time-card-bot">
-                  <text class="tc-price">￥{{ slot.Price }}</text>
+                  <text class="tc-price">{{ slot.needsNegotiation ? (slot.priceLabel || '需议价') : `￥${slot.Price}` }}</text>
                   <view v-if="isSlotBookable(slot)" class="tc-radio">
                     <view class="tc-radio-inner" v-if="selectedSlotId === slot.ID"></view>
                   </view>
@@ -198,7 +199,7 @@
           :class="{ disabled: !canProceedBooking }"
           :disabled="!canProceedBooking"
           @click="makeAppointment"
-        >{{ canProceedBooking ? `立即预约 ￥${selectedSlot?.Price || doctor.price}` : '立即预约' }}</button>
+        >{{ bookingButtonText }}</button>
       </view>
     </view>
 
@@ -386,6 +387,8 @@ interface Doctor {
   specialty: string
   experience: number
   price: number
+  needsNegotiation: boolean
+  priceLabel?: string
   avatar: string
   description: string
   profile: string
@@ -416,6 +419,8 @@ const doctor = ref<Doctor>({
   specialty: '',
   experience: 0,
   price: 0,
+  needsNegotiation: false,
+  priceLabel: undefined,
   avatar: '',
   description: '',
   profile: '',
@@ -488,6 +493,13 @@ const canProceedBooking = computed(() =>
   )
 )
 
+const bookingButtonText = computed(() => {
+  if (selectedSlot.value?.needsNegotiation || doctor.value.needsNegotiation) {
+    return '请联系助理议价'
+  }
+  return canProceedBooking.value ? `立即预约 ￥${selectedSlot.value?.Price || doctor.value.price}` : '立即预约'
+})
+
 const applyBookingData = (data: {
   timeSlots?: any[]
   availableCenterIds?: string[]
@@ -553,25 +565,30 @@ const getRouteParams = () => {
   return (currentPage as any).options || {}
 }
 
-const mapDoctorDetail = (item: any): Doctor => ({
-  id: Number(item.id || 0),
-  name: item.name || '咨询师',
-  specialty: item.specialty || item.field || '心理咨询',
-  experience: Number(item.workYears || 0),
-  price: Math.round(Number(item.billing || 0) / 100) || item.price || 500,
-  avatar: item.avatarUrl || item.avatar || '',
-  description: item.introduce || item.description || '暂无介绍',
-  profile: item.profile || item.introduce || '暂无简介',
-  career: item.career || '',
-  joiner: item.joiner || '',
-  trainingCount: Number(item.trainingCount ?? item.trainingSegments ?? 0) || 0,
-  qualification: item.qualification || '暂无资质信息',
-  field: item.field || item.specialty || '',
-  targetGroup: item.targetGroup || '成人,青少年,亲子家庭',
-  consultHours: Number(item.consultHours || 0),
-  workYears: Number(item.workYears || 0),
-  mode: item.mode || '线上/线下'
-})
+const mapDoctorDetail = (item: any): Doctor => {
+  const needsNegotiation = Boolean(item.needsNegotiation ?? item.needs_negotiation)
+  return {
+    id: Number(item.id || 0),
+    name: item.name || '咨询师',
+    specialty: item.specialty || item.field || '心理咨询',
+    experience: Number(item.workYears || 0),
+    price: Math.round(Number(item.billing || 0) / 100) || item.price || 500,
+    needsNegotiation,
+    priceLabel: item.priceLabel || item.price_label || (needsNegotiation ? '需议价' : undefined),
+    avatar: item.avatarUrl || item.avatar || '',
+    description: item.introduce || item.description || '暂无介绍',
+    profile: item.profile || item.introduce || '暂无简介',
+    career: item.career || '',
+    joiner: item.joiner || '',
+    trainingCount: Number(item.trainingCount ?? item.trainingSegments ?? 0) || 0,
+    qualification: item.qualification || '暂无资质信息',
+    field: item.field || item.specialty || '',
+    targetGroup: item.targetGroup || '成人,青少年,亲子家庭',
+    consultHours: Number(item.consultHours || 0),
+    workYears: Number(item.workYears || 0),
+    mode: item.mode || '线上/线下'
+  }
+}
 
 const loadFavoriteStatus = async () => {
   if (!doctor.value.id || !isLoggedIn()) {
@@ -756,6 +773,10 @@ const onScroll = (e: any) => {
 // 选择时间段（需已选预约中心且时段属于该中心）
 const selectTimeSlot = (slot: BookingTimeSlot) => {
   if (isTimeModuleDisabled.value) return
+  if (slot.needsNegotiation || slot.status === 'NEGOTIATION') {
+    uni.showToast({ title: '该时段需议价，请联系助理', icon: 'none' })
+    return
+  }
   if (!isSlotBookable(slot)) {
     uni.showToast({ title: '该时段已被预约', icon: 'none' })
     return
@@ -827,6 +848,10 @@ const makeAppointment = async () => {
   }
   if (selectedSlotId.value === -1) {
     uni.showToast({ title: '请选择可约时间', icon: 'none' })
+    return
+  }
+  if (selectedSlot.value?.needsNegotiation || doctor.value.needsNegotiation) {
+    uni.showToast({ title: '请先联系助理确认价格', icon: 'none' })
     return
   }
 
@@ -1187,6 +1212,10 @@ const confirmPayment = async () => {
     uni.showToast({ title: '请先选择可约时间', icon: 'none' })
     return
   }
+  if (selectedSlot.value?.needsNegotiation || doctor.value.needsNegotiation) {
+    uni.showToast({ title: '请先联系助理确认价格', icon: 'none' })
+    return
+  }
 
   let signatureUrl: string | undefined
   if (needsIntakeAgreement.value) {
@@ -1483,6 +1512,10 @@ onMounted(() => {
   font-weight: 800;
   color: #F59E0B;
   flex-shrink: 0;
+}
+
+.hero-price--negotiation {
+  color: #B45309;
 }
 
 .hero-price-unit {

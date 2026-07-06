@@ -7,20 +7,26 @@ import type { AdminUser, Role } from "@/types/api";
 
 export function RoleEditModal({
   user,
+  manageableRoles,
   selectedRoles,
   onChange,
   onClose,
   onSave,
 }: {
   user: AdminUser;
+  manageableRoles: Role[];
   selectedRoles: Role[];
   onChange: (roles: Role[]) => void;
   onClose: () => void;
   onSave: () => void;
 }) {
   const selectedSet = new Set(selectedRoles);
+  const manageableSet = new Set(manageableRoles);
 
   const toggleRole = (role: Role) => {
+    if (!manageableSet.has(role) || role === "Patient") {
+      return;
+    }
     if (selectedSet.has(role)) {
       onChange(selectedRoles.filter((item) => item !== role));
       return;
@@ -41,20 +47,28 @@ export function RoleEditModal({
         <div className="space-y-3 px-6 py-5">
           {roles.map((role) => {
             const checked = selectedSet.has(role);
+            const canChange = manageableSet.has(role) && role !== "Patient";
+            if (!checked && !canChange) {
+              return null;
+            }
             return (
               <label
                 key={role}
-                className={`flex cursor-pointer items-center justify-between rounded-xl border px-4 py-3 text-sm transition ${
+                className={`flex items-center justify-between rounded-xl border px-4 py-3 text-sm transition ${
                   checked
                     ? "border-[var(--lxxl-green)] bg-[#F3F8F5]"
                     : "border-[var(--lxxl-border)] bg-white hover:bg-[#FAF8F4]"
-                }`}
+                } ${canChange ? "cursor-pointer" : "cursor-not-allowed opacity-60"}`}
               >
-                <span className="font-medium">{roleLabel(role)}</span>
+                <span>
+                  <span className="font-medium">{roleLabel(role)}</span>
+                  {!canChange && <span className="ml-2 text-xs text-[var(--lxxl-muted)]">不可调整</span>}
+                </span>
                 <input
-                  className="h-4 w-4 accent-[var(--lxxl-green)]"
+                  className="h-4 w-4 accent-[var(--lxxl-green)] disabled:cursor-not-allowed"
                   type="checkbox"
                   checked={checked}
+                  disabled={!canChange}
                   onChange={() => toggleRole(role)}
                 />
               </label>

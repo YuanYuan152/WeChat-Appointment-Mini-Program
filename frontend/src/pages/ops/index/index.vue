@@ -2,7 +2,7 @@
   <view class="page-ops-home">
     <view class="hero-card">
       <text class="hero-title">管理工作台</text>
-      <text class="hero-subtitle">咨询助理、咨询主任、管理员共用；管理排期、咨询室、内容与用户</text>
+      <text class="hero-subtitle">咨询助理、运营、管理员共用；管理排期、咨询室、内容与用户</text>
     </view>
 
     <view class="grid">

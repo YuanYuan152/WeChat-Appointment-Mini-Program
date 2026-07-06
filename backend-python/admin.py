@@ -91,7 +91,7 @@ def require_staff_workbench(
     current_account: AppAccount = Depends(get_current_account),
     db: Session = Depends(get_db),
 ) -> AppAccount:
-    """咨询助理、咨询主任、管理员共用管理工作台。"""
+    """咨询助理、运营、管理员共用管理工作台。"""
     if not account_has_staff_workbench(
         db, current_account.Id, getattr(current_account, "ActiveRole", None)
     ):
@@ -135,6 +135,27 @@ class CreateUserByMobileRequest(BaseModel):
 
 
 BINDABLE_ROLE_TYPES = frozenset({"Counselor", "Assistant", "Ops", "Patient", "Admin"})
+ROLE_MANAGEMENT_ALLOWED = {
+    "Admin": frozenset({"Admin", "Ops", "Assistant", "Counselor", "Patient"}),
+    "Ops": frozenset({"Assistant", "Counselor", "Patient"}),
+    "Assistant": frozenset({"Counselor", "Patient"}),
+}
+
+
+def _manageable_role_types(db: Session, account: AppAccount) -> set[str]:
+    roles = set(list_account_roles(db, account.Id))
+    active_role = getattr(account, "ActiveRole", None)
+    if active_role:
+        roles.add(active_role)
+    manageable: set[str] = set()
+    for role in roles:
+        manageable.update(ROLE_MANAGEMENT_ALLOWED.get(role, ()))
+    return manageable
+
+
+def _assert_can_manage_role(db: Session, operator: AppAccount, role: str) -> None:
+    if role not in _manageable_role_types(db, operator):
+        raise HTTPException(status_code=403, detail="当前角色不能创建或调整该角色")
 
 
 def _normalize_mobile(mobile: str) -> str:
@@ -455,12 +476,13 @@ def list_admin_users(
 @router.post("/users/by-mobile", summary="通过手机号添加用户并绑定角色")
 def create_user_by_mobile(
     body: CreateUserByMobileRequest,
-    _admin: AppAccount = Depends(require_staff_workbench),
+    admin: AppAccount = Depends(require_staff_workbench),
     db: Session = Depends(get_db),
 ):
     mobile = _normalize_mobile(body.mobile)
     if body.role not in BINDABLE_ROLE_TYPES:
         raise HTTPException(status_code=400, detail="不支持绑定该角色")
+    _assert_can_manage_role(db, admin, body.role)
 
     patient_source: Optional[str] = None
     counselor_type: Optional[str] = None
@@ -543,7 +565,7 @@ def create_user_by_mobile(
 def bind_user_role(
     user_id: int,
     body: BindRoleRequest,
-    _admin: AppAccount = Depends(require_staff_workbench),
+    admin: AppAccount = Depends(require_staff_workbench),
     db: Session = Depends(get_db),
 ):
     user = db.query(AppAccount).filter(AppAccount.Id == user_id).first()
@@ -551,6 +573,7 @@ def bind_user_role(
         raise HTTPException(status_code=404, detail="用户不存在")
     if body.role not in BINDABLE_ROLE_TYPES:
         raise HTTPException(status_code=400, detail="不支持绑定该角色")
+    _assert_can_manage_role(db, admin, body.role)
     existing = db.query(AppRoleBinding).filter(
         AppRoleBinding.AccountId == user_id,
         AppRoleBinding.RoleType == body.role,
@@ -608,7 +631,7 @@ def bind_user_role(
 def unbind_user_role(
     user_id: int,
     role: str,
-    _admin: AppAccount = Depends(require_staff_workbench),
+    admin: AppAccount = Depends(require_staff_workbench),
     db: Session = Depends(get_db),
 ):
     """
@@ -619,6 +642,7 @@ def unbind_user_role(
     """
     if role == "Patient":
         raise HTTPException(status_code=400, detail="来访为默认基础角色，不可解绑")
+    _assert_can_manage_role(db, admin, role)
 
     binding = db.query(AppRoleBinding).filter(
         AppRoleBinding.AccountId == user_id,
@@ -2241,19 +2265,20 @@ def reject_leave_request_api(
 
 class AdminPricingUpdatePayload(BaseModel):
     adjustmentYuan: int = Field(..., ge=-99999, le=99999, description="手动调价（元，可正可负）")
-    shareMode: Optional[str] = Field(None, description="AMOUNT | PERCENT，空则默认基础价的 50% 分成")
+    shareMode: Optional[str] = Field(None, description="AMOUNT | PERCENT，空则使用咨询师默认分成")
     revenueShareYuan: Optional[int] = Field(None, ge=0, le=99999)
     revenueSharePercent: Optional[int] = Field(None, ge=0, le=100)
 
 
 class AdminCounselorBasePricePayload(BaseModel):
     basePriceYuan: int = Field(..., ge=0, le=99999, description="咨询师统一基础价（元）")
+    defaultRevenueShareYuan: Optional[int] = Field(None, ge=0, le=99999, description="咨询师默认分成金额（元）")
 
 
 @router.get("/pricing/counselors", summary="定价管理：咨询师列表（含统一基础价）")
 def list_pricing_counselors(
     keyword: Optional[str] = Query(None),
-    _admin: AppAccount = Depends(require_admin),
+    _staff: AppAccount = Depends(require_staff_workbench),
     db: Session = Depends(get_db),
 ):
     from pricing_service import list_counselor_pricing_summaries
@@ -2270,13 +2295,22 @@ def list_pricing_counselors(
 def update_pricing_counselor_base(
     counselor_id: int,
     body: AdminCounselorBasePricePayload,
-    _admin: AppAccount = Depends(require_admin),
+    _staff: AppAccount = Depends(require_staff_workbench),
     db: Session = Depends(get_db),
 ):
-    from pricing_service import counselor_pricing_summary, update_counselor_base_price_cents
+    from pricing_service import counselor_pricing_summary, update_counselor_base_pricing_cents
 
     try:
-        update_counselor_base_price_cents(db, counselor_id, body.basePriceYuan * 100)
+        update_counselor_base_pricing_cents(
+            db,
+            counselor_id,
+            base_price_cents=body.basePriceYuan * 100,
+            default_share_cents=(
+                body.defaultRevenueShareYuan * 100
+                if body.defaultRevenueShareYuan is not None
+                else None
+            ),
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     db.commit()
@@ -2289,7 +2323,7 @@ def list_pricing_counselor_patients(
     keyword: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
-    _admin: AppAccount = Depends(require_admin),
+    _staff: AppAccount = Depends(require_staff_workbench),
     db: Session = Depends(get_db),
 ):
     from pricing_service import counselor_pricing_summary, get_counselor_profile, list_counselor_patient_pricing
@@ -2317,7 +2351,7 @@ def update_pricing_counselor_patient(
     counselor_id: int,
     patient_id: int,
     body: AdminPricingUpdatePayload,
-    _admin: AppAccount = Depends(require_admin),
+    _staff: AppAccount = Depends(require_staff_workbench),
     db: Session = Depends(get_db),
 ):
     from pricing_service import pricing_breakdown, upsert_patient_pricing

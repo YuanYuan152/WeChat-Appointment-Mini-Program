@@ -198,7 +198,10 @@
           </view>
           
           <view class="doc-card-bottom">
-            <view class="doc-price-box">
+            <view v-if="doctor.needsNegotiation" class="doc-price-box">
+              <text class="price-negotiate">{{ doctor.priceLabel || '需议价' }}</text>
+            </view>
+            <view v-else class="doc-price-box">
               <text class="price-symbol">￥</text>
               <text class="price-num">{{ doctor.price || 500 }}</text>
               <text class="price-unit">/50分钟</text>
@@ -254,7 +257,10 @@ interface Consultant extends Omit<Doctor, 'province'> {
   consultationType?: string
   province?: string
   description?: string
+  status?: string
   price?: number
+  needsNegotiation?: boolean
+  priceLabel?: string
   _source?: string
 }
 
@@ -372,6 +378,8 @@ function parseWorkYears(item: { workYears?: number; experience?: string }) {
 }
 
 function normalizeConsultant(item: Consultant): Consultant {
+  const raw = item as Consultant & { needs_negotiation?: boolean; price_label?: string }
+  const needsNegotiation = Boolean(raw.needsNegotiation ?? raw.needs_negotiation)
   return {
     ...item,
     avatar: fixImageUrl(item.avatar || '/static/images/tc59.png'),
@@ -381,6 +389,8 @@ function normalizeConsultant(item: Consultant): Consultant {
     province: item.province || '线下/线上',
     description: item.description || '暂无介绍',
     price: item.price || 500,
+    needsNegotiation,
+    priceLabel: raw.priceLabel || raw.price_label || (needsNegotiation ? '需议价' : undefined),
   }
 }
 
@@ -931,6 +941,12 @@ onPullDownRefresh(async () => {
   font-size: 22rpx;
   color: #9CA3AF;
   margin-left: 4rpx;
+}
+
+.price-negotiate {
+  font-size: 30rpx;
+  color: #F59E0B;
+  font-weight: 800;
 }
 
 .assistant-btn {

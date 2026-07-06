@@ -70,6 +70,8 @@ def schedules_to_booking_time_slots(
     schedules: List[AppSchedule],
     *,
     billing_cents: int = 0,
+    needs_negotiation: bool = False,
+    price_label: str | None = None,
 ) -> Tuple[List[dict], Set[str]]:
     """
     将 AppSchedule 转为预约页 timeSlots。
@@ -91,8 +93,12 @@ def schedules_to_booking_time_slots(
 
         center_ids.add(center_id)
         if display == DISPLAY_OPEN:
-            slot_status = "AVAILABLE"
-            is_bookable = True
+            if needs_negotiation:
+                slot_status = "NEGOTIATION"
+                is_bookable = False
+            else:
+                slot_status = "AVAILABLE"
+                is_bookable = True
         elif display == DISPLAY_BOOKED:
             slot_status = "BOOKED"
             is_bookable = False
@@ -108,6 +114,8 @@ def schedules_to_booking_time_slots(
             "endHH": s.EndTime.strftime("%H:%M"),
             "week": f"周{'一二三四五六日'[s.StartTime.weekday()]}",
             "Price": price,
+            "priceLabel": price_label or f"￥{price:g}",
+            "needsNegotiation": needs_negotiation,
             "maxSign": 1,
             "numSign": 0 if is_bookable else 1,
             "status": slot_status,
@@ -125,7 +133,15 @@ def counselor_booking_time_slots(
     counselor_id: int,
     *,
     billing_cents: int = 0,
+    needs_negotiation: bool = False,
+    price_label: str | None = None,
 ) -> Tuple[List[dict], Set[str]]:
     """咨询师可预约时段：读 AppSchedule，规则与工作台排期展示一致。"""
     schedules = query_counselor_schedules_for_booking(db, counselor_id)
-    return schedules_to_booking_time_slots(db, schedules, billing_cents=billing_cents)
+    return schedules_to_booking_time_slots(
+        db,
+        schedules,
+        billing_cents=billing_cents,
+        needs_negotiation=needs_negotiation,
+        price_label=price_label,
+    )

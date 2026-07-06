@@ -23,7 +23,11 @@ from database import get_db
 from models import AppAccount, AppOrder, AppSchedule
 from config import settings
 from payment_service import complete_paid_order
-from pricing_service import get_counselor_profile, resolve_display_price_cents
+from pricing_service import (
+    get_counselor_profile,
+    resolve_display_price_cents,
+    resolve_price_negotiation_required,
+)
 from user_role_meta import counselor_visible_to_patient
 from intake_agreement import attach_intake_to_order
 
@@ -117,6 +121,9 @@ def _create_pending_order(
         getattr(account, "PatientSource", None),
     ):
         raise HTTPException(status_code=403, detail="您无法预约该咨询师")
+
+    if resolve_price_negotiation_required(db, account.Id, schedule.CounselorId):
+        raise HTTPException(status_code=400, detail="该公益咨询师已进入需议价阶段，请联系助理确认价格后再预约")
 
     expected_fee = resolve_display_price_cents(db, account.Id, schedule.CounselorId)
     if req.total_fee != expected_fee:

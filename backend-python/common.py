@@ -23,6 +23,8 @@ from pricing_service import (
     get_counselor_profile,
     resolve_default_display_price_cents,
     resolve_display_price_cents,
+    resolve_price_label,
+    resolve_price_negotiation_required,
 )
 from user_role_meta import counselor_visible_to_patient
 from counselor_identity_service import (
@@ -230,7 +232,13 @@ def _legacy_doctor_to_dict(row: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _counselor_profile_dict(r: AppCounselorProfile, billing_cents: Optional[int] = None) -> Dict[str, Any]:
+def _counselor_profile_dict(
+    r: AppCounselorProfile,
+    billing_cents: Optional[int] = None,
+    *,
+    needs_negotiation: bool = False,
+    price_label: Optional[str] = None,
+) -> Dict[str, Any]:
     billing = float(billing_cents if billing_cents is not None else (r.Billing or 0))
     return {
         "id": int(r.AccountId or r.Id or 0),
@@ -241,6 +249,8 @@ def _counselor_profile_dict(r: AppCounselorProfile, billing_cents: Optional[int]
         "field": r.Field,
         "introduce": r.Introduce,
         "billing": billing,
+        "needsNegotiation": needs_negotiation,
+        "priceLabel": price_label,
         "consultHours": int(r.ConsultHours or 0),
         "workYears": int(r.WorkYears or 0),
         "province": "线下/线上",
@@ -256,6 +266,21 @@ def _resolve_counselor_billing_cents(
     if patient_account:
         return resolve_display_price_cents(db, patient_account.Id, counselor_id)
     return resolve_default_display_price_cents(db, counselor_id)
+
+
+def _resolve_counselor_pricing_context(
+    db: Session,
+    counselor_id: int,
+    patient_account: Optional[AppAccount],
+) -> Dict[str, Any]:
+    patient_id = patient_account.Id if patient_account else None
+    billing_cents = _resolve_counselor_billing_cents(db, counselor_id, patient_account)
+    needs_negotiation = resolve_price_negotiation_required(db, patient_id, counselor_id)
+    return {
+        "billingCents": billing_cents,
+        "needsNegotiation": needs_negotiation,
+        "priceLabel": resolve_price_label(db, patient_id, counselor_id),
+    }
 
 
 def _patient_source_for_visibility(patient_account: Optional[AppAccount]) -> Optional[str]:
@@ -306,8 +331,15 @@ def _query_counselor_profiles(
             if not _counselor_visible_to_viewer(profile.CounselorType, patient_account):
                 continue
             seen_accounts.add(cid)
-            billing_cents = _resolve_counselor_billing_cents(db, cid, patient_account)
-            result.append(_counselor_profile_dict(profile, billing_cents))
+            pricing = _resolve_counselor_pricing_context(db, cid, patient_account)
+            result.append(
+                _counselor_profile_dict(
+                    profile,
+                    pricing["billingCents"],
+                    needs_negotiation=pricing["needsNegotiation"],
+                    price_label=pricing["priceLabel"],
+                )
+            )
         return result
     except Exception:
         return []
@@ -413,9 +445,14 @@ def common_counselor_detail(
     if not profile or not _counselor_visible_to_viewer(profile.CounselorType, current_account):
         raise HTTPException(status_code=404, detail="咨询师不存在")
 
-    billing_cents = _resolve_counselor_billing_cents(db, cid, current_account)
+    pricing = _resolve_counselor_pricing_context(db, cid, current_account)
+    billing_cents = pricing["billingCents"]
     time_slots, center_ids = counselor_booking_time_slots(
-        db, cid, billing_cents=billing_cents,
+        db,
+        cid,
+        billing_cents=billing_cents,
+        needs_negotiation=pricing["needsNegotiation"],
+        price_label=pricing["priceLabel"],
     )
     return {
         "id": cid,
@@ -426,6 +463,8 @@ def common_counselor_detail(
         "field": profile.Field or new_rows[0].get("Field"),
         "introduce": profile.Introduce or new_rows[0].get("Introduce"),
         "billing": float(billing_cents),
+        "needsNegotiation": pricing["needsNegotiation"],
+        "priceLabel": pricing["priceLabel"],
         "faceBilling": float(int(new_rows[0].get("FaceBilling") or 30000)),
         "consultHours": int(new_rows[0].get("ConsultHours") or 0),
         "workYears": int(new_rows[0].get("WorkYears") or 0),
@@ -454,9 +493,14 @@ def common_counselor_time_slots(
     profile = get_counselor_profile(db, cid)
     if not profile or not _counselor_visible_to_viewer(profile.CounselorType, current_account):
         raise HTTPException(status_code=404, detail="咨询师不存在或未开通排期")
-    billing_cents = _resolve_counselor_billing_cents(db, cid, current_account)
+    pricing = _resolve_counselor_pricing_context(db, cid, current_account)
+    billing_cents = pricing["billingCents"]
     time_slots, center_ids = counselor_booking_time_slots(
-        db, cid, billing_cents=billing_cents,
+        db,
+        cid,
+        billing_cents=billing_cents,
+        needs_negotiation=pricing["needsNegotiation"],
+        price_label=pricing["priceLabel"],
     )
     return {
         "counselorId": cid,
