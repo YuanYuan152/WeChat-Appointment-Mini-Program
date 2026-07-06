@@ -1,4 +1,4 @@
-﻿"""
+"""
 来访者预约可约时段 — 与咨询师工作台排期同源、同规则。
 
 数据流（持久链路，非注入）：
@@ -23,8 +23,10 @@ from schedule_display import (
     DISPLAY_EXPIRED,
     DISPLAY_ON_LEAVE,
     DISPLAY_OPEN,
+    DISPLAY_PENDING_PAYMENT,
     resolve_schedule_display,
 )
+from proxy_booking_service import pending_proxy_orders_for_schedules
 from schedule_meta import parse_center_id
 from schedule_slots import rolling_window_datetime_bounds
 
@@ -76,7 +78,9 @@ def schedules_to_booking_time_slots(
     必须使用与工作台相同的 resolve_schedule_display 判定状态。
     """
     price = float(billing_cents or 0) / 100
-    cons_map = _consultations_by_schedule(db, [s.Id for s in schedules])
+    schedule_ids = [s.Id for s in schedules]
+    cons_map = _consultations_by_schedule(db, schedule_ids)
+    pending_map = pending_proxy_orders_for_schedules(db, schedule_ids)
     time_slots: List[dict] = []
     center_ids: Set[str] = set()
 
@@ -85,7 +89,11 @@ def schedules_to_booking_time_slots(
         if not center_id:
             continue
 
-        display = resolve_schedule_display(s, cons_map.get(s.Id))
+        display = resolve_schedule_display(
+            s,
+            cons_map.get(s.Id),
+            has_pending_proxy_order=s.Id in pending_map,
+        )
         if display in (DISPLAY_CANCELLED, DISPLAY_DONE, DISPLAY_ON_LEAVE):
             continue
 
@@ -93,6 +101,9 @@ def schedules_to_booking_time_slots(
         if display == DISPLAY_OPEN:
             slot_status = "AVAILABLE"
             is_bookable = True
+        elif display == DISPLAY_PENDING_PAYMENT:
+            slot_status = "PENDING_PAYMENT"
+            is_bookable = False
         elif display == DISPLAY_BOOKED:
             slot_status = "BOOKED"
             is_bookable = False

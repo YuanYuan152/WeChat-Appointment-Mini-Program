@@ -2316,3 +2316,8 @@ def update_pricing_counselor_patient(
 
     db.commit()
     return pricing_breakdown(db, patient_id, counselor_id)
+
+
+from proxy_booking_routes import router as proxy_booking_router
+
+router.include_router(proxy_booking_router)

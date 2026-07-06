@@ -16,33 +16,47 @@
           <text class="order-status" :class="order.Status.toLowerCase()">{{ statusLabel(order.Status) }}</text>
         </view>
         <view class="order-body">
-          <text class="order-desc">{{ order.Description || '心理咨询预约' }}</text>
+          <text class="order-desc">{{ orderSummary(order) }}</text>
           <text class="order-price">¥{{ (order.TotalFee / 100).toFixed(2) }}</text>
         </view>
         <view class="order-footer">
           <text class="order-time">{{ formatTime(order.CreatedAt) }}</text>
+          <text v-if="order.ExpiresAt && order.Status === 'PENDING'" class="order-expire">
+            {{ expireHint(order.ExpiresAt) }}
+          </text>
+          <button
+            v-if="order.Status === 'PENDING'"
+            class="pay-btn"
+            @click.stop="openPaySheet(order)"
+          >去支付</button>
         </view>
       </view>
     </view>
+
+    <OrderPaymentSheet
+      :visible="showPaySheet"
+      :order-id="payOrderId"
+      :initial-order="payOrder"
+      @close="closePaySheet"
+      @paid="onPaid"
+    />
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
+import { onLoad, onShow } from '@dcloudio/uni-app'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
+import OrderPaymentSheet from '@/components/OrderPaymentSheet.vue'
+import { type PatientOrder, expireHintText, formatOrderTime } from '@/utils/orderPayment'
 
-interface Order {
-  Id: number
-  OutTradeNo: string
-  Status: string
-  Description: string
-  TotalFee: number
-  CreatedAt: string
-}
-
-const orders = ref<Order[]>([])
+const orders = ref<PatientOrder[]>([])
 const loading = ref(true)
+const showPaySheet = ref(false)
+const payOrderId = ref<number | null>(null)
+const payOrder = ref<PatientOrder | null>(null)
+const pendingPayOrderId = ref(0)
 
 const statusLabel = (status: string) => {
   const map: Record<string, string> = { PENDING: '待支付', PAID: '已支付', CANCELLED: '已取消' }
@@ -54,22 +68,64 @@ const formatTime = (s: string) => {
   return s.replace('T', ' ').slice(0, 19)
 }
 
-const goDetail = (order: Order) => {
+const expireHint = (expiresAt: string) => expireHintText(expiresAt)
+
+const orderSummary = (order: PatientOrder) => {
+  if (order.counselorName && order.startTime) {
+    return `${order.counselorName} · ${formatOrderTime(order.startTime, order.endTime)}`
+  }
+  return order.Description || '心理咨询预约'
+}
+
+const goDetail = (order: PatientOrder) => {
   uni.navigateTo({ url: `/pages/patient/orders/detail?id=${order.Id}` })
 }
 
-onMounted(async () => {
+const openPaySheet = (order: PatientOrder) => {
+  payOrder.value = order
+  payOrderId.value = order.Id
+  showPaySheet.value = true
+}
+
+const closePaySheet = () => {
+  showPaySheet.value = false
+  payOrder.value = null
+  payOrderId.value = null
+}
+
+const onPaid = () => {
+  loadOrders()
+}
+
+const tryOpenPendingPay = () => {
+  if (!pendingPayOrderId.value) return
+  const target = orders.value.find(o => o.Id === pendingPayOrderId.value)
+  pendingPayOrderId.value = 0
+  if (target?.Status === 'PENDING') {
+    openPaySheet(target)
+  }
+}
+
+const loadOrders = async () => {
+  loading.value = true
   try {
-    const res = await httpV2.get<Order[]>(API_ENDPOINTS.patient.orders)
+    const res = await httpV2.get<PatientOrder[]>(API_ENDPOINTS.patient.orders)
     if (res.code === 0 && Array.isArray(res.data)) {
       orders.value = res.data
+      tryOpenPendingPay()
     }
   } catch {
-    // 静默失败，已由 httpV2 弹错
+    // 静默失败
   } finally {
     loading.value = false
   }
+}
+
+onLoad((opts) => {
+  pendingPayOrderId.value = Number(opts?.payOrderId || 0)
 })
+
+onShow(loadOrders)
 </script>
 
 <style scoped>
@@ -85,8 +141,21 @@ onMounted(async () => {
 .order-status.pending { color: #F59E0B; }
 .order-status.paid { color: #10B981; }
 .order-status.cancelled { color: #9CA3AF; }
-.order-body { display: flex; justify-content: space-between; margin-bottom: 12rpx; }
-.order-desc { font-size: 28rpx; color: #374151; }
-.order-price { font-size: 32rpx; font-weight: 700; color: #0D9488; }
-.order-time { font-size: 24rpx; color: #9CA3AF; }
+.order-body { display: flex; justify-content: space-between; margin-bottom: 12rpx; gap: 16rpx; }
+.order-desc { font-size: 28rpx; color: #374151; flex: 1; }
+.order-price { font-size: 32rpx; font-weight: 700; color: #0D9488; flex-shrink: 0; }
+.order-footer { display: flex; align-items: center; gap: 16rpx; flex-wrap: wrap; margin-top: 8rpx; }
+.order-time { font-size: 24rpx; color: #9CA3AF; flex: 1; }
+.order-expire { font-size: 22rpx; color: #F59E0B; }
+.pay-btn {
+  margin: 0;
+  padding: 0 28rpx;
+  height: 56rpx;
+  line-height: 56rpx;
+  background: #0D9488;
+  color: #fff;
+  border-radius: 999rpx;
+  font-size: 24rpx;
+}
+.pay-btn::after { border: none; }
 </style>

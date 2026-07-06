@@ -52,6 +52,7 @@ from refund_exemption_service import (
 )
 from schedule_meta import center_display_name, parse_center_id
 from intake_agreement import needs_intake_agreement
+from app_time import china_now
 
 router = APIRouter(prefix="/api/mini/patient", tags=["Patient"])
 
@@ -66,9 +67,111 @@ class OrderOut(BaseModel):
     Description: Optional[str] = None
     CreatedAt: datetime
     PaidAt: Optional[datetime] = None
+    ExpiresAt: Optional[datetime] = None
+    counselorId: Optional[int] = None
+    counselorName: Optional[str] = None
+    startTime: Optional[datetime] = None
+    endTime: Optional[datetime] = None
+    centerId: Optional[str] = None
+    centerName: Optional[str] = None
+    roomName: Optional[str] = None
 
     class Config:
         from_attributes = True
+
+
+def _build_order_out(db: Session, order: AppOrder) -> OrderOut:
+    """补充订单关联的预约时段与咨询师信息。"""
+    from schedule_meta import parse_room_id, room_display_name
+
+    base = OrderOut.model_validate(order)
+    if not order.SlotId:
+        return base
+    schedule = db.query(AppSchedule).filter(AppSchedule.Id == order.SlotId).first()
+    if not schedule:
+        return base
+    center_id = parse_center_id(schedule.Note)
+    room_id = parse_room_id(schedule.Note)
+    prof = (
+        db.query(AppCounselorProfile)
+        .filter(AppCounselorProfile.AccountId == schedule.CounselorId)
+        .first()
+    )
+    acc = db.query(AppAccount).filter(AppAccount.Id == schedule.CounselorId).first()
+    counselor_name = (prof.Name if prof and prof.Name else None) or (
+        acc.Nickname if acc else None
+    ) or f"咨询师#{schedule.CounselorId}"
+    return base.model_copy(
+        update={
+            "counselorId": schedule.CounselorId,
+            "counselorName": counselor_name,
+            "startTime": schedule.StartTime,
+            "endTime": schedule.EndTime,
+            "centerId": center_id,
+            "centerName": center_display_name(center_id),
+            "roomName": room_display_name(center_id, room_id, db) if room_id else None,
+        }
+    )
+
+
+def _build_orders_out(db: Session, orders: List[AppOrder]) -> List[OrderOut]:
+    if not orders:
+        return []
+    slot_ids = [o.SlotId for o in orders if o.SlotId]
+    schedules = (
+        {
+            s.Id: s
+            for s in db.query(AppSchedule).filter(AppSchedule.Id.in_(slot_ids)).all()
+        }
+        if slot_ids
+        else {}
+    )
+    counselor_ids = {s.CounselorId for s in schedules.values()}
+    profiles = (
+        {
+            p.AccountId: p
+            for p in db.query(AppCounselorProfile)
+            .filter(AppCounselorProfile.AccountId.in_(counselor_ids))
+            .all()
+        }
+        if counselor_ids
+        else {}
+    )
+    accounts = (
+        {a.Id: a for a in db.query(AppAccount).filter(AppAccount.Id.in_(counselor_ids)).all()}
+        if counselor_ids
+        else {}
+    )
+    from schedule_meta import parse_room_id, room_display_name
+
+    result: List[OrderOut] = []
+    for order in orders:
+        base = OrderOut.model_validate(order)
+        schedule = schedules.get(order.SlotId) if order.SlotId else None
+        if not schedule:
+            result.append(base)
+            continue
+        center_id = parse_center_id(schedule.Note)
+        room_id = parse_room_id(schedule.Note)
+        prof = profiles.get(schedule.CounselorId)
+        acc = accounts.get(schedule.CounselorId)
+        counselor_name = (prof.Name if prof and prof.Name else None) or (
+            acc.Nickname if acc else None
+        ) or f"咨询师#{schedule.CounselorId}"
+        result.append(
+            base.model_copy(
+                update={
+                    "counselorId": schedule.CounselorId,
+                    "counselorName": counselor_name,
+                    "startTime": schedule.StartTime,
+                    "endTime": schedule.EndTime,
+                    "centerId": center_id,
+                    "centerName": center_display_name(center_id),
+                    "roomName": room_display_name(center_id, room_id, db) if room_id else None,
+                }
+            )
+        )
+    return result
 
 
 class PatientProfileUpdate(BaseModel):
@@ -367,6 +470,73 @@ def get_my_consultations(
             feedbackRhythmScore=fb_detail.get("rhythmScore") or None if fb_detail else None,
             feedbackImprovements=fb_detail.get("improvements") if fb_detail else None,
         ))
+
+    from proxy_booking_service import expire_pending_proxy_orders
+
+    expire_pending_proxy_orders(db)
+    now = china_now()
+    pending_proxy_orders = (
+        db.query(AppOrder)
+        .filter(
+            AppOrder.AccountId == current_account.Id,
+            AppOrder.Status == "PENDING",
+            AppOrder.ExpiresAt.isnot(None),
+            AppOrder.ExpiresAt >= now,
+        )
+        .order_by(AppOrder.CreatedAt.desc())
+        .all()
+    )
+    pending_proxy_orders = [o for o in pending_proxy_orders if (o.Description or "").startswith("proxy:")]
+    if pending_proxy_orders:
+        extra_schedule_ids = [
+            o.SlotId for o in pending_proxy_orders if o.SlotId and o.SlotId not in schedule_map
+        ]
+        if extra_schedule_ids:
+            for s in db.query(AppSchedule).filter(AppSchedule.Id.in_(extra_schedule_ids)).all():
+                schedule_map[s.Id] = s
+        extra_counselor_ids = {
+            schedule_map[o.SlotId].CounselorId
+            for o in pending_proxy_orders
+            if o.SlotId and o.SlotId in schedule_map
+        } - set(counselor_map.keys())
+        if extra_counselor_ids:
+            for c in db.query(AppCounselorProfile).filter(
+                AppCounselorProfile.AccountId.in_(extra_counselor_ids)
+            ).all():
+                counselor_map[c.AccountId] = c
+            for a in db.query(AppAccount).filter(AppAccount.Id.in_(extra_counselor_ids)).all():
+                accounts[a.Id] = a
+        for order in pending_proxy_orders:
+            sched = schedule_map.get(order.SlotId) if order.SlotId else None
+            if not sched:
+                continue
+            prof = counselor_map.get(sched.CounselorId)
+            acc = accounts.get(sched.CounselorId)
+            name = (prof.Name if prof and prof.Name else None) or (acc.Nickname if acc else None) or f"咨询师#{sched.CounselorId}"
+            avatar = (prof.AvatarUrl if prof and prof.AvatarUrl else None) or (acc.AvatarUrl if acc else None)
+            center_id = parse_center_id(sched.Note)
+            result.append(
+                ConsultationOut(
+                    id=-order.Id,
+                    orderId=order.Id,
+                    counselorId=sched.CounselorId,
+                    counselorName=name,
+                    counselorAvatar=avatar,
+                    scheduleId=sched.Id,
+                    status="PENDING_PAYMENT",
+                    startTime=sched.StartTime,
+                    endTime=sched.EndTime,
+                    note=sched.Note,
+                    createdAt=order.CreatedAt,
+                    centerId=center_id,
+                    centerName=center_display_name(center_id),
+                    canCancel=False,
+                    refundEligible=False,
+                    orderAmount=order.TotalFee,
+                    orderStatus="PENDING",
+                )
+            )
+    result.sort(key=lambda x: (x.startTime or x.createdAt), reverse=True)
     return result
 
 
@@ -540,13 +710,17 @@ def get_my_orders(
     current_account: AppAccount = Depends(get_current_account),
     db: Session = Depends(get_db),
 ):
+    from proxy_booking_service import expire_pending_proxy_orders
+
+    expire_pending_proxy_orders(db)
+    db.commit()
     orders = (
         db.query(AppOrder)
         .filter(AppOrder.AccountId == current_account.Id)
         .order_by(AppOrder.CreatedAt.desc())
         .all()
     )
-    return orders
+    return _build_orders_out(db, orders)
 
 
 @router.get("/orders/{order_id}", response_model=OrderOut, summary="获取当前用户单笔订单")
@@ -562,7 +736,7 @@ def get_my_order(
     )
     if not order:
         raise HTTPException(status_code=404, detail="订单不存在")
-    return order
+    return _build_order_out(db, order)
 
 
 @router.get("/me", response_model=PatientProfileOut, summary="获取患者资料")

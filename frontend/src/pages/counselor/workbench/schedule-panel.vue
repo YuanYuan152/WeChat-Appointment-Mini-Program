@@ -402,6 +402,7 @@ const DOT_COLORS: Record<string, string> = {
   RECORDED: '#0D9488',
   EXPIRED: '#9CA3AF',
   CANCELLED: '#D1D5DB',
+  PENDING_PAYMENT: '#9CA3AF',
 }
 
 const NO_PREF = '__none__'

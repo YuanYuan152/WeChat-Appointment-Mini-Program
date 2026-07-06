@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app_time import china_now
 from message import create_message
-from models import AppAccount, AppConsultation, AppMessage, AppRemindTask, AppSchedule
+from models import AppAccount, AppConsultation, AppMessage, AppOrder, AppRemindTask, AppSchedule
 from refund_exemption_service import latest_exemptions_by_consultation
 from schedule_meta import (
     center_display_name,
@@ -479,4 +479,47 @@ def notify_counselor_appointment_cancelled(
         content=_message_payload(summary, detail),
         related_type="COUNSELOR_APPOINTMENT_CANCEL",
         related_id=consultation.Id,
+    )
+
+
+def notify_counselor_proxy_order_pending(
+    db: Session,
+    *,
+    counselor_id: int,
+    schedule: AppSchedule,
+    patient_name: str,
+    order: AppOrder,
+) -> None:
+    """助理代理预约推送待支付订单后通知咨询师。"""
+    existing = (
+        db.query(AppMessage)
+        .filter(
+            AppMessage.AccountId == counselor_id,
+            AppMessage.RelatedType == "COUNSELOR_PROXY_ORDER_PENDING",
+            AppMessage.RelatedId == order.Id,
+        )
+        .first()
+    )
+    if existing:
+        return
+    center_id = parse_center_id(schedule.Note)
+    center_name = center_display_name(center_id) if center_id else "待定"
+    time_text = _format_datetime(schedule.StartTime)
+    summary = f"{patient_name} · {time_text} · {center_name}"
+    detail = {
+        "patientName": patient_name,
+        "startTime": time_text,
+        "endTime": _format_datetime(schedule.EndTime),
+        "location": center_name,
+        "orderId": order.Id,
+        "tip": "助理已为来访推送预约订单，待来访支付后生效",
+    }
+    _notify_counselor(
+        db,
+        counselor_id,
+        type_="ORDER",
+        title="代理预约待支付",
+        content=_message_payload(summary, detail),
+        related_type="COUNSELOR_PROXY_ORDER_PENDING",
+        related_id=order.Id,
     )

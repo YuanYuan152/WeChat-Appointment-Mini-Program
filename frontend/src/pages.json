@@ -488,6 +488,14 @@
                     }
                 },
                 {
+                    "path": "proxy-booking/index",
+                    "style": {
+                        "navigationBarTitleText": "代理预约",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                },
+                {
                     "path": "schedules/index",
                     "style": {
                         "navigationBarTitleText": "排期情况",

@@ -78,8 +78,9 @@ export const API_ENDPOINTS = {
   // 支付
   payment: {
     createOrder: '/api/payment/wechat/create',
-    /** 开发环境：一键模拟支付到账并完成预约 */
     simulatePay: '/api/payment/wechat/simulate-pay',
+    simulatePayOrder: '/api/payment/wechat/simulate-pay-order',
+    payOrder: '/api/payment/wechat/pay-order',
     confirmDev: '/api/payment/wechat/confirm-dev',
   },
 
@@ -203,6 +204,11 @@ export const API_ENDPOINTS = {
       `/api/mini/admin/pricing/counselors/${counselorId}/patients`,
     pricingCounselorPatientUpdate: (counselorId: number | string, patientId: number | string) =>
       `/api/mini/admin/pricing/counselors/${counselorId}/patients/${patientId}`,
+    proxyBookingPatients: '/api/mini/admin/proxy-booking/patients',
+    proxyBookingCounselors: '/api/mini/admin/proxy-booking/counselors',
+    proxyBookingCalendar: '/api/mini/admin/proxy-booking/calendar',
+    proxyBookingSlotOptions: '/api/mini/admin/proxy-booking/slot-options',
+    proxyBookingPushOrder: '/api/mini/admin/proxy-booking/push-order',
   },
 
   // 意见反馈

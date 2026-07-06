@@ -26,6 +26,7 @@ from payment_service import complete_paid_order
 from pricing_service import get_counselor_profile, resolve_display_price_cents
 from user_role_meta import counselor_visible_to_patient
 from intake_agreement import attach_intake_to_order
+from app_time import china_now
 
 router = APIRouter(prefix="/api/payment", tags=["Payment"])
 
@@ -85,6 +86,10 @@ class ConfirmDevPaymentRequest(BaseModel):
     center_id: Optional[str] = None
 
 
+class PayExistingOrderRequest(BaseModel):
+    order_id: int
+
+
 class CreateOrderResponse(BaseModel):
     out_trade_no: str
     pay_params: dict      # 直接透传给小程序端 wx.requestPayment
@@ -107,9 +112,14 @@ def _create_pending_order(
     req: CreateOrderRequest,
     out_trade_no: str,
 ) -> tuple[AppOrder, AppSchedule]:
+    from proxy_booking_service import expire_pending_proxy_orders, pending_proxy_order_for_schedule
+
+    expire_pending_proxy_orders(db)
     schedule = db.query(AppSchedule).filter(AppSchedule.Id == req.slot_id).first()
     if not schedule or schedule.Status != "AVAILABLE":
         raise HTTPException(status_code=400, detail="该时段已被预约或不存在")
+    if pending_proxy_order_for_schedule(db, schedule.Id):
+        raise HTTPException(status_code=400, detail="该时段已有待支付订单")
 
     profile = get_counselor_profile(db, schedule.CounselorId)
     if not profile or not counselor_visible_to_patient(
@@ -178,6 +188,91 @@ def create_order(
         out_trade_no=out_trade_no,
         pay_params={**pay_params, "order_id": order.Id},
     )
+
+
+def _load_payable_order(
+    db: Session,
+    account: AppAccount,
+    order_id: int,
+) -> AppOrder:
+    from proxy_booking_service import expire_pending_proxy_orders
+
+    expire_pending_proxy_orders(db)
+    order = (
+        db.query(AppOrder)
+        .filter(AppOrder.Id == order_id, AppOrder.AccountId == account.Id)
+        .first()
+    )
+    if not order:
+        raise HTTPException(status_code=404, detail="订单不存在")
+    if order.Status != "PENDING":
+        raise HTTPException(status_code=400, detail="订单不可支付")
+    if order.ExpiresAt and order.ExpiresAt < china_now():
+        raise HTTPException(status_code=400, detail="订单已过期，请重新预约")
+    if order.SlotId:
+        schedule = db.query(AppSchedule).filter(AppSchedule.Id == order.SlotId).first()
+        if not schedule or schedule.Status != "AVAILABLE":
+            raise HTTPException(status_code=400, detail="预约时段已不可用")
+    return order
+
+
+@router.post("/wechat/pay-order", response_model=CreateOrderResponse, summary="支付已有待支付订单")
+def pay_existing_order(
+    req: PayExistingOrderRequest,
+    current_account: AppAccount = Depends(get_current_account),
+    db: Session = Depends(get_db),
+):
+    order = _load_payable_order(db, current_account, req.order_id)
+    if _is_real_wechat_pay_configured():
+        try:
+            pay_params = _real_unified_order(
+                out_trade_no=order.OutTradeNo,
+                total_fee=order.TotalFee,
+                description=order.Description or "心理咨询预约",
+                openid=current_account.OpenId,
+            )
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"微信下单失败: {str(e)}")
+    else:
+        pay_params = _mock_pay_params(order.OutTradeNo, order.TotalFee)
+    return CreateOrderResponse(
+        out_trade_no=order.OutTradeNo,
+        pay_params={**pay_params, "order_id": order.Id},
+    )
+
+
+@router.post("/wechat/simulate-pay-order", summary="开发环境：支付已有待支付订单")
+def simulate_pay_existing_order(
+    req: PayExistingOrderRequest,
+    current_account: AppAccount = Depends(get_current_account),
+    db: Session = Depends(get_db),
+):
+    if _is_real_wechat_pay_configured():
+        raise HTTPException(status_code=403, detail="已配置真实支付，请使用微信支付流程")
+    order = _load_payable_order(db, current_account, req.order_id)
+    center_id = None
+    if order.Description and "center:" in order.Description:
+        for part in order.Description.split("|"):
+            if part.strip().lower().startswith("center:"):
+                center_id = part.split(":", 1)[1].strip()
+                break
+    try:
+        complete_paid_order(
+            db,
+            order,
+            center_id=center_id,
+            transaction_id=f"SIM_{order.OutTradeNo}",
+        )
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+    db.commit()
+    db.refresh(order)
+    return {
+        "code": 0,
+        "msg": "支付成功",
+        "data": {"order_id": order.Id, "out_trade_no": order.OutTradeNo, "status": order.Status},
+    }
 
 
 @router.post("/wechat/simulate-pay", summary="开发环境一键模拟支付并预约成功")

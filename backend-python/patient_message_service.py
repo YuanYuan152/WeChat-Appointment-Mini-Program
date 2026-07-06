@@ -13,6 +13,7 @@ from models import (
     AppConsultation,
     AppCounselorProfile,
     AppMessage,
+    AppOrder,
     AppRefundExemption,
     AppRemindTask,
     AppRoleBinding,
@@ -449,4 +450,52 @@ def notify_patient_refund_exemption_result(
         content=content,
         related_type="REFUND_EXEMPTION",
         related_id=exemption.Id,
+    )
+
+
+def notify_patient_proxy_order_pending(
+    db: Session,
+    *,
+    patient: AppAccount,
+    counselor_name: str,
+    schedule: AppSchedule,
+    order: AppOrder,
+) -> None:
+    """助理代理预约后通知来访支付。"""
+    from schedule_meta import center_display_name, parse_center_id
+
+    existing = (
+        db.query(AppMessage)
+        .filter(
+            AppMessage.AccountId == patient.Id,
+            AppMessage.RelatedType == "PATIENT_PROXY_ORDER_PENDING",
+            AppMessage.RelatedId == order.Id,
+        )
+        .first()
+    )
+    if existing:
+        return
+    center_id = parse_center_id(schedule.Note)
+    center_name = center_display_name(center_id) if center_id else "待定"
+    time_text = _format_datetime(schedule.StartTime)
+    fee_yuan = int(order.TotalFee or 0) // 100
+    summary = f"{counselor_name} · {time_text} · ¥{fee_yuan}"
+    detail = {
+        "counselorName": counselor_name,
+        "startTime": time_text,
+        "endTime": _format_datetime(schedule.EndTime),
+        "location": center_name,
+        "orderId": order.Id,
+        "totalFeeYuan": fee_yuan,
+        "expiresAt": order.ExpiresAt.isoformat() if order.ExpiresAt else None,
+        "tip": "请在 2 小时内完成支付，逾期订单将自动取消",
+    }
+    _notify_patient(
+        db,
+        patient.Id,
+        type_="ORDER",
+        title="待支付预约",
+        content=_message_payload(summary, detail),
+        related_type="PATIENT_PROXY_ORDER_PENDING",
+        related_id=order.Id,
     )

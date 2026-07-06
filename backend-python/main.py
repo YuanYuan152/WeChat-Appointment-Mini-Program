@@ -17,6 +17,23 @@ from web_auth import router as web_auth_router
 
 app = FastAPI(title="LXXL API", version="2.0")
 
+
+@app.on_event("startup")
+def _ensure_db_schema():
+    """启动时补齐 AppOrder 等表缺失列（如 ExpiresAt、ProxyCreatedByAccountId）。"""
+    try:
+        from ensure_schema import (
+            ensure_app_order_columns,
+            ensure_app_account_columns,
+            ensure_tables,
+        )
+        ensure_tables()
+        ensure_app_account_columns()
+        ensure_app_order_columns()
+    except Exception as exc:
+        import logging
+        logging.getLogger("uvicorn.error").warning("ensure_schema skipped: %s", exc)
+
 # Enable CORS for frontend
 app.add_middleware(
     CORSMiddleware,
