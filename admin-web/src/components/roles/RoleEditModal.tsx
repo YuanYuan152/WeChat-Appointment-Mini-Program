@@ -1,27 +1,35 @@
 "use client";
 
 import { roles } from "@/config/navigation";
+import { COUNSELOR_TYPE_OPTIONS, type CounselorType } from "@/config/userRoleMeta";
 import { getName } from "@/lib/display";
 import { roleLabel } from "@/lib/format";
 import type { AdminUser, Role } from "@/types/api";
+import { QueryField, queryControlClass } from "@/components/ui";
 
 export function RoleEditModal({
   user,
   manageableRoles,
   selectedRoles,
+  counselorType,
   onChange,
+  onCounselorTypeChange,
   onClose,
   onSave,
 }: {
   user: AdminUser;
   manageableRoles: Role[];
   selectedRoles: Role[];
+  counselorType: CounselorType;
   onChange: (roles: Role[]) => void;
+  onCounselorTypeChange: (type: CounselorType) => void;
   onClose: () => void;
   onSave: () => void;
 }) {
   const selectedSet = new Set(selectedRoles);
   const manageableSet = new Set(manageableRoles);
+  const counselorSelected = selectedSet.has("Counselor");
+  const canManageCounselor = manageableSet.has("Counselor");
 
   const toggleRole = (role: Role) => {
     if (!manageableSet.has(role) || role === "Patient") {
@@ -76,6 +84,27 @@ export function RoleEditModal({
           })}
           {selectedRoles.length === 0 && (
             <p className="text-xs text-[#B34B43]">至少需要保留一个绑定角色。</p>
+          )}
+          {counselorSelected && (
+            <div className="rounded-xl border border-[var(--lxxl-border)] bg-[#FAF8F4] p-4">
+              <QueryField label="咨询师类型" required>
+                <select
+                  className={queryControlClass}
+                  value={counselorType}
+                  disabled={!canManageCounselor}
+                  onChange={(event) => onCounselorTypeChange(event.target.value as CounselorType)}
+                >
+                  {COUNSELOR_TYPE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <span className="mt-2 block text-xs leading-5 text-[var(--lxxl-muted)]">
+                  保存后会同步咨询师档案中的专业/公益类型。
+                </span>
+              </QueryField>
+            </div>
           )}
         </div>
 

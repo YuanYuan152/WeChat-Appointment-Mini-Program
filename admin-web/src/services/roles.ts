@@ -9,6 +9,11 @@ export interface CreateUserByMobilePayload {
   counselor_type?: string;
 }
 
+export interface BindUserRolePayload {
+  patient_source?: string;
+  counselor_type?: string;
+}
+
 export function fetchAdminUsers() {
   return apiRequest<AdminUsersResponse | AdminUser[]>("/api/mini/admin/users?page=1&page_size=500").then((result) =>
     Array.isArray(result) ? result : result.items,
@@ -22,10 +27,10 @@ export function createUserByMobile(payload: CreateUserByMobilePayload) {
   });
 }
 
-export function bindUserRole(userId: number, role: Role) {
+export function bindUserRole(userId: number, role: Role, payload: BindUserRolePayload = {}) {
   return apiRequest(`/api/mini/admin/users/${userId}/roles`, {
     method: "POST",
-    body: JSON.stringify({ role }),
+    body: JSON.stringify({ role, ...payload }),
   });
 }
 

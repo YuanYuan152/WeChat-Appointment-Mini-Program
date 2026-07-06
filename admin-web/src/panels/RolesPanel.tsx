@@ -1,6 +1,6 @@
 import { type FormEvent, useMemo, useState } from "react";
 
-import { getManageableRoles } from "@/config/userRoleMeta";
+import { COUNSELOR_TYPE_OPTIONS, type CounselorType, getManageableRoles } from "@/config/userRoleMeta";
 import { roleLabel } from "@/lib/format";
 import type { AdminUser, Role } from "@/types/api";
 
@@ -40,11 +40,12 @@ export function RolesPanel({
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
   onCreateUser: (payload: CreateUserByMobilePayload) => Promise<void>;
-  onUpdateRoles: (userId: number, currentRoles: Role[], nextRoles: Role[]) => void;
+  onUpdateRoles: (userId: number, currentRoles: Role[], nextRoles: Role[], counselorType?: CounselorType) => void;
 }) {
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
   const [creating, setCreating] = useState(false);
   const [selectedRoles, setSelectedRoles] = useState<Role[]>([]);
+  const [selectedCounselorType, setSelectedCounselorType] = useState<CounselorType>("PROFESSIONAL");
   const [keywordInput, setKeywordInput] = useState("");
   const [keyword, setKeyword] = useState("");
   const allUsers = useMemo(() => users || [], [users]);
@@ -78,18 +79,29 @@ export function RolesPanel({
   const openEditor = (user: AdminUser) => {
     setEditingUser(user);
     setSelectedRoles(user.roles);
+    setSelectedCounselorType(resolveCounselorType(user.counselorType));
   };
 
   const closeEditor = () => {
     setEditingUser(null);
     setSelectedRoles([]);
+    setSelectedCounselorType("PROFESSIONAL");
   };
 
   const saveRoles = () => {
     if (!editingUser || selectedRoles.length === 0) {
       return;
     }
-    onUpdateRoles(editingUser.id, editingUser.roles, selectedRoles);
+    const currentCounselorType = resolveCounselorType(editingUser.counselorType);
+    const shouldSubmitCounselorType =
+      selectedRoles.includes("Counselor") &&
+      (!editingUser.roles.includes("Counselor") || selectedCounselorType !== currentCounselorType);
+    onUpdateRoles(
+      editingUser.id,
+      editingUser.roles,
+      selectedRoles,
+      shouldSubmitCounselorType ? selectedCounselorType : undefined,
+    );
     closeEditor();
   };
 
@@ -206,6 +218,8 @@ export function RolesPanel({
           user={editingUser}
           manageableRoles={manageableRoles}
           selectedRoles={selectedRoles}
+          counselorType={selectedCounselorType}
+          onCounselorTypeChange={setSelectedCounselorType}
           onChange={setSelectedRoles}
           onClose={closeEditor}
           onSave={saveRoles}
@@ -221,4 +235,8 @@ export function RolesPanel({
       )}
     </section>
   );
+}
+
+function resolveCounselorType(value?: string | null): CounselorType {
+  return COUNSELOR_TYPE_OPTIONS.some((option) => option.value === value) ? (value as CounselorType) : "PROFESSIONAL";
 }

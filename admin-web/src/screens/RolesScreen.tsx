@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import type { Role } from "@/types/api";
+import type { CounselorType } from "@/config/userRoleMeta";
 
 import {
   bindUserRole,
@@ -50,14 +51,19 @@ function RolesScreenContent() {
     void loadData();
   }, [loadData, refreshKey]);
 
-  const updateRoles = (userId: number, currentRoles: Role[], nextRoles: Role[]) => {
+  const updateRoles = (userId: number, currentRoles: Role[], nextRoles: Role[], counselorType?: CounselorType) => {
     async function runUpdate() {
       const currentRoleSet = new Set(currentRoles);
       const nextRoleSet = new Set(nextRoles);
       const rolesToBind = nextRoles.filter((role) => !currentRoleSet.has(role));
       const rolesToUnbind = currentRoles.filter((role) => !nextRoleSet.has(role));
+      const needsCounselorTypeUpdate =
+        !!counselorType &&
+        currentRoleSet.has("Counselor") &&
+        nextRoleSet.has("Counselor") &&
+        !rolesToBind.includes("Counselor");
 
-      if (rolesToBind.length === 0 && rolesToUnbind.length === 0) {
+      if (rolesToBind.length === 0 && rolesToUnbind.length === 0 && !needsCounselorTypeUpdate) {
         showNotice("success", "角色无变化");
         return;
       }
@@ -66,7 +72,14 @@ function RolesScreenContent() {
       clearNotice();
       try {
         for (const role of rolesToBind) {
-          await bindUserRole(userId, role);
+          await bindUserRole(
+            userId,
+            role,
+            role === "Counselor" && counselorType ? { counselor_type: counselorType } : undefined,
+          );
+        }
+        if (needsCounselorTypeUpdate) {
+          await bindUserRole(userId, "Counselor", { counselor_type: counselorType });
         }
         for (const role of rolesToUnbind) {
           await unbindUserRole(userId, role);
