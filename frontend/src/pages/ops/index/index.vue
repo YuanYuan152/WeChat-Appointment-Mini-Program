@@ -53,6 +53,7 @@ const allEntries = [
   { title: '咨询记录修改审核', desc: '咨询师提交的记录修改申请', symbol: '改', tone: 'tone-gold', path: '/pages/ops/case-record-amendments/index' },
   { title: '咨询师请假审批', desc: '查看请假详情与来访联系方式', symbol: '假', tone: 'tone-gold', path: '/pages/ops/leave-requests/index' },
   { title: '用户管理', desc: '来访者信息与咨询师档案管理', symbol: '用', tone: 'tone-green', path: '/pages/ops/users/index' },
+  { title: '代理预约', desc: '为来访推送待支付预约订单', symbol: '代', tone: 'tone-gold', path: '/pages/ops/proxy-booking/index' },
   { title: '用户反馈', desc: '来访者咨询完成后的评价反馈', symbol: '馈', tone: 'tone-green', path: '/pages/ops/consultation-feedbacks/index' },
   { title: '咨询记录', desc: '各咨询师近30天记录填写情况', symbol: '记', tone: 'tone-green', path: '/pages/ops/case-records/index' },
   { title: '重后台 (Web)', desc: 'WebView 嵌入旧管理后台', symbol: 'Web', tone: 'tone-dark', path: '/pages/admin-webview/index' },

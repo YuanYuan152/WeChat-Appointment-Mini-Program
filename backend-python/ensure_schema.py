@@ -25,6 +25,8 @@ APP_ACCOUNT_COLUMNS = {
 APP_ORDER_COLUMNS = {
     "IntakeIsAdult": "BIT NULL",
     "IntakeSignatureUrl": "VARCHAR(500) NULL",
+    "ExpiresAt": "DATETIME NULL",
+    "ProxyCreatedByAccountId": "INT NULL",
 }
 
 APP_REFUND_EXEMPTION_COLUMNS = {

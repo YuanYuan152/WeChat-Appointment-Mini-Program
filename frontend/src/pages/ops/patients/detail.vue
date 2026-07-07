@@ -25,6 +25,7 @@
           <text class="feedback-entry-count">{{ detail.feedbackCount }} 条</text>
           <text class="feedback-entry-arrow">查看 ›</text>
         </view>
+        <button class="proxy-btn" @tap="goProxyBooking">代理预约</button>
       </view>
 
       <view class="filter-bar">
@@ -79,6 +80,9 @@
             <text class="line">时间：{{ formatRange(item.startTime, item.endTime) }}</text>
             <text v-if="item.location" class="line">地点：{{ item.location }}</text>
             <text class="line muted">预约编号 #{{ item.consultationId }}</text>
+            <view class="cons-actions">
+              <text class="rebook-btn" @tap.stop="goRebook(item)">再约一单</text>
+            </view>
           </view>
         </view>
       </template>
@@ -109,6 +113,7 @@ import ConsultationFeedbackDisplay from '@/components/ConsultationFeedbackDispla
 
 interface ConsultationItem {
   consultationId: number
+  counselorId: number
   counselorName: string
   status: string
   statusLabel: string
@@ -154,6 +159,7 @@ const tabs = [
 
 const loading = ref(true)
 const detail = ref<PatientDetail | null>(null)
+const patientIdRef = ref(0)
 const activeTab = ref('ALL')
 const showFeedbackModal = ref(false)
 const feedbackDetail = ref<FeedbackItem | null>(null)
@@ -184,8 +190,21 @@ const openFeedbackDetail = (item: FeedbackItem) => {
   showFeedbackModal.value = true
 }
 
+const goProxyBooking = () => {
+  if (!patientIdRef.value) return
+  uni.navigateTo({ url: `/pages/ops/proxy-booking/index?patientId=${patientIdRef.value}` })
+}
+
+const goRebook = (item: ConsultationItem) => {
+  if (!patientIdRef.value) return
+  uni.navigateTo({
+    url: `/pages/ops/proxy-booking/index?patientId=${patientIdRef.value}&counselorId=${item.counselorId}`,
+  })
+}
+
 onLoad(async (opts) => {
   const patientId = Number(opts?.patientId || 0)
+  patientIdRef.value = patientId
   if (!patientId) {
     loading.value = false
     return
@@ -227,6 +246,25 @@ onLoad(async (opts) => {
 .feedback-entry-label { font-size: 28rpx; font-weight: 600; color: #047857; }
 .feedback-entry-count { font-size: 26rpx; color: #6B7280; flex: 1; }
 .feedback-entry-arrow { font-size: 26rpx; color: #3D5A4E; }
+.proxy-btn {
+  width: 100%;
+  height: 72rpx;
+  line-height: 72rpx;
+  margin-top: 20rpx;
+  background: #3D5A4E;
+  color: #fff;
+  border-radius: 100rpx;
+  font-size: 28rpx;
+}
+.proxy-btn::after { border: none; }
+.cons-actions { display: flex; justify-content: flex-end; margin-top: 16rpx; }
+.rebook-btn {
+  font-size: 24rpx;
+  color: #3D5A4E;
+  padding: 8rpx 20rpx;
+  border: 1rpx solid #3D5A4E;
+  border-radius: 999rpx;
+}
 .filter-bar {
   display: flex;
   gap: 12rpx;

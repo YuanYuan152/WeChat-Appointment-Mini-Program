@@ -746,6 +746,10 @@ def _calendar_items_for_schedules(
 
     leave_by_schedule = _leaves_by_schedule(db, schedule_ids, counselor_id)
 
+    from proxy_booking_service import pending_proxy_orders_for_schedules
+
+    pending_proxy_map = pending_proxy_orders_for_schedules(db, schedule_ids)
+
     consultation_ids = list({c.Id for c in all_consultations if c.Id})
     case_records_by_consultation: dict[int, AppCaseRecord] = {}
     if consultation_ids:
@@ -780,6 +784,10 @@ def _calendar_items_for_schedules(
         if leave_row:
             display = "ON_LEAVE"
             display_label = DISPLAY_LABELS.get("ON_LEAVE", "已请假")
+            can_cancel, requires_leave, cancel_hint = False, False, None
+        elif pending_proxy_map.get(s.Id):
+            display = "PENDING_PAYMENT"
+            display_label = DISPLAY_LABELS.get("PENDING_PAYMENT", "待支付")
             can_cancel, requires_leave, cancel_hint = False, False, None
         else:
             display = resolve_schedule_display(s, c)

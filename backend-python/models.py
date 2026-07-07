@@ -66,6 +66,8 @@ class AppOrder(Base):
     IntakeSignatureUrl = Column(String(500), nullable=True)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
     PaidAt = Column(DateTime, nullable=True)
+    ExpiresAt = Column(DateTime, nullable=True)
+    ProxyCreatedByAccountId = Column(Integer, nullable=True)
     UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
 
 

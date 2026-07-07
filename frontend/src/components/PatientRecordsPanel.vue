@@ -119,6 +119,11 @@
           <text v-else-if="r.feedbackContent" class="feedback-text">{{ r.feedbackContent }}</text>
         </view>
 
+        <view v-else-if="r.status === 'PENDING_PAYMENT'" class="record-actions">
+          <text class="pending-hint">助理已为您推送预约，请在 2 小时内完成支付</text>
+          <button class="pay-btn" @click="goPayOrder(r)">去支付</button>
+        </view>
+
         <view v-if="r.canCancel" class="record-actions">
 
           <text class="refund-hint">{{ r.refundEligible ? '距咨询超过24小时，取消可退款' : '距咨询不足24小时，取消不退款' }}</text>
@@ -347,7 +352,7 @@ const tabs: { label: string; value: RecordTab }[] = [
 
 
 
-const UNFINISHED_STATUSES = new Set(['PENDING', 'CONFIRMED', 'ONGOING'])
+const UNFINISHED_STATUSES = new Set(['PENDING', 'CONFIRMED', 'ONGOING', 'PENDING_PAYMENT'])
 
 
 
@@ -369,6 +374,8 @@ const cancelTarget = ref<Consultation | null>(null)
 
 const statusLabel = (r: Consultation) => {
 
+  if (r.status === 'PENDING_PAYMENT') return '待支付'
+
   if (r.status === 'DONE' && r.hasFeedback) return '已反馈'
 
   if (r.status === 'DONE') return '已完成'
@@ -382,6 +389,8 @@ const statusLabel = (r: Consultation) => {
 }
 
 const statusClass = (r: Consultation) => {
+
+  if (r.status === 'PENDING_PAYMENT') return 'pending-payment'
 
   if (r.status === 'DONE' && r.hasFeedback) return 'feedbacked'
 
@@ -453,6 +462,8 @@ const isCenterNote = (note: string) => note.toLowerCase().includes('center:')
 
 const cardClass = (r: Consultation) => {
 
+  if (r.status === 'PENDING_PAYMENT') return 'record-card--pending'
+
   if (r.status === 'DONE' && r.hasFeedback) return 'record-card--feedbacked'
 
   if (r.status === 'DONE') return 'record-card--done'
@@ -497,7 +508,13 @@ const applyTabFilter = () => {
 
 }
 
-
+const goPayOrder = (r: Consultation) => {
+  if (r.orderId) {
+    uni.navigateTo({ url: `/pages/patient/orders/list?payOrderId=${r.orderId}` })
+    return
+  }
+  uni.navigateTo({ url: '/pages/patient/orders/list' })
+}
 
 const fetchList = async () => {
 
@@ -714,6 +731,7 @@ defineExpose({ refresh })
 .record-card--feedbacked { background: #F0FDFA; }
 
 .record-card--cancelled { background: #FAFAF8; opacity: 0.85; }
+.record-card--pending { background: #F3F4F6; opacity: 0.92; }
 
 .record-header { display: flex; align-items: flex-start; gap: 20rpx; }
 
@@ -742,6 +760,19 @@ defineExpose({ refresh })
 .status.feedbacked { color: #047857; background: #D1FAE5; }
 
 .status.cancelled { color: #9CA3AF; background: #F3F4F6; }
+.status.pending-payment { color: #9CA3AF; background: #E5E7EB; }
+.pending-hint { display: block; font-size: 22rpx; color: #9CA3AF; margin-bottom: 12rpx; }
+.pay-btn {
+  margin: 0;
+  padding: 0 32rpx;
+  height: 64rpx;
+  line-height: 64rpx;
+  background: #0D9488;
+  color: #fff;
+  border-radius: 999rpx;
+  font-size: 26rpx;
+}
+.pay-btn::after { border: none; }
 
 .cancel-summary {
   margin-top: 20rpx; padding: 20rpx 24rpx; border-radius: 16rpx;

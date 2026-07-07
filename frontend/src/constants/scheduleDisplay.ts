@@ -1,5 +1,5 @@
-﻿/** 咨询师工作台时段展示（与后端 schedule_display 对齐） */
-export type ScheduleDisplayStatus = 'OPEN' | 'BOOKED' | 'ON_LEAVE' | 'DONE' | 'EXPIRED' | 'CANCELLED'
+/** 咨询师工作台时段展示（与后端 schedule_display 对齐） */
+export type ScheduleDisplayStatus = 'OPEN' | 'BOOKED' | 'ON_LEAVE' | 'DONE' | 'EXPIRED' | 'CANCELLED' | 'PENDING_PAYMENT'
 
 export const SCHEDULE_DISPLAY_META: Record<
   ScheduleDisplayStatus,
@@ -11,6 +11,7 @@ export const SCHEDULE_DISPLAY_META: Record<
   DONE: { label: '已完成', icon: '✅', color: '#6B7280', bg: '#F3F4F6' },
   EXPIRED: { label: '已过期', icon: '⏱️', color: '#9CA3AF', bg: '#F3F4F6' },
   CANCELLED: { label: '已取消', icon: '⚪', color: '#9CA3AF', bg: '#F9FAFB' },
+  PENDING_PAYMENT: { label: '待支付', icon: '⏳', color: '#9CA3AF', bg: '#E5E7EB' },
 }
 
 export const SCHEDULE_LEGEND = [

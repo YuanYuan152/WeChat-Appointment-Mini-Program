@@ -1,4 +1,4 @@
-﻿"""排期展示状态：与来访者预约系统联动。"""
+"""排期展示状态：与来访者预约系统联动。"""
 from typing import Optional
 
 from consultation_cancel import has_appointment_started
@@ -11,6 +11,7 @@ DISPLAY_ON_LEAVE = "ON_LEAVE"
 DISPLAY_DONE = "DONE"
 DISPLAY_EXPIRED = "EXPIRED"
 DISPLAY_CANCELLED = "CANCELLED"
+DISPLAY_PENDING_PAYMENT = "PENDING_PAYMENT"
 
 DISPLAY_LABELS = {
     DISPLAY_OPEN: "已排期",
@@ -19,6 +20,7 @@ DISPLAY_LABELS = {
     DISPLAY_DONE: "已完成",
     DISPLAY_EXPIRED: "已过期",
     DISPLAY_CANCELLED: "已取消",
+    DISPLAY_PENDING_PAYMENT: "待支付",
 }
 
 
@@ -38,7 +40,11 @@ def _is_booked_slot(
 def resolve_schedule_display(
     schedule: AppSchedule,
     consultation: Optional[AppConsultation],
+    *,
+    has_pending_proxy_order: bool = False,
 ) -> str:
+    if has_pending_proxy_order and schedule.Status == "AVAILABLE":
+        return DISPLAY_PENDING_PAYMENT
     if schedule.Status == "CANCELLED":
         return DISPLAY_CANCELLED
     if consultation and consultation.Status == "DONE":

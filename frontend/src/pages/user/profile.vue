@@ -28,7 +28,10 @@
       <!-- 数据统计卡片 -->
       <view class="stats-card">
         <view class="stat-item" @click="navigateTo('/pages/patient/orders/list')">
-          <text class="stat-num">{{ stats.appointmentCount || 0 }}</text>
+          <view class="stat-num-wrap">
+            <text class="stat-num">{{ stats.appointmentCount || 0 }}</text>
+            <text v-if="pendingOrderCount > 0" class="stat-badge" />
+          </view>
           <text class="stat-label">我的订单</text>
         </view>
         <view class="stat-divider"></view>
@@ -188,6 +191,7 @@ const userInfo = ref<UserInfo>(emptyUserInfo())
 const stats = ref({ appointmentCount: 0, activityCount: 0, favoriteCount: 0 })
 const unreadMessageCount = ref(0)
 const userRoles = ref<string[]>([])
+const pendingOrderCount = ref(0)
 const pendingRecordCount = ref(0)
 
 const isCounselor = computed(() => userRoles.value.includes('Counselor'))
@@ -281,8 +285,12 @@ const loadStats = async () => {
       activityCount: Array.isArray(consultRes.data) ? consultRes.data.length : 0,
       favoriteCount: favRes.code === 0 && favRes.data ? (favRes.data.count || 0) : 0,
     }
+    pendingOrderCount.value = Array.isArray(ordersRes.data)
+      ? ordersRes.data.filter((o: { Status?: string }) => o.Status === 'PENDING').length
+      : 0
   } catch {
     stats.value = { appointmentCount: 0, activityCount: 0, favoriteCount: 0 }
+    pendingOrderCount.value = 0
   }
 }
 
@@ -668,6 +676,21 @@ const handleDeleteAccount = () => {
   gap: 8rpx;
 }
 
+.stat-num-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.stat-badge {
+  position: absolute;
+  top: -4rpx;
+  right: -16rpx;
+  width: 16rpx;
+  height: 16rpx;
+  background: #EF4444;
+  border-radius: 50%;
+}
 .stat-num {
   font-size: 40rpx;
   font-weight: 800;
