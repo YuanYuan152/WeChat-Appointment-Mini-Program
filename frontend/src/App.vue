@@ -6,7 +6,7 @@
 
 <script setup lang="ts">
 import { onLaunch, onShow, onHide } from '@dcloudio/uni-app'
-import { updateTabBarForRole, readStoredRoles } from '@/utils/tabBar'
+import { updateTabBarForRole, readStoredRole } from '@/utils/tabBar'
 
 // 应用启动时执行
 onLaunch(() => {
@@ -18,7 +18,7 @@ onLaunch(() => {
 // 应用显示时执行
 onShow(() => {
   console.log('App Show')
-  updateTabBarForRole(readStoredRoles())
+  updateTabBarForRole(readStoredRole())
 })
 
 // 应用隐藏时执行

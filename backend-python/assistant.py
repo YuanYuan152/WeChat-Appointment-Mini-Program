@@ -31,11 +31,11 @@ def require_assistant(
     current_account: AppAccount = Depends(get_current_account),
     db: Session = Depends(get_db),
 ) -> AppAccount:
-    binding = db.query(AppRoleBinding).filter(
-        AppRoleBinding.AccountId == current_account.Id,
-        AppRoleBinding.RoleType == "Assistant",
-    ).first()
-    if not binding:
+    from role_active import get_account_role
+    from staff_roles import STAFF_WORKBENCH_ROLES
+
+    role = get_account_role(db, current_account.Id)
+    if role not in STAFF_WORKBENCH_ROLES:
         raise HTTPException(status_code=403, detail="无助理权限")
     return current_account
 

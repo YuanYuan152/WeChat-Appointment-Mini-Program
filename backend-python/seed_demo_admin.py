@@ -7,7 +7,7 @@
 
 写入:
   - 管理员账号 demo-openid-admin（13800000006，与 auth.py 对齐）
-  - 多角色示例用户（13800000030+，供角色绑定/解绑接口测试）
+  - 单角色示例用户（13800000030+，供角色更换接口测试）
   - 基础内容数据
 """
 
@@ -23,11 +23,10 @@ ADMIN = {
 
 # 独立手机号段，不与 dev 主账号冲突
 ROLE_USERS = [
-    ("13800000030", "demo-openid-admin-patient", "纯患者用户", "Patient", ["Patient"]),
-    ("13800000031", "demo-openid-admin-counselor", "咨询师用户", "Counselor", ["Patient", "Counselor"]),
-    ("13800000032", "demo-openid-admin-assistant", "助理用户", "Assistant", ["Patient", "Assistant"]),
-    ("13800000033", "demo-openid-admin-ops", "运营用户", "Ops", ["Patient", "Ops"]),
-    ("13800000034", "demo-openid-admin-multi", "多角色用户", "Patient", ["Patient", "Counselor", "Assistant"]),
+    ("13800000030", "demo-openid-admin-patient", "纯患者用户", "Patient"),
+    ("13800000031", "demo-openid-admin-counselor", "咨询师用户", "Counselor"),
+    ("13800000032", "demo-openid-admin-assistant", "助理用户", "Assistant"),
+    ("13800000033", "demo-openid-admin-ops", "运营用户", "Ops"),
 ]
 
 
@@ -44,11 +43,9 @@ def seed(db):
         gender="男",
     )
     bind_role(db, admin.Id, "Admin")
-    bind_role(db, admin.Id, "Ops")
-    bind_role(db, admin.Id, "Patient")
 
     created_users = []
-    for mobile, open_id, nickname, active_role, roles in ROLE_USERS:
+    for mobile, open_id, nickname, active_role in ROLE_USERS:
         user = create_account(
             db,
             mobile=mobile,
@@ -57,8 +54,7 @@ def seed(db):
             active_role=active_role,
             real_name=nickname,
         )
-        for role in roles:
-            bind_role(db, user.Id, role)
+        bind_role(db, user.Id, active_role)
         created_users.append(user)
 
     db.add(

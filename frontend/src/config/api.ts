@@ -162,6 +162,8 @@ export const API_ENDPOINTS = {
     users: '/api/mini/ops/users',
     dashboard: '/api/mini/ops/dashboard',
     schedulesOverview: '/api/mini/ops/schedules/overview',
+    counselorScheduleCalendar: (counselorId: number | string) =>
+      `/api/mini/ops/schedules/counselors/${counselorId}/calendar`,
     rooms: '/api/mini/ops/rooms',
     roomsStatus: '/api/mini/ops/rooms/status',
     roomDetail: (id: number | string) => `/api/mini/ops/rooms/${id}`,
@@ -172,6 +174,7 @@ export const API_ENDPOINTS = {
 
   // 管理员
   admin: {
+    rolePolicy: '/api/mini/admin/role-policy',
     users: '/api/mini/admin/users',
     createUserByMobile: '/api/mini/admin/users/by-mobile',
     deleteUser: (uid: number | string) => `/api/mini/admin/users/${uid}`,

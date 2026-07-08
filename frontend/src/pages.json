@@ -504,6 +504,14 @@
                     }
                 },
                 {
+                    "path": "schedules/detail",
+                    "style": {
+                        "navigationBarTitleText": "咨询师排期",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black"
+                    }
+                },
+                {
                     "path": "rooms/index",
                     "style": {
                         "navigationBarTitleText": "咨询室情况",

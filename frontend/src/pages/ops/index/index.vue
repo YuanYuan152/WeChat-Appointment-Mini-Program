@@ -40,7 +40,7 @@ onShow(() => {
 })
 
 const allEntries = [
-  { title: '排期情况', desc: '各咨询师当日排期与预约', symbol: '期', tone: 'tone-green', path: '/pages/ops/schedules/index' },
+  { title: '排期情况', desc: '按日浏览 · 点击进入普通/日历排期', symbol: '期', tone: 'tone-green', path: '/pages/ops/schedules/index' },
   { title: '咨询室情况', desc: '咨询室占用与管理', symbol: '室', tone: 'tone-green', path: '/pages/ops/rooms/index' },
   { title: 'Banner 管理', desc: '首页轮播图位与跳转链路', symbol: '图', tone: 'tone-gold', path: '/pages/ops/banner/index' },
   { title: '活动管理', desc: '招募 / 公告 / 主题活动', symbol: '活', tone: 'tone-gold', path: '/pages/ops/activities/index' },

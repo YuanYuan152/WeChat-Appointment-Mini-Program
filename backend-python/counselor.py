@@ -91,11 +91,9 @@ def require_counselor(
     current_account: AppAccount = Depends(get_current_account),
     db: Session = Depends(get_db),
 ) -> AppAccount:
-    binding = db.query(AppRoleBinding).filter(
-        AppRoleBinding.AccountId == current_account.Id,
-        AppRoleBinding.RoleType == "Counselor",
-    ).first()
-    if not binding:
+    from role_active import get_account_role
+
+    if get_account_role(db, current_account.Id) != "Counselor":
         raise HTTPException(status_code=403, detail="无咨询师权限")
     return current_account
 
@@ -919,21 +917,16 @@ def schedule_slot_options(
     )
 
 
-@router.get("/schedules/calendar", response_model=ScheduleCalendarOut, summary="滚动排期日历")
-def schedule_calendar(
-    start: Optional[str] = Query(None, description="起始日期 YYYY-MM-DD，默认今天"),
-    days: int = Query(ROLLING_WINDOW_DAYS, ge=1, le=ROLLING_WINDOW_DAYS * 2),
-    past_days: int = Query(
-        0,
-        ge=0,
-        le=ROLLING_WINDOW_DAYS,
-        description="向前追溯天数（用于普通模式查看已完成咨询/咨询记录筛选）",
-    ),
-    month: Optional[str] = Query(None, description="按月查看 YYYY-MM（日历模式）"),
-    counselor: AppAccount = Depends(require_counselor),
-    db: Session = Depends(get_db),
-):
-    """滚动窗口：默认从今天起连续 ROLLING_WINDOW_DAYS 天；可指定 past_days 包含历史已完成排期；或指定 month 查看整月。"""
+def build_schedule_calendar_for_counselor(
+    db: Session,
+    counselor_id: int,
+    *,
+    start: Optional[str] = None,
+    days: int = ROLLING_WINDOW_DAYS,
+    past_days: int = 0,
+    month: Optional[str] = None,
+) -> ScheduleCalendarOut:
+    """按咨询师 ID 构建排期日历（咨询师端与管理端共用）。"""
     today = china_now().date()
 
     if month:
@@ -955,7 +948,7 @@ def schedule_calendar(
         schedules = (
             db.query(AppSchedule)
             .filter(
-                AppSchedule.CounselorId == counselor.Id,
+                AppSchedule.CounselorId == counselor_id,
                 AppSchedule.StartTime >= start_dt,
                 AppSchedule.StartTime < end_dt,
             )
@@ -965,7 +958,7 @@ def schedule_calendar(
         return ScheduleCalendarOut(
             startDate=start_date.isoformat(),
             days=span_days,
-            slots=_calendar_items_for_schedules(db, schedules, counselor.Id),
+            slots=_calendar_items_for_schedules(db, schedules, counselor_id),
         )
 
     earliest_date = today - timedelta(days=past_days)
@@ -988,7 +981,7 @@ def schedule_calendar(
     schedules = (
         db.query(AppSchedule)
         .filter(
-            AppSchedule.CounselorId == counselor.Id,
+            AppSchedule.CounselorId == counselor_id,
             AppSchedule.StartTime >= start_dt,
             AppSchedule.StartTime < end_dt,
         )
@@ -1001,7 +994,32 @@ def schedule_calendar(
     return ScheduleCalendarOut(
         startDate=start_date.isoformat(),
         days=total_days,
-        slots=_calendar_items_for_schedules(db, schedules, counselor.Id),
+        slots=_calendar_items_for_schedules(db, schedules, counselor_id),
+    )
+
+
+@router.get("/schedules/calendar", response_model=ScheduleCalendarOut, summary="滚动排期日历")
+def schedule_calendar(
+    start: Optional[str] = Query(None, description="起始日期 YYYY-MM-DD，默认今天"),
+    days: int = Query(ROLLING_WINDOW_DAYS, ge=1, le=ROLLING_WINDOW_DAYS * 2),
+    past_days: int = Query(
+        0,
+        ge=0,
+        le=ROLLING_WINDOW_DAYS,
+        description="向前追溯天数（用于普通模式查看已完成咨询/咨询记录筛选）",
+    ),
+    month: Optional[str] = Query(None, description="按月查看 YYYY-MM（日历模式）"),
+    counselor: AppAccount = Depends(require_counselor),
+    db: Session = Depends(get_db),
+):
+    """滚动窗口：默认从今天起连续 ROLLING_WINDOW_DAYS 天；可指定 past_days 包含历史已完成排期；或指定 month 查看整月。"""
+    return build_schedule_calendar_for_counselor(
+        db,
+        counselor.Id,
+        start=start,
+        days=days,
+        past_days=past_days,
+        month=month,
     )
 
 

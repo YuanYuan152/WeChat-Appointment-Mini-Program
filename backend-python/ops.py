@@ -1,4 +1,4 @@
-﻿"""
+"""
 4.1 运营轻后台接口
 公开读取（小程序端）
   GET  /api/mini/ops/banners       有效 Banner 列表（按排序）
@@ -711,6 +711,44 @@ def ops_schedules_overview(
             "schedules": items,
         })
     return {"date": day.isoformat(), "counselors": result}
+
+
+@router.get(
+    "/schedules/counselors/{counselor_id}/calendar",
+    summary="某咨询师排期日历（管理端查看，与咨询师工作台一致）",
+)
+def ops_counselor_schedule_calendar(
+    counselor_id: int,
+    start: Optional[str] = Query(None, description="起始日期 YYYY-MM-DD"),
+    days: int = Query(ROLLING_WINDOW_DAYS, ge=1, le=ROLLING_WINDOW_DAYS * 2),
+    past_days: int = Query(
+        0,
+        ge=0,
+        le=ROLLING_WINDOW_DAYS,
+        description="向前追溯天数（普通模式含历史已完成）",
+    ),
+    month: Optional[str] = Query(None, description="按月查看 YYYY-MM（日历模式）"),
+    _ops: AppAccount = Depends(require_ops),
+    db: Session = Depends(get_db),
+):
+    from counselor import ScheduleCalendarOut, build_schedule_calendar_for_counselor
+
+    profile = (
+        db.query(AppCounselorProfile)
+        .filter(AppCounselorProfile.AccountId == counselor_id)
+        .first()
+    )
+    account = db.query(AccountModel).filter(AccountModel.Id == counselor_id).first()
+    if not profile and not account:
+        raise HTTPException(status_code=404, detail="咨询师不存在")
+    return build_schedule_calendar_for_counselor(
+        db,
+        counselor_id,
+        start=start,
+        days=days,
+        past_days=past_days,
+        month=month,
+    )
 
 
 class RoomCreate(BaseModel):

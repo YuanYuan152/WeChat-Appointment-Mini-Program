@@ -9,9 +9,16 @@ from pydantic import BaseModel, Field
 from sqlalchemy import exists, not_, or_
 from sqlalchemy.orm import Session
 
-from auth import get_current_account, AppAccount, _ensure_role_binding
+from auth import get_current_account, AppAccount
 from database import get_db
-from staff_roles import STAFF_WORKBENCH_ROLES, account_has_staff_workbench, staff_workbench_account_ids
+from staff_roles import (
+    STAFF_WORKBENCH_ROLES,
+    account_has_staff_workbench,
+    assignable_roles_for_actor,
+    assert_can_assign_role,
+    assert_can_manage_user,
+    staff_workbench_account_ids,
+)
 from models import (
     AppAccount,
     AppCaseRecord,
@@ -67,12 +74,12 @@ from pricing_service import (
     get_counselor_profile,
     sync_counselor_profile_billing_for_type,
 )
-from role_active import list_account_roles, resolve_active_role, invalidate_user_sessions
-from patient_registration import (
-    DEFAULT_PATIENT_SOURCE,
-    ensure_default_patient_registration,
-    ensure_patient_role_binding,
+from role_active import (
+    get_account_role,
+    set_account_role,
+    invalidate_user_sessions,
 )
+from patient_registration import DEFAULT_PATIENT_SOURCE
 
 router = APIRouter(prefix="/api/mini/admin", tags=["Admin"])
 
@@ -93,11 +100,7 @@ def require_admin(
     current_account: AppAccount = Depends(get_current_account),
     db: Session = Depends(get_db),
 ) -> AppAccount:
-    binding = db.query(AppRoleBinding).filter(
-        AppRoleBinding.AccountId == current_account.Id,
-        AppRoleBinding.RoleType == "Admin",
-    ).first()
-    if not binding:
+    if get_account_role(db, current_account.Id) != "Admin":
         raise HTTPException(status_code=403, detail="无管理员权限")
     return current_account
 
@@ -125,6 +128,37 @@ class CreateUserByMobileRequest(BaseModel):
 
 
 BINDABLE_ROLE_TYPES = frozenset({"Counselor", "Assistant", "Ops", "Patient", "Admin"})
+
+
+@router.get("/role-policy", summary="当前操作者可赋权的角色列表")
+def get_role_policy(
+    admin: AppAccount = Depends(require_staff_workbench),
+    db: Session = Depends(get_db),
+):
+    actor_role = get_account_role(db, admin.Id)
+    assignable = assignable_roles_for_actor(actor_role, BINDABLE_ROLE_TYPES)
+    return {
+        "actorRole": actor_role,
+        "assignableRoles": assignable,
+    }
+
+
+def _actor_role(db: Session, admin: AppAccount) -> str:
+    return get_account_role(db, admin.Id)
+
+
+def _guard_assign_role(db: Session, admin: AppAccount, target_role: str) -> None:
+    try:
+        assert_can_assign_role(_actor_role(db, admin), target_role)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+
+def _guard_manage_user(db: Session, admin: AppAccount, user_role: str) -> None:
+    try:
+        assert_can_manage_user(_actor_role(db, admin), user_role)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
 
 
 def _normalize_mobile(mobile: str) -> str:
@@ -199,11 +233,8 @@ def _user_admin_out(db: Session, account: AppAccount) -> dict:
         or (f"用户{account.Mobile[-4:]}" if account.Mobile else None)
         or f"用户{account.Id}"
     )
-    roles = [
-        b.RoleType
-        for b in db.query(AppRoleBinding).filter(AppRoleBinding.AccountId == account.Id).all()
-    ]
-    active_role = resolve_active_role(roles, account.ActiveRole)
+    roles = [get_account_role(db, account.Id)]
+    active_role = roles[0]
     counselor_type = profile.CounselorType if profile else None
     if active_role == "Counselor" and counselor_type:
         active_role_label = counselor_type_label(counselor_type)
@@ -445,12 +476,13 @@ def list_admin_users(
 @router.post("/users/by-mobile", summary="通过手机号添加用户并绑定角色")
 def create_user_by_mobile(
     body: CreateUserByMobileRequest,
-    _admin: AppAccount = Depends(require_staff_workbench),
+    admin: AppAccount = Depends(require_staff_workbench),
     db: Session = Depends(get_db),
 ):
     mobile = _normalize_mobile(body.mobile)
     if body.role not in BINDABLE_ROLE_TYPES:
         raise HTTPException(status_code=400, detail="不支持绑定该角色")
+    _guard_assign_role(db, admin, body.role)
 
     patient_source: Optional[str] = None
     counselor_type: Optional[str] = None
@@ -500,6 +532,9 @@ def create_user_by_mobile(
     else:
         if not account.IsActive:
             raise HTTPException(status_code=400, detail="该手机号对应账号已注销")
+        existing_role = get_account_role(db, account.Id)
+        if existing_role != body.role:
+            _guard_manage_user(db, admin, existing_role)
         if body.nickname:
             account.Nickname = body.nickname
         if getattr(account, "AccessRevokedAt", None):
@@ -508,15 +543,12 @@ def create_user_by_mobile(
     if patient_source:
         account.PatientSource = patient_source
 
-    ensure_patient_role_binding(db, account.Id)
-    _ensure_role_binding(db, account.Id, body.role)
+    set_account_role(db, account.Id, body.role)
     _restore_account_on_role_bind(db, account, body.role)
     if body.role == "Counselor" and counselor_type:
         _ensure_counselor_profile(db, account, counselor_type)
     elif body.role == "Counselor":
         _restore_counselor_on_rebind(db, account)
-    roles = list_account_roles(db, account.Id)
-    account.ActiveRole = resolve_active_role(roles, body.role)
     invalidate_user_sessions(db, account.Id)
     account.UpdatedAt = datetime.utcnow()
     db.commit()
@@ -525,15 +557,15 @@ def create_user_by_mobile(
     return {
         **_user_admin_out(db, account),
         "created": created,
-        "message": "用户已添加" if created else "已为现有用户绑定角色，重新登录后可恢复数据访问",
+        "message": "用户已添加" if created else "已更换角色，用户重新登录后生效",
     }
 
 
-@router.post("/users/{user_id}/roles", summary="绑定用户角色")
+@router.post("/users/{user_id}/roles", summary="设置用户角色（单账号仅一个角色）")
 def bind_user_role(
     user_id: int,
     body: BindRoleRequest,
-    _admin: AppAccount = Depends(require_staff_workbench),
+    admin: AppAccount = Depends(require_staff_workbench),
     db: Session = Depends(get_db),
 ):
     user = db.query(AppAccount).filter(AppAccount.Id == user_id).first()
@@ -541,103 +573,72 @@ def bind_user_role(
         raise HTTPException(status_code=404, detail="用户不存在")
     if body.role not in BINDABLE_ROLE_TYPES:
         raise HTTPException(status_code=400, detail="不支持绑定该角色")
-    existing = db.query(AppRoleBinding).filter(
-        AppRoleBinding.AccountId == user_id,
-        AppRoleBinding.RoleType == body.role,
-    ).first()
+
+    previous_role = get_account_role(db, user_id)
+    new_role = body.role
+    _guard_manage_user(db, admin, previous_role)
+    if previous_role != new_role:
+        _guard_assign_role(db, admin, new_role)
 
     counselor_type: Optional[str] = None
-    if body.role == "Counselor":
+    if new_role == "Counselor":
         try:
             counselor_type = validate_counselor_type(body.counselor_type or "PROFESSIONAL")
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        if existing:
+        if previous_role == "Counselor":
             _ensure_counselor_profile(db, user, counselor_type)
             user.UpdatedAt = datetime.utcnow()
             invalidate_user_sessions(db, user_id)
             db.commit()
             return {"message": "咨询师类型已更新"}
-    elif body.role == "Patient":
+    elif new_role == "Patient":
         if not body.patient_source:
             raise HTTPException(status_code=400, detail="请选择来访来源")
         try:
             user.PatientSource = validate_patient_source(body.patient_source)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        ensure_patient_role_binding(db, user_id)
-        if existing:
+        if previous_role == "Patient":
             user.UpdatedAt = datetime.utcnow()
             db.commit()
             return {"message": "来访来源已更新"}
 
-    if existing:
-        return {"message": "角色已存在"}
+    if previous_role == new_role:
+        return {"message": "角色未变更"}
 
-    ensure_patient_role_binding(db, user_id)
-    previous_active = user.ActiveRole
-    binding = AppRoleBinding(AccountId=user_id, RoleType=body.role, TargetId=body.target_id)
-    db.add(binding)
-    _restore_account_on_role_bind(db, user, body.role)
-    if body.role == "Counselor":
+    if previous_role == "Counselor" and new_role != "Counselor":
+        _set_counselor_profile_active(db, user_id, False)
+
+    set_account_role(db, user_id, new_role, body.target_id)
+    _restore_account_on_role_bind(db, user, new_role)
+    if new_role == "Counselor":
         _ensure_counselor_profile(db, user, counselor_type or "PROFESSIONAL")
-    roles = list_account_roles(db, user_id)
-    user.ActiveRole = resolve_active_role(roles, body.role)
+    elif new_role == "Patient" and body.patient_source:
+        user.PatientSource = validate_patient_source(body.patient_source)
+
     user.UpdatedAt = datetime.utcnow()
     db.add(AppRoleSwitchLog(
         AccountId=user_id,
-        FromRole=previous_active,
-        ToRole=body.role,
+        FromRole=previous_role,
+        ToRole=new_role,
     ))
     invalidate_user_sessions(db, user_id)
     db.commit()
-    return {"message": "角色已绑定，用户重新登录后即可恢复该角色数据访问"}
+    return {"message": "角色已更换，用户重新登录后生效"}
 
 
-@router.delete("/users/{user_id}/roles/{role}", summary="解绑用户角色")
+@router.delete("/users/{user_id}/roles/{role}", summary="已废弃：请使用 POST 更换角色")
 def unbind_user_role(
     user_id: int,
     role: str,
     _admin: AppAccount = Depends(require_staff_workbench),
     db: Session = Depends(get_db),
 ):
-    """
-    单独解绑某一角色（非删除用户）：
-    - 仅移除该角色绑定，不删除账号与历史业务数据
-    - 咨询师解绑时停用档案展示，数据仍保留
-    - 后续重新绑定同角色后，用户登录可再次加载该角色数据
-    """
-    if role == "Patient":
-        raise HTTPException(status_code=400, detail="来访为默认基础角色，不可解绑")
-
-    binding = db.query(AppRoleBinding).filter(
-        AppRoleBinding.AccountId == user_id,
-        AppRoleBinding.RoleType == role,
-    ).first()
-    if not binding:
-        raise HTTPException(status_code=404, detail="角色绑定不存在")
-
-    user = db.query(AppAccount).filter(AppAccount.Id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="用户不存在")
-
-    previous_active = user.ActiveRole
-    db.delete(binding)
-    if role == "Counselor":
-        _set_counselor_profile_active(db, user_id, False)
-
-    roles = list_account_roles(db, user_id)
-    prefer = None if user.ActiveRole == role else user.ActiveRole
-    user.ActiveRole = resolve_active_role(roles, prefer)
-    user.UpdatedAt = datetime.utcnow()
-    db.add(AppRoleSwitchLog(
-        AccountId=user_id,
-        FromRole=previous_active,
-        ToRole=f"UNBIND_{role}",
-    ))
-    invalidate_user_sessions(db, user_id)
-    db.commit()
-    return {"message": "角色已解绑，历史数据已保留，重新绑定后登录可恢复访问"}
+    raise HTTPException(
+        status_code=400,
+        detail="单账号仅支持一个角色，请通过「更换角色」修改权限，不支持单独解绑",
+    )
 
 
 @router.delete("/users/{user_id}", summary="删除用户（物理删除账号）")
@@ -657,6 +658,9 @@ def delete_user_account(
     account = db.query(AppAccount).filter(AppAccount.Id == user_id).first()
     if not account:
         raise HTTPException(status_code=404, detail="用户不存在")
+
+    user_role = get_account_role(db, user_id)
+    _guard_manage_user(db, admin, user_role)
 
     try:
         hard_delete_account(db, user_id)

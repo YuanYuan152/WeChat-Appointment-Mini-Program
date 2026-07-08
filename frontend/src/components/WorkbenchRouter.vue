@@ -86,20 +86,17 @@ const routeToWorkbench = async () => {
   state.value = 'loading'
   try {
     const me = await AuthApi.getMe()
-    const role = resolveWorkbenchRole(me.roles || [])
+    const role = resolveWorkbenchRole(me.roles || [], me.activeRole)
 
-    uni.setStorageSync('user_roles', JSON.stringify(me.roles || []))
+    uni.setStorageSync('user_roles', JSON.stringify([role]))
 
     if (!WORKBENCH_ROLES.has(role)) {
       state.value = 'patientBlocked'
       return
     }
 
-    if (role !== me.activeRole) {
-      await AuthApi.switchRole(role)
-    }
     uni.setStorageSync('active_role', role)
-    updateTabBarForRole(me.roles)
+    updateTabBarForRole(role)
 
     const target = ROLE_ROUTES[role]
     uni.redirectTo({ url: target })

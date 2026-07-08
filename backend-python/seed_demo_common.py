@@ -869,13 +869,10 @@ def get_or_create_counselor_account(
 
 
 def ensure_role(db: Session, account_id: int, role: str) -> None:
-    exists = (
-        db.query(AppRoleBinding)
-        .filter(AppRoleBinding.AccountId == account_id, AppRoleBinding.RoleType == role)
-        .first()
-    )
-    if not exists:
-        db.add(AppRoleBinding(AccountId=account_id, RoleType=role, TargetId=account_id))
+    from role_active import get_account_role, set_account_role
+
+    if get_account_role(db, account_id) != role:
+        set_account_role(db, account_id, role)
 
 
 def ensure_counselor_profile(db: Session, account_id: int, data: dict) -> None:

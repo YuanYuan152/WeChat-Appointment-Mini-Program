@@ -162,7 +162,7 @@ import { AuthApi } from '@/apis/auth'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
 import { updateTabBarForRole } from '@/utils/tabBar'
-import { resolveHighestRole, roleLabel } from '@/constants/roles'
+import { resolveAccountRole, roleLabel } from '@/constants/roles'
 
 interface UserInfo {
   name: string
@@ -258,14 +258,14 @@ const loadUserInfo = async () => {
       avatar: meData.avatarUrl || '',
     }
     userRoles.value = meData.roles || []
-    activeRole.value = resolveHighestRole(userRoles.value)
+    activeRole.value = resolveAccountRole(meData.roles, meData.activeRole)
     if (meData.roles?.length) {
-      uni.setStorageSync('user_roles', JSON.stringify(meData.roles))
+      uni.setStorageSync('user_roles', JSON.stringify([activeRole.value]))
     }
     if (meData.activeRole) {
-      uni.setStorageSync('active_role', meData.activeRole)
+      uni.setStorageSync('active_role', activeRole.value)
     }
-    updateTabBarForRole(meData.roles)
+    updateTabBarForRole(activeRole.value)
     await loadPendingRecordCount()
   } catch {
     // 网络异常时保留登录态，避免误清 token

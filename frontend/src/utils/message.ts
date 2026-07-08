@@ -1,5 +1,5 @@
 import { getDevWorkbenchRole, isMockLoginEnabled } from '@/utils/auth'
-import { STAFF_OPS_WORKBENCH_ROLES, usesOpsWorkbench } from '@/constants/roles'
+import { resolveAccountRole, STAFF_OPS_WORKBENCH_ROLES, usesOpsWorkbench } from '@/constants/roles'
 
 export interface MessageItem {
   Id: number
@@ -196,11 +196,10 @@ export function getStoredUserRoles(): string[] {
   }
 }
 
-/** 当前账号是否使用管理员/Ops 消息收件箱（含多角色账号与开发联调角色） */
+/** 当前账号是否使用管理员/Ops 消息收件箱 */
 export function hasAdminOpsMessageInbox(activeRole: string, roles?: string[]): boolean {
-  if (isAdminOpsMessageInbox(activeRole)) return true
-  const all = roles?.length ? roles : getStoredUserRoles()
-  if (STAFF_OPS_WORKBENCH_ROLES.some(r => all.includes(r))) return true
+  const role = resolveAccountRole(roles, activeRole)
+  if (isAdminOpsMessageInbox(role)) return true
   if (isMockLoginEnabled()) {
     const devRole = getDevWorkbenchRole()
     return !!devRole && usesOpsWorkbench(devRole)
@@ -211,17 +210,9 @@ export function hasAdminOpsMessageInbox(activeRole: string, roles?: string[]): b
 export function resolveMessageInboxRole(activeRole: string, roles?: string[]): string {
   if (isMockLoginEnabled()) {
     const devRole = getDevWorkbenchRole()
-    if (devRole && usesOpsWorkbench(devRole)) {
-      const all = roles?.length ? roles : getStoredUserRoles()
-      if (!all.length || all.includes(devRole)) return devRole
-    }
+    if (devRole && usesOpsWorkbench(devRole)) return devRole
   }
-  if (isAdminOpsMessageInbox(activeRole)) return activeRole
-  const all = roles?.length ? roles : getStoredUserRoles()
-  if (all.includes('Admin')) return 'Admin'
-  if (all.includes('Ops')) return 'Ops'
-  if (all.includes('Assistant')) return 'Assistant'
-  return activeRole
+  return resolveAccountRole(roles, activeRole)
 }
 
 export function isCrisisReportMessage(item: MessageItem): boolean {

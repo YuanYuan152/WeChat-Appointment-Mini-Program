@@ -1,11 +1,20 @@
 <template>
   <view class="page-patient-pricing">
     <view class="counselor-banner">
-      <text class="counselor-name">{{ counselorName }}</text>
-      <text class="counselor-meta">
-        统一基础价 ¥{{ counselor?.basePriceYuan ?? '—' }} · {{ counselor?.counselorTypeLabel }}
-        <text v-if="counselor?.usingDefaultBase">（默认）</text>
-      </text>
+      <view class="banner-top">
+        <text class="counselor-name">{{ counselorName }}</text>
+        <text v-if="counselor?.counselorTypeLabel" class="counselor-type">{{ counselor.counselorTypeLabel }}</text>
+      </view>
+
+      <view class="base-price-hero">
+        <text class="base-price-label">统一基础价</text>
+        <view class="base-price-row">
+          <text class="base-price-value">¥{{ counselor?.basePriceYuan ?? '—' }}</text>
+          <text v-if="counselor?.usingDefaultBase" class="base-price-tag">系统默认</text>
+        </view>
+        <text class="base-price-hint">对该咨询师全部来访生效，个性化调价在此基础上叠加</text>
+      </view>
+
       <text class="banner-tip">共 {{ total }} 位来访 · 以下为个性化价格调整</text>
     </view>
 
@@ -42,10 +51,6 @@
         </view>
 
         <view class="price-grid">
-          <view class="price-cell muted">
-            <text class="cell-label">基础价格</text>
-            <text class="cell-value">¥{{ row.basePriceYuan }}</text>
-          </view>
           <view class="price-cell">
             <text class="cell-label">手动调价</text>
             <text class="cell-value" :class="adjustClass(row.manualAdjustmentYuan)">
@@ -61,7 +66,7 @@
             <text class="cell-value">¥{{ row.revenueShareYuan }}</text>
             <text v-if="row.shareMode === 'PERCENT'" class="cell-sub">{{ row.revenueSharePercent }}%</text>
             <text v-else-if="row.shareMode === 'AMOUNT'" class="cell-sub">固定金额</text>
-            <text v-else class="cell-sub">默认 50%（基础价）</text>
+            <text v-else class="cell-sub">默认 50%</text>
           </view>
         </view>
       </view>
@@ -73,7 +78,7 @@
         <text class="modal-sub">{{ editing.patientName }}</text>
 
         <view class="preview-row">
-          <text class="preview-label">基础价格（统一）</text>
+          <text class="preview-label">基础价格（所有来访生效）</text>
           <text class="preview-value">¥{{ editing.basePriceYuan }}</text>
         </view>
         <view v-if="editing.autoAdjustmentYuan" class="preview-row">
@@ -82,33 +87,29 @@
         </view>
 
         <view class="form-group">
-          <text class="form-label">手动调价（元，可正可负）</text>
-          <input v-model="form.adjustmentYuan" class="form-input" type="number" placeholder="如 -50 或 100" />
-          <text class="form-hint">修改前：{{ formatAdjustment(editing.manualAdjustmentYuan) }}</text>
+          <text class="form-label">调整金额（对当前来访生效）</text>
+          <input v-model="form.adjustmentYuan" class="form-input" type="number" placeholder="元，可正可负，如 -50 或 100" />
         </view>
 
         <view class="preview-row">
           <text class="preview-label">显示价格（预览）</text>
           <text class="preview-value accent">¥{{ previewDisplayYuan }}</text>
         </view>
-        <text class="form-hint preview-before">修改前显示价格：¥{{ editing.displayPriceYuan }}</text>
 
         <view class="form-group">
-          <text class="form-label">分成方式</text>
+          <text class="form-label">咨询师分成</text>
           <view v-if="!form.shareMode" class="form-hint share-default-hint">
             当前使用系统默认：基础价格的 50%（¥{{ defaultShareYuan }}）
           </view>
           <view class="share-tabs">
-            <view class="share-tab" :class="{ active: form.shareMode === 'AMOUNT' }" @tap="form.shareMode = 'AMOUNT'">固定金额</view>
-            <view class="share-tab" :class="{ active: form.shareMode === 'PERCENT' }" @tap="form.shareMode = 'PERCENT'">占比</view>
+            <view class="share-tab" :class="{ active: form.shareMode === 'AMOUNT' }" @tap="form.shareMode = 'AMOUNT'">按固定金额</view>
+            <view class="share-tab" :class="{ active: form.shareMode === 'PERCENT' }" @tap="form.shareMode = 'PERCENT'">按比例</view>
           </view>
         </view>
 
         <view v-if="form.shareMode === 'AMOUNT'" class="form-group">
           <text class="form-label">分成金额（元）</text>
           <input v-model="form.revenueShareYuan" class="form-input" type="number" />
-          <text v-if="originalShareMode === 'AMOUNT'" class="form-hint">修改前：¥{{ editing.revenueShareYuan }}</text>
-          <text v-else-if="!originalShareMode" class="form-hint">修改前：系统默认 ¥{{ defaultShareYuan }}（基础价 50%）</text>
           <text class="form-hint">预览分成：¥{{ previewShareYuan }} · 占显示价格 {{ previewSharePercent }}%</text>
         </view>
 
@@ -118,10 +119,6 @@
             <input v-model="form.revenueSharePercent" class="form-input suffix-input" type="number" />
             <text class="input-suffix">%</text>
           </view>
-          <text v-if="originalShareMode === 'PERCENT' && editing.revenueSharePercent != null" class="form-hint">
-            修改前：{{ editing.revenueSharePercent }}%
-          </text>
-          <text v-else-if="!originalShareMode" class="form-hint">修改前：系统默认 50%（¥{{ defaultShareYuan }}）</text>
           <text class="form-hint">预览分成：¥{{ previewShareYuan }}</text>
         </view>
 
@@ -185,7 +182,6 @@ const DEFAULT_SHARE_PERCENT = 50
 
 const showEdit = ref(false)
 const editing = ref<PatientPricingRow | null>(null)
-const originalShareMode = ref('' as '' | 'AMOUNT' | 'PERCENT')
 const form = reactive({
   adjustmentYuan: '0',
   shareMode: '' as '' | 'AMOUNT' | 'PERCENT',
@@ -283,7 +279,6 @@ const loadMore = async () => {
 
 const openEdit = (row: PatientPricingRow) => {
   editing.value = row
-  originalShareMode.value = (row.shareMode as typeof form.shareMode) || ''
   form.adjustmentYuan = String(row.manualAdjustmentYuan)
   form.shareMode = (row.shareMode as typeof form.shareMode) || ''
   form.revenueShareYuan = row.shareMode === 'AMOUNT' ? String(row.revenueShareYuan) : ''
@@ -295,7 +290,6 @@ const openEdit = (row: PatientPricingRow) => {
 const closeEdit = () => {
   showEdit.value = false
   editing.value = null
-  originalShareMode.value = ''
 }
 
 const saveEdit = async () => {
@@ -353,23 +347,77 @@ onShow(() => reload(true))
   margin-bottom: 24rpx;
 }
 
+.banner-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin-bottom: 24rpx;
+}
+
 .counselor-name {
-  display: block;
   font-size: 34rpx;
   font-weight: 600;
   color: #fff;
+  flex: 1;
 }
 
-.counselor-meta {
+.counselor-type {
+  flex-shrink: 0;
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.15);
+  padding: 6rpx 16rpx;
+  border-radius: 999rpx;
+}
+
+.base-price-hero {
+  background: rgba(255, 255, 255, 0.12);
+  border: 2rpx solid rgba(255, 255, 255, 0.25);
+  border-radius: 16rpx;
+  padding: 24rpx 28rpx;
+  margin-bottom: 16rpx;
+}
+
+.base-price-label {
   display: block;
-  margin-top: 8rpx;
-  font-size: 26rpx;
-  color: rgba(255, 255, 255, 0.85);
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.75);
+  letter-spacing: 2rpx;
+  margin-bottom: 8rpx;
+}
+
+.base-price-row {
+  display: flex;
+  align-items: baseline;
+  gap: 16rpx;
+}
+
+.base-price-value {
+  font-size: 56rpx;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1.1;
+}
+
+.base-price-tag {
+  font-size: 22rpx;
+  color: #FEF3C7;
+  background: rgba(245, 158, 11, 0.35);
+  padding: 4rpx 14rpx;
+  border-radius: 999rpx;
+}
+
+.base-price-hint {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.5;
 }
 
 .banner-tip {
   display: block;
-  margin-top: 12rpx;
   font-size: 22rpx;
   color: rgba(255, 255, 255, 0.65);
   line-height: 1.5;
@@ -460,19 +508,19 @@ onShow(() => reload(true))
 }
 
 .price-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 16rpx;
+  display: flex;
+  gap: 12rpx;
 }
 
 .price-cell {
+  flex: 1;
+  min-width: 0;
   background: #F7F5F2;
   border-radius: 16rpx;
-  padding: 20rpx;
+  padding: 20rpx 16rpx;
   border: 1rpx solid #E8E4DE;
+  text-align: center;
 }
-
-.price-cell.muted { opacity: 0.85; }
 
 .price-cell.highlight {
   background: #E8E4DE;
@@ -487,12 +535,13 @@ onShow(() => reload(true))
 }
 
 .cell-value {
-  font-size: 32rpx;
+  font-size: 28rpx;
   font-weight: 600;
   color: #2C2C2C;
+  word-break: break-all;
 }
 
-.cell-value.strong { color: #3D5A4E; font-size: 34rpx; }
+.cell-value.strong { color: #3D5A4E; font-size: 30rpx; }
 .cell-value.up { color: #B45309; }
 .cell-value.down { color: #047857; }
 
@@ -603,11 +652,6 @@ onShow(() => reload(true))
 
 .share-default-hint {
   margin-bottom: 12rpx;
-}
-
-.preview-before {
-  display: block;
-  margin: -8rpx 0 16rpx;
 }
 
 .input-with-suffix {

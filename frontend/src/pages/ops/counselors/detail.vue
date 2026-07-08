@@ -122,6 +122,10 @@
           <text class="chevron" :class="{ open: expandedSections.has('schedule') }">›</text>
         </view>
         <view v-if="expandedSections.has('schedule')" class="section-body">
+          <view class="schedule-link-row" @tap="openFullSchedule">
+            <text class="schedule-link-text">查看完整排期（普通/日历模式）</text>
+            <text class="schedule-link-arrow">›</text>
+          </view>
           <view v-if="!detail.schedules.length" class="mini-empty">暂无近期排期</view>
           <view v-for="s in detail.schedules" :key="s.scheduleId" class="row-card">
             <text class="row-main">{{ formatDT(s.startTime) }} - {{ formatTime(s.endTime) }}</text>
@@ -338,6 +342,13 @@ const save = async () => {
   }
 }
 
+const openFullSchedule = () => {
+  if (!counselorId.value || !detail.value) return
+  uni.navigateTo({
+    url: `/pages/ops/schedules/detail?counselorId=${counselorId.value}&counselorName=${encodeURIComponent(detail.value.name || '咨询师')}`,
+  })
+}
+
 onMounted(() => {
   const pages = getCurrentPages()
   const opts = (pages[pages.length - 1] as any).options || {}
@@ -482,6 +493,17 @@ onMounted(() => {
 .row-main { display: block; font-size: 28rpx; font-weight: 600; color: #2C2C2C; }
 .row-sub { display: block; margin-top: 6rpx; font-size: 24rpx; color: #6B7280; }
 .row-loc { display: block; margin-top: 4rpx; font-size: 22rpx; color: #9CA3AF; }
+.schedule-link-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20rpx 24rpx;
+  margin-bottom: 16rpx;
+  background: #E8E4DE;
+  border-radius: 12rpx;
+}
+.schedule-link-text { font-size: 26rpx; color: #3D5A4E; font-weight: 600; }
+.schedule-link-arrow { font-size: 32rpx; color: #3D5A4E; }
 .save-btn {
   width: 100%;
   height: 92rpx;

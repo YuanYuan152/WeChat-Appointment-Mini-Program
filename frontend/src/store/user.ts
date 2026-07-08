@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { AuthApi, type UserInfo } from '@/apis/auth'
+import { resolveAccountRole } from '@/constants/roles'
 import { setToken, clearToken, getToken } from '@/utils/auth'
 import { updateTabBarForRole } from '@/utils/tabBar'
 
@@ -39,18 +40,17 @@ export const useUserStore = defineStore('user', {
       const me = await AuthApi.getMe()
       this.userInfo = me
       this.roles = me.roles || []
-      this.activeRole = me.activeRole || ''
-      uni.setStorageSync('user_roles', JSON.stringify(this.roles))
-      if (me.activeRole) uni.setStorageSync('active_role', me.activeRole)
-      updateTabBarForRole(this.roles)
+      this.activeRole = me.activeRole || resolveAccountRole(this.roles)
+      uni.setStorageSync('user_roles', JSON.stringify([this.activeRole]))
+      if (me.activeRole) uni.setStorageSync('active_role', this.activeRole)
+      updateTabBarForRole(this.activeRole)
     },
 
     async switchRole(role: string) {
-      const res = await AuthApi.switchRole(role)
-      this.activeRole = res.activeRole || role
-      uni.setStorageSync('active_role', this.activeRole)
-      updateTabBarForRole(this.roles)
-      return res
+      if (role !== this.activeRole) {
+        throw new Error('单账号仅支持一个角色，如需变更请联系管理员')
+      }
+      return { message: '当前角色未变更', activeRole: role }
     },
 
     logout() {

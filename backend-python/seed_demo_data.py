@@ -142,7 +142,6 @@ def main():
             acc = get_or_create_staff_account(
                 db, cfg["mobile"], cfg["open_id"], cfg["name"], cfg["role"],
             )
-            ensure_role(db, acc.Id, "Patient")
             ensure_role(db, acc.Id, cfg["role"])
             staff_map[cfg["role"]] = acc
 
