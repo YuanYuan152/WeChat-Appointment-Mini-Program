@@ -30,11 +30,14 @@
 import { computed } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '@/store/user'
+import { resolveAccountRole } from '@/constants/roles'
+import { getToken } from '@/utils/auth'
+import { readStoredRole } from '@/utils/tabBar'
 
 const userStore = useUserStore()
 
 onShow(() => {
-  if (!userStore.roles.length && userStore.isLogin) {
+  if (getToken()) {
     userStore.fetchUserInfo().catch(() => {})
   }
 })
@@ -60,7 +63,11 @@ const allEntries = [
 ]
 
 const entries = computed(() => {
-  const isAdmin = userStore.hasRole('Admin')
+  const role =
+    userStore.activeRole ||
+    resolveAccountRole(userStore.roles) ||
+    readStoredRole()
+  const isAdmin = role === 'Admin'
   return allEntries.filter(e => !e.adminOnly || isAdmin)
 })
 
