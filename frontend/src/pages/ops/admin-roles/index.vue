@@ -593,6 +593,8 @@ const selectRole = (uid: number, idx: number) => {
 
 
 
+const ROLES_WITH_TYPE = new Set(['Patient', 'Counselor'])
+
 const changeRole = async (uid: number) => {
   const role = selected[uid]
   if (!role) {
@@ -610,6 +612,14 @@ const changeRole = async (uid: number) => {
     return
   }
   const current = user ? userRole(user) : ''
+  if (current && current === role && !ROLES_WITH_TYPE.has(role)) {
+    uni.showModal({
+      title: '提示',
+      content: '当前角色暂不支持修改类型',
+      showCancel: false,
+    })
+    return
+  }
   if (current && current !== role) {
     const confirmed = await new Promise<boolean>((resolve) => {
       uni.showModal({
