@@ -236,10 +236,11 @@ def _user_admin_out(db: Session, account: AppAccount) -> dict:
     roles = [get_account_role(db, account.Id)]
     active_role = roles[0]
     counselor_type = profile.CounselorType if profile else None
+    patient_source = getattr(account, "PatientSource", None)
     if active_role == "Counselor" and counselor_type:
         active_role_label = counselor_type_label(counselor_type)
-    elif active_role == "Patient" and is_charity_patient_source(getattr(account, "PatientSource", None)):
-        active_role_label = patient_source_label(getattr(account, "PatientSource", None))
+    elif active_role == "Patient" and is_charity_patient_source(patient_source):
+        active_role_label = patient_source_label(patient_source)
     else:
         active_role_label = None
     out = {
@@ -250,11 +251,17 @@ def _user_admin_out(db: Session, account: AppAccount) -> dict:
         "counselorName": counselor_name,
         "activeRole": active_role,
         "activeRoleLabel": active_role_label,
-        "patientSource": getattr(account, "PatientSource", None),
-        "patientSourceLabel": patient_source_label(getattr(account, "PatientSource", None)),
-        "isCharityPatient": is_charity_patient_source(getattr(account, "PatientSource", None)),
-        "counselorType": counselor_type,
-        "counselorTypeLabel": counselor_type_label(counselor_type),
+        "patientSource": patient_source if active_role == "Patient" else None,
+        "patientSourceLabel": (
+            patient_source_label(patient_source) if active_role == "Patient" else None
+        ),
+        "isCharityPatient": (
+            is_charity_patient_source(patient_source) if active_role == "Patient" else False
+        ),
+        "counselorType": counselor_type if active_role == "Counselor" else None,
+        "counselorTypeLabel": (
+            counselor_type_label(counselor_type) if active_role == "Counselor" else None
+        ),
         "roles": roles,
         "createdAt": getattr(account, "CreatedAt", None),
         "isSelfRegistered": getattr(account, "PatientSource", None) == DEFAULT_PATIENT_SOURCE,
@@ -1030,6 +1037,8 @@ class AdminPatientSummaryOut(BaseModel):
     gender: Optional[str] = None
     emergencyContact: Optional[str] = None
     emergencyPhone: Optional[str] = None
+    roleLabel: str = "来访"
+    typeLabel: Optional[str] = None
     totalConsultations: int = 0
     upcomingCount: int = 0
     completedCount: int = 0
@@ -1075,6 +1084,8 @@ class AdminPatientDetailOut(BaseModel):
     gender: Optional[str] = None
     emergencyContact: Optional[str] = None
     emergencyPhone: Optional[str] = None
+    roleLabel: str = "来访"
+    typeLabel: Optional[str] = None
     createdAt: Optional[datetime] = None
     totalConsultations: int = 0
     upcomingCount: int = 0
@@ -1541,6 +1552,7 @@ def list_admin_patients(
                 gender=acc.Gender,
                 emergencyContact=acc.EmergencyContact,
                 emergencyPhone=acc.EmergencyPhone,
+                **_admin_patient_meta(acc),
                 totalConsultations=total,
                 upcomingCount=upcoming,
                 completedCount=completed,
@@ -1621,6 +1633,7 @@ def get_admin_patient_detail(
         gender=patient.Gender,
         emergencyContact=patient.EmergencyContact,
         emergencyPhone=patient.EmergencyPhone,
+        **_admin_patient_meta(patient),
         createdAt=patient.CreatedAt,
         totalConsultations=total,
         upcomingCount=upcoming,
@@ -1695,6 +1708,23 @@ def _admin_record_is_filled(record: Optional[AppCaseRecord]) -> bool:
     )
 
 
+def _admin_patient_meta(account: AppAccount) -> dict:
+    return {
+        "roleLabel": "来访",
+        "typeLabel": patient_source_label(getattr(account, "PatientSource", None)),
+    }
+
+
+def _admin_counselor_meta(profile: Optional[AppCounselorProfile]) -> dict:
+    if not profile:
+        return {"roleLabel": "咨询师", "typeLabel": None}
+    ctype = profile.CounselorType or "PROFESSIONAL"
+    return {
+        "roleLabel": "咨询师",
+        "typeLabel": counselor_type_label(ctype),
+    }
+
+
 def _admin_profile_dict(profile: Optional[AppCounselorProfile], counselor_id: int, db: Session) -> dict:
     acc = db.query(AppAccount).filter(AppAccount.Id == counselor_id).first()
     billing = int(profile.Billing or 0) if profile else 0
@@ -1725,6 +1755,7 @@ def _admin_profile_dict(profile: Optional[AppCounselorProfile], counselor_id: in
         "infoAuthenticityCommittedAt": profile.InfoAuthenticityCommittedAt if profile else None,
         "infoAuthenticitySignerName": profile.InfoAuthenticitySignerName if profile else None,
         "isActive": bool(profile.IsActive) if profile else True,
+        **_admin_counselor_meta(profile),
     }
 
 
@@ -1733,6 +1764,8 @@ class AdminCounselorSummaryOut(BaseModel):
     name: str
     title: Optional[str] = None
     avatarUrl: Optional[str] = None
+    roleLabel: str = "咨询师"
+    typeLabel: Optional[str] = None
     activeBookingCount: int = 0
     cancelledCount: int = 0
     scheduleCount: int = 0
@@ -1786,6 +1819,8 @@ class AdminCounselorDetailOut(BaseModel):
     name: str
     avatarUrl: Optional[str] = None
     title: Optional[str] = None
+    roleLabel: str = "咨询师"
+    typeLabel: Optional[str] = None
     specialty: Optional[str] = None
     field: Optional[str] = None
     introduce: Optional[str] = None
@@ -1964,6 +1999,7 @@ def list_admin_counselors(
                 name=name,
                 title=prof.Title if prof else None,
                 avatarUrl=prof.AvatarUrl if prof else (acc.AvatarUrl if acc else None),
+                **_admin_counselor_meta(prof),
                 activeBookingCount=stats.activeBookingCount,
                 cancelledCount=stats.cancelledCount,
                 scheduleCount=stats.scheduleCount,
@@ -2236,7 +2272,7 @@ class AdminCounselorBasePricePayload(BaseModel):
 @router.get("/pricing/counselors", summary="定价管理：咨询师列表（含统一基础价）")
 def list_pricing_counselors(
     keyword: Optional[str] = Query(None),
-    _admin: AppAccount = Depends(require_admin),
+    _admin: AppAccount = Depends(require_ops_or_admin),
     db: Session = Depends(get_db),
 ):
     from pricing_service import list_counselor_pricing_summaries
@@ -2253,7 +2289,7 @@ def list_pricing_counselors(
 def update_pricing_counselor_base(
     counselor_id: int,
     body: AdminCounselorBasePricePayload,
-    _admin: AppAccount = Depends(require_admin),
+    _admin: AppAccount = Depends(require_ops_or_admin),
     db: Session = Depends(get_db),
 ):
     from pricing_service import counselor_pricing_summary, update_counselor_base_price_cents
@@ -2272,7 +2308,7 @@ def list_pricing_counselor_patients(
     keyword: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
-    _admin: AppAccount = Depends(require_admin),
+    _admin: AppAccount = Depends(require_ops_or_admin),
     db: Session = Depends(get_db),
 ):
     from pricing_service import counselor_pricing_summary, get_counselor_profile, list_counselor_patient_pricing
@@ -2300,7 +2336,7 @@ def update_pricing_counselor_patient(
     counselor_id: int,
     patient_id: int,
     body: AdminPricingUpdatePayload,
-    _admin: AppAccount = Depends(require_admin),
+    _admin: AppAccount = Depends(require_ops_or_admin),
     db: Session = Depends(get_db),
 ):
     from pricing_service import pricing_breakdown, upsert_patient_pricing

@@ -4,7 +4,10 @@
     <view v-else-if="!detail" class="empty">来访者不存在</view>
     <view v-else class="content-wrap">
       <view class="profile-card">
-        <text class="profile-name">{{ detail.name }}</text>
+        <view class="profile-title-row">
+          <text class="profile-name">{{ detail.name }}</text>
+          <text v-if="detail.typeLabel" class="type-badge">{{ detail.typeLabel }}</text>
+        </view>
         <view class="info-row">
           <text class="label">手机号</text>
           <text class="value">{{ detail.mobile || '未填写' }}</text>
@@ -142,6 +145,8 @@ interface PatientDetail {
   name: string
   mobile?: string
   gender?: string
+  roleLabel?: string
+  typeLabel?: string
   emergencyContact?: string
   emergencyPhone?: string
   feedbackCount: number
@@ -229,7 +234,23 @@ onLoad(async (opts) => {
   margin-bottom: 24rpx;
   box-shadow: 0 4rpx 20rpx rgba(0,0,0,0.03);
 }
-.profile-name { display: block; font-size: 34rpx; font-weight: 600; color: #2C2C2C; margin-bottom: 20rpx; }
+.profile-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  margin-bottom: 20rpx;
+}
+.profile-name { font-size: 34rpx; font-weight: 600; color: #2C2C2C; }
+.type-badge {
+  font-size: 22rpx;
+  color: #6B6560;
+  background: #F0EDE8;
+  padding: 4rpx 14rpx;
+  border-radius: 100rpx;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
 .info-row { display: flex; gap: 24rpx; padding: 10rpx 0; }
 .label { font-size: 26rpx; color: #8A8A8A; width: 160rpx; flex-shrink: 0; }
 .value { flex: 1; font-size: 26rpx; color: #2C2C2C; line-height: 1.5; }

@@ -23,6 +23,14 @@ def has_appointment_started(start_time: Optional[datetime]) -> bool:
     return hours <= 0
 
 
+def has_appointment_ended(end_time: Optional[datetime]) -> bool:
+    """当前时间是否已到或超过咨询结束时间。"""
+    hours = hours_until_appointment(end_time)
+    if hours is None:
+        return False
+    return hours <= 0
+
+
 def is_refund_eligible(start_time: Optional[datetime]) -> bool:
     hours = hours_until_appointment(start_time)
     if hours is None:

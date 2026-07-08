@@ -11,7 +11,10 @@
         />
         <view v-else class="avatar placeholder">{{ (detail.name || '?').slice(0, 1) }}</view>
         <view class="profile-meta">
-          <text class="profile-name">{{ detail.name }}</text>
+          <view class="profile-title-row">
+            <text class="profile-name">{{ detail.name }}</text>
+            <text v-if="detail.typeLabel" class="type-badge">{{ detail.typeLabel }}</text>
+          </view>
           <text v-if="detail.title" class="profile-title">{{ detail.title }}</text>
         </view>
       </view>
@@ -220,6 +223,8 @@ interface CounselorDetail {
   name: string
   avatarUrl?: string
   title?: string
+  roleLabel?: string
+  typeLabel?: string
   specialty?: string
   field?: string
   introduce?: string
@@ -396,7 +401,22 @@ onMounted(() => {
   font-weight: 700;
 }
 .profile-meta { flex: 1; min-width: 0; }
-.profile-name { display: block; font-size: 34rpx; font-weight: 700; color: #2C2C2C; }
+.profile-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+.profile-name { font-size: 34rpx; font-weight: 700; color: #2C2C2C; }
+.type-badge {
+  font-size: 22rpx;
+  color: #6B6560;
+  background: #F0EDE8;
+  padding: 4rpx 14rpx;
+  border-radius: 100rpx;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
 .profile-title { display: block; margin-top: 6rpx; font-size: 24rpx; color: #9CA3AF; }
 .stats-grid {
   display: grid;

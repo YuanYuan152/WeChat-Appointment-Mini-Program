@@ -43,7 +43,10 @@
           @tap="openPatientDetail(item.patientId)"
         >
           <view class="card-head">
-            <text class="name">{{ item.name }}</text>
+            <view class="name-row">
+              <text class="name">{{ item.name }}</text>
+              <text v-if="item.typeLabel" class="type-badge">{{ item.typeLabel }}</text>
+            </view>
             <text class="arrow">›</text>
           </view>
           <text class="mobile">{{ item.mobile || '未填写手机号' }}</text>
@@ -82,8 +85,11 @@
                 mode="aspectFill"
               />
               <view v-else class="avatar placeholder">{{ item.name.slice(0, 1) }}</view>
-              <view>
-                <text class="name">{{ item.name }}</text>
+              <view class="name-block">
+                <view class="name-row">
+                  <text class="name">{{ item.name }}</text>
+                  <text v-if="item.typeLabel" class="type-badge">{{ item.typeLabel }}</text>
+                </view>
                 <text v-if="item.title" class="sub">{{ item.title }}</text>
               </view>
             </view>
@@ -106,6 +112,8 @@ interface PatientSummary {
   patientId: number
   name: string
   mobile?: string
+  roleLabel?: string
+  typeLabel?: string
   totalConsultations: number
   upcomingCount: number
   completedCount: number
@@ -117,6 +125,8 @@ interface CounselorSummary {
   name: string
   title?: string
   avatarUrl?: string
+  roleLabel?: string
+  typeLabel?: string
   activeBookingCount: number
   cancelledCount: number
   scheduleCount: number
@@ -228,7 +238,25 @@ onShow(refresh)
   box-shadow: 0 4rpx 20rpx rgba(0,0,0,0.03);
 }
 .card:active { opacity: 0.92; }
-.card-head { display: flex; justify-content: space-between; align-items: center; }
+.card-head { display: flex; justify-content: space-between; align-items: center; gap: 16rpx; }
+.name-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  flex: 1;
+  min-width: 0;
+}
+.name-block { flex: 1; min-width: 0; }
+.type-badge {
+  font-size: 22rpx;
+  color: #6B6560;
+  background: #F0EDE8;
+  padding: 4rpx 14rpx;
+  border-radius: 100rpx;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
 .head-left { display: flex; align-items: center; gap: 16rpx; flex: 1; min-width: 0; }
 .avatar { width: 72rpx; height: 72rpx; border-radius: 16rpx; flex-shrink: 0; }
 .avatar.placeholder {
@@ -240,7 +268,7 @@ onShow(refresh)
   font-size: 32rpx;
   font-weight: 700;
 }
-.name { display: block; font-size: 30rpx; font-weight: 600; color: #2C2C2C; }
+.name { font-size: 30rpx; font-weight: 600; color: #2C2C2C; }
 .sub { display: block; margin-top: 4rpx; font-size: 22rpx; color: #9CA3AF; }
 .mobile { display: block; margin-top: 8rpx; font-size: 26rpx; color: #6B6560; }
 .arrow { font-size: 36rpx; color: #C9A96E; flex-shrink: 0; }

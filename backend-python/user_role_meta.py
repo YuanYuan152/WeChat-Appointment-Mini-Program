@@ -22,6 +22,14 @@ COUNSELOR_TYPES = {
     "PROFESSIONAL": "专业咨询师",
 }
 
+# 心理咨询列表/详情：以下角色可见全部咨询师（含公益）
+COUNSELOR_DIRECTORY_FULL_VISIBILITY_ROLES = frozenset({
+    "Counselor",
+    "Assistant",
+    "Ops",
+    "Admin",
+})
+
 
 def patient_source_label(code: Optional[str]) -> Optional[str]:
     if not code:
@@ -48,6 +56,21 @@ def counselor_visible_to_patient(
     if ctype != "CHARITY":
         return True
     return is_charity_patient_source(patient_source)
+
+
+def can_view_all_counselors_in_directory(viewer_role: Optional[str]) -> bool:
+    return (viewer_role or "") in COUNSELOR_DIRECTORY_FULL_VISIBILITY_ROLES
+
+
+def counselor_visible_to_viewer(
+    counselor_type: Optional[str],
+    patient_source: Optional[str],
+    viewer_role: Optional[str] = None,
+) -> bool:
+    """心理咨询模块列表/详情可见性（含角色豁免）。"""
+    if can_view_all_counselors_in_directory(viewer_role):
+        return True
+    return counselor_visible_to_patient(counselor_type, patient_source)
 
 
 def validate_patient_source(code: Optional[str]) -> str:

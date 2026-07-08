@@ -41,8 +41,8 @@
             <text class="uid">
               {{ u.isLegacyOnly ? `旧系统 ID ${u.legacyDoctorId}` : `ID ${u.id}` }}{{ u.mobile ? ' · ' + u.mobile : '' }}
             </text>
-            <text v-if="u.patientSourceLabel" class="meta-line">来访来源：{{ u.patientSourceLabel }}</text>
-            <text v-if="u.counselorTypeLabel" class="meta-line">咨询师类型：{{ u.counselorTypeLabel }}</text>
+            <text v-if="showPatientSourceMeta(u)" class="meta-line">来访来源：{{ u.patientSourceLabel }}</text>
+            <text v-if="showCounselorTypeMeta(u)" class="meta-line">咨询师类型：{{ u.counselorTypeLabel }}</text>
             <text v-if="u.createdAt" class="meta-line">注册时间：{{ formatCreatedAt(u.createdAt) }}</text>
           </view>
           <text v-if="u.isLegacyOnly" class="legacy-tag">旧系统 · 待绑定</text>
@@ -434,6 +434,14 @@ const currentRoleDisplayLabel = (user: AdminUser) => {
   return roleLabel(role)
 }
 
+/** 仅当前角色为来访时展示来源 */
+const showPatientSourceMeta = (user: AdminUser) =>
+  userRole(user) === 'Patient' && !!user.patientSourceLabel
+
+/** 仅当前角色为咨询师时展示类型 */
+const showCounselorTypeMeta = (user: AdminUser) =>
+  userRole(user) === 'Counselor' && !!user.counselorTypeLabel
+
 const initSelectedFromUsers = () => {
   for (const u of users.value) {
     const role = userRole(u)
@@ -763,13 +771,16 @@ onShow(() => load(true))
 
 .search-btn {
   flex-shrink: 0;
-  padding: 0 28rpx;
+  box-sizing: border-box;
+  height: 88rpx;
   line-height: 88rpx;
+  padding: 0 28rpx;
   background: #E8E4DE;
   color: #3D5A4E;
   border-radius: 16rpx;
   font-size: 28rpx;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .load-more {
@@ -863,14 +874,6 @@ onShow(() => load(true))
 
 
 
-.search-bar {
-
-  margin-bottom: 16rpx;
-
-}
-
-
-
 .search-input {
   width: 100%;
   box-sizing: border-box;
@@ -886,26 +889,20 @@ onShow(() => load(true))
   box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.03);
 }
 
-
-
 .add-btn {
-
+  flex-shrink: 0;
+  box-sizing: border-box;
+  height: 88rpx;
+  line-height: 88rpx;
+  padding: 0 28rpx;
   background: #3D5A4E;
-
   color: #fff;
-
   border-radius: 16rpx;
-
-  padding: 20rpx 0;
-
   text-align: center;
-
   font-size: 28rpx;
-
   font-weight: 600;
-
+  white-space: nowrap;
   box-shadow: 0 4rpx 16rpx rgba(61, 90, 78, 0.2);
-
 }
 
 

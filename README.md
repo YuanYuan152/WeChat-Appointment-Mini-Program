@@ -49,7 +49,7 @@ npm run dev
 ## 项目结构
 
 ```
-├── frontend/                 # 前端代码
+├── frontend/                # 前端代码
 │   ├── src/
 │   │   ├── pages/           # 页面文件
 │   │   │   └── consultant/  # 咨询师相关页面
