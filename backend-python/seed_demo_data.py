@@ -1,5 +1,5 @@
 """
-首页咨询师 + 预约置灰 + 多角色演示数据（Python 注入，启动后端即可用）。
+首页咨询师 + 预约置灰 + 单角色演示数据（Python 注入，启动后端即可用）。
 
 用法（务必使用 venv / conda）:
   cd backend-python
@@ -7,11 +7,13 @@
 
 写入内容（增量，不清表）:
   - 三位来访者：林小美 / 赵小刚 / 何小丽（与 auth.py dev_patient_* 对齐）
-  - 四位咨询师：李心怡 / 张明远 / 王婉清 / 陈启明（含视频咨询中心时段）
+  - 四位咨询师：李心怡 / 张明远 / 王婉清 / 陈启明（陈启明为公益咨询师 ¥100）
+  - 单账号单角色：每位演示账号仅保留一个 AppRoleBinding
+  - 定价管理演示：李心怡/王婉清对林小美的个性化调价
   - 预约样例：待确认/已确认/已完成/已取消、视频咨询、退款豁免等
   - 咨询记录（含照片与修改历史）、来访反馈、心理量表、首次登记表
   - 助理待办/风险提醒/联系记录、咨询师请假申请
-  - 助理 / 运营 / 管理员演示账号
+  - 助理 / 咨询主任 / 管理员演示账号（各一角色）
   - Banner / 活动 / 文章 / 订阅消息模板
 """
 from datetime import datetime, timedelta
@@ -36,6 +38,8 @@ from seed_demo_common import (
     ensure_demo_consultation_feedbacks,
     ensure_demo_counselor_favorites,
     ensure_demo_leave_requests,
+    cleanup_legacy_demo_pricing,
+    ensure_demo_patient_pricing,
     ensure_demo_psych_scales,
     ensure_demo_refund_exemptions,
     ensure_demo_registration_forms,
@@ -200,6 +204,8 @@ def main():
         ensure_demo_consultation_feedbacks(db, patient_map)
         ensure_demo_refund_exemptions(db, patient_map)
         ensure_demo_counselor_favorites(db, patient_map, counselor_map)
+        cleanup_legacy_demo_pricing(db)
+        ensure_demo_patient_pricing(db, patient_map, counselor_map)
         ensure_demo_leave_requests(db, counselor_map)
         assistant = staff_map.get("Assistant")
         if assistant:
@@ -213,9 +219,10 @@ def main():
             print(f"[OK] 管理工作台收件箱消息已同步 {synced} 条（助理/主任/管理员一致）")
 
         db.commit()
-        print("[OK] 演示助理/运营/管理员账号已写入（dev_assistant / dev_ops / dev_admin）")
-        print("[OK] 四位咨询师演示数据已写入（含视频咨询中心、请假申请）")
+        print("[OK] 演示助理/咨询主任/管理员账号已写入（dev_assistant / dev_ops / dev_admin，单角色）")
+        print("[OK] 四位咨询师演示数据已写入（陈启明=公益 100元，含视频咨询中心、请假申请）")
         print("[OK] 三位来访者演示数据已写入（预约/登记/量表/反馈/收藏）")
+        print("[OK] 定价管理演示：李心怡->林小美 +20元 固定分成 320元；王婉清->林小美 +100元")
         for cfg in DEMO_PATIENTS:
             acc = patient_map[cfg["real_name"]]
             print(f"[OK] 来访者 {cfg['real_name']}: account_id={acc.Id}, mobile={acc.Mobile}")
@@ -225,15 +232,18 @@ def main():
         print("--- 快速验证（无需支付）---")
         print("  1. 李心怡 → 杨浦 → 明天 10:00 灰显，工作台显示咨询室 yangpu-r1")
         print("  2. 张明远 → 浦东 → 后天 14:00 灰显，工作台显示咨询室 pudong-r2")
-        print("  3. 陈启明 → 视频咨询 → 后天 11:00 可约；15:00 已约（无咨询室）")
+        print("  3. 陈启明（公益）-> 视频咨询 -> 后天 11:00 可约；15:00 已约（无咨询室，基础价 100元）")
         print("  4. 林小美：可退款/不可退款/已取消/视频预约 + 豁免申请待审")
         print("  5. 赵小刚：PENDING 预约 + 张明远 2 条已填记录 + 1 条待填写（近3天）")
         print("  6. 何小丽：3 条已完成咨询记录（含首次+视频）")
+        print("--- 定价管理（管理员 dev_admin）---")
+        print("  7. 李心怡 -> 林小美：调整 +20元，咨询师分成 320元（固定金额）")
+        print("  8. 王婉清 -> 林小美：调整 +100元，分成默认 50% 基础价")
         print("--- 咨询记录演示 ---")
-        print("  7. 李心怡：林小美 2 条已填（含历史版本）")
-        print("  8. 张明远：赵小刚 2 条已填 + 1 条待填写")
-        print("  9. 王婉清：何小丽/林小美/赵小刚 共 4 条已填")
-        print(" 10. 陈启明：何小丽/林小美 各 1 条已填（视频）")
+        print("  9. 李心怡：林小美 2 条已填（含历史版本）")
+        print(" 10. 张明远：赵小刚 2 条已填 + 1 条待填写")
+        print(" 11. 王婉清：何小丽/林小美/赵小刚 共 4 条已填")
+        print(" 12. 陈启明：何小丽/林小美 各 1 条已填（视频）")
     except Exception:
         db.rollback()
         raise
