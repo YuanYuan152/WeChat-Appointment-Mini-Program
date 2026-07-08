@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { formatDateTime, formatMoneyFromCents } from "@/lib/format";
 
 import type { ScreenData, SummaryRow } from "@/types/app";
@@ -36,6 +38,22 @@ export function DashboardPanel({
               <div className="mt-2 text-sm text-[var(--lxxl-green)]">{metric.helper}</div>
             </div>
           ))}
+        </section>
+        <section className="rounded-xl border border-[var(--lxxl-border)] bg-white px-6 py-5">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold">代理预约</h2>
+              <p className="mt-1 text-sm text-[var(--lxxl-muted)]">
+                为来访选择咨询师和时段，推送待支付订单。
+              </p>
+            </div>
+            <Link
+              className="inline-flex h-10 w-28 items-center justify-center rounded-xl bg-[var(--lxxl-green)] px-4 text-sm font-medium text-white transition hover:bg-[var(--lxxl-green-dark)]"
+              href="/proxy-booking"
+            >
+              进入
+            </Link>
+          </div>
         </section>
         <section className="rounded-xl border border-[var(--lxxl-border)] bg-white">
           <PanelHeader title="近期需要关注" description="展示待审核豁免、待补咨询记录和正在占用的咨询室。" />

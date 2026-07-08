@@ -15,6 +15,8 @@ import type {
   CompletedOrderImportResult,
   FeedbackItem,
   MessageItem,
+  ProxyScheduleCalendar,
+  ProxySlotOptions,
   CounselorRecordSummary,
   AdminCaseRecordDetail,
   AdminConsultationRecord,
@@ -42,6 +44,7 @@ export type SectionId =
   | "schedules"
   | "rooms"
   | "pricing"
+  | "proxyBooking"
   | "caseRecords"
   | "operationLogs"
   | "dataImport"
@@ -94,6 +97,8 @@ export interface ScreenData {
   counselorDashboardDetails?: CounselorDashboardDetailItem[];
   counselorScheduleCalendar?: CounselorScheduleCalendar;
   counselorSlotOptions?: CounselorSlotOptions;
+  proxyScheduleCalendar?: ProxyScheduleCalendar;
+  proxySlotOptions?: ProxySlotOptions;
   counselorCompletedConsultations?: CounselorCompletedConsultation[];
   counselorCaseRecords?: CounselorCaseRecord[];
   selectedCounselorCaseRecord?: CounselorCaseRecord;

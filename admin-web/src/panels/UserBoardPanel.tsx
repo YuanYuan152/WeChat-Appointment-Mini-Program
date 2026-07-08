@@ -1,5 +1,5 @@
 import { memo } from "react";
-import type { Dispatch, SetStateAction } from "react";
+import type { Dispatch, ReactNode, SetStateAction } from "react";
 
 import { formatDateTime, formatMoneyFromCents, statusLabel } from "@/lib/format";
 import type { PagedResult, UserBoardDetail, UserBoardSummary } from "@/types/api";
@@ -19,6 +19,15 @@ import {
 import type { UserBoardFilters } from "@/types/app";
 import { roleText } from "@/lib/display";
 
+export interface UserProxyBookingTarget {
+  patientId: number;
+  patientName: string;
+  patientMobile?: string | null;
+  counselorId?: number | null;
+  counselorName?: string | null;
+  counselorMobile?: string | null;
+}
+
 export function UserBoardPanel({
   users,
   listLoading,
@@ -32,6 +41,7 @@ export function UserBoardPanel({
   onPageSizeChange,
   onOpen,
   onCloseDetail,
+  onProxyBooking,
 }: {
   users?: PagedResult<UserBoardSummary>;
   listLoading: boolean;
@@ -45,6 +55,7 @@ export function UserBoardPanel({
   onPageSizeChange: (pageSize: number) => void;
   onOpen: (accountId: number) => void;
   onCloseDetail: () => void;
+  onProxyBooking?: (target: UserProxyBookingTarget) => void;
 }) {
   return (
     <>
@@ -64,7 +75,7 @@ export function UserBoardPanel({
           {detailLoading && !selected ? (
             <div className="py-10 text-sm text-[var(--lxxl-muted)]">正在加载详情...</div>
           ) : selected ? (
-            <UserDetailPanel detail={selected} />
+            <UserDetailPanel detail={selected} onProxyBooking={onProxyBooking} />
           ) : null}
         </DetailDrawer>
       )}
@@ -195,15 +206,34 @@ const UserBoardListSection = memo(function UserBoardListSection({
   );
 });
 
-function UserDetailPanel({ detail }: { detail: UserBoardDetail }) {
+function UserDetailPanel({
+  detail,
+  onProxyBooking,
+}: {
+  detail: UserBoardDetail;
+  onProxyBooking?: (target: UserProxyBookingTarget) => void;
+}) {
+  const canProxyBooking = detail.profile.roles.includes("Patient");
   const completedConsultations = detail.consultations.filter((item) => item.status === "DONE");
   const cancelledConsultations = detail.consultations.filter(
     (item) => item.status === "CANCELLED" || item.status === "CANCELED",
   );
+  const proxyTarget = (item?: UserBoardDetail["consultations"][number]): UserProxyBookingTarget => ({
+    patientId: detail.profile.id,
+    patientName: detail.profile.name,
+    patientMobile: detail.profile.mobile,
+    counselorId: item?.counselorId,
+    counselorName: item?.counselorName,
+  });
   const consultationCard = (item: UserBoardDetail["consultations"][number]) => {
     const note = cleanBusinessNote(item.note);
     return (
       <DetailCard
+        action={
+          canProxyBooking && onProxyBooking ? (
+            <TableActionButton onClick={() => onProxyBooking(proxyTarget(item))}>再约一单</TableActionButton>
+          ) : undefined
+        }
         title={`${timeRangeText(item.startTime, item.endTime)} · ${statusLabel(item.status)}`}
         rows={[
           ["咨询师", item.counselorName],
@@ -227,6 +257,13 @@ function UserDetailPanel({ detail }: { detail: UserBoardDetail }) {
       <div className="mt-1 text-sm text-[var(--lxxl-muted)]">
         {detail.profile.mobile || "-"} · {detail.profile.gender || "性别未填"} · {roleText(detail.profile.roles)}
       </div>
+      {canProxyBooking && onProxyBooking && (
+        <div className="mt-4">
+          <QueryButton className="w-28" onClick={() => onProxyBooking(proxyTarget())}>
+            代理预约
+          </QueryButton>
+        </div>
+      )}
       <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
         <MiniStat label="订单" value={detail.profile.orderCount} />
         <MiniStat label="已付金额" value={formatMoneyFromCents(detail.profile.paidAmount)} />
@@ -336,10 +373,13 @@ function cleanBusinessNote(value?: string | null) {
     .join(" · ");
 }
 
-function DetailCard({ title, rows }: { title: string; rows: Array<[string, string]> }) {
+function DetailCard({ title, rows, action }: { title: string; rows: Array<[string, string]>; action?: ReactNode }) {
   return (
     <div className="space-y-2">
-      <div className="font-medium text-[var(--lxxl-text)]">{title}</div>
+      <div className="flex items-start justify-between gap-3">
+        <div className="font-medium text-[var(--lxxl-text)]">{title}</div>
+        {action && <div className="shrink-0">{action}</div>}
+      </div>
       <div className="space-y-1">
         {rows.map(([label, value]) => (
           <div className="grid grid-cols-[4.5rem_1fr] gap-2" key={label}>

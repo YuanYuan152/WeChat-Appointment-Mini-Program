@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { SetStateAction } from "react";
+import { useRouter } from "next/navigation";
 
 import { fetchUserBoard, fetchUserBoardDetail } from "@/services/boards";
 import { AppRoute, useAppRoute } from "@/components/AppRoute";
-import { UserBoardPanel } from "@/panels/UserBoardPanel";
+import { UserBoardPanel, type UserProxyBookingTarget } from "@/panels/UserBoardPanel";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
 import type { UserBoardDetail } from "@/types/api";
 import type { ScreenData, UserBoardFilters } from "@/types/app";
@@ -24,6 +25,7 @@ export function UserBoardScreen() {
 }
 
 function UserBoardScreenContent() {
+  const router = useRouter();
   const { clearNotice, refreshKey, showNotice } = useAppRoute();
   const [data, setData] = useState<ScreenData>({});
   const [page, setPage] = useState(1);
@@ -110,6 +112,26 @@ function UserBoardScreenContent() {
     setSelectedUserBoard(undefined);
   }, []);
 
+  const openProxyBooking = useCallback(
+    (target: UserProxyBookingTarget) => {
+      const params = new URLSearchParams();
+      params.set("patientId", String(target.patientId));
+      params.set("patientName", target.patientName);
+      if (target.patientMobile) {
+        params.set("patientMobile", target.patientMobile);
+      }
+      if (target.counselorId) {
+        params.set("counselorId", String(target.counselorId));
+        params.set("counselorName", target.counselorName || `咨询师#${target.counselorId}`);
+      }
+      if (target.counselorMobile) {
+        params.set("counselorMobile", target.counselorMobile);
+      }
+      router.push(`/proxy-booking?${params.toString()}`);
+    },
+    [router],
+  );
+
   return (
     <UserBoardPanel
       users={data.userBoard}
@@ -124,6 +146,7 @@ function UserBoardScreenContent() {
       onPageSizeChange={changePageSize}
       onOpen={openUserDetail}
       onCloseDetail={closeDetail}
+      onProxyBooking={openProxyBooking}
     />
   );
 }

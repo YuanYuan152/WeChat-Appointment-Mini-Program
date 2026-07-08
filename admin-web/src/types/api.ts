@@ -803,6 +803,65 @@ export interface CounselorSlotOptions {
   slots: CounselorSlotOption[];
 }
 
+export interface ProxyPersonOption {
+  id: number;
+  name: string;
+  mobile?: string | null;
+  label: string;
+}
+
+export interface ProxySearchResult {
+  items: ProxyPersonOption[];
+}
+
+export interface ProxyScheduleCalendarItem extends CounselorScheduleCalendarItem {}
+
+export interface ProxyScheduleCalendar {
+  startDate: string;
+  days: number;
+  slots: ProxyScheduleCalendarItem[];
+}
+
+export interface ProxySlotRoomOption {
+  roomId: string;
+  roomName: string;
+  available: boolean;
+  occupiedBySelf?: boolean;
+  occupiedByOther: boolean;
+  otherCounselorId?: number | null;
+}
+
+export interface ProxySlotOption {
+  key: string;
+  startTime: string;
+  endTime: string;
+  label: string;
+  past: boolean;
+  counselorOccupied: boolean;
+  counselorScheduleId?: number | null;
+  existingAvailableScheduleId?: number | null;
+  allRoomsFull: boolean;
+  selectable: boolean;
+  rooms: ProxySlotRoomOption[];
+}
+
+export interface ProxySlotOptions {
+  date: string;
+  centerId: string;
+  centerName: string;
+  slots: ProxySlotOption[];
+}
+
+export interface ProxyPushOrderResult {
+  orderId: number;
+  scheduleId: number;
+  outTradeNo: string;
+  totalFee: number;
+  totalFeeYuan: number;
+  expiresAt?: string | null;
+  message: string;
+}
+
 export interface CounselorCompletedConsultation {
   Id: number;
   PatientId: number;
