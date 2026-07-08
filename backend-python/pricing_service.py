@@ -41,6 +41,27 @@ def default_revenue_share_cents_for_base(base_price_cents: int) -> int:
     return max(0, int(base_price_cents * DEFAULT_SHARE_PERCENT_OF_BASE / 100))
 
 
+def _clamp_share_cents(share_cents: int, display_price_cents: int) -> int:
+    return max(0, min(int(share_cents), max(int(display_price_cents), 0)))
+
+
+def _scale_share_cents_by_display_ratio(
+    *,
+    old_share_cents: int,
+    old_display_price_cents: int,
+    new_display_price_cents: int,
+) -> int:
+    """价格发生变化时，按原分成占来访可见总价的比例同步分成金额。"""
+    if new_display_price_cents <= 0:
+        return 0
+    if old_display_price_cents <= 0:
+        return _clamp_share_cents(old_share_cents, new_display_price_cents)
+    return _clamp_share_cents(
+        round(new_display_price_cents * old_share_cents / old_display_price_cents),
+        new_display_price_cents,
+    )
+
+
 def is_legacy_unset_billing(profile: AppCounselorProfile) -> bool:
     """未在定价管理中显式设置过基础价（含公益咨询师沿用 ORM 默认 ¥600 的旧数据）。"""
     billing = int(profile.Billing or 0)
@@ -444,9 +465,51 @@ def update_counselor_base_pricing_cents(
     profile = get_counselor_profile(db, counselor_account_id)
     if not profile:
         raise ValueError("咨询师档案不存在")
+    old_base_price_cents = resolve_counselor_base_price_cents(db, counselor_account_id)
+    old_default_share_cents = resolve_counselor_default_share_cents(
+        db,
+        counselor_account_id,
+        old_base_price_cents,
+    )
+    if default_share_cents is None:
+        default_share_cents = _scale_share_cents_by_display_ratio(
+            old_share_cents=old_default_share_cents,
+            old_display_price_cents=old_base_price_cents,
+            new_display_price_cents=base_price_cents,
+        )
+
+    if base_price_cents != old_base_price_cents:
+        rows = (
+            db.query(AppCounselorPatientPricing)
+            .filter(AppCounselorPatientPricing.CounselorAccountId == counselor_account_id)
+            .all()
+        )
+        for row in rows:
+            auto_adj = resolve_charity_tier_adjustment_cents(
+                db,
+                row.PatientAccountId,
+                counselor_account_id,
+            )
+            adjustment = int(row.AdjustmentCents or 0)
+            old_display = max(old_base_price_cents + adjustment + auto_adj, 0)
+            new_display = max(base_price_cents + adjustment + auto_adj, 0)
+            if row.ShareMode == SHARE_MODE_AMOUNT:
+                row.RevenueShareCents = _scale_share_cents_by_display_ratio(
+                    old_share_cents=int(row.RevenueShareCents or 0),
+                    old_display_price_cents=old_display,
+                    new_display_price_cents=new_display,
+                )
+            elif row.ShareMode == SHARE_MODE_PERCENT:
+                percent = max(0, min(int(row.RevenueSharePercent or 0), 100))
+                row.ShareMode = SHARE_MODE_AMOUNT
+                row.RevenueShareCents = _clamp_share_cents(
+                    round(new_display * percent / 100),
+                    new_display,
+                )
+                row.RevenueSharePercent = None
+
     profile.Billing = base_price_cents
-    if default_share_cents is not None:
-        profile.FaceBilling = default_share_cents
+    profile.FaceBilling = default_share_cents
     db.flush()
     return profile
 
@@ -527,6 +590,10 @@ def upsert_patient_pricing(
 ) -> AppCounselorPatientPricing:
     base = resolve_counselor_base_price_cents(db, counselor_account_id)
     auto_adj = resolve_charity_tier_adjustment_cents(db, patient_account_id, counselor_account_id)
+    row = get_pricing_override(db, counselor_account_id, patient_account_id)
+    old_manual_adjustment = int(row.AdjustmentCents or 0) if row else 0
+    old_display = max(base + old_manual_adjustment + auto_adj, 0)
+    old_share = resolve_revenue_share_cents(db, patient_account_id, counselor_account_id, old_display)
     display = max(base + adjustment_cents + auto_adj, 0)
 
     if share_mode == SHARE_MODE_AMOUNT:
@@ -539,10 +606,23 @@ def upsert_patient_pricing(
             raise ValueError("请填写分成比例")
         if revenue_share_percent < 0 or revenue_share_percent > 100:
             raise ValueError("分成比例须在 0–100 之间")
+        share_mode = SHARE_MODE_AMOUNT
+        revenue_share_cents = _clamp_share_cents(
+            round(display * revenue_share_percent / 100),
+            display,
+        )
+        revenue_share_percent = None
     elif share_mode:
         raise ValueError("无效的分成方式")
+    elif adjustment_cents != old_manual_adjustment:
+        # 只针对当前来访的“调整价格”变化自动联动分成；咨询师统一基础价由基础配置入口处理。
+        share_mode = SHARE_MODE_AMOUNT
+        revenue_share_cents = _scale_share_cents_by_display_ratio(
+            old_share_cents=old_share,
+            old_display_price_cents=old_display,
+            new_display_price_cents=display,
+        )
 
-    row = get_pricing_override(db, counselor_account_id, patient_account_id)
     if not row:
         row = AppCounselorPatientPricing(
             CounselorAccountId=counselor_account_id,

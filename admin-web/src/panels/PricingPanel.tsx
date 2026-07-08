@@ -80,7 +80,7 @@ export function PricingPanel({
           <div>
             <h2 className="text-xl font-semibold tracking-normal">调价管理</h2>
             <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">
-              基础价和分成金额按元保存；页面按比例辅助填写，保存时会换算成咨询师分成金额。
+              基础价、调整价和分成金额按元保存；基础价或来访个体调整价变动时，按当前分成比例辅助换算新的分成金额。
             </p>
           </div>
 
@@ -382,7 +382,7 @@ function CounselorPricingModal({
           <div className="text-[var(--lxxl-muted)]">实际保存的默认分成金额</div>
           <div className="mt-1 text-lg font-semibold">¥{defaultRevenueShareYuan}</div>
           <div className="mt-1 text-xs text-[var(--lxxl-muted)]">
-            例如基础价 600，分成 50%，会保存为咨询师分成 300。
+            调整基础价时保持当前默认分成比例；例如基础价 600、分成 50%，会保存为咨询师分成 300。
           </div>
         </div>
         {error && <div className="rounded-xl border border-[#E7B8B2] bg-[#FFF5F3] px-4 py-3 text-sm text-[#A13F37]">{error}</div>}
@@ -485,7 +485,9 @@ function PatientPricingModal({
             <ReadonlyInfo label="来访可见价" value={`¥${displayPriceYuan}`} />
             <ReadonlyInfo label="实际保存分成" value={`¥${revenueShareYuan}`} />
           </div>
-          <div className="mt-2 text-xs text-[var(--lxxl-muted)]">数据库保存为分成金额，不保存比例。</div>
+          <div className="mt-2 text-xs text-[var(--lxxl-muted)]">
+            调整价变动时保持当前分成比例；数据库仍保存换算后的分成金额。
+          </div>
         </div>
         {error && <div className="rounded-xl border border-[#E7B8B2] bg-[#FFF5F3] px-4 py-3 text-sm text-[#A13F37]">{error}</div>}
       </div>

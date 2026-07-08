@@ -13,7 +13,7 @@
       <text class="rule-line">· 专业咨询师：¥600</text>
       <text class="rule-line">· 默认分成比例：基础价格的 50%</text>
       <text class="rule-line">· 需议价阶段可为单个来访设置个体调价，设置后该来访按调价后价格预约</text>
-      <text class="rule-line">· 可在下方直接修改各咨询师基础价，修改后对该咨询师全部来访生效</text>
+      <text class="rule-line">· 可在下方直接修改各咨询师基础价，修改后对该咨询师全部来访生效，并按当前分成比例同步分成金额</text>
     </view>
 
     <view class="toolbar">
@@ -69,6 +69,7 @@
           />
           <text class="form-hint">修改前：¥{{ editing.basePriceYuan }}</text>
           <text class="form-hint">类型默认：¥{{ editing.defaultBasePriceYuan }}</text>
+          <text class="form-hint">保存后会按当前分成比例同步换算默认分成金额</text>
         </view>
         <view class="modal-btns">
           <button class="modal-btn cancel" @tap="closeEdit">取消</button>

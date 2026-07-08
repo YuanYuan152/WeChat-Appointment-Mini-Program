@@ -98,7 +98,7 @@
         <view class="form-group">
           <text class="form-label">分成方式</text>
           <view v-if="!form.shareMode" class="form-hint share-default-hint">
-            当前使用系统默认：基础价格的 50%（¥{{ defaultShareYuan }}）
+            当前按现有分成比例 {{ currentSharePercent }}% 联动调整，保存后仍记录为分成金额。
           </view>
           <view class="share-tabs">
             <view class="share-tab" :class="{ active: form.shareMode === 'AMOUNT' }" @tap="form.shareMode = 'AMOUNT'">固定金额</view>
@@ -110,7 +110,7 @@
           <text class="form-label">分成金额（元）</text>
           <input v-model="form.revenueShareYuan" class="form-input" type="number" />
           <text v-if="originalShareMode === 'AMOUNT'" class="form-hint">修改前：¥{{ editing.revenueShareYuan }}</text>
-          <text v-else-if="!originalShareMode" class="form-hint">修改前：系统默认 ¥{{ defaultShareYuan }}（基础价 50%）</text>
+          <text v-else-if="!originalShareMode" class="form-hint">修改前：¥{{ editing.revenueShareYuan }}（当前 {{ currentSharePercent }}%）</text>
           <text class="form-hint">预览分成：¥{{ previewShareYuan }} · 占显示价格 {{ previewSharePercent }}%</text>
         </view>
 
@@ -123,7 +123,7 @@
           <text v-if="originalShareMode === 'PERCENT' && editing.revenueSharePercent != null" class="form-hint">
             修改前：{{ editing.revenueSharePercent }}%
           </text>
-          <text v-else-if="!originalShareMode" class="form-hint">修改前：系统默认 50%（¥{{ defaultShareYuan }}）</text>
+          <text v-else-if="!originalShareMode" class="form-hint">修改前：{{ currentSharePercent }}%（¥{{ editing.revenueShareYuan }}）</text>
           <text class="form-hint">预览分成：¥{{ previewShareYuan }}</text>
         </view>
 
@@ -188,8 +188,6 @@ const pageSize = 50
 
 const hasMore = computed(() => items.value.length < total.value)
 
-const DEFAULT_SHARE_PERCENT = 50
-
 const showEdit = ref(false)
 const editing = ref<PatientPricingRow | null>(null)
 const originalShareMode = ref('' as '' | 'AMOUNT' | 'PERCENT')
@@ -200,9 +198,10 @@ const form = reactive({
   revenueSharePercent: '',
 })
 
-const defaultShareYuan = computed(() => {
+const currentSharePercent = computed(() => {
   if (!editing.value) return 0
-  return Math.floor(editing.value.basePriceYuan * DEFAULT_SHARE_PERCENT / 100)
+  if (editing.value.displayPriceYuan <= 0) return 0
+  return Math.round(editing.value.revenueShareYuan / editing.value.displayPriceYuan * 100)
 })
 
 const previewDisplayYuan = computed(() => {
@@ -220,7 +219,7 @@ const previewShareYuan = computed(() => {
     const pct = Math.max(0, Math.min(Number(form.revenueSharePercent) || 0, 100))
     return Math.floor(display * pct / 100)
   }
-  return defaultShareYuan.value
+  return Math.max(0, Math.min(Math.round(display * currentSharePercent.value / 100), display))
 })
 
 const previewSharePercent = computed(() => {
@@ -233,10 +232,7 @@ const previewSharePercent = computed(() => {
   if (form.shareMode === 'PERCENT') {
     return Math.max(0, Math.min(Number(form.revenueSharePercent) || 0, 100))
   }
-  if (editing.value && editing.value.basePriceYuan > 0) {
-    return Math.round(defaultShareYuan.value / display * 100)
-  }
-  return DEFAULT_SHARE_PERCENT
+  return currentSharePercent.value
 })
 
 const formatAdjustment = (v: number) => (v > 0 ? `+¥${v}` : v < 0 ? `-¥${Math.abs(v)}` : '¥0')
