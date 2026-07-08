@@ -404,6 +404,32 @@ export interface CaseRecordAmendment {
   proposed: CaseRecordSnapshot;
 }
 
+export interface AdminLeaveRequestDetail {
+  id: number;
+  scheduleId: number;
+  counselorId: number;
+  counselorName: string;
+  reason?: string | null;
+  status: string;
+  startTime?: string | null;
+  endTime?: string | null;
+  location?: string | null;
+  screenshotUrl?: string | null;
+  affectedPatients: Array<{
+    consultationId?: number | null;
+    patientName?: string | null;
+    patientPhone?: string | null;
+    emergencyContact?: string | null;
+    emergencyPhone?: string | null;
+    startTime?: string | null;
+    endTime?: string | null;
+    location?: string | null;
+    refundText?: string | null;
+  }>;
+  createdAt?: string | null;
+  reviewedAt?: string | null;
+}
+
 export interface MessageItem {
   Id: number;
   AccountId: number;
@@ -696,6 +722,7 @@ export interface CounselorDashboardStats {
   estimatedRevenue?: number;
   completedOrderCount?: number;
   completedOrderRevenue?: number;
+  personalIncome?: number;
   caseRecordCount?: number;
   totalAppointments?: number;
   leaveCount?: number;
@@ -707,8 +734,13 @@ export interface CounselorDashboardDetailItem {
   subtitle?: string | null;
   extra?: string | null;
   amount?: number | null;
+  personalIncome?: number | null;
+  patientId?: number | null;
+  patientMobile?: string | null;
+  orderId?: number | null;
   consultationId?: number | null;
   caseRecordId?: number | null;
+  caseRecordStatus?: string | null;
   status?: string | null;
 }
 

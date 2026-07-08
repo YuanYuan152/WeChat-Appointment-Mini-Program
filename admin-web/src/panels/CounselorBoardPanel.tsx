@@ -493,7 +493,7 @@ function CounselorDetailPanel({
         items={cancelLogItems}
         listKey={`counselor-${detail.profile.id}-cancel-logs`}
         onToggle={setExpandedKey}
-        title="咨询师取消/请假取消日志"
+        title="取消排期记录"
       />
       <ClickableDetailList
         expandedKey={expandedKey}

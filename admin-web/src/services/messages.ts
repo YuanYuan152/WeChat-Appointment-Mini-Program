@@ -1,5 +1,5 @@
 import { apiRequest } from "@/lib/api";
-import type { MessageItem } from "@/types/api";
+import type { AdminLeaveRequestDetail, MessageItem } from "@/types/api";
 
 export const MESSAGE_UNREAD_CHANGED_EVENT = "lxxl-admin-web-messages-updated";
 
@@ -35,6 +35,10 @@ export function fetchUnreadMessageCount(category?: string) {
 
 export function fetchMessageDetail(id: number) {
   return apiRequest<MessageItem>(`/api/mini/message/${id}`);
+}
+
+export function fetchMessageLeaveRequestDetail(id: number) {
+  return apiRequest<AdminLeaveRequestDetail>(`/api/mini/admin/leave-requests/${id}`);
 }
 
 export function markMessageRead(id: number) {

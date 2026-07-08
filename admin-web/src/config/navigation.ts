@@ -19,7 +19,7 @@ export const sections: NavigationSection[] = [
     allowedRoles: ["Admin", "Ops", "Assistant"],
   },
   { id: "refunds", label: "豁免审核", desc: "退款豁免处理", path: "/refund-exemptions", allowedRoles: ["Admin", "Ops"] },
-  { id: "feedback", label: "用户反馈", desc: "查看用户反馈详情", path: "/feedback", allowedRoles: ["Admin", "Ops"] },
+  { id: "feedback", label: "咨询反馈", desc: "查看咨询反馈详情", path: "/feedback", allowedRoles: ["Admin", "Ops"] },
   { id: "content", label: "内容管理", desc: "Banner / 活动 / 文章", path: "/ops-content", allowedRoles: ["Admin", "Ops"] },
   { id: "schedules", label: "排期情况", desc: "咨询师排期总览", path: "/schedules", allowedRoles: ["Admin", "Ops"] },
   { id: "rooms", label: "咨询室情况", desc: "咨询室状态与占用", path: "/rooms", allowedRoles: ["Admin", "Ops"] },

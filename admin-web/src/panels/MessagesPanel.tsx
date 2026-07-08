@@ -1,7 +1,7 @@
 import { DetailDrawer } from "@/components/boards/DetailDrawer";
 import { formatDateTime, formatFullDateTime, statusLabel } from "@/lib/format";
 import { getPageItems } from "@/lib/pagination";
-import type { MessageItem } from "@/types/api";
+import type { AdminLeaveRequestDetail, MessageItem } from "@/types/api";
 
 import {
   Badge,
@@ -19,6 +19,15 @@ type MessagePayload = {
   summary?: unknown;
   detail?: Record<string, unknown>;
 };
+
+export type MessageBusinessDetail =
+  | {
+      type: "leave-request";
+      id: number;
+      data?: AdminLeaveRequestDetail | null;
+      error?: string;
+    }
+  | null;
 
 export type MessageReadFilter = "ALL" | "UNREAD" | "READ";
 export type MessageCategoryFilter =
@@ -63,6 +72,7 @@ export function MessagesPanel({
   categoryFilter,
   page,
   pageSize,
+  selectedBusinessDetail,
   selectedMessage,
   showCrisisBanner,
   statusFilter,
@@ -84,6 +94,7 @@ export function MessagesPanel({
   categoryFilter: MessageCategoryFilter;
   page: number;
   pageSize: number;
+  selectedBusinessDetail?: MessageBusinessDetail;
   selectedMessage?: MessageItem | null;
   showCrisisBanner?: boolean;
   statusFilter: MessageReadFilter;
@@ -272,24 +283,32 @@ export function MessagesPanel({
         )}
       </div>
       {selectedMessage && (
-        <MessageDetailDrawer loading={detailLoading} message={selectedMessage} onClose={onCloseDetail} />
+        <MessageDetailDrawer
+          businessDetail={selectedBusinessDetail}
+          loading={detailLoading}
+          message={selectedMessage}
+          onClose={onCloseDetail}
+        />
       )}
     </section>
   );
 }
 
 function MessageDetailDrawer({
+  businessDetail,
   loading,
   message,
   onClose,
 }: {
+  businessDetail?: MessageBusinessDetail;
   loading?: boolean;
   message: MessageItem;
   onClose: () => void;
 }) {
   const display = getMessageDisplay(message);
   const detail = parseMessagePayload(message.Content)?.detail || {};
-  const sections = buildMessageDetailSections(message, detail, display.summary);
+  const businessSections = buildMessageBusinessSections(businessDetail);
+  const sections = [...businessSections, ...buildMessageDetailSections(message, detail, display.summary)];
   const isCrisis = isCrisisReportMessage(message);
 
   return (
@@ -325,6 +344,70 @@ function MessageDetailDrawer({
       </div>
     </DetailDrawer>
   );
+}
+
+function buildMessageBusinessSections(businessDetail?: MessageBusinessDetail): DetailSection[] {
+  if (!businessDetail) {
+    return [];
+  }
+  if (businessDetail.error) {
+    return [
+      {
+        title: "关联业务详情",
+        rows: [{ label: "加载状态", value: businessDetail.error }],
+      },
+    ];
+  }
+  if (businessDetail.type !== "leave-request" || !businessDetail.data) {
+    return [];
+  }
+
+  const data = businessDetail.data;
+  const sections: DetailSection[] = [
+    {
+      title: "请假申请详情",
+      rows: compactRows([
+        { label: "咨询师", value: data.counselorName || "" },
+        { label: "请假状态", value: statusLabel(data.status) },
+        { label: "请假原因", value: data.reason || "" },
+        { label: "咨询时间", value: timeRangeFromValues(data.startTime, data.endTime) },
+        { label: "咨询地点", value: data.location || "" },
+        { label: "提交时间", value: formatFullDateTime(data.createdAt) },
+        { label: "处理时间", value: data.reviewedAt ? formatFullDateTime(data.reviewedAt) : "" },
+      ]),
+    },
+    {
+      title: "受影响来访",
+      rows: affectedLeavePatientRows(data.affectedPatients),
+    },
+  ];
+
+  return sections.filter((section) => section.rows.length > 0);
+}
+
+function affectedLeavePatientRows(patients: AdminLeaveRequestDetail["affectedPatients"] = []) {
+  return patients
+    .map((patient, index) => {
+      const patientName = patient.patientName || "";
+      const patientPhone = patient.patientPhone || "";
+      const emergency =
+        patient.emergencyContact && patient.emergencyPhone
+          ? `${patient.emergencyContact}（${patient.emergencyPhone}）`
+          : patient.emergencyContact || patient.emergencyPhone || "";
+      return {
+        label: `来访 ${index + 1}`,
+        value: compactTextLines([
+          patientName ? `来访者：${patientPhone ? `${patientName}（${patientPhone}）` : patientName}` : "",
+          emergency ? `紧急联系人：${emergency}` : "",
+          timeRangeFromValues(patient.startTime, patient.endTime)
+            ? `咨询时间：${timeRangeFromValues(patient.startTime, patient.endTime)}`
+            : "",
+          patient.location ? `地点：${patient.location}` : "",
+          patient.refundText ? `退款说明：${patient.refundText}` : "",
+        ]),
+      };
+    })
+    .filter((row) => row.value);
 }
 
 type DetailRow = {
@@ -424,6 +507,10 @@ function formatDetailValue(value: unknown): string {
 function timeRangeText(detail: Record<string, unknown>) {
   const startTime = detailText(detail, "startTime");
   const endTime = detailText(detail, "endTime");
+  return timeRangeFromValues(startTime, endTime);
+}
+
+function timeRangeFromValues(startTime?: string | null, endTime?: string | null) {
   if (!startTime) {
     return "";
   }
@@ -599,7 +686,7 @@ function relatedTypeLabel(type?: string | null) {
     CASE_RECORD_AMENDMENT: "咨询记录修改申请",
     CASE_RECORD_AMENDMENT_PENDING: "待审咨询记录修改",
     CASE_RECORD_CRISIS_REPORT: "风险上报",
-    FEEDBACK: "用户反馈",
+    FEEDBACK: "咨询反馈",
     CONSULTATION: "咨询预约",
     SCHEDULE: "排期",
     COUNSELOR_LEAVE: "咨询师请假",

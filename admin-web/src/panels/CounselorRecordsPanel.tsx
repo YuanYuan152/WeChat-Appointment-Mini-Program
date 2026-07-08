@@ -5,6 +5,7 @@ import { formatDateTime } from "@/lib/format";
 import { API_BASE_URL } from "@/lib/api";
 import {
   RISK_ASSESSMENT_ITEMS,
+  RISK_ITEM_GUIDE_HINTS,
   RISK_LEVEL_GUIDE,
   calculateCrisisLevelChoice,
   formatRiskChoiceDisplay,
@@ -588,6 +589,8 @@ function RiskQuestion({
   const selectedChoice = normalizeRiskChoice(value.choice || "", item.id);
   const displayChoices = readonly && selectedChoice ? item.choices.filter((choice) => choice === selectedChoice) : item.choices;
   const needsNote = selectedChoice && item.noteChoices.includes(selectedChoice);
+  const noteRequired = selectedChoice && (item.noteRequiredChoices ?? item.noteChoices).includes(selectedChoice);
+  const guideHint = RISK_ITEM_GUIDE_HINTS[item.id];
 
   return (
     <div className="border-t border-[var(--lxxl-border)] pt-4 first:border-t-0 first:pt-0">
@@ -601,6 +604,11 @@ function RiskQuestion({
             {!readonly && <span className="ml-1 text-[#B94A48]">*</span>}
           </div>
           {item.description && <p className="mt-1 text-xs leading-5 text-[var(--lxxl-muted)]">{item.description}</p>}
+          {guideHint && (
+            <div className="mt-3 whitespace-pre-wrap rounded-lg border-l-4 border-[#E4A94B] bg-[#FFF8E6] px-3 py-2 text-xs leading-5 text-[#8A5A16]">
+              {guideHint}
+            </div>
+          )}
           <div className="mt-3 grid grid-cols-1 gap-2">
             {displayChoices.map((choice) => {
               const normalizedChoice = normalizeRiskChoice(choice, item.id);
@@ -631,7 +639,7 @@ function RiskQuestion({
               ) : (
                 <textarea
                   className={`${queryControlClass} min-h-20 resize-y py-3 text-sm`}
-                  placeholder="请填写具体说明"
+                  placeholder={noteRequired ? "请填写具体说明" : "请填写具体说明（选填）"}
                   value={value.note || ""}
                   onChange={(event) => onChange(item.id, { note: event.target.value })}
                 />
@@ -651,6 +659,8 @@ function CalculatedRiskLevel({
   choice: "A" | "B" | "C" | "D";
   item: RiskAssessmentItemConfig;
 }) {
+  const guideHint = RISK_ITEM_GUIDE_HINTS[item.id];
+
   return (
     <div className="border-t border-[var(--lxxl-border)] pt-4">
       <div className="flex items-start gap-3">
@@ -662,6 +672,7 @@ function CalculatedRiskLevel({
             <div>
               <div className="text-sm font-semibold text-[#2C2C2C]">{item.label}</div>
               <p className="mt-1 text-xs text-[var(--lxxl-muted)]">系统根据前 9 项自动计算，不可手动修改。</p>
+              {guideHint && <p className="mt-2 text-xs leading-5 text-[#8A5A16]">{guideHint}</p>}
             </div>
             <span className={`rounded-full px-3 py-1 text-xs font-semibold ${riskLevelToneClass(choice)}`}>
               {formatRiskChoiceDisplay(item.id, choice)}

@@ -111,7 +111,7 @@ function messageTypeLabel(message: MessageItem) {
     CASE_RECORD_AMENDMENT_PENDING: "咨询记录修改",
     CASE_RECORD_CRISIS_REPORT: "风险上报",
     COUNSELOR_LEAVE_SUBMITTED: "咨询师请假",
-    FEEDBACK: "用户反馈",
+    FEEDBACK: "咨询反馈",
     REFUND_EXEMPTION_PENDING: "豁免审核",
   };
   return message.RelatedType ? labels[message.RelatedType] || message.Title || "消息提醒" : message.Title || "消息提醒";

@@ -33,7 +33,7 @@ function FeedbackScreenContent() {
       const feedbacks = await fetchFeedbacks(queryStatus);
       setData((prev) => ({ ...prev, feedbacks }));
     } catch (error) {
-      showNotice("error", error instanceof Error ? error.message : "用户反馈加载失败");
+      showNotice("error", error instanceof Error ? error.message : "咨询反馈加载失败");
     } finally {
       setListLoading(false);
     }

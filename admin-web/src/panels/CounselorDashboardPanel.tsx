@@ -11,6 +11,7 @@ import {
   QueryButton,
   QueryField,
   QueryResetButton,
+  TableActionButton,
   queryControlClass,
 } from "@/components/ui";
 
@@ -21,15 +22,25 @@ const PERIOD_OPTIONS: Array<{ value: CounselorDashboardPeriod; label: string }> 
   { value: "all", label: "全部" },
 ];
 
-const CATEGORY_OPTIONS: Array<{
-  key: CounselorDashboardCategory;
+const CATEGORY_LABELS: Record<CounselorDashboardCategory, string> = {
+  orders: "完成订单",
+  "case-records": "咨询记录",
+  appointments: "预约咨询",
+  leaves: "请假记录",
+};
+
+const DASHBOARD_CARDS: Array<{
+  id: string;
+  category: CounselorDashboardCategory;
   label: string;
   valueKey: keyof CounselorDashboardStats;
-  amountKey?: keyof CounselorDashboardStats;
+  valueType?: "count" | "money";
 }> = [
-  { key: "orders", label: "完成订单", valueKey: "completedOrderCount", amountKey: "completedOrderRevenue" },
-  { key: "case-records", label: "咨询记录", valueKey: "caseRecordCount" },
-  { key: "appointments", label: "预约咨询", valueKey: "totalAppointments" },
+  { id: "completed-orders", category: "orders", label: "完成订单", valueKey: "completedOrderCount" },
+  { id: "order-revenue", category: "orders", label: "订单收入", valueKey: "completedOrderRevenue", valueType: "money" },
+  { id: "personal-income", category: "orders", label: "个人收入", valueKey: "personalIncome", valueType: "money" },
+  { id: "case-records", category: "case-records", label: "咨询记录", valueKey: "caseRecordCount" },
+  { id: "appointments", category: "appointments", label: "预约咨询", valueKey: "totalAppointments" },
 ];
 
 export function CounselorDashboardPanel({
@@ -61,6 +72,7 @@ export function CounselorDashboardPanel({
   const [detailStatusDraft, setDetailStatusDraft] = useState("ALL");
   const [detailKeyword, setDetailKeyword] = useState("");
   const [detailStatus, setDetailStatus] = useState("ALL");
+  const [activePatientKey, setActivePatientKey] = useState<string | null>(null);
   const [activeDetailId, setActiveDetailId] = useState<number | null>(null);
 
   useEffect(() => {
@@ -68,6 +80,7 @@ export function CounselorDashboardPanel({
     setDetailStatusDraft("ALL");
     setDetailKeyword("");
     setDetailStatus("ALL");
+    setActivePatientKey(null);
     setActiveDetailId(null);
   }, [selectedCategory]);
 
@@ -90,11 +103,47 @@ export function CounselorDashboardPanel({
       if (!keyword) {
         return true;
       }
-      return [item.title, item.subtitle, item.extra, item.status, item.amount != null ? formatMoneyFromCents(item.amount) : ""]
+      return [
+        item.title,
+        item.subtitle,
+        item.extra,
+        item.status,
+        item.patientMobile,
+        item.caseRecordStatus,
+        item.amount != null ? formatMoneyFromCents(item.amount) : "",
+        item.personalIncome != null ? formatMoneyFromCents(item.personalIncome) : "",
+      ]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(keyword));
     });
   }, [detailKeyword, detailStatus, details]);
+
+  const orderGroups = useMemo(() => {
+    const groups = new Map<string, {
+      key: string;
+      title: string;
+      mobile?: string | null;
+      totalAmount: number;
+      personalIncome: number;
+      items: CounselorDashboardDetailItem[];
+    }>();
+    for (const item of filteredDetails) {
+      const key = `${item.patientId ?? item.title}-${item.patientMobile ?? ""}`;
+      const current = groups.get(key) || {
+        key,
+        title: item.title,
+        mobile: item.patientMobile,
+        totalAmount: 0,
+        personalIncome: 0,
+        items: [],
+      };
+      current.totalAmount += Number(item.amount || 0);
+      current.personalIncome += Number(item.personalIncome || 0);
+      current.items.push(item);
+      groups.set(key, current);
+    }
+    return Array.from(groups.values());
+  }, [filteredDetails]);
 
   return (
     <>
@@ -145,20 +194,19 @@ export function CounselorDashboardPanel({
             <EmptyState text={listLoading ? "正在加载看板..." : "暂无看板数据。"} />
           ) : (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-              {CATEGORY_OPTIONS.map((item) => (
+              {DASHBOARD_CARDS.map((item) => (
                 <button
-                  key={item.key}
+                  key={item.id}
                   className="rounded-xl border border-[var(--lxxl-border)] bg-white p-4 text-left transition hover:border-[var(--lxxl-green)] hover:bg-[#FAF8F4]"
                   type="button"
-                  onClick={() => onOpenCategory(item.key)}
+                  onClick={() => onOpenCategory(item.category)}
                 >
                   <div className="text-sm text-[var(--lxxl-muted)]">{item.label}</div>
-                  <div className="mt-3 text-2xl font-semibold">{stats[item.valueKey] ?? 0}</div>
-                  {item.amountKey && (
-                    <div className="mt-2 text-sm text-[var(--lxxl-muted)]">
-                      {formatMoneyFromCents(Number(stats[item.amountKey] || 0))}
-                    </div>
-                  )}
+                  <div className="mt-3 text-2xl font-semibold">
+                    {item.valueType === "money"
+                      ? formatMoneyFromCents(Number(stats[item.valueKey] || 0))
+                      : stats[item.valueKey] ?? 0}
+                  </div>
                 </button>
               ))}
               <MiniStat label="总咨询" value={stats.totalConsultations ?? 0} />
@@ -182,6 +230,7 @@ export function CounselorDashboardPanel({
                   event.preventDefault();
                   setDetailKeyword(detailKeywordDraft.trim());
                   setDetailStatus(detailStatusDraft);
+                  setActivePatientKey(null);
                   setActiveDetailId(null);
                 }}
               >
@@ -223,16 +272,56 @@ export function CounselorDashboardPanel({
                       setDetailStatusDraft("ALL");
                       setDetailKeyword("");
                       setDetailStatus("ALL");
+                      setActivePatientKey(null);
                       setActiveDetailId(null);
                     }}
                   />
                 </div>
               </form>
-              <div className="space-y-2">
-                {filteredDetails.length === 0 ? (
-                  <EmptyState text="没有符合筛选条件的明细。" />
-                ) : (
-                  filteredDetails.map((item) => {
+              {filteredDetails.length === 0 ? (
+                <EmptyState text="没有符合筛选条件的明细。" />
+              ) : selectedCategory === "orders" ? (
+                <div className="space-y-3">
+                  {orderGroups.map((group) => {
+                    const active = activePatientKey === group.key;
+                    return (
+                      <section key={group.key} className="border-b border-[var(--lxxl-border)] pb-3 last:border-b-0">
+                        <button
+                          className="flex w-full items-start justify-between gap-4 py-2 text-left"
+                          type="button"
+                          onClick={() => {
+                            setActivePatientKey(active ? null : group.key);
+                            setActiveDetailId(null);
+                          }}
+                        >
+                          <span className="min-w-0">
+                            <span className="block text-sm font-semibold text-[#2C2C2C]">
+                              {group.title}
+                              {group.mobile ? <span className="ml-2 font-normal text-[var(--lxxl-muted)]">{group.mobile}</span> : null}
+                            </span>
+                            <span className="mt-1 block text-xs leading-5 text-[var(--lxxl-muted)]">
+                              预约次数 {group.items.length} · 订单收入 {formatMoneyFromCents(group.totalAmount)} · 个人收入{" "}
+                              {formatMoneyFromCents(group.personalIncome)}
+                            </span>
+                          </span>
+                          <span className="shrink-0 text-sm font-medium text-[var(--lxxl-green)]">
+                            {active ? "收起" : "展开"}
+                          </span>
+                        </button>
+                        {active && (
+                          <div className="mt-2 space-y-3">
+                            {group.items.map((item) => (
+                              <OrderDetailCard key={item.id} item={item} />
+                            ))}
+                          </div>
+                        )}
+                      </section>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {filteredDetails.map((item) => {
                     const active = activeDetailId === item.id;
                     return (
                       <div key={`${selectedCategory}-${item.id}`} className="border-b border-[var(--lxxl-border)] py-3 last:border-b-0">
@@ -266,9 +355,9 @@ export function CounselorDashboardPanel({
                         )}
                       </div>
                     );
-                  })
-                )}
-              </div>
+                  })}
+                </div>
+              )}
             </div>
           ) : (
             <EmptyState text={detailLoading ? "正在加载明细..." : "暂无明细。"} />
@@ -288,7 +377,43 @@ function DetailLine({ label, value }: { label: string; value?: string | null }) 
   );
 }
 
+function OrderDetailCard({ item }: { item: CounselorDashboardDetailItem }) {
+  const hasRecord = item.caseRecordStatus === "FILLED" || Boolean(item.caseRecordId);
+
+  return (
+    <article className="rounded-xl bg-[#FAF8F4] px-4 py-3 text-sm">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="font-semibold text-[#2C2C2C]">
+            {formatDateTime(item.subtitle)} · {statusLabel(item.status)}
+          </div>
+          <div className="mt-2 grid gap-1 text-xs leading-5 text-[var(--lxxl-muted)]">
+            <span>订单收入：{formatMoneyFromCents(item.amount)}</span>
+            <span>个人收入：{formatMoneyFromCents(item.personalIncome)}</span>
+            <span>咨询记录：{hasRecord ? "已填写" : "待填写"}</span>
+            {item.extra ? <span>{item.extra}</span> : null}
+          </div>
+        </div>
+        <TableActionButton
+          onClick={() => {
+            const params = new URLSearchParams();
+            if (item.consultationId != null) {
+              params.set("consultationId", String(item.consultationId));
+            }
+            if (item.caseRecordId != null) {
+              params.set("recordId", String(item.caseRecordId));
+            }
+            const query = params.toString();
+            window.location.assign(`/counselor-records${query ? `?${query}` : ""}`);
+          }}
+        >
+          {hasRecord ? "查看记录" : "去填写"}
+        </TableActionButton>
+      </div>
+    </article>
+  );
+}
+
 function categoryLabel(category: CounselorDashboardCategory) {
-  const found = CATEGORY_OPTIONS.find((item) => item.key === category);
-  return found?.label || "看板";
+  return CATEGORY_LABELS[category] || "看板";
 }

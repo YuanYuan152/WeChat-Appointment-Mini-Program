@@ -4,10 +4,12 @@ import { useCallback, useEffect, useState } from "react";
 
 import { AppRoute, useAppRoute } from "@/components/AppRoute";
 import { MessagesPanel } from "@/panels/MessagesPanel";
+import type { MessageBusinessDetail } from "@/panels/MessagesPanel";
 import type { MessageCategoryFilter } from "@/panels/MessagesPanel";
 import type { MessageReadFilter } from "@/panels/MessagesPanel";
 import {
   fetchMessageDetail,
+  fetchMessageLeaveRequestDetail,
   fetchMessages,
   fetchUnreadMessageCount,
   markMessageRead,
@@ -37,6 +39,7 @@ function MessagesScreenContent() {
   const [pageSize, setPageSize] = useState(20);
   const [crisisUnreadCount, setCrisisUnreadCount] = useState(0);
   const [selectedMessage, setSelectedMessage] = useState<MessageItem | null>(null);
+  const [selectedBusinessDetail, setSelectedBusinessDetail] = useState<MessageBusinessDetail>(null);
   const [listLoading, setListLoading] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const showCrisisBanner = currentUser.roles.includes("Admin") || currentUser.roles.includes("Ops");
@@ -83,14 +86,17 @@ function MessagesScreenContent() {
   const openMessage = useCallback(
     async (message: MessageItem) => {
       setSelectedMessage(message);
+      setSelectedBusinessDetail(null);
       setDetailLoading(true);
       clearNotice();
       try {
         await markMessageRead(message.Id);
         const detail = await fetchMessageDetail(message.Id);
+        const businessDetail = await loadMessageBusinessDetail(detail);
         window.dispatchEvent(new Event(MESSAGE_UNREAD_CHANGED_EVENT));
         await loadCrisisUnreadCount();
         setSelectedMessage(detail);
+        setSelectedBusinessDetail(businessDetail);
         setData((prev) => ({
           ...prev,
           messages: prev.messages?.map((item) =>
@@ -133,10 +139,14 @@ function MessagesScreenContent() {
       messages={data.messages}
       page={page}
       pageSize={pageSize}
+      selectedBusinessDetail={selectedBusinessDetail}
       selectedMessage={selectedMessage}
       showCrisisBanner={showCrisisBanner}
       statusFilter={statusFilter}
-      onCloseDetail={() => setSelectedMessage(null)}
+      onCloseDetail={() => {
+        setSelectedMessage(null);
+        setSelectedBusinessDetail(null);
+      }}
       onCategoryFilterChange={setCategoryFilter}
       onKeywordChange={setKeyword}
       onOpen={openMessage}
@@ -150,4 +160,70 @@ function MessagesScreenContent() {
       onStatusFilterChange={setStatusFilter}
     />
   );
+}
+
+async function loadMessageBusinessDetail(message: MessageItem): Promise<MessageBusinessDetail> {
+  if (message.RelatedType !== "COUNSELOR_LEAVE") {
+    return null;
+  }
+
+  const leaveRequestId = getLeaveRequestId(message);
+  if (!leaveRequestId) {
+    return {
+      type: "leave-request",
+      id: 0,
+      error: "这条请假消息没有关联到具体请假申请。",
+    };
+  }
+
+  try {
+    const data = await fetchMessageLeaveRequestDetail(leaveRequestId);
+    return {
+      type: "leave-request",
+      id: leaveRequestId,
+      data,
+    };
+  } catch (error) {
+    return {
+      type: "leave-request",
+      id: leaveRequestId,
+      error: error instanceof Error ? error.message : "请假申请详情加载失败",
+    };
+  }
+}
+
+function getLeaveRequestId(message: MessageItem) {
+  const detail = parseMessageDetail(message.Content);
+  const detailId = numberFromUnknown(detail?.leaveRequestId);
+  if (detailId) {
+    return detailId;
+  }
+  return numberFromUnknown(message.RelatedId);
+}
+
+function parseMessageDetail(content?: string | null) {
+  if (!content) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(content) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return null;
+    }
+    const detail = (parsed as { detail?: unknown }).detail;
+    return detail && typeof detail === "object" && !Array.isArray(detail) ? (detail as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
+function numberFromUnknown(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
 }

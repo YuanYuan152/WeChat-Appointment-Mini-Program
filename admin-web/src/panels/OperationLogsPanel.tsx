@@ -26,7 +26,6 @@ const actionTypeLabels: Record<string, string> = {
   SCHEDULE_CANCEL: "咨询师取消排期",
   ROOM: "咨询室管理",
   CONTENT: "内容管理",
-  FEEDBACK: "用户反馈",
   ROLE_SWITCH: "角色切换",
 };
 
@@ -41,7 +40,6 @@ const targetTypeLabels: Record<string, string> = {
   Schedule: "排期",
   ConsultationRoom: "咨询室",
   RoomSlot: "咨询室时段",
-  Feedback: "用户反馈",
   ConsultationFeedback: "咨询反馈",
   Banner: "Banner",
   Activity: "活动公告",
@@ -85,9 +83,6 @@ function targetTitle(record: OperationRecord) {
   }
   if (record.targetType === "Schedule" && record.counselorName) {
     return `排期：${record.counselorName}`;
-  }
-  if (record.targetType === "Feedback" && record.patientName) {
-    return `反馈：${record.patientName}`;
   }
   if (record.targetType === "ConsultationFeedback" && record.patientName) {
     return `咨询反馈：${record.patientName}`;
@@ -261,7 +256,6 @@ export function OperationLogsPanel({
               <option value="SCHEDULE_CANCEL">咨询师取消排期</option>
               <option value="ROOM">咨询室管理</option>
               <option value="CONTENT">内容管理</option>
-              <option value="FEEDBACK">用户反馈</option>
               <option value="ROLE_SWITCH">角色切换</option>
             </select>
           </QueryField>

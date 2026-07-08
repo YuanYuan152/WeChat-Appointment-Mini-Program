@@ -77,8 +77,8 @@ export function FeedbackPanel({
         }}
       >
         <div>
-          <h2 className="text-xl font-semibold tracking-normal">用户反馈</h2>
-          <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">查看用户提交的反馈内容、联系方式和处理状态。</p>
+          <h2 className="text-xl font-semibold tracking-normal">咨询反馈</h2>
+          <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">查看来访者在咨询后提交的反馈内容、联系方式和提交状态。</p>
         </div>
         <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <QueryField label="关键词">
@@ -92,8 +92,7 @@ export function FeedbackPanel({
           <QueryField label="状态">
             <select className={queryControlClass} value={status} onChange={(event) => setStatus(event.target.value)}>
               <option value="ALL">全部</option>
-              <option value="OPEN">未处理</option>
-              <option value="CLOSED">已处理</option>
+              <option value="SUBMITTED">已提交</option>
             </select>
           </QueryField>
         </div>
@@ -110,7 +109,7 @@ export function FeedbackPanel({
           </div>
         )}
         {filteredItems.length === 0 ? (
-          <EmptyState text={listLoading ? "正在加载列表..." : "暂无符合条件的用户反馈。"} />
+          <EmptyState text={listLoading ? "正在加载列表..." : "暂无符合条件的咨询反馈。"} />
         ) : (
           <>
             <table className="w-full border-collapse text-sm">
@@ -137,7 +136,7 @@ export function FeedbackPanel({
                     <td className="max-w-lg px-5 py-4 text-[var(--lxxl-muted)]">{item.content}</td>
                     <td className="px-5 py-4 text-[var(--lxxl-muted)]">{item.contact || "-"}</td>
                     <td className="px-5 py-4">
-                      <Badge tone={item.status === "OPEN" ? "gold" : "green"}>{statusLabel(item.status)}</Badge>
+                      <Badge tone="green">{statusLabel(item.status)}</Badge>
                     </td>
                     <td className="px-5 py-4 text-right">
                       <TableActionButton onClick={() => setSelectedFeedback(item)}>

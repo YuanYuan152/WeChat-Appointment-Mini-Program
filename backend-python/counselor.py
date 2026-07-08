@@ -83,6 +83,7 @@ from schedule_slots import (
     rolling_window_datetime_bounds,
     validate_slot_in_rolling_window,
 )
+from pricing_service import resolve_revenue_share_cents
 
 router = APIRouter(prefix="/api/mini/counselor", tags=["Counselor"])
 
@@ -381,8 +382,13 @@ class DashboardDetailItem(BaseModel):
     subtitle: Optional[str] = None
     extra: Optional[str] = None
     amount: Optional[int] = None
+    personalIncome: Optional[int] = None
+    patientId: Optional[int] = None
+    patientMobile: Optional[str] = None
+    orderId: Optional[int] = None
     consultationId: Optional[int] = None
     caseRecordId: Optional[int] = None
+    caseRecordStatus: Optional[str] = None
     status: Optional[str] = None
 
 
@@ -465,14 +471,19 @@ def _compute_dashboard_stats(
 
     completed_order_count = 0
     completed_order_revenue = 0
+    personal_income = 0
     for c in done_in_range:
         order = orders_by_id.get(c.OrderId) if c.OrderId else None
         if order and order.Status == "PAID":
             completed_order_count += 1
-            completed_order_revenue += order.TotalFee or 0
+            amount = order.TotalFee or 0
+            completed_order_revenue += amount
+            personal_income += resolve_revenue_share_cents(db, c.PatientId, counselor.Id, amount)
         elif not order:
             completed_order_count += 1
-            completed_order_revenue += billing or 0
+            amount = billing or 0
+            completed_order_revenue += amount
+            personal_income += resolve_revenue_share_cents(db, c.PatientId, counselor.Id, amount)
 
     case_records = (
         db.query(AppCaseRecord)
@@ -513,6 +524,7 @@ def _compute_dashboard_stats(
     return {
         "completedOrderCount": completed_order_count,
         "completedOrderRevenue": completed_order_revenue,
+        "personalIncome": personal_income,
         "caseRecordCount": case_record_count,
         "totalAppointments": total_appointments,
         "leaveCount": leave_count,
@@ -1740,6 +1752,12 @@ def counselor_stats_details(
             o.Id: o
             for o in db.query(AppOrder).filter(AppOrder.Id.in_(order_ids)).all()
         } if order_ids else {}
+        case_records = (
+            db.query(AppCaseRecord)
+            .filter(AppCaseRecord.ConsultationId.in_([c.Id for c in consultations]))
+            .all()
+        ) if consultations else []
+        case_records_by_consultation = {row.ConsultationId: row for row in case_records}
         profile = db.query(AppCounselorProfile).filter(
             AppCounselorProfile.AccountId == counselor.Id
         ).first()
@@ -1751,15 +1769,24 @@ def counselor_stats_details(
             if order and order.Status != "PAID":
                 continue
             amount = (order.TotalFee if order else billing) or 0
+            patient = patients.get(c.PatientId)
+            case_record = case_records_by_consultation.get(c.Id)
+            has_record = bool(case_record and case_record_has_content(case_record))
             if order or not c.OrderId:
                 items.append(
                     DashboardDetailItem(
                         id=c.Id,
-                        title=_patient_display_name(patients.get(c.PatientId)),
+                        title=_patient_display_name(patient),
                         subtitle=_format_dt_short(_consultation_time(c)),
                         extra=f"咨询单 #{c.Id}",
                         amount=amount,
+                        personalIncome=resolve_revenue_share_cents(db, c.PatientId, counselor.Id, amount),
+                        patientId=c.PatientId,
+                        patientMobile=patient.Mobile if patient else None,
+                        orderId=order.Id if order else None,
                         consultationId=c.Id,
+                        caseRecordId=case_record.Id if case_record else None,
+                        caseRecordStatus="FILLED" if has_record else "PENDING",
                         status=c.Status,
                     )
                 )

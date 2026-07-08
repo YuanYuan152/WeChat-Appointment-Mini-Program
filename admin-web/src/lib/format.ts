@@ -109,6 +109,7 @@ export function statusLabel(status?: string | null) {
     CANCELED: "已取消",
     OPEN: "未处理",
     CLOSED: "已处理",
+    SUBMITTED: "已提交",
     ACTIVE: "启用",
     INACTIVE: "停用",
   };

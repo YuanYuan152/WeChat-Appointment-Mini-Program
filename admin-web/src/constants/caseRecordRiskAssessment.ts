@@ -17,17 +17,19 @@ export interface RiskAssessmentItemConfig {
   options: Partial<Record<"A" | "B" | "C" | "D" | "E", string>>;
   choices: RiskChoice[];
   noteChoices: RiskChoice[];
+  /** 须填写说明的选项；未设置时与 noteChoices 相同 */
+  noteRequiredChoices?: RiskChoice[];
   otherChoice?: "C" | "E";
 }
 
 export const RISK_LEVEL_GUIDE = `一、一级风险/危机：转介/不适合咨询；向来访者说明其困扰已经超出了心理咨询可提供的专业范围，必须尽快就医或寻求其他专业帮助。
 
 判定标准：满足任一条件即可归为一级（优先级最高）：
-1、项目1（诊断/就医）：选 D（重度：一年内有复发史、住院史）且无医生「配合心理咨询」建议；未选选项，但初始访谈发现明显精神疾病症状（如幻觉、妄想）或严重躯体疾病且自评影响极大（项目8选 B 且说明为严重疾病，参考癌症、重型糖尿病、甲亢、严重的免疫系统疾病、带有耻辱感的性病、难以忍受的慢性疼痛等）。
+1、项目1（诊断/就医）：选 D（重度：一年内有复发史、住院史）且无医生「配合心理咨询」建议；未选选项，但初始访谈发现明显精神疾病症状（如幻觉、妄想）或严重躯体疾病且自评影响极大（项目8选 C 且说明为严重疾病，参考癌症、重型糖尿病、甲亢、严重的免疫系统疾病、带有耻辱感的性病、难以忍受的慢性疼痛等）。
 2、项目3（自我伤害）：选 D（重度：反复自伤/自杀未遂）且处于发作期。
 3、项目4（伤害他人）：选 D（重度：有详细计划并准备实施）。
-4、项目6（重大/应激事件）：选 B 且说明正在经历性虐待、暴力关系。
-5、咨询期间发现心理疾病复发（项目1选 D+近期复发）或严重躯体症状（项目8选 B+症状急性发作）。
+4、项目6（重大/应激事件）：选 C 且说明正在经历性虐待、暴力关系。
+5、咨询期间发现心理疾病复发（项目1选 D+近期复发）或严重躯体症状（项目8选 C+症状急性发作）。
 
 二、二级风险/危机：不适合网络咨询；需要上报同心理咨询中心，且需要突破保密设置、以及做安全计划。
 
@@ -44,7 +46,8 @@ export const RISK_LEVEL_GUIDE = `一、一级风险/危机：转介/不适合咨
 2、项目3（自我伤害）：选 B（轻度：有念头无计划/行为）。
 3、项目4（伤害他人）：选 B（轻度：有念头无计划/行为，可自控）。
 4、项目5（自我照顾）：选 B（轻度：偶尔不能自我照顾）。
-5、项目6（重大/应激事件）：选 B 近期经历负性生活事件且自评受影响较大，咨询师评估可能升级为二级风险（参考：①丧失性挫折：包括亲人去逝、失业、失恋、事业受挫、股票、赌博导致损失大量金钱；②人际关系冲突、夫妻关系冲突、婚外恋、离婚等）。
+5、项目6（重大/应激事件）：选 C（有并归类为危机）。
+6、项目7/8/9（家族史、疾病史、创伤史）：选 C（有并归类为危机）。
 
 四、无危机：一般咨询
 
@@ -134,37 +137,37 @@ export const RISK_ASSESSMENT_ITEMS: RiskAssessmentItemConfig[] = [
     id: "stress_event",
     index: 6,
     label: "重大/应激事件",
-    options: { A: "无", B: "有（具体说明）", C: "其他" },
+    options: { A: "无", B: "有(无危机)", C: "有(并归类为危机)" },
     choices: ["A", "B", "C"],
     noteChoices: ["B", "C"],
-    otherChoice: "C",
+    noteRequiredChoices: [],
   },
   {
     id: "family_history",
     index: 7,
     label: "家族史",
-    options: { A: "无", B: "有（具体说明）", C: "其他" },
+    options: { A: "无", B: "有(无危机)", C: "有(并归类为危机)" },
     choices: ["A", "B", "C"],
     noteChoices: ["B", "C"],
-    otherChoice: "C",
+    noteRequiredChoices: [],
   },
   {
     id: "medical_history",
     index: 8,
     label: "疾病史",
-    options: { A: "无", B: "有（具体说明）", C: "其他" },
+    options: { A: "无", B: "有(无危机)", C: "有(并归类为危机)" },
     choices: ["A", "B", "C"],
     noteChoices: ["B", "C"],
-    otherChoice: "C",
+    noteRequiredChoices: [],
   },
   {
     id: "trauma_history",
     index: 9,
     label: "创伤史",
-    options: { A: "无", B: "有（具体说明）", C: "其他" },
+    options: { A: "无", B: "有(无危机)", C: "有(并归类为危机)" },
     choices: ["A", "B", "C"],
     noteChoices: ["B", "C"],
-    otherChoice: "C",
+    noteRequiredChoices: [],
   },
   {
     id: "crisis_level",
@@ -183,6 +186,25 @@ export const RISK_ASSESSMENT_ITEMS: RiskAssessmentItemConfig[] = [
 
 export const RISK_SCALE_ITEMS = RISK_ASSESSMENT_ITEMS.filter((item) => item.id !== "crisis_level");
 export const CRISIS_REPORT_CHOICES: RiskChoice[] = ["A", "B", "C"];
+
+export const EDITABLE_RISK_ITEM_IDS = RISK_ASSESSMENT_ITEMS
+  .filter((item) => item.id !== "crisis_level")
+  .map((item) => item.id);
+
+export const RISK_ITEM_GUIDE_HINTS: Record<string, string> = {
+  diagnosis:
+    "【一级】选 D（重度）且无医生「配合心理咨询」建议；或访谈发现明显精神病性症状；或项目8选 C 且为严重躯体疾病。\n【二级】如项目1选 C 且项目3选 B 等组合，评估可能升级为一级风险。",
+  support_system: "【三级】选 B（一般）。\n【二级】选 D（没有）且项目3选 C 等组合时，评估可能升级。",
+  self_harm: "【一级】选 D（重度）且处于发作期。\n【二级】选 C。\n【三级】选 B。",
+  harm_others: "【一级】选 D。\n【二级】选 C。\n【三级】选 B。",
+  self_care: "【二级】选 C（经常不能自我照顾）。\n【三级】选 B（偶尔不能自我照顾）。",
+  stress_event:
+    "【一级】选 C 且说明正在经历性虐待、暴力关系。\n【三级】选 C（归类为危机）时纳入评估；选 B（无危机）不升级。",
+  family_history: "选 B/C 可填具体说明（选填）；选 C（归类为危机）时为三级风险。",
+  medical_history: "【一级】选 C 且为严重疾病或急性发作。\n选 B（无危机）不升级。",
+  trauma_history: "选 B/C 可填具体说明（选填）；选 C（归类为危机）时为三级风险。",
+  crisis_level: "根据前 1–9 题选项，按风险等级说明规则自动评定，无需手动选择。",
+};
 
 export const createEmptyRiskAssessment = (): RiskAssessmentData => ({
   items: Object.fromEntries(RISK_ASSESSMENT_ITEMS.map((item) => [item.id, { choice: "", note: "" }])),
@@ -215,52 +237,42 @@ export const calculateCrisisLevelChoice = (data?: RiskAssessmentData | null): "A
   const harmOthers = choiceOf(data, "harm_others");
   const selfCare = choiceOf(data, "self_care");
   const stressEvent = choiceOf(data, "stress_event");
+  const familyHistory = choiceOf(data, "family_history");
   const medicalHistory = choiceOf(data, "medical_history");
-  const severeStress = noteHasAny(noteOf(data, "stress_event"), ["性虐待", "性侵", "强奸", "暴力关系", "家暴", "暴力"]);
+  const traumaHistory = choiceOf(data, "trauma_history");
+  const diagnosisNote = noteOf(data, "diagnosis");
+  const severeStress = noteHasAny(noteOf(data, "stress_event"), ["性虐待", "暴力关系", "家暴", "虐待"]);
   const severeMedical = noteHasAny(noteOf(data, "medical_history"), [
-    "癌",
+    "急性",
+    "发作",
+    "癌症",
     "重型糖尿病",
     "甲亢",
-    "免疫系统",
-    "性病",
+    "免疫",
     "慢性疼痛",
-    "急性发作",
-    "严重",
   ]);
 
-  if (
-    diagnosis === "D" ||
-    selfHarm === "D" ||
-    harmOthers === "D" ||
-    selfCare === "D" ||
-    (stressEvent === "B" && severeStress) ||
-    (medicalHistory === "B" && severeMedical)
-  ) {
-    return "A";
-  }
+  if (selfHarm === "D") return "A";
+  if (harmOthers === "D") return "A";
+  if (diagnosis === "D" && !noteHasAny(diagnosisNote, ["配合心理咨询", "配合咨询"])) return "A";
+  if (stressEvent === "C" && severeStress) return "A";
+  if (diagnosis === "D" && noteHasAny(diagnosisNote, ["复发", "近期复发"])) return "A";
+  if (medicalHistory === "C" && severeMedical) return "A";
 
-  if (
-    selfHarm === "C" ||
-    harmOthers === "C" ||
-    selfCare === "C" ||
-    (diagnosis === "C" && selfHarm === "B") ||
-    (support === "D" && selfHarm === "B")
-  ) {
-    return "B";
-  }
+  if (selfHarm === "C") return "B";
+  if (harmOthers === "C") return "B";
+  if (selfCare === "C") return "B";
+  if (diagnosis === "C" && selfHarm === "B") return "B";
+  if (diagnosis === "D" && selfHarm === "B") return "B";
 
-  if (
-    support === "B" ||
-    support === "C" ||
-    support === "D" ||
-    selfHarm === "B" ||
-    harmOthers === "B" ||
-    selfCare === "B" ||
-    stressEvent === "B" ||
-    stressEvent === "C"
-  ) {
-    return "C";
-  }
+  if (support === "B") return "C";
+  if (selfHarm === "B") return "C";
+  if (harmOthers === "B") return "C";
+  if (selfCare === "B") return "C";
+  if (stressEvent === "C") return "C";
+  if (familyHistory === "C") return "C";
+  if (medicalHistory === "C") return "C";
+  if (traumaHistory === "C") return "C";
 
   return "D";
 };
@@ -288,7 +300,8 @@ export const riskAssessmentMissingLabel = (data?: RiskAssessmentData | null): st
     const val = data.items[item.id];
     const choice = normalizeRiskChoice(val?.choice || "", item.id);
     if (!choice || !item.choices.includes(choice)) return `${item.index}. ${item.label}`;
-    if (item.noteChoices.includes(choice) && !String(val?.note || "").trim()) {
+    const requiredNoteChoices = item.noteRequiredChoices ?? item.noteChoices;
+    if (requiredNoteChoices.includes(choice) && !String(val?.note || "").trim()) {
       return `${item.index}. ${item.label}（请填写说明）`;
     }
   }

@@ -32,7 +32,6 @@ from models import (
     AppConsultationRoom,
     AppConsultationRoomSlot,
     AppCounselorProfile,
-    AppFeedback,
     AppLeaveRequest,
     AppOrder,
     AppRefundExemption,
@@ -948,27 +947,6 @@ def operation_records(
             "endTime": consultation.EndTime if consultation else (schedule.EndTime if schedule else None),
             "createdAt": row.CreatedAt,
             **(_consultation_room_payload(consultation, schedules_by_id) if consultation else _room_payload(schedule)),
-        })
-
-    for row in db.query(AppFeedback).all():
-        updated_at = optional_model_value(row, "UpdatedAt", row.CreatedAt)
-        account_ids.add(row.AccountId)
-        records.append({
-            "id": f"feedback-{row.Id}",
-            "occurredAt": updated_at or row.CreatedAt,
-            "actionType": "FEEDBACK",
-            "actionLabel": "用户反馈",
-            "operatorId": row.AccountId,
-            "operatorRole": "Patient",
-            "targetType": "Feedback",
-            "targetId": row.Id,
-            "targetName": row.Category or "用户反馈",
-            "summary": row.Content,
-            "amount": None,
-            "status": row.Status,
-            "patientId": row.AccountId,
-            "createdAt": row.CreatedAt,
-            "updatedAt": updated_at,
         })
 
     for row in db.query(AppConsultationFeedback).all():
