@@ -219,7 +219,9 @@ function CounselorRecordsScreenContent() {
       setFormErrors({});
       await loadData();
     } catch (error) {
-      setFormErrors({ form: error instanceof Error ? error.message : "提交失败" });
+      const message = error instanceof Error ? error.message : "提交失败";
+      setFormErrors({ form: message });
+      showNotice("error", message);
     } finally {
       setFormLoading(false);
     }

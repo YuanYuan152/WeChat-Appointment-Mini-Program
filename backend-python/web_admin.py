@@ -185,7 +185,44 @@ def _schedule_action_label(schedule: AppSchedule) -> str:
     return "新建排期"
 
 
-REQUIRED_IMPORT_HEADERS = {"日期", "时间", "咨询师", "来访者", "付费金额"}
+IMPORT_HEADERS = (
+    "日期",
+    "星期",
+    "时间",
+    "咨询师",
+    "来访者",
+    "付费状况",
+    "付费时间",
+    "付费方式",
+    "付费金额",
+    "取消备注",
+    "形式",
+    "地点",
+    "咨询室",
+    "次数",
+    "咨询时数",
+    "备注",
+    "助理",
+    "目前阶段",
+    "最后咨询次数",
+    "总时长",
+    "合计收入",
+)
+REQUIRED_IMPORT_HEADERS = set(IMPORT_HEADERS)
+IMPORT_DESCRIPTION_HEADERS = (
+    "星期",
+    "付费状况",
+    "付费方式",
+    "取消备注",
+    "次数",
+    "咨询时数",
+    "备注",
+    "助理",
+    "目前阶段",
+    "最后咨询次数",
+    "总时长",
+    "合计收入",
+)
 PHONE_PATTERN = re.compile(r"1[3-9]\d{9}")
 
 
@@ -251,7 +288,7 @@ def _parse_import_time(value: Any) -> time:
     raise ValueError("时间格式无法识别")
 
 
-def _parse_optional_datetime(value: Any) -> Optional[datetime]:
+def _parse_optional_datetime(value: Any, reference_date: Optional[date] = None) -> Optional[datetime]:
     if value is None or _strip_value(value) == "":
         return None
     if isinstance(value, datetime):
@@ -268,6 +305,19 @@ def _parse_optional_datetime(value: Any) -> Optional[datetime]:
             pass
     try:
         return datetime.fromisoformat(text)
+    except ValueError:
+        pass
+
+    month_day_match = re.fullmatch(r"(\d{1,2})[/-](\d{1,2})", text)
+    if not month_day_match or not reference_date:
+        return None
+
+    month, day = (int(part) for part in month_day_match.groups())
+    try:
+        candidate = datetime(reference_date.year, month, day)
+        if candidate.date() > reference_date:
+            candidate = candidate.replace(year=reference_date.year - 1)
+        return candidate
     except ValueError:
         return None
 
@@ -490,7 +540,7 @@ def _find_or_create_patient_for_import(db: Session, raw: Any) -> AppAccount:
 
 def _import_description(row_map: dict[str, Any], counselor_name: str, patient_name: str) -> str:
     parts = [f"导入完成订单：{patient_name}/{counselor_name}"]
-    for header in ("付费状况", "付费方式", "次数", "咨询时数", "助理", "目前阶段", "最后咨询次数", "总时长", "备注", "取消备注"):
+    for header in IMPORT_DESCRIPTION_HEADERS:
         value = _strip_value(row_map.get(header))
         if value:
             parts.append(f"{header}:{value}")
@@ -503,7 +553,7 @@ def _import_completed_order_row(db: Session, row_number: int, row_map: dict[str,
     start_at = datetime.combine(consultation_date, consultation_time)
     duration_minutes = _parse_duration_minutes(_row_value(row_map, "咨询时数"))
     end_at = start_at + timedelta(minutes=duration_minutes)
-    paid_at = _parse_optional_datetime(_row_value(row_map, "付费时间")) or start_at
+    paid_at = _parse_optional_datetime(_row_value(row_map, "付费时间"), consultation_date) or start_at
     amount = _parse_amount_cents(_row_value(row_map, "付费金额"))
 
     counselor = _find_counselor_for_import(db, _row_value(row_map, "咨询师"))
@@ -638,7 +688,7 @@ async def import_completed_orders(
 
     headers = _normalize_import_headers(rows[0])
     header_set = {header for header in headers if header}
-    missing_headers = sorted(REQUIRED_IMPORT_HEADERS - header_set)
+    missing_headers = [header for header in IMPORT_HEADERS if header not in header_set]
     if missing_headers:
         raise HTTPException(status_code=400, detail=f"缺少必填表头：{', '.join(missing_headers)}")
 

@@ -23,7 +23,10 @@ def check_http(name, resp, expect_status=200):
     ok = resp.status_code == expect_status
     record(name, ok, f"HTTP {resp.status_code}")
     try:
-        return resp.json()
+        body = resp.json()
+        if isinstance(body, dict) and "code" in body and "data" in body:
+            return body["data"]
+        return body
     except Exception:
         return {}
 

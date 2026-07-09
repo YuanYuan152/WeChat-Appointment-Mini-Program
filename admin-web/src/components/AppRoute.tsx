@@ -70,6 +70,14 @@ function AppRouteRoot({ sectionId, children }: { sectionId: SectionId; children:
     setNotice(null);
   }, []);
 
+  useEffect(() => {
+    if (!notice) {
+      return;
+    }
+    const timer = window.setTimeout(() => setNotice(null), notice.type === "error" ? 4000 : 3000);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
+
   const requestRefresh = useCallback(() => {
     setRefreshKey((value) => value + 1);
   }, []);

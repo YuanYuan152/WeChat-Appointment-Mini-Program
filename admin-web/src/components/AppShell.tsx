@@ -89,7 +89,8 @@ export function AppShell({
           <div className="p-8">
             {notice && (
               <div
-                className={`mb-5 rounded-xl border px-4 py-3 text-sm ${
+                role="alert"
+                className={`fixed right-6 top-20 z-[70] max-w-[min(420px,calc(100vw-3rem))] rounded-xl border px-4 py-3 text-sm shadow-[0_16px_40px_rgba(44,44,44,0.18)] ${
                   notice.type === "error"
                     ? "border-[#F0B8B2] bg-[#FFF4F2] text-[#A13F37]"
                     : notice.type === "success"

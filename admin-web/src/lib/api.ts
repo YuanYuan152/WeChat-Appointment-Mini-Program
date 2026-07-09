@@ -44,6 +44,12 @@ export function clearStoredToken() {
 }
 
 function getErrorMessage(payload: unknown, fallback: string) {
+  if (payload && typeof payload === "object" && "msg" in payload) {
+    const msg = (payload as { msg?: unknown }).msg;
+    if (typeof msg === "string") {
+      return msg;
+    }
+  }
   if (payload && typeof payload === "object" && "detail" in payload) {
     const detail = (payload as { detail?: unknown }).detail;
     if (typeof detail === "string") {
@@ -57,6 +63,16 @@ function getErrorMessage(payload: unknown, fallback: string) {
     }
   }
   return fallback;
+}
+
+function isApiEnvelope(payload: unknown): payload is { code: number; msg?: string; data: unknown } {
+  return Boolean(
+    payload &&
+      typeof payload === "object" &&
+      "code" in payload &&
+      typeof (payload as { code?: unknown }).code === "number" &&
+      "data" in payload,
+  );
 }
 
 export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -84,6 +100,17 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
       getErrorMessage(payload, `请求失败：HTTP ${response.status}`),
       payload,
     );
+  }
+
+  if (isApiEnvelope(payload)) {
+    if (payload.code !== 0) {
+      throw new ApiError(
+        response.status,
+        getErrorMessage(payload, "请求失败"),
+        payload,
+      );
+    }
+    return payload.data as T;
   }
 
   return payload as T;

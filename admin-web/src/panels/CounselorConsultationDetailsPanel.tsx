@@ -109,29 +109,6 @@ export function CounselorConsultationDetailsPanel({
         <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">
           咨询记录和预约咨询在同一页面查看，避免在工作台中承载过多侧栏内容。
         </p>
-        <div className="mt-5 flex flex-wrap gap-3">
-          {TAB_OPTIONS.map((item) => {
-            const active = activeTab === item.value;
-            const count = item.value === "case-records" ? caseRecordDetails?.length || 0 : appointmentDetails?.length || 0;
-            return (
-              <button
-                key={item.value}
-                className={`rounded-xl border px-4 py-3 text-left transition ${
-                  active
-                    ? "border-[var(--lxxl-green)] bg-[#EAF2ED] text-[var(--lxxl-green-dark)]"
-                    : "border-[var(--lxxl-border)] bg-white hover:border-[var(--lxxl-green)]"
-                }`}
-                type="button"
-                onClick={() => setActiveTab(item.value)}
-              >
-                <span className="block text-sm font-semibold">{item.label}</span>
-                <span className="mt-1 block text-xs text-[var(--lxxl-muted)]">
-                  {item.description} · {count} 条
-                </span>
-              </button>
-            );
-          })}
-        </div>
       </div>
 
       <form
@@ -201,6 +178,32 @@ export function CounselorConsultationDetailsPanel({
           />
         </div>
       </form>
+
+      <div className="border-t border-[var(--lxxl-border)] px-6 py-5 sm:px-7 lg:px-8">
+        <div className="flex flex-wrap gap-3">
+          {TAB_OPTIONS.map((item) => {
+            const active = activeTab === item.value;
+            const count = item.value === "case-records" ? caseRecordDetails?.length || 0 : appointmentDetails?.length || 0;
+            return (
+              <button
+                key={item.value}
+                className={`rounded-xl border px-4 py-3 text-left transition ${
+                  active
+                    ? "border-[var(--lxxl-green)] bg-[#EAF2ED] text-[var(--lxxl-green-dark)]"
+                    : "border-[var(--lxxl-border)] bg-white hover:border-[var(--lxxl-green)]"
+                }`}
+                type="button"
+                onClick={() => setActiveTab(item.value)}
+              >
+                <span className="block text-sm font-semibold">{item.label}</span>
+                <span className="mt-1 block text-xs text-[var(--lxxl-muted)]">
+                  {item.description} · {count} 条
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       <div className="relative border-t border-[var(--lxxl-border)] px-6 py-5 sm:px-7 lg:px-8">
         {listLoading && activeRows.length > 0 && (

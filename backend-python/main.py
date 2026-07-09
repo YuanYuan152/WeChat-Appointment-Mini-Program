@@ -1,7 +1,15 @@
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from api_response import (
+    ApiResponseEnvelopeMiddleware,
+    api_http_exception_handler,
+    api_unhandled_exception_handler,
+    api_validation_exception_handler,
+)
 from auth import router as auth_router
 from payment import router as payment_router
 from upload import router as upload_router
@@ -17,6 +25,10 @@ from web_admin import router as web_admin_router
 from web_auth import router as web_auth_router
 
 app = FastAPI(title="LXXL API", version="2.0")
+
+app.add_exception_handler(StarletteHTTPException, api_http_exception_handler)
+app.add_exception_handler(RequestValidationError, api_validation_exception_handler)
+app.add_exception_handler(Exception, api_unhandled_exception_handler)
 
 
 @app.on_event("startup")
@@ -43,6 +55,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(ApiResponseEnvelopeMiddleware)
 
 # Serve uploaded static files
 static_dir = Path(__file__).parent / "static"

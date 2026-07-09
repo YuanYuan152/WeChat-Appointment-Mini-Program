@@ -95,7 +95,7 @@ class HttpRequest {
       }
 
       // 处理响应
-      return this.handleResponse(response)
+      return this.handleResponse<T>(response, showError)
     } catch (error) {
       // 隐藏加载提示
       if (showLoading) {
@@ -122,11 +122,11 @@ class HttpRequest {
   private extractErrorMessage(statusCode: number, data: any): string {
     const body = this.parseResponseBody(data)
     if (body && typeof body === 'object') {
+      if (typeof body.msg === 'string') return body.msg
       if (typeof body.detail === 'string') return body.detail
       if (Array.isArray(body.detail) && body.detail.length) {
         return body.detail.map((d: any) => d?.msg || JSON.stringify(d)).join('; ')
       }
-      if (typeof body.msg === 'string') return body.msg
       if (typeof body.message === 'string') return body.message
     }
     return `HTTP错误: ${statusCode}`
@@ -135,7 +135,16 @@ class HttpRequest {
   /**
    * 处理响应
    */
-  private handleResponse(response: any): ApiResponse {
+  private showErrorToast(message: string, showError: boolean) {
+    if (!showError) return
+    uni.showToast({
+      title: message,
+      icon: 'none',
+      duration: 2000
+    })
+  }
+
+  private handleResponse<T = any>(response: any, showError: boolean): ApiResponse<T> {
     const { statusCode, data: rawData } = response
     const data = this.parseResponseBody(rawData)
 
@@ -145,22 +154,26 @@ class HttpRequest {
       if (data && typeof data === 'object') {
         // 处理后端返回的 {success, message, data} 格式
         if (data.hasOwnProperty('success') && data.hasOwnProperty('message')) {
-          return {
+          const result = {
             code: data.success ? 0 : -1,
             msg: data.message || '请求成功',
-            data: data.data || data,
+            data: Object.prototype.hasOwnProperty.call(data, 'data') ? data.data : data,
             url: data.url
           }
+          if (result.code !== 0) this.showErrorToast(result.msg, showError)
+          return result
         }
         // 处理后端返回的 {code, msg, data} 格式（confirm-dev 等）
         else if (data.hasOwnProperty('code') && data.hasOwnProperty('msg')) {
           const bizCode = typeof data.code === 'number' ? data.code : 0
-          return {
+          const result = {
             code: bizCode,
             msg: data.msg || '请求成功',
-            data: data.data ?? data,
+            data: Object.prototype.hasOwnProperty.call(data, 'data') ? data.data : data,
             url: data.url
           }
+          if (result.code !== 0) this.showErrorToast(result.msg, showError)
+          return result
         }
         // 其他格式，直接返回
         else {
@@ -180,10 +193,15 @@ class HttpRequest {
         }
       }
     } else {
+      const code = data && typeof data === 'object' && typeof data.code === 'number'
+        ? data.code
+        : statusCode
+      const message = this.extractErrorMessage(statusCode, data)
+      this.showErrorToast(message, showError)
       return {
-        code: statusCode,
-        msg: this.extractErrorMessage(statusCode, data),
-        data: undefined,
+        code,
+        msg: message,
+        data: data && typeof data === 'object' ? data.data : undefined,
         url: undefined
       }
     }
@@ -207,13 +225,7 @@ class HttpRequest {
     }
 
     // 显示错误提示
-    if (showError) {
-      uni.showToast({
-        title: message,
-        icon: 'none',
-        duration: 2000
-      })
-    }
+    this.showErrorToast(message, showError)
 
     return {
       code,
@@ -289,19 +301,17 @@ class HttpRequest {
         timeout: this.timeout,
         success: (res) => {
           try {
-            const data = JSON.parse(res.data)
-            if (data.hasOwnProperty('success') && data.hasOwnProperty('message')) {
-              resolve({ code: data.success ? 0 : -1, msg: data.message, data: data.data })
-            } else if (data.hasOwnProperty('code')) {
-              resolve({ code: data.code || 0, msg: data.msg || '上传成功', data: data.data || data })
-            } else {
-              resolve({ code: 0, msg: '上传成功', data })
-            }
+            const result = this.handleResponse<T>(res, true)
+            resolve(result.code === 0 && result.msg === '请求成功'
+              ? { ...result, msg: '上传成功' }
+              : result)
           } catch {
+            this.showErrorToast('解析上传响应失败', true)
             resolve({ code: -1, msg: '解析上传响应失败', data: undefined })
           }
         },
         fail: () => {
+          this.showErrorToast('上传失败', true)
           resolve({ code: -1, msg: '上传失败', data: undefined })
         },
       })

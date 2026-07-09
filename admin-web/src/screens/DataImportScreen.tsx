@@ -10,6 +10,7 @@ import type { CompletedOrderImportResult, CompletedOrderImportRowResult, Complet
 
 const REQUIRED_HEADERS = [
   "日期",
+  "星期",
   "时间",
   "咨询师",
   "来访者",
@@ -17,10 +18,18 @@ const REQUIRED_HEADERS = [
   "付费时间",
   "付费方式",
   "付费金额",
+  "取消备注",
   "形式",
   "地点",
   "咨询室",
+  "次数",
   "咨询时数",
+  "备注",
+  "助理",
+  "目前阶段",
+  "最后咨询次数",
+  "总时长",
+  "合计收入",
 ];
 
 const statusConfig: Record<CompletedOrderImportStatus, { label: string; tone: "green" | "gold" | "red" }> = {
@@ -97,6 +106,9 @@ function DataImportContent() {
               系统会复用现有用户、角色、排期、订单和咨询单表。未找到来访者时会按姓名创建来访账号；
               一条客户记录会导入为一条已支付、已完成的订单记录。未找到咨询师、地点无法识别或同时间已有咨询时，
               该行会标记失败并继续处理下一行。
+            </p>
+            <p className="mt-2 text-xs leading-5 text-[var(--lxxl-muted)]">
+              Excel 第一行需包含以下全部表头；星期、备注及累计统计字段可以留空，但表头需要保留。
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
               {REQUIRED_HEADERS.map((header) => (
