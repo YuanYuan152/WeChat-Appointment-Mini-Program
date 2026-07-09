@@ -450,8 +450,11 @@ def notify_counselor_appointment_cancelled(
     *,
     refunded: bool,
 ) -> None:
+    from consultation_status_service import cancel_consultation_auto_done_tasks
+
     cancel_counselor_consultation_reminders(db, consultation.Id)
     cancel_counselor_consultation_done_notices(db, consultation.Id)
+    cancel_consultation_auto_done_tasks(db, consultation.Id)
     ctx = _consultation_context(db, consultation)
     time_text = _format_datetime(ctx["startTime"])
     summary = f"{ctx['patientName']} · {time_text} · {ctx['location']}"

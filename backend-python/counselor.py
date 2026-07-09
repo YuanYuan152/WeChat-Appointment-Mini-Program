@@ -27,11 +27,11 @@ from case_record_service import (
     build_default_header_info,
     save_case_record_revision,
     validate_case_record_required_fields,
-    ensure_consultation_done_for_record,
     reject_if_case_record_locked,
     get_crisis_level_choice,
     notify_admins_crisis_report_if_needed,
 )
+from consultation_status_service import mark_consultation_done
 from case_record_amendment_service import (
     latest_amendment_for_record,
     submit_amendment_request,
@@ -627,9 +627,11 @@ def _counselor_cancel_booked(
             cancel_patient_consultation_reminders,
             notify_patient_counselor_leave_approved,
         )
+        from consultation_status_service import cancel_consultation_auto_done_tasks
 
         cancel_counselor_consultation_reminders(db, consultation.Id)
         cancel_counselor_consultation_done_notices(db, consultation.Id)
+        cancel_consultation_auto_done_tasks(db, consultation.Id)
         cancel_patient_consultation_reminders(db, consultation.Id)
         notify_patient_counselor_leave_approved(
             db,
@@ -1280,8 +1282,15 @@ def update_consultation(
 
     if body.status == "DONE":
         from counselor_message_service import notify_counselor_consultation_done
+        from consultation_status_service import cancel_consultation_auto_done_tasks
 
+        cancel_consultation_auto_done_tasks(db, consultation.Id)
         notify_counselor_consultation_done(db, consultation)
+
+    if body.status == "CANCELLED":
+        from consultation_status_service import cancel_consultation_auto_done_tasks
+
+        cancel_consultation_auto_done_tasks(db, consultation.Id)
 
     consultation.UpdatedAt = datetime.utcnow()
     db.commit()
@@ -1479,7 +1488,7 @@ def create_case_record(
     consultation, schedule = _get_recordable_consultation(
         db, counselor.Id, body.consultation_id
     )
-    ensure_consultation_done_for_record(consultation, schedule)
+    mark_consultation_done(db, consultation, schedule)
 
     validate_case_record_required_fields(
         subjective=body.subjective,

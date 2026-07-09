@@ -87,6 +87,10 @@ def cancel_consultation_for_visitor(
     consultation.Status = "CANCELLED"
     consultation.UpdatedAt = datetime.utcnow()
 
+    from consultation_status_service import cancel_consultation_auto_done_tasks
+
+    cancel_consultation_auto_done_tasks(db, consultation.Id)
+
     if consultation.OrderId:
         order = db.query(AppOrder).filter(AppOrder.Id == consultation.OrderId).first()
         if order and order.Status == "PAID":

@@ -368,6 +368,13 @@ def get_my_consultations(
     db: Session = Depends(get_db),
 ):
     """方案 §8.1 我的咨询：返回登录账号作为 Patient 的所有咨询单。"""
+    from proxy_booking_service import expire_pending_proxy_orders
+    from consultation_status_service import expire_due_consultations
+
+    expire_pending_proxy_orders(db)
+    expire_due_consultations(db)
+    db.commit()
+
     q = db.query(AppConsultation).filter(AppConsultation.PatientId == current_account.Id)
     if status:
         q = q.filter(AppConsultation.Status == status)
@@ -471,9 +478,6 @@ def get_my_consultations(
             feedbackImprovements=fb_detail.get("improvements") if fb_detail else None,
         ))
 
-    from proxy_booking_service import expire_pending_proxy_orders
-
-    expire_pending_proxy_orders(db)
     now = china_now()
     pending_proxy_orders = (
         db.query(AppOrder)

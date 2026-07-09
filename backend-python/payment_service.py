@@ -69,11 +69,13 @@ def complete_paid_order(
             notify_patient_appointment_success,
             schedule_patient_consultation_reminder,
         )
+        from consultation_status_service import schedule_consultation_auto_done
 
         notify_staff_new_appointment(db, existing, order)
         notify_counselor_new_appointment(db, existing)
         schedule_counselor_consultation_reminder(db, existing)
         schedule_counselor_consultation_done_notice(db, existing)
+        schedule_consultation_auto_done(db, existing, schedule)
         notify_patient_appointment_success(db, existing)
         schedule_patient_consultation_reminder(db, existing)
         return
@@ -100,10 +102,12 @@ def complete_paid_order(
         notify_patient_appointment_success,
         schedule_patient_consultation_reminder,
     )
+    from consultation_status_service import schedule_consultation_auto_done
 
     notify_staff_new_appointment(db, consultation, order)
     notify_counselor_new_appointment(db, consultation)
     schedule_counselor_consultation_reminder(db, consultation)
     schedule_counselor_consultation_done_notice(db, consultation)
+    schedule_consultation_auto_done(db, consultation, schedule)
     notify_patient_appointment_success(db, consultation)
     schedule_patient_consultation_reminder(db, consultation)
