@@ -146,6 +146,10 @@ export const RELATED_TYPE_LABELS: Record<string, string> = {
   PATIENT_APPOINTMENT_CANCEL: '预约取消',
   PATIENT_APPOINTMENT_REMIND: '预约提醒',
   PATIENT_LEAVE_APPROVED: '请假通知',
+  CHARITY_CONSULTATION_30_BOOKING: '公益咨询第30次预约',
+  CHARITY_CONSULTATION_30_DONE: '公益咨询第30次完成',
+  PATIENT_CHARITY_NEGOTIATION_TIP: '公益咨询议价提示',
+  PROFESSIONAL_PAIR_CONSULTATION_30_BOOKING: '正价咨询第30次预约',
 }
 
 /** 咨询师消息类型：详情页不展示来访联系方式 */
@@ -167,6 +171,7 @@ export const PATIENT_MESSAGE_TYPES = new Set([
   'PATIENT_LEAVE_APPROVED',
   'REFUND_EXEMPTION',
   'REFUND_EXEMPTION_PENDING',
+  'PATIENT_CHARITY_NEGOTIATION_TIP',
 ])
 
 export interface MessageCategoryOption {
@@ -180,12 +185,14 @@ export const ADMIN_OPS_MESSAGE_CATEGORIES: MessageCategoryOption[] = [
   { value: 'counselor_leave', label: '咨询师请假' },
   { value: 'case_record_amendment', label: '记录修改审核' },
   { value: 'case_record_crisis', label: '风险上报' },
+  { value: 'charity_milestone', label: '公益咨询里程碑' },
+  { value: 'professional_pair_milestone', label: '正价咨询里程碑' },
 ]
 
 const ADMIN_OPS_FORBIDDEN_FILTER_VALUES = new Set(['appointment_new', 'appointment_cancel'])
 
 export function isAdminOpsMessageInbox(role: string): boolean {
-  return usesOpsWorkbench(role)
+  return role === 'Ops' || role === 'Admin'
 }
 
 export function getStoredUserRoles(): string[] {
@@ -246,6 +253,8 @@ export function getMessageCategoriesForRole(role: string): MessageCategoryOption
       { value: 'appointment_new', label: '新增预约' },
       { value: 'appointment_cancel', label: '预约取消' },
       { value: 'counselor_leave', label: '咨询师请假' },
+      { value: 'charity_milestone', label: '公益咨询里程碑' },
+      { value: 'professional_pair_milestone', label: '正价咨询里程碑' },
     ]
   }
 
@@ -316,6 +325,8 @@ export function messageSearchText(item: MessageItem): string {
     detail.counselorName,
     detail.patientPhone,
     detail.counselorPhone,
+    detail.recentCounselorsText,
+    detail.messageText,
     detail.activityTitle,
     detail.location,
     detail.startTime,

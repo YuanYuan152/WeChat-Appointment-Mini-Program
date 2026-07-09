@@ -121,6 +121,10 @@ def _create_pending_order(
     if pending_proxy_order_for_schedule(db, schedule.Id):
         raise HTTPException(status_code=400, detail="该时段已有待支付订单")
 
+    from charity_milestone_service import assert_charity_patient_can_book_charity
+
+    assert_charity_patient_can_book_charity(db, account.Id, schedule.CounselorId)
+
     profile = get_counselor_profile(db, schedule.CounselorId)
     if not profile or not counselor_visible_to_patient(
         profile.CounselorType,

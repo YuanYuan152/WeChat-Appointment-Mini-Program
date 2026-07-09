@@ -199,6 +199,7 @@ export const API_ENDPOINTS = {
     patientDetail: (id: number | string) => `/api/mini/admin/patients/${id}`,
     counselors: '/api/mini/admin/counselors',
     counselorDetail: (id: number | string) => `/api/mini/admin/counselors/${id}`,
+    staffRemark: (accountId: number | string) => `/api/mini/admin/accounts/${accountId}/staff-remark`,
     consultationFeedbacks: '/api/mini/admin/consultation-feedbacks',
     pricingCounselors: '/api/mini/admin/pricing/counselors',
     pricingCounselorBase: (counselorId: number | string) =>

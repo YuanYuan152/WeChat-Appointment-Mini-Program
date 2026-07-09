@@ -46,6 +46,7 @@
             <view class="name-row">
               <text class="name">{{ item.name }}</text>
               <text v-if="item.typeLabel" class="type-badge">{{ item.typeLabel }}</text>
+              <text v-if="item.staffRemark" class="remark-badge">{{ item.staffRemark }}</text>
             </view>
             <text class="arrow">›</text>
           </view>
@@ -89,6 +90,7 @@
                 <view class="name-row">
                   <text class="name">{{ item.name }}</text>
                   <text v-if="item.typeLabel" class="type-badge">{{ item.typeLabel }}</text>
+                  <text v-if="item.staffRemark" class="remark-badge">{{ item.staffRemark }}</text>
                 </view>
                 <text v-if="item.title" class="sub">{{ item.title }}</text>
               </view>
@@ -118,6 +120,7 @@ interface PatientSummary {
   upcomingCount: number
   completedCount: number
   cancelledCount: number
+  staffRemark?: string
 }
 
 interface CounselorSummary {
@@ -135,6 +138,7 @@ interface CounselorSummary {
   visitorCount: number
   billingYuan: number
   faceBillingYuan: number
+  staffRemark?: string
 }
 
 const activeTab = ref<'patients' | 'counselors'>('patients')
@@ -256,6 +260,18 @@ onShow(refresh)
   border-radius: 100rpx;
   white-space: nowrap;
   flex-shrink: 0;
+}
+.remark-badge {
+  font-size: 22rpx;
+  color: #3D5A4E;
+  background: #E8F0EC;
+  padding: 4rpx 14rpx;
+  border-radius: 100rpx;
+  max-width: 280rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 1;
 }
 .head-left { display: flex; align-items: center; gap: 16rpx; flex: 1; min-width: 0; }
 .avatar { width: 72rpx; height: 72rpx; border-radius: 16rpx; flex-shrink: 0; }

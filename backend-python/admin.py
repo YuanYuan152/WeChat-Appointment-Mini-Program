@@ -79,6 +79,11 @@ from role_active import (
     set_account_role,
     invalidate_user_sessions,
 )
+from staff_remark_service import (
+    get_staff_remark,
+    get_staff_remarks_map,
+    set_staff_remark,
+)
 from patient_registration import DEFAULT_PATIENT_SOURCE
 
 router = APIRouter(prefix="/api/mini/admin", tags=["Admin"])
@@ -222,7 +227,7 @@ def _last_revoke_meta(db: Session, account_id: int, access_revoked_at=None) -> d
     }
 
 
-def _user_admin_out(db: Session, account: AppAccount) -> dict:
+def _user_admin_out(db: Session, account: AppAccount, *, staff_remark: str = "") -> dict:
     profile = get_counselor_profile(db, account.Id)
     access_revoked_at = getattr(account, "AccessRevokedAt", None)
     counselor_name = (profile.Name if profile else None) or None
@@ -266,6 +271,8 @@ def _user_admin_out(db: Session, account: AppAccount) -> dict:
         "createdAt": getattr(account, "CreatedAt", None),
         "isSelfRegistered": getattr(account, "PatientSource", None) == DEFAULT_PATIENT_SOURCE,
     }
+    if active_role in ("Counselor", "Patient"):
+        out["staffRemark"] = staff_remark
     if access_revoked_at or _is_staff_revoked(db, account):
         out.update(_last_revoke_meta(db, account.Id, access_revoked_at))
     return out
@@ -465,7 +472,18 @@ def list_admin_users(
         .limit(page_size)
         .all()
     )
-    items = [_user_admin_out(db, u) for u in accounts]
+    remarkable_ids = [
+        u.Id for u in accounts if get_account_role(db, u.Id) in ("Counselor", "Patient")
+    ]
+    remarks_map = get_staff_remarks_map(db, remarkable_ids)
+    items = [
+        _user_admin_out(
+            db,
+            u,
+            staff_remark=remarks_map.get(u.Id, ""),
+        )
+        for u in accounts
+    ]
 
     if page == 1:
         legacy_items = list_legacy_unlinked_doctors(db, kw or None)
@@ -1030,6 +1048,44 @@ def _admin_consultation_bucket(
     return "other"
 
 
+def _assert_staff_remark_target(db: Session, account_id: int) -> None:
+    """仅咨询师或来访者（含来访管理中的账号）可设置工作人员备注。"""
+    role = get_account_role(db, account_id)
+    if role in ("Counselor", "Patient"):
+        return
+    if account_id in _admin_visitor_patient_ids(db):
+        return
+    if account_id in _admin_counselor_ids(db):
+        return
+    raise HTTPException(status_code=400, detail="仅咨询师或来访者可添加备注")
+
+
+class StaffRemarkUpdatePayload(BaseModel):
+    remark: str = Field(default="", max_length=2000)
+
+
+@router.put(
+    "/accounts/{account_id}/staff-remark",
+    summary="保存咨询师/来访者工作人员备注（仅管理工作台可见）",
+)
+def update_staff_account_remark(
+    account_id: int,
+    body: StaffRemarkUpdatePayload,
+    admin: AppAccount = Depends(require_staff_workbench),
+    db: Session = Depends(get_db),
+):
+    account = db.query(AppAccount).filter(AppAccount.Id == account_id).first()
+    if not account:
+        raise HTTPException(status_code=404, detail="账号不存在")
+    _assert_staff_remark_target(db, account_id)
+    try:
+        remark = set_staff_remark(db, account_id, body.remark, admin.Id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    db.commit()
+    return {"accountId": account_id, "staffRemark": remark}
+
+
 class AdminPatientSummaryOut(BaseModel):
     patientId: int
     name: str
@@ -1044,6 +1100,7 @@ class AdminPatientSummaryOut(BaseModel):
     completedCount: int = 0
     cancelledCount: int = 0
     lastConsultationTime: Optional[datetime] = None
+    staffRemark: str = ""
 
 
 class AdminPatientConsultationOut(BaseModel):
@@ -1092,6 +1149,7 @@ class AdminPatientDetailOut(BaseModel):
     completedCount: int = 0
     cancelledCount: int = 0
     feedbackCount: int = 0
+    staffRemark: str = ""
     consultations: List[AdminPatientConsultationOut] = []
     feedbacks: List[AdminConsultationFeedbackOut] = []
 
@@ -1538,6 +1596,8 @@ def list_admin_patients(
         for s in db.query(AppSchedule).filter(AppSchedule.Id.in_(schedule_ids)).all()
     } if schedule_ids else {}
 
+    remarks_map = get_staff_remarks_map(db, account_ids)
+
     result: List[AdminPatientSummaryOut] = []
     for acc in accounts:
         rows = cons_by_patient.get(acc.Id, [])
@@ -1558,6 +1618,7 @@ def list_admin_patients(
                 completedCount=completed,
                 cancelledCount=cancelled,
                 lastConsultationTime=last_time,
+                staffRemark=remarks_map.get(acc.Id, ""),
             )
         )
     result.sort(
@@ -1640,6 +1701,7 @@ def get_admin_patient_detail(
         completedCount=completed,
         cancelledCount=cancelled,
         feedbackCount=len(feedbacks_out),
+        staffRemark=get_staff_remark(db, patient_id),
         consultations=cons_out,
         feedbacks=feedbacks_out,
     )
@@ -1774,6 +1836,7 @@ class AdminCounselorSummaryOut(BaseModel):
     visitorCount: int = 0
     billingYuan: int = 600
     faceBillingYuan: int = 300
+    staffRemark: str = ""
 
 
 class AdminCounselorVisitorOut(BaseModel):
@@ -1843,6 +1906,7 @@ class AdminCounselorDetailOut(BaseModel):
     schedules: List[AdminCounselorScheduleOut] = []
     recordedConsultations: List[AdminCounselorConsultationBriefOut] = []
     unrecordedConsultations: List[AdminCounselorConsultationBriefOut] = []
+    staffRemark: str = ""
 
 
 class AdminCounselorUpdatePayload(BaseModel):
@@ -1974,6 +2038,8 @@ def list_admin_counselors(
     for s in schedules:
         schedules_by_counselor.setdefault(s.CounselorId, []).append(s)
 
+    remarks_map = get_staff_remarks_map(db, counselor_ids)
+
     result: List[AdminCounselorSummaryOut] = []
     for cid in counselor_ids:
         prof = profiles.get(cid)
@@ -2008,6 +2074,7 @@ def list_admin_counselors(
                 visitorCount=stats.visitorCount,
                 billingYuan=billing // 100,
                 faceBillingYuan=face_billing // 100,
+                staffRemark=remarks_map.get(cid, ""),
             )
         )
     result.sort(key=lambda x: x.name)
@@ -2133,6 +2200,7 @@ def get_admin_counselor_detail(
         schedules=schedule_out[:50],
         recordedConsultations=recorded_out[:30],
         unrecordedConsultations=unrecorded_out[:30],
+        staffRemark=get_staff_remark(db, counselor_id),
         **{k: v for k, v in base.items() if k != "counselorId"},
         counselorId=counselor_id,
     )

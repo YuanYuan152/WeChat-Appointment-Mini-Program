@@ -20,6 +20,7 @@ APP_ACCOUNT_COLUMNS = {
     "DeletedAt": "DATETIME NULL",
     "PasswordHash": "VARCHAR(255) NULL",
     "PreferenceTagsCompletedAt": "DATETIME NULL",
+    "CharityPricingNegotiatedAt": "DATETIME NULL",
 }
 
 APP_ORDER_COLUMNS = {

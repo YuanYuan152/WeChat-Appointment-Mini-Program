@@ -316,6 +316,15 @@ def push_proxy_order(
         raise ValueError("来访不存在")
     if not get_counselor_profile(db, counselor_id):
         raise ValueError("咨询师不存在")
+
+    from charity_milestone_service import assert_charity_patient_can_book_charity
+    from fastapi import HTTPException
+
+    try:
+        assert_charity_patient_can_book_charity(db, patient_id, counselor_id)
+    except HTTPException as exc:
+        raise ValueError(str(exc.detail)) from exc
+
     if not center_id or center_id not in CENTER_NAMES:
         raise ValueError("必须选择预约中心")
     if end_time <= start_time:

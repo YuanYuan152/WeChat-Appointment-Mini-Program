@@ -199,9 +199,15 @@
           
           <view class="doc-card-bottom">
             <view class="doc-price-box">
-              <text class="price-symbol">￥</text>
-              <text class="price-num">{{ doctor.price || 500 }}</text>
-              <text class="price-unit">/50分钟</text>
+              <template v-if="doctor.priceNegotiation">
+                <text class="price-num">议价</text>
+                <text class="price-unit">/50分钟</text>
+              </template>
+              <template v-else>
+                <text class="price-symbol">￥</text>
+                <text class="price-num">{{ doctor.price || 500 }}</text>
+                <text class="price-unit">/50分钟</text>
+              </template>
             </view>
             <view class="doc-card-actions">
               <button class="assistant-btn" @click.stop="openAssistantContact">联系助理</button>
@@ -255,6 +261,8 @@ interface Consultant extends Omit<Doctor, 'province'> {
   province?: string
   description?: string
   price?: number
+  priceNegotiation?: boolean
+  billingLabel?: string
   _source?: string
 }
 

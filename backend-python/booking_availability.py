@@ -72,12 +72,13 @@ def schedules_to_booking_time_slots(
     schedules: List[AppSchedule],
     *,
     billing_cents: int = 0,
+    price_negotiation: bool = False,
 ) -> Tuple[List[dict], Set[str]]:
     """
     将 AppSchedule 转为预约页 timeSlots。
     必须使用与工作台相同的 resolve_schedule_display 判定状态。
     """
-    price = float(billing_cents or 0) / 100
+    price = None if price_negotiation else float(billing_cents or 0) / 100
     schedule_ids = [s.Id for s in schedules]
     cons_map = _consultations_by_schedule(db, schedule_ids)
     pending_map = pending_proxy_orders_for_schedules(db, schedule_ids)
@@ -119,6 +120,8 @@ def schedules_to_booking_time_slots(
             "endHH": s.EndTime.strftime("%H:%M"),
             "week": f"周{'一二三四五六日'[s.StartTime.weekday()]}",
             "Price": price,
+            "priceNegotiation": price_negotiation,
+            "priceLabel": "议价" if price_negotiation else None,
             "maxSign": 1,
             "numSign": 0 if is_bookable else 1,
             "status": slot_status,
@@ -136,7 +139,13 @@ def counselor_booking_time_slots(
     counselor_id: int,
     *,
     billing_cents: int = 0,
+    price_negotiation: bool = False,
 ) -> Tuple[List[dict], Set[str]]:
     """咨询师可预约时段：读 AppSchedule，规则与工作台排期展示一致。"""
     schedules = query_counselor_schedules_for_booking(db, counselor_id)
-    return schedules_to_booking_time_slots(db, schedules, billing_cents=billing_cents)
+    return schedules_to_booking_time_slots(
+        db,
+        schedules,
+        billing_cents=billing_cents,
+        price_negotiation=price_negotiation,
+    )

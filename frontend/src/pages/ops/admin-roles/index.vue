@@ -48,6 +48,12 @@
           <text v-if="u.isLegacyOnly" class="legacy-tag">旧系统 · 待绑定</text>
           <text v-else-if="u.activeRole || u.roles?.length" class="active-tag">当前：{{ currentRoleDisplayLabel(u) }}</text>
         </view>
+        <StaffRemarkEditor
+          v-if="showStaffRemark(u) && !u.isLegacyOnly"
+          :account-id="u.id"
+          :model-value="u.staffRemark || ''"
+          @saved="value => onStaffRemarkSaved(u.id, value)"
+        />
 
         <view v-if="u.isLegacyOnly" class="legacy-actions">
           <text class="legacy-tip">该咨询师仅在旧系统中，请通过手机号添加为系统用户后绑定角色。</text>
@@ -238,6 +244,7 @@ import {
   isCharityPatientSource,
 } from '@/constants/userRoleMeta'
 import { useUserStore } from '@/store/user'
+import StaffRemarkEditor from '@/components/StaffRemarkEditor.vue'
 
 interface AdminUser {
   id: number
@@ -256,6 +263,7 @@ interface AdminUser {
   isSelfRegistered?: boolean
   isLegacyOnly?: boolean
   legacyDoctorId?: number
+  staffRemark?: string
 }
 
 interface AdminUsersResponse {
@@ -441,6 +449,17 @@ const showPatientSourceMeta = (user: AdminUser) =>
 /** 仅当前角色为咨询师时展示类型 */
 const showCounselorTypeMeta = (user: AdminUser) =>
   userRole(user) === 'Counselor' && !!user.counselorTypeLabel
+
+/** 仅咨询师或来访展示工作人员备注 */
+const showStaffRemark = (user: AdminUser) => {
+  const role = userRole(user)
+  return role === 'Counselor' || role === 'Patient'
+}
+
+const onStaffRemarkSaved = (userId: number, value: string) => {
+  const user = users.value.find(u => u.id === userId)
+  if (user) user.staffRemark = value
+}
 
 const initSelectedFromUsers = () => {
   for (const u of users.value) {
@@ -971,6 +990,8 @@ onShow(() => load(true))
 
   color: #2C2C2C;
 
+  margin-bottom: 4rpx;
+
 }
 
 
@@ -1193,8 +1214,6 @@ onShow(() => load(true))
   flex: 1;
 
 }
-
-
 
 .footer-tip {
 

@@ -80,6 +80,63 @@
         </view>
       </view>
 
+      <view v-else-if="isPatientCharityNegotiationTip" class="detail-body">
+        <view class="tip-box pending">
+          <text class="tip-text">{{ detail.messageText || detail.tip || payload.summary }}</text>
+        </view>
+      </view>
+
+      <view v-else-if="isProfessionalPairMilestone" class="detail-body">
+        <view class="tip-box pending">
+          <text class="tip-text">{{ detail.messageText || payload.summary }}</text>
+        </view>
+        <view v-if="detail.counselorName" class="detail-row">
+          <text class="label">咨询师</text>
+          <text class="value">{{ detail.counselorName }}</text>
+        </view>
+        <view v-if="detail.counselorPhone" class="detail-row">
+          <text class="label">咨询师电话</text>
+          <text class="value">{{ detail.counselorPhone }}</text>
+        </view>
+        <view class="detail-row">
+          <text class="label">咨询师备注</text>
+          <text class="value multiline">{{ detail.counselorStaffRemark || '暂无备注' }}</text>
+        </view>
+        <view v-if="detail.patientName" class="detail-row">
+          <text class="label">来访者</text>
+          <text class="value">{{ detail.patientName }}</text>
+        </view>
+        <view v-if="detail.patientPhone" class="detail-row">
+          <text class="label">来访电话</text>
+          <text class="value">{{ detail.patientPhone }}</text>
+        </view>
+      </view>
+
+      <view v-else-if="isCharityMilestone" class="detail-body">
+        <view class="tip-box pending">
+          <text class="tip-text">{{ detail.messageText || payload.summary }}</text>
+        </view>
+        <view v-if="detail.patientName" class="detail-row">
+          <text class="label">来访者</text>
+          <text class="value">{{ detail.patientName }}</text>
+        </view>
+        <view v-if="detail.patientPhone" class="detail-row">
+          <text class="label">来访电话</text>
+          <text class="value">{{ detail.patientPhone }}</text>
+        </view>
+        <view class="detail-row">
+          <text class="label">最近三次公益咨询咨询师</text>
+          <view class="value multiline">
+            <text
+              v-for="(item, idx) in recentCounselorList"
+              :key="idx"
+              class="counselor-line"
+            >{{ item.name || '咨询师' }}（{{ item.phone || '未填写' }}）</text>
+            <text v-if="!recentCounselorList.length" class="counselor-line">暂无记录</text>
+          </view>
+        </view>
+      </view>
+
       <view v-else-if="isExemptionPending" class="detail-body">
         <view class="tip-box pending">
           <text class="tip-text">{{ exemptionPendingTip }}</text>
@@ -312,6 +369,12 @@ import { API_ENDPOINTS } from '@/config/api'
 import { COUNSELOR_MESSAGE_TYPES, PATIENT_MESSAGE_TYPES, CASE_RECORD_AMENDMENT_REVIEW_PATH, caseRecordCrisisReportViewPath, isCaseRecordAmendmentPendingMessage, isExemptionPendingMessage, messageDisplayTitle, parseMessageContent, type MessageItem } from '@/utils/message'
 import { RISK_ASSESSMENT_ITEMS } from '@/constants/caseRecordRiskAssessment'
 
+interface RecentCounselorContact {
+  name?: string
+  phone?: string
+  counselorId?: number
+}
+
 interface AffectedAppointment {
   patientName?: string
   patientPhone?: string
@@ -341,6 +404,20 @@ const isCaseRecordAmendmentPending = computed(() => {
   return isCaseRecordAmendmentPendingMessage(message.value)
 })
 const isCaseRecordCrisisReport = computed(() => relatedType.value === 'CASE_RECORD_CRISIS_REPORT')
+const isProfessionalPairMilestone = computed(() =>
+  relatedType.value === 'PROFESSIONAL_PAIR_CONSULTATION_30_BOOKING',
+)
+const isCharityMilestone = computed(() =>
+  relatedType.value === 'CHARITY_CONSULTATION_30_BOOKING'
+  || relatedType.value === 'CHARITY_CONSULTATION_30_DONE',
+)
+const isPatientCharityNegotiationTip = computed(() =>
+  relatedType.value === 'PATIENT_CHARITY_NEGOTIATION_TIP',
+)
+const recentCounselorList = computed(() => {
+  const list = detail.value.recentCounselors
+  return Array.isArray(list) ? (list as RecentCounselorContact[]) : []
+})
 const crisisLevelText = computed(() => {
   const choice = detail.value.crisisLevel as string | undefined
   const crisisItem = RISK_ASSESSMENT_ITEMS.find(i => i.id === 'crisis_level')
@@ -537,6 +614,11 @@ onLoad((options) => {
 
 .value.multiline {
   white-space: pre-wrap;
+}
+
+.counselor-line {
+  display: block;
+  margin-bottom: 8rpx;
 }
 
 .value.highlight {

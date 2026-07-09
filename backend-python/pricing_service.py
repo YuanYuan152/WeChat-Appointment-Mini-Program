@@ -464,6 +464,12 @@ def upsert_patient_pricing(
     row.RevenueShareCents = revenue_share_cents if share_mode == SHARE_MODE_AMOUNT else None
     row.RevenueSharePercent = revenue_share_percent if share_mode == SHARE_MODE_PERCENT else None
     db.flush()
+
+    from charity_milestone_service import is_charity_counselor, is_charity_patient, mark_charity_pricing_negotiated
+
+    if is_charity_patient(db, patient_account_id) and is_charity_counselor(db, counselor_account_id):
+        mark_charity_pricing_negotiated(db, patient_account_id)
+
     return row
 
 

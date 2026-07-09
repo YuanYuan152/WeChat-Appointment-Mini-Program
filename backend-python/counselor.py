@@ -1265,32 +1265,35 @@ def update_consultation(
     if not consultation:
         raise HTTPException(status_code=404, detail="咨询单不存在")
 
-    consultation.Status = body.status
+    schedule = None
+    if consultation.ScheduleId:
+        schedule = db.query(AppSchedule).filter(AppSchedule.Id == consultation.ScheduleId).first()
+
     if body.note is not None:
         consultation.Note = body.note
-    if body.status == "ONGOING" and not consultation.StartTime:
-        consultation.StartTime = datetime.utcnow()
-    if body.status == "DONE" and not consultation.EndTime:
-        consultation.EndTime = datetime.utcnow()
 
-    if body.status == "CANCELLED" and consultation.ScheduleId:
-        schedule = db.query(AppSchedule).filter(AppSchedule.Id == consultation.ScheduleId).first()
+    if body.status == "ONGOING":
+        if not consultation.StartTime:
+            consultation.StartTime = datetime.utcnow()
+        consultation.Status = body.status
+    elif body.status == "DONE":
+        from consultation_status_service import cancel_consultation_auto_done_tasks, mark_consultation_done
+        from counselor_message_service import notify_counselor_consultation_done
+
+        cancel_consultation_auto_done_tasks(db, consultation.Id)
+        mark_consultation_done(db, consultation, schedule)
+        notify_counselor_consultation_done(db, consultation)
+    elif body.status == "CANCELLED":
         if schedule and schedule.Status == "BOOKED":
             schedule.Note = release_assigned_room(schedule.Note)
             schedule.Status = "AVAILABLE"
             schedule.UpdatedAt = datetime.utcnow()
-
-    if body.status == "DONE":
-        from counselor_message_service import notify_counselor_consultation_done
         from consultation_status_service import cancel_consultation_auto_done_tasks
 
         cancel_consultation_auto_done_tasks(db, consultation.Id)
-        notify_counselor_consultation_done(db, consultation)
-
-    if body.status == "CANCELLED":
-        from consultation_status_service import cancel_consultation_auto_done_tasks
-
-        cancel_consultation_auto_done_tasks(db, consultation.Id)
+        consultation.Status = body.status
+    else:
+        consultation.Status = body.status
 
     consultation.UpdatedAt = datetime.utcnow()
     db.commit()

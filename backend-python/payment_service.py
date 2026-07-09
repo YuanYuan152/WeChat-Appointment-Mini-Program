@@ -78,6 +78,10 @@ def complete_paid_order(
         schedule_consultation_auto_done(db, existing, schedule)
         notify_patient_appointment_success(db, existing)
         schedule_patient_consultation_reminder(db, existing)
+        from charity_milestone_service import maybe_notify_charity_30th_booking
+        maybe_notify_charity_30th_booking(db, existing)
+        from professional_pair_milestone_service import maybe_notify_professional_pair_30th_booking
+        maybe_notify_professional_pair_30th_booking(db, existing)
         return
 
     consultation = AppConsultation(
@@ -111,3 +115,7 @@ def complete_paid_order(
     schedule_consultation_auto_done(db, consultation, schedule)
     notify_patient_appointment_success(db, consultation)
     schedule_patient_consultation_reminder(db, consultation)
+    from charity_milestone_service import maybe_notify_charity_30th_booking
+    maybe_notify_charity_30th_booking(db, consultation)
+    from professional_pair_milestone_service import maybe_notify_professional_pair_30th_booking
+    maybe_notify_professional_pair_30th_booking(db, consultation)

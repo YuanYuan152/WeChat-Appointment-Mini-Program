@@ -26,6 +26,8 @@ DEV_MOCK_CODE_OPENIDS = {
     "dev_patient_xiaomei": "demo-openid-patient-xiaomei",
     "dev_patient_xiaogang": "demo-openid-patient-xiaogang",
     "dev_patient_xiaoli": "demo-openid-patient-xiaoli",
+    "dev_patient_charity_test": "demo-openid-patient-charity-test",
+    "dev_patient_professional_milestone_test": "demo-openid-patient-professional-milestone-test",
     # 与 seed_demo_data.py 三位咨询师账号对齐
     "dev_counselor": "demo-counselor-lixinyi",
     "dev_counselor_lixinyi": "demo-counselor-lixinyi",
@@ -42,6 +44,8 @@ DEV_MOCK_CODE_ACTIVE_ROLES = {
     "dev_patient_xiaomei": "Patient",
     "dev_patient_xiaogang": "Patient",
     "dev_patient_xiaoli": "Patient",
+    "dev_patient_charity_test": "Patient",
+    "dev_patient_professional_milestone_test": "Patient",
     "dev_counselor": "Counselor",
     "dev_counselor_lixinyi": "Counselor",
     "dev_counselor_zhangmingyuan": "Counselor",

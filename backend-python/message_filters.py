@@ -5,7 +5,6 @@ from sqlalchemy import false, or_
 from sqlalchemy.orm import Query, Session
 
 from models import AppMessage
-from staff_roles import STAFF_WORKBENCH_ROLES, account_has_staff_workbench
 
 ADMIN_OPS_INBOX_RELATED_TYPES: Tuple[str, ...] = (
     "REFUND_EXEMPTION",
@@ -14,6 +13,9 @@ ADMIN_OPS_INBOX_RELATED_TYPES: Tuple[str, ...] = (
     "CASE_RECORD_AMENDMENT",
     "CASE_RECORD_AMENDMENT_PENDING",
     "CASE_RECORD_CRISIS_REPORT",
+    "CHARITY_CONSULTATION_30_BOOKING",
+    "CHARITY_CONSULTATION_30_DONE",
+    "PROFESSIONAL_PAIR_CONSULTATION_30_BOOKING",
 )
 
 ADMIN_OPS_INBOX_CATEGORIES: Tuple[str, ...] = (
@@ -21,10 +23,12 @@ ADMIN_OPS_INBOX_CATEGORIES: Tuple[str, ...] = (
     "counselor_leave",
     "case_record_amendment",
     "case_record_crisis",
+    "charity_milestone",
+    "professional_pair_milestone",
 )
 
 CATEGORY_RELATED_TYPES: dict[str, list[str]] = {
-    "appointment_new": ["APPOINTMENT_NEW", "COUNSELOR_APPOINTMENT_NEW"],
+    "appointment_new": ["APPOINTMENT_NEW", "COUNSELOR_APPOINTMENT_NEW", "CHARITY_CONSULTATION_30_BOOKING"],
     "appointment_cancel": ["APPOINTMENT_CANCEL", "COUNSELOR_APPOINTMENT_CANCEL", "PATIENT_APPOINTMENT_CANCEL"],
     "counselor_leave": ["COUNSELOR_LEAVE"],
     "leave_submitted": ["COUNSELOR_LEAVE_SUBMITTED", "COUNSELOR_LEAVE_SUCCESS"],
@@ -35,7 +39,10 @@ CATEGORY_RELATED_TYPES: dict[str, list[str]] = {
     "appointment_success": ["PATIENT_APPOINTMENT_SUCCESS"],
     "appointment_remind": ["PATIENT_APPOINTMENT_REMIND", "COUNSELOR_CONSULTATION_REMIND"],
     "consultation_done": ["COUNSELOR_CONSULTATION_DONE"],
+    "charity_milestone": ["CHARITY_CONSULTATION_30_BOOKING", "CHARITY_CONSULTATION_30_DONE"],
+    "professional_pair_milestone": ["PROFESSIONAL_PAIR_CONSULTATION_30_BOOKING"],
     "leave_notice": ["PATIENT_LEAVE_APPROVED"],
+    "charity_negotiation": ["PATIENT_CHARITY_NEGOTIATION_TIP"],
 }
 
 CATEGORY_KEYWORDS: dict[str, list[str]] = {
@@ -50,6 +57,9 @@ CATEGORY_KEYWORDS: dict[str, list[str]] = {
     "appointment_success": ["预约成功"],
     "appointment_remind": ["咨询即将开始", "30分钟后"],
     "consultation_done": ["咨询已完成", "请尽快填写咨询记录"],
+    "charity_milestone": ["公益咨询第30次", "第三十次公益咨询", "30次公益咨询"],
+    "professional_pair_milestone": ["正价咨询第30次", "第三十次预约", "调整抽成比例"],
+    "charity_negotiation": ["公益咨询议价", "议价后方可再次预约"],
     "leave_notice": ["咨询师请假，预约已取消"],
 }
 
@@ -102,7 +112,8 @@ def apply_message_search(q: Query, keyword: Optional[str]) -> Query:
 
 
 def is_admin_ops_inbox_role(active_role: Optional[str]) -> bool:
-    return active_role in STAFF_WORKBENCH_ROLES
+    """仅咨询主任/管理员使用受限收件箱；咨询助理可见全部投递给自己的消息。"""
+    return active_role in ("Ops", "Admin")
 
 
 def account_has_admin_ops_inbox(
@@ -110,7 +121,10 @@ def account_has_admin_ops_inbox(
     account_id: int,
     active_role: Optional[str] = None,
 ) -> bool:
-    return account_has_staff_workbench(db, account_id, active_role)
+    from role_active import get_account_role
+
+    role = active_role or get_account_role(db, account_id)
+    return role in ("Ops", "Admin")
 
 
 def apply_admin_ops_inbox_scope(

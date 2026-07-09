@@ -34,6 +34,7 @@ class AppAccount(Base):
     PasswordHash = Column(String(255), nullable=True)
     PreferenceTagsCompletedAt = Column(DateTime, nullable=True)
     PatientSource = Column(String(50), nullable=True)
+    CharityPricingNegotiatedAt = Column(DateTime, nullable=True)
     AccessRevokedAt = Column(DateTime, nullable=True)
     IsActive = Column(Boolean, nullable=False, default=True, server_default="1")
     DeletedAt = Column(DateTime, nullable=True)
@@ -554,6 +555,21 @@ class AppUserPreferenceTag(Base):
     Category = Column(String(20), nullable=False)  # personal | interest
     Tag = Column(Unicode(50), nullable=False)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
+
+
+class AppStaffAccountRemark(Base):
+    """工作人员对咨询师/来访者的内部备注（仅咨询助理/主任/管理员可见）。"""
+    __tablename__ = "AppStaffAccountRemark"
+    __table_args__ = (
+        UniqueConstraint("AccountId", name="UQ_AppStaffAccountRemark_Account"),
+    )
+
+    Id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    AccountId = Column(Integer, nullable=False, index=True)
+    Remark = Column(UnicodeText, nullable=True)
+    UpdatedByAccountId = Column(Integer, nullable=True)
+    CreatedAt = Column(DateTime, default=func.now(), nullable=False)
+    UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
 
 
 class AppCounselorPatientPricing(Base):

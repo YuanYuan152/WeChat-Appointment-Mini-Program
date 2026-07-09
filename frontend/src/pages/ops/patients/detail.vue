@@ -8,6 +8,10 @@
           <text class="profile-name">{{ detail.name }}</text>
           <text v-if="detail.typeLabel" class="type-badge">{{ detail.typeLabel }}</text>
         </view>
+        <StaffRemarkEditor
+          :account-id="patientIdRef"
+          v-model="staffRemark"
+        />
         <view class="info-row">
           <text class="label">手机号</text>
           <text class="value">{{ detail.mobile || '未填写' }}</text>
@@ -113,6 +117,7 @@ import { onLoad } from '@dcloudio/uni-app'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
 import ConsultationFeedbackDisplay from '@/components/ConsultationFeedbackDisplay.vue'
+import StaffRemarkEditor from '@/components/StaffRemarkEditor.vue'
 
 interface ConsultationItem {
   consultationId: number
@@ -152,6 +157,7 @@ interface PatientDetail {
   feedbackCount: number
   consultations: ConsultationItem[]
   feedbacks: FeedbackItem[]
+  staffRemark?: string
 }
 
 const tabs = [
@@ -165,6 +171,7 @@ const tabs = [
 const loading = ref(true)
 const detail = ref<PatientDetail | null>(null)
 const patientIdRef = ref(0)
+const staffRemark = ref('')
 const activeTab = ref('ALL')
 const showFeedbackModal = ref(false)
 const feedbackDetail = ref<FeedbackItem | null>(null)
@@ -217,7 +224,10 @@ onLoad(async (opts) => {
   if (opts?.tab === 'feedback') activeTab.value = 'feedback'
   try {
     const res = await httpV2.get<PatientDetail>(API_ENDPOINTS.admin.patientDetail(patientId))
-    if (res.code === 0 && res.data) detail.value = res.data
+    if (res.code === 0 && res.data) {
+      detail.value = res.data
+      staffRemark.value = res.data.staffRemark || ''
+    }
   } finally {
     loading.value = false
   }
@@ -239,7 +249,7 @@ onLoad(async (opts) => {
   align-items: center;
   flex-wrap: wrap;
   gap: 12rpx;
-  margin-bottom: 20rpx;
+  margin-bottom: 8rpx;
 }
 .profile-name { font-size: 34rpx; font-weight: 600; color: #2C2C2C; }
 .type-badge {

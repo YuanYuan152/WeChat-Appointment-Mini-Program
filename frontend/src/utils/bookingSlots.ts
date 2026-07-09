@@ -6,7 +6,9 @@ export interface BookingTimeSlot {
   startHH: string
   endHH: string
   week: string
-  Price: number
+  Price: number | null
+  priceNegotiation?: boolean
+  priceLabel?: string
   maxSign: number
   numSign: number
   /** 所属预约中心，来自 API / 咨询师排班 */
@@ -38,7 +40,9 @@ export function normalizeBookingTimeSlots(raw: any[] = []): BookingTimeSlot[] {
         startHH: slot.startHH || '',
         endHH: slot.endHH || '',
         week: slot.week || '',
-        Price: Number(slot.Price ?? slot.price ?? 0),
+        Price: slot.Price == null ? null : Number(slot.Price ?? slot.price ?? 0),
+        priceNegotiation: !!(slot.priceNegotiation),
+        priceLabel: slot.priceLabel || '',
         maxSign: Number(slot.maxSign ?? 1),
         numSign: Number(slot.numSign ?? 0),
         centerId: String(centerId),

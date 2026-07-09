@@ -499,3 +499,43 @@ def notify_patient_proxy_order_pending(
         related_type="PATIENT_PROXY_ORDER_PENDING",
         related_id=order.Id,
     )
+
+
+def notify_patient_charity_negotiation_tip(
+    db: Session,
+    patient_id: int,
+    consultation_id: int,
+) -> None:
+    """公益来访支付第 30 次公益咨询预约后，提示议价。"""
+    from charity_milestone_service import (
+        PATIENT_NEGOTIATION_TIP_TEXT,
+        RELATED_TYPE_PATIENT_NEGOTIATION_TIP,
+    )
+
+    existing = (
+        db.query(AppMessage)
+        .filter(
+            AppMessage.AccountId == patient_id,
+            AppMessage.RelatedType == RELATED_TYPE_PATIENT_NEGOTIATION_TIP,
+            AppMessage.RelatedId == patient_id,
+        )
+        .first()
+    )
+    if existing:
+        return
+
+    detail = {
+        "patientId": patient_id,
+        "consultationId": consultation_id,
+        "messageText": PATIENT_NEGOTIATION_TIP_TEXT,
+        "tip": PATIENT_NEGOTIATION_TIP_TEXT,
+    }
+    _notify_patient(
+        db,
+        patient_id,
+        type_="SYSTEM",
+        title="公益咨询议价提示",
+        content=_message_payload(PATIENT_NEGOTIATION_TIP_TEXT, detail),
+        related_type=RELATED_TYPE_PATIENT_NEGOTIATION_TIP,
+        related_id=patient_id,
+    )

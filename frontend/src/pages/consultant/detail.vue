@@ -39,7 +39,10 @@
           <view class="hero-info">
             <view class="hero-name-row">
               <text class="hero-name">{{ doctor.name }}</text>
-              <text class="hero-price">￥{{ doctor.price }}<text class="hero-price-unit">/次</text></text>
+              <text class="hero-price">
+                <template v-if="doctor.priceNegotiation">议价<text class="hero-price-unit">/次</text></template>
+                <template v-else>￥{{ doctor.price }}<text class="hero-price-unit">/次</text></template>
+              </text>
             </view>
             <view class="hero-tags">
               <text class="hero-tag secondary">从业{{ doctor.workYears }}年</text>
@@ -163,7 +166,7 @@
                   <text class="tc-time">{{ slot.startHH }}-{{ slot.endHH }}</text>
                 </view>
                 <view class="time-card-bot">
-                  <text class="tc-price">￥{{ slot.Price }}</text>
+                  <text class="tc-price">{{ slotPriceLabel(slot) }}</text>
                   <view v-if="isSlotBookable(slot)" class="tc-radio">
                     <view class="tc-radio-inner" v-if="selectedSlotId === slot.ID"></view>
                   </view>
@@ -198,7 +201,7 @@
           :class="{ disabled: !canProceedBooking }"
           :disabled="!canProceedBooking"
           @click="makeAppointment"
-        >{{ canProceedBooking ? `立即预约 ￥${selectedSlot?.Price || doctor.price}` : '立即预约' }}</button>
+        >{{ bookingButtonLabel }}</button>
       </view>
     </view>
 
@@ -305,8 +308,13 @@
         </view>
         <view class="modal-body">
           <view class="pay-amount-box">
-            <text class="pay-currency">￥</text>
-            <text class="pay-amount">{{ selectedSlot?.Price || 0 }}</text>
+            <template v-if="doctor.priceNegotiation">
+              <text class="pay-amount">议价</text>
+            </template>
+            <template v-else>
+              <text class="pay-currency">￥</text>
+              <text class="pay-amount">{{ selectedSlot?.Price || 0 }}</text>
+            </template>
           </view>
           
           <view class="pay-details">
@@ -386,6 +394,8 @@ interface Doctor {
   specialty: string
   experience: number
   price: number
+  priceNegotiation?: boolean
+  charityBookingBlocked?: boolean
   avatar: string
   description: string
   profile: string
@@ -480,6 +490,8 @@ const isTimeModuleDisabled = computed(() => {
 
 const canProceedBooking = computed(() =>
   Boolean(
+    !doctor.value.charityBookingBlocked &&
+    !doctor.value.priceNegotiation &&
     selectedCenterId.value &&
     selectedSlotId.value !== -1 &&
     selectedSlot.value &&
@@ -488,12 +500,36 @@ const canProceedBooking = computed(() =>
   )
 )
 
+const slotPriceLabel = (slot: BookingTimeSlot) => {
+  if (slot.priceNegotiation || slot.priceLabel === '议价') return '议价'
+  return `￥${slot.Price ?? 0}`
+}
+
+const bookingButtonLabel = computed(() => {
+  if (doctor.value.charityBookingBlocked || doctor.value.priceNegotiation) {
+    return '议价后方可预约'
+  }
+  if (canProceedBooking.value) {
+    const price = selectedSlot.value?.Price ?? doctor.value.price
+    return `立即预约 ￥${price}`
+  }
+  return '立即预约'
+})
+
 const applyBookingData = (data: {
   timeSlots?: any[]
   availableCenterIds?: string[]
   hasAvailableTime?: boolean
+  charityBookingBlocked?: boolean
+  priceNegotiation?: boolean
 }) => {
   timeSlots.value = normalizeBookingTimeSlots(data.timeSlots || [])
+  if (data.priceNegotiation != null) {
+    doctor.value.priceNegotiation = !!data.priceNegotiation
+  }
+  if (data.charityBookingBlocked != null) {
+    doctor.value.charityBookingBlocked = !!data.charityBookingBlocked
+  }
   counselorCenterIds.value =
     data.availableCenterIds?.length
       ? data.availableCenterIds
@@ -559,6 +595,8 @@ const mapDoctorDetail = (item: any): Doctor => ({
   specialty: item.specialty || item.field || '心理咨询',
   experience: Number(item.workYears || 0),
   price: Math.round(Number(item.billing || 0) / 100) || item.price || 500,
+  priceNegotiation: !!(item.priceNegotiation),
+  charityBookingBlocked: !!(item.charityBookingBlocked),
   avatar: item.avatarUrl || item.avatar || '',
   description: item.introduce || item.description || '暂无介绍',
   profile: item.profile || item.introduce || '暂无简介',
@@ -817,6 +855,10 @@ const closeAssistantContact = () => {
 
 // 预约：须先选预约中心 → 可约时间 →（首次）协议 → 支付成功
 const makeAppointment = async () => {
+  if (doctor.value.charityBookingBlocked || doctor.value.priceNegotiation) {
+    uni.showToast({ title: '请与咨询师议价后再预约', icon: 'none' })
+    return
+  }
   if (!selectedCenterId.value) {
     uni.showToast({ title: '请选择预约中心', icon: 'none' })
     return

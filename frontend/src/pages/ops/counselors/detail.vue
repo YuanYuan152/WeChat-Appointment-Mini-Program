@@ -15,6 +15,10 @@
             <text class="profile-name">{{ detail.name }}</text>
             <text v-if="detail.typeLabel" class="type-badge">{{ detail.typeLabel }}</text>
           </view>
+          <StaffRemarkEditor
+            :account-id="counselorId"
+            v-model="staffRemark"
+          />
           <text v-if="detail.title" class="profile-title">{{ detail.title }}</text>
         </view>
       </view>
@@ -201,6 +205,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
+import StaffRemarkEditor from '@/components/StaffRemarkEditor.vue'
 
 const modeOptions = ['线上', '线下', '线上/线下']
 
@@ -246,11 +251,13 @@ interface CounselorDetail {
   schedules: Array<{ scheduleId: number; startTime?: string; endTime?: string; statusLabel: string; patientName?: string; location?: string }>
   recordedConsultations: Array<{ consultationId: number; patientName: string; startTime?: string; statusLabel: string }>
   unrecordedConsultations: Array<{ consultationId: number; patientName: string; startTime?: string; statusLabel: string }>
+  staffRemark?: string
 }
 
 const loading = ref(true)
 const saving = ref(false)
 const counselorId = ref(0)
+const staffRemark = ref('')
 const detail = ref<CounselorDetail | null>(null)
 const activeTab = ref<TabValue>('ALL')
 const expandedSections = ref<Set<SectionKey>>(new Set(ALL_SECTION_KEYS))
@@ -317,6 +324,7 @@ const load = async () => {
     )
     if (res.code === 0 && res.data) {
       detail.value = res.data
+      staffRemark.value = res.data.staffRemark || ''
       applyForm(res.data)
     }
   } finally {
@@ -337,6 +345,7 @@ const save = async () => {
       if (res.data) {
         const data = res.data as CounselorDetail
         detail.value = data
+        staffRemark.value = data.staffRemark || staffRemark.value
         applyForm(data)
       }
     } else {

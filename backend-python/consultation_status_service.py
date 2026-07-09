@@ -58,6 +58,11 @@ def mark_consultation_done(
         consultation.EndTime = end_time or china_now()
     consultation.UpdatedAt = datetime.utcnow()
     cancel_consultation_auto_done_tasks(db, consultation.Id)
+    db.flush()
+
+    from charity_milestone_service import maybe_notify_charity_30th_completion
+    maybe_notify_charity_30th_completion(db, consultation)
+
     return True
 
 

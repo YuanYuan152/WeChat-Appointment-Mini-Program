@@ -19,6 +19,7 @@ from config import settings
 from auth import get_optional_account
 from models import AppAccount, AppBanner, AppActivity, AppArticle, AppCounselorProfile
 from booking_availability import counselor_booking_time_slots
+from charity_milestone_service import should_show_negotiation_price
 from pricing_service import (
     get_counselor_profile,
     resolve_default_display_price_cents,
@@ -230,9 +231,14 @@ def _legacy_doctor_to_dict(row: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _counselor_profile_dict(r: AppCounselorProfile, billing_cents: Optional[int] = None) -> Dict[str, Any]:
+def _counselor_profile_dict(
+    r: AppCounselorProfile,
+    billing_cents: Optional[int] = None,
+    *,
+    price_negotiation: bool = False,
+) -> Dict[str, Any]:
     billing = float(billing_cents if billing_cents is not None else (r.Billing or 0))
-    return {
+    item: Dict[str, Any] = {
         "id": int(r.AccountId or r.Id or 0),
         "name": r.Name,
         "avatarUrl": r.AvatarUrl,
@@ -246,6 +252,10 @@ def _counselor_profile_dict(r: AppCounselorProfile, billing_cents: Optional[int]
         "province": "线下/线上",
         "_source": "AppCounselorProfile",
     }
+    if price_negotiation:
+        item["priceNegotiation"] = True
+        item["billingLabel"] = "议价"
+    return item
 
 
 def _resolve_counselor_billing_cents(
@@ -317,7 +327,11 @@ def _query_counselor_profiles(
                 continue
             seen_accounts.add(cid)
             billing_cents = _resolve_counselor_billing_cents(db, cid, patient_account)
-            result.append(_counselor_profile_dict(profile, billing_cents))
+            negotiation = bool(
+                patient_account
+                and should_show_negotiation_price(db, patient_account.Id, cid)
+            )
+            result.append(_counselor_profile_dict(profile, billing_cents, price_negotiation=negotiation))
         return result
     except Exception:
         return []
@@ -424,8 +438,16 @@ def common_counselor_detail(
         raise HTTPException(status_code=404, detail="咨询师不存在")
 
     billing_cents = _resolve_counselor_billing_cents(db, cid, current_account)
+    price_negotiation = bool(
+        current_account
+        and should_show_negotiation_price(db, current_account.Id, cid)
+    )
+    charity_booking_blocked = price_negotiation
     time_slots, center_ids = counselor_booking_time_slots(
-        db, cid, billing_cents=billing_cents,
+        db,
+        cid,
+        billing_cents=billing_cents,
+        price_negotiation=price_negotiation,
     )
     return {
         "id": cid,
@@ -436,6 +458,9 @@ def common_counselor_detail(
         "field": profile.Field or new_rows[0].get("Field"),
         "introduce": profile.Introduce or new_rows[0].get("Introduce"),
         "billing": float(billing_cents),
+        "priceNegotiation": price_negotiation,
+        "billingLabel": "议价" if price_negotiation else None,
+        "charityBookingBlocked": charity_booking_blocked,
         "faceBilling": float(int(new_rows[0].get("FaceBilling") or 30000)),
         "consultHours": int(new_rows[0].get("ConsultHours") or 0),
         "workYears": int(new_rows[0].get("WorkYears") or 0),
@@ -465,11 +490,21 @@ def common_counselor_time_slots(
     if not profile or not _counselor_visible_to_viewer(profile.CounselorType, current_account, db):
         raise HTTPException(status_code=404, detail="咨询师不存在或未开通排班")
     billing_cents = _resolve_counselor_billing_cents(db, cid, current_account)
+    price_negotiation = bool(
+        current_account
+        and should_show_negotiation_price(db, current_account.Id, cid)
+    )
     time_slots, center_ids = counselor_booking_time_slots(
-        db, cid, billing_cents=billing_cents,
+        db,
+        cid,
+        billing_cents=billing_cents,
+        price_negotiation=price_negotiation,
     )
     return {
         "counselorId": cid,
+        "priceNegotiation": price_negotiation,
+        "billingLabel": "议价" if price_negotiation else None,
+        "charityBookingBlocked": price_negotiation,
         "timeSlots": time_slots,
         "availableCenterIds": sorted(center_ids),
         "hasAvailableTime": any(t.get("isBookable") for t in time_slots),
