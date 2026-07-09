@@ -155,7 +155,7 @@ const CounselorBoardListSection = memo(function CounselorBoardListSection({
         <div>
           <h2 className="text-xl font-semibold tracking-normal">咨询师管理</h2>
           <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">
-            管理咨询师介绍页资料，并查看咨询记录、请假、排期和咨询室使用记录。
+            管理咨询师介绍页资料，并查看咨询单、记录填写、请假申请和排期情况。
           </p>
         </div>
 
@@ -175,6 +175,10 @@ const CounselorBoardListSection = memo(function CounselorBoardListSection({
           <QueryResetButton onClick={onReset} />
         </div>
       </form>
+      <div className="border-t border-[var(--lxxl-border)] bg-[#FCFBF8] px-6 py-3 text-xs leading-5 text-[var(--lxxl-muted)] sm:px-7 lg:px-8">
+        <span className="font-medium text-[var(--lxxl-text)]">统计口径：</span>
+        咨询单包含全部状态；取消咨询暂不区分取消方；记录待补仅统计已完成但尚无记录的咨询；请假申请包含全部审核状态；排期是咨询师创建的时间槽，与咨询单并非一一对应；已占用排期包含完成后仍保持占用状态的历史排期。
+      </div>
       <div className="relative">
         {listLoading && records && records.items.length > 0 && (
           <div className="absolute inset-x-0 top-0 z-10 border-t border-[var(--lxxl-border)] bg-white/80 px-5 py-3 text-sm text-[var(--lxxl-muted)] backdrop-blur-sm">
@@ -185,8 +189,8 @@ const CounselorBoardListSection = memo(function CounselorBoardListSection({
         <EmptyState text={listLoading ? "正在加载列表..." : "暂无咨询师数据。"} />
       ) : (
         <>
-          <div className="overflow-hidden">
-            <table className="w-full table-fixed border-collapse text-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1280px] table-fixed border-collapse text-sm">
               <colgroup>
                 <col className="w-[12%]" />
                 <col className="w-[12%]" />
@@ -202,12 +206,12 @@ const CounselorBoardListSection = memo(function CounselorBoardListSection({
                 <tr>
                   <th className="px-5 py-3 font-medium">咨询师</th>
                   <th className="px-5 py-3 font-medium">联系电话</th>
-                  <th className="px-5 py-3 font-medium">咨询</th>
-                  <th className="px-5 py-3 font-medium">来访取消</th>
-                  <th className="px-5 py-3 font-medium">咨询记录</th>
-                  <th className="px-5 py-3 font-medium">请假</th>
-                  <th className="px-5 py-3 font-medium">排期</th>
-                  <th className="px-5 py-3 font-medium">最近排期</th>
+                  <MetricTableHeader hint="总数 / 已完成" title="咨询单" />
+                  <MetricTableHeader hint="取消来源未区分" title="取消咨询" />
+                  <MetricTableHeader hint="已有 / 待补" title="记录完成情况" />
+                  <MetricTableHeader hint="全部申请状态" title="请假申请" />
+                  <MetricTableHeader hint="总排期 / 已占用" title="排期情况" />
+                  <MetricTableHeader hint="时间最大的一条" title="最晚排期时间" />
                   <th className="px-5 py-3 text-right font-medium">操作</th>
                 </tr>
               </thead>
@@ -228,26 +232,36 @@ const CounselorBoardListSection = memo(function CounselorBoardListSection({
                       </div>
                     </td>
                     <td className="px-5 py-4">
-                      <div className="font-semibold">{record.consultationCount}</div>
-                      <div className="mt-1 text-xs text-[var(--lxxl-muted)]">
-                        完成 {record.completedConsultationCount}
-                      </div>
+                      <RatioMetric
+                        part={record.completedConsultationCount}
+                        partLabel="已完成"
+                        total={record.consultationCount}
+                        totalLabel="总计"
+                      />
                     </td>
-                    <td className="px-5 py-4 font-semibold">{record.cancelledConsultationCount}</td>
                     <td className="px-5 py-4">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold">{record.caseRecordCount}</span>
+                      <SingleMetric hint="取消来源未区分" value={record.cancelledConsultationCount} />
+                    </td>
+                    <td className="px-5 py-4">
+                      <div className="space-y-2">
+                        <div className="text-xs text-[var(--lxxl-muted)]">
+                          已有 <span className="text-base font-semibold text-[var(--lxxl-text)]">{record.caseRecordCount}</span>
+                        </div>
                         <Badge tone={record.missingRecordCount > 0 ? "gold" : "green"}>
-                          待补记录 {record.missingRecordCount}
+                          待补 {record.missingRecordCount}
                         </Badge>
                       </div>
                     </td>
-                    <td className="px-5 py-4 font-semibold">{record.leaveRequestCount}</td>
                     <td className="px-5 py-4">
-                      <div className="font-semibold">{record.scheduleCount}</div>
-                      <div className="mt-1 text-xs text-[var(--lxxl-muted)]">
-                        已预约 {record.bookedScheduleCount}
-                      </div>
+                      <SingleMetric hint="累计申请" value={record.leaveRequestCount} />
+                    </td>
+                    <td className="px-5 py-4">
+                      <RatioMetric
+                        part={record.bookedScheduleCount}
+                        partLabel="已占用"
+                        total={record.scheduleCount}
+                        totalLabel="总计"
+                      />
                     </td>
                     <td className="px-5 py-4 text-[var(--lxxl-muted)]">
                       <div className="truncate" title={record.latestScheduleAt ? formatDateTime(record.latestScheduleAt) : "-"}>
@@ -284,6 +298,52 @@ const CounselorBoardListSection = memo(function CounselorBoardListSection({
     </section>
   );
 });
+
+function MetricTableHeader({ title, hint }: { title: string; hint: string }) {
+  return (
+    <th className="px-5 py-3">
+      <div className="font-medium text-[var(--lxxl-text)]">{title}</div>
+      <div className="mt-1 text-[11px] font-normal text-[var(--lxxl-muted)]">{hint}</div>
+    </th>
+  );
+}
+
+function RatioMetric({
+  total,
+  totalLabel,
+  part,
+  partLabel,
+}: {
+  total: number;
+  totalLabel: string;
+  part: number;
+  partLabel: string;
+}) {
+  const ratio = total > 0 ? Math.min(100, Math.max(0, (part / total) * 100)) : 0;
+  return (
+    <div className="min-w-0">
+      <div className="flex items-baseline gap-1.5">
+        <span className="text-base font-semibold text-[var(--lxxl-text)]">{total}</span>
+        <span className="text-xs text-[var(--lxxl-muted)]">{totalLabel}</span>
+      </div>
+      <div className="mt-1 text-xs text-[var(--lxxl-muted)]">
+        {partLabel} <span className="font-medium text-[var(--lxxl-text)]">{part}</span>
+      </div>
+      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#EDE9E2]">
+        <div className="h-full rounded-full bg-[var(--lxxl-green)]" style={{ width: `${ratio}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function SingleMetric({ value, hint }: { value: number; hint: string }) {
+  return (
+    <div>
+      <div className="text-base font-semibold text-[var(--lxxl-text)]">{value}</div>
+      <div className="mt-1 text-xs text-[var(--lxxl-muted)]">{hint}</div>
+    </div>
+  );
+}
 
 function compactMeta(parts: Array<string | null | undefined>) {
   const visibleParts = parts.filter((part): part is string => Boolean(part && part !== "-"));
@@ -449,14 +509,14 @@ function CounselorDetailPanel({
         {canEditIntro && <TableActionButton onClick={onEditIntro}>编辑介绍页</TableActionButton>}
       </div>
       <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
-        <MiniStat label="咨询" value={detail.profile.consultationCount} />
-        <MiniStat label="已完成" value={detail.profile.completedConsultationCount} />
-        <MiniStat label="来访取消" value={detail.profile.cancelledConsultationCount} />
+        <MiniStat label="咨询单总数" value={detail.profile.consultationCount} />
+        <MiniStat label="已完成咨询" value={detail.profile.completedConsultationCount} />
+        <MiniStat label="已取消咨询" value={detail.profile.cancelledConsultationCount} />
         <MiniStat label="待补记录" value={detail.profile.missingRecordCount} />
-        <MiniStat label="个案记录" value={detail.profile.caseRecordCount} />
-        <MiniStat label="请假" value={detail.profile.leaveRequestCount} />
-        <MiniStat label="排期" value={detail.profile.scheduleCount} />
-        <MiniStat label="已预约排期" value={detail.profile.bookedScheduleCount} />
+        <MiniStat label="已有咨询记录" value={detail.profile.caseRecordCount} />
+        <MiniStat label="请假申请" value={detail.profile.leaveRequestCount} />
+        <MiniStat label="排期总数" value={detail.profile.scheduleCount} />
+        <MiniStat label="已占用排期" value={detail.profile.bookedScheduleCount} />
         <MiniStat label="咨询室使用" value={detail.roomUsage.length} />
         <MiniStat label="来访人数" value={visitors.length} />
       </div>
@@ -486,7 +546,7 @@ function CounselorDetailPanel({
         items={cancelledConsultationItems}
         listKey={`counselor-${detail.profile.id}-cancelled-consultations`}
         onToggle={setExpandedKey}
-        title="来访取消记录"
+        title="取消咨询记录（全部来源）"
       />
       <ClickableDetailList
         expandedKey={expandedKey}
@@ -500,7 +560,7 @@ function CounselorDetailPanel({
         items={leaveItems}
         listKey={`counselor-${detail.profile.id}-leave-requests`}
         onToggle={setExpandedKey}
-        title="请假记录"
+        title="请假申请记录"
       />
       <ClickableDetailList
         expandedKey={expandedKey}

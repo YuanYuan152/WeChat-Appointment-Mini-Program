@@ -93,7 +93,7 @@ export function AgentBookingPanel({
 }) {
   const today = getLocalDateValue();
   const [createOpen, setCreateOpen] = useState(false);
-  const rows = calendar?.slots || [];
+  const rows = useMemo(() => calendar?.slots || [], [calendar?.slots]);
   const total = rows.length;
   const pagedRows = useMemo(() => {
     const start = (page - 1) * pageSize;
@@ -529,16 +529,33 @@ function ProxyBookingModal({
           ) : (
             <div className="mt-5 space-y-6">
               <QueryField label="时段" required>
+                <div className="mb-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-[var(--lxxl-muted)]">
+                  <span className="inline-flex items-center gap-2">
+                    <span className="h-3 w-3 rounded-sm border border-[#BFD9C9] bg-[#EAF2ED]" />
+                    咨询师已排期、尚未预约
+                  </span>
+                  <span className="inline-flex items-center gap-2">
+                    <span className="h-3 w-3 rounded-sm border border-[var(--lxxl-border)] bg-white" />
+                    咨询师尚未排期，可新建
+                  </span>
+                  <span className="inline-flex items-center gap-2">
+                    <span className="h-3 w-3 rounded-sm border border-[var(--lxxl-border)] bg-[#F4F1EB]" />
+                    已预约或不可用
+                  </span>
+                </div>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                   {slotOptions.slots.map((slot) => {
                     const selectable = slot.selectable && !slot.past && !slot.counselorOccupied && !slot.allRoomsFull;
                     const selected = draft.slotKey === slot.key;
+                    const existingAvailableSchedule = Boolean(slot.existingAvailableScheduleId);
                     return (
                       <button
                         className={`rounded-xl border px-4 py-3 text-left text-sm transition ${
                           selected
                             ? "border-[var(--lxxl-green)] bg-[#F4FBF7]"
-                            : selectable
+                            : selectable && existingAvailableSchedule
+                              ? "border-[#BFD9C9] bg-[#EAF2ED] text-[var(--lxxl-green-dark)] hover:border-[var(--lxxl-green)]"
+                              : selectable
                               ? "border-[var(--lxxl-border)] bg-white hover:border-[var(--lxxl-green)]"
                               : "cursor-not-allowed border-[var(--lxxl-border)] bg-[#F4F1EB] text-[var(--lxxl-muted)]"
                         }`}
@@ -642,10 +659,10 @@ function slotHint(slot: ProxySlotOption) {
     return "咨询室已满";
   }
   if (slot.existingAvailableScheduleId) {
-    return "咨询师已有可约排期";
+    return "咨询师已有可约排期，可直接代理";
   }
   if (slot.selectable) {
-    return "可新建代理预约";
+    return "咨询师尚未排期，可新建代理预约";
   }
   return "不可预约";
 }

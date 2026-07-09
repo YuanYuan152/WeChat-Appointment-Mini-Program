@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useState } from "react";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
 
 import { formatDateTime, formatMoneyFromCents, statusLabel } from "@/lib/format";
@@ -6,6 +6,7 @@ import type { PagedResult, UserBoardDetail, UserBoardSummary } from "@/types/api
 
 import { DetailDrawer } from "@/components/boards/DetailDrawer";
 import {
+  CollapsibleSection,
   DetailList,
   EmptyState,
   MiniStat,
@@ -278,9 +279,9 @@ function UserDetailPanel({
         title="预约记录"
         items={detail.consultations.map(consultationCard)}
       />
-      <DetailList
-        title="完成预约记录"
-        items={completedConsultations.map(consultationCard)}
+      <CompletedConsultationsByCounselor
+        consultations={completedConsultations}
+        renderConsultation={consultationCard}
       />
       <DetailList
         title="取消预约记录"
@@ -354,6 +355,102 @@ function UserDetailPanel({
   );
 }
 
+type UserConsultation = UserBoardDetail["consultations"][number];
+
+function CompletedConsultationsByCounselor({
+  consultations,
+  renderConsultation,
+}: {
+  consultations: UserConsultation[];
+  renderConsultation: (item: UserConsultation) => ReactNode;
+}) {
+  const groups = groupConsultationsByCounselor(consultations);
+
+  return (
+    <CollapsibleSection count={consultations.length} title="完成预约记录">
+      {groups.length === 0 ? (
+        <div className="text-sm text-[var(--lxxl-muted)]">暂无记录</div>
+      ) : (
+        <div className="border-y border-[var(--lxxl-border)]">
+          <div className="grid grid-cols-[minmax(0,1fr)_4rem_3rem] gap-2 bg-[#FAF8F4] px-3 py-2 text-xs text-[var(--lxxl-muted)]">
+            <span>咨询师</span>
+            <span className="text-right">次数</span>
+            <span />
+          </div>
+          <div className="divide-y divide-[var(--lxxl-border)]">
+            {groups.map((group) => (
+              <CompletedConsultationCounselorGroup
+                key={group.key}
+                counselorName={group.counselorName}
+                consultations={group.consultations}
+                renderConsultation={renderConsultation}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+    </CollapsibleSection>
+  );
+}
+
+function CompletedConsultationCounselorGroup({
+  counselorName,
+  consultations,
+  renderConsultation,
+}: {
+  counselorName: string;
+  consultations: UserConsultation[];
+  renderConsultation: (item: UserConsultation) => ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div>
+      <button
+        aria-expanded={open}
+        className="grid w-full grid-cols-[minmax(0,1fr)_4rem_3rem] items-center gap-2 px-3 py-3 text-left text-sm transition hover:bg-[#FAF8F4]"
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+      >
+        <span className="truncate font-medium text-[var(--lxxl-text)]">{counselorName}</span>
+        <span className="text-right text-[var(--lxxl-muted)]">{consultations.length} 次</span>
+        <span className="text-right text-xs font-medium text-[var(--lxxl-green)]">
+          {open ? "收起" : "展开"}
+        </span>
+      </button>
+      {open && (
+        <div className="divide-y divide-[var(--lxxl-border)] border-t border-[var(--lxxl-border)] bg-[#FCFBF8] px-3">
+          {consultations.map((item) => (
+            <div className="py-3 text-xs leading-5 text-[var(--lxxl-muted)]" key={item.id}>
+              {renderConsultation(item)}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function groupConsultationsByCounselor(consultations: UserConsultation[]) {
+  const groups = new Map<
+    string,
+    { key: string; counselorName: string; consultations: UserConsultation[] }
+  >();
+
+  for (const consultation of consultations) {
+    const key = String(consultation.counselorId || consultation.counselorName);
+    const group = groups.get(key) || {
+      key,
+      counselorName: consultation.counselorName || `咨询师 #${consultation.counselorId}`,
+      consultations: [],
+    };
+    group.consultations.push(consultation);
+    groups.set(key, group);
+  }
+
+  return Array.from(groups.values());
+}
+
 function timeRangeText(startTime?: string | null, endTime?: string | null) {
   return `${formatDateTime(startTime)} 至 ${formatDateTime(endTime)}`;
 }
@@ -376,10 +473,7 @@ function cleanBusinessNote(value?: string | null) {
 function DetailCard({ title, rows, action }: { title: string; rows: Array<[string, string]>; action?: ReactNode }) {
   return (
     <div className="space-y-2">
-      <div className="flex items-start justify-between gap-3">
-        <div className="font-medium text-[var(--lxxl-text)]">{title}</div>
-        {action && <div className="shrink-0">{action}</div>}
-      </div>
+      <div className="font-medium text-[var(--lxxl-text)]">{title}</div>
       <div className="space-y-1">
         {rows.map(([label, value]) => (
           <div className="grid grid-cols-[4.5rem_1fr] gap-2" key={label}>
@@ -388,6 +482,7 @@ function DetailCard({ title, rows, action }: { title: string; rows: Array<[strin
           </div>
         ))}
       </div>
+      {action && <div className="flex justify-end pt-1">{action}</div>}
     </div>
   );
 }
