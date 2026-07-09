@@ -44,6 +44,20 @@ export const sections: NavigationSection[] = [
     allowedRoles: ["Counselor"],
   },
   {
+    id: "counselorOrderDetails",
+    label: "订单明细",
+    desc: "完成订单和收入明细",
+    path: "/counselor-order-details",
+    allowedRoles: ["Counselor"],
+  },
+  {
+    id: "counselorConsultationDetails",
+    label: "咨询明细",
+    desc: "咨询记录和预约咨询",
+    path: "/counselor-consultation-details",
+    allowedRoles: ["Counselor"],
+  },
+  {
     id: "counselorSchedules",
     label: "我的排期",
     desc: "新增排期和请假",
@@ -69,7 +83,17 @@ export const navigationGroups: NavigationGroup[] = [
   { id: "business", label: "业务处理", sectionIds: ["refunds", "feedback", "caseRecords", "operationLogs", "dataImport"] },
   { id: "operation", label: "运营配置", sectionIds: ["content", "schedules", "rooms", "pricing"] },
   { id: "boards", label: "数据看板", sectionIds: ["userBoard", "counselorBoard"] },
-  { id: "counselor", label: "咨询师工作台", sectionIds: ["counselorDashboard", "counselorSchedules", "counselorRecords"] },
+  {
+    id: "counselor",
+    label: "咨询师工作台",
+    sectionIds: [
+      "counselorDashboard",
+      "counselorOrderDetails",
+      "counselorConsultationDetails",
+      "counselorSchedules",
+      "counselorRecords",
+    ],
+  },
 ];
 
 export function getSectionById(sectionId: NavigationSection["id"]) {

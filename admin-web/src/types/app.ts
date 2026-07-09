@@ -51,6 +51,8 @@ export type SectionId =
   | "userBoard"
   | "counselorBoard"
   | "counselorDashboard"
+  | "counselorOrderDetails"
+  | "counselorConsultationDetails"
   | "counselorSchedules"
   | "counselorRecords";
 

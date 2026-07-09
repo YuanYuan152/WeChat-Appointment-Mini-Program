@@ -814,7 +814,7 @@ export interface ProxySearchResult {
   items: ProxyPersonOption[];
 }
 
-export interface ProxyScheduleCalendarItem extends CounselorScheduleCalendarItem {}
+export type ProxyScheduleCalendarItem = CounselorScheduleCalendarItem;
 
 export interface ProxyScheduleCalendar {
   startDate: string;
