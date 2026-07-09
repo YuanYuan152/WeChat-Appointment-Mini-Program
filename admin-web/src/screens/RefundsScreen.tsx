@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { approveRefundExemption, fetchRefundExemptions, rejectRefundExemption } from "@/services/refunds";
 import { AppRoute, useAppRoute } from "@/components/AppRoute";
@@ -18,10 +19,13 @@ export function RefundsScreen() {
 }
 
 function RefundsScreenContent() {
+  const searchParams = useSearchParams();
   const { clearNotice, refreshKey, showNotice } = useAppRoute();
+  const focusedRefundId = numberFromSearchParam(searchParams.get("exemptionId"));
+  const initialStatus = focusedRefundId ? "PENDING" : "ALL";
   const [data, setData] = useState<ScreenData>({});
-  const [status, setStatus] = useState("ALL");
-  const [queryStatus, setQueryStatus] = useState("ALL");
+  const [status, setStatus] = useState(initialStatus);
+  const [queryStatus, setQueryStatus] = useState(initialStatus);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [listLoading, setListLoading] = useState(false);
@@ -95,6 +99,7 @@ function RefundsScreenContent() {
       pageSize={pageSize}
       listLoading={listLoading}
       status={status}
+      focusedRefundId={focusedRefundId}
       setStatus={setStatus}
       onSearch={search}
       onPageChange={setPage}
@@ -106,4 +111,12 @@ function RefundsScreenContent() {
       onReject={reject}
     />
   );
+}
+
+function numberFromSearchParam(value: string | null) {
+  if (!value) {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }

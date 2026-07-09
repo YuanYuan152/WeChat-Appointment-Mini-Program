@@ -1,5 +1,6 @@
 import { DetailDrawer } from "@/components/boards/DetailDrawer";
 import { formatDateTime, formatFullDateTime, statusLabel } from "@/lib/format";
+import type { MessageActionTarget } from "@/lib/messageNavigation";
 import { getPageItems } from "@/lib/pagination";
 import type { AdminLeaveRequestDetail, MessageItem } from "@/types/api";
 
@@ -72,6 +73,7 @@ export function MessagesPanel({
   categoryFilter,
   page,
   pageSize,
+  selectedActionTarget,
   selectedBusinessDetail,
   selectedMessage,
   showCrisisBanner,
@@ -79,6 +81,7 @@ export function MessagesPanel({
   onCloseDetail,
   onKeywordChange,
   onCategoryFilterChange,
+  onNavigateTarget,
   onOpen,
   onPageChange,
   onPageSizeChange,
@@ -94,6 +97,7 @@ export function MessagesPanel({
   categoryFilter: MessageCategoryFilter;
   page: number;
   pageSize: number;
+  selectedActionTarget?: MessageActionTarget | null;
   selectedBusinessDetail?: MessageBusinessDetail;
   selectedMessage?: MessageItem | null;
   showCrisisBanner?: boolean;
@@ -101,6 +105,7 @@ export function MessagesPanel({
   onCloseDetail: () => void;
   onKeywordChange: (value: string) => void;
   onCategoryFilterChange: (value: MessageCategoryFilter) => void;
+  onNavigateTarget?: (target: MessageActionTarget) => void;
   onOpen: (message: MessageItem) => void;
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
@@ -284,10 +289,12 @@ export function MessagesPanel({
       </div>
       {selectedMessage && (
         <MessageDetailDrawer
+          actionTarget={selectedActionTarget}
           businessDetail={selectedBusinessDetail}
           loading={detailLoading}
           message={selectedMessage}
           onClose={onCloseDetail}
+          onNavigateTarget={onNavigateTarget}
         />
       )}
     </section>
@@ -295,29 +302,58 @@ export function MessagesPanel({
 }
 
 function MessageDetailDrawer({
+  actionTarget,
   businessDetail,
   loading,
   message,
   onClose,
+  onNavigateTarget,
 }: {
+  actionTarget?: MessageActionTarget | null;
   businessDetail?: MessageBusinessDetail;
   loading?: boolean;
   message: MessageItem;
   onClose: () => void;
+  onNavigateTarget?: (target: MessageActionTarget) => void;
 }) {
   const display = getMessageDisplay(message);
   const detail = parseMessagePayload(message.Content)?.detail || {};
   const businessSections = buildMessageBusinessSections(businessDetail);
   const sections = [...businessSections, ...buildMessageDetailSections(message, detail, display.summary)];
   const isCrisis = isCrisisReportMessage(message);
+  const footer =
+    actionTarget && onNavigateTarget ? (
+      <div className="flex w-full flex-wrap items-center justify-between gap-3">
+        <button
+          className="rounded-lg border border-[var(--lxxl-border)] px-5 py-2 text-sm font-medium text-[var(--lxxl-muted)]"
+          type="button"
+          onClick={onClose}
+        >
+          关闭
+        </button>
+        <button
+          className="rounded-lg bg-[var(--lxxl-green)] px-5 py-2 text-sm font-medium text-white"
+          type="button"
+          onClick={() => onNavigateTarget(actionTarget)}
+        >
+          {actionTarget.label}
+        </button>
+      </div>
+    ) : undefined;
 
   return (
-    <DetailDrawer title={`${display.title}详情`} onClose={onClose}>
+    <DetailDrawer title={`${display.title}详情`} footer={footer} onClose={onClose}>
       <div className="space-y-6">
         {loading && (
           <div className="rounded-lg border border-[var(--lxxl-border)] bg-[#FAF8F4] px-4 py-3 text-sm text-[var(--lxxl-muted)]">
             正在加载最新消息详情...
           </div>
+        )}
+        {actionTarget && (
+          <section className="border-b border-[var(--lxxl-border)] pb-5">
+            <h4 className="text-sm font-semibold text-[var(--lxxl-text)]">后续处理</h4>
+            <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">{actionTarget.description}</p>
+          </section>
         )}
         <section className="border-b border-[var(--lxxl-border)] pb-5">
           <div className="mb-3 flex flex-wrap items-center gap-2">

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type {
   AdminCaseRecordDetail,
@@ -34,6 +34,7 @@ export function CaseRecordsPanel({
   caseRecordLoading,
   amendments,
   amendmentsLoading,
+  focusedAmendmentId,
   recordsLoading,
   amendmentStatus,
   setAmendmentStatus,
@@ -57,6 +58,7 @@ export function CaseRecordsPanel({
   caseRecordLoading?: boolean;
   amendments?: CaseRecordAmendment[];
   amendmentsLoading?: boolean;
+  focusedAmendmentId?: number | null;
   recordsLoading?: boolean;
   amendmentStatus: string;
   setAmendmentStatus: (value: string) => void;
@@ -73,6 +75,23 @@ export function CaseRecordsPanel({
   const [selectedAmendment, setSelectedAmendment] = useState<CaseRecordAmendment | null>(null);
   const [rejectingAmendment, setRejectingAmendment] = useState<CaseRecordAmendment | null>(null);
   const [rejectReason, setRejectReason] = useState("");
+  const focusedAmendmentHandledRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!focusedAmendmentId) {
+      focusedAmendmentHandledRef.current = null;
+      return;
+    }
+    if (focusedAmendmentHandledRef.current === focusedAmendmentId) {
+      return;
+    }
+    const matched = amendments?.find((item) => item.id === focusedAmendmentId);
+    if (!matched) {
+      return;
+    }
+    focusedAmendmentHandledRef.current = focusedAmendmentId;
+    setSelectedAmendment(matched);
+  }, [amendments, focusedAmendmentId]);
 
   return (
     <section className="rounded-xl border border-[var(--lxxl-border)] bg-white">

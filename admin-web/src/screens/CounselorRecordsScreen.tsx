@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { AppRoute, useAppRoute } from "@/components/AppRoute";
 import {
@@ -35,12 +36,16 @@ export function CounselorRecordsScreen() {
 }
 
 function CounselorRecordsScreenContent() {
+  const searchParams = useSearchParams();
   const { clearNotice, refreshKey, showNotice } = useAppRoute();
+  const focusedRecordId = numberFromSearchParam(searchParams.get("recordId"));
+  const focusedConsultationId = numberFromSearchParam(searchParams.get("consultationId"));
   const [data, setData] = useState<ScreenData>({});
   const [listLoading, setListLoading] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
   const [selectedForm, setSelectedForm] = useState<CounselorRecordFormState>();
   const [formErrors, setFormErrors] = useState<CounselorRecordFormErrors>({});
+  const openedTargetRef = useRef<string | null>(null);
 
   const loadData = useCallback(async () => {
     setListLoading(true);
@@ -125,6 +130,40 @@ function CounselorRecordsScreenContent() {
     setSelectedForm(undefined);
     setFormErrors({});
   }, []);
+
+  useEffect(() => {
+    if (focusedRecordId) {
+      const targetKey = `record:${focusedRecordId}`;
+      if (openedTargetRef.current === targetKey) {
+        return;
+      }
+      openedTargetRef.current = targetKey;
+      void openRecord(focusedRecordId, "view");
+      return;
+    }
+
+    if (!focusedConsultationId) {
+      openedTargetRef.current = null;
+      return;
+    }
+
+    const targetKey = `consultation:${focusedConsultationId}`;
+    if (openedTargetRef.current === targetKey) {
+      return;
+    }
+
+    const consultation = data.counselorCompletedConsultations?.find((item) => item.Id === focusedConsultationId);
+    if (!consultation) {
+      return;
+    }
+
+    openedTargetRef.current = targetKey;
+    if (consultation.CaseRecordId) {
+      void openRecord(consultation.CaseRecordId, "view");
+      return;
+    }
+    void openCreate(consultation);
+  }, [data.counselorCompletedConsultations, focusedConsultationId, focusedRecordId, openCreate, openRecord]);
 
   const clearFormError = useCallback((field: string) => {
     setFormErrors((prev) => {
@@ -301,4 +340,12 @@ function mergeHeaderInfo(
     merged[key] = recordHeader?.[key] || defaults?.[key] || "";
   }
   return merged;
+}
+
+function numberFromSearchParam(value: string | null) {
+  if (!value) {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { AppRoute, useAppRoute } from "@/components/AppRoute";
 import { getLocalDateValue } from "@/lib/date";
@@ -17,8 +18,8 @@ import type { CounselorSlotOption } from "@/types/api";
 import type { ScreenData } from "@/types/app";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
 
-const INITIAL_QUERY = (): CounselorScheduleQuery => ({
-  start: getLocalDateValue(),
+const INITIAL_QUERY = (start?: string | null): CounselorScheduleQuery => ({
+  start: start || getLocalDateValue(),
   days: 14,
 });
 
@@ -38,10 +39,14 @@ export function CounselorSchedulesScreen() {
 }
 
 function CounselorSchedulesScreenContent() {
+  const searchParams = useSearchParams();
   const { clearNotice, refreshKey, showNotice } = useAppRoute();
+  const focusedScheduleId = numberFromSearchParam(searchParams.get("scheduleId"));
+  const focusedConsultationId = numberFromSearchParam(searchParams.get("consultationId"));
+  const focusedStart = dateFromSearchParam(searchParams.get("start"));
   const [data, setData] = useState<ScreenData>({});
-  const [filters, setFilters] = useState(INITIAL_QUERY);
-  const [draftFilters, setDraftFilters] = useState(INITIAL_QUERY);
+  const [filters, setFilters] = useState(() => INITIAL_QUERY(focusedStart));
+  const [draftFilters, setDraftFilters] = useState(() => INITIAL_QUERY(focusedStart));
   const [draft, setDraft] = useState(INITIAL_DRAFT);
   const [listLoading, setListLoading] = useState(false);
   const [slotLoading, setSlotLoading] = useState(false);
@@ -65,6 +70,16 @@ function CounselorSchedulesScreenContent() {
   useEffect(() => {
     void loadData();
   }, [loadData, refreshKey]);
+
+  useEffect(() => {
+    if (!focusedStart || filters.start === focusedStart) {
+      return;
+    }
+    const next = INITIAL_QUERY(focusedStart);
+    setDraftFilters(next);
+    setFilters(next);
+    setPage(1);
+  }, [filters.start, focusedStart]);
 
   const search = useCallback(() => {
     setPage(1);
@@ -170,6 +185,8 @@ function CounselorSchedulesScreenContent() {
       draft={draft}
       page={page}
       pageSize={pageSize}
+      focusedScheduleId={focusedScheduleId}
+      focusedConsultationId={focusedConsultationId}
       setQuery={setDraftFilters}
       setDraft={setDraft}
       onSearch={search}
@@ -183,4 +200,19 @@ function CounselorSchedulesScreenContent() {
       onPageSizeChange={changePageSize}
     />
   );
+}
+
+function numberFromSearchParam(value: string | null) {
+  if (!value) {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function dateFromSearchParam(value: string | null) {
+  if (!value) {
+    return null;
+  }
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
 }

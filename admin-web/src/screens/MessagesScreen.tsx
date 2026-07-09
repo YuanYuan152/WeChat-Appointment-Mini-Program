@@ -1,8 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { AppRoute, useAppRoute } from "@/components/AppRoute";
+import { resolveMessageActionTarget } from "@/lib/messageNavigation";
+import type { MessageActionTarget } from "@/lib/messageNavigation";
 import { MessagesPanel } from "@/panels/MessagesPanel";
 import type { MessageBusinessDetail } from "@/panels/MessagesPanel";
 import type { MessageCategoryFilter } from "@/panels/MessagesPanel";
@@ -27,6 +30,7 @@ export function MessagesScreen() {
 }
 
 function MessagesScreenContent() {
+  const router = useRouter();
   const { clearNotice, currentUser, refreshKey, showNotice } = useAppRoute();
   const [data, setData] = useState<ScreenData>({});
   const [keyword, setKeyword] = useState("");
@@ -40,6 +44,7 @@ function MessagesScreenContent() {
   const [crisisUnreadCount, setCrisisUnreadCount] = useState(0);
   const [selectedMessage, setSelectedMessage] = useState<MessageItem | null>(null);
   const [selectedBusinessDetail, setSelectedBusinessDetail] = useState<MessageBusinessDetail>(null);
+  const [selectedActionTarget, setSelectedActionTarget] = useState<MessageActionTarget | null>(null);
   const [listLoading, setListLoading] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const showCrisisBanner = currentUser.roles.includes("Admin") || currentUser.roles.includes("Ops");
@@ -85,31 +90,47 @@ function MessagesScreenContent() {
 
   const openMessage = useCallback(
     async (message: MessageItem) => {
-      setSelectedMessage(message);
+      setSelectedMessage(null);
       setSelectedBusinessDetail(null);
+      setSelectedActionTarget(null);
       setDetailLoading(true);
       clearNotice();
       try {
         await markMessageRead(message.Id);
         const detail = await fetchMessageDetail(message.Id);
-        const businessDetail = await loadMessageBusinessDetail(detail);
+        const actionTarget = resolveMessageActionTarget(detail, currentUser.activeRole);
         window.dispatchEvent(new Event(MESSAGE_UNREAD_CHANGED_EVENT));
         await loadCrisisUnreadCount();
-        setSelectedMessage(detail);
-        setSelectedBusinessDetail(businessDetail);
         setData((prev) => ({
           ...prev,
           messages: prev.messages?.map((item) =>
             item.Id === message.Id ? { ...item, IsRead: true, ReadAt: detail.ReadAt || item.ReadAt } : item,
           ),
         }));
+        if (actionTarget) {
+          router.push(actionTarget.href);
+          return;
+        }
+        const businessDetail = await loadMessageBusinessDetail(detail);
+        setSelectedMessage(detail);
+        setSelectedBusinessDetail(businessDetail);
       } catch (error) {
         showNotice("error", error instanceof Error ? error.message : "消息详情加载失败");
       } finally {
         setDetailLoading(false);
       }
     },
-    [clearNotice, loadCrisisUnreadCount, showNotice],
+    [clearNotice, currentUser.activeRole, loadCrisisUnreadCount, router, showNotice],
+  );
+
+  const navigateMessageTarget = useCallback(
+    (target: MessageActionTarget) => {
+      setSelectedMessage(null);
+      setSelectedBusinessDetail(null);
+      setSelectedActionTarget(null);
+      router.push(target.href);
+    },
+    [router],
   );
 
   const searchMessages = useCallback(() => {
@@ -140,16 +161,19 @@ function MessagesScreenContent() {
       page={page}
       pageSize={pageSize}
       selectedBusinessDetail={selectedBusinessDetail}
+      selectedActionTarget={selectedActionTarget}
       selectedMessage={selectedMessage}
       showCrisisBanner={showCrisisBanner}
       statusFilter={statusFilter}
       onCloseDetail={() => {
         setSelectedMessage(null);
         setSelectedBusinessDetail(null);
+        setSelectedActionTarget(null);
       }}
       onCategoryFilterChange={setCategoryFilter}
       onKeywordChange={setKeyword}
       onOpen={openMessage}
+      onNavigateTarget={navigateMessageTarget}
       onPageChange={setPage}
       onPageSizeChange={(nextPageSize) => {
         setPageSize(nextPageSize);

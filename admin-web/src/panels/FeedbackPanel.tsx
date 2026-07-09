@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { DetailDrawer } from "@/components/boards/DetailDrawer";
 import { formatDateTime, statusLabel } from "@/lib/format";
@@ -26,6 +26,7 @@ export function FeedbackPanel({
   setStatus,
   page,
   pageSize,
+  focusedFeedbackId,
   onSearch,
   onReset,
   onPageChange,
@@ -40,13 +41,15 @@ export function FeedbackPanel({
   setStatus: (status: string) => void;
   page: number;
   pageSize: number;
+  focusedFeedbackId?: number | null;
   onSearch: () => void;
   onReset: () => void;
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
 }) {
   const [selectedFeedback, setSelectedFeedback] = useState<FeedbackItem | null>(null);
-  const items = feedbacks || [];
+  const focusedFeedbackHandledRef = useRef<number | null>(null);
+  const items = useMemo(() => feedbacks || [], [feedbacks]);
   const normalizedKeyword = queryKeyword.trim().toLowerCase();
   const filteredItems = normalizedKeyword
     ? items.filter((item) =>
@@ -66,6 +69,22 @@ export function FeedbackPanel({
       )
     : items;
   const { currentPage, items: pageItems } = getPageItems(filteredItems, page, pageSize);
+
+  useEffect(() => {
+    if (!focusedFeedbackId) {
+      focusedFeedbackHandledRef.current = null;
+      return;
+    }
+    if (focusedFeedbackHandledRef.current === focusedFeedbackId) {
+      return;
+    }
+    const matched = items.find((item) => item.id === focusedFeedbackId);
+    if (!matched) {
+      return;
+    }
+    focusedFeedbackHandledRef.current = focusedFeedbackId;
+    setSelectedFeedback(matched);
+  }, [focusedFeedbackId, items]);
 
   return (
     <section className="rounded-xl border border-[var(--lxxl-border)] bg-white">

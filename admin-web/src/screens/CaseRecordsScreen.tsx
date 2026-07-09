@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 import {
   approveCaseRecordAmendment,
@@ -26,7 +27,11 @@ export function CaseRecordsScreen() {
 }
 
 function CaseRecordsScreenContent() {
+  const searchParams = useSearchParams();
   const { clearNotice, refreshKey, showNotice } = useAppRoute();
+  const focusedAmendmentId = numberFromSearchParam(searchParams.get("amendmentId"));
+  const initialAmendmentStatus = focusedAmendmentId ? "ALL" : "PENDING";
+  const focusedRecordId = focusedAmendmentId ? null : numberFromSearchParam(searchParams.get("recordId"));
   const [data, setData] = useState<ScreenData>({});
   const [selectedCounselorName, setSelectedCounselorName] = useState<string | null>(null);
   const [selectedCounselorRecords, setSelectedCounselorRecords] = useState<AdminConsultationRecord[]>();
@@ -37,8 +42,9 @@ function CaseRecordsScreenContent() {
   const [caseRecordLoading, setCaseRecordLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
-  const [amendmentStatus, setAmendmentStatus] = useState("PENDING");
-  const [appliedAmendmentStatus, setAppliedAmendmentStatus] = useState("PENDING");
+  const [amendmentStatus, setAmendmentStatus] = useState(initialAmendmentStatus);
+  const [appliedAmendmentStatus, setAppliedAmendmentStatus] = useState(initialAmendmentStatus);
+  const openedRecordRef = useRef<number | null>(null);
 
   const loadData = useCallback(async () => {
     setRecordsLoading(true);
@@ -83,7 +89,9 @@ function CaseRecordsScreenContent() {
       clearNotice();
       setCaseRecordLoading(true);
       try {
-        setSelectedCaseRecord(await fetchCaseRecordDetail(recordId));
+        const detail = await fetchCaseRecordDetail(recordId);
+        setSelectedCounselorName(detail.CounselorName || "咨询师");
+        setSelectedCaseRecord(detail);
       } catch (error) {
         showNotice("error", error instanceof Error ? error.message : "咨询记录详情加载失败");
       } finally {
@@ -92,6 +100,14 @@ function CaseRecordsScreenContent() {
     },
     [clearNotice, showNotice],
   );
+
+  useEffect(() => {
+    if (!focusedRecordId || openedRecordRef.current === focusedRecordId) {
+      return;
+    }
+    openedRecordRef.current = focusedRecordId;
+    void openCaseRecord(focusedRecordId);
+  }, [focusedRecordId, openCaseRecord]);
 
   const closeDetails = useCallback(() => {
     setSelectedCounselorName(null);
@@ -170,6 +186,7 @@ function CaseRecordsScreenContent() {
       caseRecordLoading={caseRecordLoading}
       amendments={data.caseRecordAmendments}
       amendmentsLoading={amendmentsLoading}
+      focusedAmendmentId={focusedAmendmentId}
       recordsLoading={recordsLoading}
       amendmentStatus={amendmentStatus}
       setAmendmentStatus={setAmendmentStatus}
@@ -182,4 +199,12 @@ function CaseRecordsScreenContent() {
       onCloseDetails={closeDetails}
     />
   );
+}
+
+function numberFromSearchParam(value: string | null) {
+  if (!value) {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }

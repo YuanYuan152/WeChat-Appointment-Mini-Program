@@ -1,6 +1,6 @@
 import { formatDateTime, formatMoneyFromCents, statusLabel } from "@/lib/format";
 import type { RefundExemption } from "@/types/api";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   Badge,
@@ -21,6 +21,7 @@ export function RefundsPanel({
   onPageChange,
   onPageSizeChange,
   status,
+  focusedRefundId,
   setStatus,
   onSearch,
   onApprove,
@@ -33,6 +34,7 @@ export function RefundsPanel({
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
   status: string;
+  focusedRefundId?: number | null;
   setStatus: (status: string) => void;
   onSearch: () => void;
   onApprove: (id: number) => void;
@@ -45,6 +47,20 @@ export function RefundsPanel({
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const currentPage = Math.min(Math.max(page, 1), totalPages);
   const visibleRefunds = refunds?.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  useEffect(() => {
+    if (!focusedRefundId || !refunds?.length) {
+      return;
+    }
+    const targetIndex = refunds.findIndex((item) => item.id === focusedRefundId);
+    if (targetIndex < 0) {
+      return;
+    }
+    const targetPage = Math.floor(targetIndex / pageSize) + 1;
+    if (targetPage !== currentPage) {
+      onPageChange(targetPage);
+    }
+  }, [currentPage, focusedRefundId, onPageChange, pageSize, refunds]);
 
   return (
     <section className="rounded-xl border border-[var(--lxxl-border)] bg-white">
@@ -105,7 +121,12 @@ export function RefundsPanel({
             </thead>
             <tbody>
               {visibleRefunds.map((item) => (
-                <tr key={item.id} className="border-t border-[var(--lxxl-border)] align-top">
+                <tr
+                  key={item.id}
+                  className={`border-t border-[var(--lxxl-border)] align-top ${
+                    item.id === focusedRefundId ? "bg-[#FFF9ED]" : ""
+                  }`}
+                >
                   <td className="px-5 py-4">{formatDateTime(item.createdAt)}</td>
                   <td className="px-5 py-4">
                     <div className="font-medium">{item.patientName}</div>

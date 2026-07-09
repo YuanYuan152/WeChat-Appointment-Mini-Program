@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 
 import { formatDateTime, statusLabel } from "@/lib/format";
@@ -48,6 +48,8 @@ export function CounselorSchedulesPanel({
   draft,
   page,
   pageSize,
+  focusedScheduleId,
+  focusedConsultationId,
   setQuery,
   setDraft,
   onSearch,
@@ -69,6 +71,8 @@ export function CounselorSchedulesPanel({
   draft: CounselorScheduleDraft;
   page: number;
   pageSize: number;
+  focusedScheduleId?: number | null;
+  focusedConsultationId?: number | null;
   setQuery: Dispatch<SetStateAction<CounselorScheduleQuery>>;
   setDraft: Dispatch<SetStateAction<CounselorScheduleDraft>>;
   onSearch: () => void;
@@ -92,12 +96,34 @@ export function CounselorSchedulesPanel({
     slotOptions && slotOptions.date === draft.date && slotOptions.centerId === draft.centerId ? slotOptions : undefined;
   const selectedSlot = visibleSlotOptions?.slots.find((slot) => slot.key === draft.slotKey);
   const availableRooms = selectedSlot?.rooms.filter((room) => room.available && !room.occupiedByOther) || [];
-  const rows = calendar?.slots || [];
+  const rows = useMemo(() => calendar?.slots || [], [calendar?.slots]);
   const total = rows.length;
+  const focusedRowId = useMemo(() => {
+    const matched = rows.find(
+      (item) =>
+        (focusedScheduleId && item.id === focusedScheduleId) ||
+        (focusedConsultationId && item.consultationId === focusedConsultationId),
+    );
+    return matched?.id ?? null;
+  }, [focusedConsultationId, focusedScheduleId, rows]);
   const pagedRows = useMemo(() => {
     const start = (page - 1) * pageSize;
     return rows.slice(start, start + pageSize);
   }, [page, pageSize, rows]);
+
+  useEffect(() => {
+    if (!focusedRowId) {
+      return;
+    }
+    const targetIndex = rows.findIndex((item) => item.id === focusedRowId);
+    if (targetIndex < 0) {
+      return;
+    }
+    const targetPage = Math.floor(targetIndex / pageSize) + 1;
+    if (targetPage !== page) {
+      onPageChange(targetPage);
+    }
+  }, [focusedRowId, onPageChange, page, pageSize, rows]);
 
   const confirmPendingAction = () => {
     if (!pendingAction) {
@@ -193,7 +219,12 @@ export function CounselorSchedulesPanel({
                 </thead>
                 <tbody>
                   {pagedRows.map((item) => (
-                    <tr key={item.id} className="border-t border-[var(--lxxl-border)] align-top">
+                    <tr
+                      key={item.id}
+                      className={`border-t border-[var(--lxxl-border)] align-top ${
+                        item.id === focusedRowId ? "bg-[#FFF9ED]" : ""
+                      }`}
+                    >
                       <td className="px-5 py-4">
                         {formatDateTime(item.startTime)} 至 {formatDateTime(item.endTime)}
                       </td>

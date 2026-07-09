@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { AppRoute, useAppRoute } from "@/components/AppRoute";
 import { FeedbackPanel } from "@/panels/FeedbackPanel";
@@ -16,7 +17,9 @@ export function FeedbackScreen() {
 }
 
 function FeedbackScreenContent() {
+  const searchParams = useSearchParams();
   const { clearNotice, refreshKey, showNotice } = useAppRoute();
+  const focusedFeedbackId = numberFromSearchParam(searchParams.get("feedbackId"));
   const [data, setData] = useState<ScreenData>({});
   const [keyword, setKeyword] = useState("");
   const [queryKeyword, setQueryKeyword] = useState("");
@@ -76,6 +79,7 @@ function FeedbackScreenContent() {
       setStatus={setStatus}
       page={page}
       pageSize={pageSize}
+      focusedFeedbackId={focusedFeedbackId}
       onSearch={search}
       onReset={reset}
       onPageChange={setPage}
@@ -85,4 +89,12 @@ function FeedbackScreenContent() {
       }}
     />
   );
+}
+
+function numberFromSearchParam(value: string | null) {
+  if (!value) {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
