@@ -17,7 +17,12 @@ function getRequiredRoles(url: string): string[] | null {
 function getUserRoles(): string[] {
   try {
     const raw = uni.getStorageSync('user_roles')
-    return raw ? JSON.parse(raw) : []
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed) && parsed.length) return parsed
+    }
+    const active = uni.getStorageSync('active_role')
+    return active ? [active] : []
   } catch {
     return []
   }

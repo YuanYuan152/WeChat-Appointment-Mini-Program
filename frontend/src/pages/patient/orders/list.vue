@@ -19,6 +19,9 @@
           <text class="order-desc">{{ orderSummary(order) }}</text>
           <text class="order-price">¥{{ (order.TotalFee / 100).toFixed(2) }}</text>
         </view>
+        <view v-if="order.proxyAgreementLabel && order.Status === 'PENDING'" class="agreement-hint">
+          待签署：{{ order.proxyAgreementLabel }}
+        </view>
         <view class="order-footer">
           <text class="order-time">{{ formatTime(order.CreatedAt) }}</text>
           <text v-if="order.ExpiresAt && order.Status === 'PENDING'" class="order-expire">
@@ -142,6 +145,14 @@ onShow(loadOrders)
 .order-status.paid { color: #10B981; }
 .order-status.cancelled { color: #9CA3AF; }
 .order-body { display: flex; justify-content: space-between; margin-bottom: 12rpx; gap: 16rpx; }
+.agreement-hint {
+  font-size: 24rpx;
+  color: #B45309;
+  background: #FFFBEB;
+  border-radius: 12rpx;
+  padding: 12rpx 16rpx;
+  margin-bottom: 12rpx;
+}
 .order-desc { font-size: 28rpx; color: #374151; flex: 1; }
 .order-price { font-size: 32rpx; font-weight: 700; color: #0D9488; flex-shrink: 0; }
 .order-footer { display: flex; align-items: center; gap: 16rpx; flex-wrap: wrap; margin-top: 8rpx; }

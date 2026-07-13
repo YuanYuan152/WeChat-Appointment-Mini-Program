@@ -97,12 +97,16 @@ def _appointment_location(
 
 
 def _patient_contact(db: Session, patient_id: int) -> Dict[str, str]:
+    from patient_contract_service import patient_contract_extras
+
     acc = db.query(AppAccount).filter(AppAccount.Id == patient_id).first()
+    contract = patient_contract_extras(db, acc)
     return {
         "name": _account_display_name(db, patient_id),
         "phone": (acc.Mobile or "") if acc else "",
         "emergencyContact": (acc.EmergencyContact or "") if acc else "",
         "emergencyPhone": (acc.EmergencyPhone or "") if acc else "",
+        "contractTag": contract.get("contractTag") or "",
     }
 
 
@@ -180,6 +184,7 @@ def notify_staff_new_appointment(
         amount_yuan = f"{order.TotalFee / 100:.2f}"
     detail = {
         "patientName": patient["name"],
+        "patientContractTag": patient.get("contractTag") or None,
         "patientPhone": patient["phone"],
         "emergencyContact": patient["emergencyContact"],
         "emergencyPhone": patient["emergencyPhone"],
@@ -224,6 +229,7 @@ def notify_staff_appointment_cancelled(
 
     detail = {
         "patientName": patient["name"],
+        "patientContractTag": patient.get("contractTag") or None,
         "patientPhone": patient["phone"],
         "emergencyContact": patient["emergencyContact"],
         "emergencyPhone": patient["emergencyPhone"],
@@ -277,6 +283,7 @@ def notify_staff_counselor_leave(
         affected.append({
             "consultationId": consultation.Id,
             "patientName": patient["name"],
+            "patientContractTag": patient.get("contractTag") or None,
             "patientPhone": patient["phone"],
             "emergencyContact": patient["emergencyContact"],
             "emergencyPhone": patient["emergencyPhone"],
@@ -317,6 +324,67 @@ def notify_staff_counselor_leave(
         related_type="COUNSELOR_LEAVE",
         related_id=leave_request_id or schedule.Id,
         account_ids=staff_workbench_account_ids(db),
+    )
+
+
+def notify_staff_proxy_order_pushed(
+    db: Session,
+    *,
+    staff_account_id: int,
+    order: AppOrder,
+    schedule: AppSchedule,
+    patient: AppAccount,
+    counselor_id: int,
+) -> None:
+    """助理/主任/管理员推送代理预约订单后，向操作人发送推送成功确认消息。"""
+    from staff_roles import account_has_staff_workbench
+
+    if not account_has_staff_workbench(db, staff_account_id):
+        return
+
+    existing = (
+        db.query(AppMessage)
+        .filter(
+            AppMessage.AccountId == staff_account_id,
+            AppMessage.RelatedType == "STAFF_PROXY_ORDER_PUSHED",
+            AppMessage.RelatedId == order.Id,
+        )
+        .first()
+    )
+    if existing:
+        return
+
+    patient_contact = _patient_contact(db, patient.Id)
+    counselor_name = _counselor_display_name(db, counselor_id)
+    location = _appointment_location(db, schedule.Note, status=schedule.Status)
+    time_text = _format_datetime(schedule.StartTime)
+    patient_name = patient_contact["name"]
+    contract_tag = patient_contact.get("contractTag") or None
+    patient_label = f"{patient_name} {contract_tag}" if contract_tag else patient_name
+    summary = f"{patient_label} · {counselor_name} · {time_text} · {location}"
+    amount_yuan = None
+    if order.TotalFee:
+        amount_yuan = f"{order.TotalFee / 100:.2f}"
+    detail = {
+        "patientName": patient_name,
+        "patientContractTag": contract_tag,
+        "counselorName": counselor_name,
+        "boundCounselorName": counselor_name,
+        "startTime": time_text,
+        "endTime": _format_datetime(schedule.EndTime),
+        "location": location,
+        "orderId": order.Id,
+        "amountYuan": amount_yuan,
+        "tip": "订单已推送给来访，待来访在 2 小时内完成支付",
+    }
+    _notify_staff(
+        db,
+        type_="ORDER",
+        title="代理预约已推送",
+        content=_message_payload(summary, detail),
+        related_type="STAFF_PROXY_ORDER_PUSHED",
+        related_id=order.Id,
+        account_ids=[staff_account_id],
     )
 
 

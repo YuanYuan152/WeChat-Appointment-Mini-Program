@@ -13,7 +13,7 @@
       <view v-if="detail.current?.counselorName" class="info-card">
         <text class="info-title">当前时段</text>
         <text class="info-row">咨询师：{{ detail.current.counselorName }}</text>
-        <text v-if="detail.current.patientName" class="info-row">来访者：{{ detail.current.patientName }}</text>
+        <text v-if="detail.current.patientName" class="info-row">来访者：{{ formatPatientInline(detail.current.patientName, detail.current.patientContractTag) }}</text>
         <text v-if="detail.current.startTime" class="info-row">
           时段：{{ formatTime(detail.current.startTime) }} - {{ formatTime(detail.current.endTime) }}
         </text>
@@ -82,7 +82,7 @@
         </view>
         <view class="session-block">
           <text class="session-label">来访者</text>
-          <text class="session-name">{{ sessionSlot?.patientName || '—' }}</text>
+          <text class="session-name">{{ formatPatientInline(sessionSlot?.patientName, sessionSlot?.patientContractTag) || '—' }}</text>
           <text
             class="session-contact"
             :class="{ link: !!sessionSlot?.patientMobile }"
@@ -149,6 +149,7 @@ import { onLoad } from '@dcloudio/uni-app'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
 import { formatDateLocal } from '@/constants/scheduleSlots'
+import { formatPatientInline } from '@/utils/patientContract'
 
 type ManualStatus = 'AVAILABLE' | 'DISABLED'
 

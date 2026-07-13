@@ -108,6 +108,8 @@ def pending_proxy_order_for_schedule(db: Session, schedule_id: int) -> Optional[
 
 
 def search_proxy_patients(db: Session, keyword: Optional[str] = None, limit: int = 30) -> List[Dict[str, Any]]:
+    from patient_contract_service import batch_patient_contract_extras
+
     q = db.query(AppAccount).filter(AppAccount.IsActive == True)
     if keyword:
         kw = keyword.strip()
@@ -122,22 +124,120 @@ def search_proxy_patients(db: Session, keyword: Optional[str] = None, limit: int
         b.AccountId
         for b in db.query(AppRoleBinding).filter(AppRoleBinding.RoleType == "Patient").all()
     }
+    contract_map = batch_patient_contract_extras(db, accounts)
     result: List[Dict[str, Any]] = []
     for acc in accounts:
         if acc.Id not in patient_ids:
             continue
         name = acc.RealName or acc.Nickname or f"来访#{acc.Id}"
+        contract = contract_map.get(acc.Id, {})
+        tag = contract.get("contractTag")
+        label = f"{name} · {acc.Mobile or acc.Id}"
+        if tag:
+            label = f"{name} {tag} · {acc.Mobile or acc.Id}"
         result.append(
             {
                 "id": acc.Id,
                 "name": name,
                 "mobile": acc.Mobile,
-                "label": f"{name} · {acc.Mobile or acc.Id}",
+                "contractTag": tag,
+                "isContractSigned": bool(contract.get("isContractSigned")),
+                "boundCounselorId": contract.get("boundCounselorId"),
+                "boundCounselorName": contract.get("boundCounselorName"),
+                "label": label,
             }
         )
         if len(result) >= limit:
             break
     return result
+
+
+def search_counselor_proxy_patients(
+    db: Session,
+    counselor_id: int,
+    keyword: Optional[str] = None,
+    limit: int = 30,
+) -> List[Dict[str, Any]]:
+    """咨询师代理预约：按关键词搜索来访，并标注是否已绑定且已签约（可推送）。"""
+    from patient_contract_service import batch_patient_contract_extras
+    from models import AppRoleBinding
+
+    patient_ids = {
+        b.AccountId
+        for b in db.query(AppRoleBinding).filter(AppRoleBinding.RoleType == "Patient").all()
+    }
+    q = db.query(AppAccount).filter(AppAccount.IsActive == True)
+    if keyword:
+        kw = keyword.strip()
+        if kw:
+            q = q.filter(
+                (AppAccount.Nickname.like(f"%{kw}%"))
+                | (AppAccount.RealName.like(f"%{kw}%"))
+                | (AppAccount.Mobile.like(f"%{kw}%"))
+            )
+    accounts = q.order_by(AppAccount.Id.desc()).limit(limit * 3).all()
+    contract_map = batch_patient_contract_extras(db, accounts)
+    result: List[Dict[str, Any]] = []
+    for acc in accounts:
+        if acc.Id not in patient_ids:
+            continue
+        contract = contract_map.get(acc.Id, {})
+        bound_id = contract.get("boundCounselorId")
+        is_bound = bool(bound_id and int(bound_id) == int(counselor_id))
+        is_signed = bool(contract.get("isContractSigned"))
+        can_proxy_push = is_bound and is_signed
+        name = acc.RealName or acc.Nickname or f"来访#{acc.Id}"
+        tag = contract.get("contractTag")
+        label = f"{name} · {acc.Mobile or acc.Id}"
+        if tag:
+            label = f"{name} {tag} · {acc.Mobile or acc.Id}"
+        elif not can_proxy_push:
+            if not is_bound:
+                label = f"{name} · 未绑定您 · {acc.Mobile or acc.Id}"
+            elif not is_signed:
+                label = f"{name} · 未签约 · {acc.Mobile or acc.Id}"
+        result.append(
+            {
+                "id": acc.Id,
+                "name": name,
+                "mobile": acc.Mobile,
+                "contractTag": tag,
+                "isContractSigned": is_signed,
+                "boundCounselorId": bound_id,
+                "isBoundToCounselor": is_bound,
+                "canProxyPush": can_proxy_push,
+                "label": label,
+            }
+        )
+        if len(result) >= limit:
+            break
+    return result
+
+
+def counselor_proxy_patient_push_error(
+    db: Session,
+    patient: AppAccount,
+    counselor_id: int,
+) -> Optional[str]:
+    """不可推送时返回提示文案，可推送则返回 None。"""
+    bound_id = getattr(patient, "BoundCounselorId", None)
+    if not bound_id or int(bound_id) != int(counselor_id):
+        return "该来访并非您签约且绑定的来访，无法推送订单"
+    from order_contract_agreement import is_signed_with_counselor
+
+    if not is_signed_with_counselor(db, patient, counselor_id):
+        return "该来访并非您签约且绑定的来访，无法推送订单"
+    return None
+
+
+def validate_counselor_proxy_patient(
+    db: Session,
+    patient: AppAccount,
+    counselor_id: int,
+) -> None:
+    err = counselor_proxy_patient_push_error(db, patient, counselor_id)
+    if err:
+        raise ValueError(err)
 
 
 def search_proxy_counselors(db: Session, keyword: Optional[str] = None, limit: int = 30) -> List[Dict[str, Any]]:
@@ -308,14 +408,38 @@ def push_proxy_order(
     end_time: datetime,
     room_id: Optional[str] = None,
     existing_schedule_id: Optional[int] = None,
+    agreement_is_adult: Optional[bool] = None,
 ) -> Dict[str, Any]:
     expire_pending_proxy_orders(db)
 
     patient = db.query(AppAccount).filter(AppAccount.Id == patient_id, AppAccount.IsActive == True).first()
     if not patient:
         raise ValueError("来访不存在")
+    bound_id = getattr(patient, "BoundCounselorId", None)
+    if not bound_id:
+        raise ValueError("该来访尚未绑定签约咨询师，请先在来访者详情中绑定")
+    if int(counselor_id) != int(bound_id):
+        raise ValueError("只能为来访已绑定的咨询师推送代理预约订单")
     if not get_counselor_profile(db, counselor_id):
         raise ValueError("咨询师不存在")
+
+    from order_contract_agreement import is_signed_with_counselor
+
+    needs_agreement = not is_signed_with_counselor(db, patient, counselor_id)
+    if needs_agreement:
+        if agreement_is_adult is None:
+            raise ValueError("未签约来访需选择推送的签约协议类型")
+    elif agreement_is_adult is not None:
+        agreement_is_adult = None
+
+    from charity_milestone_service import assert_charity_patient_can_book_charity
+    from fastapi import HTTPException
+
+    try:
+        assert_charity_patient_can_book_charity(db, patient_id, counselor_id)
+    except HTTPException as exc:
+        raise ValueError(str(exc.detail)) from exc
+
     if not center_id or center_id not in CENTER_NAMES:
         raise ValueError("必须选择预约中心")
     if end_time <= start_time:
@@ -388,13 +512,21 @@ def push_proxy_order(
         Description=f"proxy:{staff_account_id}|center:{center_id}",
         ExpiresAt=expires_at,
         ProxyCreatedByAccountId=staff_account_id,
+        ProxyAgreementIsAdult=agreement_is_adult if needs_agreement else None,
     )
     db.add(order)
     db.flush()
 
     from proxy_booking_notify import notify_proxy_order_created
 
-    notify_proxy_order_created(db, order=order, schedule=schedule, patient=patient, counselor_id=counselor_id)
+    notify_proxy_order_created(
+        db,
+        order=order,
+        schedule=schedule,
+        patient=patient,
+        counselor_id=counselor_id,
+        staff_account_id=staff_account_id,
+    )
 
     return {
         "orderId": order.Id,

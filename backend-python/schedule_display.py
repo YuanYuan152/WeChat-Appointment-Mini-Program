@@ -1,7 +1,8 @@
-"""排期展示状态：与来访者预约系统联动。"""
+"""排班展示状态：与来访者预约系统联动。"""
+from datetime import datetime, timedelta
 from typing import Optional
 
-from consultation_cancel import has_appointment_started
+from consultation_cancel import has_appointment_ended, has_appointment_started
 from models import AppConsultation, AppSchedule
 
 # OPEN=已排期可约 BOOKED=已预约 ON_LEAVE=已请假 DONE=已完成 EXPIRED=已过期 CANCELLED=已取消
@@ -37,6 +38,20 @@ def _is_booked_slot(
     )
 
 
+def _appointment_end_time(
+    schedule: AppSchedule,
+    consultation: Optional[AppConsultation] = None,
+) -> Optional[datetime]:
+    if schedule.EndTime:
+        return schedule.EndTime
+    if consultation and consultation.EndTime:
+        return consultation.EndTime
+    start = schedule.StartTime or (consultation.StartTime if consultation else None)
+    if start:
+        return start + timedelta(minutes=50)
+    return None
+
+
 def resolve_schedule_display(
     schedule: AppSchedule,
     consultation: Optional[AppConsultation],
@@ -49,7 +64,9 @@ def resolve_schedule_display(
         return DISPLAY_CANCELLED
     if consultation and consultation.Status == "DONE":
         return DISPLAY_DONE
-    if _is_booked_slot(schedule, consultation) and has_appointment_started(schedule.StartTime):
+    if _is_booked_slot(schedule, consultation) and has_appointment_ended(
+        _appointment_end_time(schedule, consultation)
+    ):
         return DISPLAY_DONE
     if schedule.Status == "BOOKED":
         return DISPLAY_BOOKED
@@ -73,11 +90,11 @@ def is_consultation_recordable(
         return True
     if consultation.Status not in ("PENDING", "CONFIRMED", "ONGOING"):
         return False
-    start_time = consultation.StartTime
-    if schedule and schedule.StartTime:
-        start_time = start_time or schedule.StartTime
-    if not has_appointment_started(start_time):
-        return False
     if schedule is not None:
+        if not has_appointment_ended(_appointment_end_time(schedule, consultation)):
+            return False
         return _is_booked_slot(schedule, consultation)
-    return True
+    end_time = consultation.EndTime
+    if not end_time and consultation.StartTime:
+        end_time = consultation.StartTime + timedelta(minutes=50)
+    return has_appointment_ended(end_time)

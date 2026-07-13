@@ -23,6 +23,14 @@ def has_appointment_started(start_time: Optional[datetime]) -> bool:
     return hours <= 0
 
 
+def has_appointment_ended(end_time: Optional[datetime]) -> bool:
+    """当前时间是否已到或超过咨询结束时间。"""
+    hours = hours_until_appointment(end_time)
+    if hours is None:
+        return False
+    return hours <= 0
+
+
 def is_refund_eligible(start_time: Optional[datetime]) -> bool:
     hours = hours_until_appointment(start_time)
     if hours is None:
@@ -78,6 +86,10 @@ def cancel_consultation_for_visitor(
     refund = force_refund or is_refund_eligible(consultation.StartTime)
     consultation.Status = "CANCELLED"
     consultation.UpdatedAt = datetime.utcnow()
+
+    from consultation_status_service import cancel_consultation_auto_done_tasks
+
+    cancel_consultation_auto_done_tasks(db, consultation.Id)
 
     if consultation.OrderId:
         order = db.query(AppOrder).filter(AppOrder.Id == consultation.OrderId).first()

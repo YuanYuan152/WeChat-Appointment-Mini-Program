@@ -13,7 +13,8 @@
       <text class="rule-line">· 专业咨询师：¥600</text>
       <text class="rule-line">· 默认分成比例：基础价格的 50%</text>
       <text class="rule-line">· 需议价阶段可为单个来访设置个体调价，设置后该来访按调价后价格预约</text>
-      <text class="rule-line">· 可在下方直接修改各咨询师基础价，修改后对该咨询师全部来访生效，并按当前分成比例同步分成金额</text>
+      <text class="rule-line">· 默认抽成：基础价格的 50%；可点击「默认抽成」按固定金额或比例调整，保存后对该咨询师全部来访生效</text>
+      <text class="rule-line">· 可在下方直接修改各咨询师基础价，修改后对该咨询师全部来访生效</text>
     </view>
 
     <view class="toolbar">
@@ -47,9 +48,14 @@
             <text class="base-value">¥{{ row.basePriceYuan }}</text>
             <text v-if="row.usingDefaultBase" class="default-hint">类型默认</text>
           </view>
+          <view class="share-row">
+            <text class="share-label">默认分成</text>
+            <text class="share-value">{{ formatDefaultShare(row) }}</text>
+          </view>
         </view>
         <view class="card-actions">
           <view class="action-btn" @tap="openEditBase(row)">基础价</view>
+          <view class="action-btn" @tap="openEditShare(row)">默认抽成</view>
           <view class="action-btn primary" @tap="goPatients(row)">个性化调价</view>
         </view>
       </view>
@@ -77,14 +83,61 @@
         </view>
       </view>
     </view>
+
+    <view v-if="showShareEdit && shareEditing" class="overlay" @touchmove.stop.prevent>
+      <view class="modal-card edit-modal" @tap.stop>
+        <text class="modal-title">修改默认抽成</text>
+        <text class="modal-sub">{{ shareEditing.counselorName }} · 保存后对该咨询师全部来访生效</text>
+        <text class="modal-warn">将覆盖已有个性化分成设置，仅保留各来访的手动调价</text>
+
+        <view class="preview-row">
+          <text class="preview-label">当前基础价</text>
+          <text class="preview-value">¥{{ shareEditing.basePriceYuan }}</text>
+        </view>
+
+        <view class="form-group">
+          <text class="form-label">默认咨询师分成</text>
+          <view v-if="!shareForm.shareMode" class="form-hint share-default-hint">
+            当前使用系统默认：基础价格的 50%（¥{{ systemDefaultShareYuan }}）
+          </view>
+          <view class="share-tabs">
+            <view class="share-tab" :class="{ active: shareForm.shareMode === 'AMOUNT' }" @tap="shareForm.shareMode = 'AMOUNT'">按固定金额</view>
+            <view class="share-tab" :class="{ active: shareForm.shareMode === 'PERCENT' }" @tap="shareForm.shareMode = 'PERCENT'">按比例</view>
+            <view class="share-tab" :class="{ active: !shareForm.shareMode }" @tap="shareForm.shareMode = ''">系统默认</view>
+          </view>
+        </view>
+
+        <view v-if="shareForm.shareMode === 'AMOUNT'" class="form-group">
+          <text class="form-label">分成金额（元）</text>
+          <input v-model="shareForm.revenueShareYuan" class="form-input" type="number" />
+          <text class="form-hint">预览分成：¥{{ previewShareYuan }} · 占基础价 {{ previewSharePercent }}%</text>
+        </view>
+
+        <view v-if="shareForm.shareMode === 'PERCENT'" class="form-group">
+          <text class="form-label">分成占比（0–100%）</text>
+          <view class="input-with-suffix">
+            <input v-model="shareForm.revenueSharePercent" class="form-input suffix-input" type="number" />
+            <text class="input-suffix">%</text>
+          </view>
+          <text class="form-hint">预览分成：¥{{ previewShareYuan }}（按各来访实际显示价计算）</text>
+        </view>
+
+        <view class="modal-btns">
+          <button class="modal-btn cancel" @tap="closeShareEdit">取消</button>
+          <button class="modal-btn confirm" :loading="shareSaving" @tap="saveShare">保存</button>
+        </view>
+      </view>
+    </view>
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
+
+const DEFAULT_SHARE_PERCENT = 50
 
 interface CounselorPricingRow {
   counselorId: number
@@ -94,6 +147,10 @@ interface CounselorPricingRow {
   basePriceYuan: number
   defaultBasePriceYuan: number
   usingDefaultBase?: boolean
+  defaultShareMode?: string | null
+  defaultRevenueShareYuan?: number | null
+  defaultRevenueSharePercent?: number | null
+  defaultShareYuan?: number
   patientCount: number
   completedConsultationCount?: number
   charityNegotiationThreshold?: number
@@ -104,11 +161,65 @@ interface CounselorPricingRow {
 const items = ref<CounselorPricingRow[]>([])
 const loading = ref(false)
 const saving = ref(false)
+const shareSaving = ref(false)
 const keyword = ref('')
 
 const showEdit = ref(false)
+const showShareEdit = ref(false)
 const editing = ref<CounselorPricingRow | null>(null)
+const shareEditing = ref<CounselorPricingRow | null>(null)
 const basePriceInput = ref('')
+const shareForm = reactive({
+  shareMode: '' as '' | 'AMOUNT' | 'PERCENT',
+  revenueShareYuan: '',
+  revenueSharePercent: '',
+})
+
+const previewBaseYuan = computed(() => {
+  const row = shareEditing.value || editing.value
+  if (shareEditing.value) return shareEditing.value.basePriceYuan
+  const yuan = Number(basePriceInput.value)
+  return Number.isNaN(yuan) || yuan < 0 ? (row?.basePriceYuan || 0) : yuan
+})
+
+const systemDefaultShareYuan = computed(() =>
+  Math.floor(previewBaseYuan.value * DEFAULT_SHARE_PERCENT / 100),
+)
+
+const previewShareYuan = computed(() => {
+  const base = previewBaseYuan.value
+  if (shareForm.shareMode === 'AMOUNT') {
+    return Math.max(0, Math.min(Number(shareForm.revenueShareYuan) || 0, base))
+  }
+  if (shareForm.shareMode === 'PERCENT') {
+    const pct = Math.max(0, Math.min(Number(shareForm.revenueSharePercent) || 0, 100))
+    return Math.floor(base * pct / 100)
+  }
+  return systemDefaultShareYuan.value
+})
+
+const previewSharePercent = computed(() => {
+  const base = previewBaseYuan.value
+  if (base <= 0) return 0
+  if (shareForm.shareMode === 'AMOUNT') {
+    const amount = Number(shareForm.revenueShareYuan) || 0
+    return Math.round(Math.max(0, Math.min(amount, base)) / base * 100)
+  }
+  if (shareForm.shareMode === 'PERCENT') {
+    return Math.max(0, Math.min(Number(shareForm.revenueSharePercent) || 0, 100))
+  }
+  return DEFAULT_SHARE_PERCENT
+})
+
+const formatDefaultShare = (row: CounselorPricingRow) => {
+  if (row.defaultShareMode === 'AMOUNT' && row.defaultRevenueShareYuan != null) {
+    return `¥${row.defaultRevenueShareYuan}（固定金额）`
+  }
+  if (row.defaultShareMode === 'PERCENT' && row.defaultRevenueSharePercent != null) {
+    return `${row.defaultRevenueSharePercent}%（约 ¥${row.defaultShareYuan ?? 0}）`
+  }
+  return `50%（约 ¥${row.defaultShareYuan ?? Math.floor(row.basePriceYuan * DEFAULT_SHARE_PERCENT / 100)}）`
+}
 
 const reload = async () => {
   loading.value = true
@@ -141,9 +252,32 @@ const openEditBase = (row: CounselorPricingRow) => {
   showEdit.value = true
 }
 
+const fillShareForm = (row: CounselorPricingRow) => {
+  shareForm.shareMode = (row.defaultShareMode as typeof shareForm.shareMode) || ''
+  shareForm.revenueShareYuan =
+    row.defaultShareMode === 'AMOUNT' && row.defaultRevenueShareYuan != null
+      ? String(row.defaultRevenueShareYuan)
+      : ''
+  shareForm.revenueSharePercent =
+    row.defaultShareMode === 'PERCENT' && row.defaultRevenueSharePercent != null
+      ? String(row.defaultRevenueSharePercent)
+      : ''
+}
+
+const openEditShare = (row: CounselorPricingRow) => {
+  shareEditing.value = row
+  fillShareForm(row)
+  showShareEdit.value = true
+}
+
 const closeEdit = () => {
   showEdit.value = false
   editing.value = null
+}
+
+const closeShareEdit = () => {
+  showShareEdit.value = false
+  shareEditing.value = null
 }
 
 const saveBase = async () => {
@@ -170,6 +304,55 @@ const saveBase = async () => {
     uni.showToast({ title: '保存失败', icon: 'none' })
   } finally {
     saving.value = false
+  }
+}
+
+const saveShare = async () => {
+  if (!shareEditing.value) return
+  const baseYuan = shareEditing.value.basePriceYuan
+  if (shareForm.shareMode === 'AMOUNT') {
+    const shareYuan = Number(shareForm.revenueShareYuan)
+    if (Number.isNaN(shareYuan) || shareYuan < 0) {
+      uni.showToast({ title: '请输入有效分成金额', icon: 'none' })
+      return
+    }
+    if (shareYuan > baseYuan) {
+      uni.showToast({ title: '分成金额不能超过基础价格', icon: 'none' })
+      return
+    }
+  }
+  if (shareForm.shareMode === 'PERCENT') {
+    const pct = Number(shareForm.revenueSharePercent)
+    if (Number.isNaN(pct) || pct < 0 || pct > 100) {
+      uni.showToast({ title: '分成比例须在 0–100 之间', icon: 'none' })
+      return
+    }
+  }
+  shareSaving.value = true
+  try {
+    const payload: Record<string, unknown> = {
+      shareMode: shareForm.shareMode || null,
+    }
+    if (shareForm.shareMode === 'AMOUNT') {
+      payload.revenueShareYuan = Number(shareForm.revenueShareYuan)
+    } else if (shareForm.shareMode === 'PERCENT') {
+      payload.revenueSharePercent = Number(shareForm.revenueSharePercent)
+    }
+    const res = await httpV2.put(
+      API_ENDPOINTS.admin.pricingCounselorDefaultShare(shareEditing.value.counselorId),
+      payload,
+    )
+    if (res.code === 0) {
+      uni.showToast({ title: '默认抽成已更新', icon: 'success' })
+      closeShareEdit()
+      await reload()
+    } else {
+      uni.showToast({ title: res.msg || '保存失败', icon: 'none' })
+    }
+  } catch {
+    uni.showToast({ title: '保存失败', icon: 'none' })
+  } finally {
+    shareSaving.value = false
   }
 }
 
@@ -326,9 +509,28 @@ onShow(reload)
   color: #9CA3AF;
 }
 
+.share-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12rpx;
+  margin-top: 12rpx;
+  padding: 16rpx 20rpx;
+  background: #fff;
+  border-radius: 12rpx;
+  border: 1rpx solid #E8E4DE;
+}
+
+.share-label { font-size: 24rpx; color: #6B7280; }
+
+.share-value {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #3D5A4E;
+}
+
 .card-actions {
   display: flex;
-  gap: 16rpx;
+  gap: 12rpx;
   margin-top: 20rpx;
   padding-top: 20rpx;
   border-top: 1rpx solid #F0EDE8;
@@ -337,7 +539,7 @@ onShow(reload)
 .action-btn {
   flex: 1;
   text-align: center;
-  font-size: 28rpx;
+  font-size: 24rpx;
   color: #3D5A4E;
   font-weight: 600;
   padding: 20rpx 0;
@@ -370,6 +572,8 @@ onShow(reload)
   border-radius: 24rpx;
   padding: 40rpx 32rpx;
   box-sizing: border-box;
+  max-height: 85vh;
+  overflow-y: auto;
 }
 
 .modal-title {
@@ -385,6 +589,26 @@ onShow(reload)
   font-size: 24rpx;
   color: #9CA3AF;
 }
+
+.modal-warn {
+  display: block;
+  margin: -12rpx 0 20rpx;
+  padding: 16rpx 20rpx;
+  background: #FFFBEB;
+  border-radius: 12rpx;
+  font-size: 22rpx;
+  color: #B45309;
+  line-height: 1.5;
+}
+
+.preview-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 12rpx 0 20rpx;
+}
+
+.preview-label { font-size: 26rpx; color: #6B7280; }
+.preview-value { font-size: 30rpx; font-weight: 600; color: #2C2C2C; }
 
 .form-group { margin-bottom: 24rpx; }
 
@@ -413,6 +637,57 @@ onShow(reload)
   margin-top: 8rpx;
   font-size: 22rpx;
   color: #9CA3AF;
+}
+
+.share-tabs {
+  display: flex;
+  gap: 12rpx;
+}
+
+.share-tab {
+  flex: 1;
+  text-align: center;
+  padding: 16rpx 8rpx;
+  border-radius: 12rpx;
+  font-size: 24rpx;
+  color: #6B7280;
+  background: #F7F5F2;
+  border: 1rpx solid #E8E4DE;
+}
+
+.share-tab.active {
+  background: #E8E4DE;
+  color: #3D5A4E;
+  font-weight: 600;
+  border-color: #3D5A4E;
+}
+
+.share-default-hint {
+  margin-bottom: 12rpx;
+  color: #6B9080;
+}
+
+.input-with-suffix {
+  display: flex;
+  align-items: center;
+  background: #F7F5F2;
+  border-radius: 16rpx;
+  border: 1rpx solid #E8E4DE;
+  overflow: hidden;
+}
+
+.suffix-input {
+  flex: 1;
+  border: none !important;
+  background: transparent !important;
+}
+
+.input-suffix {
+  flex-shrink: 0;
+  padding: 0 24rpx;
+  font-size: 28rpx;
+  color: #6B7280;
+  font-weight: 600;
 }
 
 .modal-btns {

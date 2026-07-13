@@ -48,7 +48,7 @@
           <text class="status-tag" :class="tagClass(room)">{{ roomStatusLabel(room) }}</text>
         </view>
         <text v-if="room.counselorName" class="room-extra">咨询师：{{ room.counselorName }}</text>
-        <text v-if="room.patientName" class="room-extra">来访者：{{ room.patientName }}</text>
+        <text v-if="room.patientName" class="room-extra">来访者：{{ formatPatientInline(room.patientName, room.patientContractTag) }}</text>
       </view>
     </view>
 
@@ -91,6 +91,7 @@ import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
 import { APPOINTMENT_CENTERS } from '@/constants/appointmentCenters'
 import { currentStandardSlot, SLOT_START_HOURS } from '@/constants/scheduleSlots'
+import { formatPatientInline } from '@/utils/patientContract'
 
 interface RoomSnapshot {
   id?: number
@@ -103,6 +104,7 @@ interface RoomSnapshot {
   label: string
   counselorName?: string
   patientName?: string
+  patientContractTag?: string
 }
 
 const loading = ref(true)

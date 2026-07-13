@@ -30,8 +30,15 @@ def _format_datetime(dt: Optional[datetime]) -> str:
     return dt.strftime("%Y-%m-%d %H:%M")
 
 
-def _patient_name_only(db: Session, patient_id: int) -> str:
-    """咨询师消息仅展示姓名/昵称，不含手机号等联系方式。"""
+def _patient_contract_tag(db: Session, patient_id: int) -> Optional[str]:
+    from patient_contract_service import patient_contract_extras
+
+    acc = db.query(AppAccount).filter(AppAccount.Id == patient_id).first()
+    return patient_contract_extras(db, acc).get("contractTag")
+
+
+def _patient_name_plain(db: Session, patient_id: int) -> str:
+    """不含签约标签的来访者姓名。"""
     acc = db.query(AppAccount).filter(AppAccount.Id == patient_id).first()
     if not acc:
         return "来访者"
@@ -40,6 +47,25 @@ def _patient_name_only(db: Session, patient_id: int) -> str:
     if acc.Nickname:
         return acc.Nickname
     return "来访者"
+
+
+def _patient_label(name: Optional[str], tag: Optional[str] = None) -> str:
+    if not name:
+        return ""
+    if tag:
+        return f"{name} {tag}"
+    return name
+
+
+def _patient_detail_fields(ctx: Dict[str, Any]) -> Dict[str, Any]:
+    name = ctx.get("patientName")
+    tag = ctx.get("patientContractTag")
+    if not name:
+        return {}
+    out: Dict[str, Any] = {"patientName": name}
+    if tag:
+        out["patientContractTag"] = tag
+    return out
 
 
 def _appointment_location(
@@ -86,7 +112,8 @@ def _consultation_context(db: Session, consultation: AppConsultation) -> Dict[st
         db, note, status=schedule.Status if schedule else "BOOKED",
     )
     return {
-        "patientName": _patient_name_only(db, consultation.PatientId),
+        "patientName": _patient_name_plain(db, consultation.PatientId),
+        "patientContractTag": _patient_contract_tag(db, consultation.PatientId),
         "startTime": start_time,
         "endTime": end_time,
         "location": location,
@@ -167,6 +194,8 @@ def _leave_notice_detail(
     time_text = _format_datetime(schedule.StartTime)
     location = _appointment_location(db, schedule.Note, status=schedule.Status)
     patient_name = ctx["patientName"] if ctx else None
+    patient_tag = ctx.get("patientContractTag") if ctx else None
+    patient_label = _patient_label(patient_name, patient_tag)
     pending = status == "PENDING"
     if pending:
         title = "请假申请已提交"
@@ -177,8 +206,8 @@ def _leave_notice_detail(
         tip = "您的请假已生效，相关预约已取消，来访者将收到通知。"
         status_label = "已成功"
     summary = f"{time_text} · {location}"
-    if patient_name:
-        summary = f"{patient_name} · {summary}"
+    if patient_label:
+        summary = f"{patient_label} · {summary}"
     detail: Dict[str, Any] = {
         "startTime": time_text,
         "endTime": _format_datetime(schedule.EndTime),
@@ -190,8 +219,8 @@ def _leave_notice_detail(
         "statusLabel": status_label,
         "tip": tip,
     }
-    if patient_name:
-        detail["patientName"] = patient_name
+    if patient_name and ctx:
+        detail.update(_patient_detail_fields(ctx))
     if consultation:
         detail["consultationId"] = consultation.Id
     return title, _message_payload(summary, detail), detail
@@ -301,11 +330,11 @@ def notify_counselor_new_appointment(
 
     ctx = _consultation_context(db, consultation)
     time_text = _format_datetime(ctx["startTime"])
-    patient_name = ctx["patientName"]
+    patient_label = _patient_label(ctx["patientName"], ctx.get("patientContractTag"))
     location = ctx["location"]
-    summary = f"{patient_name} · {time_text} · {location}"
+    summary = f"{patient_label} · {time_text} · {location}"
     detail = {
-        "patientName": patient_name,
+        **_patient_detail_fields(ctx),
         "startTime": time_text,
         "endTime": _format_datetime(ctx["endTime"]),
         "location": location,
@@ -339,11 +368,11 @@ def schedule_counselor_consultation_reminder(
         return
 
     time_text = _format_datetime(start_time)
-    patient_name = ctx["patientName"]
+    patient_label = _patient_label(ctx["patientName"], ctx.get("patientContractTag"))
     location = ctx["location"]
-    summary = f"{patient_name} · {time_text} · {location}"
+    summary = f"{patient_label} · {time_text} · {location}"
     detail = {
-        "patientName": patient_name,
+        **_patient_detail_fields(ctx),
         "startTime": time_text,
         "endTime": _format_datetime(ctx["endTime"]),
         "location": location,
@@ -422,11 +451,12 @@ def notify_counselor_consultation_done(
 
     ctx = _consultation_context(db, consultation)
     time_text = _format_datetime(ctx["startTime"])
+    patient_label = _patient_label(ctx["patientName"], ctx.get("patientContractTag"))
     summary = (
-        f"{ctx['patientName']} · {time_text} · {ctx['location']} · 请尽快填写咨询记录"
+        f"{patient_label} · {time_text} · {ctx['location']} · 请尽快填写咨询记录"
     )
     detail = {
-        "patientName": ctx["patientName"],
+        **_patient_detail_fields(ctx),
         "startTime": time_text,
         "endTime": _format_datetime(ctx["endTime"]),
         "location": ctx["location"],
@@ -450,18 +480,22 @@ def notify_counselor_appointment_cancelled(
     *,
     refunded: bool,
 ) -> None:
+    from consultation_status_service import cancel_consultation_auto_done_tasks
+
     cancel_counselor_consultation_reminders(db, consultation.Id)
     cancel_counselor_consultation_done_notices(db, consultation.Id)
+    cancel_consultation_auto_done_tasks(db, consultation.Id)
     ctx = _consultation_context(db, consultation)
     time_text = _format_datetime(ctx["startTime"])
-    summary = f"{ctx['patientName']} · {time_text} · {ctx['location']}"
+    patient_label = _patient_label(ctx["patientName"], ctx.get("patientContractTag"))
+    summary = f"{patient_label} · {time_text} · {ctx['location']}"
 
     exemption_map = latest_exemptions_by_consultation(db, [consultation.Id])
     exemption = exemption_map.get(consultation.Id)
     exemption_status = exemption.Status if exemption else None
 
     detail = {
-        "patientName": ctx["patientName"],
+        **_patient_detail_fields(ctx),
         "startTime": time_text,
         "endTime": _format_datetime(ctx["endTime"]),
         "location": ctx["location"],
@@ -487,7 +521,7 @@ def notify_counselor_proxy_order_pending(
     *,
     counselor_id: int,
     schedule: AppSchedule,
-    patient_name: str,
+    patient_id: int,
     order: AppOrder,
 ) -> None:
     """助理代理预约推送待支付订单后通知咨询师。"""
@@ -505,9 +539,13 @@ def notify_counselor_proxy_order_pending(
     center_id = parse_center_id(schedule.Note)
     center_name = center_display_name(center_id) if center_id else "待定"
     time_text = _format_datetime(schedule.StartTime)
-    summary = f"{patient_name} · {time_text} · {center_name}"
+    patient_name = _patient_name_plain(db, patient_id)
+    patient_tag = _patient_contract_tag(db, patient_id)
+    patient_label = _patient_label(patient_name, patient_tag)
+    summary = f"{patient_label} · {time_text} · {center_name}"
     detail = {
         "patientName": patient_name,
+        "patientContractTag": patient_tag,
         "startTime": time_text,
         "endTime": _format_datetime(schedule.EndTime),
         "location": center_name,

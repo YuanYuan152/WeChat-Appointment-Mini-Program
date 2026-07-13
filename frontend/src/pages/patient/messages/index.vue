@@ -152,7 +152,7 @@ const emptyHint = computed(() => {
   const cat = categories.value.find(c => c.value === activeCategory.value)
   if (cat && cat.value !== 'ALL') return `暂无「${cat.label}」类消息`
   if (isAdminOpsInbox.value) {
-    return '豁免申请、咨询师请假、记录修改、风险上报等通知会在这里显示'
+    return '豁免申请、咨询师请假、记录修改、风险上报、定价与抽成等通知会在这里显示'
   }
   return '预约、请假、取消等通知会在这里显示'
 })
@@ -346,7 +346,7 @@ const openMessage = async (item: MessageItem) => {
   uni.navigateTo({
     url,
     fail: () => {
-      if (url.includes('case-record-amendments') || url.includes('refund-exemptions')) {
+      if (url.includes('case-record-amendments') || url.includes('approvals') || url.includes('refund-exemptions') || url.includes('leave-requests')) {
         uni.showModal({
           title: '页面未找到',
           content: '请重启 pnpm dev:mp-weixin，并在微信开发者工具中点击「编译」刷新后重试。',

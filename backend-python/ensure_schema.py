@@ -20,6 +20,9 @@ APP_ACCOUNT_COLUMNS = {
     "DeletedAt": "DATETIME NULL",
     "PasswordHash": "VARCHAR(255) NULL",
     "PreferenceTagsCompletedAt": "DATETIME NULL",
+    "CharityPricingNegotiatedAt": "DATETIME NULL",
+    "IsContractSigned": "BIT NOT NULL CONSTRAINT DF_AppAccount_IsContractSigned DEFAULT 0",
+    "BoundCounselorId": "INT NULL",
 }
 
 APP_ORDER_COLUMNS = {
@@ -27,6 +30,7 @@ APP_ORDER_COLUMNS = {
     "IntakeSignatureUrl": "VARCHAR(500) NULL",
     "ExpiresAt": "DATETIME NULL",
     "ProxyCreatedByAccountId": "INT NULL",
+    "ProxyAgreementIsAdult": "BIT NULL",
 }
 
 APP_REFUND_EXEMPTION_COLUMNS = {
@@ -57,6 +61,13 @@ APP_COUNSELOR_PROFILE_COLUMNS = {
     "InfoAuthenticityCommittedAt": "DATETIME NULL",
     "InfoAuthenticitySignerName": "NVARCHAR(100) NULL",
     "FaceBilling": "INT NOT NULL CONSTRAINT DF_AppCounselorProfile_FaceBilling DEFAULT 30000",
+    "DefaultShareMode": "NVARCHAR(20) NULL",
+    "DefaultRevenueShareCents": "INT NULL",
+    "DefaultRevenueSharePercent": "INT NULL",
+}
+
+APP_COUNSELOR_PATIENT_PRICING_COLUMNS = {
+    "CharityNegotiatedAt": "DATETIME NULL",
 }
 
 
@@ -190,6 +201,25 @@ def ensure_counselor_profile_columns():
             print(f"[OK] Added AppCounselorProfile.{name}")
 
 
+def ensure_counselor_patient_pricing_columns():
+    inspector = inspect(engine)
+    if not inspector.has_table("AppCounselorPatientPricing"):
+        return
+
+    existing = {column["name"] for column in inspector.get_columns("AppCounselorPatientPricing")}
+    missing = [
+        (name, ddl) for name, ddl in APP_COUNSELOR_PATIENT_PRICING_COLUMNS.items() if name not in existing
+    ]
+    if not missing:
+        print("[OK] AppCounselorPatientPricing columns already complete")
+        return
+
+    with engine.begin() as conn:
+        for name, ddl in missing:
+            conn.execute(text(f"ALTER TABLE [dbo].[AppCounselorPatientPricing] ADD [{name}] {ddl}"))
+            print(f"[OK] Added AppCounselorPatientPricing.{name}")
+
+
 def print_summary():
     inspector = inspect(engine)
     tables = [name for name in inspector.get_table_names() if name.startswith("App")]
@@ -210,6 +240,18 @@ def main():
     ensure_case_record_columns()
     ensure_refund_exemption_columns()
     ensure_counselor_profile_columns()
+    ensure_counselor_patient_pricing_columns()
+    from database import SessionLocal
+    from charity_milestone_service import backfill_charity_negotiation_state
+
+    db = SessionLocal()
+    try:
+        n = backfill_charity_negotiation_state(db)
+        db.commit()
+        if n:
+            print(f"[OK] Backfilled charity negotiation timestamps: {n}")
+    finally:
+        db.close()
     print_summary()
 
 

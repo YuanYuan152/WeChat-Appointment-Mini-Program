@@ -16,7 +16,7 @@
     <view v-else class="list">
       <view v-for="item in items" :key="item.id" class="card" @tap="openDetail(item)">
         <view class="card-head">
-          <text class="patient">{{ item.patientName }}</text>
+          <text class="patient">{{ formatPatientInline(item.patientName, item.patientContractTag) }}</text>
           <text class="time">{{ formatDT(item.createdAt) }}</text>
         </view>
         <text class="line">咨询师：{{ item.counselorName }}</text>
@@ -31,7 +31,7 @@
         <view class="detail-body">
           <view class="detail-row">
             <text class="label">来访者</text>
-            <text class="value">{{ detail.patientName }}</text>
+            <text class="value">{{ formatPatientInline(detail.patientName, detail.patientContractTag) }}</text>
           </view>
           <view class="detail-row">
             <text class="label">手机号</text>
@@ -71,12 +71,14 @@ import { onLoad, onShow } from '@dcloudio/uni-app'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
 import ConsultationFeedbackDisplay from '@/components/ConsultationFeedbackDisplay.vue'
+import { formatPatientInline } from '@/utils/patientContract'
 
 interface FeedbackItem {
   id: number
   consultationId: number
   patientId: number
   patientName: string
+  patientContractTag?: string
   patientMobile?: string
   counselorId: number
   counselorName: string

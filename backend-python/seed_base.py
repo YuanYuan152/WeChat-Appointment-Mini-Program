@@ -6,7 +6,8 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app_time import china_now
-from models import AppAccount, AppRoleBinding
+from models import AppAccount
+from role_active import set_account_role
 
 # 按依赖顺序删除，避免残留关联数据
 APP_TABLES_DELETE_ORDER = [
@@ -76,13 +77,8 @@ def create_account(
 
 
 def bind_role(db: Session, account_id: int, role: str, target_id: int | None = None) -> None:
-    db.add(
-        AppRoleBinding(
-            AccountId=account_id,
-            RoleType=role,
-            TargetId=target_id or account_id,
-        )
-    )
+    """单账号单角色：设置唯一角色绑定。"""
+    set_account_role(db, account_id, role, target_id)
 
 
 def utc_now() -> datetime:

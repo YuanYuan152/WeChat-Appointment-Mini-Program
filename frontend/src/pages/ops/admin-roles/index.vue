@@ -6,7 +6,7 @@
 
       <text class="title">角色&权限绑定</text>
 
-      <text class="subtitle">新用户注册后默认为来访；绑定「来访」时可选择来源（含公益来访）；绑定咨询师等角色后用户下次登录将进入对应界面</text>
+      <text class="subtitle">每个账号仅拥有一个角色。管理员 &gt; 咨询主任 &gt; 咨询助理，高级别可赋权/管理低级别，同级不可互相操作</text>
 
     </view>
 
@@ -41,13 +41,19 @@
             <text class="uid">
               {{ u.isLegacyOnly ? `旧系统 ID ${u.legacyDoctorId}` : `ID ${u.id}` }}{{ u.mobile ? ' · ' + u.mobile : '' }}
             </text>
-            <text v-if="u.patientSourceLabel" class="meta-line">来访来源：{{ u.patientSourceLabel }}</text>
-            <text v-if="u.counselorTypeLabel" class="meta-line">咨询师类型：{{ u.counselorTypeLabel }}</text>
+            <text v-if="showPatientSourceMeta(u)" class="meta-line">来访来源：{{ u.patientSourceLabel }}</text>
+            <text v-if="showCounselorTypeMeta(u)" class="meta-line">咨询师类型：{{ u.counselorTypeLabel }}</text>
             <text v-if="u.createdAt" class="meta-line">注册时间：{{ formatCreatedAt(u.createdAt) }}</text>
           </view>
           <text v-if="u.isLegacyOnly" class="legacy-tag">旧系统 · 待绑定</text>
           <text v-else-if="u.activeRole || u.roles?.length" class="active-tag">当前：{{ currentRoleDisplayLabel(u) }}</text>
         </view>
+        <StaffRemarkEditor
+          v-if="showStaffRemark(u) && !u.isLegacyOnly"
+          :account-id="u.id"
+          :model-value="u.staffRemark || ''"
+          @saved="value => onStaffRemarkSaved(u.id, value)"
+        />
 
         <view v-if="u.isLegacyOnly" class="legacy-actions">
           <text class="legacy-tip">该咨询师仅在旧系统中，请通过手机号添加为系统用户后绑定角色。</text>
@@ -56,31 +62,27 @@
 
         <template v-else>
         <view
-          v-if="u.roles?.length && u.id !== currentUserId"
+          v-if="u.roles?.length && u.id !== currentUserId && canManageUser(u)"
           class="delete-user-btn"
           @tap="deleteUser(u)"
         >
           删除用户
         </view>
+        <view v-else-if="u.roles?.length && u.id !== currentUserId && !canManageUser(u)" class="readonly-hint">
+          您无权管理该账号（同级或更高级别）
+        </view>
 
-        <view class="section-label">已绑定角色</view>
-        <view v-if="displayRoles(u).length" class="roles">
-          <view
-            v-for="r in displayRoles(u)"
-            :key="r"
-            class="role-chip"
-            :class="{ 'role-chip-base': r === 'Patient' }"
-            @tap="r !== 'Patient' ? removeRole(u.id, r) : undefined"
-          >
-            <text class="role-text">{{ roleLabel(r) }}{{ r === 'Patient' ? '（基础）' : '' }}</text>
-            <text v-if="r !== 'Patient'" class="role-remove">×</text>
+        <view class="section-label">当前角色</view>
+        <view v-if="userRole(u)" class="roles">
+          <view class="role-chip role-chip-base">
+            <text class="role-text">{{ currentRoleDisplayLabel(u) }}</text>
           </view>
         </view>
-        <text v-else class="no-role">暂未绑定角色</text>
+        <text v-else class="no-role">暂未设置角色</text>
 
-        <view class="bind-row">
+        <view v-if="canManageUser(u)" class="bind-row">
           <picker
-            :range="roleLabels"
+            :range="assignableRoleLabels"
             :value="pickerIndex(u.id)"
             @change="e => selectRole(u.id, Number(e.detail.value))"
           >
@@ -89,8 +91,9 @@
               <text class="picker-arrow">▾</text>
             </view>
           </picker>
-          <view class="bind-btn" @tap="bindRole(u.id)">绑定</view>
+          <view class="bind-btn" @tap="changeRole(u.id)">更换类型</view>
         </view>
+        <text v-else-if="userRole(u)" class="readonly-hint">当前账号超出您的赋权范围，无法更换角色</text>
         </template>
       </view>
     </view>
@@ -135,7 +138,7 @@
 
           <picker
 
-            :range="roleLabels"
+            :range="assignableRoleLabels"
 
             :value="addForm.roleIndex"
 
@@ -145,7 +148,7 @@
 
             <view class="picker-row modal-picker">
 
-              <text class="picker-text">{{ roleLabels[addForm.roleIndex] || '选择角色' }}</text>
+              <text class="picker-text">{{ assignableRoleLabels[addForm.roleIndex] || '选择角色' }}</text>
 
               <text class="picker-arrow">▾</text>
 
@@ -233,7 +236,7 @@ import { httpV2 } from '@/utils/http'
 
 import { API_ENDPOINTS } from '@/config/api'
 
-import { ROLE_OPTIONS, roleLabel, resolveHighestRole } from '@/constants/roles'
+import { ROLE_OPTIONS, roleLabel, resolveAccountRole, assignableRolesForActor, canActorManageUser, canActorAssignRole } from '@/constants/roles'
 import {
   COUNSELOR_TYPE_OPTIONS,
   PATIENT_SOURCE_OPTIONS,
@@ -241,6 +244,7 @@ import {
   isCharityPatientSource,
 } from '@/constants/userRoleMeta'
 import { useUserStore } from '@/store/user'
+import StaffRemarkEditor from '@/components/StaffRemarkEditor.vue'
 
 interface AdminUser {
   id: number
@@ -259,6 +263,7 @@ interface AdminUser {
   isSelfRegistered?: boolean
   isLegacyOnly?: boolean
   legacyDoctorId?: number
+  staffRemark?: string
 }
 
 interface AdminUsersResponse {
@@ -268,14 +273,27 @@ interface AdminUsersResponse {
   pageSize: number
 }
 
-const roleLabels = ROLE_OPTIONS.map(r => r.label)
 const roleValues = ROLE_OPTIONS.map(r => r.value)
+
+const actorRole = computed(() =>
+  resolveAccountRole(userStore.roles, userStore.activeRole || userStore.userInfo?.activeRole),
+)
+
+const assignableRoleValues = computed(() =>
+  assignableRolesForActor(actorRole.value, roleValues),
+)
+
+const assignableRoleLabels = computed(() =>
+  assignableRoleValues.value.map(v => roleLabel(v)),
+)
+
+const roleLabels = ROLE_OPTIONS.map(r => r.label)
 const patientSourceLabels = PATIENT_SOURCE_OPTIONS.map(o => o.label)
 const counselorTypeLabels = COUNSELOR_TYPE_OPTIONS.map(o => o.label)
 
 const userStore = useUserStore()
 const currentUserId = computed(() => userStore.userId)
-const addSelectedRole = computed(() => roleValues[addForm.roleIndex] || roleValues[0])
+const addSelectedRole = computed(() => assignableRoleValues.value[addForm.roleIndex] || assignableRoleValues.value[0])
 
 const users = ref<AdminUser[]>([])
 const loading = ref(false)
@@ -348,6 +366,7 @@ const load = async (reset = true) => {
       total.value = res.data.total || 0
       const next = res.data.items || []
       users.value = reset ? next : [...users.value, ...next]
+      initSelectedFromUsers()
     } else if (reset) {
       users.value = []
       total.value = 0
@@ -365,13 +384,19 @@ const load = async (reset = true) => {
   }
 }
 
+const canManageUser = (user: AdminUser) => {
+  const targetRole = userRole(user)
+  if (!targetRole) return true
+  return canActorManageUser(actorRole.value, targetRole)
+}
+
 const pickerIndex = (uid: number) => {
 
   const val = selected[uid]
 
   if (!val) return 0
 
-  const idx = roleValues.indexOf(val as typeof roleValues[number])
+  const idx = assignableRoleValues.value.indexOf(val as typeof roleValues[number])
 
   return idx >= 0 ? idx : 0
 
@@ -380,11 +405,11 @@ const pickerIndex = (uid: number) => {
 
 
 const selectedLabel = (uid: number) => {
-
   const val = selected[uid]
-
-  return val ? roleLabel(val) : '选择角色'
-
+  if (val) return roleLabel(val)
+  const user = users.value.find(u => u.id === uid)
+  if (user && userRole(user)) return currentRoleDisplayLabel(user)
+  return '选择角色'
 }
 
 
@@ -401,26 +426,46 @@ const formatCreatedAt = (value?: string) => {
   return formatDateTime(value)
 }
 
-/** 管理列表右上角「当前」：取最高已绑定角色；咨询师展示具体类型（公益/专业） */
+/** 管理列表展示当前唯一角色 */
+const userRole = (user: AdminUser) =>
+  resolveAccountRole(user.roles, user.activeRole)
+
 const currentRoleDisplayLabel = (user: AdminUser) => {
   if (user.activeRoleLabel) return user.activeRoleLabel
-  const highest = resolveHighestRole(user.roles)
-  if (highest === 'Counselor') {
+  const role = userRole(user)
+  if (role === 'Counselor') {
     return user.counselorTypeLabel || counselorTypeLabel(user.counselorType) || roleLabel('Counselor')
   }
-  if (highest === 'Patient' && isCharityPatientSource(user.patientSource)) {
+  if (role === 'Patient' && isCharityPatientSource(user.patientSource)) {
     return user.patientSourceLabel || '公益来访'
   }
-  return roleLabel(user.activeRole || highest)
+  return roleLabel(role)
 }
 
-const ROLE_DISPLAY_ORDER = ['Patient', 'Counselor', 'Assistant', 'Ops', 'Admin']
+/** 仅当前角色为来访时展示来源 */
+const showPatientSourceMeta = (user: AdminUser) =>
+  userRole(user) === 'Patient' && !!user.patientSourceLabel
 
-const displayRoles = (user: AdminUser) => {
-  const roles = user.roles || []
-  return [...roles].sort(
-    (a, b) => ROLE_DISPLAY_ORDER.indexOf(a) - ROLE_DISPLAY_ORDER.indexOf(b),
-  )
+/** 仅当前角色为咨询师时展示类型 */
+const showCounselorTypeMeta = (user: AdminUser) =>
+  userRole(user) === 'Counselor' && !!user.counselorTypeLabel
+
+/** 仅咨询师或来访展示工作人员备注 */
+const showStaffRemark = (user: AdminUser) => {
+  const role = userRole(user)
+  return role === 'Counselor' || role === 'Patient'
+}
+
+const onStaffRemarkSaved = (userId: number, value: string) => {
+  const user = users.value.find(u => u.id === userId)
+  if (user) user.staffRemark = value
+}
+
+const initSelectedFromUsers = () => {
+  for (const u of users.value) {
+    const role = userRole(u)
+    if (role) selected[u.id] = role
+  }
 }
 
 const pickPatientSource = (): Promise<string | null> =>
@@ -448,13 +493,17 @@ const pickCounselorType = (): Promise<string | null> =>
 const openAddFromLegacy = (user: AdminUser) => {
   addForm.mobile = (user.mobile || '').replace(/\D/g, '')
   addForm.nickname = user.displayName || user.nickname || ''
-  addForm.roleIndex = Math.max(0, roleValues.indexOf('Counselor'))
+  addForm.roleIndex = Math.max(0, assignableRoleValues.value.indexOf('Counselor'))
   addForm.patientSourceIndex = 0
   addForm.counselorTypeIndex = 0
   showAddModal.value = true
 }
 
 const openAddModal = () => {
+  if (!assignableRoleValues.value.length) {
+    uni.showToast({ title: '当前角色无可赋权选项', icon: 'none' })
+    return
+  }
   addForm.mobile = ''
   addForm.roleIndex = 0
   addForm.nickname = ''
@@ -477,7 +526,7 @@ const submitAddUser = async () => {
 
   }
 
-  const role = roleValues[addForm.roleIndex]
+  const role = assignableRoleValues.value[addForm.roleIndex]
   if (!role) {
     uni.showToast({ title: '请选择角色', icon: 'none' })
     return
@@ -565,26 +614,51 @@ const submitAddUser = async () => {
 
 const selectRole = (uid: number, idx: number) => {
 
-  selected[uid] = roleValues[idx] || roleValues[0]
+  selected[uid] = assignableRoleValues.value[idx] || assignableRoleValues.value[0]
 
 }
 
 
 
-const bindRole = async (uid: number) => {
+const ROLES_WITH_TYPE = new Set(['Patient', 'Counselor'])
 
+const changeRole = async (uid: number) => {
   const role = selected[uid]
-
   if (!role) {
-
     uni.showToast({ title: '请选择角色', icon: 'none' })
-
     return
+  }
 
+  const user = users.value.find(u => u.id === uid)
+  if (user && !canManageUser(user)) {
+    uni.showToast({ title: '无权管理该账号', icon: 'none' })
+    return
+  }
+  if (!canActorAssignRole(actorRole.value, role)) {
+    uni.showToast({ title: '无权赋权该角色', icon: 'none' })
+    return
+  }
+  const current = user ? userRole(user) : ''
+  if (current && current === role && !ROLES_WITH_TYPE.has(role)) {
+    uni.showModal({
+      title: '提示',
+      content: '当前角色暂不支持修改类型',
+      showCancel: false,
+    })
+    return
+  }
+  if (current && current !== role) {
+    const confirmed = await new Promise<boolean>((resolve) => {
+      uni.showModal({
+        title: '确认更换角色',
+        content: `将「${roleLabel(current)}」更换为「${roleLabel(role)}」？用户需重新登录后生效。`,
+        success: (res) => resolve(!!res.confirm),
+      })
+    })
+    if (!confirmed) return
   }
 
   const payload: { role: string; counselor_type?: string; patient_source?: string } = { role }
-
   if (role === 'Patient') {
     const patientSource = await pickPatientSource()
     if (!patientSource) return
@@ -598,42 +672,12 @@ const bindRole = async (uid: number) => {
   const res = await httpV2.post(API_ENDPOINTS.admin.bindRole(uid), payload)
 
   if (res.code === 0) {
-
     delete selected[uid]
-
     await load(true)
-
-    uni.showToast({ title: (res.data as { message?: string })?.message || res.msg || '已绑定', icon: 'success' })
-
+    uni.showToast({ title: (res.data as { message?: string })?.message || res.msg || '已更换', icon: 'success' })
   } else {
-
-    uni.showToast({ title: res.msg || res.data?.message || '绑定失败', icon: 'none' })
-
+    uni.showToast({ title: res.msg || res.data?.message || '更换失败', icon: 'none' })
   }
-
-}
-
-
-
-const removeRole = (uid: number, role: string) => {
-  if (role === 'Patient') {
-    uni.showToast({ title: '来访为默认基础角色，不可解绑', icon: 'none' })
-    return
-  }
-  uni.showModal({
-    title: '确认解绑',
-    content: `是否解绑「${roleLabel(role)}」？`,
-    success: async (res) => {
-      if (!res.confirm) return
-      const del = await httpV2.delete(`${API_ENDPOINTS.admin.bindRole(uid)}/${role}`)
-      if (del.code === 0) {
-        await load(true)
-        uni.showToast({ title: '已解绑', icon: 'success' })
-      } else {
-        uni.showToast({ title: del.msg || '解绑失败', icon: 'none' })
-      }
-    },
-  })
 }
 
 const deleteUser = (user: AdminUser) => {
@@ -746,13 +790,16 @@ onShow(() => load(true))
 
 .search-btn {
   flex-shrink: 0;
-  padding: 0 28rpx;
+  box-sizing: border-box;
+  height: 88rpx;
   line-height: 88rpx;
+  padding: 0 28rpx;
   background: #E8E4DE;
   color: #3D5A4E;
   border-radius: 16rpx;
   font-size: 28rpx;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .load-more {
@@ -846,14 +893,6 @@ onShow(() => load(true))
 
 
 
-.search-bar {
-
-  margin-bottom: 16rpx;
-
-}
-
-
-
 .search-input {
   width: 100%;
   box-sizing: border-box;
@@ -869,26 +908,20 @@ onShow(() => load(true))
   box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.03);
 }
 
-
-
 .add-btn {
-
+  flex-shrink: 0;
+  box-sizing: border-box;
+  height: 88rpx;
+  line-height: 88rpx;
+  padding: 0 28rpx;
   background: #3D5A4E;
-
   color: #fff;
-
   border-radius: 16rpx;
-
-  padding: 20rpx 0;
-
   text-align: center;
-
   font-size: 28rpx;
-
   font-weight: 600;
-
+  white-space: nowrap;
   box-shadow: 0 4rpx 16rpx rgba(61, 90, 78, 0.2);
-
 }
 
 
@@ -957,6 +990,8 @@ onShow(() => load(true))
 
   color: #2C2C2C;
 
+  margin-bottom: 4rpx;
+
 }
 
 
@@ -993,6 +1028,13 @@ onShow(() => load(true))
   font-size: 24rpx;
   color: #B91C1C;
   padding: 8rpx 0;
+}
+
+.readonly-hint {
+  margin-top: 16rpx;
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: #9CA3AF;
 }
 
 
@@ -1172,8 +1214,6 @@ onShow(() => load(true))
   flex: 1;
 
 }
-
-
 
 .footer-tip {
 

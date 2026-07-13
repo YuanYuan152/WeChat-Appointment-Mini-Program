@@ -13,7 +13,7 @@
       <view v-if="relatedType === 'APPOINTMENT_NEW'" class="detail-body">
         <view class="detail-row">
           <text class="label">来访者</text>
-          <text class="value">{{ detail.patientName }}</text>
+          <text class="value">{{ patientNameFromDetail(detail) }}</text>
         </view>
         <view class="detail-row">
           <text class="label">联系电话</text>
@@ -44,7 +44,7 @@
       <view v-else-if="relatedType === 'APPOINTMENT_CANCEL'" class="detail-body">
         <view class="detail-row">
           <text class="label">来访者</text>
-          <text class="value">{{ detail.patientName }}</text>
+          <text class="value">{{ patientNameFromDetail(detail) }}</text>
         </view>
         <view class="detail-row">
           <text class="label">联系电话</text>
@@ -80,6 +80,72 @@
         </view>
       </view>
 
+      <view v-else-if="isPatientCharityNegotiationTip" class="detail-body">
+        <view class="tip-box pending">
+          <text class="tip-text">{{ detail.messageText || detail.tip || payload.summary }}</text>
+        </view>
+      </view>
+
+      <view v-else-if="isPricingNotice" class="detail-body">
+        <view class="tip-box pending">
+          <text class="tip-text">{{ detail.messageText || detail.counselorMessageText || payload.summary }}</text>
+        </view>
+        <view v-if="detail.actorLabel" class="detail-row">
+          <text class="label">操作人</text>
+          <text class="value">{{ detail.actorLabel }}</text>
+        </view>
+        <view v-if="detail.counselorName" class="detail-row">
+          <text class="label">咨询师</text>
+          <text class="value">{{ detail.counselorName }}</text>
+        </view>
+        <view v-if="detail.patientName" class="detail-row">
+          <text class="label">来访者</text>
+          <text class="value">{{ patientNameFromDetail(detail) }}</text>
+        </view>
+        <view v-if="detail.oldBasePriceYuan != null && detail.newBasePriceYuan != null" class="detail-row">
+          <text class="label">基础价格</text>
+          <text class="value">¥{{ detail.oldBasePriceYuan }} → ¥{{ detail.newBasePriceYuan }}</text>
+        </view>
+        <view v-if="detail.displayPriceYuan != null && relatedType !== 'PRICING_COUNSELOR_BASE_UPDATED'" class="detail-row">
+          <text class="label">展示价格</text>
+          <text class="value">¥{{ detail.displayPriceYuan }}</text>
+        </view>
+        <view v-if="detail.adjustmentYuan != null" class="detail-row">
+          <text class="label">调价幅度</text>
+          <text class="value">¥{{ detail.adjustmentYuan }}</text>
+        </view>
+        <view v-if="detail.shareText" class="detail-row">
+          <text class="label">抽成</text>
+          <text class="value">{{ detail.shareText }}</text>
+        </view>
+      </view>
+
+      <view v-else-if="isStaffMilestoneNotice" class="detail-body">
+        <view class="tip-box pending">
+          <text class="tip-text">{{ detail.messageText || payload.summary }}</text>
+        </view>
+        <view v-if="milestoneCounselorName" class="detail-row">
+          <text class="label">咨询师</text>
+          <text class="value">{{ milestoneCounselorName }}</text>
+        </view>
+        <view v-if="milestoneCounselorPhone" class="detail-row">
+          <text class="label">咨询师电话</text>
+          <text class="value">{{ milestoneCounselorPhone }}</text>
+        </view>
+        <view class="detail-row">
+          <text class="label">咨询师备注</text>
+          <text class="value multiline">{{ milestoneCounselorStaffRemark || '暂无备注' }}</text>
+        </view>
+        <view v-if="detail.patientName" class="detail-row">
+          <text class="label">来访者</text>
+          <text class="value">{{ patientNameFromDetail(detail) }}</text>
+        </view>
+        <view v-if="detail.patientPhone" class="detail-row">
+          <text class="label">来访电话</text>
+          <text class="value">{{ detail.patientPhone }}</text>
+        </view>
+      </view>
+
       <view v-else-if="isExemptionPending" class="detail-body">
         <view class="tip-box pending">
           <text class="tip-text">{{ exemptionPendingTip }}</text>
@@ -90,7 +156,7 @@
         </view>
         <view v-if="detail.patientName" class="detail-row">
           <text class="label">来访者</text>
-          <text class="value">{{ detail.patientName }}</text>
+          <text class="value">{{ patientNameFromDetail(detail) }}</text>
         </view>
         <view v-if="detail.counselorName" class="detail-row">
           <text class="label">咨询师</text>
@@ -141,7 +207,7 @@
         </view>
         <view v-if="detail.patientName" class="detail-row">
           <text class="label">来访者</text>
-          <text class="value">{{ detail.patientName }}</text>
+          <text class="value">{{ patientNameFromDetail(detail) }}</text>
         </view>
         <view class="detail-row">
           <text class="label">来访电话</text>
@@ -221,7 +287,7 @@
         </view>
         <view v-if="detail.patientName" class="detail-row">
           <text class="label">来访者</text>
-          <text class="value">{{ detail.patientName }}</text>
+          <text class="value">{{ patientNameFromDetail(detail) }}</text>
         </view>
         <view class="detail-row">
           <text class="label">{{ (relatedType === 'COUNSELOR_LEAVE_SUBMITTED' || relatedType === 'COUNSELOR_LEAVE_SUCCESS') ? '请假时段' : '咨询时间' }}</text>
@@ -267,7 +333,7 @@
         <view v-for="(appt, idx) in affectedList" :key="idx" class="sub-card">
           <view class="detail-row">
             <text class="label">来访者</text>
-            <text class="value">{{ appt.patientName }}</text>
+            <text class="value">{{ patientNameFromDetail(appt) }}</text>
           </view>
           <view class="detail-row">
             <text class="label">联系电话</text>
@@ -292,6 +358,32 @@
         </view>
       </view>
 
+      <view v-else-if="relatedType === 'STAFF_PROXY_ORDER_PUSHED'" class="detail-body">
+        <view class="detail-row">
+          <text class="label">推送来访</text>
+          <text class="value">{{ patientNameFromDetail(detail) }}</text>
+        </view>
+        <view class="detail-row">
+          <text class="label">绑定咨询师</text>
+          <text class="value">{{ detail.boundCounselorName || detail.counselorName }}</text>
+        </view>
+        <view class="detail-row">
+          <text class="label">咨询时间</text>
+          <text class="value">{{ detail.startTime }}<text v-if="detail.endTime"> - {{ formatEndTime(detail.endTime) }}</text></text>
+        </view>
+        <view class="detail-row">
+          <text class="label">咨询地点</text>
+          <text class="value">{{ detail.location }}</text>
+        </view>
+        <view v-if="detail.amountYuan" class="detail-row">
+          <text class="label">订单金额</text>
+          <text class="value">¥{{ detail.amountYuan }}</text>
+        </view>
+        <view v-if="detail.tip" class="tip-box pending">
+          <text class="tip-text">{{ detail.tip }}</text>
+        </view>
+      </view>
+
       <view v-else class="detail-body">
         <text class="fallback-text">{{ payload.summary || message.Content || '暂无详情' }}</text>
       </view>
@@ -311,6 +403,13 @@ import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
 import { COUNSELOR_MESSAGE_TYPES, PATIENT_MESSAGE_TYPES, CASE_RECORD_AMENDMENT_REVIEW_PATH, caseRecordCrisisReportViewPath, isCaseRecordAmendmentPendingMessage, isExemptionPendingMessage, messageDisplayTitle, parseMessageContent, type MessageItem } from '@/utils/message'
 import { RISK_ASSESSMENT_ITEMS } from '@/constants/caseRecordRiskAssessment'
+import { patientNameFromDetail } from '@/utils/patientContract'
+
+interface RecentCounselorContact {
+  name?: string
+  phone?: string
+  counselorId?: number
+}
 
 interface AffectedAppointment {
   patientName?: string
@@ -341,6 +440,40 @@ const isCaseRecordAmendmentPending = computed(() => {
   return isCaseRecordAmendmentPendingMessage(message.value)
 })
 const isCaseRecordCrisisReport = computed(() => relatedType.value === 'CASE_RECORD_CRISIS_REPORT')
+const isPricingNotice = computed(() =>
+  relatedType.value === 'PRICING_COUNSELOR_BASE_UPDATED'
+  || relatedType.value === 'PRICING_PATIENT_PRICE_UPDATED'
+  || relatedType.value === 'PRICING_PATIENT_SHARE_UPDATED',
+)
+const isProfessionalPairMilestone = computed(() =>
+  relatedType.value === 'PROFESSIONAL_PAIR_CONSULTATION_30_BOOKING',
+)
+const isCharityMilestone = computed(() =>
+  relatedType.value === 'CHARITY_CONSULTATION_30_BOOKING'
+  || relatedType.value === 'CHARITY_CONSULTATION_30_DONE',
+)
+const isStaffMilestoneNotice = computed(() =>
+  isProfessionalPairMilestone.value || isCharityMilestone.value,
+)
+const isPatientCharityNegotiationTip = computed(() =>
+  relatedType.value === 'PATIENT_CHARITY_NEGOTIATION_TIP',
+)
+const recentCounselorList = computed(() => {
+  const list = detail.value.recentCounselors
+  return Array.isArray(list) ? (list as RecentCounselorContact[]) : []
+})
+const milestoneCounselorName = computed(() => {
+  if (detail.value.counselorName) return String(detail.value.counselorName)
+  return recentCounselorList.value[0]?.name || ''
+})
+const milestoneCounselorPhone = computed(() => {
+  if (detail.value.counselorPhone) return String(detail.value.counselorPhone)
+  return recentCounselorList.value[0]?.phone || ''
+})
+const milestoneCounselorStaffRemark = computed(() => {
+  const remark = detail.value.counselorStaffRemark
+  return typeof remark === 'string' ? remark : ''
+})
 const crisisLevelText = computed(() => {
   const choice = detail.value.crisisLevel as string | undefined
   const crisisItem = RISK_ASSESSMENT_ITEMS.find(i => i.id === 'crisis_level')
@@ -357,7 +490,7 @@ const amendmentPendingTip = computed(() => {
 const exemptionPendingTip = computed(() => {
   const text = detail.value.resultText as string | undefined
   if (text && text.includes('您的')) return text
-  return '待审核：请在工作台「豁免申请审核」中选择对应申请后处理'
+  return '待审核：请在工作台「审批管理」中处理对应豁免申请'
 })
 const exemptionStatusLabel = computed(() => {
   if (isExemptionPending.value) return '待审核'
@@ -537,6 +670,11 @@ onLoad((options) => {
 
 .value.multiline {
   white-space: pre-wrap;
+}
+
+.counselor-line {
+  display: block;
+  margin-bottom: 8rpx;
 }
 
 .value.highlight {

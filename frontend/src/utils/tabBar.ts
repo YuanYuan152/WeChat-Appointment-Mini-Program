@@ -1,28 +1,40 @@
-import { resolveHighestRole } from '@/constants/roles'
+import { resolveAccountRole } from '@/constants/roles'
 
-/** tabBar 第三项：来访者=预约记录，其他角色=工作台 */export const TAB_SLOT_INDEX = 2
+/** tabBar 第三项：来访者=预约记录，其他角色=工作台 */
+export const TAB_SLOT_INDEX = 2
 
-export function resolveTabSlotIsPatient(roles?: string[]): boolean {
-  return resolveHighestRole(roles) === 'Patient'
+export function resolveTabSlotIsPatient(roleOrRoles?: string | string[]): boolean {
+  if (typeof roleOrRoles === 'string') {
+    return roleOrRoles === 'Patient'
+  }
+  return resolveAccountRole(roleOrRoles) === 'Patient'
 }
 
-export function readStoredRoles(): string[] {
+export function readStoredRole(): string {
   try {
+    const active = uni.getStorageSync('active_role')
+    if (active) return active
     const raw = uni.getStorageSync('user_roles')
-    if (!raw) return []
+    if (!raw) return 'Patient'
     const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed : []
+    return resolveAccountRole(Array.isArray(parsed) ? parsed : [])
   } catch {
-    return []
+    return 'Patient'
   }
 }
 
-export function updateTabBarForRole(roles?: string[]) {
-  const roleList = roles ?? readStoredRoles()
-  const isPatient = resolveTabSlotIsPatient(roleList)
+export function updateTabBarForRole(roleOrRoles?: string | string[]) {
+  let role = 'Patient'
+  if (typeof roleOrRoles === 'string') {
+    role = roleOrRoles
+  } else if (Array.isArray(roleOrRoles)) {
+    role = resolveAccountRole(roleOrRoles)
+  } else {
+    role = readStoredRole()
+  }
 
   uni.setTabBarItem({
     index: TAB_SLOT_INDEX,
-    text: isPatient ? '预约记录' : '工作台',
+    text: role === 'Patient' ? '预约记录' : '工作台',
   })
 }

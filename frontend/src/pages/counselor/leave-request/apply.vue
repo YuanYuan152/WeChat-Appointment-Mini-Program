@@ -2,7 +2,7 @@
   <view class="page-leave">
     <view class="info-card">
       <text class="info-title">请假申请</text>
-      <text class="info-line">请返回咨询师工作台，在对应已预约时段点击「请假」，上传与来访者的沟通截图后确认取消。</text>
+      <text class="info-line">请返回咨询师工作台，在对应已预约时段点击「请假」，上传与来访者的沟通截图后提交申请，待管理员审核通过后生效。</text>
       <text v-if="slotText" class="info-line">时段：{{ slotText }}</text>
       <text v-if="centerRoom" class="info-line">地点：{{ centerRoom }}</text>
     </view>

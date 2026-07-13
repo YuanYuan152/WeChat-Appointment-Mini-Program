@@ -198,17 +198,26 @@
           </view>
           
           <view class="doc-card-bottom">
-            <view v-if="doctor.needsNegotiation" class="doc-price-box">
-              <text class="price-negotiate">{{ doctor.priceLabel || '需议价' }}</text>
-            </view>
-            <view v-else class="doc-price-box">
-              <text class="price-symbol">￥</text>
-              <text class="price-num">{{ doctor.price || 500 }}</text>
-              <text class="price-unit">/50分钟</text>
+            <view class="doc-price-box">
+              <template v-if="doctor.priceNegotiation || doctor.needsNegotiation">
+                <text class="price-num">{{ doctor.billingLabel || doctor.priceLabel || '议价' }}</text>
+                <text class="price-unit">/50分钟</text>
+              </template>
+              <template v-else>
+                <text class="price-symbol">￥</text>
+                <text class="price-num">{{ doctor.price || 500 }}</text>
+                <text class="price-unit">/50分钟</text>
+              </template>
             </view>
             <view class="doc-card-actions">
               <button class="assistant-btn" @click.stop="openAssistantContact">联系助理</button>
-              <button class="book-btn" @click.stop="goToDetail(doctor.id)">立即预约</button>
+              <button
+                class="book-btn"
+                :class="{ disabled: doctor.priceNegotiation || doctor.needsNegotiation }"
+                @click.stop="goToDetail(doctor.id)"
+              >
+                {{ doctor.priceNegotiation || doctor.needsNegotiation ? '议价后方可预约' : '立即预约' }}
+              </button>
             </view>
           </view>
         </view>
@@ -261,6 +270,8 @@ interface Consultant extends Omit<Doctor, 'province'> {
   price?: number
   needsNegotiation?: boolean
   priceLabel?: string
+  priceNegotiation?: boolean
+  billingLabel?: string
   _source?: string
 }
 
@@ -378,8 +389,12 @@ function parseWorkYears(item: { workYears?: number; experience?: string }) {
 }
 
 function normalizeConsultant(item: Consultant): Consultant {
-  const raw = item as Consultant & { needs_negotiation?: boolean; price_label?: string }
+  const raw = item as Consultant & {
+    needs_negotiation?: boolean
+    price_label?: string
+  }
   const needsNegotiation = Boolean(raw.needsNegotiation ?? raw.needs_negotiation)
+  const priceNegotiation = !!(item.priceNegotiation || item.billingLabel === '议价')
   return {
     ...item,
     avatar: fixImageUrl(item.avatar || '/static/images/tc59.png'),
@@ -391,6 +406,8 @@ function normalizeConsultant(item: Consultant): Consultant {
     price: item.price || 500,
     needsNegotiation,
     priceLabel: raw.priceLabel || raw.price_label || (needsNegotiation ? '需议价' : undefined),
+    priceNegotiation,
+    billingLabel: item.billingLabel || (priceNegotiation ? '议价' : undefined),
   }
 }
 
@@ -981,6 +998,12 @@ onPullDownRefresh(async () => {
 
 .book-btn::after {
   border: none;
+}
+
+.book-btn.disabled {
+  background: #E8E4DE;
+  color: #9CA3AF;
+  box-shadow: none;
 }
 
 .modal-overlay {

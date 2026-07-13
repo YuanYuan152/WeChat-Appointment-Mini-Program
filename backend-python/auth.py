@@ -11,7 +11,11 @@ from sqlalchemy.exc import SQLAlchemyError
 from database import get_db
 from models import AppAccount, AppLoginSession, AppRoleBinding, AppRoleSwitchLog
 from config import settings
-from role_active import resolve_active_role
+from role_active import (
+    consolidate_account_role_bindings,
+    get_account_role,
+    set_account_role,
+)
 from patient_registration import ensure_default_patient_registration
 
 router = APIRouter(prefix="/api/mini/auth", tags=["Auth"])
@@ -23,6 +27,8 @@ DEV_MOCK_CODE_OPENIDS = {
     "dev_patient_xiaomei": "demo-openid-patient-xiaomei",
     "dev_patient_xiaogang": "demo-openid-patient-xiaogang",
     "dev_patient_xiaoli": "demo-openid-patient-xiaoli",
+    "dev_patient_charity_test": "demo-openid-patient-charity-test",
+    "dev_patient_professional_milestone_test": "demo-openid-patient-professional-milestone-test",
     # 与 seed_demo_data.py 三位咨询师账号对齐
     "dev_counselor": "demo-counselor-lixinyi",
     "dev_counselor_lixinyi": "demo-counselor-lixinyi",
@@ -39,6 +45,8 @@ DEV_MOCK_CODE_ACTIVE_ROLES = {
     "dev_patient_xiaomei": "Patient",
     "dev_patient_xiaogang": "Patient",
     "dev_patient_xiaoli": "Patient",
+    "dev_patient_charity_test": "Patient",
+    "dev_patient_professional_milestone_test": "Patient",
     "dev_counselor": "Counselor",
     "dev_counselor_lixinyi": "Counselor",
     "dev_counselor_zhangmingyuan": "Counselor",
@@ -179,13 +187,7 @@ def get_optional_account(
 # ---------------------------------------------------------------------------
 
 def _ensure_role_binding(db: Session, account_id: int, role: str) -> None:
-    exists = (
-        db.query(AppRoleBinding)
-        .filter(AppRoleBinding.AccountId == account_id, AppRoleBinding.RoleType == role)
-        .first()
-    )
-    if not exists:
-        db.add(AppRoleBinding(AccountId=account_id, RoleType=role, TargetId=account_id))
+    set_account_role(db, account_id, role)
 
 
 def _restore_demo_staff_on_mock_login(
@@ -198,7 +200,6 @@ def _restore_demo_staff_on_mock_login(
     account.IsActive = True
     if hasattr(account, "AccessRevokedAt"):
         account.AccessRevokedAt = None
-    _ensure_role_binding(db, account.Id, "Patient")
     _ensure_role_binding(db, account.Id, staff_role)
     account.ActiveRole = staff_role
     db.commit()
@@ -256,11 +257,9 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
         db.refresh(account)
         is_new_user = True
 
-        # 本地开发 mock 模式：自动给新用户绑定所有角色，方便调试
+        # 本地开发 mock：新账号默认来访，具体角色由 dev_* 登录码决定
         if openid.startswith("mock_openid_"):
-            for role in ["Patient", "Counselor", "Assistant", "Ops", "Admin"]:
-                db.add(AppRoleBinding(AccountId=account.Id, RoleType=role))
-            account.ActiveRole = "Admin"
+            set_account_role(db, account.Id, "Patient")
             db.commit()
     else:
         # 现有账号若之前没有 unionid，本次拿到了就回写；不会覆盖已有的 unionid
@@ -282,11 +281,7 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
         target_role = DEV_MOCK_CODE_ACTIVE_ROLES.get(request.code)
         if target_role:
             _restore_demo_staff_on_mock_login(db, account, request.code, openid)
-            bindings = db.query(AppRoleBinding).filter(
-                AppRoleBinding.AccountId == account.Id
-            ).all()
-            role_names = [b.RoleType for b in bindings]
-            account.ActiveRole = resolve_active_role(role_names)
+            set_account_role(db, account.Id, target_role)
             db.commit()
 
     token, expire = create_access_token({"sub": str(account.Id), "openid": openid})
@@ -351,15 +346,10 @@ def get_me(
         db.commit()
         db.refresh(current_account)
 
-    bindings = db.query(AppRoleBinding).filter(
-        AppRoleBinding.AccountId == current_account.Id
-    ).all()
-    roles = [b.RoleType for b in bindings]
-
-    stored = getattr(current_account, "ActiveRole", None)
-    active_role = resolve_active_role(roles, stored)
-    if active_role != stored:
-        current_account.ActiveRole = active_role
+    consolidate_account_role_bindings(db, current_account.Id)
+    role = get_account_role(db, current_account.Id)
+    if getattr(current_account, "ActiveRole", None) != role:
+        current_account.ActiveRole = role
         current_account.UpdatedAt = datetime.utcnow()
         db.commit()
         db.refresh(current_account)
@@ -372,8 +362,8 @@ def get_me(
         avatarUrl=current_account.AvatarUrl,
         realName=current_account.RealName,
         gender=current_account.Gender,
-        roles=roles,
-        activeRole=active_role,
+        roles=[role],
+        activeRole=role,
     )
 
 
@@ -461,41 +451,17 @@ def delete_account(
     return {"message": "账号已注销，所有登录会话已失效"}
 
 
-@router.post("/switch-role", summary="切换当前活跃角色（Q4=A 自由切换）")
+@router.post("/switch-role", summary="切换角色（单账号仅一个角色，已禁用）")
 def switch_role(
     body: SwitchRoleRequest,
     request: Request,
     current_account: AppAccount = Depends(get_current_account),
     db: Session = Depends(get_db),
 ):
-    target = body.role
-    bindings = db.query(AppRoleBinding).filter(
-        AppRoleBinding.AccountId == current_account.Id
-    ).all()
-    role_names = [b.RoleType for b in bindings]
-
-    # Patient 角色为默认兜底，所有账号都允许
-    allowed = set(role_names) | {"Patient"}
-    if target not in allowed:
-        raise HTTPException(status_code=403, detail=f"账号未绑定 {target} 角色")
-
-    from_role = getattr(current_account, "ActiveRole", None)
-
-    # 写日志
-    log = AppRoleSwitchLog(
-        AccountId=current_account.Id,
-        FromRole=from_role,
-        ToRole=target,
-        Ip=request.client.host if request.client else None,
-        UserAgent=request.headers.get("user-agent", "")[:200] if request.headers else None,
-    )
-    db.add(log)
-
-    # 在 AppAccount 上落 ActiveRole 字段。表里没有此列时跳过。
-    try:
-        current_account.ActiveRole = target
-    except Exception:
-        pass
-
-    db.commit()
-    return {"message": "角色已切换", "activeRole": target}
+    current = get_account_role(db, current_account.Id)
+    if body.role != current:
+        raise HTTPException(
+            status_code=400,
+            detail="单账号仅支持一个角色，如需变更请联系管理员在工作台更换",
+        )
+    return {"message": "当前角色未变更", "activeRole": current}

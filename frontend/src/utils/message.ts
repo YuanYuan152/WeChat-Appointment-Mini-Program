@@ -1,5 +1,5 @@
 import { getDevWorkbenchRole, isMockLoginEnabled } from '@/utils/auth'
-import { STAFF_OPS_WORKBENCH_ROLES, usesOpsWorkbench } from '@/constants/roles'
+import { resolveAccountRole, STAFF_OPS_WORKBENCH_ROLES, usesOpsWorkbench } from '@/constants/roles'
 
 export interface MessageItem {
   Id: number
@@ -146,6 +146,14 @@ export const RELATED_TYPE_LABELS: Record<string, string> = {
   PATIENT_APPOINTMENT_CANCEL: '预约取消',
   PATIENT_APPOINTMENT_REMIND: '预约提醒',
   PATIENT_LEAVE_APPROVED: '请假通知',
+  CHARITY_CONSULTATION_30_BOOKING: '公益咨询第30次预约',
+  CHARITY_CONSULTATION_30_DONE: '公益咨询第30次完成',
+  PATIENT_CHARITY_NEGOTIATION_TIP: '公益咨询议价提示',
+  PROFESSIONAL_PAIR_CONSULTATION_30_BOOKING: '正价咨询第30次预约',
+  PRICING_COUNSELOR_BASE_UPDATED: '基础价格调整',
+  PRICING_PATIENT_PRICE_UPDATED: '来访调价成功',
+  PRICING_PATIENT_SHARE_UPDATED: '抽成调整成功',
+  STAFF_PROXY_ORDER_PUSHED: '代理预约已推送',
 }
 
 /** 咨询师消息类型：详情页不展示来访联系方式 */
@@ -167,6 +175,7 @@ export const PATIENT_MESSAGE_TYPES = new Set([
   'PATIENT_LEAVE_APPROVED',
   'REFUND_EXEMPTION',
   'REFUND_EXEMPTION_PENDING',
+  'PATIENT_CHARITY_NEGOTIATION_TIP',
 ])
 
 export interface MessageCategoryOption {
@@ -180,12 +189,15 @@ export const ADMIN_OPS_MESSAGE_CATEGORIES: MessageCategoryOption[] = [
   { value: 'counselor_leave', label: '咨询师请假' },
   { value: 'case_record_amendment', label: '记录修改审核' },
   { value: 'case_record_crisis', label: '风险上报' },
+  { value: 'charity_milestone', label: '公益咨询里程碑' },
+  { value: 'professional_pair_milestone', label: '正价咨询里程碑' },
+  { value: 'pricing', label: '定价与抽成' },
 ]
 
 const ADMIN_OPS_FORBIDDEN_FILTER_VALUES = new Set(['appointment_new', 'appointment_cancel'])
 
 export function isAdminOpsMessageInbox(role: string): boolean {
-  return usesOpsWorkbench(role)
+  return role === 'Ops' || role === 'Admin'
 }
 
 export function getStoredUserRoles(): string[] {
@@ -196,11 +208,10 @@ export function getStoredUserRoles(): string[] {
   }
 }
 
-/** 当前账号是否使用管理员/Ops 消息收件箱（含多角色账号与开发联调角色） */
+/** 当前账号是否使用管理员/Ops 消息收件箱 */
 export function hasAdminOpsMessageInbox(activeRole: string, roles?: string[]): boolean {
-  if (isAdminOpsMessageInbox(activeRole)) return true
-  const all = roles?.length ? roles : getStoredUserRoles()
-  if (STAFF_OPS_WORKBENCH_ROLES.some(r => all.includes(r))) return true
+  const role = resolveAccountRole(roles, activeRole)
+  if (isAdminOpsMessageInbox(role)) return true
   if (isMockLoginEnabled()) {
     const devRole = getDevWorkbenchRole()
     return !!devRole && usesOpsWorkbench(devRole)
@@ -211,17 +222,9 @@ export function hasAdminOpsMessageInbox(activeRole: string, roles?: string[]): b
 export function resolveMessageInboxRole(activeRole: string, roles?: string[]): string {
   if (isMockLoginEnabled()) {
     const devRole = getDevWorkbenchRole()
-    if (devRole && usesOpsWorkbench(devRole)) {
-      const all = roles?.length ? roles : getStoredUserRoles()
-      if (!all.length || all.includes(devRole)) return devRole
-    }
+    if (devRole && usesOpsWorkbench(devRole)) return devRole
   }
-  if (isAdminOpsMessageInbox(activeRole)) return activeRole
-  const all = roles?.length ? roles : getStoredUserRoles()
-  if (all.includes('Admin')) return 'Admin'
-  if (all.includes('Ops')) return 'Ops'
-  if (all.includes('Assistant')) return 'Assistant'
-  return activeRole
+  return resolveAccountRole(roles, activeRole)
 }
 
 export function isCrisisReportMessage(item: MessageItem): boolean {
@@ -255,6 +258,9 @@ export function getMessageCategoriesForRole(role: string): MessageCategoryOption
       { value: 'appointment_new', label: '新增预约' },
       { value: 'appointment_cancel', label: '预约取消' },
       { value: 'counselor_leave', label: '咨询师请假' },
+      { value: 'charity_milestone', label: '公益咨询里程碑' },
+      { value: 'professional_pair_milestone', label: '正价咨询里程碑' },
+      { value: 'pricing', label: '定价与抽成' },
     ]
   }
 
@@ -325,6 +331,8 @@ export function messageSearchText(item: MessageItem): string {
     detail.counselorName,
     detail.patientPhone,
     detail.counselorPhone,
+    detail.recentCounselorsText,
+    detail.messageText,
     detail.activityTitle,
     detail.location,
     detail.startTime,
@@ -361,11 +369,13 @@ export function resolveMessageNavigation(
 
   if (shouldOpenLeaveApproval(activeRole, item)) {
     const leaveId = getLeaveRequestId(item)
-    return leaveId ? `/pages/ops/leave-requests/index?id=${leaveId}` : `/pages/patient/messages/detail?id=${item.Id}`
+    return leaveId
+      ? `/pages/ops/approvals/index?category=LEAVE&leaveId=${leaveId}`
+      : `/pages/ops/approvals/index?category=LEAVE`
   }
 
   if (shouldOpenExemptionReview(activeRole, item)) {
-    return '/pages/ops/refund-exemptions/index'
+    return '/pages/ops/approvals/index?category=EXEMPTION'
   }
 
   if (shouldOpenCaseRecordAmendmentReview(activeRole, item)) {

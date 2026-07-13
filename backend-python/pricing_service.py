@@ -328,6 +328,41 @@ def resolve_display_price_cents(
     return max(base + adjustment, 0)
 
 
+def _counselor_default_share_snapshot(profile: Optional[AppCounselorProfile]) -> Dict[str, Any]:
+    if not profile:
+        return {"shareMode": None, "revenueShareCents": None, "revenueSharePercent": None}
+    return {
+        "shareMode": getattr(profile, "DefaultShareMode", None),
+        "revenueShareCents": getattr(profile, "DefaultRevenueShareCents", None),
+        "revenueSharePercent": getattr(profile, "DefaultRevenueSharePercent", None),
+    }
+
+
+def _resolve_counselor_default_share_cents(
+    profile: Optional[AppCounselorProfile],
+    *,
+    base_cents: int,
+    display_cents: int,
+) -> int:
+    if display_cents <= 0:
+        return 0
+    if not profile:
+        return int(base_cents * DEFAULT_SHARE_PERCENT_OF_BASE / 100)
+
+    mode = getattr(profile, "DefaultShareMode", None)
+    if mode == SHARE_MODE_AMOUNT:
+        amount = int(getattr(profile, "DefaultRevenueShareCents", 0) or 0)
+        return max(0, min(amount, display_cents))
+    if mode == SHARE_MODE_PERCENT:
+        percent = int(getattr(profile, "DefaultRevenueSharePercent", 0) or 0)
+        percent = max(0, min(percent, 100))
+        return int(display_cents * percent / 100)
+    if not is_legacy_unset_face_billing(profile, base_cents):
+        amount = int(profile.FaceBilling or 0)
+        return max(0, min(amount, display_cents))
+    return int(base_cents * DEFAULT_SHARE_PERCENT_OF_BASE / 100)
+
+
 def resolve_revenue_share_cents(
     db: Session,
     patient_account_id: int,
@@ -342,20 +377,24 @@ def resolve_revenue_share_cents(
     if display <= 0:
         return 0
 
+    base = resolve_counselor_base_price_cents(db, counselor_account_id)
     row = get_pricing_override(db, counselor_account_id, patient_account_id)
-    if not row or not row.ShareMode:
-        return resolve_counselor_default_share_cents(db, counselor_account_id, display)
+    if row and row.ShareMode:
+        if row.ShareMode == SHARE_MODE_AMOUNT:
+            amount = int(row.RevenueShareCents or 0)
+            return max(0, min(amount, display))
 
-    if row.ShareMode == SHARE_MODE_AMOUNT:
-        amount = int(row.RevenueShareCents or 0)
-        return max(0, min(amount, display))
+        if row.ShareMode == SHARE_MODE_PERCENT:
+            percent = int(row.RevenueSharePercent or 0)
+            percent = max(0, min(percent, 100))
+            return int(display * percent / 100)
 
-    if row.ShareMode == SHARE_MODE_PERCENT:
-        percent = int(row.RevenueSharePercent or 0)
-        percent = max(0, min(percent, 100))
-        return int(display * percent / 100)
-
-    return resolve_counselor_default_share_cents(db, counselor_account_id, display)
+    profile = get_counselor_profile(db, counselor_account_id)
+    return _resolve_counselor_default_share_cents(
+        profile,
+        base_cents=base,
+        display_cents=display,
+    )
 
 
 def resolve_default_display_price_cents(db: Session, counselor_account_id: int) -> int:
@@ -368,10 +407,8 @@ def counselor_pricing_summary(db: Session, counselor_account_id: int) -> Dict[st
     acc = db.query(AppAccount).filter(AppAccount.Id == counselor_account_id).first()
     counselor_type = (profile.CounselorType if profile else None) or "PROFESSIONAL"
     base = resolve_counselor_base_price_cents(db, counselor_account_id)
-    default_share = resolve_counselor_default_share_cents(db, counselor_account_id, base)
     default_base = default_base_price_cents_for_type(counselor_type)
     using_default = bool(profile and is_legacy_unset_billing(profile))
-    default_share_percent = int(round(default_share * 100 / base)) if base > 0 else 0
     patient_count = (
         db.query(func.count(func.distinct(AppConsultation.PatientId)))
         .filter(AppConsultation.CounselorId == counselor_account_id)
@@ -392,6 +429,14 @@ def counselor_pricing_summary(db: Session, counselor_account_id: int) -> Dict[st
         or (acc.Nickname if acc else None)
         or f"咨询师#{counselor_account_id}"
     )
+    default_share_snapshot = _counselor_default_share_snapshot(profile)
+    default_share_mode = default_share_snapshot.get("shareMode")
+    default_share_cents = _resolve_counselor_default_share_cents(
+        profile,
+        base_cents=base,
+        display_cents=base,
+    )
+    default_share_percent = int(round(default_share_cents * 100 / base)) if base > 0 else 0
     return {
         "counselorId": counselor_account_id,
         "counselorName": name,
@@ -400,10 +445,18 @@ def counselor_pricing_summary(db: Session, counselor_account_id: int) -> Dict[st
         "basePriceCents": base,
         "basePriceYuan": base // 100,
         "defaultBasePriceYuan": default_base // 100,
-        "defaultRevenueShareCents": default_share,
-        "defaultRevenueShareYuan": default_share // 100,
+        "defaultRevenueShareCents": default_share_cents,
+        "defaultRevenueShareYuan": default_share_cents // 100,
         "defaultSharePercent": default_share_percent,
         "usingDefaultBase": using_default,
+        "defaultShareMode": default_share_mode,
+        "defaultRevenueSharePercent": (
+            int(default_share_snapshot["revenueSharePercent"])
+            if default_share_mode == SHARE_MODE_PERCENT
+            and default_share_snapshot.get("revenueSharePercent") is not None
+            else None
+        ),
+        "defaultShareYuan": default_share_cents // 100,
         "patientCount": int(patient_count),
         "totalPatientCount": total_patient_count,
         "configuredPatientCount": int(override_count),
@@ -440,12 +493,14 @@ def update_counselor_base_price_cents(
     counselor_account_id: int,
     base_price_cents: int,
 ) -> AppCounselorProfile:
-    return update_counselor_base_pricing_cents(
-        db,
-        counselor_account_id,
-        base_price_cents=base_price_cents,
-        default_share_cents=None,
-    )
+    if base_price_cents < 0:
+        raise ValueError("基础价格不能为负数")
+    profile = get_counselor_profile(db, counselor_account_id)
+    if not profile:
+        raise ValueError("咨询师档案不存在")
+    profile.Billing = base_price_cents
+    db.flush()
+    return profile
 
 
 def update_counselor_base_pricing_cents(
@@ -510,7 +565,114 @@ def update_counselor_base_pricing_cents(
 
     profile.Billing = base_price_cents
     profile.FaceBilling = default_share_cents
+    profile.DefaultShareMode = SHARE_MODE_AMOUNT
+    profile.DefaultRevenueShareCents = default_share_cents
+    profile.DefaultRevenueSharePercent = None
     db.flush()
+    return profile
+
+
+def clear_counselor_patient_share_overrides(db: Session, counselor_account_id: int) -> int:
+    """清除该咨询师下所有来访的个性化分成设置，使默认抽成对全部来访生效。"""
+    rows = (
+        db.query(AppCounselorPatientPricing)
+        .filter(AppCounselorPatientPricing.CounselorAccountId == counselor_account_id)
+        .all()
+    )
+    cleared = 0
+    for row in rows:
+        if row.ShareMode or row.RevenueShareCents is not None or row.RevenueSharePercent is not None:
+            row.ShareMode = None
+            row.RevenueShareCents = None
+            row.RevenueSharePercent = None
+            cleared += 1
+    if cleared:
+        db.flush()
+    return cleared
+
+
+def update_counselor_default_share(
+    db: Session,
+    counselor_account_id: int,
+    *,
+    share_mode: Optional[str] = None,
+    revenue_share_cents: Optional[int] = None,
+    revenue_share_percent: Optional[int] = None,
+    apply_to_all_patients: bool = True,
+) -> AppCounselorProfile:
+    profile = get_counselor_profile(db, counselor_account_id)
+    if not profile:
+        raise ValueError("咨询师档案不存在")
+    base_price_cents = resolve_counselor_base_price_cents(db, counselor_account_id)
+
+    if share_mode == SHARE_MODE_AMOUNT:
+        if revenue_share_cents is None:
+            raise ValueError("请填写分成金额")
+        if revenue_share_cents < 0 or revenue_share_cents > base_price_cents:
+            raise ValueError("分成金额不能超过基础价格")
+    elif share_mode == SHARE_MODE_PERCENT:
+        if revenue_share_percent is None:
+            raise ValueError("请填写分成比例")
+        if revenue_share_percent < 0 or revenue_share_percent > 100:
+            raise ValueError("分成比例须在 0–100 之间")
+    elif share_mode:
+        raise ValueError("无效的分成方式")
+
+    profile.DefaultShareMode = share_mode or None
+    profile.DefaultRevenueShareCents = (
+        revenue_share_cents if share_mode == SHARE_MODE_AMOUNT else None
+    )
+    profile.DefaultRevenueSharePercent = (
+        revenue_share_percent if share_mode == SHARE_MODE_PERCENT else None
+    )
+    db.flush()
+    if apply_to_all_patients:
+        clear_counselor_patient_share_overrides(db, counselor_account_id)
+    return profile
+
+
+def update_counselor_base_pricing(
+    db: Session,
+    counselor_account_id: int,
+    *,
+    base_price_cents: int,
+    share_mode: Optional[str] = None,
+    revenue_share_cents: Optional[int] = None,
+    revenue_share_percent: Optional[int] = None,
+) -> AppCounselorProfile:
+    if base_price_cents < 0:
+        raise ValueError("基础价格不能为负数")
+
+    if share_mode == SHARE_MODE_AMOUNT:
+        if revenue_share_cents is None:
+            raise ValueError("请填写分成金额")
+        if revenue_share_cents < 0 or revenue_share_cents > base_price_cents:
+            raise ValueError("分成金额不能超过基础价格")
+    elif share_mode == SHARE_MODE_PERCENT:
+        if revenue_share_percent is None:
+            raise ValueError("请填写分成比例")
+        if revenue_share_percent < 0 or revenue_share_percent > 100:
+            raise ValueError("分成比例须在 0–100 之间")
+    elif share_mode:
+        raise ValueError("无效的分成方式")
+
+    profile = get_counselor_profile(db, counselor_account_id)
+    if not profile:
+        raise ValueError("咨询师档案不存在")
+
+    before_share = _counselor_default_share_snapshot(profile)
+    profile.Billing = base_price_cents
+    profile.DefaultShareMode = share_mode or None
+    profile.DefaultRevenueShareCents = (
+        revenue_share_cents if share_mode == SHARE_MODE_AMOUNT else None
+    )
+    profile.DefaultRevenueSharePercent = (
+        revenue_share_percent if share_mode == SHARE_MODE_PERCENT else None
+    )
+    db.flush()
+    after_share = _counselor_default_share_snapshot(profile)
+    if before_share != after_share:
+        clear_counselor_patient_share_overrides(db, counselor_account_id)
     return profile
 
 
@@ -529,6 +691,12 @@ def pricing_breakdown(
     )
     display = max(base + total_adj, 0)
     share = resolve_revenue_share_cents(db, patient_account_id, counselor_account_id, display)
+    counselor_default = _counselor_default_share_snapshot(profile)
+    effective_share_mode = (
+        override.ShareMode
+        if override and override.ShareMode
+        else counselor_default.get("shareMode")
+    )
 
     patient = db.query(AppAccount).filter(AppAccount.Id == patient_account_id).first()
     counselor_type = (profile.CounselorType if profile else None) or "PROFESSIONAL"
@@ -566,9 +734,21 @@ def pricing_breakdown(
         "adjustmentCents": total_adj,
         "displayPriceCents": display,
         "revenueShareCents": share,
-        "shareMode": override.ShareMode if override else None,
-        "revenueShareAmountCents": override.RevenueShareCents if override else None,
-        "revenueSharePercent": override.RevenueSharePercent if override else None,
+        "shareMode": effective_share_mode,
+        "revenueShareAmountCents": (
+            override.RevenueShareCents
+            if override and override.ShareMode == SHARE_MODE_AMOUNT
+            else counselor_default.get("revenueShareCents")
+            if effective_share_mode == SHARE_MODE_AMOUNT
+            else None
+        ),
+        "revenueSharePercent": (
+            override.RevenueSharePercent
+            if override and override.ShareMode == SHARE_MODE_PERCENT
+            else counselor_default.get("revenueSharePercent")
+            if effective_share_mode == SHARE_MODE_PERCENT
+            else None
+        ),
         "basePriceYuan": base // 100,
         "manualAdjustmentYuan": manual_adj // 100,
         "autoAdjustmentYuan": auto_adj // 100,
@@ -635,6 +815,16 @@ def upsert_patient_pricing(
     row.RevenueShareCents = revenue_share_cents if share_mode == SHARE_MODE_AMOUNT else None
     row.RevenueSharePercent = revenue_share_percent if share_mode == SHARE_MODE_PERCENT else None
     db.flush()
+
+    from charity_milestone_service import (
+        is_charity_counselor,
+        is_charity_patient,
+        mark_charity_pair_pricing_negotiated,
+    )
+
+    if is_charity_patient(db, patient_account_id) and is_charity_counselor(db, counselor_account_id):
+        mark_charity_pair_pricing_negotiated(db, patient_account_id, counselor_account_id)
+
     return row
 
 

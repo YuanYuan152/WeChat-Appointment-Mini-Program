@@ -7,6 +7,7 @@ const ok = <T>(data: T, msg = '请求成功'): ApiResponse<T> => ({ code: 0, msg
 
 const mapDoctor = (item: any): Doctor & { title?: string; workYears?: number; consultHours?: number; _source?: string } => {
     const needsNegotiation = Boolean(item.needsNegotiation ?? item.needs_negotiation)
+    const priceNegotiation = Boolean(item.priceNegotiation || item.billingLabel === '议价')
     return {
         id: Number(item.id || item.Id || item.accountId || 0),
         name: item.name || item.Name || item.nickname || '咨询师',
@@ -19,6 +20,8 @@ const mapDoctor = (item: any): Doctor & { title?: string; workYears?: number; co
         price: Math.round(Number(item.billing || item.Billing || 0) / 100) || item.price || 500,
         needsNegotiation,
         priceLabel: item.priceLabel || item.price_label || (needsNegotiation ? '需议价' : undefined),
+        priceNegotiation,
+        billingLabel: item.billingLabel || (priceNegotiation ? '议价' : ''),
         title: item.title || item.Title || '心理咨询师',
         workYears: Number(item.workYears || item.WorkYears || 0),
         consultHours: Number(item.consultHours || item.ConsultHours || 0),

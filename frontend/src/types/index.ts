@@ -22,6 +22,8 @@ export interface Doctor {
   price?: number
   needsNegotiation?: boolean
   priceLabel?: string
+  priceNegotiation?: boolean
+  billingLabel?: string
 }
 
 // 轮播图类型

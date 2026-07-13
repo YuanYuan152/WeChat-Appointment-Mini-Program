@@ -10,9 +10,16 @@ from sqlalchemy import exists, not_, or_
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from auth import get_current_account, AppAccount, _ensure_role_binding
+from auth import get_current_account, AppAccount
 from database import get_db
-from staff_roles import STAFF_WORKBENCH_ROLES, account_has_staff_workbench, staff_workbench_account_ids
+from staff_roles import (
+    STAFF_WORKBENCH_ROLES,
+    account_has_staff_workbench,
+    assignable_roles_for_actor,
+    assert_can_assign_role,
+    assert_can_manage_user,
+    staff_workbench_account_ids,
+)
 from models import (
     AppAccount,
     AppCaseRecord,
@@ -77,12 +84,22 @@ from pricing_service import (
     get_counselor_profile,
     sync_counselor_profile_billing_for_type,
 )
-from role_active import list_account_roles, resolve_active_role, invalidate_user_sessions
-from patient_registration import (
-    DEFAULT_PATIENT_SOURCE,
-    ensure_default_patient_registration,
-    ensure_patient_role_binding,
+from role_active import (
+    get_account_role,
+    set_account_role,
+    invalidate_user_sessions,
 )
+from staff_remark_service import (
+    get_staff_remark,
+    get_staff_remarks_map,
+    set_staff_remark,
+)
+from patient_contract_service import (
+    batch_patient_contract_extras,
+    bind_patient_counselor,
+    patient_contract_extras,
+)
+from patient_registration import DEFAULT_PATIENT_SOURCE
 
 router = APIRouter(prefix="/api/mini/admin", tags=["Admin"])
 
@@ -103,11 +120,7 @@ def require_admin(
     current_account: AppAccount = Depends(get_current_account),
     db: Session = Depends(get_db),
 ) -> AppAccount:
-    binding = db.query(AppRoleBinding).filter(
-        AppRoleBinding.AccountId == current_account.Id,
-        AppRoleBinding.RoleType == "Admin",
-    ).first()
-    if not binding:
+    if get_account_role(db, current_account.Id) != "Admin":
         raise HTTPException(status_code=403, detail="无管理员权限")
     return current_account
 
@@ -135,27 +148,37 @@ class CreateUserByMobileRequest(BaseModel):
 
 
 BINDABLE_ROLE_TYPES = frozenset({"Counselor", "Assistant", "Ops", "Patient", "Admin"})
-ROLE_MANAGEMENT_ALLOWED = {
-    "Admin": frozenset({"Admin", "Ops", "Assistant", "Counselor", "Patient"}),
-    "Ops": frozenset({"Assistant", "Counselor", "Patient"}),
-    "Assistant": frozenset({"Counselor", "Patient"}),
-}
 
 
-def _manageable_role_types(db: Session, account: AppAccount) -> set[str]:
-    roles = set(list_account_roles(db, account.Id))
-    active_role = getattr(account, "ActiveRole", None)
-    if active_role:
-        roles.add(active_role)
-    manageable: set[str] = set()
-    for role in roles:
-        manageable.update(ROLE_MANAGEMENT_ALLOWED.get(role, ()))
-    return manageable
+@router.get("/role-policy", summary="当前操作者可赋权的角色列表")
+def get_role_policy(
+    admin: AppAccount = Depends(require_staff_workbench),
+    db: Session = Depends(get_db),
+):
+    actor_role = get_account_role(db, admin.Id)
+    assignable = assignable_roles_for_actor(actor_role, BINDABLE_ROLE_TYPES)
+    return {
+        "actorRole": actor_role,
+        "assignableRoles": assignable,
+    }
 
 
-def _assert_can_manage_role(db: Session, operator: AppAccount, role: str) -> None:
-    if role not in _manageable_role_types(db, operator):
-        raise HTTPException(status_code=403, detail="当前角色不能创建或调整该角色")
+def _actor_role(db: Session, admin: AppAccount) -> str:
+    return get_account_role(db, admin.Id)
+
+
+def _guard_assign_role(db: Session, admin: AppAccount, target_role: str) -> None:
+    try:
+        assert_can_assign_role(_actor_role(db, admin), target_role)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+
+def _guard_manage_user(db: Session, admin: AppAccount, user_role: str) -> None:
+    try:
+        assert_can_manage_user(_actor_role(db, admin), user_role)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
 
 
 def _normalize_mobile(mobile: str) -> str:
@@ -219,7 +242,7 @@ def _last_revoke_meta(db: Session, account_id: int, access_revoked_at=None) -> d
     }
 
 
-def _user_admin_out(db: Session, account: AppAccount) -> dict:
+def _user_admin_out(db: Session, account: AppAccount, *, staff_remark: str = "") -> dict:
     profile = get_counselor_profile(db, account.Id)
     access_revoked_at = getattr(account, "AccessRevokedAt", None)
     counselor_name = (profile.Name if profile else None) or None
@@ -230,16 +253,14 @@ def _user_admin_out(db: Session, account: AppAccount) -> dict:
         or (f"用户{account.Mobile[-4:]}" if account.Mobile else None)
         or f"用户{account.Id}"
     )
-    roles = [
-        b.RoleType
-        for b in db.query(AppRoleBinding).filter(AppRoleBinding.AccountId == account.Id).all()
-    ]
-    active_role = resolve_active_role(roles, account.ActiveRole)
+    roles = [get_account_role(db, account.Id)]
+    active_role = roles[0]
     counselor_type = profile.CounselorType if profile else None
+    patient_source = getattr(account, "PatientSource", None)
     if active_role == "Counselor" and counselor_type:
         active_role_label = counselor_type_label(counselor_type)
-    elif active_role == "Patient" and is_charity_patient_source(getattr(account, "PatientSource", None)):
-        active_role_label = patient_source_label(getattr(account, "PatientSource", None))
+    elif active_role == "Patient" and is_charity_patient_source(patient_source):
+        active_role_label = patient_source_label(patient_source)
     else:
         active_role_label = None
     out = {
@@ -250,15 +271,23 @@ def _user_admin_out(db: Session, account: AppAccount) -> dict:
         "counselorName": counselor_name,
         "activeRole": active_role,
         "activeRoleLabel": active_role_label,
-        "patientSource": getattr(account, "PatientSource", None),
-        "patientSourceLabel": patient_source_label(getattr(account, "PatientSource", None)),
-        "isCharityPatient": is_charity_patient_source(getattr(account, "PatientSource", None)),
-        "counselorType": counselor_type,
-        "counselorTypeLabel": counselor_type_label(counselor_type),
+        "patientSource": patient_source if active_role == "Patient" else None,
+        "patientSourceLabel": (
+            patient_source_label(patient_source) if active_role == "Patient" else None
+        ),
+        "isCharityPatient": (
+            is_charity_patient_source(patient_source) if active_role == "Patient" else False
+        ),
+        "counselorType": counselor_type if active_role == "Counselor" else None,
+        "counselorTypeLabel": (
+            counselor_type_label(counselor_type) if active_role == "Counselor" else None
+        ),
         "roles": roles,
         "createdAt": getattr(account, "CreatedAt", None),
         "isSelfRegistered": getattr(account, "PatientSource", None) == DEFAULT_PATIENT_SOURCE,
     }
+    if active_role in ("Counselor", "Patient"):
+        out["staffRemark"] = staff_remark
     if access_revoked_at or _is_staff_revoked(db, account):
         out.update(_last_revoke_meta(db, account.Id, access_revoked_at))
     return out
@@ -458,7 +487,18 @@ def list_admin_users(
         .limit(page_size)
         .all()
     )
-    items = [_user_admin_out(db, u) for u in accounts]
+    remarkable_ids = [
+        u.Id for u in accounts if get_account_role(db, u.Id) in ("Counselor", "Patient")
+    ]
+    remarks_map = get_staff_remarks_map(db, remarkable_ids)
+    items = [
+        _user_admin_out(
+            db,
+            u,
+            staff_remark=remarks_map.get(u.Id, ""),
+        )
+        for u in accounts
+    ]
 
     if page == 1:
         legacy_items = list_legacy_unlinked_doctors(db, kw or None)
@@ -482,7 +522,7 @@ def create_user_by_mobile(
     mobile = _normalize_mobile(body.mobile)
     if body.role not in BINDABLE_ROLE_TYPES:
         raise HTTPException(status_code=400, detail="不支持绑定该角色")
-    _assert_can_manage_role(db, admin, body.role)
+    _guard_assign_role(db, admin, body.role)
 
     patient_source: Optional[str] = None
     counselor_type: Optional[str] = None
@@ -532,6 +572,9 @@ def create_user_by_mobile(
     else:
         if not account.IsActive:
             raise HTTPException(status_code=400, detail="该手机号对应账号已注销")
+        existing_role = get_account_role(db, account.Id)
+        if existing_role != body.role:
+            _guard_manage_user(db, admin, existing_role)
         if body.nickname:
             account.Nickname = body.nickname
         if getattr(account, "AccessRevokedAt", None):
@@ -540,15 +583,12 @@ def create_user_by_mobile(
     if patient_source:
         account.PatientSource = patient_source
 
-    ensure_patient_role_binding(db, account.Id)
-    _ensure_role_binding(db, account.Id, body.role)
+    set_account_role(db, account.Id, body.role)
     _restore_account_on_role_bind(db, account, body.role)
     if body.role == "Counselor" and counselor_type:
         _ensure_counselor_profile(db, account, counselor_type)
     elif body.role == "Counselor":
         _restore_counselor_on_rebind(db, account)
-    roles = list_account_roles(db, account.Id)
-    account.ActiveRole = resolve_active_role(roles, body.role)
     invalidate_user_sessions(db, account.Id)
     account.UpdatedAt = datetime.utcnow()
     db.commit()
@@ -557,11 +597,11 @@ def create_user_by_mobile(
     return {
         **_user_admin_out(db, account),
         "created": created,
-        "message": "用户已添加" if created else "已为现有用户绑定角色，重新登录后可恢复数据访问",
+        "message": "用户已添加" if created else "已更换角色，用户重新登录后生效",
     }
 
 
-@router.post("/users/{user_id}/roles", summary="绑定用户角色")
+@router.post("/users/{user_id}/roles", summary="设置用户角色（单账号仅一个角色）")
 def bind_user_role(
     user_id: int,
     body: BindRoleRequest,
@@ -573,105 +613,72 @@ def bind_user_role(
         raise HTTPException(status_code=404, detail="用户不存在")
     if body.role not in BINDABLE_ROLE_TYPES:
         raise HTTPException(status_code=400, detail="不支持绑定该角色")
-    _assert_can_manage_role(db, admin, body.role)
-    existing = db.query(AppRoleBinding).filter(
-        AppRoleBinding.AccountId == user_id,
-        AppRoleBinding.RoleType == body.role,
-    ).first()
+
+    previous_role = get_account_role(db, user_id)
+    new_role = body.role
+    _guard_manage_user(db, admin, previous_role)
+    if previous_role != new_role:
+        _guard_assign_role(db, admin, new_role)
 
     counselor_type: Optional[str] = None
-    if body.role == "Counselor":
+    if new_role == "Counselor":
         try:
             counselor_type = validate_counselor_type(body.counselor_type or "PROFESSIONAL")
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        if existing:
+        if previous_role == "Counselor":
             _ensure_counselor_profile(db, user, counselor_type)
             user.UpdatedAt = datetime.utcnow()
             invalidate_user_sessions(db, user_id)
             db.commit()
             return {"message": "咨询师类型已更新"}
-    elif body.role == "Patient":
+    elif new_role == "Patient":
         if not body.patient_source:
             raise HTTPException(status_code=400, detail="请选择来访来源")
         try:
             user.PatientSource = validate_patient_source(body.patient_source)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        ensure_patient_role_binding(db, user_id)
-        if existing:
+        if previous_role == "Patient":
             user.UpdatedAt = datetime.utcnow()
             db.commit()
             return {"message": "来访来源已更新"}
 
-    if existing:
-        return {"message": "角色已存在"}
+    if previous_role == new_role:
+        return {"message": "角色未变更"}
 
-    ensure_patient_role_binding(db, user_id)
-    previous_active = user.ActiveRole
-    binding = AppRoleBinding(AccountId=user_id, RoleType=body.role, TargetId=body.target_id)
-    db.add(binding)
-    _restore_account_on_role_bind(db, user, body.role)
-    if body.role == "Counselor":
+    if previous_role == "Counselor" and new_role != "Counselor":
+        _set_counselor_profile_active(db, user_id, False)
+
+    set_account_role(db, user_id, new_role, body.target_id)
+    _restore_account_on_role_bind(db, user, new_role)
+    if new_role == "Counselor":
         _ensure_counselor_profile(db, user, counselor_type or "PROFESSIONAL")
-    roles = list_account_roles(db, user_id)
-    user.ActiveRole = resolve_active_role(roles, body.role)
+    elif new_role == "Patient" and body.patient_source:
+        user.PatientSource = validate_patient_source(body.patient_source)
+
     user.UpdatedAt = datetime.utcnow()
     db.add(AppRoleSwitchLog(
         AccountId=user_id,
-        FromRole=previous_active,
-        ToRole=body.role,
+        FromRole=previous_role,
+        ToRole=new_role,
     ))
     invalidate_user_sessions(db, user_id)
     db.commit()
-    return {"message": "角色已绑定，用户重新登录后即可恢复该角色数据访问"}
+    return {"message": "角色已更换，用户重新登录后生效"}
 
 
-@router.delete("/users/{user_id}/roles/{role}", summary="解绑用户角色")
+@router.delete("/users/{user_id}/roles/{role}", summary="已废弃：请使用 POST 更换角色")
 def unbind_user_role(
     user_id: int,
     role: str,
     admin: AppAccount = Depends(require_staff_workbench),
     db: Session = Depends(get_db),
 ):
-    """
-    单独解绑某一角色（非删除用户）：
-    - 仅移除该角色绑定，不删除账号与历史业务数据
-    - 咨询师解绑时停用档案展示，数据仍保留
-    - 后续重新绑定同角色后，用户登录可再次加载该角色数据
-    """
-    if role == "Patient":
-        raise HTTPException(status_code=400, detail="来访为默认基础角色，不可解绑")
-    _assert_can_manage_role(db, admin, role)
-
-    binding = db.query(AppRoleBinding).filter(
-        AppRoleBinding.AccountId == user_id,
-        AppRoleBinding.RoleType == role,
-    ).first()
-    if not binding:
-        raise HTTPException(status_code=404, detail="角色绑定不存在")
-
-    user = db.query(AppAccount).filter(AppAccount.Id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="用户不存在")
-
-    previous_active = user.ActiveRole
-    db.delete(binding)
-    if role == "Counselor":
-        _set_counselor_profile_active(db, user_id, False)
-
-    roles = list_account_roles(db, user_id)
-    prefer = None if user.ActiveRole == role else user.ActiveRole
-    user.ActiveRole = resolve_active_role(roles, prefer)
-    user.UpdatedAt = datetime.utcnow()
-    db.add(AppRoleSwitchLog(
-        AccountId=user_id,
-        FromRole=previous_active,
-        ToRole=f"UNBIND_{role}",
-    ))
-    invalidate_user_sessions(db, user_id)
-    db.commit()
-    return {"message": "角色已解绑，历史数据已保留，重新绑定后登录可恢复访问"}
+    raise HTTPException(
+        status_code=400,
+        detail="单账号仅支持一个角色，请通过「更换角色」修改权限，不支持单独解绑",
+    )
 
 
 @router.delete("/users/{user_id}", summary="删除用户（物理删除账号）")
@@ -691,6 +698,9 @@ def delete_user_account(
     account = db.query(AppAccount).filter(AppAccount.Id == user_id).first()
     if not account:
         raise HTTPException(status_code=404, detail="用户不存在")
+
+    user_role = get_account_role(db, user_id)
+    _guard_manage_user(db, admin, user_role)
 
     try:
         hard_delete_account(db, user_id)
@@ -756,11 +766,11 @@ def _build_exemption_admin_out(
 @router.get(
     "/refund-exemptions",
     response_model=List[RefundExemptionAdminOut],
-    summary="退款豁免申请列表（管理员审核）",
+    summary="退款豁免申请列表（管理工作台审核）",
 )
 def list_refund_exemptions(
-    status: Optional[str] = Query(None, description="PENDING / APPROVED / REJECTED"),
-    _admin: AppAccount = Depends(require_ops_or_admin),
+    status: Optional[str] = Query(None, description="PENDING / APPROVED / REJECTED / ALL"),
+    _staff: AppAccount = Depends(require_staff_workbench),
     db: Session = Depends(get_db),
 ):
     q = db.query(AppRefundExemption).order_by(AppRefundExemption.CreatedAt.desc())
@@ -783,7 +793,7 @@ def list_refund_exemptions(
 )
 def approve_refund_exemption_request(
     exemption_id: int,
-    admin: AppAccount = Depends(require_ops_or_admin),
+    admin: AppAccount = Depends(require_staff_workbench),
     db: Session = Depends(get_db),
 ):
     row = db.query(AppRefundExemption).filter(AppRefundExemption.Id == exemption_id).first()
@@ -804,7 +814,7 @@ def approve_refund_exemption_request(
 def reject_refund_exemption_request(
     exemption_id: int,
     body: RejectRefundExemptionRequest,
-    admin: AppAccount = Depends(require_ops_or_admin),
+    admin: AppAccount = Depends(require_staff_workbench),
     db: Session = Depends(get_db),
 ):
     row = db.query(AppRefundExemption).filter(AppRefundExemption.Id == exemption_id).first()
@@ -1062,6 +1072,44 @@ def _admin_consultation_bucket(
     return "other"
 
 
+def _assert_staff_remark_target(db: Session, account_id: int) -> None:
+    """仅咨询师或来访者（含来访管理中的账号）可设置工作人员备注。"""
+    role = get_account_role(db, account_id)
+    if role in ("Counselor", "Patient"):
+        return
+    if account_id in _admin_visitor_patient_ids(db):
+        return
+    if account_id in _admin_counselor_ids(db):
+        return
+    raise HTTPException(status_code=400, detail="仅咨询师或来访者可添加备注")
+
+
+class StaffRemarkUpdatePayload(BaseModel):
+    remark: str = Field(default="", max_length=2000)
+
+
+@router.put(
+    "/accounts/{account_id}/staff-remark",
+    summary="保存咨询师/来访者工作人员备注（仅管理工作台可见）",
+)
+def update_staff_account_remark(
+    account_id: int,
+    body: StaffRemarkUpdatePayload,
+    admin: AppAccount = Depends(require_staff_workbench),
+    db: Session = Depends(get_db),
+):
+    account = db.query(AppAccount).filter(AppAccount.Id == account_id).first()
+    if not account:
+        raise HTTPException(status_code=404, detail="账号不存在")
+    _assert_staff_remark_target(db, account_id)
+    try:
+        remark = set_staff_remark(db, account_id, body.remark, admin.Id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    db.commit()
+    return {"accountId": account_id, "staffRemark": remark}
+
+
 class AdminPatientSummaryOut(BaseModel):
     patientId: int
     name: str
@@ -1069,11 +1117,18 @@ class AdminPatientSummaryOut(BaseModel):
     gender: Optional[str] = None
     emergencyContact: Optional[str] = None
     emergencyPhone: Optional[str] = None
+    roleLabel: str = "来访"
+    typeLabel: Optional[str] = None
+    isContractSigned: bool = False
+    boundCounselorId: Optional[int] = None
+    boundCounselorName: Optional[str] = None
+    contractTag: Optional[str] = None
     totalConsultations: int = 0
     upcomingCount: int = 0
     completedCount: int = 0
     cancelledCount: int = 0
     lastConsultationTime: Optional[datetime] = None
+    staffRemark: str = ""
 
 
 class AdminPatientConsultationOut(BaseModel):
@@ -1096,6 +1151,7 @@ class AdminConsultationFeedbackOut(BaseModel):
     patientId: int
     patientName: str
     patientMobile: Optional[str] = None
+    patientContractTag: Optional[str] = None
     counselorId: int
     counselorName: str
     startTime: Optional[datetime] = None
@@ -1114,12 +1170,19 @@ class AdminPatientDetailOut(BaseModel):
     gender: Optional[str] = None
     emergencyContact: Optional[str] = None
     emergencyPhone: Optional[str] = None
+    roleLabel: str = "来访"
+    typeLabel: Optional[str] = None
+    isContractSigned: bool = False
+    boundCounselorId: Optional[int] = None
+    boundCounselorName: Optional[str] = None
+    contractTag: Optional[str] = None
     createdAt: Optional[datetime] = None
     totalConsultations: int = 0
     upcomingCount: int = 0
     completedCount: int = 0
     cancelledCount: int = 0
     feedbackCount: int = 0
+    staffRemark: str = ""
     consultations: List[AdminPatientConsultationOut] = []
     feedbacks: List[AdminConsultationFeedbackOut] = []
 
@@ -1174,12 +1237,14 @@ def _build_admin_feedback_out(
     start_time = consultation.StartTime or (sched.StartTime if sched else None)
     end_time = consultation.EndTime or (sched.EndTime if sched else None)
     detail = feedback_detail(fb.Content)
+    contract = patient_contract_extras(db, patient)
     return AdminConsultationFeedbackOut(
         id=fb.Id,
         consultationId=consultation.Id,
         patientId=consultation.PatientId,
         patientName=_admin_patient_name(patient),
         patientMobile=patient.Mobile if patient else None,
+        patientContractTag=contract.get("contractTag"),
         counselorId=consultation.CounselorId,
         counselorName=_admin_counselor_name(db, consultation.CounselorId),
         startTime=start_time,
@@ -1567,12 +1632,16 @@ def list_admin_patients(
         for s in db.query(AppSchedule).filter(AppSchedule.Id.in_(schedule_ids)).all()
     } if schedule_ids else {}
 
+    remarks_map = get_staff_remarks_map(db, account_ids)
+    contract_map = batch_patient_contract_extras(db, accounts)
+
     result: List[AdminPatientSummaryOut] = []
     for acc in accounts:
         rows = cons_by_patient.get(acc.Id, [])
         total, upcoming, completed, cancelled, last_time = _summarize_patient_consultations(
             rows, schedules
         )
+        contract = contract_map.get(acc.Id, {})
         result.append(
             AdminPatientSummaryOut(
                 patientId=acc.Id,
@@ -1581,11 +1650,17 @@ def list_admin_patients(
                 gender=acc.Gender,
                 emergencyContact=acc.EmergencyContact,
                 emergencyPhone=acc.EmergencyPhone,
+                **_admin_patient_meta(acc),
+                isContractSigned=bool(contract.get("isContractSigned")),
+                boundCounselorId=contract.get("boundCounselorId"),
+                boundCounselorName=contract.get("boundCounselorName"),
+                contractTag=contract.get("contractTag"),
                 totalConsultations=total,
                 upcomingCount=upcoming,
                 completedCount=completed,
                 cancelledCount=cancelled,
                 lastConsultationTime=last_time,
+                staffRemark=remarks_map.get(acc.Id, ""),
             )
         )
     result.sort(
@@ -1661,15 +1736,51 @@ def get_admin_patient_detail(
         gender=patient.Gender,
         emergencyContact=patient.EmergencyContact,
         emergencyPhone=patient.EmergencyPhone,
+        **_admin_patient_meta(patient),
+        **patient_contract_extras(db, patient),
         createdAt=patient.CreatedAt,
         totalConsultations=total,
         upcomingCount=upcoming,
         completedCount=completed,
         cancelledCount=cancelled,
         feedbackCount=len(feedbacks_out),
+        staffRemark=get_staff_remark(db, patient_id),
         consultations=cons_out,
         feedbacks=feedbacks_out,
     )
+
+
+class BindPatientCounselorPayload(BaseModel):
+    counselorId: Optional[int] = Field(None, description="绑定咨询师账号 ID，传 null 表示解除绑定")
+
+
+@router.put(
+    "/patients/{patient_id}/bound-counselor",
+    summary="绑定或更换来访者的签约咨询师",
+)
+def update_patient_bound_counselor(
+    patient_id: int,
+    body: BindPatientCounselorPayload,
+    _staff: AppAccount = Depends(require_ops_or_admin),
+    db: Session = Depends(get_db),
+):
+    patient = db.query(AppAccount).filter(AppAccount.Id == patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="来访者不存在")
+    if patient_id not in _admin_visitor_patient_ids(db):
+        raise HTTPException(status_code=404, detail="来访者不存在")
+    try:
+        bind_patient_counselor(db, patient_id, body.counselorId)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    db.commit()
+    db.refresh(patient)
+    return {
+        "patientId": patient_id,
+        **_admin_patient_meta(patient),
+        "name": _admin_patient_name(patient),
+        **patient_contract_extras(db, patient),
+    }
 
 
 @router.get(
@@ -1735,6 +1846,23 @@ def _admin_record_is_filled(record: Optional[AppCaseRecord]) -> bool:
     )
 
 
+def _admin_patient_meta(account: AppAccount) -> dict:
+    return {
+        "roleLabel": "来访",
+        "typeLabel": patient_source_label(getattr(account, "PatientSource", None)),
+    }
+
+
+def _admin_counselor_meta(profile: Optional[AppCounselorProfile]) -> dict:
+    if not profile:
+        return {"roleLabel": "咨询师", "typeLabel": None}
+    ctype = profile.CounselorType or "PROFESSIONAL"
+    return {
+        "roleLabel": "咨询师",
+        "typeLabel": counselor_type_label(ctype),
+    }
+
+
 def _admin_profile_dict(profile: Optional[AppCounselorProfile], counselor_id: int, db: Session) -> dict:
     acc = db.query(AppAccount).filter(AppAccount.Id == counselor_id).first()
     billing = int(profile.Billing or 0) if profile else 0
@@ -1765,6 +1893,7 @@ def _admin_profile_dict(profile: Optional[AppCounselorProfile], counselor_id: in
         "infoAuthenticityCommittedAt": profile.InfoAuthenticityCommittedAt if profile else None,
         "infoAuthenticitySignerName": profile.InfoAuthenticitySignerName if profile else None,
         "isActive": bool(profile.IsActive) if profile else True,
+        **_admin_counselor_meta(profile),
     }
 
 
@@ -1773,6 +1902,8 @@ class AdminCounselorSummaryOut(BaseModel):
     name: str
     title: Optional[str] = None
     avatarUrl: Optional[str] = None
+    roleLabel: str = "咨询师"
+    typeLabel: Optional[str] = None
     activeBookingCount: int = 0
     cancelledCount: int = 0
     scheduleCount: int = 0
@@ -1781,12 +1912,14 @@ class AdminCounselorSummaryOut(BaseModel):
     visitorCount: int = 0
     billingYuan: int = 600
     faceBillingYuan: int = 300
+    staffRemark: str = ""
 
 
 class AdminCounselorVisitorOut(BaseModel):
     patientId: int
     patientName: str
     mobile: Optional[str] = None
+    patientContractTag: Optional[str] = None
     consultationCount: int = 0
 
 
@@ -1797,6 +1930,7 @@ class AdminCounselorScheduleOut(BaseModel):
     status: str
     statusLabel: str
     patientName: Optional[str] = None
+    patientContractTag: Optional[str] = None
     location: Optional[str] = None
 
 
@@ -1804,6 +1938,7 @@ class AdminCounselorConsultationBriefOut(BaseModel):
     consultationId: int
     patientId: int
     patientName: str
+    patientContractTag: Optional[str] = None
     startTime: Optional[datetime] = None
     endTime: Optional[datetime] = None
     status: str
@@ -1826,6 +1961,8 @@ class AdminCounselorDetailOut(BaseModel):
     name: str
     avatarUrl: Optional[str] = None
     title: Optional[str] = None
+    roleLabel: str = "咨询师"
+    typeLabel: Optional[str] = None
     specialty: Optional[str] = None
     field: Optional[str] = None
     introduce: Optional[str] = None
@@ -1848,6 +1985,7 @@ class AdminCounselorDetailOut(BaseModel):
     schedules: List[AdminCounselorScheduleOut] = []
     recordedConsultations: List[AdminCounselorConsultationBriefOut] = []
     unrecordedConsultations: List[AdminCounselorConsultationBriefOut] = []
+    staffRemark: str = ""
 
 
 class AdminCounselorUpdatePayload(BaseModel):
@@ -1979,6 +2117,8 @@ def list_admin_counselors(
     for s in schedules:
         schedules_by_counselor.setdefault(s.CounselorId, []).append(s)
 
+    remarks_map = get_staff_remarks_map(db, counselor_ids)
+
     result: List[AdminCounselorSummaryOut] = []
     for cid in counselor_ids:
         prof = profiles.get(cid)
@@ -2005,6 +2145,7 @@ def list_admin_counselors(
                 name=name,
                 title=prof.Title if prof else None,
                 avatarUrl=prof.AvatarUrl if prof else (acc.AvatarUrl if acc else None),
+                **_admin_counselor_meta(prof),
                 activeBookingCount=stats.activeBookingCount,
                 cancelledCount=stats.cancelledCount,
                 scheduleCount=stats.scheduleCount,
@@ -2013,6 +2154,7 @@ def list_admin_counselors(
                 visitorCount=stats.visitorCount,
                 billingYuan=billing // 100,
                 faceBillingYuan=face_billing // 100,
+                staffRemark=remarks_map.get(cid, ""),
             )
         )
     result.sort(key=lambda x: x.name)
@@ -2071,6 +2213,7 @@ def get_admin_counselor_detail(
         a.Id: a
         for a in db.query(AppAccount).filter(AppAccount.Id.in_(patient_ids)).all()
     } if patient_ids else {}
+    contract_map = batch_patient_contract_extras(db, list(patients.values())) if patients else {}
     visitor_counts: dict[int, int] = {}
     for c in consultations:
         if c.Status == "CANCELLED":
@@ -2081,6 +2224,7 @@ def get_admin_counselor_detail(
             patientId=pid,
             patientName=_admin_patient_name(patients.get(pid)),
             mobile=patients[pid].Mobile if pid in patients else None,
+            patientContractTag=contract_map.get(pid, {}).get("contractTag"),
             consultationCount=count,
         )
         for pid, count in sorted(visitor_counts.items(), key=lambda x: -x[1])
@@ -2093,6 +2237,7 @@ def get_admin_counselor_detail(
             continue
         linked = next((c for c in consultations if c.ScheduleId == s.Id), None)
         patient_name = _admin_patient_name(patients.get(linked.PatientId)) if linked else None
+        patient_tag = contract_map.get(linked.PatientId, {}).get("contractTag") if linked else None
         label = "已预约" if linked and linked.Status != "CANCELLED" else (
             "可预约" if s.Status == "AVAILABLE" else s.Status
         )
@@ -2104,6 +2249,7 @@ def get_admin_counselor_detail(
                 status=s.Status,
                 statusLabel=label,
                 patientName=patient_name if linked and linked.Status != "CANCELLED" else None,
+                patientContractTag=patient_tag if linked and linked.Status != "CANCELLED" else None,
                 location=_admin_consultation_location(db, linked, s) if linked else (
                     center_display_name(parse_center_id(s.Note or "")) if s.Note else None
                 ),
@@ -2121,6 +2267,7 @@ def get_admin_counselor_detail(
             consultationId=c.Id,
             patientId=c.PatientId,
             patientName=_admin_patient_name(patients.get(c.PatientId)),
+            patientContractTag=contract_map.get(c.PatientId, {}).get("contractTag"),
             startTime=c.StartTime,
             endTime=c.EndTime,
             status=c.Status,
@@ -2138,6 +2285,7 @@ def get_admin_counselor_detail(
         schedules=schedule_out[:50],
         recordedConsultations=recorded_out[:30],
         unrecordedConsultations=unrecorded_out[:30],
+        staffRemark=get_staff_remark(db, counselor_id),
         **{k: v for k, v in base.items() if k != "counselorId"},
         counselorId=counselor_id,
     )
@@ -2199,10 +2347,10 @@ def update_admin_counselor(
     return get_admin_counselor_detail(counselor_id, _admin, db)
 
 
-@router.get("/leave-requests", summary="咨询师请假列表（管理员）")
+@router.get("/leave-requests", summary="咨询师请假列表（管理工作台审批）")
 def list_leave_requests(
     status: str = Query("ALL", description="PENDING|APPROVED|REJECTED|ALL"),
-    _admin: AppAccount = Depends(require_staff_workbench),
+    _staff: AppAccount = Depends(require_staff_workbench),
     db: Session = Depends(get_db),
 ):
     q = db.query(AppLeaveRequest).order_by(AppLeaveRequest.CreatedAt.desc())
@@ -2212,10 +2360,10 @@ def list_leave_requests(
     return [build_leave_request_out(db, row) for row in rows]
 
 
-@router.get("/leave-requests/{leave_id}", summary="咨询师请假详情（管理员）")
+@router.get("/leave-requests/{leave_id}", summary="咨询师请假详情（管理工作台审批）")
 def get_leave_request(
     leave_id: int,
-    _admin: AppAccount = Depends(require_staff_workbench),
+    _staff: AppAccount = Depends(require_staff_workbench),
     db: Session = Depends(get_db),
 ):
     row = db.query(AppLeaveRequest).filter(AppLeaveRequest.Id == leave_id).first()
@@ -2270,6 +2418,12 @@ class AdminPricingUpdatePayload(BaseModel):
     revenueSharePercent: Optional[int] = Field(None, ge=0, le=100)
 
 
+class AdminCounselorDefaultSharePayload(BaseModel):
+    shareMode: Optional[str] = Field(None, description="AMOUNT | PERCENT，空则默认基础价的 50% 分成")
+    revenueShareYuan: Optional[int] = Field(None, ge=0, le=99999)
+    revenueSharePercent: Optional[int] = Field(None, ge=0, le=100)
+
+
 class AdminCounselorBasePricePayload(BaseModel):
     basePriceYuan: int = Field(..., ge=0, le=99999, description="咨询师统一基础价（元）")
     defaultRevenueShareYuan: Optional[int] = Field(None, ge=0, le=99999, description="咨询师默认分成金额（元）")
@@ -2278,7 +2432,7 @@ class AdminCounselorBasePricePayload(BaseModel):
 @router.get("/pricing/counselors", summary="定价管理：咨询师列表（含统一基础价）")
 def list_pricing_counselors(
     keyword: Optional[str] = Query(None),
-    _staff: AppAccount = Depends(require_staff_workbench),
+    _admin: AppAccount = Depends(require_ops_or_admin),
     db: Session = Depends(get_db),
 ):
     from pricing_service import list_counselor_pricing_summaries
@@ -2295,24 +2449,94 @@ def list_pricing_counselors(
 def update_pricing_counselor_base(
     counselor_id: int,
     body: AdminCounselorBasePricePayload,
-    _staff: AppAccount = Depends(require_staff_workbench),
+    actor: AppAccount = Depends(require_ops_or_admin),
     db: Session = Depends(get_db),
 ):
-    from pricing_service import counselor_pricing_summary, update_counselor_base_pricing_cents
+    from pricing_service import (
+        _counselor_default_share_snapshot,
+        counselor_pricing_summary,
+        get_counselor_profile,
+        resolve_counselor_base_price_cents,
+        update_counselor_base_price_cents,
+        update_counselor_base_pricing_cents,
+    )
+    from pricing_notify_service import notify_counselor_base_pricing_updated
 
+    old_yuan = resolve_counselor_base_price_cents(db, counselor_id) // 100
+    before_profile = get_counselor_profile(db, counselor_id)
+    before_share = _counselor_default_share_snapshot(before_profile)
     try:
-        update_counselor_base_pricing_cents(
+        if body.defaultRevenueShareYuan is None:
+            update_counselor_base_price_cents(db, counselor_id, body.basePriceYuan * 100)
+        else:
+            update_counselor_base_pricing_cents(
+                db,
+                counselor_id,
+                base_price_cents=body.basePriceYuan * 100,
+                default_share_cents=body.defaultRevenueShareYuan * 100,
+            )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if old_yuan != body.basePriceYuan:
+        after_profile = get_counselor_profile(db, counselor_id)
+        notify_counselor_base_pricing_updated(
+            db,
+            actor_id=actor.Id,
+            counselor_id=counselor_id,
+            old_base_yuan=old_yuan,
+            new_base_yuan=body.basePriceYuan,
+            before_share=before_share,
+            after_share=_counselor_default_share_snapshot(after_profile),
+        )
+    db.commit()
+    return counselor_pricing_summary(db, counselor_id)
+
+
+@router.put("/pricing/counselors/{counselor_id}/default-share", summary="更新咨询师默认分成（对该咨询师全部来访生效）")
+def update_pricing_counselor_default_share(
+    counselor_id: int,
+    body: AdminCounselorDefaultSharePayload,
+    actor: AppAccount = Depends(require_ops_or_admin),
+    db: Session = Depends(get_db),
+):
+    from pricing_service import (
+        _counselor_default_share_snapshot,
+        counselor_pricing_summary,
+        get_counselor_profile,
+        resolve_counselor_base_price_cents,
+        update_counselor_default_share,
+    )
+    from pricing_notify_service import notify_counselor_base_pricing_updated
+
+    before_profile = get_counselor_profile(db, counselor_id)
+    if not before_profile:
+        raise HTTPException(status_code=404, detail="咨询师不存在")
+    before_share = _counselor_default_share_snapshot(before_profile)
+    base_yuan = resolve_counselor_base_price_cents(db, counselor_id) // 100
+    try:
+        update_counselor_default_share(
             db,
             counselor_id,
-            base_price_cents=body.basePriceYuan * 100,
-            default_share_cents=(
-                body.defaultRevenueShareYuan * 100
-                if body.defaultRevenueShareYuan is not None
-                else None
-            ),
+            share_mode=body.shareMode or None,
+            revenue_share_cents=body.revenueShareYuan * 100 if body.revenueShareYuan is not None else None,
+            revenue_share_percent=body.revenueSharePercent,
+            apply_to_all_patients=True,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+    after_profile = get_counselor_profile(db, counselor_id)
+    after_share = _counselor_default_share_snapshot(after_profile)
+    if before_share != after_share:
+        notify_counselor_base_pricing_updated(
+            db,
+            actor_id=actor.Id,
+            counselor_id=counselor_id,
+            old_base_yuan=base_yuan,
+            new_base_yuan=base_yuan,
+            before_share=before_share,
+            after_share=after_share,
+        )
     db.commit()
     return counselor_pricing_summary(db, counselor_id)
 
@@ -2323,7 +2547,7 @@ def list_pricing_counselor_patients(
     keyword: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100),
-    _staff: AppAccount = Depends(require_staff_workbench),
+    _admin: AppAccount = Depends(require_ops_or_admin),
     db: Session = Depends(get_db),
 ):
     from pricing_service import counselor_pricing_summary, get_counselor_profile, list_counselor_patient_pricing
@@ -2351,11 +2575,15 @@ def update_pricing_counselor_patient(
     counselor_id: int,
     patient_id: int,
     body: AdminPricingUpdatePayload,
-    _staff: AppAccount = Depends(require_staff_workbench),
+    actor: AppAccount = Depends(require_ops_or_admin),
     db: Session = Depends(get_db),
 ):
-    from pricing_service import pricing_breakdown, upsert_patient_pricing
+    from pricing_service import get_pricing_override, pricing_breakdown, upsert_patient_pricing
+    from pricing_notify_service import _share_snapshot, notify_pricing_updates_after_patient_save
 
+    before_override = get_pricing_override(db, counselor_id, patient_id)
+    before_manual_cents = int(before_override.AdjustmentCents or 0) if before_override else 0
+    before_share = _share_snapshot(before_override)
     try:
         upsert_patient_pricing(
             db,
@@ -2369,8 +2597,18 @@ def update_pricing_counselor_patient(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+    after_breakdown = pricing_breakdown(db, patient_id, counselor_id)
+    notify_pricing_updates_after_patient_save(
+        db,
+        actor_id=actor.Id,
+        counselor_id=counselor_id,
+        patient_id=patient_id,
+        before_manual_cents=before_manual_cents,
+        before_share=before_share,
+        after_breakdown=after_breakdown,
+    )
     db.commit()
-    return pricing_breakdown(db, patient_id, counselor_id)
+    return after_breakdown
 
 
 from proxy_booking_routes import router as proxy_booking_router

@@ -371,19 +371,14 @@ def apply_case_record_fields(
 
 
 def ensure_consultation_done_for_record(
+    db: Session,
     consultation: AppConsultation,
     schedule: Optional[AppSchedule] = None,
 ) -> None:
-    """保存咨询记录时，将已到期的咨询单自动标记为已完成。"""
-    if consultation.Status == "DONE":
-        return
-    consultation.Status = "DONE"
-    if not consultation.EndTime:
-        if schedule and schedule.EndTime:
-            consultation.EndTime = schedule.EndTime
-        else:
-            consultation.EndTime = datetime.utcnow()
-    consultation.UpdatedAt = datetime.utcnow()
+    """保存咨询记录时的兜底：若后台任务尚未执行则标记为已完成。"""
+    from consultation_status_service import mark_consultation_done
+
+    mark_consultation_done(db, consultation, schedule)
 
 
 def _ops_admin_account_ids(db: Session) -> List[int]:

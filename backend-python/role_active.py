@@ -1,8 +1,12 @@
-"""根据已绑定角色解析/校正 ActiveRole。"""
+"""单账号单角色：AppAccount.ActiveRole 与 AppRoleBinding 保持唯一一致。"""
 from typing import Iterable, List, Optional, Sequence
 
-# 角色等级由低到高；展示与权限取已绑定角色中的最高等级
+from sqlalchemy.orm import Session
+
+# 历史多绑定时合并用；正常运行期每账号仅一个角色
 ROLE_PRIORITY: Sequence[str] = ("Patient", "Counselor", "Assistant", "Ops", "Admin")
+
+VALID_ROLES = frozenset(ROLE_PRIORITY)
 
 
 def resolve_highest_role(roles: Iterable[str]) -> str:
@@ -13,24 +17,109 @@ def resolve_highest_role(roles: Iterable[str]) -> str:
     return "Patient"
 
 
+def get_account_role(db: Session, account_id: int) -> str:
+    from models import AppAccount, AppRoleBinding
+
+    account = db.query(AppAccount).filter(AppAccount.Id == account_id).first()
+    bindings = (
+        db.query(AppRoleBinding)
+        .filter(AppRoleBinding.AccountId == account_id)
+        .order_by(AppRoleBinding.Id.asc())
+        .all()
+    )
+    if len(bindings) == 1:
+        role = bindings[0].RoleType
+        if account and getattr(account, "ActiveRole", None) != role:
+            account.ActiveRole = role
+        return role
+    if len(bindings) > 1:
+        return consolidate_account_role_bindings(db, account_id) or "Patient"
+    if account and getattr(account, "ActiveRole", None) in VALID_ROLES:
+        return account.ActiveRole
+    return "Patient"
+
+
+def consolidate_account_role_bindings(db: Session, account_id: int) -> str:
+    """将历史多角色绑定合并为单角色（保留 ActiveRole 或最高等级）。"""
+    from models import AppAccount, AppRoleBinding
+
+    account = db.query(AppAccount).filter(AppAccount.Id == account_id).first()
+    bindings = (
+        db.query(AppRoleBinding)
+        .filter(AppRoleBinding.AccountId == account_id)
+        .order_by(AppRoleBinding.Id.asc())
+        .all()
+    )
+    if not bindings:
+        role = "Patient"
+        if account:
+            account.ActiveRole = role
+        return role
+    if len(bindings) == 1:
+        role = bindings[0].RoleType
+        if account:
+            account.ActiveRole = role
+        return role
+
+    role_names = [b.RoleType for b in bindings]
+    stored = getattr(account, "ActiveRole", None) if account else None
+    keep = stored if stored in role_names else resolve_highest_role(role_names)
+
+    db.query(AppRoleBinding).filter(AppRoleBinding.AccountId == account_id).delete(
+        synchronize_session=False
+    )
+    db.add(
+        AppRoleBinding(
+            AccountId=account_id,
+            RoleType=keep,
+            TargetId=account_id,
+        )
+    )
+    if account:
+        account.ActiveRole = keep
+    return keep
+
+
+def list_account_roles(db: Session, account_id: int) -> List[str]:
+    return [get_account_role(db, account_id)]
+
+
 def resolve_active_role(
     roles: Iterable[str],
     preferred: Optional[str] = None,
 ) -> str:
-    """preferred 保留兼容；实际始终返回最高等级角色。"""
-    return resolve_highest_role(roles)
+    if preferred in VALID_ROLES:
+        return preferred
+    role_list = list(roles or [])
+    if role_list:
+        return role_list[0]
+    return "Patient"
 
 
-def list_account_roles(db, account_id: int) -> List[str]:
-    from models import AppRoleBinding
+def set_account_role(
+    db: Session,
+    account_id: int,
+    role: str,
+    target_id: Optional[int] = None,
+) -> str:
+    from models import AppAccount, AppRoleBinding
 
-    return [
-        b.RoleType
-        for b in db.query(AppRoleBinding).filter(AppRoleBinding.AccountId == account_id).all()
-    ]
+    if role not in VALID_ROLES:
+        raise ValueError(f"不支持的角色: {role}")
+
+    account = db.query(AppAccount).filter(AppAccount.Id == account_id).first()
+    tid = target_id if target_id is not None else account_id
+
+    db.query(AppRoleBinding).filter(AppRoleBinding.AccountId == account_id).delete(
+        synchronize_session=False
+    )
+    db.add(AppRoleBinding(AccountId=account_id, RoleType=role, TargetId=tid))
+    if account:
+        account.ActiveRole = role
+    return role
 
 
-def invalidate_user_sessions(db, account_id: int) -> None:
+def invalidate_user_sessions(db: Session, account_id: int) -> None:
     from models import AppLoginSession
 
     db.query(AppLoginSession).filter(

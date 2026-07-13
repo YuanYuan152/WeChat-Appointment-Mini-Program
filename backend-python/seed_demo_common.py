@@ -3,6 +3,8 @@ seed_demo_*.py 公共常量与排期 Note 规则（与 auth.py / schedule_meta.p
 
 主入口：python seed_demo_data.py（增量写入，不清表）
 单角色脚本：seed_demo_counselor.py 等（会 clear_all_tables，仅用于隔离测试）
+
+演示账号均为单账号单角色；ensure_role 每次注入会强制覆盖 AppRoleBinding。
 """
 import json
 from datetime import datetime, timedelta
@@ -28,10 +30,10 @@ from models import (
     AppRefundExemption,
     AppRegistrationForm,
     AppRiskAlert,
-    AppRoleBinding,
     AppSchedule,
     AppTask,
 )
+from pricing_service import default_base_price_cents_for_type, upsert_patient_pricing
 from case_record_service import encode_photo_urls
 from consultation_feedback import ALLOWED_IMPROVEMENTS, encode_feedback
 from psych_scale import encode_answers
@@ -172,7 +174,8 @@ DEMO_COUNSELORS = [
         "introduce": "整合人本与叙事取向，陪伴来访者处理过往创伤、重建自我认同与边界感。",
         "career": "多年一线咨询经验，持续接受注册系统督导与创伤取向培训。",
         "qualification": "国家二级心理咨询师；叙事治疗连续培训结业",
-        "billing": 62000,
+        "counselor_type": "CHARITY",
+        "billing": 10000,
         "consult_hours": 2800,
         "work_years": 8,
         "slots": [
@@ -190,6 +193,23 @@ DEMO_STAFF_ACCOUNTS = [
     {"mobile": "13800000004", "open_id": "demo-openid-assistant", "name": "演示助理", "role": "Assistant"},
     {"mobile": "13800000005", "open_id": "demo-openid-ops", "name": "演示运营", "role": "Ops"},
     {"mobile": "13800000006", "open_id": "demo-openid-admin", "name": "演示管理员", "role": "Admin"},
+]
+
+# 定价管理 · 个性化调价演示（管理员工作台）
+DEMO_PATIENT_PRICING = [
+    {
+        "counselor": "李心怡",
+        "patient": "林小美",
+        "adjustment_cents": 2000,
+        "share_mode": "AMOUNT",
+        "revenue_share_cents": 32000,
+    },
+    {
+        "counselor": "王婉清",
+        "patient": "林小美",
+        "adjustment_cents": 10000,
+        "share_mode": None,
+    },
 ]
 
 # 演示来访者咨询记录（我的咨询记录 + 取消/退款规则）
@@ -272,7 +292,7 @@ DEMO_PATIENT_CONSULTATIONS = [
         "offset": timedelta(days=2, hours=1),
         "center": "video",
         "status": "CONFIRMED",
-        "billing": 62000,
+        "billing": 10000,
     },
     {
         "key": "cancelled_refund",
@@ -290,7 +310,7 @@ DEMO_PATIENT_CONSULTATIONS = [
         "offset": timedelta(days=-10),
         "center": "video",
         "status": "DONE",
-        "billing": 62000,
+        "billing": 10000,
     },
     {
         "key": "done_xiaogang_wang",
@@ -307,7 +327,7 @@ DEMO_PATIENT_CONSULTATIONS = [
         "offset": timedelta(days=5),
         "center": "video",
         "status": "CONFIRMED",
-        "billing": 62000,
+        "billing": 10000,
     },
     {
         "key": "video_confirmed_xiaoli",
@@ -315,7 +335,7 @@ DEMO_PATIENT_CONSULTATIONS = [
         "offset": timedelta(days=4),
         "center": "video",
         "status": "CONFIRMED",
-        "billing": 62000,
+        "billing": 10000,
     },
     {
         "key": "done_xiaomei_chen",
@@ -323,7 +343,7 @@ DEMO_PATIENT_CONSULTATIONS = [
         "offset": timedelta(days=-9),
         "center": "video",
         "status": "DONE",
-        "billing": 62000,
+        "billing": 10000,
     },
     {
         "key": "done_xiaoli_wang_intake",
@@ -869,13 +889,10 @@ def get_or_create_counselor_account(
 
 
 def ensure_role(db: Session, account_id: int, role: str) -> None:
-    exists = (
-        db.query(AppRoleBinding)
-        .filter(AppRoleBinding.AccountId == account_id, AppRoleBinding.RoleType == role)
-        .first()
-    )
-    if not exists:
-        db.add(AppRoleBinding(AccountId=account_id, RoleType=role, TargetId=account_id))
+    """单账号单角色：每次注入都强制覆盖为唯一绑定。"""
+    from role_active import set_account_role
+
+    set_account_role(db, account_id, role)
 
 
 def ensure_counselor_profile(db: Session, account_id: int, data: dict) -> None:
@@ -893,7 +910,12 @@ def ensure_counselor_profile(db: Session, account_id: int, data: dict) -> None:
     row.Qualification = data.get("qualification")
     row.TargetGroup = data.get("target_group", "成人,青少年,亲子家庭")
     row.Mode = data.get("mode", "线上/线下")
-    row.Billing = data.get("billing") or 60000
+    counselor_type = data.get("counselor_type") or "PROFESSIONAL"
+    row.CounselorType = counselor_type
+    if counselor_type == "CHARITY":
+        row.Billing = default_base_price_cents_for_type("CHARITY")
+    else:
+        row.Billing = data.get("billing") or default_base_price_cents_for_type("PROFESSIONAL")
     row.FaceBilling = data.get("face_billing") or 30000
     row.ConsultHours = data["consult_hours"]
     row.WorkYears = data["work_years"]
@@ -1490,6 +1512,40 @@ def ensure_demo_assistant_workspace(
         else:
             row.ContactMethod = contact_cfg.get("method", "PHONE")
             row.NextFollowAt = next_follow
+
+
+def cleanup_legacy_demo_pricing(db: Session) -> None:
+    """移除指向已停用旧演示来访账号的个性化调价。"""
+    from models import AppCounselorPatientPricing
+
+    legacy = db.query(AppAccount).filter(AppAccount.Mobile == "13800000000").first()
+    if not legacy:
+        return
+    db.query(AppCounselorPatientPricing).filter(
+        AppCounselorPatientPricing.PatientAccountId == legacy.Id,
+    ).delete(synchronize_session=False)
+
+
+def ensure_demo_patient_pricing(
+    db: Session,
+    patient_map: dict,
+    counselor_map: dict,
+) -> None:
+    """写入定价管理 · 个性化调价演示数据。"""
+    for cfg in DEMO_PATIENT_PRICING:
+        counselor = counselor_map.get(cfg["counselor"])
+        patient = patient_map.get(cfg["patient"])
+        if not counselor or not patient:
+            continue
+        upsert_patient_pricing(
+            db,
+            counselor.Id,
+            patient.Id,
+            adjustment_cents=cfg["adjustment_cents"],
+            share_mode=cfg.get("share_mode"),
+            revenue_share_cents=cfg.get("revenue_share_cents"),
+            revenue_share_percent=cfg.get("revenue_share_percent"),
+        )
 
 
 def ensure_demo_user_feedback(db: Session, patient_map: dict) -> None:

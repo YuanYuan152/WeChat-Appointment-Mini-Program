@@ -11,7 +11,14 @@
         />
         <view v-else class="avatar placeholder">{{ (detail.name || '?').slice(0, 1) }}</view>
         <view class="profile-meta">
-          <text class="profile-name">{{ detail.name }}</text>
+          <view class="profile-title-row">
+            <text class="profile-name">{{ detail.name }}</text>
+            <text v-if="detail.typeLabel" class="type-badge">{{ detail.typeLabel }}</text>
+          </view>
+          <StaffRemarkEditor
+            :account-id="counselorId"
+            v-model="staffRemark"
+          />
           <text v-if="detail.title" class="profile-title">{{ detail.title }}</text>
         </view>
       </view>
@@ -122,10 +129,14 @@
           <text class="chevron" :class="{ open: expandedSections.has('schedule') }">›</text>
         </view>
         <view v-if="expandedSections.has('schedule')" class="section-body">
+          <view class="schedule-link-row" @tap="openFullSchedule">
+            <text class="schedule-link-text">查看完整排期（普通/日历模式）</text>
+            <text class="schedule-link-arrow">›</text>
+          </view>
           <view v-if="!detail.schedules.length" class="mini-empty">暂无近期排期</view>
           <view v-for="s in detail.schedules" :key="s.scheduleId" class="row-card">
             <text class="row-main">{{ formatDT(s.startTime) }} - {{ formatTime(s.endTime) }}</text>
-            <text class="row-sub">{{ s.statusLabel }}{{ s.patientName ? ` · ${s.patientName}` : '' }}</text>
+            <text class="row-sub">{{ s.statusLabel }}{{ s.patientName ? ` · ${formatPatientInline(s.patientName, s.patientContractTag)}` : '' }}</text>
             <text v-if="s.location" class="row-loc">{{ s.location }}</text>
           </view>
         </view>
@@ -141,7 +152,7 @@
         <view v-if="expandedSections.has('unrecorded')" class="section-body">
           <view v-if="!detail.unrecordedConsultations.length" class="mini-empty">暂无未填记录</view>
           <view v-for="c in detail.unrecordedConsultations" :key="c.consultationId" class="row-card warn">
-            <text class="row-main">{{ c.patientName }}</text>
+            <text class="row-main">{{ formatPatientInline(c.patientName, c.patientContractTag) }}</text>
             <text class="row-sub">{{ formatDT(c.startTime) }} · {{ c.statusLabel }}</text>
           </view>
         </view>
@@ -157,7 +168,7 @@
         <view v-if="expandedSections.has('recorded')" class="section-body">
           <view v-if="!detail.recordedConsultations.length" class="mini-empty">暂无已填记录</view>
           <view v-for="c in detail.recordedConsultations" :key="c.consultationId" class="row-card">
-            <text class="row-main">{{ c.patientName }}</text>
+            <text class="row-main">{{ formatPatientInline(c.patientName, c.patientContractTag) }}</text>
             <text class="row-sub">{{ formatDT(c.startTime) }} · 已填写</text>
           </view>
         </view>
@@ -173,7 +184,7 @@
         <view v-if="expandedSections.has('visitors')" class="section-body">
           <view v-if="!detail.visitors.length" class="mini-empty">暂无来访者</view>
           <view v-for="v in detail.visitors" :key="v.patientId" class="row-card">
-            <text class="row-main">{{ v.patientName }}</text>
+            <text class="row-main">{{ formatPatientInline(v.patientName, v.patientContractTag) }}</text>
             <text class="row-sub">咨询 {{ v.consultationCount }} 次{{ v.mobile ? ` · ${v.mobile}` : '' }}</text>
           </view>
         </view>
@@ -194,6 +205,8 @@
 import { computed, onMounted, ref } from 'vue'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
+import StaffRemarkEditor from '@/components/StaffRemarkEditor.vue'
+import { formatPatientInline } from '@/utils/patientContract'
 
 const modeOptions = ['线上', '线下', '线上/线下']
 
@@ -216,6 +229,8 @@ interface CounselorDetail {
   name: string
   avatarUrl?: string
   title?: string
+  roleLabel?: string
+  typeLabel?: string
   specialty?: string
   field?: string
   introduce?: string
@@ -237,11 +252,13 @@ interface CounselorDetail {
   schedules: Array<{ scheduleId: number; startTime?: string; endTime?: string; statusLabel: string; patientName?: string; location?: string }>
   recordedConsultations: Array<{ consultationId: number; patientName: string; startTime?: string; statusLabel: string }>
   unrecordedConsultations: Array<{ consultationId: number; patientName: string; startTime?: string; statusLabel: string }>
+  staffRemark?: string
 }
 
 const loading = ref(true)
 const saving = ref(false)
 const counselorId = ref(0)
+const staffRemark = ref('')
 const detail = ref<CounselorDetail | null>(null)
 const activeTab = ref<TabValue>('ALL')
 const expandedSections = ref<Set<SectionKey>>(new Set(ALL_SECTION_KEYS))
@@ -308,6 +325,7 @@ const load = async () => {
     )
     if (res.code === 0 && res.data) {
       detail.value = res.data
+      staffRemark.value = res.data.staffRemark || ''
       applyForm(res.data)
     }
   } finally {
@@ -328,6 +346,7 @@ const save = async () => {
       if (res.data) {
         const data = res.data as CounselorDetail
         detail.value = data
+        staffRemark.value = data.staffRemark || staffRemark.value
         applyForm(data)
       }
     } else {
@@ -336,6 +355,13 @@ const save = async () => {
   } finally {
     saving.value = false
   }
+}
+
+const openFullSchedule = () => {
+  if (!counselorId.value || !detail.value) return
+  uni.navigateTo({
+    url: `/pages/ops/schedules/detail?counselorId=${counselorId.value}&counselorName=${encodeURIComponent(detail.value.name || '咨询师')}`,
+  })
 }
 
 onMounted(() => {
@@ -385,7 +411,22 @@ onMounted(() => {
   font-weight: 700;
 }
 .profile-meta { flex: 1; min-width: 0; }
-.profile-name { display: block; font-size: 34rpx; font-weight: 700; color: #2C2C2C; }
+.profile-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+.profile-name { font-size: 34rpx; font-weight: 700; color: #2C2C2C; }
+.type-badge {
+  font-size: 22rpx;
+  color: #6B6560;
+  background: #F0EDE8;
+  padding: 4rpx 14rpx;
+  border-radius: 100rpx;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
 .profile-title { display: block; margin-top: 6rpx; font-size: 24rpx; color: #9CA3AF; }
 .stats-grid {
   display: grid;
@@ -482,6 +523,17 @@ onMounted(() => {
 .row-main { display: block; font-size: 28rpx; font-weight: 600; color: #2C2C2C; }
 .row-sub { display: block; margin-top: 6rpx; font-size: 24rpx; color: #6B7280; }
 .row-loc { display: block; margin-top: 4rpx; font-size: 22rpx; color: #9CA3AF; }
+.schedule-link-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20rpx 24rpx;
+  margin-bottom: 16rpx;
+  background: #E8E4DE;
+  border-radius: 12rpx;
+}
+.schedule-link-text { font-size: 26rpx; color: #3D5A4E; font-weight: 600; }
+.schedule-link-arrow { font-size: 32rpx; color: #3D5A4E; }
 .save-btn {
   width: 100%;
   height: 92rpx;

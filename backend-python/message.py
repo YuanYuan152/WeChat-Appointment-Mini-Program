@@ -280,6 +280,14 @@ def create_remind_task(body: CreateRemindTaskRequest, db: Session = Depends(get_
 
 @router.post("/remind-tasks/process", summary="处理到期提醒任务（可由定时任务调用）")
 def process_due_reminders(db: Session = Depends(get_db)):
+    from consultation_status_service import (
+        AUTO_DONE_EVENT,
+        expire_due_consultations,
+        process_consultation_auto_done_task,
+        mark_consultation_done_if_expired,
+    )
+
+    expire_due_consultations(db)
     now = china_now()
     tasks = (
         db.query(AppRemindTask)
@@ -291,6 +299,14 @@ def process_due_reminders(db: Session = Depends(get_db)):
     processed = 0
     for task in tasks:
         try:
+            if task.EventKey == AUTO_DONE_EVENT:
+                if task.RelatedId:
+                    process_consultation_auto_done_task(db, task.RelatedId)
+                task.Status = "DONE"
+                task.ProcessedAt = datetime.utcnow()
+                processed += 1
+                continue
+
             if task.EventKey == "COUNSELOR_CONSULTATION_DONE":
                 from counselor_message_service import notify_counselor_consultation_done
                 from models import AppConsultation
@@ -300,7 +316,8 @@ def process_due_reminders(db: Session = Depends(get_db)):
                     .filter(AppConsultation.Id == task.RelatedId)
                     .first()
                 )
-                if consultation and consultation.Status in ("PENDING", "CONFIRMED", "ONGOING"):
+                if consultation and consultation.Status != "CANCELLED":
+                    mark_consultation_done_if_expired(db, consultation)
                     notify_counselor_consultation_done(db, consultation)
                 task.Status = "DONE"
                 task.ProcessedAt = datetime.utcnow()

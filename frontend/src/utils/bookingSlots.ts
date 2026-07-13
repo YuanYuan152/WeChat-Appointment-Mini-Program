@@ -6,7 +6,9 @@ export interface BookingTimeSlot {
   startHH: string
   endHH: string
   week: string
-  Price: number
+  Price: number | null
+  priceNegotiation?: boolean
+  priceLabel?: string
   maxSign: number
   numSign: number
   /** 所属预约中心，来自 API / 咨询师排班 */
@@ -14,7 +16,6 @@ export interface BookingTimeSlot {
   status?: 'AVAILABLE' | 'BOOKED' | 'EXPIRED' | 'NEGOTIATION'
   isBookable?: boolean
   needsNegotiation?: boolean
-  priceLabel?: string
   startTime?: string
   endTime?: string
   createTime?: string
@@ -40,7 +41,8 @@ export function normalizeBookingTimeSlots(raw: any[] = []): BookingTimeSlot[] {
         startHH: slot.startHH || '',
         endHH: slot.endHH || '',
         week: slot.week || '',
-        Price: Number(slot.Price ?? slot.price ?? 0),
+        Price: slot.Price == null ? null : Number(slot.Price ?? slot.price ?? 0),
+        priceNegotiation: !!slot.priceNegotiation,
         maxSign: Number(slot.maxSign ?? 1),
         numSign: Number(slot.numSign ?? 0),
         centerId: String(centerId),
@@ -49,6 +51,7 @@ export function normalizeBookingTimeSlots(raw: any[] = []): BookingTimeSlot[] {
           slot.isBookable ??
           (
             !Boolean(slot.needsNegotiation) &&
+            !Boolean(slot.priceNegotiation) &&
             slot.status !== 'BOOKED' &&
             slot.status !== 'EXPIRED' &&
             slot.status !== 'NEGOTIATION' &&
@@ -86,13 +89,14 @@ export function isSlotExpired(slot: BookingTimeSlot): boolean {
 /** 不可预约时段的展示文案 */
 export function slotUnavailableLabel(slot: BookingTimeSlot): string {
   if (slot.needsNegotiation || slot.status === 'NEGOTIATION') return slot.priceLabel || '需议价'
+  if (slot.priceNegotiation) return slot.priceLabel || '议价'
   if (isSlotExpired(slot)) return '已过期'
   if (slot.status === 'BOOKED') return '已约满'
   return '已约满'
 }
 
 export function isSlotBookable(slot: BookingTimeSlot): boolean {
-  if (slot.needsNegotiation || slot.status === 'NEGOTIATION') return false
+  if (slot.needsNegotiation || slot.priceNegotiation || slot.status === 'NEGOTIATION') return false
   if (slot.isBookable === false) return false
   if (isSlotExpired(slot)) return false
   if (slot.status === 'BOOKED') return false

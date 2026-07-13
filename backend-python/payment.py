@@ -92,6 +92,14 @@ class ConfirmDevPaymentRequest(BaseModel):
 
 class PayExistingOrderRequest(BaseModel):
     order_id: int
+    is_adult: Optional[bool] = None
+    signature_url: Optional[str] = None
+
+
+class AttachOrderAgreementRequest(BaseModel):
+    order_id: int
+    is_adult: bool
+    signature_url: str
 
 
 class CreateOrderResponse(BaseModel):
@@ -124,6 +132,15 @@ def _create_pending_order(
         raise HTTPException(status_code=400, detail="该时段已被预约或不存在")
     if pending_proxy_order_for_schedule(db, schedule.Id):
         raise HTTPException(status_code=400, detail="该时段已有待支付订单")
+
+    from charity_milestone_service import assert_charity_patient_can_book_charity
+    from patient_contract_service import assert_patient_can_self_book
+
+    assert_charity_patient_can_book_charity(db, account.Id, schedule.CounselorId)
+    try:
+        assert_patient_can_self_book(db, account.Id, schedule.CounselorId)
+    except ValueError as e:
+        raise HTTPException(status_code=403, detail=str(e))
 
     profile = get_counselor_profile(db, schedule.CounselorId)
     if not profile or not counselor_visible_to_patient(
@@ -223,6 +240,49 @@ def _load_payable_order(
     return order
 
 
+def _attach_order_agreement_if_needed(
+    db: Session,
+    account: AppAccount,
+    order: AppOrder,
+    *,
+    is_adult: Optional[bool],
+    signature_url: Optional[str],
+) -> None:
+    from order_contract_agreement import attach_contract_agreement_to_order
+
+    attach_contract_agreement_to_order(
+        db,
+        account,
+        order,
+        is_adult=is_adult,
+        signature_url=signature_url,
+    )
+
+
+@router.post("/wechat/attach-order-agreement", summary="待支付订单签署心理咨询协议")
+def attach_order_agreement(
+    req: AttachOrderAgreementRequest,
+    current_account: AppAccount = Depends(get_current_account),
+    db: Session = Depends(get_db),
+):
+    order = _load_payable_order(db, current_account, req.order_id)
+    try:
+        _attach_order_agreement_if_needed(
+            db,
+            current_account,
+            order,
+            is_adult=req.is_adult,
+            signature_url=req.signature_url,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    db.commit()
+    db.refresh(order)
+    from patient import _build_order_out
+
+    return {"code": 0, "msg": "协议已签署", "data": _build_order_out(db, order, current_account)}
+
+
 @router.post("/wechat/pay-order", response_model=CreateOrderResponse, summary="支付已有待支付订单")
 def pay_existing_order(
     req: PayExistingOrderRequest,
@@ -230,6 +290,21 @@ def pay_existing_order(
     db: Session = Depends(get_db),
 ):
     order = _load_payable_order(db, current_account, req.order_id)
+    try:
+        _attach_order_agreement_if_needed(
+            db,
+            current_account,
+            order,
+            is_adult=req.is_adult,
+            signature_url=req.signature_url,
+        )
+        from order_contract_agreement import assert_order_contract_agreement_ready
+
+        assert_order_contract_agreement_ready(db, current_account, order)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    db.commit()
+    db.refresh(order)
     if _is_real_wechat_pay_configured():
         try:
             pay_params = _real_unified_order(
@@ -257,6 +332,19 @@ def simulate_pay_existing_order(
     if _is_real_wechat_pay_configured():
         raise HTTPException(status_code=403, detail="已配置真实支付，请使用微信支付流程")
     order = _load_payable_order(db, current_account, req.order_id)
+    try:
+        _attach_order_agreement_if_needed(
+            db,
+            current_account,
+            order,
+            is_adult=req.is_adult,
+            signature_url=req.signature_url,
+        )
+        from order_contract_agreement import assert_order_contract_agreement_ready
+
+        assert_order_contract_agreement_ready(db, current_account, order)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     center_id = None
     if order.Description and "center:" in order.Description:
         for part in order.Description.split("|"):

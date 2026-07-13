@@ -7,6 +7,8 @@ export type DevLoginRole =
   | 'patient'
   | 'patient_gang'
   | 'patient_li'
+  | 'patient_charity'
+  | 'patient_professional_milestone'
   | 'counselor'
   | 'counselor_zhang'
   | 'counselor_wang'
@@ -32,7 +34,7 @@ export const DEV_LOGIN_ROLE_GROUPS: {
   title: string
   roles: DevLoginRole[]
 }[] = [
-  { title: '来访', roles: ['patient', 'patient_gang', 'patient_li'] },
+  { title: '来访', roles: ['patient', 'patient_gang', 'patient_li', 'patient_charity', 'patient_professional_milestone'] },
   { title: '咨询师', roles: ['counselor', 'counselor_zhang', 'counselor_wang', 'counselor_chen'] },
   { title: '咨询助理', roles: ['assistant'] },
   { title: '运营', roles: ['ops'] },
@@ -48,6 +50,8 @@ export const DEV_LOGIN_ROLES: {
   { role: 'patient', label: '来访·小美', code: 'dev_patient', seedHint: 'seed_demo_data.py（林小美）' },
   { role: 'patient_gang', label: '来访·小刚', code: 'dev_patient_xiaogang', seedHint: 'seed_demo_data.py（赵小刚）' },
   { role: 'patient_li', label: '来访·小丽', code: 'dev_patient_xiaoli', seedHint: 'seed_demo_data.py（何小丽）' },
+  { role: 'patient_charity', label: '来访·公益测试', code: 'dev_patient_charity_test', seedHint: 'seed_charity_milestone_test.py（周公益）' },
+  { role: 'patient_professional_milestone', label: '来访·正价测试', code: 'dev_patient_professional_milestone_test', seedHint: 'seed_charity_milestone_test.py（周正价）' },
   { role: 'counselor', label: '咨询师·李心怡', code: 'dev_counselor', seedHint: 'seed_demo_data.py' },
   { role: 'counselor_zhang', label: '咨询师·张明远', code: 'dev_counselor_zhangmingyuan', seedHint: 'seed_demo_data.py' },
   { role: 'counselor_wang', label: '咨询师·王婉清', code: 'dev_counselor_wangwanqing', seedHint: 'seed_demo_data.py' },
@@ -61,6 +65,8 @@ const DEV_ROLE_TO_CODE: Record<DevLoginRole, string> = {
   patient: 'dev_patient',
   patient_gang: 'dev_patient_xiaogang',
   patient_li: 'dev_patient_xiaoli',
+  patient_charity: 'dev_patient_charity_test',
+  patient_professional_milestone: 'dev_patient_professional_milestone_test',
   counselor: 'dev_counselor',
   counselor_zhang: 'dev_counselor_zhangmingyuan',
   counselor_wang: 'dev_counselor_wangwanqing',
@@ -77,6 +83,8 @@ export const getDevWorkbenchRole = (): string | null => {
     role === 'patient'
     || role === 'patient_gang'
     || role === 'patient_li'
+    || role === 'patient_charity'
+    || role === 'patient_professional_milestone'
   ) return 'Patient'
   if (
     role === 'counselor'

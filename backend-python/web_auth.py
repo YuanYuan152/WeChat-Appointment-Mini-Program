@@ -13,7 +13,8 @@ from sqlalchemy.orm import Session
 
 from auth import UserInfo, create_access_token, get_current_account, get_me
 from database import get_db
-from models import AppAccount, AppLoginSession, AppRoleBinding
+from models import AppAccount, AppLoginSession
+from role_active import set_account_role
 from password_utils import hash_password, verify_password
 from preference_tags import (
     get_account_tags,
@@ -84,18 +85,8 @@ def _find_active_account_by_mobile(db: Session, mobile: str) -> Optional[AppAcco
 
 
 def _ensure_patient_role(db: Session, account: AppAccount) -> None:
-    exists = (
-        db.query(AppRoleBinding)
-        .filter(
-            AppRoleBinding.AccountId == account.Id,
-            AppRoleBinding.RoleType == "Patient",
-        )
-        .first()
-    )
-    if not exists:
-        db.add(AppRoleBinding(AccountId=account.Id, RoleType="Patient", TargetId=account.Id))
     if not account.ActiveRole:
-        account.ActiveRole = "Patient"
+        set_account_role(db, account.Id, "Patient")
 
 
 def _issue_token(db: Session, account: AppAccount) -> str:

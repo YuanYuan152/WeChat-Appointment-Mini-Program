@@ -28,7 +28,10 @@
     </view>
 
     <view class="toolbar">
-      <button class="add-btn" @tap="openAddModal">+ 新建排期</button>
+      <view class="toolbar-btns">
+        <button class="add-btn toolbar-btn" @tap="openAddModal">+ 新建排期</button>
+        <button class="proxy-btn toolbar-btn" @tap="openProxyModal">代理预约</button>
+      </view>
       <text class="toolbar-tip">{{ toolbarTip }}</text>
     </view>
 
@@ -123,7 +126,7 @@
             <text class="slot-time">{{ formatTime(slot.startTime) }} – {{ formatTime(slot.endTime) }}</text>
             <text v-if="slot.centerName" class="slot-center">{{ slot.centerName }}</text>
             <text v-if="slotRoomText(slot)" class="slot-room">{{ slotRoomText(slot) }}</text>
-            <text v-if="slot.patientName" class="slot-patient">来访者：{{ slot.patientName }}</text>
+            <text v-if="slot.patientName" class="slot-patient">来访者：{{ formatPatientInline(slot.patientName, slot.patientContractTag) }}</text>
           </view>
         </view>
         <view class="slot-right">
@@ -224,6 +227,102 @@
       </view>
     </view>
 
+    <!-- 代理预约 -->
+    <view v-if="showProxy" class="modal-overlay" @touchmove.stop.prevent>
+      <view class="modal-card" @tap.stop @touchmove.stop.prevent>
+        <text class="modal-title">代理预约</text>
+        <text class="modal-sub">为已签约来访推送待支付订单，来访需在 2 小时内完成支付</text>
+
+        <view class="form-item">
+          <text class="form-label">选择来访 <text class="required">*</text></text>
+          <input
+            class="patient-input"
+            placeholder="输入姓名/手机号搜索"
+            :value="proxyPatientKeyword"
+            @input="onProxyPatientInput"
+            @focus="showProxyPatientDropdown = true"
+          />
+          <view v-if="showProxyPatientDropdown && proxyPatientSuggestions.length" class="patient-dropdown">
+            <view
+              v-for="p in proxyPatientSuggestions"
+              :key="p.id"
+              class="patient-dropdown-item"
+              :class="{ disabled: p.canProxyPush === false }"
+              @tap="selectProxyPatient(p)"
+            >{{ p.label || formatPatientInline(p.name, p.contractTag) }}</view>
+          </view>
+          <text v-if="proxySelectedPatient" class="selected-patient-tag">
+            已选：{{ formatPatientInline(proxySelectedPatient.name, proxySelectedPatient.contractTag) }}
+          </text>
+          <text v-else class="proxy-patient-hint">仅可选择已绑定您且已签约的来访</text>
+        </view>
+
+        <view class="form-item">
+          <text class="form-label">预约中心</text>
+          <view class="center-row">
+            <view
+              v-for="c in centers"
+              :key="c.id"
+              class="center-chip"
+              :class="{ active: proxyForm.centerId === c.id }"
+              @tap="onProxyCenterChange(c.id)"
+            >{{ c.name }}</view>
+          </view>
+        </view>
+
+        <view class="form-item" @tap.stop>
+          <text class="form-label">日期</text>
+          <picker mode="date" :value="proxyForm.date" :start="minDate" :end="maxDate" @change="onProxyDateChange">
+            <view class="picker-row" hover-class="none">{{ proxyForm.date || '选择日期' }}</view>
+          </picker>
+        </view>
+
+        <view class="form-item">
+          <text class="form-label">时间槽</text>
+          <view v-if="proxySlotOptionsLoading" class="picker-row">加载时段...</view>
+          <view v-else class="slot-grid">
+            <view
+              v-for="ts in proxyTimeSlotOptions"
+              :key="ts.key"
+              class="slot-chip"
+              :class="{
+                active: proxyForm.slotKey === ts.key,
+                disabled: !ts.selectable,
+                available: ts.selectable && !!ts.existingAvailableScheduleId,
+              }"
+              @tap="selectProxyTimeSlot(ts)"
+            >{{ ts.label }}{{ proxySlotChipHint(ts) }}</view>
+          </view>
+        </view>
+
+        <view v-if="!isProxyVideoCenterSelected" class="form-item">
+          <text class="form-label">咨询室（必选）</text>
+          <view class="center-row">
+            <view
+              v-for="room in proxyRoomOptionsForSlot"
+              :key="room.roomId"
+              class="center-chip"
+              :class="{
+                active: proxyForm.roomId === room.roomId,
+                disabled: !room.available,
+              }"
+              @tap="selectProxyRoom(room)"
+            >{{ room.roomName }}{{ room.occupiedByOther ? '（已占用）' : '' }}</view>
+          </view>
+        </view>
+        <view v-else class="form-item video-center-hint">
+          <text class="video-hint-text">视频咨询无需选择咨询室</text>
+        </view>
+
+        <view class="modal-btns">
+          <button class="modal-btn cancel" @tap.stop="showProxy = false">取消</button>
+          <button class="modal-btn confirm" :disabled="proxySubmitting || !canPushProxyOrder" @tap.stop="submitProxyOrder">
+            {{ proxySubmitting ? '推送中...' : '推送订单' }}
+          </button>
+        </view>
+      </view>
+    </view>
+
     <!-- 请假详情 -->
     <view v-if="showLeaveDetail" class="notice-overlay" @touchmove.stop.prevent>
       <view class="detail-card" @tap.stop>
@@ -259,7 +358,7 @@
     <!-- 已预约请假/取消：须上传沟通截图 -->
     <view v-if="showCancelBooked" class="notice-overlay" @touchmove.stop.prevent>
       <view class="cancel-booked-card" @tap.stop>
-        <text class="notice-title">{{ cancelBookedIsLeave ? '请假（取消已预约）' : '取消已预约排期' }}</text>
+        <text class="notice-title">请假申请</text>
         <text class="cancel-booked-tip">{{ cancelBookedTip }}</text>
         <view v-if="cancelBookedSlotText" class="detail-block">
           <text class="detail-label">咨询时段</text>
@@ -299,7 +398,7 @@
             :disabled="!canSubmitCancelBooked || cancellingBooked"
             :loading="cancellingBooked"
             @tap="confirmCancelBooked"
-          >{{ cancellingBooked ? '提交中...' : (cancelBookedIsLeave ? '确认请假' : '确认取消') }}</button>
+          >{{ cancellingBooked ? '提交中...' : '提交请假申请' }}</button>
         </view>
       </view>
     </view>
@@ -327,6 +426,7 @@ import { APPOINTMENT_CENTERS, isVideoCenter } from '@/constants/appointmentCente
 import { SCHEDULE_DISPLAY_META, type ScheduleDisplayStatus } from '@/constants/scheduleDisplay'
 import { formatDateLocal, ROLLING_WINDOW_DAYS, PAST_WINDOW_DAYS, LIST_WINDOW_DAYS, addDays } from '@/constants/scheduleSlots'
 import { openCounselorCaseRecord } from '@/utils/case-record'
+import { formatPatientInline } from '@/utils/patientContract'
 
 interface RoomOpt {
   roomId: string
@@ -347,6 +447,38 @@ interface TimeSlotOpt {
   rooms: RoomOpt[]
 }
 
+interface ProxyPatientItem {
+  id: number
+  name: string
+  label?: string
+  contractTag?: string | null
+  isBoundToCounselor?: boolean
+  isContractSigned?: boolean
+  canProxyPush?: boolean
+}
+
+const PROXY_PATIENT_BLOCKED_MSG = '该来访并非您签约且绑定的来访，无法推送订单'
+
+const showProxyPatientBlockedModal = () => {
+  uni.showModal({
+    title: '无法推送订单',
+    content: PROXY_PATIENT_BLOCKED_MSG,
+    showCancel: false,
+  })
+}
+
+interface ProxyTimeSlotOpt {
+  key: string
+  label: string
+  selectable: boolean
+  past?: boolean
+  counselorOccupied?: boolean
+  existingAvailableScheduleId?: number | null
+  startTime: string
+  endTime: string
+  rooms?: RoomOpt[]
+}
+
 interface CalendarSlot {
   id: number
   startTime: string
@@ -357,6 +489,7 @@ interface CalendarSlot {
   centerId?: string
   roomName?: string
   patientName?: string
+  patientContractTag?: string
   consultationId?: number
   hasCaseRecord?: boolean
   caseRecordId?: number | null
@@ -409,7 +542,7 @@ const NO_PREF = '__none__'
 const MS_24H = 24 * 60 * 60 * 1000
 
 const DEFAULT_BOOKED_LEAVE_HINT =
-  '取消前请与来访者提前沟通，填写请假理由并上传沟通截图。取消成功后将释放咨询室、通知来访者并协助改约。'
+  '取消前请与来访者提前沟通，填写请假理由并上传沟通截图。提交后须等待管理员审核通过；审核通过后将释放咨询室、通知来访者并协助改约。'
 
 const parseStartTime = (iso: string) => new Date(iso.includes('T') ? iso : iso.replace(' ', 'T'))
 
@@ -446,6 +579,35 @@ const selectedCalendarDate = ref(formatDateLocal())
 const monthSlots = ref<CalendarSlot[]>([])
 const slots = ref<CalendarSlot[]>([])
 const showAdd = ref(false)
+const showProxy = ref(false)
+const proxyPatientKeyword = ref('')
+const proxyPatientSuggestions = ref<ProxyPatientItem[]>([])
+const proxySelectedPatient = ref<ProxyPatientItem | null>(null)
+const showProxyPatientDropdown = ref(false)
+const proxySubmitting = ref(false)
+const proxySlotOptionsLoading = ref(false)
+const proxyTimeSlotOptions = ref<ProxyTimeSlotOpt[]>([])
+let proxyPatientSearchTimer: ReturnType<typeof setTimeout> | null = null
+const proxyForm = ref({
+  centerId: 'yangpu',
+  date: formatDateLocal(),
+  slotKey: '',
+  roomId: '',
+  startTime: '',
+  endTime: '',
+  scheduleId: null as number | null,
+})
+const isProxyVideoCenterSelected = computed(() => isVideoCenter(proxyForm.value.centerId))
+const proxyRoomOptionsForSlot = computed(() => {
+  const ts = proxyTimeSlotOptions.value.find((t) => t.key === proxyForm.value.slotKey)
+  return ts?.rooms || []
+})
+const canPushProxyOrder = computed(() => {
+  if (!proxySelectedPatient.value) return false
+  if (!proxyForm.value.slotKey) return false
+  if (!isProxyVideoCenterSelected.value && !proxyForm.value.roomId) return false
+  return true
+})
 const showLeaveNotice = ref(false)
 const leaveNoticeText = ref('')
 const leaveNoticeSlot = ref<CalendarSlot | null>(null)
@@ -456,7 +618,6 @@ const leaveDetailPatient = ref('')
 const leaveDetailReason = ref('')
 const leaveDetailSubmittedAt = ref('')
 const leaveDetailStatusLabel = ref('')
-const cancelBookedIsLeave = ref(false)
 const cancelBookedTip = ref('')
 const showCancelBooked = ref(false)
 const cancelBookedSlot = ref<CalendarSlot | null>(null)
@@ -901,6 +1062,157 @@ const openAddModal = async () => {
   await loadSlotOptions()
 }
 
+const searchProxyPatients = async (keyword: string) => {
+  const res = await httpV2.get(
+    API_ENDPOINTS.counselor.proxyBookingPatients,
+    { keyword: keyword || undefined },
+    { showLoading: false },
+  )
+  if (res.code === 0 && res.data?.items) {
+    proxyPatientSuggestions.value = res.data.items
+  }
+}
+
+const onProxyPatientInput = (e: { detail: { value: string } }) => {
+  proxyPatientKeyword.value = e.detail.value
+  if (proxySelectedPatient.value && e.detail.value !== proxySelectedPatient.value.name) {
+    proxySelectedPatient.value = null
+  }
+  showProxyPatientDropdown.value = true
+  if (proxyPatientSearchTimer) clearTimeout(proxyPatientSearchTimer)
+  proxyPatientSearchTimer = setTimeout(() => searchProxyPatients(proxyPatientKeyword.value.trim()), 300)
+}
+
+const selectProxyPatient = (p: ProxyPatientItem) => {
+  proxySelectedPatient.value = p
+  proxyPatientKeyword.value = p.name
+  showProxyPatientDropdown.value = false
+}
+
+const isProxyPatientEligible = (p: ProxyPatientItem | null) => {
+  if (!p) return false
+  if (p.canProxyPush === false) return false
+  if (p.canProxyPush === true) return true
+  return p.isBoundToCounselor !== false && p.isContractSigned !== false
+}
+
+const loadProxySlotOptions = async () => {
+  const { centerId, date } = proxyForm.value
+  if (!centerId || !date) return
+  proxySlotOptionsLoading.value = true
+  try {
+    const res = await httpV2.get<{ slots: ProxyTimeSlotOpt[] }>(
+      API_ENDPOINTS.counselor.proxyBookingSlotOptions,
+      { date, center_id: centerId },
+      { showLoading: false },
+    )
+    proxyTimeSlotOptions.value = res.code === 0 && res.data ? res.data.slots || [] : []
+  } catch {
+    proxyTimeSlotOptions.value = []
+  } finally {
+    proxySlotOptionsLoading.value = false
+  }
+}
+
+const proxySlotChipHint = (ts: ProxyTimeSlotOpt) => {
+  if (ts.past) return '（已过）'
+  if (ts.counselorOccupied && !ts.existingAvailableScheduleId) return '（已预约）'
+  if (ts.existingAvailableScheduleId) return '（可约）'
+  return ''
+}
+
+const openProxyModal = async () => {
+  proxySelectedPatient.value = null
+  proxyPatientKeyword.value = ''
+  proxyPatientSuggestions.value = []
+  showProxyPatientDropdown.value = false
+  proxyForm.value = {
+    centerId: defaultCenterId,
+    date: minDate.value,
+    slotKey: '',
+    roomId: '',
+    startTime: '',
+    endTime: '',
+    scheduleId: null,
+  }
+  showProxy.value = true
+  await Promise.all([searchProxyPatients(''), loadProxySlotOptions()])
+}
+
+const onProxyCenterChange = async (id: string) => {
+  proxyForm.value.centerId = id
+  proxyForm.value.slotKey = ''
+  proxyForm.value.roomId = ''
+  proxyForm.value.scheduleId = null
+  await loadProxySlotOptions()
+}
+
+const onProxyDateChange = async (e: { detail: { value: string } }) => {
+  proxyForm.value.date = e.detail.value
+  proxyForm.value.slotKey = ''
+  proxyForm.value.roomId = ''
+  proxyForm.value.scheduleId = null
+  await loadProxySlotOptions()
+}
+
+const selectProxyTimeSlot = (ts: ProxyTimeSlotOpt) => {
+  if (!ts.selectable) return
+  proxyForm.value.slotKey = ts.key
+  proxyForm.value.startTime = ts.startTime
+  proxyForm.value.endTime = ts.endTime
+  proxyForm.value.scheduleId = ts.existingAvailableScheduleId || null
+  proxyForm.value.roomId = ''
+}
+
+const selectProxyRoom = (room: RoomOpt) => {
+  if (!room.available) return
+  proxyForm.value.roomId = room.roomId
+}
+
+const submitProxyOrder = async () => {
+  if (!proxySelectedPatient.value || proxySubmitting.value) return
+  if (!isProxyPatientEligible(proxySelectedPatient.value)) {
+    showProxyPatientBlockedModal()
+    return
+  }
+  if (!proxyForm.value.slotKey) {
+    uni.showToast({ title: '请选择时间槽', icon: 'none' })
+    return
+  }
+  if (!isProxyVideoCenterSelected.value && !proxyForm.value.roomId) {
+    uni.showToast({ title: '请选择咨询室', icon: 'none' })
+    return
+  }
+  proxySubmitting.value = true
+  try {
+    const res = await httpV2.post(API_ENDPOINTS.counselor.proxyBookingPushOrder, {
+      patient_id: proxySelectedPatient.value.id,
+      center_id: proxyForm.value.centerId,
+      start_time: proxyForm.value.startTime,
+      end_time: proxyForm.value.endTime,
+      room_id: isProxyVideoCenterSelected.value ? null : proxyForm.value.roomId,
+      schedule_id: proxyForm.value.scheduleId,
+    })
+    if (res.code !== 0) {
+      const msg = res.msg || '推送失败'
+      if (msg.includes('签约') || msg.includes('绑定')) {
+        showProxyPatientBlockedModal()
+      } else {
+        uni.showToast({ title: msg, icon: 'none' })
+      }
+      return
+    }
+    uni.showToast({ title: '订单已推送', icon: 'success' })
+    showProxy.value = false
+    await refresh()
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : '推送失败'
+    uni.showToast({ title: msg, icon: 'none' })
+  } finally {
+    proxySubmitting.value = false
+  }
+}
+
 const closeLeaveNotice = () => {
   showLeaveNotice.value = false
   leaveNoticeSlot.value = null
@@ -918,12 +1230,10 @@ const openCancelBooked = (slot: CalendarSlot) => {
   cancelBookedPatient.value = slot.patientName || ''
   cancelScreenshotUrl.value = ''
   cancelLeaveReason.value = ''
-  const within24h = msUntilStart(slot) > 0 && msUntilStart(slot) < MS_24H
-  cancelBookedIsLeave.value = within24h
   cancelBookedTip.value = slot.cancelHint || (
-    within24h
-      ? '距咨询开始不足24小时。取消前请与来访者提前沟通并上传沟通截图；取消后来访者将全额退款，将释放咨询室并协助改约。'
-      : '距咨询开始超过24小时。取消前请与来访者提前沟通并上传沟通截图；取消后将释放咨询室、通知来访者并协助改约。'
+    msUntilStart(slot) > 0 && msUntilStart(slot) < MS_24H
+      ? '距咨询开始不足24小时。取消前请与来访者提前沟通并上传沟通截图；提交后须等待管理员审核通过，审核通过后来访者将全额退款，请协助改约。'
+      : '距咨询开始超过24小时。取消前请与来访者提前沟通并上传沟通截图；提交后须等待管理员审核通过，审核通过后将释放咨询室、通知来访者并协助改约。'
   )
   showCancelBooked.value = true
 }
@@ -968,20 +1278,20 @@ const confirmCancelBooked = async () => {
   }
   cancellingBooked.value = true
   try {
-    const r = await httpV2.put(`/api/mini/counselor/schedules/${slot.id}`, {
-      status: 'CANCELLED',
-      leave_reason: reason,
+    const r = await httpV2.post(API_ENDPOINTS.counselor.scheduleLeaveRequest(slot.id), {
+      reason,
       communication_screenshot_url: cancelScreenshotUrl.value,
     })
     if (r.code === 0) {
       closeCancelBooked()
       uni.showToast({
-        title: cancelBookedIsLeave.value ? '请假成功' : '已取消',
-        icon: 'success',
+        title: (r.data as { message?: string })?.message || '请假申请已提交，请等待审核',
+        icon: 'none',
+        duration: 2500,
       })
       await refresh()
     } else {
-      uni.showToast({ title: r.msg || '取消失败', icon: 'none' })
+      uni.showToast({ title: r.msg || '提交失败', icon: 'none' })
     }
   } finally {
     cancellingBooked.value = false
@@ -1165,10 +1475,28 @@ defineExpose({ refresh, focusScheduleId, applyListFilter, getUnrecordedCount })
 .legend-icon { font-size: 28rpx; }
 .legend-text { font-size: 22rpx; color: #5A5A5A; }
 .toolbar { margin-bottom: 24rpx; }
-.add-btn {
-  width: 100%; background: #3D5A4E; color: #fff;
-  border-radius: 12rpx; height: 84rpx; line-height: 84rpx; font-size: 30rpx; border: none;
+.toolbar-btns {
+  display: flex;
+  gap: 16rpx;
 }
+.toolbar-btn {
+  flex: 1;
+  border-radius: 12rpx;
+  height: 84rpx;
+  line-height: 84rpx;
+  font-size: 28rpx;
+  border: none;
+}
+.add-btn {
+  background: #3D5A4E;
+  color: #fff;
+}
+.proxy-btn {
+  background: #fff;
+  color: #3D5A4E;
+  border: 2rpx solid #3D5A4E;
+}
+.toolbar-btn::after { border: none; }
 .toolbar-tip { display: block; font-size: 22rpx; color: #8A8A8A; margin-top: 12rpx; text-align: center; line-height: 1.5; }
 .day-section { margin-bottom: 28rpx; }
 .day-title { display: block; font-size: 28rpx; font-weight: 600; color: #2C2C2C; margin-bottom: 12rpx; }
@@ -1289,4 +1617,44 @@ defineExpose({ refresh, focusScheduleId, applyListFilter, getUnrecordedCount })
 .modal-btn { flex: 1; height: 84rpx; line-height: 84rpx; border-radius: 100rpx; font-size: 28rpx; }
 .modal-btn.cancel { background: #F3F4F6; color: #6B7280; }
 .modal-btn.confirm { background: #3D5A4E; color: #fff; }
+.patient-input {
+  width: 100%;
+  box-sizing: border-box;
+  height: 72rpx;
+  padding: 0 20rpx;
+  background: #F9FAFB;
+  border-radius: 12rpx;
+  font-size: 28rpx;
+  border: 1rpx solid #E5E7EB;
+}
+.patient-dropdown {
+  margin-top: 8rpx;
+  background: #fff;
+  border: 1rpx solid #E5E7EB;
+  border-radius: 12rpx;
+  max-height: 320rpx;
+  overflow-y: auto;
+}
+.patient-dropdown-item {
+  padding: 20rpx 24rpx;
+  font-size: 26rpx;
+  color: #374151;
+  border-bottom: 1rpx solid #F3F4F6;
+}
+.patient-dropdown-item:active { background: #F9FAFB; }
+.patient-dropdown-item.disabled { color: #9CA3AF; }
+.selected-patient-tag {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 24rpx;
+  color: #0D9488;
+}
+.proxy-patient-hint {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: #9CA3AF;
+}
+.required { color: #EF4444; }
+.slot-chip.available { border: 2rpx solid #10B981; }
 </style>

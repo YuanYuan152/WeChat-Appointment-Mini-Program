@@ -151,9 +151,11 @@ def approve_leave_request(
             cancel_patient_consultation_reminders,
             notify_patient_counselor_leave_approved,
         )
+        from consultation_status_service import cancel_consultation_auto_done_tasks
 
         cancel_counselor_consultation_reminders(db, consultation.Id)
         cancel_counselor_consultation_done_notices(db, consultation.Id)
+        cancel_consultation_auto_done_tasks(db, consultation.Id)
         cancel_patient_consultation_reminders(db, consultation.Id)
         notify_patient_counselor_leave_approved(
             db,

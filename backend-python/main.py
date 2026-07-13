@@ -43,6 +43,15 @@ def _ensure_db_schema():
         ensure_tables()
         ensure_app_account_columns()
         ensure_app_order_columns()
+        from database import SessionLocal
+        from charity_milestone_service import backfill_charity_negotiation_state
+
+        db = SessionLocal()
+        try:
+            backfill_charity_negotiation_state(db)
+            db.commit()
+        finally:
+            db.close()
     except Exception as exc:
         import logging
         logging.getLogger("uvicorn.error").warning("ensure_schema skipped: %s", exc)
