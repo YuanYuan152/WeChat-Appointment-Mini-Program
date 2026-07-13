@@ -136,7 +136,7 @@
           <view v-if="!detail.schedules.length" class="mini-empty">暂无近期排期</view>
           <view v-for="s in detail.schedules" :key="s.scheduleId" class="row-card">
             <text class="row-main">{{ formatDT(s.startTime) }} - {{ formatTime(s.endTime) }}</text>
-            <text class="row-sub">{{ s.statusLabel }}{{ s.patientName ? ` · ${s.patientName}` : '' }}</text>
+            <text class="row-sub">{{ s.statusLabel }}{{ s.patientName ? ` · ${formatPatientInline(s.patientName, s.patientContractTag)}` : '' }}</text>
             <text v-if="s.location" class="row-loc">{{ s.location }}</text>
           </view>
         </view>
@@ -152,7 +152,7 @@
         <view v-if="expandedSections.has('unrecorded')" class="section-body">
           <view v-if="!detail.unrecordedConsultations.length" class="mini-empty">暂无未填记录</view>
           <view v-for="c in detail.unrecordedConsultations" :key="c.consultationId" class="row-card warn">
-            <text class="row-main">{{ c.patientName }}</text>
+            <text class="row-main">{{ formatPatientInline(c.patientName, c.patientContractTag) }}</text>
             <text class="row-sub">{{ formatDT(c.startTime) }} · {{ c.statusLabel }}</text>
           </view>
         </view>
@@ -168,7 +168,7 @@
         <view v-if="expandedSections.has('recorded')" class="section-body">
           <view v-if="!detail.recordedConsultations.length" class="mini-empty">暂无已填记录</view>
           <view v-for="c in detail.recordedConsultations" :key="c.consultationId" class="row-card">
-            <text class="row-main">{{ c.patientName }}</text>
+            <text class="row-main">{{ formatPatientInline(c.patientName, c.patientContractTag) }}</text>
             <text class="row-sub">{{ formatDT(c.startTime) }} · 已填写</text>
           </view>
         </view>
@@ -184,7 +184,7 @@
         <view v-if="expandedSections.has('visitors')" class="section-body">
           <view v-if="!detail.visitors.length" class="mini-empty">暂无来访者</view>
           <view v-for="v in detail.visitors" :key="v.patientId" class="row-card">
-            <text class="row-main">{{ v.patientName }}</text>
+            <text class="row-main">{{ formatPatientInline(v.patientName, v.patientContractTag) }}</text>
             <text class="row-sub">咨询 {{ v.consultationCount }} 次{{ v.mobile ? ` · ${v.mobile}` : '' }}</text>
           </view>
         </view>
@@ -206,6 +206,7 @@ import { computed, onMounted, ref } from 'vue'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
 import StaffRemarkEditor from '@/components/StaffRemarkEditor.vue'
+import { formatPatientInline } from '@/utils/patientContract'
 
 const modeOptions = ['线上', '线下', '线上/线下']
 

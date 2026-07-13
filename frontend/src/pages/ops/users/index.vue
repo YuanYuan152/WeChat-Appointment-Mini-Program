@@ -45,6 +45,7 @@
           <view class="card-head">
             <view class="name-row">
               <text class="name">{{ item.name }}</text>
+              <PatientContractBadge :item="item" />
               <text v-if="item.typeLabel" class="type-badge">{{ item.typeLabel }}</text>
               <text v-if="item.staffRemark" class="remark-badge">{{ item.staffRemark }}</text>
             </view>
@@ -109,6 +110,7 @@ import { ref, onMounted, watch } from 'vue'
 import { onShow, onLoad } from '@dcloudio/uni-app'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
+import PatientContractBadge from '@/components/PatientContractBadge.vue'
 
 interface PatientSummary {
   patientId: number
@@ -116,6 +118,10 @@ interface PatientSummary {
   mobile?: string
   roleLabel?: string
   typeLabel?: string
+  contractTag?: string | null
+  isContractSigned?: boolean
+  boundCounselorId?: number | null
+  boundCounselorName?: string | null
   totalConsultations: number
   upcomingCount: number
   completedCount: number

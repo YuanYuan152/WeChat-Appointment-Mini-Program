@@ -51,11 +51,9 @@ def counselor_visible_to_patient(
     counselor_type: Optional[str],
     patient_source: Optional[str],
 ) -> bool:
-    """公益咨询师仅对公益来访可见；专业咨询师对所有来访可见。"""
-    ctype = (counselor_type or "") or "PROFESSIONAL"
-    if ctype != "CHARITY":
-        return True
-    return is_charity_patient_source(patient_source)
+    """心理咨询列表/详情/预约：专业与公益咨询师对所有来访来源均可见。"""
+    _ = counselor_type, patient_source
+    return True
 
 
 def can_view_all_counselors_in_directory(viewer_role: Optional[str]) -> bool:
@@ -67,10 +65,9 @@ def counselor_visible_to_viewer(
     patient_source: Optional[str],
     viewer_role: Optional[str] = None,
 ) -> bool:
-    """心理咨询模块列表/详情可见性（含角色豁免）。"""
-    if can_view_all_counselors_in_directory(viewer_role):
-        return True
-    return counselor_visible_to_patient(counselor_type, patient_source)
+    """心理咨询模块列表/详情可见性：全部咨询师对所有用户可见。"""
+    _ = counselor_type, patient_source, viewer_role
+    return True
 
 
 def validate_patient_source(code: Optional[str]) -> str:

@@ -565,7 +565,9 @@ def _account_mobile(db: Session, account_id: int) -> Optional[str]:
     return acc.Mobile if acc and acc.Mobile else None
 
 
-def _schedule_patient_info(db: Session, schedule_id: int) -> tuple[Optional[str], Optional[str]]:
+def _schedule_patient_info(db: Session, schedule_id: int) -> tuple[Optional[str], Optional[str], Optional[str]]:
+    from patient_contract_service import patient_contract_extras
+
     consultation = (
         db.query(AppConsultation)
         .filter(
@@ -575,16 +577,17 @@ def _schedule_patient_info(db: Session, schedule_id: int) -> tuple[Optional[str]
         .first()
     )
     if not consultation:
-        return None, None
+        return None, None, None
     patient = db.query(AccountModel).filter(AccountModel.Id == consultation.PatientId).first()
     if not patient:
-        return None, None
+        return None, None, None
     name = patient.RealName or patient.Nickname
-    return name, patient.Mobile
+    contract = patient_contract_extras(db, patient)
+    return name, patient.Mobile, contract.get("contractTag")
 
 
 def _schedule_patient_name(db: Session, schedule_id: int) -> Optional[str]:
-    name, _ = _schedule_patient_info(db, schedule_id)
+    name, _, _ = _schedule_patient_info(db, schedule_id)
     return name
 
 
@@ -613,7 +616,7 @@ def _room_occupancy_at(
             continue
         if s.Status != "BOOKED" or not parse_room_id(s.Note):
             continue
-        patient_name, patient_mobile = _schedule_patient_info(db, s.Id)
+        patient_name, patient_mobile, patient_contract_tag = _schedule_patient_info(db, s.Id)
         counselor_name = _counselor_name(db, s.CounselorId)
         counselor_mobile = _account_mobile(db, s.CounselorId)
         assigned_room = parse_room_id(s.Note)
@@ -628,6 +631,7 @@ def _room_occupancy_at(
             "counselorMobile": counselor_mobile,
             "patientName": patient_name,
             "patientMobile": patient_mobile,
+            "patientContractTag": patient_contract_tag,
             "roomCode": assigned_room,
             "roomName": room_display_name(center_id, assigned_room, db),
             "startTime": s.StartTime,
@@ -693,6 +697,7 @@ def ops_schedules_overview(
                 continue
             center_id = parse_center_id(s.Note)
             room_id = display_room_id(s.Note, s.Status)
+            patient_name, _, patient_contract_tag = _schedule_patient_info(db, s.Id)
             items.append({
                 "scheduleId": s.Id,
                 "startTime": s.StartTime,
@@ -702,7 +707,8 @@ def ops_schedules_overview(
                 "centerName": center_display_name(center_id),
                 "roomId": room_id,
                 "roomName": room_display_name(center_id, room_id, db),
-                "patientName": _schedule_patient_name(db, s.Id),
+                "patientName": patient_name,
+                "patientContractTag": patient_contract_tag,
             })
         result.append({
             "counselorId": cid,
@@ -925,6 +931,7 @@ def get_room_detail(
             "counselorName": occ.get("counselorName"),
             "counselorMobile": occ.get("counselorMobile"),
             "patientName": occ.get("patientName"),
+            "patientContractTag": occ.get("patientContractTag"),
             "patientMobile": occ.get("patientMobile"),
             "roomCode": occ.get("roomCode"),
             "roomName": occ.get("roomName"),

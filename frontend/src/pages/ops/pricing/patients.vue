@@ -12,7 +12,7 @@
           <text class="base-price-value">¥{{ counselor?.basePriceYuan ?? '—' }}</text>
           <text v-if="counselor?.usingDefaultBase" class="base-price-tag">系统默认</text>
         </view>
-        <text class="base-price-hint">对该咨询师全部来访生效，个性化调价在此基础上叠加</text>
+        <text class="base-price-hint">对该咨询师全部来访生效；未单独设置分成的来访沿用此默认分成</text>
       </view>
 
       <text class="banner-tip">共 {{ total }} 位来访 · 以下为个性化价格调整</text>
@@ -66,7 +66,7 @@
             <text class="cell-value">¥{{ row.revenueShareYuan }}</text>
             <text v-if="row.shareMode === 'PERCENT'" class="cell-sub">{{ row.revenueSharePercent }}%</text>
             <text v-else-if="row.shareMode === 'AMOUNT'" class="cell-sub">固定金额</text>
-            <text v-else class="cell-sub">默认 50%</text>
+            <text v-else class="cell-sub">{{ counselorDefaultShareLabel }}</text>
           </view>
         </view>
       </view>
@@ -99,7 +99,7 @@
         <view class="form-group">
           <text class="form-label">咨询师分成</text>
           <view v-if="!form.shareMode" class="form-hint share-default-hint">
-            当前使用系统默认：基础价格的 50%（¥{{ defaultShareYuan }}）
+            当前使用咨询师默认分成：{{ counselorDefaultShareLabel }}（¥{{ counselorDefaultShareYuan }}）
           </view>
           <view class="share-tabs">
             <view class="share-tab" :class="{ active: form.shareMode === 'AMOUNT' }" @tap="form.shareMode = 'AMOUNT'">按固定金额</view>
@@ -145,6 +145,10 @@ interface CounselorInfo {
   counselorTypeLabel: string
   basePriceYuan: number
   usingDefaultBase?: boolean
+  defaultShareMode?: string | null
+  defaultRevenueShareYuan?: number | null
+  defaultRevenueSharePercent?: number | null
+  defaultShareYuan?: number
 }
 
 interface PatientPricingRow {
@@ -189,9 +193,29 @@ const form = reactive({
   revenueSharePercent: '',
 })
 
-const defaultShareYuan = computed(() => {
-  if (!editing.value) return 0
-  return Math.floor(editing.value.basePriceYuan * DEFAULT_SHARE_PERCENT / 100)
+const defaultShareYuan = computed(() => counselorDefaultShareYuan.value)
+
+const counselorDefaultShareYuan = computed(() => {
+  if (!counselor.value) return 0
+  if (counselor.value.defaultShareMode === 'AMOUNT' && counselor.value.defaultRevenueShareYuan != null) {
+    return counselor.value.defaultRevenueShareYuan
+  }
+  if (counselor.value.defaultShareMode === 'PERCENT' && counselor.value.defaultRevenueSharePercent != null) {
+    return Math.floor(counselor.value.basePriceYuan * counselor.value.defaultRevenueSharePercent / 100)
+  }
+  if (counselor.value.defaultShareYuan != null) return counselor.value.defaultShareYuan
+  return Math.floor((counselor.value.basePriceYuan || 0) * DEFAULT_SHARE_PERCENT / 100)
+})
+
+const counselorDefaultShareLabel = computed(() => {
+  if (!counselor.value) return '50%'
+  if (counselor.value.defaultShareMode === 'AMOUNT' && counselor.value.defaultRevenueShareYuan != null) {
+    return `固定 ¥${counselor.value.defaultRevenueShareYuan}`
+  }
+  if (counselor.value.defaultShareMode === 'PERCENT' && counselor.value.defaultRevenueSharePercent != null) {
+    return `${counselor.value.defaultRevenueSharePercent}%`
+  }
+  return '50%'
 })
 
 const previewDisplayYuan = computed(() => {
@@ -209,7 +233,7 @@ const previewShareYuan = computed(() => {
     const pct = Math.max(0, Math.min(Number(form.revenueSharePercent) || 0, 100))
     return Math.floor(display * pct / 100)
   }
-  return defaultShareYuan.value
+  return counselorDefaultShareYuan.value
 })
 
 const previewSharePercent = computed(() => {
@@ -222,10 +246,9 @@ const previewSharePercent = computed(() => {
   if (form.shareMode === 'PERCENT') {
     return Math.max(0, Math.min(Number(form.revenueSharePercent) || 0, 100))
   }
-  if (editing.value && editing.value.basePriceYuan > 0) {
-    return Math.round(defaultShareYuan.value / display * 100)
-  }
-  return DEFAULT_SHARE_PERCENT
+  const base = editing.value?.basePriceYuan || counselor.value?.basePriceYuan || 0
+  if (display <= 0 || base <= 0) return DEFAULT_SHARE_PERCENT
+  return Math.round(counselorDefaultShareYuan.value / display * 100)
 })
 
 const formatAdjustment = (v: number) => (v > 0 ? `+¥${v}` : v < 0 ? `-¥${Math.abs(v)}` : '¥0')

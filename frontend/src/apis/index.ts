@@ -15,7 +15,7 @@ const mapDoctor = (item: any): Doctor & { title?: string; workYears?: number; co
     province: item.province || item.Province || item.city || item.City || '线下/线上',
     description: item.introduce || item.Introduce || item.description || '暂无介绍',
     price: Math.round(Number(item.billing || item.Billing || 0) / 100) || item.price || 500,
-    priceNegotiation: !!(item.priceNegotiation),
+    priceNegotiation: !!(item.priceNegotiation || item.billingLabel === '议价'),
     billingLabel: item.billingLabel || '',
     title: item.title || item.Title || '心理咨询师',
     workYears: Number(item.workYears || item.WorkYears || 0),

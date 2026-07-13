@@ -35,6 +35,8 @@ class AppAccount(Base):
     PreferenceTagsCompletedAt = Column(DateTime, nullable=True)
     PatientSource = Column(String(50), nullable=True)
     CharityPricingNegotiatedAt = Column(DateTime, nullable=True)
+    IsContractSigned = Column(Boolean, nullable=False, default=False, server_default="0")
+    BoundCounselorId = Column(Integer, nullable=True)
     AccessRevokedAt = Column(DateTime, nullable=True)
     IsActive = Column(Boolean, nullable=False, default=True, server_default="1")
     DeletedAt = Column(DateTime, nullable=True)
@@ -69,6 +71,7 @@ class AppOrder(Base):
     PaidAt = Column(DateTime, nullable=True)
     ExpiresAt = Column(DateTime, nullable=True)
     ProxyCreatedByAccountId = Column(Integer, nullable=True)
+    ProxyAgreementIsAdult = Column(Boolean, nullable=True)
     UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
 
 
@@ -380,6 +383,9 @@ class AppCounselorProfile(Base):
     Mode = Column(Unicode(100), nullable=True)
     Billing = Column(Integer, nullable=False, default=60000)
     FaceBilling = Column(Integer, nullable=False, default=30000)
+    DefaultShareMode = Column(String(20), nullable=True)  # AMOUNT | PERCENT
+    DefaultRevenueShareCents = Column(Integer, nullable=True)
+    DefaultRevenueSharePercent = Column(Integer, nullable=True)
     ConsultHours = Column(Integer, nullable=False, default=0)
     WorkYears = Column(Integer, nullable=False, default=0)
     InfoAuthenticityCommittedAt = Column(DateTime, nullable=True)
@@ -590,5 +596,6 @@ class AppCounselorPatientPricing(Base):
     ShareMode = Column(String(20), nullable=True)  # AMOUNT | PERCENT
     RevenueShareCents = Column(Integer, nullable=True)
     RevenueSharePercent = Column(Integer, nullable=True)
+    CharityNegotiatedAt = Column(DateTime, nullable=True)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
     UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())

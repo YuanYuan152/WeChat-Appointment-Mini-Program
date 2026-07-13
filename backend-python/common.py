@@ -19,7 +19,6 @@ from config import settings
 from auth import get_optional_account
 from models import AppAccount, AppBanner, AppActivity, AppArticle, AppCounselorProfile
 from booking_availability import counselor_booking_time_slots
-from charity_milestone_service import should_show_negotiation_price
 from pricing_service import (
     get_counselor_profile,
     resolve_default_display_price_cents,
@@ -255,6 +254,7 @@ def _counselor_profile_dict(
     if price_negotiation:
         item["priceNegotiation"] = True
         item["billingLabel"] = "议价"
+        item["charityBookingBlocked"] = True
     return item
 
 
@@ -327,11 +327,7 @@ def _query_counselor_profiles(
                 continue
             seen_accounts.add(cid)
             billing_cents = _resolve_counselor_billing_cents(db, cid, patient_account)
-            negotiation = bool(
-                patient_account
-                and should_show_negotiation_price(db, patient_account.Id, cid)
-            )
-            result.append(_counselor_profile_dict(profile, billing_cents, price_negotiation=negotiation))
+            result.append(_counselor_profile_dict(profile, billing_cents, price_negotiation=False))
         return result
     except Exception:
         return []
@@ -438,16 +434,14 @@ def common_counselor_detail(
         raise HTTPException(status_code=404, detail="咨询师不存在")
 
     billing_cents = _resolve_counselor_billing_cents(db, cid, current_account)
-    price_negotiation = bool(
-        current_account
-        and should_show_negotiation_price(db, current_account.Id, cid)
-    )
-    charity_booking_blocked = price_negotiation
+    from patient_contract_service import patient_can_self_book_counselor
+
+    can_self_book = patient_can_self_book_counselor(db, current_account, cid)
     time_slots, center_ids = counselor_booking_time_slots(
         db,
         cid,
         billing_cents=billing_cents,
-        price_negotiation=price_negotiation,
+        price_negotiation=False,
     )
     return {
         "id": cid,
@@ -458,9 +452,10 @@ def common_counselor_detail(
         "field": profile.Field or new_rows[0].get("Field"),
         "introduce": profile.Introduce or new_rows[0].get("Introduce"),
         "billing": float(billing_cents),
-        "priceNegotiation": price_negotiation,
-        "billingLabel": "议价" if price_negotiation else None,
-        "charityBookingBlocked": charity_booking_blocked,
+        "priceNegotiation": False,
+        "billingLabel": None,
+        "charityBookingBlocked": False,
+        "canSelfBook": can_self_book,
         "faceBilling": float(int(new_rows[0].get("FaceBilling") or 30000)),
         "consultHours": int(new_rows[0].get("ConsultHours") or 0),
         "workYears": int(new_rows[0].get("WorkYears") or 0),
@@ -490,21 +485,21 @@ def common_counselor_time_slots(
     if not profile or not _counselor_visible_to_viewer(profile.CounselorType, current_account, db):
         raise HTTPException(status_code=404, detail="咨询师不存在或未开通排班")
     billing_cents = _resolve_counselor_billing_cents(db, cid, current_account)
-    price_negotiation = bool(
-        current_account
-        and should_show_negotiation_price(db, current_account.Id, cid)
-    )
+    from patient_contract_service import patient_can_self_book_counselor
+
+    can_self_book = patient_can_self_book_counselor(db, current_account, cid)
     time_slots, center_ids = counselor_booking_time_slots(
         db,
         cid,
         billing_cents=billing_cents,
-        price_negotiation=price_negotiation,
+        price_negotiation=False,
     )
     return {
         "counselorId": cid,
-        "priceNegotiation": price_negotiation,
-        "billingLabel": "议价" if price_negotiation else None,
-        "charityBookingBlocked": price_negotiation,
+        "canSelfBook": can_self_book,
+        "priceNegotiation": False,
+        "billingLabel": None,
+        "charityBookingBlocked": False,
         "timeSlots": time_slots,
         "availableCenterIds": sorted(center_ids),
         "hasAvailableTime": any(t.get("isBookable") for t in time_slots),

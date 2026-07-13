@@ -16,6 +16,10 @@ ADMIN_OPS_INBOX_RELATED_TYPES: Tuple[str, ...] = (
     "CHARITY_CONSULTATION_30_BOOKING",
     "CHARITY_CONSULTATION_30_DONE",
     "PROFESSIONAL_PAIR_CONSULTATION_30_BOOKING",
+    "PRICING_COUNSELOR_BASE_UPDATED",
+    "PRICING_PATIENT_PRICE_UPDATED",
+    "PRICING_PATIENT_SHARE_UPDATED",
+    "STAFF_PROXY_ORDER_PUSHED",
 )
 
 ADMIN_OPS_INBOX_CATEGORIES: Tuple[str, ...] = (
@@ -25,6 +29,7 @@ ADMIN_OPS_INBOX_CATEGORIES: Tuple[str, ...] = (
     "case_record_crisis",
     "charity_milestone",
     "professional_pair_milestone",
+    "pricing",
 )
 
 CATEGORY_RELATED_TYPES: dict[str, list[str]] = {
@@ -41,6 +46,11 @@ CATEGORY_RELATED_TYPES: dict[str, list[str]] = {
     "consultation_done": ["COUNSELOR_CONSULTATION_DONE"],
     "charity_milestone": ["CHARITY_CONSULTATION_30_BOOKING", "CHARITY_CONSULTATION_30_DONE"],
     "professional_pair_milestone": ["PROFESSIONAL_PAIR_CONSULTATION_30_BOOKING"],
+    "pricing": [
+        "PRICING_COUNSELOR_BASE_UPDATED",
+        "PRICING_PATIENT_PRICE_UPDATED",
+        "PRICING_PATIENT_SHARE_UPDATED",
+    ],
     "leave_notice": ["PATIENT_LEAVE_APPROVED"],
     "charity_negotiation": ["PATIENT_CHARITY_NEGOTIATION_TIP"],
 }
@@ -59,6 +69,7 @@ CATEGORY_KEYWORDS: dict[str, list[str]] = {
     "consultation_done": ["咨询已完成", "请尽快填写咨询记录"],
     "charity_milestone": ["公益咨询第30次", "第三十次公益咨询", "30次公益咨询"],
     "professional_pair_milestone": ["正价咨询第30次", "第三十次预约", "调整抽成比例"],
+    "pricing": ["改价成功", "调价成功", "基础价格", "抽成比例", "价格调整", "抽成已调整"],
     "charity_negotiation": ["公益咨询议价", "议价后方可再次预约"],
     "leave_notice": ["咨询师请假，预约已取消"],
 }

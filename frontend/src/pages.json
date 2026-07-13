@@ -384,9 +384,17 @@
                     }
                 },
                 {
+                    "path": "approvals/index",
+                    "style": {
+                        "navigationBarTitleText": "审批管理",
+                        "navigationBarBackgroundColor": "#3D5A4E",
+                        "navigationBarTextStyle": "white"
+                    }
+                },
+                {
                     "path": "refund-exemptions/index",
                     "style": {
-                        "navigationBarTitleText": "豁免申请审核",
+                        "navigationBarTitleText": "审批管理",
                         "navigationBarBackgroundColor": "#ffffff",
                         "navigationBarTextStyle": "black"
                     }
@@ -418,7 +426,7 @@
                 {
                     "path": "leave-requests/index",
                     "style": {
-                        "navigationBarTitleText": "咨询师请假审批",
+                        "navigationBarTitleText": "审批管理",
                         "navigationBarBackgroundColor": "#ffffff",
                         "navigationBarTextStyle": "black"
                     }

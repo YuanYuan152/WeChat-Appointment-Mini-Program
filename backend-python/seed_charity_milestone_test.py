@@ -23,11 +23,13 @@ from charity_milestone_service import (
     RELATED_TYPE_30TH_DONE as CHARITY_DONE,
     RELATED_TYPE_PATIENT_NEGOTIATION_TIP,
     charity_negotiation_price_active,
+    charity_milestone_reached,
     count_charity_bookings,
     count_charity_completed,
+    has_charity_pair_pricing_negotiated,
 )
 from database import SessionLocal
-from models import AppAccount, AppConsultation, AppCounselorProfile, AppMessage, AppOrder, AppSchedule
+from models import AppAccount, AppConsultation, AppCounselorPatientPricing, AppCounselorProfile, AppMessage, AppOrder, AppSchedule
 from professional_pair_milestone_service import (
     RELATED_TYPE_30TH_BOOKING as PROFESSIONAL_PAIR_BOOKING,
     count_professional_pair_bookings,
@@ -204,6 +206,15 @@ def reset_charity_milestone_state(
     if patient:
         patient.CharityPricingNegotiatedAt = None
 
+    pricing_rows = (
+        db.query(AppCounselorPatientPricing)
+        .filter(AppCounselorPatientPricing.PatientAccountId == patient_id)
+        .all()
+    )
+    for row in pricing_rows:
+        db.delete(row)
+        stats["pricing_rows"] = stats.get("pricing_rows", 0) + 1
+
     milestone_types = [CHARITY_BOOKING, CHARITY_DONE, RELATED_TYPE_PATIENT_NEGOTIATION_TIP]
     message_rows = (
         db.query(AppMessage)
@@ -379,7 +390,9 @@ def _print_summary(
     print(f"  来访 ID: {charity_patient.Id}  姓名: {charity_patient.RealName}  手机: {charity_patient.Mobile}")
     print(f"  来访来源: {charity_patient.PatientSource} ({'公益' if is_charity_patient_source(charity_patient.PatientSource) else '非公益'})")
     print(f"  咨询师: {charity_profile.Name} (ID {charity_counselor.Id})")
-    print(f"  公益预约数: {charity_bookings}  完成数: {charity_done}  议价: {'是' if charity_negotiation_price_active(db, charity_patient.Id) else '否'}")
+    print(f"  公益预约数: {charity_bookings}  完成数: {charity_done}  议价阶段: {'是' if charity_milestone_reached(db, charity_patient.Id) else '否'}")
+    negotiated = has_charity_pair_pricing_negotiated(db, charity_patient.Id, charity_counselor.Id)
+    print(f"  与陈启明议价完成: {'是' if negotiated else '否'}（定价管理保存后应为是）")
     print(f"  可约 ScheduleId: {charity_slot.Id}  时间: {charity_slot_time}")
 
     print("\n── 正价咨询（来访 × 专业咨询师 配对）──")

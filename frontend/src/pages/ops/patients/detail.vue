@@ -6,6 +6,7 @@
       <view class="profile-card">
         <view class="profile-title-row">
           <text class="profile-name">{{ detail.name }}</text>
+          <PatientContractBadge :item="detail" />
           <text v-if="detail.typeLabel" class="type-badge">{{ detail.typeLabel }}</text>
         </view>
         <StaffRemarkEditor
@@ -20,6 +21,14 @@
           <text class="label">性别</text>
           <text class="value">{{ genderLabel(detail.gender) }}</text>
         </view>
+        <view class="info-row">
+          <text class="label">是否签约</text>
+          <text class="value">{{ isContractSignedLabel(detail.isContractSigned) }}</text>
+        </view>
+        <view class="info-row">
+          <text class="label">绑定咨询师</text>
+          <text class="value">{{ boundCounselorLabel(detail.boundCounselorName) }}</text>
+        </view>
         <view v-if="detail.emergencyContact || detail.emergencyPhone" class="info-row">
           <text class="label">紧急联系人</text>
           <text class="value">
@@ -33,6 +42,9 @@
           <text class="feedback-entry-arrow">查看 ›</text>
         </view>
         <button class="proxy-btn" @tap="goProxyBooking">代理预约</button>
+        <button class="bind-btn" @tap="openBindCounselor">
+          {{ detail.boundCounselorId ? '更换签约咨询师' : '绑定签约咨询师' }}
+        </button>
       </view>
 
       <view class="filter-bar">
@@ -108,6 +120,38 @@
         <button class="modal-btn" @click="showFeedbackModal = false">关闭</button>
       </view>
     </view>
+    <view v-if="showBindModal" class="overlay" @touchmove.stop.prevent @tap="closeBindCounselor">
+      <view class="modal-card bind-modal" @tap.stop>
+        <text class="modal-title">选择签约咨询师</text>
+        <text class="modal-sub">更换绑定后签约状态将变为「否」，须由咨询助理推送预约订单并选择签约协议，来访支付签署后恢复已签约</text>
+        <input
+          v-model="counselorKeyword"
+          class="bind-search"
+          type="text"
+          placeholder="搜索咨询师姓名"
+          confirm-type="search"
+          @confirm="loadCounselorOptions"
+        />
+        <scroll-view scroll-y class="counselor-pick-list">
+          <view
+            v-for="c in counselorOptions"
+            :key="c.counselorId"
+            class="counselor-pick-item"
+            :class="{ active: selectedCounselorId === c.counselorId }"
+            @tap="selectedCounselorId = c.counselorId"
+          >
+            <text class="pick-name">{{ c.name }}</text>
+            <text v-if="c.typeLabel" class="pick-meta">{{ c.typeLabel }}</text>
+          </view>
+          <view v-if="!counselorOptions.length" class="pick-empty">暂无咨询师</view>
+        </scroll-view>
+        <view class="modal-btns">
+          <button v-if="detail?.boundCounselorId" class="modal-btn ghost" @tap="saveBindCounselor(null)">解除绑定</button>
+          <button class="modal-btn cancel" @tap="closeBindCounselor">取消</button>
+          <button class="modal-btn confirm" :loading="bindSaving" @tap="saveBindCounselor(selectedCounselorId)">确定</button>
+        </view>
+      </view>
+    </view>
   </view>
 </template>
 
@@ -118,6 +162,8 @@ import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
 import ConsultationFeedbackDisplay from '@/components/ConsultationFeedbackDisplay.vue'
 import StaffRemarkEditor from '@/components/StaffRemarkEditor.vue'
+import PatientContractBadge from '@/components/PatientContractBadge.vue'
+import { boundCounselorLabel, isContractSignedLabel } from '@/utils/patientContract'
 
 interface ConsultationItem {
   consultationId: number
@@ -152,12 +198,22 @@ interface PatientDetail {
   gender?: string
   roleLabel?: string
   typeLabel?: string
+  isContractSigned?: boolean
+  boundCounselorId?: number | null
+  boundCounselorName?: string | null
+  contractTag?: string | null
   emergencyContact?: string
   emergencyPhone?: string
   feedbackCount: number
   consultations: ConsultationItem[]
   feedbacks: FeedbackItem[]
   staffRemark?: string
+}
+
+interface CounselorOption {
+  counselorId: number
+  name: string
+  typeLabel?: string
 }
 
 const tabs = [
@@ -175,6 +231,11 @@ const staffRemark = ref('')
 const activeTab = ref('ALL')
 const showFeedbackModal = ref(false)
 const feedbackDetail = ref<FeedbackItem | null>(null)
+const showBindModal = ref(false)
+const bindSaving = ref(false)
+const counselorKeyword = ref('')
+const counselorOptions = ref<CounselorOption[]>([])
+const selectedCounselorId = ref<number | null>(null)
 
 const activeTabLabel = computed(() => tabs.find(t => t.value === activeTab.value)?.label || '')
 
@@ -212,6 +273,60 @@ const goRebook = (item: ConsultationItem) => {
   uni.navigateTo({
     url: `/pages/ops/proxy-booking/index?patientId=${patientIdRef.value}&counselorId=${item.counselorId}`,
   })
+}
+
+const loadCounselorOptions = async () => {
+  const params: Record<string, string> = {}
+  if (counselorKeyword.value.trim()) params.keyword = counselorKeyword.value.trim()
+  const res = await httpV2.get<CounselorOption[]>(API_ENDPOINTS.admin.counselors, params, { showLoading: false })
+  if (res.code === 0 && Array.isArray(res.data)) {
+    counselorOptions.value = res.data
+  } else {
+    counselorOptions.value = []
+  }
+}
+
+const openBindCounselor = async () => {
+  selectedCounselorId.value = detail.value?.boundCounselorId ?? null
+  counselorKeyword.value = ''
+  showBindModal.value = true
+  await loadCounselorOptions()
+}
+
+const closeBindCounselor = () => {
+  showBindModal.value = false
+}
+
+const saveBindCounselor = async (counselorId: number | null) => {
+  if (!patientIdRef.value) return
+  if (counselorId !== null && !counselorId) {
+    uni.showToast({ title: '请选择咨询师', icon: 'none' })
+    return
+  }
+  bindSaving.value = true
+  try {
+    const res = await httpV2.put(
+      API_ENDPOINTS.admin.patientBoundCounselor(patientIdRef.value),
+      { counselorId },
+    )
+    if (res.code === 0 && res.data) {
+      const data = res.data as PatientDetail
+      if (detail.value) {
+        detail.value.isContractSigned = !!data.isContractSigned
+        detail.value.boundCounselorId = data.boundCounselorId ?? null
+        detail.value.boundCounselorName = data.boundCounselorName ?? null
+        detail.value.contractTag = data.contractTag ?? null
+      }
+      uni.showToast({ title: counselorId ? '已更新绑定' : '已解除绑定', icon: 'success' })
+      closeBindCounselor()
+    } else {
+      uni.showToast({ title: res.msg || '保存失败', icon: 'none' })
+    }
+  } catch {
+    uni.showToast({ title: '保存失败', icon: 'none' })
+  } finally {
+    bindSaving.value = false
+  }
 }
 
 onLoad(async (opts) => {
@@ -288,6 +403,78 @@ onLoad(async (opts) => {
   font-size: 28rpx;
 }
 .proxy-btn::after { border: none; }
+.bind-btn {
+  width: 100%;
+  height: 72rpx;
+  line-height: 72rpx;
+  margin-top: 16rpx;
+  background: #fff;
+  color: #3D5A4E;
+  border: 2rpx solid #3D5A4E;
+  border-radius: 100rpx;
+  font-size: 28rpx;
+}
+.bind-btn::after { border: none; }
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32rpx;
+  box-sizing: border-box;
+}
+.bind-modal {
+  width: 100%;
+  max-width: 640rpx;
+  background: #fff;
+  border-radius: 24rpx;
+  padding: 32rpx;
+  box-sizing: border-box;
+}
+.modal-title { display: block; font-size: 32rpx; font-weight: 700; color: #2C2C2C; }
+.modal-sub { display: block; margin: 12rpx 0 20rpx; font-size: 24rpx; color: #9CA3AF; line-height: 1.5; }
+.bind-search {
+  width: 100%;
+  box-sizing: border-box;
+  height: 72rpx;
+  line-height: 72rpx;
+  background: #F7F5F2;
+  border-radius: 16rpx;
+  padding: 0 24rpx;
+  font-size: 28rpx;
+  margin-bottom: 16rpx;
+}
+.counselor-pick-list { max-height: 420rpx; }
+.counselor-pick-item {
+  padding: 20rpx 16rpx;
+  border-radius: 16rpx;
+  border: 1rpx solid #E8E4DE;
+  margin-bottom: 12rpx;
+}
+.counselor-pick-item.active {
+  border-color: #3D5A4E;
+  background: #E8E4DE;
+}
+.pick-name { display: block; font-size: 28rpx; font-weight: 600; color: #2C2C2C; }
+.pick-meta { display: block; margin-top: 4rpx; font-size: 22rpx; color: #9CA3AF; }
+.pick-empty { text-align: center; padding: 40rpx 0; color: #9CA3AF; font-size: 26rpx; }
+.modal-btns { display: flex; gap: 12rpx; margin-top: 24rpx; flex-wrap: wrap; }
+.modal-btn {
+  flex: 1;
+  min-width: 140rpx;
+  height: 72rpx;
+  line-height: 72rpx;
+  border-radius: 100rpx;
+  font-size: 26rpx;
+  margin: 0;
+}
+.modal-btn::after { border: none; }
+.modal-btn.cancel { background: #F3F4F6; color: #6B7280; }
+.modal-btn.confirm { background: #3D5A4E; color: #fff; }
+.modal-btn.ghost { background: #fff; color: #B45309; border: 1rpx solid #FCD34D; }
 .cons-actions { display: flex; justify-content: flex-end; margin-top: 16rpx; }
 .rebook-btn {
   font-size: 24rpx;

@@ -109,7 +109,7 @@
               <text class="slot-time">{{ formatTime(slot.startTime) }} – {{ formatTime(slot.endTime) }}</text>
               <text v-if="slot.centerName" class="slot-center">{{ slot.centerName }}</text>
               <text v-if="slotRoomText(slot)" class="slot-room">{{ slotRoomText(slot) }}</text>
-              <text v-if="slot.patientName" class="slot-patient">来访者：{{ slot.patientName }}</text>
+              <text v-if="slot.patientName" class="slot-patient">来访者：{{ formatPatientInline(slot.patientName, slot.patientContractTag) }}</text>
             </view>
           </view>
           <view class="slot-right">
@@ -156,6 +156,7 @@ import {
   addDays,
 } from '@/constants/scheduleSlots'
 import { isVideoCenter } from '@/constants/appointmentCenters'
+import { formatPatientInline } from '@/utils/patientContract'
 
 interface CalendarSlot {
   id: number
@@ -167,6 +168,7 @@ interface CalendarSlot {
   centerId?: string
   roomName?: string
   patientName?: string
+  patientContractTag?: string
   consultationId?: number
   hasCaseRecord?: boolean
   leaveRequestId?: number

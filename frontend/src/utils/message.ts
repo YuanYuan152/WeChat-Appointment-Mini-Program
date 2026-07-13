@@ -150,6 +150,10 @@ export const RELATED_TYPE_LABELS: Record<string, string> = {
   CHARITY_CONSULTATION_30_DONE: '公益咨询第30次完成',
   PATIENT_CHARITY_NEGOTIATION_TIP: '公益咨询议价提示',
   PROFESSIONAL_PAIR_CONSULTATION_30_BOOKING: '正价咨询第30次预约',
+  PRICING_COUNSELOR_BASE_UPDATED: '基础价格调整',
+  PRICING_PATIENT_PRICE_UPDATED: '来访调价成功',
+  PRICING_PATIENT_SHARE_UPDATED: '抽成调整成功',
+  STAFF_PROXY_ORDER_PUSHED: '代理预约已推送',
 }
 
 /** 咨询师消息类型：详情页不展示来访联系方式 */
@@ -187,6 +191,7 @@ export const ADMIN_OPS_MESSAGE_CATEGORIES: MessageCategoryOption[] = [
   { value: 'case_record_crisis', label: '风险上报' },
   { value: 'charity_milestone', label: '公益咨询里程碑' },
   { value: 'professional_pair_milestone', label: '正价咨询里程碑' },
+  { value: 'pricing', label: '定价与抽成' },
 ]
 
 const ADMIN_OPS_FORBIDDEN_FILTER_VALUES = new Set(['appointment_new', 'appointment_cancel'])
@@ -255,6 +260,7 @@ export function getMessageCategoriesForRole(role: string): MessageCategoryOption
       { value: 'counselor_leave', label: '咨询师请假' },
       { value: 'charity_milestone', label: '公益咨询里程碑' },
       { value: 'professional_pair_milestone', label: '正价咨询里程碑' },
+      { value: 'pricing', label: '定价与抽成' },
     ]
   }
 
@@ -363,11 +369,13 @@ export function resolveMessageNavigation(
 
   if (shouldOpenLeaveApproval(activeRole, item)) {
     const leaveId = getLeaveRequestId(item)
-    return leaveId ? `/pages/ops/leave-requests/index?id=${leaveId}` : `/pages/patient/messages/detail?id=${item.Id}`
+    return leaveId
+      ? `/pages/ops/approvals/index?category=LEAVE&leaveId=${leaveId}`
+      : `/pages/ops/approvals/index?category=LEAVE`
   }
 
   if (shouldOpenExemptionReview(activeRole, item)) {
-    return '/pages/ops/refund-exemptions/index'
+    return '/pages/ops/approvals/index?category=EXEMPTION'
   }
 
   if (shouldOpenCaseRecordAmendmentReview(activeRole, item)) {

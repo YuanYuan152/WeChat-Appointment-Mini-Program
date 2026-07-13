@@ -6,7 +6,7 @@ from datetime import date as date_type, datetime, time, timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app_time import china_now
@@ -47,6 +47,10 @@ class ProxyPushOrderRequest(BaseModel):
     end_time: datetime
     room_id: Optional[str] = None
     schedule_id: Optional[int] = None
+    agreement_is_adult: Optional[bool] = Field(
+        None,
+        description="未签约来访必填：true=成年来访者协议，false=未成年来访者协议",
+    )
 
 
 class ScheduleCalendarOut(BaseModel):
@@ -173,6 +177,7 @@ def proxy_push_order(
             end_time=body.end_time,
             room_id=body.room_id,
             existing_schedule_id=body.schedule_id,
+            agreement_is_adult=body.agreement_is_adult,
         )
         db.commit()
         return result

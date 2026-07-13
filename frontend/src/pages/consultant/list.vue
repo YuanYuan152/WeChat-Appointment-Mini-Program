@@ -211,7 +211,13 @@
             </view>
             <view class="doc-card-actions">
               <button class="assistant-btn" @click.stop="openAssistantContact">联系助理</button>
-              <button class="book-btn" @click.stop="goToDetail(doctor.id)">立即预约</button>
+              <button
+                class="book-btn"
+                :class="{ disabled: doctor.priceNegotiation }"
+                @click.stop="goToDetail(doctor.id)"
+              >
+                {{ doctor.priceNegotiation ? '议价后方可预约' : '立即预约' }}
+              </button>
             </view>
           </view>
         </view>
@@ -380,6 +386,7 @@ function parseWorkYears(item: { workYears?: number; experience?: string }) {
 }
 
 function normalizeConsultant(item: Consultant): Consultant {
+  const priceNegotiation = !!(item.priceNegotiation || item.billingLabel === '议价')
   return {
     ...item,
     avatar: fixImageUrl(item.avatar || '/static/images/tc59.png'),
@@ -389,6 +396,7 @@ function normalizeConsultant(item: Consultant): Consultant {
     province: item.province || '线下/线上',
     description: item.description || '暂无介绍',
     price: item.price || 500,
+    priceNegotiation,
   }
 }
 
@@ -973,6 +981,12 @@ onPullDownRefresh(async () => {
 
 .book-btn::after {
   border: none;
+}
+
+.book-btn.disabled {
+  background: #E8E4DE;
+  color: #9CA3AF;
+  box-shadow: none;
 }
 
 .modal-overlay {

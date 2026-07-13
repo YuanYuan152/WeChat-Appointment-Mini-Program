@@ -84,6 +84,11 @@ from staff_remark_service import (
     get_staff_remarks_map,
     set_staff_remark,
 )
+from patient_contract_service import (
+    batch_patient_contract_extras,
+    bind_patient_counselor,
+    patient_contract_extras,
+)
 from patient_registration import DEFAULT_PATIENT_SOURCE
 
 router = APIRouter(prefix="/api/mini/admin", tags=["Admin"])
@@ -748,11 +753,11 @@ def _build_exemption_admin_out(
 @router.get(
     "/refund-exemptions",
     response_model=List[RefundExemptionAdminOut],
-    summary="退款豁免申请列表（管理员审核）",
+    summary="退款豁免申请列表（管理工作台审核）",
 )
 def list_refund_exemptions(
-    status: Optional[str] = Query(None, description="PENDING / APPROVED / REJECTED"),
-    _admin: AppAccount = Depends(require_ops_or_admin),
+    status: Optional[str] = Query(None, description="PENDING / APPROVED / REJECTED / ALL"),
+    _staff: AppAccount = Depends(require_staff_workbench),
     db: Session = Depends(get_db),
 ):
     q = db.query(AppRefundExemption).order_by(AppRefundExemption.CreatedAt.desc())
@@ -775,7 +780,7 @@ def list_refund_exemptions(
 )
 def approve_refund_exemption_request(
     exemption_id: int,
-    admin: AppAccount = Depends(require_ops_or_admin),
+    admin: AppAccount = Depends(require_staff_workbench),
     db: Session = Depends(get_db),
 ):
     row = db.query(AppRefundExemption).filter(AppRefundExemption.Id == exemption_id).first()
@@ -796,7 +801,7 @@ def approve_refund_exemption_request(
 def reject_refund_exemption_request(
     exemption_id: int,
     body: RejectRefundExemptionRequest,
-    admin: AppAccount = Depends(require_ops_or_admin),
+    admin: AppAccount = Depends(require_staff_workbench),
     db: Session = Depends(get_db),
 ):
     row = db.query(AppRefundExemption).filter(AppRefundExemption.Id == exemption_id).first()
@@ -1095,6 +1100,10 @@ class AdminPatientSummaryOut(BaseModel):
     emergencyPhone: Optional[str] = None
     roleLabel: str = "来访"
     typeLabel: Optional[str] = None
+    isContractSigned: bool = False
+    boundCounselorId: Optional[int] = None
+    boundCounselorName: Optional[str] = None
+    contractTag: Optional[str] = None
     totalConsultations: int = 0
     upcomingCount: int = 0
     completedCount: int = 0
@@ -1123,6 +1132,7 @@ class AdminConsultationFeedbackOut(BaseModel):
     patientId: int
     patientName: str
     patientMobile: Optional[str] = None
+    patientContractTag: Optional[str] = None
     counselorId: int
     counselorName: str
     startTime: Optional[datetime] = None
@@ -1143,6 +1153,10 @@ class AdminPatientDetailOut(BaseModel):
     emergencyPhone: Optional[str] = None
     roleLabel: str = "来访"
     typeLabel: Optional[str] = None
+    isContractSigned: bool = False
+    boundCounselorId: Optional[int] = None
+    boundCounselorName: Optional[str] = None
+    contractTag: Optional[str] = None
     createdAt: Optional[datetime] = None
     totalConsultations: int = 0
     upcomingCount: int = 0
@@ -1204,12 +1218,14 @@ def _build_admin_feedback_out(
     start_time = consultation.StartTime or (sched.StartTime if sched else None)
     end_time = consultation.EndTime or (sched.EndTime if sched else None)
     detail = feedback_detail(fb.Content)
+    contract = patient_contract_extras(db, patient)
     return AdminConsultationFeedbackOut(
         id=fb.Id,
         consultationId=consultation.Id,
         patientId=consultation.PatientId,
         patientName=_admin_patient_name(patient),
         patientMobile=patient.Mobile if patient else None,
+        patientContractTag=contract.get("contractTag"),
         counselorId=consultation.CounselorId,
         counselorName=_admin_counselor_name(db, consultation.CounselorId),
         startTime=start_time,
@@ -1597,6 +1613,7 @@ def list_admin_patients(
     } if schedule_ids else {}
 
     remarks_map = get_staff_remarks_map(db, account_ids)
+    contract_map = batch_patient_contract_extras(db, accounts)
 
     result: List[AdminPatientSummaryOut] = []
     for acc in accounts:
@@ -1604,6 +1621,7 @@ def list_admin_patients(
         total, upcoming, completed, cancelled, last_time = _summarize_patient_consultations(
             rows, schedules
         )
+        contract = contract_map.get(acc.Id, {})
         result.append(
             AdminPatientSummaryOut(
                 patientId=acc.Id,
@@ -1613,6 +1631,10 @@ def list_admin_patients(
                 emergencyContact=acc.EmergencyContact,
                 emergencyPhone=acc.EmergencyPhone,
                 **_admin_patient_meta(acc),
+                isContractSigned=bool(contract.get("isContractSigned")),
+                boundCounselorId=contract.get("boundCounselorId"),
+                boundCounselorName=contract.get("boundCounselorName"),
+                contractTag=contract.get("contractTag"),
                 totalConsultations=total,
                 upcomingCount=upcoming,
                 completedCount=completed,
@@ -1695,6 +1717,7 @@ def get_admin_patient_detail(
         emergencyContact=patient.EmergencyContact,
         emergencyPhone=patient.EmergencyPhone,
         **_admin_patient_meta(patient),
+        **patient_contract_extras(db, patient),
         createdAt=patient.CreatedAt,
         totalConsultations=total,
         upcomingCount=upcoming,
@@ -1705,6 +1728,39 @@ def get_admin_patient_detail(
         consultations=cons_out,
         feedbacks=feedbacks_out,
     )
+
+
+class BindPatientCounselorPayload(BaseModel):
+    counselorId: Optional[int] = Field(None, description="绑定咨询师账号 ID，传 null 表示解除绑定")
+
+
+@router.put(
+    "/patients/{patient_id}/bound-counselor",
+    summary="绑定或更换来访者的签约咨询师",
+)
+def update_patient_bound_counselor(
+    patient_id: int,
+    body: BindPatientCounselorPayload,
+    _staff: AppAccount = Depends(require_ops_or_admin),
+    db: Session = Depends(get_db),
+):
+    patient = db.query(AppAccount).filter(AppAccount.Id == patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="来访者不存在")
+    if patient_id not in _admin_visitor_patient_ids(db):
+        raise HTTPException(status_code=404, detail="来访者不存在")
+    try:
+        bind_patient_counselor(db, patient_id, body.counselorId)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    db.commit()
+    db.refresh(patient)
+    return {
+        "patientId": patient_id,
+        **_admin_patient_meta(patient),
+        "name": _admin_patient_name(patient),
+        **patient_contract_extras(db, patient),
+    }
 
 
 @router.get(
@@ -1843,6 +1899,7 @@ class AdminCounselorVisitorOut(BaseModel):
     patientId: int
     patientName: str
     mobile: Optional[str] = None
+    patientContractTag: Optional[str] = None
     consultationCount: int = 0
 
 
@@ -1853,6 +1910,7 @@ class AdminCounselorScheduleOut(BaseModel):
     status: str
     statusLabel: str
     patientName: Optional[str] = None
+    patientContractTag: Optional[str] = None
     location: Optional[str] = None
 
 
@@ -1860,6 +1918,7 @@ class AdminCounselorConsultationBriefOut(BaseModel):
     consultationId: int
     patientId: int
     patientName: str
+    patientContractTag: Optional[str] = None
     startTime: Optional[datetime] = None
     endTime: Optional[datetime] = None
     status: str
@@ -2133,6 +2192,7 @@ def get_admin_counselor_detail(
         a.Id: a
         for a in db.query(AppAccount).filter(AppAccount.Id.in_(patient_ids)).all()
     } if patient_ids else {}
+    contract_map = batch_patient_contract_extras(db, list(patients.values())) if patients else {}
     visitor_counts: dict[int, int] = {}
     for c in consultations:
         if c.Status == "CANCELLED":
@@ -2143,6 +2203,7 @@ def get_admin_counselor_detail(
             patientId=pid,
             patientName=_admin_patient_name(patients.get(pid)),
             mobile=patients[pid].Mobile if pid in patients else None,
+            patientContractTag=contract_map.get(pid, {}).get("contractTag"),
             consultationCount=count,
         )
         for pid, count in sorted(visitor_counts.items(), key=lambda x: -x[1])
@@ -2155,6 +2216,7 @@ def get_admin_counselor_detail(
             continue
         linked = next((c for c in consultations if c.ScheduleId == s.Id), None)
         patient_name = _admin_patient_name(patients.get(linked.PatientId)) if linked else None
+        patient_tag = contract_map.get(linked.PatientId, {}).get("contractTag") if linked else None
         label = "已预约" if linked and linked.Status != "CANCELLED" else (
             "可预约" if s.Status == "AVAILABLE" else s.Status
         )
@@ -2166,6 +2228,7 @@ def get_admin_counselor_detail(
                 status=s.Status,
                 statusLabel=label,
                 patientName=patient_name if linked and linked.Status != "CANCELLED" else None,
+                patientContractTag=patient_tag if linked and linked.Status != "CANCELLED" else None,
                 location=_admin_consultation_location(db, linked, s) if linked else (
                     center_display_name(parse_center_id(s.Note or "")) if s.Note else None
                 ),
@@ -2183,6 +2246,7 @@ def get_admin_counselor_detail(
             consultationId=c.Id,
             patientId=c.PatientId,
             patientName=_admin_patient_name(patients.get(c.PatientId)),
+            patientContractTag=contract_map.get(c.PatientId, {}).get("contractTag"),
             startTime=c.StartTime,
             endTime=c.EndTime,
             status=c.Status,
@@ -2262,10 +2326,10 @@ def update_admin_counselor(
     return get_admin_counselor_detail(counselor_id, _admin, db)
 
 
-@router.get("/leave-requests", summary="咨询师请假列表（管理员）")
+@router.get("/leave-requests", summary="咨询师请假列表（管理工作台审批）")
 def list_leave_requests(
     status: str = Query("ALL", description="PENDING|APPROVED|REJECTED|ALL"),
-    _admin: AppAccount = Depends(require_staff_workbench),
+    _staff: AppAccount = Depends(require_staff_workbench),
     db: Session = Depends(get_db),
 ):
     q = db.query(AppLeaveRequest).order_by(AppLeaveRequest.CreatedAt.desc())
@@ -2275,10 +2339,10 @@ def list_leave_requests(
     return [build_leave_request_out(db, row) for row in rows]
 
 
-@router.get("/leave-requests/{leave_id}", summary="咨询师请假详情（管理员）")
+@router.get("/leave-requests/{leave_id}", summary="咨询师请假详情（管理工作台审批）")
 def get_leave_request(
     leave_id: int,
-    _admin: AppAccount = Depends(require_staff_workbench),
+    _staff: AppAccount = Depends(require_staff_workbench),
     db: Session = Depends(get_db),
 ):
     row = db.query(AppLeaveRequest).filter(AppLeaveRequest.Id == leave_id).first()
@@ -2333,6 +2397,12 @@ class AdminPricingUpdatePayload(BaseModel):
     revenueSharePercent: Optional[int] = Field(None, ge=0, le=100)
 
 
+class AdminCounselorDefaultSharePayload(BaseModel):
+    shareMode: Optional[str] = Field(None, description="AMOUNT | PERCENT，空则默认基础价的 50% 分成")
+    revenueShareYuan: Optional[int] = Field(None, ge=0, le=99999)
+    revenueSharePercent: Optional[int] = Field(None, ge=0, le=100)
+
+
 class AdminCounselorBasePricePayload(BaseModel):
     basePriceYuan: int = Field(..., ge=0, le=99999, description="咨询师统一基础价（元）")
 
@@ -2357,15 +2427,85 @@ def list_pricing_counselors(
 def update_pricing_counselor_base(
     counselor_id: int,
     body: AdminCounselorBasePricePayload,
-    _admin: AppAccount = Depends(require_ops_or_admin),
+    actor: AppAccount = Depends(require_ops_or_admin),
     db: Session = Depends(get_db),
 ):
-    from pricing_service import counselor_pricing_summary, update_counselor_base_price_cents
+    from pricing_service import (
+        _counselor_default_share_snapshot,
+        counselor_pricing_summary,
+        get_counselor_profile,
+        resolve_counselor_base_price_cents,
+        update_counselor_base_price_cents,
+    )
+    from pricing_notify_service import notify_counselor_base_pricing_updated
 
+    old_yuan = resolve_counselor_base_price_cents(db, counselor_id) // 100
+    before_profile = get_counselor_profile(db, counselor_id)
+    before_share = _counselor_default_share_snapshot(before_profile)
     try:
         update_counselor_base_price_cents(db, counselor_id, body.basePriceYuan * 100)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    if old_yuan != body.basePriceYuan:
+        after_profile = get_counselor_profile(db, counselor_id)
+        notify_counselor_base_pricing_updated(
+            db,
+            actor_id=actor.Id,
+            counselor_id=counselor_id,
+            old_base_yuan=old_yuan,
+            new_base_yuan=body.basePriceYuan,
+            before_share=before_share,
+            after_share=_counselor_default_share_snapshot(after_profile),
+        )
+    db.commit()
+    return counselor_pricing_summary(db, counselor_id)
+
+
+@router.put("/pricing/counselors/{counselor_id}/default-share", summary="更新咨询师默认分成（对该咨询师全部来访生效）")
+def update_pricing_counselor_default_share(
+    counselor_id: int,
+    body: AdminCounselorDefaultSharePayload,
+    actor: AppAccount = Depends(require_ops_or_admin),
+    db: Session = Depends(get_db),
+):
+    from pricing_service import (
+        _counselor_default_share_snapshot,
+        counselor_pricing_summary,
+        get_counselor_profile,
+        resolve_counselor_base_price_cents,
+        update_counselor_default_share,
+    )
+    from pricing_notify_service import notify_counselor_base_pricing_updated
+
+    before_profile = get_counselor_profile(db, counselor_id)
+    if not before_profile:
+        raise HTTPException(status_code=404, detail="咨询师不存在")
+    before_share = _counselor_default_share_snapshot(before_profile)
+    base_yuan = resolve_counselor_base_price_cents(db, counselor_id) // 100
+    try:
+        update_counselor_default_share(
+            db,
+            counselor_id,
+            share_mode=body.shareMode or None,
+            revenue_share_cents=body.revenueShareYuan * 100 if body.revenueShareYuan is not None else None,
+            revenue_share_percent=body.revenueSharePercent,
+            apply_to_all_patients=True,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    after_profile = get_counselor_profile(db, counselor_id)
+    after_share = _counselor_default_share_snapshot(after_profile)
+    if before_share != after_share:
+        notify_counselor_base_pricing_updated(
+            db,
+            actor_id=actor.Id,
+            counselor_id=counselor_id,
+            old_base_yuan=base_yuan,
+            new_base_yuan=base_yuan,
+            before_share=before_share,
+            after_share=after_share,
+        )
     db.commit()
     return counselor_pricing_summary(db, counselor_id)
 
@@ -2404,11 +2544,15 @@ def update_pricing_counselor_patient(
     counselor_id: int,
     patient_id: int,
     body: AdminPricingUpdatePayload,
-    _admin: AppAccount = Depends(require_ops_or_admin),
+    actor: AppAccount = Depends(require_ops_or_admin),
     db: Session = Depends(get_db),
 ):
-    from pricing_service import pricing_breakdown, upsert_patient_pricing
+    from pricing_service import get_pricing_override, pricing_breakdown, upsert_patient_pricing
+    from pricing_notify_service import _share_snapshot, notify_pricing_updates_after_patient_save
 
+    before_override = get_pricing_override(db, counselor_id, patient_id)
+    before_manual_cents = int(before_override.AdjustmentCents or 0) if before_override else 0
+    before_share = _share_snapshot(before_override)
     try:
         upsert_patient_pricing(
             db,
@@ -2422,8 +2566,18 @@ def update_pricing_counselor_patient(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+    after_breakdown = pricing_breakdown(db, patient_id, counselor_id)
+    notify_pricing_updates_after_patient_save(
+        db,
+        actor_id=actor.Id,
+        counselor_id=counselor_id,
+        patient_id=patient_id,
+        before_manual_cents=before_manual_cents,
+        before_share=before_share,
+        after_breakdown=after_breakdown,
+    )
     db.commit()
-    return pricing_breakdown(db, patient_id, counselor_id)
+    return after_breakdown
 
 
 from proxy_booking_routes import router as proxy_booking_router

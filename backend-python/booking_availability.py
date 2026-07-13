@@ -101,7 +101,7 @@ def schedules_to_booking_time_slots(
         center_ids.add(center_id)
         if display == DISPLAY_OPEN:
             slot_status = "AVAILABLE"
-            is_bookable = True
+            is_bookable = not price_negotiation
         elif display == DISPLAY_PENDING_PAYMENT:
             slot_status = "PENDING_PAYMENT"
             is_bookable = False

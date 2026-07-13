@@ -149,6 +149,7 @@ class SlotOptionsOut(BaseModel):
 
 class LeaveRequestCreate(BaseModel):
     reason: str
+    communication_screenshot_url: Optional[str] = None
 
 
 class ScheduleOut(BaseModel):
@@ -176,6 +177,7 @@ class ScheduleCalendarItem(BaseModel):
     roomId: Optional[str] = None
     roomName: Optional[str] = None
     patientName: Optional[str] = None
+    patientContractTag: Optional[str] = None
     consultationId: Optional[int] = None
     consultationStatus: Optional[str] = None
     canCancel: bool = False
@@ -578,13 +580,13 @@ def _cancel_permissions(schedule: AppSchedule, consultation: Optional[AppConsult
         if is_refund_eligible(schedule.StartTime):
             return (
                 True,
-                False,
-                "取消前请与来访者提前沟通并上传沟通截图。取消后将通知来访者并协助改约。",
+                True,
+                "取消前请与来访者提前沟通并上传沟通截图。提交后须等待管理员审核通过，审核通过后将通知来访者并协助改约。",
             )
         return (
             True,
             True,
-            "取消前请与来访者提前沟通并上传沟通截图。取消后来访者将全额退款，请协助改约。",
+            "取消前请与来访者提前沟通并上传沟通截图。提交后须等待管理员审核通过；审核通过后来访者将全额退款，请协助改约。",
         )
 
     # 已标 BOOKED 但无有效咨询单（数据异常），仍允许直接取消
@@ -768,12 +770,20 @@ def _calendar_items_for_schedules(
         room_id, room_name = _resolve_calendar_room(s, c, center_id, db)
         patient = patients.get(display_cons.PatientId) if display_cons else None
         patient_name = None
+        patient_contract_tag = None
         if patient:
+            from patient_contract_service import patient_contract_extras
+
             patient_name = patient.RealName or patient.Nickname or f"来访者#{patient.Id}"
+            patient_contract_tag = patient_contract_extras(db, patient).get("contractTag")
 
         if leave_row:
             display = "ON_LEAVE"
-            display_label = DISPLAY_LABELS.get("ON_LEAVE", "已请假")
+            display_label = (
+                "请假审核中"
+                if leave_row.Status == "PENDING"
+                else DISPLAY_LABELS.get("ON_LEAVE", "已请假")
+            )
             can_cancel, requires_leave, cancel_hint = False, False, None
         elif pending_proxy_map.get(s.Id):
             display = "PENDING_PAYMENT"
@@ -805,6 +815,7 @@ def _calendar_items_for_schedules(
                 roomId=room_id,
                 roomName=room_name,
                 patientName=patient_name,
+                patientContractTag=patient_contract_tag,
                 consultationId=display_cons.Id if display_cons else None,
                 consultationStatus=display_cons.Status if display_cons else None,
                 canCancel=can_cancel,
@@ -1111,22 +1122,9 @@ def update_schedule(
             raise HTTPException(status_code=400, detail="咨询已开始或已过开始时间，不可取消")
         if _has_active_booking(schedule, consultation):
             if _active_consultation(consultation):
-                _counselor_cancel_booked(
-                    db,
-                    schedule,
-                    counselor.Id,
-                    leave_reason=body.leave_reason,
-                    communication_screenshot_url=body.communication_screenshot_url,
-                )
-                from staff_message_service import notify_staff_counselor_leave
-
-                notify_staff_counselor_leave(
-                    db,
-                    schedule=schedule,
-                    counselor_id=counselor.Id,
-                    leave_reason=body.leave_reason or "",
-                    screenshot_url=body.communication_screenshot_url,
-                    consultation=consultation,
+                raise HTTPException(
+                    status_code=400,
+                    detail="已预约时段请提交请假申请，待管理员审核通过后方可取消",
                 )
             else:
                 schedule.Status = "CANCELLED"
@@ -1151,7 +1149,7 @@ def update_schedule(
     return schedule
 
 
-@router.post("/schedules/{schedule_id}/leave-request", summary="提交请假申请（不足24h已预约）")
+@router.post("/schedules/{schedule_id}/leave-request", summary="提交请假申请（已预约须审核）")
 def submit_leave_request(
     schedule_id: int,
     body: LeaveRequestCreate,
@@ -1174,14 +1172,15 @@ def submit_leave_request(
     )
     if has_appointment_started(schedule.StartTime):
         raise HTTPException(status_code=400, detail="咨询已开始或已过开始时间，不可申请请假")
-    if is_refund_eligible(schedule.StartTime):
-        raise HTTPException(status_code=400, detail="距咨询开始超过24小时，可直接取消排期")
     if schedule.Status != "BOOKED" and not _active_consultation(consultation):
         raise HTTPException(status_code=400, detail="仅已预约时段可申请请假")
 
     reason = (body.reason or "").strip()
     if not reason:
         raise HTTPException(status_code=400, detail="请填写请假原因")
+    screenshot = (body.communication_screenshot_url or "").strip()
+    if not screenshot:
+        raise HTTPException(status_code=400, detail="请上传与来访者的沟通截图")
 
     pending = (
         db.query(AppLeaveRequest)
@@ -1203,6 +1202,14 @@ def submit_leave_request(
     )
     db.add(row)
     db.flush()
+    db.add(
+        AppScheduleCancelLog(
+            ScheduleId=schedule_id,
+            CounselorId=counselor.Id,
+            ConsultationId=consultation.Id if consultation else None,
+            ScreenshotUrl=screenshot,
+        )
+    )
     from counselor_message_service import notify_counselor_leave_submitted
     from staff_message_service import notify_staff_counselor_leave
 
@@ -1211,7 +1218,7 @@ def submit_leave_request(
         schedule=schedule,
         counselor_id=counselor.Id,
         leave_reason=reason,
-        screenshot_url=None,
+        screenshot_url=screenshot,
         consultation=consultation,
     )
     notify_counselor_leave_submitted(
@@ -1903,3 +1910,86 @@ def counselor_stats_details(
         return items
 
     raise HTTPException(status_code=400, detail="category 应为 orders|case-records|appointments|leaves")
+
+
+# ---------------------------------------------------------------------------
+# 咨询师代理预约
+# ---------------------------------------------------------------------------
+
+class CounselorProxyPushOrderRequest(BaseModel):
+    patient_id: int
+    center_id: str
+    start_time: datetime
+    end_time: datetime
+    room_id: Optional[str] = None
+    schedule_id: Optional[int] = None
+
+
+@router.get("/proxy-booking/patients", summary="搜索可代理预约的来访（标注绑定与签约状态）")
+def counselor_proxy_search_patients(
+    keyword: Optional[str] = Query(None),
+    counselor: AppAccount = Depends(require_counselor),
+    db: Session = Depends(get_db),
+):
+    from proxy_booking_service import search_counselor_proxy_patients
+
+    return {"items": search_counselor_proxy_patients(db, counselor.Id, keyword)}
+
+
+@router.get("/proxy-booking/slot-options", summary="代理预约时间槽与咨询室占用")
+def counselor_proxy_slot_options(
+    date: str = Query(..., description="YYYY-MM-DD"),
+    center_id: str = Query(...),
+    counselor: AppAccount = Depends(require_counselor),
+    db: Session = Depends(get_db),
+):
+    from proxy_booking_service import build_proxy_slot_options
+    from schedule_meta import center_display_name
+
+    try:
+        slots = build_proxy_slot_options(db, counselor.Id, date, center_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {
+        "date": date,
+        "centerId": center_id,
+        "centerName": center_display_name(center_id) or center_id,
+        "slots": slots,
+    }
+
+
+@router.post("/proxy-booking/push-order", summary="推送代理预约订单（待来访支付）")
+def counselor_proxy_push_order(
+    body: CounselorProxyPushOrderRequest,
+    counselor: AppAccount = Depends(require_counselor),
+    db: Session = Depends(get_db),
+):
+    from models import AppAccount as PatientAccount
+    from proxy_booking_service import push_proxy_order, validate_counselor_proxy_patient
+
+    patient = (
+        db.query(PatientAccount)
+        .filter(PatientAccount.Id == body.patient_id, PatientAccount.IsActive == True)
+        .first()
+    )
+    if not patient:
+        raise HTTPException(status_code=400, detail="来访不存在")
+    try:
+        validate_counselor_proxy_patient(db, patient, counselor.Id)
+        result = push_proxy_order(
+            db,
+            staff_account_id=counselor.Id,
+            patient_id=body.patient_id,
+            counselor_id=counselor.Id,
+            center_id=body.center_id,
+            start_time=body.start_time,
+            end_time=body.end_time,
+            room_id=body.room_id,
+            existing_schedule_id=body.schedule_id,
+            agreement_is_adult=None,
+        )
+        db.commit()
+        return result
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

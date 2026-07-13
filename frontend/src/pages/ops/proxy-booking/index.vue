@@ -22,37 +22,28 @@
             class="dropdown-item"
             @tap="selectPatient(p)"
           >
-            {{ p.name }}
+            {{ p.label || formatPatientInline(p.name, p.contractTag) }}
           </view>
         </view>
-        <text v-if="selectedPatient" class="selected-tag">已选：{{ selectedPatient.name }}</text>
+        <text v-if="selectedPatient" class="selected-tag">已选：{{ formatPatientInline(selectedPatient.name, selectedPatient.contractTag) }}</text>
+      </view>
+
+      <view v-if="selectedPatient" class="selector-item">
+        <text class="selector-label">签约状态</text>
+        <text class="contract-status" :class="{ signed: patientContractSigned }">
+          {{ patientContractSigned ? '已签约' : '未签约' }}
+        </text>
       </view>
 
       <view class="selector-item">
-        <text class="selector-label">当前咨询师</text>
-        <input
-          class="selector-input"
-          placeholder="输入姓名/ID搜索"
-          :value="counselorKeyword"
-          @input="onCounselorInput"
-          @focus="showCounselorDropdown = true"
-        />
-        <view v-if="showCounselorDropdown && counselorSuggestions.length" class="dropdown">
-          <view
-            v-for="c in counselorSuggestions"
-            :key="c.id"
-            class="dropdown-item"
-            @tap="selectCounselor(c)"
-          >
-            {{ c.name }}
-          </view>
-        </view>
-        <text v-if="selectedCounselor" class="selected-tag">已选：{{ selectedCounselor.name }}</text>
+        <text class="selector-label">绑定咨询师</text>
+        <text v-if="selectedCounselor" class="bound-counselor">{{ selectedCounselor.name }}</text>
+        <text v-else class="bound-empty">来访尚未绑定咨询师，请先在来访者详情中绑定</text>
       </view>
     </view>
 
     <view v-if="!canShowSchedule" class="empty-card">
-      <text class="empty-text">请先选择来访和咨询师</text>
+      <text class="empty-text">{{ scheduleEmptyHint }}</text>
     </view>
 
     <template v-else>
@@ -133,7 +124,7 @@
                 <text class="slot-time">{{ formatTime(slot.startTime) }} – {{ formatTime(slot.endTime) }}</text>
                 <text v-if="slot.centerName" class="slot-center">{{ slot.centerName }}</text>
                 <text v-if="slot.roomName" class="slot-room">{{ slot.roomName }}</text>
-                <text v-if="slot.patientName" class="slot-patient">来访者：{{ slot.patientName }}</text>
+                <text v-if="slot.patientName" class="slot-patient">来访者：{{ formatPatientInline(slot.patientName, slot.patientContractTag) }}</text>
               </view>
             </view>
             <text class="slot-status" :style="{ color: meta(slot.displayStatus).color }">
@@ -212,9 +203,26 @@
           <text class="video-hint">视频咨询无需选择咨询室</text>
         </view>
 
+        <view v-if="!patientContractSigned" class="form-item">
+          <text class="form-label">签约协议 <text class="required">*</text></text>
+          <text class="form-hint">未签约来访需选择推送的协议，来访支付前将按此协议签署</text>
+          <view class="center-row">
+            <view
+              class="center-chip"
+              :class="{ active: form.agreementIsAdult === true }"
+              @tap="form.agreementIsAdult = true"
+            >成年来访者协议</view>
+            <view
+              class="center-chip"
+              :class="{ active: form.agreementIsAdult === false }"
+              @tap="form.agreementIsAdult = false"
+            >未成年来访者协议</view>
+          </view>
+        </view>
+
         <view class="modal-btns">
           <button class="modal-btn cancel" @tap="showAdd = false">取消</button>
-          <button class="modal-btn confirm" :disabled="submitting" @tap="submitProxyOrder">
+          <button class="modal-btn confirm" :disabled="submitting || !canPushOrder" @tap="submitProxyOrder">
             {{ submitting ? '推送中...' : '推送订单' }}
           </button>
         </view>
@@ -231,6 +239,7 @@ import { API_ENDPOINTS } from '@/config/api'
 import { APPOINTMENT_CENTERS, isVideoCenter } from '@/constants/appointmentCenters'
 import { SCHEDULE_DISPLAY_META, type ScheduleDisplayStatus } from '@/constants/scheduleDisplay'
 import { formatDateLocal, ROLLING_WINDOW_DAYS, addDays } from '@/constants/scheduleSlots'
+import { formatPatientInline } from '@/utils/patientContract'
 
 const defaultCenterId = 'yangpu'
 const weekdayHeaders = ['一', '二', '三', '四', '五', '六', '日']
@@ -249,6 +258,10 @@ interface PersonItem {
   id: number
   name: string
   label?: string
+  contractTag?: string | null
+  isContractSigned?: boolean
+  boundCounselorId?: number | null
+  boundCounselorName?: string | null
 }
 
 interface CalendarSlot {
@@ -260,6 +273,7 @@ interface CalendarSlot {
   centerName?: string
   roomName?: string
   patientName?: string
+  patientContractTag?: string
 }
 
 interface RoomOption {
@@ -294,13 +308,10 @@ interface CalendarCell {
 const centers = APPOINTMENT_CENTERS
 
 const patientKeyword = ref('')
-const counselorKeyword = ref('')
 const patientSuggestions = ref<PersonItem[]>([])
-const counselorSuggestions = ref<PersonItem[]>([])
 const selectedPatient = ref<PersonItem | null>(null)
 const selectedCounselor = ref<PersonItem | null>(null)
 const showPatientDropdown = ref(false)
-const showCounselorDropdown = ref(false)
 const loading = ref(false)
 const viewMode = ref<'list' | 'calendar'>('list')
 const calendarMonth = ref(formatDateLocal().slice(0, 7))
@@ -315,6 +326,18 @@ const timeSlotOptions = ref<TimeSlotOption[]>([])
 const minDate = computed(() => formatDateLocal())
 const maxDate = computed(() => addDays(minDate.value, ROLLING_WINDOW_DAYS - 1))
 const canShowSchedule = computed(() => !!selectedPatient.value && !!selectedCounselor.value)
+const patientContractSigned = computed(() => !!selectedPatient.value?.isContractSigned)
+const scheduleEmptyHint = computed(() => {
+  if (!selectedPatient.value) return '请先选择来访'
+  if (!selectedCounselor.value) return '该来访尚未绑定咨询师，请先在来访者详情中绑定'
+  return ''
+})
+const canPushOrder = computed(() => {
+  if (!form.value.slotKey) return false
+  if (!isVideoCenterSelected.value && !form.value.roomId) return false
+  if (!patientContractSigned.value && form.value.agreementIsAdult === null) return false
+  return true
+})
 const isVideoCenterSelected = computed(() => isVideoCenter(form.value.centerId))
 
 const form = ref({
@@ -325,10 +348,10 @@ const form = ref({
   startTime: '',
   endTime: '',
   scheduleId: null as number | null,
+  agreementIsAdult: null as boolean | null,
 })
 
 let patientSearchTimer: ReturnType<typeof setTimeout> | null = null
-let counselorSearchTimer: ReturnType<typeof setTimeout> | null = null
 
 const legend = Object.entries(SCHEDULE_DISPLAY_META).map(([key, v]) => ({
   key,
@@ -428,6 +451,20 @@ const slotChipHint = (ts: TimeSlotOption) => {
   return ''
 }
 
+const syncBoundCounselor = (p: PersonItem) => {
+  if (p.boundCounselorId && p.boundCounselorName) {
+    selectedCounselor.value = {
+      id: p.boundCounselorId,
+      name: p.boundCounselorName,
+    }
+    loadSchedules()
+  } else {
+    selectedCounselor.value = null
+    slots.value = []
+    monthSlots.value = []
+  }
+}
+
 const searchPatients = async (keyword: string) => {
   const res = await httpV2.get(
     API_ENDPOINTS.admin.proxyBookingPatients,
@@ -437,15 +474,6 @@ const searchPatients = async (keyword: string) => {
   if (res.code === 0 && res.data?.items) patientSuggestions.value = res.data.items
 }
 
-const searchCounselors = async (keyword: string) => {
-  const res = await httpV2.get(
-    API_ENDPOINTS.admin.proxyBookingCounselors,
-    { keyword: keyword || undefined },
-    { showLoading: false }
-  )
-  if (res.code === 0 && res.data?.items) counselorSuggestions.value = res.data.items
-}
-
 const onPatientInput = (e: { detail: { value: string } }) => {
   patientKeyword.value = e.detail.value
   showPatientDropdown.value = true
@@ -453,37 +481,44 @@ const onPatientInput = (e: { detail: { value: string } }) => {
   patientSearchTimer = setTimeout(() => searchPatients(patientKeyword.value.trim()), 300)
 }
 
-const onCounselorInput = (e: { detail: { value: string } }) => {
-  counselorKeyword.value = e.detail.value
-  showCounselorDropdown.value = true
-  if (counselorSearchTimer) clearTimeout(counselorSearchTimer)
-  counselorSearchTimer = setTimeout(() => searchCounselors(counselorKeyword.value.trim()), 300)
-}
-
 const selectPatient = (p: PersonItem) => {
   selectedPatient.value = p
   patientKeyword.value = p.name
   showPatientDropdown.value = false
+  syncBoundCounselor(p)
 }
 
-const selectCounselor = (c: PersonItem) => {
-  selectedCounselor.value = c
-  counselorKeyword.value = c.name
-  showCounselorDropdown.value = false
-  if (selectedPatient.value) loadSchedules()
-}
-
-const applyPatient = (id: number, name: string) => {
-  selectedPatient.value = { id, name, label: name }
-  patientKeyword.value = name
-  showPatientDropdown.value = false
-}
-
-const applyCounselor = async (id: number, name: string) => {
-  selectedCounselor.value = { id, name, label: name }
-  counselorKeyword.value = name
-  showCounselorDropdown.value = false
-  if (selectedPatient.value) await loadSchedules()
+const applyPatient = async (id: number, fallbackName?: string) => {
+  try {
+    const res = await httpV2.get<{
+      name?: string
+      isContractSigned?: boolean
+      boundCounselorId?: number | null
+      boundCounselorName?: string | null
+      contractTag?: string | null
+    }>(API_ENDPOINTS.admin.patientDetail(id), undefined, { showLoading: false, showError: false })
+    if (res.code === 0 && res.data) {
+      const d = res.data
+      selectPatient({
+        id,
+        name: d.name || fallbackName || `来访#${id}`,
+        contractTag: d.contractTag,
+        isContractSigned: !!d.isContractSigned,
+        boundCounselorId: d.boundCounselorId ?? null,
+        boundCounselorName: d.boundCounselorName ?? null,
+      })
+      return
+    }
+  } catch {
+    // fallback below
+  }
+  selectPatient({
+    id,
+    name: fallbackName || `来访#${id}`,
+    isContractSigned: false,
+    boundCounselorId: null,
+    boundCounselorName: null,
+  })
 }
 
 const loadSchedules = async () => {
@@ -555,7 +590,7 @@ const loadSlotOptions = async () => {
 
 const openAddModal = () => {
   if (!selectedPatient.value || !selectedCounselor.value) {
-    uni.showToast({ title: '请先选择来访和咨询师', icon: 'none' })
+    uni.showToast({ title: '请先选择已绑定咨询师的来访', icon: 'none' })
     return
   }
   form.value = {
@@ -566,6 +601,7 @@ const openAddModal = () => {
     startTime: '',
     endTime: '',
     scheduleId: null,
+    agreementIsAdult: null,
   }
   showAdd.value = true
   loadSlotOptions()
@@ -609,9 +645,13 @@ const submitProxyOrder = async () => {
     uni.showToast({ title: '请选择咨询室', icon: 'none' })
     return
   }
+  if (!patientContractSigned.value && form.value.agreementIsAdult === null) {
+    uni.showToast({ title: '请选择推送的签约协议', icon: 'none' })
+    return
+  }
   submitting.value = true
   try {
-    const res = await httpV2.post(API_ENDPOINTS.admin.proxyBookingPushOrder, {
+    const payload: Record<string, unknown> = {
       patient_id: selectedPatient.value.id,
       counselor_id: selectedCounselor.value.id,
       center_id: form.value.centerId,
@@ -619,7 +659,11 @@ const submitProxyOrder = async () => {
       end_time: form.value.endTime,
       room_id: isVideoCenterSelected.value ? null : form.value.roomId,
       schedule_id: form.value.scheduleId,
-    })
+    }
+    if (!patientContractSigned.value) {
+      payload.agreement_is_adult = form.value.agreementIsAdult
+    }
+    const res = await httpV2.post(API_ENDPOINTS.admin.proxyBookingPushOrder, payload)
     if (res.code !== 0) {
       uni.showToast({ title: res.msg || '推送失败', icon: 'none' })
       return
@@ -643,48 +687,13 @@ watch(canShowSchedule, (ok) => {
 })
 
 onLoad(async (opts) => {
-  await Promise.all([searchPatients(''), searchCounselors('')])
+  await searchPatients('')
   const patientId = Number(opts?.patientId || 0)
-  const counselorId = Number(opts?.counselorId || 0)
 
   if (patientId) {
     const p = patientSuggestions.value.find((x) => x.id === patientId)
-    if (p) applyPatient(p.id, p.name)
-    else {
-      try {
-        const res = await httpV2.get(
-          API_ENDPOINTS.admin.patientDetail(patientId),
-          undefined,
-          { showLoading: false, showError: false }
-        )
-        applyPatient(
-          patientId,
-          res.code === 0 && res.data?.name ? res.data.name : `来访#${patientId}`
-        )
-      } catch {
-        applyPatient(patientId, `来访#${patientId}`)
-      }
-    }
-  }
-
-  if (counselorId) {
-    const c = counselorSuggestions.value.find((x) => x.id === counselorId)
-    if (c) await applyCounselor(c.id, c.name)
-    else {
-      try {
-        const res = await httpV2.get(
-          API_ENDPOINTS.admin.counselorDetail(counselorId),
-          undefined,
-          { showLoading: false, showError: false }
-        )
-        await applyCounselor(
-          counselorId,
-          res.code === 0 && res.data?.name ? res.data.name : `咨询师#${counselorId}`
-        )
-      } catch {
-        await applyCounselor(counselorId, `咨询师#${counselorId}`)
-      }
-    }
+    if (p) selectPatient(p)
+    else await applyPatient(patientId)
   }
 })
 </script>
@@ -1066,6 +1075,40 @@ onLoad(async (opts) => {
 .video-hint {
   font-size: 24rpx;
   color: #6B7280;
+}
+
+.contract-status {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #F59E0B;
+}
+
+.contract-status.signed {
+  color: #10B981;
+}
+
+.bound-counselor {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #1F2937;
+}
+
+.bound-empty {
+  font-size: 26rpx;
+  color: #EF4444;
+  line-height: 1.5;
+}
+
+.form-hint {
+  display: block;
+  font-size: 24rpx;
+  color: #6B7280;
+  margin-bottom: 12rpx;
+  line-height: 1.5;
+}
+
+.required {
+  color: #EF4444;
 }
 
 .modal-btns {

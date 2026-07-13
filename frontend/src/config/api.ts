@@ -81,6 +81,7 @@ export const API_ENDPOINTS = {
     simulatePay: '/api/payment/wechat/simulate-pay',
     simulatePayOrder: '/api/payment/wechat/simulate-pay-order',
     payOrder: '/api/payment/wechat/pay-order',
+    attachOrderAgreement: '/api/payment/wechat/attach-order-agreement',
     confirmDev: '/api/payment/wechat/confirm-dev',
   },
 
@@ -143,6 +144,9 @@ export const API_ENDPOINTS = {
     profileAuthenticityCommitment: '/api/mini/counselor/profile/authenticity-commitment',
     stats: '/api/mini/counselor/stats',
     statsDetails: '/api/mini/counselor/stats/details',
+    proxyBookingPatients: '/api/mini/counselor/proxy-booking/patients',
+    proxyBookingSlotOptions: '/api/mini/counselor/proxy-booking/slot-options',
+    proxyBookingPushOrder: '/api/mini/counselor/proxy-booking/push-order',
   },
 
   // 助理工作台
@@ -197,6 +201,7 @@ export const API_ENDPOINTS = {
     consultationRecordRevisions: (id: number | string) => `/api/mini/admin/consultation-records/records/${id}/revisions`,
     patients: '/api/mini/admin/patients',
     patientDetail: (id: number | string) => `/api/mini/admin/patients/${id}`,
+    patientBoundCounselor: (id: number | string) => `/api/mini/admin/patients/${id}/bound-counselor`,
     counselors: '/api/mini/admin/counselors',
     counselorDetail: (id: number | string) => `/api/mini/admin/counselors/${id}`,
     staffRemark: (accountId: number | string) => `/api/mini/admin/accounts/${accountId}/staff-remark`,
@@ -204,6 +209,8 @@ export const API_ENDPOINTS = {
     pricingCounselors: '/api/mini/admin/pricing/counselors',
     pricingCounselorBase: (counselorId: number | string) =>
       `/api/mini/admin/pricing/counselors/${counselorId}`,
+    pricingCounselorDefaultShare: (counselorId: number | string) =>
+      `/api/mini/admin/pricing/counselors/${counselorId}/default-share`,
     pricingCounselorPatients: (counselorId: number | string) =>
       `/api/mini/admin/pricing/counselors/${counselorId}/patients`,
     pricingCounselorPatientUpdate: (counselorId: number | string, patientId: number | string) =>

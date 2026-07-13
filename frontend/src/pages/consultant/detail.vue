@@ -114,6 +114,14 @@
       <view class="content-section main-content-padding" id="section1">
         <view class="booking-section">
           <text class="block-title block-title--green">预约</text>
+          <view v-if="!contractStatusLoaded" class="booking-locked booking-locked--loading">
+            <text class="booking-locked-desc">正在加载预约权限...</text>
+          </view>
+          <view v-else-if="!canSelfBook" class="booking-locked">
+            <text class="booking-locked-title">首次预约请联系咨询助理</text>
+            <text class="booking-locked-desc">完成绑定签约咨询师并支付首单后，方可在此自助预约您的签约咨询师。</text>
+          </view>
+          <template v-else>
           <text class="booking-hint">请选择您合适的预约中心和时间段</text>
 
           <!-- 预约中心 -->
@@ -177,6 +185,7 @@
               <text class="module-placeholder-text">该预约中心暂无可约时间段</text>
             </view>
           </view>
+          </template>
         </view>
       </view>
       
@@ -194,14 +203,21 @@
         <text class="favorite-icon">{{ isFavorited ? '♥' : '♡' }}</text>
         <text>{{ isFavorited ? '已收藏' : '收藏' }}</text>
       </button>
-      <view class="action-btns">
-        <button class="action-btn outline" @click="openAssistantContact">联系助理</button>
+      <view class="action-btns" :class="{ 'action-btns--single': !canSelfBook }">
+        <template v-if="canSelfBook">
+          <button class="action-btn outline" @click="openAssistantContact">联系助理</button>
+          <button
+            class="action-btn"
+            :class="{ disabled: !canProceedBooking }"
+            :disabled="!canProceedBooking"
+            @click="makeAppointment"
+          >{{ bookingButtonLabel }}</button>
+        </template>
         <button
-          class="action-btn"
-          :class="{ disabled: !canProceedBooking }"
-          :disabled="!canProceedBooking"
-          @click="makeAppointment"
-        >{{ bookingButtonLabel }}</button>
+          v-else
+          class="action-btn action-btn--contact-only"
+          @click="openAssistantContact"
+        >首次预约请点击联系助理</button>
       </view>
     </view>
 
@@ -462,6 +478,9 @@ const needsIntakeAgreement = ref(true)
 const intakeIsAdult = ref<boolean | null>(null)
 /** 确认订单页：是否已勾选同意温馨提示与隐私协议 */
 const payRulesAgreed = ref(false)
+/** 来访已签约且当前页为绑定咨询师时可自助预约 */
+const canSelfBook = ref(false)
+const contractStatusLoaded = ref(false)
 
 // 协议内容
 const currentAgreement = ref('')
@@ -522,6 +541,7 @@ const applyBookingData = (data: {
   hasAvailableTime?: boolean
   charityBookingBlocked?: boolean
   priceNegotiation?: boolean
+  canSelfBook?: boolean
 }) => {
   timeSlots.value = normalizeBookingTimeSlots(data.timeSlots || [])
   if (data.priceNegotiation != null) {
@@ -529,6 +549,10 @@ const applyBookingData = (data: {
   }
   if (data.charityBookingBlocked != null) {
     doctor.value.charityBookingBlocked = !!data.charityBookingBlocked
+  }
+  if (data.canSelfBook != null) {
+    canSelfBook.value = !!data.canSelfBook
+    contractStatusLoaded.value = true
   }
   counselorCenterIds.value =
     data.availableCenterIds?.length
@@ -595,8 +619,8 @@ const mapDoctorDetail = (item: any): Doctor => ({
   specialty: item.specialty || item.field || '心理咨询',
   experience: Number(item.workYears || 0),
   price: Math.round(Number(item.billing || 0) / 100) || item.price || 500,
-  priceNegotiation: !!(item.priceNegotiation),
-  charityBookingBlocked: !!(item.charityBookingBlocked),
+  priceNegotiation: !!(item.priceNegotiation || item.billingLabel === '议价'),
+  charityBookingBlocked: !!(item.charityBookingBlocked || item.priceNegotiation || item.billingLabel === '议价'),
   avatar: item.avatarUrl || item.avatar || '',
   description: item.introduce || item.description || '暂无介绍',
   profile: item.profile || item.introduce || '暂无简介',
@@ -704,6 +728,7 @@ const getDoctorDetail = async () => {
       const data = payload.data
       doctor.value = data.doctor
       applyBookingData(data)
+      await loadPatientContract()
       await loadFavoriteStatus()
       setTimeout(() => updateSectionOffsets(), 300)
       return
@@ -713,6 +738,9 @@ const getDoctorDetail = async () => {
     if (response.code === 0 && response.data) {
       doctor.value = mapDoctorDetail(response.data)
       applyBookingData(response.data)
+      if (response.data.canSelfBook == null) {
+        await loadPatientContract()
+      }
       await loadFavoriteStatus()
       setTimeout(() => updateSectionOffsets(), 300)
     } else {
@@ -829,6 +857,31 @@ const resetSignatureForNewBooking = () => {
   })
 }
 
+const loadPatientContract = async () => {
+  if (!isLoggedIn()) {
+    canSelfBook.value = false
+    contractStatusLoaded.value = true
+    return
+  }
+  try {
+    const res = await httpV2.get<{
+      isContractSigned?: boolean
+      boundCounselorId?: number | null
+    }>(API_ENDPOINTS.patient.me, undefined, { showLoading: false, showError: false })
+    if (res.code === 0 && res.data) {
+      const signed = !!res.data.isContractSigned
+      const boundId = res.data.boundCounselorId ?? null
+      canSelfBook.value = signed && boundId != null && Number(boundId) === Number(doctor.value.id)
+    } else {
+      canSelfBook.value = false
+    }
+  } catch {
+    canSelfBook.value = false
+  } finally {
+    contractStatusLoaded.value = true
+  }
+}
+
 const loadIntakeStatus = async () => {
   try {
     const res = await httpV2.get<{ needsIntakeAgreement?: boolean }>(API_ENDPOINTS.patient.me)
@@ -853,8 +906,12 @@ const closeAssistantContact = () => {
   showAssistantContact.value = false
 }
 
-// 预约：须先选预约中心 → 可约时间 →（首次）协议 → 支付成功
+// 预约：须已签约绑定当前咨询师 → 选中心/时段 →（首次）协议 → 支付
 const makeAppointment = async () => {
+  if (!canSelfBook.value) {
+    openAssistantContact()
+    return
+  }
   if (doctor.value.charityBookingBlocked || doctor.value.priceNegotiation) {
     uni.showToast({ title: '请与咨询师议价后再预约', icon: 'none' })
     return
@@ -1329,6 +1386,10 @@ const goBackFromSignature = () => {
 
 onLoad((opts) => {
   routeDoctorId.value = opts?.id || opts?.doctorId || ''
+  if (!isLoggedIn()) {
+    contractStatusLoaded.value = true
+    canSelfBook.value = false
+  }
   getDoctorDetail()
   if (uni.getStorageSync('token')) {
     loadIntakeStatus()
@@ -1338,6 +1399,9 @@ onLoad((opts) => {
 onShow(() => {
   if (doctor.value.id) {
     loadFavoriteStatus()
+    if (isLoggedIn()) {
+      loadPatientContract()
+    }
   }
   const params = getRouteParams()
   const doctorId = routeDoctorId.value || params.id || params.doctorId
@@ -2072,6 +2136,50 @@ onMounted(() => {
 
 .action-btn::after {
   border: none;
+}
+
+.action-btns--single {
+  flex: 1;
+  justify-content: stretch;
+}
+
+.action-btn--contact-only {
+  flex: 1;
+  max-width: none;
+  min-width: 0;
+  width: 100%;
+}
+
+.booking-locked {
+  background: #FFFBEB;
+  border: 1rpx solid #FDE68A;
+  border-radius: 20rpx;
+  padding: 28rpx 24rpx;
+  margin-bottom: 8rpx;
+}
+
+.booking-locked--loading {
+  background: #F9FAFB;
+  border-color: #E5E7EB;
+}
+
+.booking-locked--loading .booking-locked-desc {
+  color: #6B7280;
+}
+
+.booking-locked-title {
+  display: block;
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #92400E;
+  margin-bottom: 12rpx;
+}
+
+.booking-locked-desc {
+  display: block;
+  font-size: 26rpx;
+  color: #B45309;
+  line-height: 1.6;
 }
 
 .action-btn.outline {

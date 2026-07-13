@@ -16,6 +16,11 @@ export interface PatientOrder {
   centerId?: string
   centerName?: string
   roomName?: string
+  needsContractAgreement?: boolean
+  contractAgreementSigned?: boolean
+  isProxyOrder?: boolean
+  proxyAgreementIsAdult?: boolean | null
+  proxyAgreementLabel?: string | null
 }
 
 export const useRealWechatPay = () => import.meta.env.VITE_ENABLE_REAL_PAY === 'true'

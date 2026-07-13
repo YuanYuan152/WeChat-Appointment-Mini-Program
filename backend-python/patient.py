@@ -75,18 +75,57 @@ class OrderOut(BaseModel):
     centerId: Optional[str] = None
     centerName: Optional[str] = None
     roomName: Optional[str] = None
+    needsContractAgreement: bool = False
+    contractAgreementSigned: bool = False
+    isProxyOrder: bool = False
+    proxyAgreementIsAdult: Optional[bool] = None
+    proxyAgreementLabel: Optional[str] = None
 
     class Config:
         from_attributes = True
 
 
-def _build_order_out(db: Session, order: AppOrder) -> OrderOut:
+def _order_contract_fields(
+    db: Session,
+    account: Optional[AppAccount],
+    order: AppOrder,
+) -> dict:
+    from order_contract_agreement import (
+        needs_contract_agreement_for_order,
+        order_has_contract_agreement,
+    )
+
+    needs = bool(account and needs_contract_agreement_for_order(db, account, order))
+    preset = getattr(order, "ProxyAgreementIsAdult", None)
+    preset_label = None
+    if preset is True:
+        preset_label = "成年来访者协议"
+    elif preset is False:
+        preset_label = "未成年来访者协议"
+    return {
+        "needsContractAgreement": needs,
+        "contractAgreementSigned": order_has_contract_agreement(order),
+        "isProxyOrder": (order.Description or "").startswith("proxy:"),
+        "proxyAgreementIsAdult": preset,
+        "proxyAgreementLabel": preset_label,
+    }
+
+
+def _build_order_out(
+    db: Session,
+    order: AppOrder,
+    account: Optional[AppAccount] = None,
+) -> OrderOut:
     """补充订单关联的预约时段与咨询师信息。"""
     from schedule_meta import parse_room_id, room_display_name
 
+    if account is None:
+        account = db.query(AppAccount).filter(AppAccount.Id == order.AccountId).first()
+
     base = OrderOut.model_validate(order)
+    contract_fields = _order_contract_fields(db, account, order)
     if not order.SlotId:
-        return base
+        return base.model_copy(update=contract_fields)
     schedule = db.query(AppSchedule).filter(AppSchedule.Id == order.SlotId).first()
     if not schedule:
         return base
@@ -110,6 +149,7 @@ def _build_order_out(db: Session, order: AppOrder) -> OrderOut:
             "centerId": center_id,
             "centerName": center_display_name(center_id),
             "roomName": room_display_name(center_id, room_id, db) if room_id else None,
+            **contract_fields,
         }
     )
 
@@ -117,61 +157,12 @@ def _build_order_out(db: Session, order: AppOrder) -> OrderOut:
 def _build_orders_out(db: Session, orders: List[AppOrder]) -> List[OrderOut]:
     if not orders:
         return []
-    slot_ids = [o.SlotId for o in orders if o.SlotId]
-    schedules = (
-        {
-            s.Id: s
-            for s in db.query(AppSchedule).filter(AppSchedule.Id.in_(slot_ids)).all()
-        }
-        if slot_ids
-        else {}
-    )
-    counselor_ids = {s.CounselorId for s in schedules.values()}
-    profiles = (
-        {
-            p.AccountId: p
-            for p in db.query(AppCounselorProfile)
-            .filter(AppCounselorProfile.AccountId.in_(counselor_ids))
-            .all()
-        }
-        if counselor_ids
-        else {}
-    )
-    accounts = (
-        {a.Id: a for a in db.query(AppAccount).filter(AppAccount.Id.in_(counselor_ids)).all()}
-        if counselor_ids
-        else {}
-    )
-    from schedule_meta import parse_room_id, room_display_name
-
-    result: List[OrderOut] = []
-    for order in orders:
-        base = OrderOut.model_validate(order)
-        schedule = schedules.get(order.SlotId) if order.SlotId else None
-        if not schedule:
-            result.append(base)
-            continue
-        center_id = parse_center_id(schedule.Note)
-        room_id = parse_room_id(schedule.Note)
-        prof = profiles.get(schedule.CounselorId)
-        acc = accounts.get(schedule.CounselorId)
-        counselor_name = (prof.Name if prof and prof.Name else None) or (
-            acc.Nickname if acc else None
-        ) or f"咨询师#{schedule.CounselorId}"
-        result.append(
-            base.model_copy(
-                update={
-                    "counselorId": schedule.CounselorId,
-                    "counselorName": counselor_name,
-                    "startTime": schedule.StartTime,
-                    "endTime": schedule.EndTime,
-                    "centerId": center_id,
-                    "centerName": center_display_name(center_id),
-                    "roomName": room_display_name(center_id, room_id, db) if room_id else None,
-                }
-            )
-        )
-    return result
+    patient_ids = {o.AccountId for o in orders}
+    patients = {
+        a.Id: a
+        for a in db.query(AppAccount).filter(AppAccount.Id.in_(patient_ids)).all()
+    }
+    return [_build_order_out(db, order, patients.get(order.AccountId)) for order in orders]
 
 
 class PatientProfileUpdate(BaseModel):
@@ -196,6 +187,9 @@ class PatientProfileOut(BaseModel):
     emergencyContact: Optional[str] = None
     emergencyPhone: Optional[str] = None
     needsIntakeAgreement: bool = True
+    isContractSigned: bool = False
+    boundCounselorId: Optional[int] = None
+    boundCounselorName: Optional[str] = None
 
 
 class RegistrationPayload(BaseModel):
@@ -241,6 +235,9 @@ class RegistrationPayload(BaseModel):
 
 
 def _profile_out(account: AppAccount, db: Session) -> PatientProfileOut:
+    from patient_contract_service import patient_contract_extras
+
+    contract = patient_contract_extras(db, account)
     return PatientProfileOut(
         id=account.Id,
         openId=account.OpenId,
@@ -253,6 +250,9 @@ def _profile_out(account: AppAccount, db: Session) -> PatientProfileOut:
         emergencyContact=account.EmergencyContact,
         emergencyPhone=account.EmergencyPhone,
         needsIntakeAgreement=needs_intake_agreement(db, account),
+        isContractSigned=bool(contract.get("isContractSigned")),
+        boundCounselorId=contract.get("boundCounselorId"),
+        boundCounselorName=contract.get("boundCounselorName"),
     )
 
 
@@ -740,7 +740,7 @@ def get_my_order(
     )
     if not order:
         raise HTTPException(status_code=404, detail="订单不存在")
-    return _build_order_out(db, order)
+    return _build_order_out(db, order, current_account)
 
 
 @router.get("/me", response_model=PatientProfileOut, summary="获取患者资料")

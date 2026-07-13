@@ -6,10 +6,6 @@ from models import AppAccount, AppOrder, AppSchedule
 from pricing_service import get_counselor_profile
 
 
-def _display_name(acc: AppAccount) -> str:
-    return acc.RealName or acc.Nickname or f"用户{acc.Id}"
-
-
 def notify_proxy_order_created(
     db: Session,
     *,
@@ -17,19 +13,20 @@ def notify_proxy_order_created(
     schedule: AppSchedule,
     patient: AppAccount,
     counselor_id: int,
+    staff_account_id: int,
 ) -> None:
     from counselor_message_service import notify_counselor_proxy_order_pending
     from patient_message_service import notify_patient_proxy_order_pending
+    from staff_message_service import notify_staff_proxy_order_pushed
 
     profile = get_counselor_profile(db, counselor_id)
     counselor_name = (profile.Name if profile else None) or f"咨询师#{counselor_id}"
-    patient_name = _display_name(patient)
 
     notify_counselor_proxy_order_pending(
         db,
         counselor_id=counselor_id,
         schedule=schedule,
-        patient_name=patient_name,
+        patient_id=patient.Id,
         order=order,
     )
     notify_patient_proxy_order_pending(
@@ -38,4 +35,12 @@ def notify_proxy_order_created(
         counselor_name=counselor_name,
         schedule=schedule,
         order=order,
+    )
+    notify_staff_proxy_order_pushed(
+        db,
+        staff_account_id=staff_account_id,
+        order=order,
+        schedule=schedule,
+        patient=patient,
+        counselor_id=counselor_id,
     )
