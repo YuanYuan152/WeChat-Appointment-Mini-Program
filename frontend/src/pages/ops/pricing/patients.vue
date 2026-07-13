@@ -86,9 +86,17 @@
           <text class="preview-value">+¥{{ editing.autoAdjustmentYuan }}</text>
         </view>
 
-        <view class="form-group">
-          <text class="form-label">调整金额（对当前来访生效）</text>
-          <input v-model="form.adjustmentYuan" class="form-input" type="number" placeholder="元，可正可负，如 -50 或 100" />
+        <view class="preview-row">
+          <text class="preview-label">调整金额（对当前来访生效）</text>
+          <view class="plain-amount">
+            <text>¥</text>
+            <input
+              v-model="form.adjustmentYuan"
+              class="plain-amount-input"
+              type="number"
+              placeholder="0"
+            />
+          </view>
         </view>
 
         <view class="preview-row">
@@ -96,30 +104,89 @@
           <text class="preview-value accent">¥{{ previewDisplayYuan }}</text>
         </view>
 
-        <view class="form-group">
-          <text class="form-label">咨询师分成</text>
-          <view v-if="!form.shareMode" class="form-hint share-default-hint">
-            当前使用咨询师默认分成：{{ counselorDefaultShareLabel }}（¥{{ counselorDefaultShareYuan }}）
+        <view class="share-target-section">
+          <view class="share-header-row">
+            <text class="share-target-label">分成</text>
+            <view class="share-target-fields">
+              <text class="share-col-label">分成比例</text>
+              <text class="share-col-label">分成金额</text>
+            </view>
           </view>
-          <view class="share-tabs">
-            <view class="share-tab" :class="{ active: form.shareMode === 'AMOUNT' }" @tap="form.shareMode = 'AMOUNT'">按固定金额</view>
-            <view class="share-tab" :class="{ active: form.shareMode === 'PERCENT' }" @tap="form.shareMode = 'PERCENT'">按比例</view>
+          <view class="share-target-row">
+            <text class="share-target-label">平台</text>
+            <view class="share-target-fields">
+              <view class="target-field">
+                <input
+                  v-model="form.platformPercent"
+                  class="plain-inline-input"
+                  type="digit"
+                  @input="onPlatformPercentInput"
+                />
+                <text class="share-inline-unit">%</text>
+              </view>
+              <view class="target-field amount-field">
+                <view class="plain-amount compact">
+                  <text>¥</text>
+                  <input
+                    v-model="form.platformYuan"
+                    class="plain-amount-input"
+                    type="digit"
+                    @input="onPlatformYuanInput"
+                  />
+                </view>
+              </view>
+            </view>
           </view>
-        </view>
-
-        <view v-if="form.shareMode === 'AMOUNT'" class="form-group">
-          <text class="form-label">分成金额（元）</text>
-          <input v-model="form.revenueShareYuan" class="form-input" type="number" />
-          <text class="form-hint">预览分成：¥{{ previewShareYuan }} · 占显示价格 {{ previewSharePercent }}%</text>
-        </view>
-
-        <view v-if="form.shareMode === 'PERCENT'" class="form-group">
-          <text class="form-label">分成占比（0–100%）</text>
-          <view class="input-with-suffix">
-            <input v-model="form.revenueSharePercent" class="form-input suffix-input" type="number" />
-            <text class="input-suffix">%</text>
+          <view class="share-target-row">
+            <text class="share-target-label">咨询师</text>
+            <view class="share-target-fields">
+              <view class="target-field">
+                <input
+                  v-model="form.revenueSharePercent"
+                  class="plain-inline-input"
+                  type="digit"
+                  @input="onCounselorPercentInput"
+                />
+                <text class="share-inline-unit">%</text>
+              </view>
+              <view class="target-field amount-field">
+                <view class="plain-amount compact">
+                  <text>¥</text>
+                  <input
+                    v-model="form.revenueShareYuan"
+                    class="plain-amount-input"
+                    type="digit"
+                    @input="onCounselorYuanInput"
+                  />
+                </view>
+              </view>
+            </view>
           </view>
-          <text class="form-hint">预览分成：¥{{ previewShareYuan }}</text>
+          <view class="share-target-row">
+            <text class="share-target-label">医生</text>
+            <view class="share-target-fields">
+              <view class="target-field">
+                <input
+                  v-model="form.doctorPercent"
+                  class="plain-inline-input"
+                  type="digit"
+                  @input="onDoctorPercentInput"
+                />
+                <text class="share-inline-unit">%</text>
+              </view>
+              <view class="target-field amount-field">
+                <view class="plain-amount compact">
+                  <text>¥</text>
+                  <input
+                    v-model="form.doctorYuan"
+                    class="plain-amount-input"
+                    type="digit"
+                    @input="onDoctorYuanInput"
+                  />
+                </view>
+              </view>
+            </view>
+          </view>
         </view>
 
         <view class="modal-btns">
@@ -134,7 +201,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
@@ -188,12 +255,122 @@ const showEdit = ref(false)
 const editing = ref<PatientPricingRow | null>(null)
 const form = reactive({
   adjustmentYuan: '0',
-  shareMode: '' as '' | 'AMOUNT' | 'PERCENT',
-  revenueShareYuan: '',
-  revenueSharePercent: '',
+  revenueShareYuan: '0',
+  revenueSharePercent: '0',
+  platformPercent: '0',
+  platformYuan: '0',
+  doctorPercent: '0',
+  doctorYuan: '0',
 })
 
-const defaultShareYuan = computed(() => counselorDefaultShareYuan.value)
+const shareSyncLock = ref(false)
+
+const clampSharePercent = (value: number) => Math.max(0, Math.min(Math.round(value), 100))
+
+const clampShareYuan = (value: number, display: number) => Math.max(0, Math.min(Math.floor(value), display))
+
+const calcShareYuanFromPercent = (percent: number, display = previewDisplayYuan.value) =>
+  clampShareYuan(Math.floor(display * percent / 100), display)
+
+const calcSharePercentFromYuan = (amount: number, display = previewDisplayYuan.value) => {
+  if (display <= 0) return 0
+  return clampSharePercent(Math.round(amount / display * 100))
+}
+
+const applyCounselorShare = (percent: number, yuan: number) => {
+  if (shareSyncLock.value) return
+  shareSyncLock.value = true
+  const display = previewDisplayYuan.value
+  const counselorYuan = clampShareYuan(yuan, display)
+  const counselorPercent = calcSharePercentFromYuan(counselorYuan, display)
+  const doctorYuan = clampShareYuan(Number(form.doctorYuan) || 0, display)
+  const platformYuan = Math.max(0, display - counselorYuan - doctorYuan)
+  form.revenueSharePercent = String(counselorPercent)
+  form.revenueShareYuan = String(counselorYuan)
+  form.platformYuan = String(platformYuan)
+  form.platformPercent = String(calcSharePercentFromYuan(platformYuan, display))
+  shareSyncLock.value = false
+}
+
+const onCounselorPercentInput = () => {
+  const percent = clampSharePercent(Number(form.revenueSharePercent) || 0)
+  applyCounselorShare(percent, calcShareYuanFromPercent(percent))
+}
+
+const onCounselorYuanInput = () => {
+  const display = previewDisplayYuan.value
+  const yuan = clampShareYuan(Number(form.revenueShareYuan) || 0, display)
+  applyCounselorShare(calcSharePercentFromYuan(yuan, display), yuan)
+}
+
+const applyPlatformShare = (percent: number, yuan: number) => {
+  if (shareSyncLock.value) return
+  shareSyncLock.value = true
+  const display = previewDisplayYuan.value
+  const platformYuan = clampShareYuan(yuan, display)
+  const platformPercent = calcSharePercentFromYuan(platformYuan, display)
+  const doctorYuan = clampShareYuan(Number(form.doctorYuan) || 0, display)
+  const counselorYuan = Math.max(0, display - platformYuan - doctorYuan)
+  form.platformPercent = String(platformPercent)
+  form.platformYuan = String(platformYuan)
+  form.revenueShareYuan = String(counselorYuan)
+  form.revenueSharePercent = String(calcSharePercentFromYuan(counselorYuan, display))
+  shareSyncLock.value = false
+}
+
+const onPlatformPercentInput = () => {
+  const percent = clampSharePercent(Number(form.platformPercent) || 0)
+  applyPlatformShare(percent, calcShareYuanFromPercent(percent))
+}
+
+const onPlatformYuanInput = () => {
+  const display = previewDisplayYuan.value
+  const yuan = clampShareYuan(Number(form.platformYuan) || 0, display)
+  applyPlatformShare(calcSharePercentFromYuan(yuan, display), yuan)
+}
+
+const applyDoctorShare = (percent: number, yuan: number) => {
+  if (shareSyncLock.value) return
+  shareSyncLock.value = true
+  const display = previewDisplayYuan.value
+  const doctorYuan = clampShareYuan(yuan, display)
+  const doctorPercent = calcSharePercentFromYuan(doctorYuan, display)
+  const counselorYuan = clampShareYuan(Number(form.revenueShareYuan) || 0, display)
+  const platformYuan = Math.max(0, display - counselorYuan - doctorYuan)
+  form.doctorPercent = String(doctorPercent)
+  form.doctorYuan = String(doctorYuan)
+  form.platformYuan = String(platformYuan)
+  form.platformPercent = String(calcSharePercentFromYuan(platformYuan, display))
+  shareSyncLock.value = false
+}
+
+const onDoctorPercentInput = () => {
+  const percent = clampSharePercent(Number(form.doctorPercent) || 0)
+  applyDoctorShare(percent, calcShareYuanFromPercent(percent))
+}
+
+const onDoctorYuanInput = () => {
+  const display = previewDisplayYuan.value
+  const yuan = clampShareYuan(Number(form.doctorYuan) || 0, display)
+  applyDoctorShare(calcSharePercentFromYuan(yuan, display), yuan)
+}
+
+watch(
+  () => form.adjustmentYuan,
+  () => {
+    if (shareSyncLock.value) return
+    shareSyncLock.value = true
+    const display = previewDisplayYuan.value
+    const percent = clampSharePercent(Number(form.revenueSharePercent) || 0)
+    const counselorYuan = calcShareYuanFromPercent(percent, display)
+    const doctorYuan = clampShareYuan(Number(form.doctorYuan) || 0, display)
+    const platformYuan = Math.max(0, display - counselorYuan - doctorYuan)
+    form.revenueShareYuan = String(counselorYuan)
+    form.platformYuan = String(platformYuan)
+    form.platformPercent = String(calcSharePercentFromYuan(platformYuan, display))
+    shareSyncLock.value = false
+  },
+)
 
 const counselorDefaultShareYuan = computed(() => {
   if (!counselor.value) return 0
@@ -224,32 +401,7 @@ const previewDisplayYuan = computed(() => {
   return Math.max(editing.value.basePriceYuan + manual + (editing.value.autoAdjustmentYuan || 0), 0)
 })
 
-const previewShareYuan = computed(() => {
-  const display = previewDisplayYuan.value
-  if (form.shareMode === 'AMOUNT') {
-    return Math.max(0, Math.min(Number(form.revenueShareYuan) || 0, display))
-  }
-  if (form.shareMode === 'PERCENT') {
-    const pct = Math.max(0, Math.min(Number(form.revenueSharePercent) || 0, 100))
-    return Math.floor(display * pct / 100)
-  }
-  return counselorDefaultShareYuan.value
-})
-
-const previewSharePercent = computed(() => {
-  const display = previewDisplayYuan.value
-  if (display <= 0) return 0
-  if (form.shareMode === 'AMOUNT') {
-    const amount = Number(form.revenueShareYuan) || 0
-    return Math.round(Math.max(0, Math.min(amount, display)) / display * 100)
-  }
-  if (form.shareMode === 'PERCENT') {
-    return Math.max(0, Math.min(Number(form.revenueSharePercent) || 0, 100))
-  }
-  const base = editing.value?.basePriceYuan || counselor.value?.basePriceYuan || 0
-  if (display <= 0 || base <= 0) return DEFAULT_SHARE_PERCENT
-  return Math.round(counselorDefaultShareYuan.value / display * 100)
-})
+const counselorShareYuan = computed(() => Number(form.revenueShareYuan) || 0)
 
 const formatAdjustment = (v: number) => (v > 0 ? `+¥${v}` : v < 0 ? `-¥${Math.abs(v)}` : '¥0')
 const adjustClass = (v: number) => (v > 0 ? 'up' : v < 0 ? 'down' : '')
@@ -300,13 +452,50 @@ const loadMore = async () => {
   await reload(false)
 }
 
+const resolveInitialShare = (row: PatientPricingRow) => {
+  const display = Math.max(
+    row.basePriceYuan + row.manualAdjustmentYuan + (row.autoAdjustmentYuan || 0),
+    0,
+  )
+  let percent = DEFAULT_SHARE_PERCENT
+  let amount = 0
+
+  if (row.shareMode === 'PERCENT' && row.revenueSharePercent != null) {
+    percent = clampSharePercent(row.revenueSharePercent)
+    amount = calcShareYuanFromPercent(percent, display)
+  } else if (row.shareMode === 'AMOUNT') {
+    amount = clampShareYuan(row.revenueShareYuan, display)
+    percent = calcSharePercentFromYuan(amount, display)
+  } else if (counselor.value?.defaultShareMode === 'PERCENT' && counselor.value.defaultRevenueSharePercent != null) {
+    percent = clampSharePercent(counselor.value.defaultRevenueSharePercent)
+    amount = calcShareYuanFromPercent(percent, display)
+  } else if (counselor.value?.defaultShareMode === 'AMOUNT' && counselor.value.defaultRevenueShareYuan != null) {
+    amount = clampShareYuan(counselor.value.defaultRevenueShareYuan, display)
+    percent = calcSharePercentFromYuan(amount, display)
+  } else {
+    amount = calcShareYuanFromPercent(percent, display)
+  }
+
+  return { percent, amount }
+}
+
 const openEdit = (row: PatientPricingRow) => {
   editing.value = row
   form.adjustmentYuan = String(row.manualAdjustmentYuan)
-  form.shareMode = (row.shareMode as typeof form.shareMode) || ''
-  form.revenueShareYuan = row.shareMode === 'AMOUNT' ? String(row.revenueShareYuan) : ''
-  form.revenueSharePercent =
-    row.shareMode === 'PERCENT' && row.revenueSharePercent != null ? String(row.revenueSharePercent) : ''
+  const display = Math.max(
+    row.basePriceYuan + row.manualAdjustmentYuan + (row.autoAdjustmentYuan || 0),
+    0,
+  )
+  const { percent, amount } = resolveInitialShare(row)
+  const platformYuan = Math.max(0, display - amount)
+  shareSyncLock.value = true
+  form.revenueSharePercent = String(percent)
+  form.revenueShareYuan = String(amount)
+  form.platformYuan = String(platformYuan)
+  form.platformPercent = String(calcSharePercentFromYuan(platformYuan, display))
+  form.doctorYuan = '0'
+  form.doctorPercent = '0'
+  shareSyncLock.value = false
   showEdit.value = true
 }
 
@@ -321,12 +510,8 @@ const saveEdit = async () => {
   try {
     const payload: Record<string, unknown> = {
       adjustmentYuan: Number(form.adjustmentYuan) || 0,
-      shareMode: form.shareMode || null,
-    }
-    if (form.shareMode === 'AMOUNT') {
-      payload.revenueShareYuan = Number(form.revenueShareYuan)
-    } else if (form.shareMode === 'PERCENT') {
-      payload.revenueSharePercent = Number(form.revenueSharePercent)
+      shareMode: 'AMOUNT',
+      revenueShareYuan: counselorShareYuan.value,
     }
     const res = await httpV2.put(
       API_ENDPOINTS.admin.pricingCounselorPatientUpdate(counselorId.value, editing.value.patientId),
@@ -621,6 +806,116 @@ onShow(() => reload(true))
 .preview-value { font-size: 30rpx; font-weight: 600; color: #2C2C2C; }
 .preview-value.accent { color: #3D5A4E; font-size: 34rpx; }
 
+.plain-amount {
+  display: inline-flex;
+  align-items: baseline;
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #2C2C2C;
+}
+
+.plain-amount-input {
+  min-width: 48rpx;
+  max-width: 140rpx;
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #2C2C2C;
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  text-align: left;
+}
+
+.share-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 0 12rpx;
+  border-bottom: 1rpx solid #E8E4DE;
+  margin-bottom: 4rpx;
+}
+
+.share-col-label {
+  font-size: 24rpx;
+  color: #9CA3AF;
+  min-width: 96rpx;
+  text-align: right;
+}
+
+.share-col-label:last-child {
+  min-width: 120rpx;
+}
+
+.share-inline-unit {
+  font-size: 26rpx;
+  color: #6B7280;
+}
+
+.plain-inline-input {
+  width: 72rpx;
+  text-align: right;
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #2C2C2C;
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+}
+
+.plain-inline-input.wide { width: 96rpx; }
+
+.share-target-section {
+  background: #F9FAFB;
+  border-radius: 16rpx;
+  padding: 20rpx 24rpx;
+  margin: 8rpx 0 24rpx;
+}
+
+.share-target-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14rpx 0;
+  border-bottom: 1rpx solid #E8E4DE;
+}
+
+.share-target-row:last-child { border-bottom: none; }
+
+.share-target-label {
+  font-size: 28rpx;
+  color: #374151;
+  font-weight: 600;
+}
+
+.plain-amount.compact {
+  font-size: 28rpx;
+}
+
+.plain-amount.compact .plain-amount-input {
+  font-size: 28rpx;
+  max-width: 88rpx;
+}
+
+.share-target-fields {
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+}
+
+.target-field {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4rpx;
+  min-width: 96rpx;
+}
+
+.target-field.amount-field {
+  min-width: 120rpx;
+}
+
 .form-group { margin-bottom: 24rpx; }
 
 .form-label {
@@ -648,56 +943,6 @@ onShow(() => reload(true))
   margin-top: 8rpx;
   font-size: 22rpx;
   color: #6B9080;
-}
-
-.share-tabs {
-  display: flex;
-  gap: 12rpx;
-}
-
-.share-tab {
-  flex: 1;
-  text-align: center;
-  padding: 16rpx 8rpx;
-  border-radius: 12rpx;
-  font-size: 24rpx;
-  color: #6B7280;
-  background: #F7F5F2;
-  border: 1rpx solid #E8E4DE;
-}
-
-.share-tab.active {
-  background: #E8E4DE;
-  color: #3D5A4E;
-  font-weight: 600;
-  border-color: #3D5A4E;
-}
-
-.share-default-hint {
-  margin-bottom: 12rpx;
-}
-
-.input-with-suffix {
-  display: flex;
-  align-items: center;
-  background: #F7F5F2;
-  border-radius: 16rpx;
-  border: 1rpx solid #E8E4DE;
-  overflow: hidden;
-}
-
-.suffix-input {
-  flex: 1;
-  border: none !important;
-  background: transparent !important;
-}
-
-.input-suffix {
-  flex-shrink: 0;
-  padding: 0 24rpx;
-  font-size: 28rpx;
-  color: #6B7280;
-  font-weight: 600;
 }
 
 .modal-btns {
