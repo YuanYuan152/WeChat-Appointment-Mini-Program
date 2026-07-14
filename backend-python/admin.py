@@ -2581,5 +2581,12 @@ def update_pricing_counselor_patient(
 
 
 from proxy_booking_routes import router as proxy_booking_router
+from system_settings_routes import register_system_settings_routes
+
+register_system_settings_routes(
+    router,
+    require_staff_workbench=require_staff_workbench,
+    require_admin=require_admin,
+)
 
 router.include_router(proxy_booking_router)

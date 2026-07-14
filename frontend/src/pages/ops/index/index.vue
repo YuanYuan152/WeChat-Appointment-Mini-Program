@@ -56,6 +56,7 @@ const allEntries = [
   { title: '咨询记录修改审核', desc: '咨询师提交的记录修改申请', symbol: '改', tone: 'tone-gold', path: '/pages/ops/case-record-amendments/index' },
   { title: '用户管理', desc: '来访者信息与咨询师档案管理', symbol: '用', tone: 'tone-green', path: '/pages/ops/users/index' },
   { title: '代理预约', desc: '为来访推送待支付预约订单', symbol: '代', tone: 'tone-gold', path: '/pages/ops/proxy-booking/index' },
+  { title: '系统设置', desc: '待支付时限（5 分钟起，轮盘调节）', symbol: '设', tone: 'tone-muted', path: '/pages/ops/system-settings/index', adminOnly: true },
   { title: '用户反馈', desc: '来访者咨询完成后的评价反馈', symbol: '馈', tone: 'tone-green', path: '/pages/ops/consultation-feedbacks/index' },
   { title: '咨询记录', desc: '各咨询师近30天记录填写情况', symbol: '记', tone: 'tone-green', path: '/pages/ops/case-records/index' },
   { title: '重后台 (Web)', desc: 'WebView 嵌入旧管理后台', symbol: 'Web', tone: 'tone-dark', path: '/pages/admin-webview/index' },

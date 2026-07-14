@@ -12,6 +12,7 @@ APP_ACCOUNT_COLUMNS = {
     "Gender": "NVARCHAR(10) NULL",
     "Birthday": "DATETIME NULL",
     "EmergencyContact": "NVARCHAR(100) NULL",
+    "EmergencyRelation": "NVARCHAR(50) NULL",
     "EmergencyPhone": "NVARCHAR(20) NULL",
     "IntakeAgreementSignedAt": "DATETIME NULL",
     "IntakeIsAdult": "BIT NULL",

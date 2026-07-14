@@ -2,7 +2,7 @@
   <view class="page-proxy">
     <view class="header-card">
       <text class="page-title">代理预约</text>
-      <text class="page-sub">为来访推送待支付订单，来访需在 2 小时内完成支付</text>
+      <text class="page-sub">为来访推送待支付订单，{{ proxyOrderPayHint }}</text>
     </view>
 
     <view class="selector-card">
@@ -138,7 +138,7 @@
     <view v-if="showAdd" class="modal-overlay" @touchmove.stop.prevent>
       <view class="modal-card" @tap.stop>
         <text class="modal-title">代理预约</text>
-        <text class="modal-sub">选择预约中心、日期、时间槽与咨询室，推送后来访需在 2 小时内支付</text>
+        <text class="modal-sub">选择预约中心、日期、时间槽与咨询室，推送后{{ proxyOrderPayHint }}</text>
 
         <view class="form-item">
           <text class="form-label">预约中心</text>
@@ -206,17 +206,17 @@
         <view v-if="!patientContractSigned" class="form-item">
           <text class="form-label">签约协议 <text class="required">*</text></text>
           <text class="form-hint">未签约来访需选择推送的协议，来访支付前将按此协议签署</text>
-          <view class="center-row">
+          <view class="center-row agreement-row">
             <view
               class="center-chip"
               :class="{ active: form.agreementIsAdult === true }"
               @tap="form.agreementIsAdult = true"
-            >成年来访者协议</view>
+            >{{ tongxinAgreementTitle }}</view>
             <view
               class="center-chip"
               :class="{ active: form.agreementIsAdult === false }"
               @tap="form.agreementIsAdult = false"
-            >未成年来访者协议</view>
+            >{{ yangfanAgreementTitle }}</view>
           </view>
         </view>
 
@@ -233,13 +233,33 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { onLoad } from '@dcloudio/uni-app'
+import { onLoad, onShow } from '@dcloudio/uni-app'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
 import { APPOINTMENT_CENTERS, isVideoCenter } from '@/constants/appointmentCenters'
 import { SCHEDULE_DISPLAY_META, type ScheduleDisplayStatus } from '@/constants/scheduleDisplay'
 import { formatDateLocal, ROLLING_WINDOW_DAYS, addDays } from '@/constants/scheduleSlots'
 import { formatPatientInline } from '@/utils/patientContract'
+import { fetchSystemSettings, formatProxyOrderPushHint } from '@/utils/systemSettings'
+import {
+  TONGXIN_AGREEMENT_TITLE,
+  YANGFAN_AGREEMENT_TITLE,
+} from '@/utils/consultationAgreement'
+
+const tongxinAgreementTitle = TONGXIN_AGREEMENT_TITLE
+const yangfanAgreementTitle = YANGFAN_AGREEMENT_TITLE
+
+const proxyOrderTtlMinutes = ref(120)
+const proxyOrderPayHint = computed(() => formatProxyOrderPushHint(proxyOrderTtlMinutes.value))
+
+const loadSystemSettings = async () => {
+  const data = await fetchSystemSettings()
+  proxyOrderTtlMinutes.value = data.proxyOrderTtlMinutes
+}
+
+onShow(() => {
+  loadSystemSettings()
+})
 
 const defaultCenterId = 'yangpu'
 const weekdayHeaders = ['一', '二', '三', '四', '五', '六', '日']
@@ -646,7 +666,7 @@ const submitProxyOrder = async () => {
     return
   }
   if (!patientContractSigned.value && form.value.agreementIsAdult === null) {
-    uni.showToast({ title: '请选择推送的签约协议', icon: 'none' })
+    uni.showToast({ title: '请选择签署协议类型', icon: 'none' })
     return
   }
   submitting.value = true
@@ -1020,6 +1040,12 @@ onLoad(async (opts) => {
   display: flex;
   flex-wrap: wrap;
   gap: 12rpx;
+}
+
+.agreement-row .center-chip {
+  flex: 1;
+  min-width: 240rpx;
+  text-align: center;
 }
 
 .center-chip {

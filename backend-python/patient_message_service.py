@@ -479,6 +479,9 @@ def notify_patient_proxy_order_pending(
     center_name = center_display_name(center_id) if center_id else "待定"
     time_text = _format_datetime(schedule.StartTime)
     fee_yuan = int(order.TotalFee or 0) // 100
+    from system_setting_service import get_proxy_order_ttl_minutes, proxy_order_ttl_patient_tip
+
+    ttl_minutes = get_proxy_order_ttl_minutes(db)
     summary = f"{counselor_name} · {time_text} · ¥{fee_yuan}"
     detail = {
         "counselorName": counselor_name,
@@ -488,7 +491,8 @@ def notify_patient_proxy_order_pending(
         "orderId": order.Id,
         "totalFeeYuan": fee_yuan,
         "expiresAt": order.ExpiresAt.isoformat() if order.ExpiresAt else None,
-        "tip": "请在 2 小时内完成支付，逾期订单将自动取消",
+        "proxyOrderTtlMinutes": ttl_minutes,
+        "tip": proxy_order_ttl_patient_tip(ttl_minutes),
     }
     _notify_patient(
         db,

@@ -336,12 +336,7 @@ def notify_staff_proxy_order_pushed(
     patient: AppAccount,
     counselor_id: int,
 ) -> None:
-    """助理/主任/管理员推送代理预约订单后，向操作人发送推送成功确认消息。"""
-    from staff_roles import account_has_staff_workbench
-
-    if not account_has_staff_workbench(db, staff_account_id):
-        return
-
+    """代理预约推送后，向操作人（助理/主任/管理员/咨询师）发送推送成功确认消息。"""
     existing = (
         db.query(AppMessage)
         .filter(
@@ -365,6 +360,9 @@ def notify_staff_proxy_order_pushed(
     amount_yuan = None
     if order.TotalFee:
         amount_yuan = f"{order.TotalFee / 100:.2f}"
+    from system_setting_service import get_proxy_order_ttl_minutes, proxy_order_ttl_staff_tip
+
+    ttl_minutes = get_proxy_order_ttl_minutes(db)
     detail = {
         "patientName": patient_name,
         "patientContractTag": contract_tag,
@@ -375,16 +373,17 @@ def notify_staff_proxy_order_pushed(
         "location": location,
         "orderId": order.Id,
         "amountYuan": amount_yuan,
-        "tip": "订单已推送给来访，待来访在 2 小时内完成支付",
+        "proxyOrderTtlMinutes": ttl_minutes,
+        "tip": proxy_order_ttl_staff_tip(ttl_minutes),
     }
-    _notify_staff(
+    create_message(
         db,
-        type_="ORDER",
-        title="代理预约已推送",
-        content=_message_payload(summary, detail),
+        staff_account_id,
+        "ORDER",
+        "代理预约已推送",
+        _message_payload(summary, detail),
         related_type="STAFF_PROXY_ORDER_PUSHED",
         related_id=order.Id,
-        account_ids=[staff_account_id],
     )
 
 

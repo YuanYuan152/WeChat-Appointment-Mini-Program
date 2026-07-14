@@ -560,3 +560,23 @@ def common_search(
         ]
 
     return result
+
+
+@router.get("/system-settings", summary="公开系统设置（待支付时限等）")
+def common_system_settings(db: Session = Depends(get_db)):
+    from system_setting_service import (
+        MAX_PROXY_ORDER_TTL_MINUTES,
+        MIN_PROXY_ORDER_TTL_MINUTES,
+        PROXY_ORDER_TTL_STEP_MINUTES,
+        format_proxy_order_ttl_duration,
+        get_proxy_order_ttl_minutes,
+    )
+
+    minutes = get_proxy_order_ttl_minutes(db)
+    return {
+        "proxyOrderTtlMinutes": minutes,
+        "proxyOrderTtlLabel": format_proxy_order_ttl_duration(minutes),
+        "proxyOrderTtlMinMinutes": MIN_PROXY_ORDER_TTL_MINUTES,
+        "proxyOrderTtlMaxMinutes": MAX_PROXY_ORDER_TTL_MINUTES,
+        "proxyOrderTtlStepMinutes": PROXY_ORDER_TTL_STEP_MINUTES,
+    }

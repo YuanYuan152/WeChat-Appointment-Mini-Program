@@ -27,6 +27,7 @@ class AppAccount(Base):
     Gender = Column(String(10), nullable=True)
     Birthday = Column(DateTime, nullable=True)
     EmergencyContact = Column(Unicode(100), nullable=True)
+    EmergencyRelation = Column(Unicode(50), nullable=True)
     EmergencyPhone = Column(String(20), nullable=True)
     IntakeAgreementSignedAt = Column(DateTime, nullable=True)
     IntakeIsAdult = Column(Boolean, nullable=True)
@@ -597,5 +598,20 @@ class AppCounselorPatientPricing(Base):
     RevenueShareCents = Column(Integer, nullable=True)
     RevenueSharePercent = Column(Integer, nullable=True)
     CharityNegotiatedAt = Column(DateTime, nullable=True)
+    CreatedAt = Column(DateTime, default=func.now(), nullable=False)
+    UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
+
+
+class AppSystemSetting(Base):
+    """系统级配置项（键值存储）。"""
+    __tablename__ = "AppSystemSetting"
+    __table_args__ = (
+        UniqueConstraint("SettingKey", name="UQ_AppSystemSetting_Key"),
+    )
+
+    Id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    SettingKey = Column(String(100), nullable=False, index=True)
+    SettingValue = Column(String(500), nullable=False)
+    UpdatedByAccountId = Column(Integer, nullable=True)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
     UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())

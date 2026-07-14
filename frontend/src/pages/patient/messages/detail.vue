@@ -245,6 +245,29 @@
         </view>
       </view>
 
+      <view v-else-if="relatedType === 'PATIENT_PROXY_ORDER_PENDING'" class="detail-body">
+        <view v-if="detail.tip" class="tip-box pending">
+          <text class="tip-text">{{ detail.tip }}</text>
+        </view>
+        <view v-if="detail.counselorName" class="detail-row">
+          <text class="label">咨询师</text>
+          <text class="value">{{ detail.counselorName }}</text>
+        </view>
+        <view v-if="detail.startTime" class="detail-row">
+          <text class="label">预约时间</text>
+          <text class="value">{{ detail.startTime }}<text v-if="detail.endTime"> - {{ formatEndTime(detail.endTime) }}</text></text>
+        </view>
+        <view v-if="detail.location" class="detail-row">
+          <text class="label">预约地点</text>
+          <text class="value">{{ detail.location }}</text>
+        </view>
+        <view v-if="detail.totalFeeYuan != null" class="detail-row">
+          <text class="label">订单金额</text>
+          <text class="value">¥{{ detail.totalFeeYuan }}</text>
+        </view>
+        <button v-if="proxyOrderId" class="review-btn" @click="goProxyOrderPay">去支付</button>
+      </view>
+
       <view v-else-if="isPatientMessage" class="detail-body">
         <view v-if="detail.tip" class="tip-box">
           <text class="tip-text">{{ detail.tip }}</text>
@@ -508,6 +531,11 @@ const affectedList = computed(() => {
   return Array.isArray(list) ? (list as AffectedAppointment[]) : []
 })
 
+const proxyOrderId = computed(() => {
+  const id = detail.value.orderId || message.value?.RelatedId
+  return id ? Number(id) : 0
+})
+
 const formatTime = (dt?: string) => dt ? dt.slice(0, 16).replace('T', ' ') : ''
 
 const formatEndTime = (value?: string) => {
@@ -568,6 +596,14 @@ const goCaseRecordView = () => {
       })
     },
   })
+}
+
+const goProxyOrderPay = () => {
+  if (!proxyOrderId.value) {
+    uni.showToast({ title: '缺少订单编号', icon: 'none' })
+    return
+  }
+  uni.navigateTo({ url: `/pages/patient/orders/detail?id=${proxyOrderId.value}` })
 }
 
 onLoad((options) => {

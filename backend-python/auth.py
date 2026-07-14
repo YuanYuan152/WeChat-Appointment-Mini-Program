@@ -429,6 +429,7 @@ def delete_account(
             AppAccount.Gender: None,
             AppAccount.Birthday: None,
             AppAccount.EmergencyContact: None,
+            AppAccount.EmergencyRelation: None,
             AppAccount.EmergencyPhone: None,
             AppAccount.ActiveRole: None,
             AppAccount.IsActive: False,

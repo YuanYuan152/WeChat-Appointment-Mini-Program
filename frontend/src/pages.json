@@ -496,6 +496,14 @@
                     }
                 },
                 {
+                    "path": "system-settings/index",
+                    "style": {
+                        "navigationBarTitleText": "系统设置",
+                        "navigationBarBackgroundColor": "#3D5A4E",
+                        "navigationBarTextStyle": "white"
+                    }
+                },
+                {
                     "path": "proxy-booking/index",
                     "style": {
                         "navigationBarTitleText": "代理预约",

@@ -99,9 +99,9 @@ def _order_contract_fields(
     preset = getattr(order, "ProxyAgreementIsAdult", None)
     preset_label = None
     if preset is True:
-        preset_label = "成年来访者协议"
+        preset_label = "同心理咨询协议"
     elif preset is False:
-        preset_label = "未成年来访者协议"
+        preset_label = "“扬帆计划”协议"
     return {
         "needsContractAgreement": needs,
         "contractAgreementSigned": order_has_contract_agreement(order),
@@ -172,6 +172,7 @@ class PatientProfileUpdate(BaseModel):
     gender: Optional[str] = None
     birthday: Optional[datetime] = None
     emergencyContact: Optional[str] = None
+    emergencyRelation: Optional[str] = None
     emergencyPhone: Optional[str] = None
 
 
@@ -185,6 +186,7 @@ class PatientProfileOut(BaseModel):
     gender: Optional[str] = None
     birthday: Optional[datetime] = None
     emergencyContact: Optional[str] = None
+    emergencyRelation: Optional[str] = None
     emergencyPhone: Optional[str] = None
     needsIntakeAgreement: bool = True
     isContractSigned: bool = False
@@ -248,6 +250,7 @@ def _profile_out(account: AppAccount, db: Session) -> PatientProfileOut:
         gender=account.Gender,
         birthday=account.Birthday,
         emergencyContact=account.EmergencyContact,
+        emergencyRelation=getattr(account, "EmergencyRelation", None),
         emergencyPhone=account.EmergencyPhone,
         needsIntakeAgreement=needs_intake_agreement(db, account),
         isContractSigned=bool(contract.get("isContractSigned")),
@@ -764,6 +767,7 @@ def update_patient_me(
         "gender": "Gender",
         "birthday": "Birthday",
         "emergencyContact": "EmergencyContact",
+        "emergencyRelation": "EmergencyRelation",
         "emergencyPhone": "EmergencyPhone",
     }
     for src, dst in mapping.items():

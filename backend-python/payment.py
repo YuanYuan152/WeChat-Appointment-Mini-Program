@@ -79,6 +79,9 @@ class CreateOrderRequest(BaseModel):
     center_id: Optional[str] = None
     is_adult: Optional[bool] = None
     signature_url: Optional[str] = None
+    emergency_contact: Optional[str] = None
+    emergency_relation: Optional[str] = None
+    emergency_phone: Optional[str] = None
 
 
 class ConfirmDevPaymentRequest(BaseModel):
@@ -90,12 +93,18 @@ class PayExistingOrderRequest(BaseModel):
     order_id: int
     is_adult: Optional[bool] = None
     signature_url: Optional[str] = None
+    emergency_contact: Optional[str] = None
+    emergency_relation: Optional[str] = None
+    emergency_phone: Optional[str] = None
 
 
 class AttachOrderAgreementRequest(BaseModel):
     order_id: int
     is_adult: bool
     signature_url: str
+    emergency_contact: str
+    emergency_relation: str
+    emergency_phone: str
 
 
 class CreateOrderResponse(BaseModel):
@@ -167,6 +176,9 @@ def _create_pending_order(
             order,
             is_adult=req.is_adult,
             signature_url=req.signature_url,
+            emergency_contact=req.emergency_contact,
+            emergency_relation=req.emergency_relation,
+            emergency_phone=req.emergency_phone,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -240,6 +252,9 @@ def _attach_order_agreement_if_needed(
     *,
     is_adult: Optional[bool],
     signature_url: Optional[str],
+    emergency_contact: Optional[str] = None,
+    emergency_relation: Optional[str] = None,
+    emergency_phone: Optional[str] = None,
 ) -> None:
     from order_contract_agreement import attach_contract_agreement_to_order
 
@@ -249,6 +264,9 @@ def _attach_order_agreement_if_needed(
         order,
         is_adult=is_adult,
         signature_url=signature_url,
+        emergency_contact=emergency_contact,
+        emergency_relation=emergency_relation,
+        emergency_phone=emergency_phone,
     )
 
 
@@ -266,6 +284,9 @@ def attach_order_agreement(
             order,
             is_adult=req.is_adult,
             signature_url=req.signature_url,
+            emergency_contact=req.emergency_contact,
+            emergency_relation=req.emergency_relation,
+            emergency_phone=req.emergency_phone,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -290,6 +311,9 @@ def pay_existing_order(
             order,
             is_adult=req.is_adult,
             signature_url=req.signature_url,
+            emergency_contact=req.emergency_contact,
+            emergency_relation=req.emergency_relation,
+            emergency_phone=req.emergency_phone,
         )
         from order_contract_agreement import assert_order_contract_agreement_ready
 
@@ -332,6 +356,9 @@ def simulate_pay_existing_order(
             order,
             is_adult=req.is_adult,
             signature_url=req.signature_url,
+            emergency_contact=req.emergency_contact,
+            emergency_relation=req.emergency_relation,
+            emergency_phone=req.emergency_phone,
         )
         from order_contract_agreement import assert_order_contract_agreement_ready
 

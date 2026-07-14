@@ -120,7 +120,7 @@
         </view>
 
         <view v-else-if="r.status === 'PENDING_PAYMENT'" class="record-actions">
-          <text class="pending-hint">助理已为您推送预约，请在 2 小时内完成支付</text>
+          <text class="pending-hint">助理已为您推送预约，{{ proxyOrderPatientHint }}</text>
           <button class="pay-btn" @click="goPayOrder(r)">去支付</button>
         </view>
 
@@ -269,6 +269,10 @@ import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
 import { goalScoreHint, rhythmScoreHint, PATIENT_RECORDS_AFTER_FEEDBACK } from '@/constants/consultationFeedback'
 import FeedbackStarRating from '@/components/FeedbackStarRating.vue'
+import { fetchSystemSettings, formatProxyOrderTtlHint } from '@/utils/systemSettings'
+
+const proxyOrderTtlMinutes = ref(120)
+const proxyOrderPatientHint = computed(() => formatProxyOrderTtlHint(proxyOrderTtlMinutes.value))
 
 
 
@@ -684,7 +688,11 @@ const confirmCancel = async () => {
 
 
 
-onMounted(refresh)
+onMounted(async () => {
+  const data = await fetchSystemSettings()
+  proxyOrderTtlMinutes.value = data.proxyOrderTtlMinutes
+  refresh()
+})
 
 defineExpose({ refresh })
 
