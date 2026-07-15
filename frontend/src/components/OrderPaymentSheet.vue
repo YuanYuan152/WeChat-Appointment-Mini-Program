@@ -1,6 +1,7 @@
 <template>
-  <view v-if="visible" class="sheet-overlay" @touchmove.stop.prevent @tap="onClose">
-    <view class="sheet-card" @tap.stop>
+  <view v-if="visible" class="sheet-root">
+    <view class="sheet-overlay" @touchmove.stop.prevent @tap="onClose">
+      <view class="sheet-card" @tap.stop>
       <view class="sheet-header">
         <text class="sheet-title">{{ sheetTitle }}</text>
         <text class="sheet-close" @tap="onClose">×</text>
@@ -31,8 +32,6 @@
             class="agreement-body-scroll"
             scroll-y
             :show-scrollbar="false"
-            :scroll-into-view="signatureScrollIntoView"
-            scroll-with-animation
           >
             <view class="agreement-scroll">
               <text class="agreement-text">{{ agreementText }}</text>
@@ -76,38 +75,17 @@
               </view>
             </view>
 
-            <view id="signature-anchor" class="signature-box">
+            <view class="signature-box">
               <view class="sig-header">
                 <text class="sig-title">来访者签字 <text class="sig-required">*</text></text>
                 <text class="sig-date">{{ agreementDate }}</text>
               </view>
 
-              <view v-if="!hasSignature && !showSignatureCanvas" class="sig-placeholder" @tap="startSignature">
+              <view v-if="!hasSignature" class="sig-placeholder" @tap="startSignature">
                 <text class="sig-placeholder-text">点击此处手写签名</text>
               </view>
 
-              <view v-if="showSignatureCanvas" class="sig-canvas-wrap">
-                <text class="sig-tip">请在下方框内绘制您的签名</text>
-                <view class="sig-canvas-inner" :style="{ height: sigCanvasHeightPx + 'px' }">
-                  <l-signature
-                    ref="signatureRef"
-                    penColor="#000000"
-                    :penSize="3"
-                    backgroundColor="#F9FAFB"
-                    :disableScroll="true"
-                    :beforeDelay="280"
-                    :maxHistoryLength="20"
-                    :openSmooth="false"
-                    type="2d"
-                  />
-                </view>
-                <view class="sig-actions">
-                  <button class="sig-btn outline" @tap="clearSignature">重写</button>
-                  <button class="sig-btn fill" @tap="confirmSignature">确认签名</button>
-                </view>
-              </view>
-
-              <view v-if="hasSignature && !showSignatureCanvas" class="sig-result">
+              <view v-if="hasSignature" class="sig-result">
                 <image :src="signatureData" class="sig-img" mode="aspectFit" />
                 <view class="sig-re-sign" @tap="startSignature">重新签名</view>
               </view>
@@ -187,6 +165,40 @@
         </view>
       </template>
     </view>
+    </view>
+
+    <!-- 签名浮层：不能挂在 catchtouchmove 祖先下，否则触点事件收不到、无笔画 -->
+    <view v-if="showSignatureCanvas" class="sig-pad-overlay">
+      <view class="sig-pad-mask" @tap="cancelSignaturePad" @touchmove.stop.prevent></view>
+      <view class="sig-pad-card" @tap.stop>
+        <view class="sig-pad-header">
+          <text class="sig-pad-title">来访者签字</text>
+          <text class="sig-pad-close" @tap="cancelSignaturePad">×</text>
+        </view>
+        <text class="sig-pad-tip">请在下方区域内书写签名</text>
+        <view
+          class="sig-pad-canvas"
+          :style="{ width: sigCanvasWidthPx + 'px', height: sigCanvasHeightPx + 'px' }"
+        >
+          <l-signature
+            v-if="signaturePadReady"
+            ref="signatureRef"
+            penColor="#111111"
+            :penSize="4"
+            backgroundColor="#FFFFFF"
+            :disableScroll="true"
+            :beforeDelay="400"
+            :maxHistoryLength="20"
+            :openSmooth="false"
+            type="2d"
+          />
+        </view>
+        <view class="sig-pad-actions">
+          <button class="sig-btn outline" @tap="clearSignature">重写</button>
+          <button class="sig-btn fill" @tap="confirmSignature">确认签名</button>
+        </view>
+      </view>
+    </view>
   </view>
 </template>
 
@@ -238,9 +250,10 @@ const hasSignature = ref(false)
 const showSignatureCanvas = ref(false)
 const signatureData = ref('')
 const signatureRef = ref<any>(null)
-/** 签字区高度（px），按屏宽自适应，确保父容器有明确尺寸供 lime-signature 测量 */
-const sigCanvasHeightPx = ref(180)
-const signatureScrollIntoView = ref('')
+/** 签字区画布显式宽高（px），保证 lime-signature 能正确测量 */
+const sigCanvasWidthPx = ref(320)
+const sigCanvasHeightPx = ref(220)
+const signaturePadReady = ref(false)
 const emergencyName = ref('')
 const emergencyRelation = ref('')
 const emergencyPhone = ref('')
@@ -248,12 +261,14 @@ const emergencyPhone = ref('')
 const resolveSigCanvasHeight = () => {
   try {
     const { windowWidth = 375, windowHeight = 667 } = uni.getSystemInfoSync()
-    // 宽度约一半作签名高度，并夹在合理范围内，避免过扁或占满屏
-    const byWidth = Math.round(windowWidth * 0.52)
-    const byHeight = Math.round(windowHeight * 0.28)
-    sigCanvasHeightPx.value = Math.max(160, Math.min(byWidth, byHeight, 260))
+    // 左右各留 32px 边距
+    sigCanvasWidthPx.value = Math.max(260, Math.round(windowWidth - 64))
+    const byWidth = Math.round(sigCanvasWidthPx.value * 0.55)
+    const byHeight = Math.round(windowHeight * 0.34)
+    sigCanvasHeightPx.value = Math.max(200, Math.min(byWidth, byHeight, 320))
   } catch {
-    sigCanvasHeightPx.value = 180
+    sigCanvasWidthPx.value = 320
+    sigCanvasHeightPx.value = 220
   }
 }
 
@@ -314,8 +329,8 @@ const resetAgreementState = () => {
   agreementDate.value = ''
   hasSignature.value = false
   showSignatureCanvas.value = false
+  signaturePadReady.value = false
   signatureData.value = ''
-  signatureScrollIntoView.value = ''
   emergencyName.value = ''
   emergencyRelation.value = ''
   emergencyPhone.value = ''
@@ -422,19 +437,24 @@ const onEmergencyPhoneInput = (e: { detail: { value: string } }) => {
 
 const startSignature = () => {
   resolveSigCanvasHeight()
-  showSignatureCanvas.value = true
   hasSignature.value = false
   signatureData.value = ''
-  // 展开后滚到签字区，避免画布在可视区域外导致测量不全
-  signatureScrollIntoView.value = ''
-  setTimeout(() => {
-    signatureScrollIntoView.value = 'signature-anchor'
-  }, 50)
+  signaturePadReady.value = false
+  showSignatureCanvas.value = true
+  // 浮层渲染完成后再挂载画布；配合组件 beforeDelay，避免宽高为 0
+  nextTick(() => {
+    setTimeout(() => {
+      signaturePadReady.value = true
+    }, 50)
+  })
+}
+
+const cancelSignaturePad = () => {
+  showSignatureCanvas.value = false
+  signaturePadReady.value = false
 }
 
 const clearSignature = () => {
-  hasSignature.value = false
-  signatureData.value = ''
   signatureRef.value?.clear?.()
 }
 
@@ -448,6 +468,7 @@ const confirmSignature = () => {
       if (!res.isEmpty && res.tempFilePath) {
         hasSignature.value = true
         showSignatureCanvas.value = false
+        signaturePadReady.value = false
         signatureData.value = res.tempFilePath
         uni.showToast({ title: '签名完成', icon: 'success' })
       } else {
@@ -523,11 +544,15 @@ const onConfirm = async () => {
 </script>
 
 <style scoped>
-.sheet-overlay {
+.sheet-root {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.45);
   z-index: 200;
+}
+.sheet-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
   display: flex;
   align-items: flex-end;
 }
@@ -740,37 +765,73 @@ const onConfirm = async () => {
   font-size: 28rpx;
   color: #9CA3AF;
 }
-.sig-canvas-wrap {
+.sig-result {
+  position: relative;
+  height: 200rpx;
+  background: #F9FAFB;
+  border-radius: 16rpx;
+  border: 1rpx solid #E5E7EB;
+  overflow: hidden;
+}
+.sig-pad-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.sig-pad-mask {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+}
+.sig-pad-card {
+  position: relative;
+  z-index: 1;
   width: 100%;
+  background: #fff;
+  border-radius: 32rpx 32rpx 0 0;
+  padding: 28rpx 32rpx calc(28rpx + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+}
+.sig-pad-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12rpx;
+}
+.sig-pad-title {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #1F2937;
+}
+.sig-pad-close {
+  font-size: 48rpx;
+  color: #9CA3AF;
+  line-height: 1;
+  padding: 0 8rpx;
+}
+.sig-pad-tip {
+  display: block;
+  font-size: 24rpx;
+  color: #6B7280;
+  margin-bottom: 16rpx;
+}
+.sig-pad-canvas {
+  /* width/height 由 inline 明确指定，供 canvas 2d 正确采样 */
   box-sizing: border-box;
   border: 2rpx solid #D1D5DB;
   border-radius: 16rpx;
   overflow: hidden;
-  background: #fff;
-}
-.sig-tip {
-  display: block;
-  text-align: center;
-  font-size: 22rpx;
-  color: #9CA3AF;
-  padding: 12rpx 0;
-  background: #F9FAFB;
-  border-bottom: 1rpx solid #E5E7EB;
-}
-.sig-canvas-inner {
-  width: 100%;
-  /* height 由 inline style 按屏宽动态设置，保证 canvas 有完整可绘区域 */
-  background: #F9FAFB;
-  box-sizing: border-box;
+  background: #FFFFFF;
   position: relative;
-  overflow: hidden;
+  margin: 0 auto;
 }
-.sig-actions {
+.sig-pad-actions {
   display: flex;
   gap: 16rpx;
-  padding: 16rpx;
-  background: #F9FAFB;
-  border-top: 1rpx solid #E5E7EB;
+  margin-top: 20rpx;
 }
 .sig-btn {
   flex: 1;
@@ -789,14 +850,6 @@ const onConfirm = async () => {
   color: #fff;
 }
 .sig-btn::after { border: none; }
-.sig-result {
-  position: relative;
-  height: 200rpx;
-  background: #F9FAFB;
-  border-radius: 16rpx;
-  border: 1rpx solid #E5E7EB;
-  overflow: hidden;
-}
 .sig-img {
   width: 100%;
   height: 100%;

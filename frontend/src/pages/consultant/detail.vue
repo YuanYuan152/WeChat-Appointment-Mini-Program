@@ -313,33 +313,11 @@
               <text class="sig-date">{{ currentDate }}</text>
             </view>
             
-            <view v-if="!hasSignature && !showSignatureCanvas" class="sig-placeholder" @click="startSignature">
+            <view v-if="!hasSignature" class="sig-placeholder" @click="startSignature">
               <text class="sig-placeholder-text">点击此处手写签名</text>
             </view>
             
-            <view v-if="showSignatureCanvas" class="sig-canvas-wrap">
-              <text class="sig-tip">请在下方区域内绘制您的签名</text>
-              <view class="sig-canvas-inner" :style="{ height: sigCanvasHeightPx + 'px' }">
-                <l-signature 
-                  ref="signatureRef"
-                  :penColor="'#000000'"
-                  :penSize="3"
-                  :backgroundColor="'#F9FAFB'"
-                  :disableScroll="true"
-                  :beforeDelay="280"
-                  :maxHistoryLength="20"
-                  :openSmooth="false"
-                  :type="'2d'"
-                ></l-signature>
-              </view>
-              <view class="sig-actions">
-                <button class="sig-btn outline" @click="clearSignature">重写</button>
-                <button class="sig-btn outline" @click="goBackFromSignature">取消</button>
-                <button class="sig-btn fill" @click="confirmSignature">确认签名</button>
-              </view>
-            </view>
-            
-            <view v-if="hasSignature && !showSignatureCanvas" class="sig-result">
+            <view v-if="hasSignature" class="sig-result">
               <image :src="signatureData" class="sig-img" mode="aspectFit" @error="onSignatureImageError" />
               <view class="sig-re-sign" @click="startSignature">重新签名</view>
             </view>
@@ -349,6 +327,39 @@
         <view class="modal-footer-modern">
           <text v-if="agreementSubmitHint" class="agreement-submit-hint">{{ agreementSubmitHint }}</text>
           <button class="btn-fill full-width" :class="{ 'disabled': !canConfirmAgreement }" @click="confirmAgreement">同意协议并继续</button>
+        </view>
+      </view>
+    </view>
+
+    <!-- 签名浮层：遮罩与画布分离，避免 catchtouchmove 吃掉笔画事件 -->
+    <view v-if="showSignatureCanvas" class="sig-pad-overlay">
+      <view class="sig-pad-mask" @tap="goBackFromSignature" @touchmove.stop.prevent></view>
+      <view class="sig-pad-card" @tap.stop>
+        <view class="sig-pad-header">
+          <text class="sig-pad-title">来访者签字</text>
+          <text class="sig-pad-close" @click="goBackFromSignature">×</text>
+        </view>
+        <text class="sig-pad-tip">请在下方区域内书写签名</text>
+        <view
+          class="sig-pad-canvas"
+          :style="{ width: sigCanvasWidthPx + 'px', height: sigCanvasHeightPx + 'px' }"
+        >
+          <l-signature
+            v-if="signaturePadReady"
+            ref="signatureRef"
+            :penColor="'#111111'"
+            :penSize="4"
+            :backgroundColor="'#FFFFFF'"
+            :disableScroll="true"
+            :beforeDelay="400"
+            :maxHistoryLength="20"
+            :openSmooth="false"
+            :type="'2d'"
+          />
+        </view>
+        <view class="sig-pad-actions">
+          <button class="sig-btn outline" @click="clearSignature">重写</button>
+          <button class="sig-btn fill" @click="confirmSignature">确认签名</button>
         </view>
       </view>
     </view>
@@ -539,8 +550,11 @@ const showAgreement = ref(false)
 const showPayment = ref(false)
 const showAssistantContact = ref(false)
 const showSignatureCanvas = ref(false)
-/** 签字区高度（px），按屏宽自适应 */
-const sigCanvasHeightPx = ref(180)
+/** 签字浮层布局稳定后再挂载画布，避免坐标漂移 */
+const signaturePadReady = ref(false)
+const sigCanvasWidthPx = ref(320)
+/** 签字区高度（px） */
+const sigCanvasHeightPx = ref(220)
 /** 是否仍需首次协议签署（年龄确认 + 签字） */
 const needsIntakeAgreement = ref(true)
 /** 协议类型：true=同心理咨询协议，false=扬帆计划协议（沿用 is_adult 字段） */
@@ -912,6 +926,7 @@ const resetSignatureForNewBooking = () => {
   signatureData.value = ''
   intakeIsAdult.value = null
   showSignatureCanvas.value = false
+  signaturePadReady.value = false
   emergencyName.value = ''
   emergencyRelation.value = ''
   emergencyPhone.value = ''
@@ -1150,6 +1165,7 @@ const confirmAge = (isTongxin: boolean) => {
 const hideAgreementModal = () => {
   showAgreement.value = false
   showSignatureCanvas.value = false
+  signaturePadReady.value = false
 }
 
 // 用户取消协议：关闭并重置签名，便于下次重新签
@@ -1162,16 +1178,22 @@ const closeAgreement = () => {
 const startSignature = () => {
   try {
     const { windowWidth = 375, windowHeight = 667 } = uni.getSystemInfoSync()
-    const byWidth = Math.round(windowWidth * 0.52)
-    const byHeight = Math.round(windowHeight * 0.28)
-    sigCanvasHeightPx.value = Math.max(160, Math.min(byWidth, byHeight, 260))
+    sigCanvasWidthPx.value = Math.max(260, Math.round(windowWidth - 64))
+    const byWidth = Math.round(sigCanvasWidthPx.value * 0.55)
+    const byHeight = Math.round(windowHeight * 0.34)
+    sigCanvasHeightPx.value = Math.max(200, Math.min(byWidth, byHeight, 320))
   } catch {
-    sigCanvasHeightPx.value = 180
+    sigCanvasWidthPx.value = 320
+    sigCanvasHeightPx.value = 220
   }
-  showSignatureCanvas.value = true
   hasSignature.value = false
+  signatureData.value = ''
+  signaturePadReady.value = false
+  showSignatureCanvas.value = true
   nextTick(() => {
-    console.log('lime-signature组件已初始化')
+    setTimeout(() => {
+      signaturePadReady.value = true
+    }, 50)
   })
 }
 
@@ -1180,10 +1202,10 @@ const confirmSignature = () => {
   if (signatureRef.value) {
     signatureRef.value.canvasToTempFilePath({
       success: (res: any) => {
-        console.log('签名保存成功:', res)
         if (!res.isEmpty) {
           hasSignature.value = true
           showSignatureCanvas.value = false
+          signaturePadReady.value = false
           // 仅本次预约流程使用，不写本地存储，避免下次预约仍显示旧签名
           signatureData.value = res.tempFilePath
           uni.showToast({
@@ -1219,12 +1241,7 @@ const signatureData = ref<string>('')
 
 // 清空签名时也要清空签名数据
 const clearSignature = () => {
-  hasSignature.value = false
-  signatureData.value = ''
-  // 使用lime-signature组件的clear方法
-  if (signatureRef.value) {
-    signatureRef.value.clear()
-  }
+  signatureRef.value?.clear?.()
 }
 
 // 签名图片加载错误处理
@@ -1400,7 +1417,7 @@ const confirmPayment = async () => {
 // 返回按钮点击事件
 const goBackFromSignature = () => {
   showSignatureCanvas.value = false
-  // 只关闭绘制区域，保持其他状态不变
+  signaturePadReady.value = false
 }
 
 onLoad((opts) => {
@@ -2568,40 +2585,72 @@ onMounted(() => {
   font-weight: 500;
 }
 
-.sig-canvas-wrap {
-  background: #ffffff;
-  border: 2rpx solid #D1D5DB;
-  border-radius: 24rpx;
-  overflow: hidden;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.sig-tip {
-  display: block;
-  text-align: center;
-  font-size: 24rpx;
-  color: #9CA3AF;
-  padding: 16rpx 0;
-  background: #F9FAFB;
-}
-
-.sig-canvas-inner {
-  width: 100%;
-  /* height 由 inline 动态设置，保证 canvas 有完整可绘区域 */
-  background: #F9FAFB;
-  box-sizing: border-box;
-  position: relative;
-  overflow: hidden;
-  border-top: 1px solid #E5E7EB;
-  border-bottom: 1px solid #E5E7EB;
-}
-
-.sig-actions {
+.sig-pad-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
   display: flex;
-  padding: 16rpx;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.sig-pad-mask {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.sig-pad-card {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  background: #fff;
+  border-radius: 32rpx 32rpx 0 0;
+  padding: 28rpx 32rpx calc(28rpx + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+}
+
+.sig-pad-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12rpx;
+}
+
+.sig-pad-title {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #1F2937;
+}
+
+.sig-pad-close {
+  font-size: 48rpx;
+  color: #9CA3AF;
+  line-height: 1;
+  padding: 0 8rpx;
+}
+
+.sig-pad-tip {
+  display: block;
+  font-size: 24rpx;
+  color: #6B7280;
+  margin-bottom: 16rpx;
+}
+
+.sig-pad-canvas {
+  box-sizing: border-box;
+  border: 2rpx solid #D1D5DB;
+  border-radius: 16rpx;
+  overflow: hidden;
+  background: #FFFFFF;
+  position: relative;
+  margin: 0 auto;
+}
+
+.sig-pad-actions {
+  display: flex;
   gap: 16rpx;
-  background: #F9FAFB;
+  margin-top: 20rpx;
 }
 
 .sig-btn {
@@ -2623,6 +2672,8 @@ onMounted(() => {
   background: #3D5A4E;
   color: white;
 }
+
+.sig-btn::after { border: none; }
 
 .sig-result {
   position: relative;
