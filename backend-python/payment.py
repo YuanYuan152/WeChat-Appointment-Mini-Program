@@ -7,6 +7,7 @@ POST /api/payment/wechat/callback → 微信支付异步回调（更新订单状
 """
 
 import hashlib
+import hmac
 import random
 import string
 import time
@@ -22,7 +23,7 @@ from auth import get_current_account
 from database import get_db
 from models import AppAccount, AppOrder, AppSchedule
 from config import settings
-from payment_service import complete_paid_order
+from payment_service import _assert_order_binding_current, complete_paid_order
 from pricing_service import (
     get_counselor_profile,
     resolve_display_price_cents,
@@ -31,6 +32,7 @@ from pricing_service import (
 from user_role_meta import counselor_visible_to_patient
 from intake_agreement import attach_intake_to_order
 from app_time import china_now
+from schedule_meta import parse_center_id
 
 router = APIRouter(prefix="/api/payment", tags=["Payment"])
 
@@ -72,6 +74,44 @@ def _mock_pay_params(out_trade_no: str, total_fee: int) -> dict:
     }
 
 
+def _wechat_callback_signature_valid(values: dict[str, Optional[str]]) -> bool:
+    """真实微信支付回调必须校验商户号、AppId 和 V2 签名。"""
+    if not _is_real_wechat_pay_configured():
+        return True
+    if values.get("appid") != settings.WECHAT_APPID:
+        return False
+    if values.get("mch_id") != settings.WECHAT_PAY_MCH_ID:
+        return False
+    provided = (values.get("sign") or "").strip().upper()
+    if not provided:
+        return False
+    sign_values = {
+        key: value
+        for key, value in values.items()
+        if key != "sign" and value is not None and str(value) != ""
+    }
+    sign_text = "&".join(f"{key}={sign_values[key]}" for key in sorted(sign_values))
+    sign_text += f"&key={settings.WECHAT_PAY_KEY}"
+    sign_type = (values.get("sign_type") or "MD5").upper()
+    if sign_type == "HMAC-SHA256":
+        expected = hmac.new(
+            settings.WECHAT_PAY_KEY.encode("utf-8"),
+            sign_text.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest().upper()
+    else:
+        expected = hashlib.md5(sign_text.encode("utf-8")).hexdigest().upper()
+    return hmac.compare_digest(provided, expected)
+
+
+def _wechat_callback_response(success: bool, message: str) -> Response:
+    code = "SUCCESS" if success else "FAIL"
+    return Response(
+        content=f"<xml><return_code>{code}</return_code><return_msg>{message}</return_msg></xml>",
+        media_type="application/xml",
+    )
+
+
 # ---------------------------------------------------------------------------
 # Schemas
 # ---------------------------------------------------------------------------
@@ -111,10 +151,11 @@ class CreateOrderResponse(BaseModel):
 # Routes
 # ---------------------------------------------------------------------------
 
-def _build_order_description(req: CreateOrderRequest) -> str:
+def _build_order_description(req: CreateOrderRequest, *, center_id: Optional[str] = None) -> str:
     desc = req.description or "心理咨询预约"
-    if req.center_id:
-        desc = f"{desc}|center:{req.center_id}"
+    resolved_center = center_id or req.center_id
+    if resolved_center:
+        desc = f"{desc}|center:{resolved_center}"
     return desc
 
 
@@ -130,6 +171,9 @@ def _create_pending_order(
     schedule = db.query(AppSchedule).filter(AppSchedule.Id == req.slot_id).first()
     if not schedule or schedule.Status != "AVAILABLE":
         raise HTTPException(status_code=400, detail="该时段已被预约或不存在")
+    schedule_center = parse_center_id(schedule.Note)
+    if req.center_id and schedule_center and req.center_id != schedule_center:
+        raise HTTPException(status_code=400, detail="预约中心与排期不一致，请刷新后重试")
     if pending_proxy_order_for_schedule(db, schedule.Id):
         raise HTTPException(status_code=400, detail="该时段已有待支付订单")
 
@@ -165,7 +209,7 @@ def _create_pending_order(
         OutTradeNo=out_trade_no,
         TotalFee=req.total_fee,
         Status="PENDING",
-        Description=_build_order_description(req),
+        Description=_build_order_description(req, center_id=schedule_center),
     )
     try:
         attach_intake_to_order(
@@ -237,6 +281,10 @@ def _load_payable_order(
         schedule = db.query(AppSchedule).filter(AppSchedule.Id == order.SlotId).first()
         if not schedule or schedule.Status != "AVAILABLE":
             raise HTTPException(status_code=400, detail="预约时段已不可用")
+    try:
+        _assert_order_binding_current(db, account, order)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return order
 
 
@@ -461,16 +509,33 @@ async def payment_callback(request: Request, db: Session = Depends(get_db)):
         xml_data = ET.fromstring(body.decode("utf-8"))
         result = {child.tag: child.text for child in xml_data}
     except Exception:
-        return Response(content="<xml><return_code>FAIL</return_code><return_msg>解析失败</return_msg></xml>",
-                        media_type="application/xml")
+        return _wechat_callback_response(False, "解析失败")
+
+    if not _wechat_callback_signature_valid(result):
+        return _wechat_callback_response(False, "签名校验失败")
 
     return_code = result.get("return_code")
     result_code = result.get("result_code")
     out_trade_no = result.get("out_trade_no")
 
-    if return_code == "SUCCESS" and result_code == "SUCCESS" and out_trade_no:
+    if return_code == "SUCCESS" and result_code == "SUCCESS":
+        if not out_trade_no:
+            return _wechat_callback_response(False, "缺少商户订单号")
         order = db.query(AppOrder).filter(AppOrder.OutTradeNo == out_trade_no).first()
-        if order and order.Status == "PENDING":
+        if not order:
+            return _wechat_callback_response(False, "订单不存在")
+        callback_fee = result.get("total_fee")
+        if callback_fee is None and _is_real_wechat_pay_configured():
+            return _wechat_callback_response(False, "缺少支付金额")
+        if callback_fee is not None:
+            try:
+                amount_matches = int(callback_fee) == int(order.TotalFee)
+            except (TypeError, ValueError):
+                amount_matches = False
+            if not amount_matches:
+                return _wechat_callback_response(False, "支付金额不一致")
+
+        if order.Status != "PAID":
             center_id = None
             if order.Description and "center:" in order.Description:
                 for part in order.Description.split("|"):
@@ -484,11 +549,15 @@ async def payment_callback(request: Request, db: Session = Depends(get_db)):
                 db.commit()
             except ValueError:
                 db.rollback()
+                return _wechat_callback_response(
+                    False,
+                    "订单业务校验失败，请重试或联系工作人员",
+                )
+            except Exception:
+                db.rollback()
+                return _wechat_callback_response(False, "订单处理失败，请稍后重试")
 
-    return Response(
-        content="<xml><return_code>SUCCESS</return_code><return_msg>OK</return_msg></xml>",
-        media_type="application/xml",
-    )
+    return _wechat_callback_response(True, "OK")
 
 
 # ---------------------------------------------------------------------------
@@ -497,7 +566,6 @@ async def payment_callback(request: Request, db: Session = Depends(get_db)):
 
 def _real_unified_order(out_trade_no: str, total_fee: int, description: str, openid: str) -> dict:
     import requests as req_lib
-    import hmac
 
     nonce_str = _random_nonce()
     params = {

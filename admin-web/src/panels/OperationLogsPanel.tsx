@@ -54,29 +54,37 @@ function targetTypeLabel(record: OperationRecord) {
   return record.targetType ? targetTypeLabels[record.targetType] || record.targetType : "关联业务";
 }
 
-function withContact(name?: string | null, contact?: string | null) {
+function withContact(name?: string | null, contact?: string | null, contractTag?: string | null) {
   if (!name && !contact) {
     return null;
   }
   if (!name) {
     return contact || null;
   }
-  return contact ? `${name}（${contact}）` : name;
+  const displayName = contractTag ? `${name} ${contractTag}` : name;
+  return contact ? `${displayName}（${contact}）` : displayName;
+}
+
+function patientName(record: OperationRecord) {
+  if (!record.patientName) return "";
+  return record.patientContractTag
+    ? `${record.patientName} ${record.patientContractTag}`
+    : record.patientName;
 }
 
 function targetTitle(record: OperationRecord) {
   const type = targetTypeLabel(record);
   if (record.targetType === "Consultation" && record.patientName && record.counselorName) {
-    return `预约：${record.patientName} / ${record.counselorName}`;
+    return `预约：${patientName(record)} / ${record.counselorName}`;
   }
   if (record.targetType === "CaseRecord" && record.patientName && record.counselorName) {
-    return `咨询记录：${record.patientName} / ${record.counselorName}`;
+    return `咨询记录：${patientName(record)} / ${record.counselorName}`;
   }
   if (record.targetType === "CaseRecordAmendment" && record.patientName && record.counselorName) {
-    return `记录修改：${record.patientName} / ${record.counselorName}`;
+    return `记录修改：${patientName(record)} / ${record.counselorName}`;
   }
   if (record.targetType === "RefundExemption" && record.patientName) {
-    return `豁免申请：${record.patientName}`;
+    return `豁免申请：${patientName(record)}`;
   }
   if (record.targetType === "LeaveRequest" && record.counselorName) {
     return `请假申请：${record.counselorName}`;
@@ -85,16 +93,16 @@ function targetTitle(record: OperationRecord) {
     return `排期：${record.counselorName}`;
   }
   if (record.targetType === "ConsultationFeedback" && record.patientName) {
-    return `咨询反馈：${record.patientName}`;
+    return `咨询反馈：${patientName(record)}`;
   }
   if (record.targetName) {
     return `${type}：${record.targetName}`;
   }
   if (record.patientName && record.counselorName) {
-    return `咨询：${record.patientName} / ${record.counselorName}`;
+    return `咨询：${patientName(record)} / ${record.counselorName}`;
   }
   if (record.patientName) {
-    return `来访者：${record.patientName}`;
+    return `来访者：${patientName(record)}`;
   }
   if (record.counselorName) {
     return `咨询师：${record.counselorName}`;
@@ -104,7 +112,7 @@ function targetTitle(record: OperationRecord) {
 
 function operationObjectRows(record: OperationRecord) {
   const rows: Array<{ label: string; value: string }> = [];
-  const patient = withContact(record.patientName, record.patientContact);
+  const patient = withContact(record.patientName, record.patientContact, record.patientContractTag);
   const counselor = withContact(record.counselorName, record.counselorContact);
 
   if (patient) {
@@ -245,7 +253,7 @@ export function OperationLogsPanel({
               onChange={(event) => setFilters((prev) => ({ ...prev, actionType: event.target.value }))}
             >
               <option value="">全部操作</option>
-              <option value="REFUND_EXEMPTION">豁免审核</option>
+              <option value="REFUND_EXEMPTION">用户豁免审核</option>
               <option value="ORDER">订单</option>
               <option value="CONSULTATION">预约/取消预约</option>
               <option value="SCHEDULE">排期</option>

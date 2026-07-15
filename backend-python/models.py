@@ -417,6 +417,9 @@ class AppLeaveRequest(Base):
     CounselorId = Column(Integer, nullable=False)
     Reason = Column(UnicodeText, nullable=False)
     Status = Column(String(20), nullable=False, default="PENDING")
+    RejectReason = Column(UnicodeText, nullable=True)
+    ReviewedBy = Column(Integer, nullable=True)
+    ReviewedAt = Column(DateTime, nullable=True)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
     UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
 
@@ -429,6 +432,7 @@ class AppScheduleCancelLog(Base):
     ScheduleId = Column(Integer, nullable=False)
     CounselorId = Column(Integer, nullable=False)
     ConsultationId = Column(Integer, nullable=True)
+    LeaveRequestId = Column(Integer, nullable=True)
     ScreenshotUrl = Column(Unicode(500), nullable=False)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
 

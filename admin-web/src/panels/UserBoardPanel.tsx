@@ -2,10 +2,11 @@ import { memo, useState } from "react";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
 
 import { formatDateTime, formatMoneyFromCents, statusLabel } from "@/lib/format";
-import type { PagedResult, UserBoardDetail, UserBoardSummary } from "@/types/api";
+import type { PagedResult, ProxyPersonOption, UserBoardDetail, UserBoardSummary } from "@/types/api";
 
 import { DetailDrawer } from "@/components/boards/DetailDrawer";
 import {
+  Badge,
   CollapsibleSection,
   DetailList,
   EmptyState,
@@ -19,6 +20,7 @@ import {
 } from "@/components/ui";
 import type { UserBoardFilters } from "@/types/app";
 import { roleText } from "@/lib/display";
+import { patientContractTag } from "@/lib/patientContract";
 
 export interface UserProxyBookingTarget {
   patientId: number;
@@ -27,6 +29,9 @@ export interface UserProxyBookingTarget {
   counselorId?: number | null;
   counselorName?: string | null;
   counselorMobile?: string | null;
+  isContractSigned?: boolean;
+  boundCounselorId?: number | null;
+  boundCounselorName?: string | null;
 }
 
 export function UserBoardPanel({
@@ -43,6 +48,8 @@ export function UserBoardPanel({
   onOpen,
   onCloseDetail,
   onProxyBooking,
+  onSearchCounselors,
+  onBindCounselor,
 }: {
   users?: PagedResult<UserBoardSummary>;
   listLoading: boolean;
@@ -57,6 +64,8 @@ export function UserBoardPanel({
   onOpen: (accountId: number) => void;
   onCloseDetail: () => void;
   onProxyBooking?: (target: UserProxyBookingTarget) => void;
+  onSearchCounselors?: (keyword: string) => Promise<ProxyPersonOption[]>;
+  onBindCounselor?: (patientId: number, counselorId: number | null) => Promise<void>;
 }) {
   return (
     <>
@@ -76,7 +85,12 @@ export function UserBoardPanel({
           {detailLoading && !selected ? (
             <div className="py-10 text-sm text-[var(--lxxl-muted)]">正在加载详情...</div>
           ) : selected ? (
-            <UserDetailPanel detail={selected} onProxyBooking={onProxyBooking} />
+            <UserDetailPanel
+              detail={selected}
+              onBindCounselor={onBindCounselor}
+              onProxyBooking={onProxyBooking}
+              onSearchCounselors={onSearchCounselors}
+            />
           ) : null}
         </DetailDrawer>
       )}
@@ -172,6 +186,9 @@ const UserBoardListSection = memo(function UserBoardListSection({
                     <td className="px-5 py-4">
                       <div className="font-medium">{user.name}</div>
                       <div className="mt-1 text-xs text-[var(--lxxl-muted)]">{roleText(user.roles)}</div>
+                      {patientContractTag(user) && (
+                        <div className="mt-1 text-xs font-medium text-[#315D4B]">{patientContractTag(user)}</div>
+                      )}
                     </td>
                     <td className="px-5 py-4">{user.mobile || "-"}</td>
                     <td className="px-5 py-4">
@@ -210,21 +227,35 @@ const UserBoardListSection = memo(function UserBoardListSection({
 function UserDetailPanel({
   detail,
   onProxyBooking,
+  onSearchCounselors,
+  onBindCounselor,
 }: {
   detail: UserBoardDetail;
   onProxyBooking?: (target: UserProxyBookingTarget) => void;
+  onSearchCounselors?: (keyword: string) => Promise<ProxyPersonOption[]>;
+  onBindCounselor?: (patientId: number, counselorId: number | null) => Promise<void>;
 }) {
-  const canProxyBooking = detail.profile.roles.includes("Patient");
+  const [bindOpen, setBindOpen] = useState(false);
+  const [bindKeyword, setBindKeyword] = useState("");
+  const [bindOptions, setBindOptions] = useState<ProxyPersonOption[]>([]);
+  const [selectedCounselorId, setSelectedCounselorId] = useState<number | null>(null);
+  const [bindLoading, setBindLoading] = useState(false);
+  const [bindSaving, setBindSaving] = useState(false);
+  const canProxyBooking = detail.profile.isVisitor === true;
+  const contractTag = patientContractTag(detail.profile);
   const completedConsultations = detail.consultations.filter((item) => item.status === "DONE");
   const cancelledConsultations = detail.consultations.filter(
     (item) => item.status === "CANCELLED" || item.status === "CANCELED",
   );
-  const proxyTarget = (item?: UserBoardDetail["consultations"][number]): UserProxyBookingTarget => ({
+  const proxyTarget = (): UserProxyBookingTarget => ({
     patientId: detail.profile.id,
     patientName: detail.profile.name,
     patientMobile: detail.profile.mobile,
-    counselorId: item?.counselorId,
-    counselorName: item?.counselorName,
+    counselorId: detail.profile.boundCounselorId,
+    counselorName: detail.profile.boundCounselorName,
+    isContractSigned: detail.profile.isContractSigned,
+    boundCounselorId: detail.profile.boundCounselorId,
+    boundCounselorName: detail.profile.boundCounselorName,
   });
   const consultationCard = (item: UserBoardDetail["consultations"][number]) => {
     const note = cleanBusinessNote(item.note);
@@ -232,7 +263,7 @@ function UserDetailPanel({
       <DetailCard
         action={
           canProxyBooking && onProxyBooking ? (
-            <TableActionButton onClick={() => onProxyBooking(proxyTarget(item))}>再约一单</TableActionButton>
+            <TableActionButton onClick={() => onProxyBooking(proxyTarget())}>再约一单</TableActionButton>
           ) : undefined
         }
         title={`${timeRangeText(item.startTime, item.endTime)} · ${statusLabel(item.status)}`}
@@ -254,15 +285,45 @@ function UserDetailPanel({
   return (
     <>
       <div className="text-sm text-[var(--lxxl-muted)]">用户详情</div>
-      <h3 className="mt-2 text-lg font-semibold">{detail.profile.name}</h3>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <h3 className="text-lg font-semibold">{detail.profile.name}</h3>
+        {contractTag && <Badge tone="green">{contractTag}</Badge>}
+      </div>
       <div className="mt-1 text-sm text-[var(--lxxl-muted)]">
         {detail.profile.mobile || "-"} · {detail.profile.gender || "性别未填"} · {roleText(detail.profile.roles)}
       </div>
+      {canProxyBooking && (
+        <div className="mt-4 rounded-xl bg-[#FAF8F4] px-4 py-3 text-sm leading-6">
+          <div className="grid grid-cols-[5rem_minmax(0,1fr)] gap-x-3">
+            <span className="text-[var(--lxxl-muted)]">是否签约</span>
+            <span className="font-medium">{detail.profile.isContractSigned ? "是" : "否"}</span>
+            <span className="text-[var(--lxxl-muted)]">绑定咨询师</span>
+            <span className="font-medium">{detail.profile.boundCounselorName || "未绑定"}</span>
+          </div>
+        </div>
+      )}
       {canProxyBooking && onProxyBooking && (
-        <div className="mt-4">
+        <div className="mt-4 flex flex-col items-start gap-3">
           <QueryButton className="w-28" onClick={() => onProxyBooking(proxyTarget())}>
             代理预约
           </QueryButton>
+          {onSearchCounselors && onBindCounselor && (
+            <QueryResetButton
+              className="w-40"
+              onClick={() => {
+                setBindKeyword("");
+                setSelectedCounselorId(detail.profile.boundCounselorId || null);
+                setBindOpen(true);
+                setBindLoading(true);
+                void onSearchCounselors("")
+                  .then(setBindOptions)
+                  .catch(() => setBindOptions([]))
+                  .finally(() => setBindLoading(false));
+              }}
+            >
+              {detail.profile.boundCounselorId ? "更换签约咨询师" : "绑定签约咨询师"}
+            </QueryResetButton>
+          )}
         </div>
       )}
       <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
@@ -351,7 +412,139 @@ function UserDetailPanel({
         title="预约咨询室记录"
         items={detail.roomBookings.map(roomBookingCard)}
       />
+      {bindOpen && onSearchCounselors && onBindCounselor && (
+        <BindCounselorModal
+          boundCounselorId={detail.profile.boundCounselorId}
+          keyword={bindKeyword}
+          loading={bindLoading}
+          options={bindOptions}
+          saving={bindSaving}
+          selectedCounselorId={selectedCounselorId}
+          setKeyword={setBindKeyword}
+          setSelectedCounselorId={setSelectedCounselorId}
+          onClose={() => setBindOpen(false)}
+          onSave={async (counselorId) => {
+            setBindSaving(true);
+            try {
+              await onBindCounselor(detail.profile.id, counselorId);
+              setBindOpen(false);
+            } catch {
+              // 页面级通知已展示接口返回的业务错误，保留弹窗便于重新选择。
+            } finally {
+              setBindSaving(false);
+            }
+          }}
+          onSearch={async () => {
+            setBindLoading(true);
+            try {
+              setBindOptions(await onSearchCounselors(bindKeyword));
+            } finally {
+              setBindLoading(false);
+            }
+          }}
+        />
+      )}
     </>
+  );
+}
+
+function BindCounselorModal({
+  boundCounselorId,
+  keyword,
+  loading,
+  options,
+  saving,
+  selectedCounselorId,
+  setKeyword,
+  setSelectedCounselorId,
+  onClose,
+  onSave,
+  onSearch,
+}: {
+  boundCounselorId?: number | null;
+  keyword: string;
+  loading: boolean;
+  options: ProxyPersonOption[];
+  saving: boolean;
+  selectedCounselorId: number | null;
+  setKeyword: (value: string) => void;
+  setSelectedCounselorId: (value: number | null) => void;
+  onClose: () => void;
+  onSave: (counselorId: number | null) => Promise<void>;
+  onSearch: () => Promise<void>;
+}) {
+  return (
+    <div className="fixed inset-0 z-[60] grid place-items-center bg-black/30 px-6 py-6">
+      <section
+        aria-label="选择签约咨询师"
+        aria-modal="true"
+        className="flex max-h-[80vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-[var(--lxxl-border)] bg-white shadow-2xl"
+        role="dialog"
+      >
+        <div className="border-b border-[var(--lxxl-border)] px-6 py-5">
+          <h3 className="text-lg font-semibold">选择签约咨询师</h3>
+          <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">
+            绑定关系变化后，系统会按照与小程序一致的规则重新判定签约状态。
+          </p>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+          <div className="flex gap-3">
+            <input
+              className={queryControlClass}
+              placeholder="搜索咨询师姓名或电话"
+              value={keyword}
+              onChange={(event) => setKeyword(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  void onSearch();
+                }
+              }}
+            />
+            <QueryButton disabled={loading} onClick={() => void onSearch()}>
+              {loading ? "搜索中" : "查询"}
+            </QueryButton>
+          </div>
+          <div className="mt-4 divide-y divide-[var(--lxxl-border)] rounded-xl border border-[var(--lxxl-border)]">
+            {loading ? (
+              <div className="px-4 py-6 text-center text-sm text-[var(--lxxl-muted)]">正在加载咨询师...</div>
+            ) : options.length === 0 ? (
+              <div className="px-4 py-6 text-center text-sm text-[var(--lxxl-muted)]">暂无咨询师</div>
+            ) : (
+              options.map((item) => (
+                <label className="flex cursor-pointer items-center gap-3 px-4 py-3" key={item.id}>
+                  <input
+                    checked={selectedCounselorId === item.id}
+                    name="bound-counselor"
+                    type="radio"
+                    onChange={() => setSelectedCounselorId(item.id)}
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-medium">{item.name}</span>
+                    <span className="mt-1 block text-xs text-[var(--lxxl-muted)]">{item.mobile || `ID ${item.id}`}</span>
+                  </span>
+                </label>
+              ))
+            )}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-3 border-t border-[var(--lxxl-border)] px-6 py-4">
+          <QueryButton
+            className="w-28"
+            disabled={saving || !selectedCounselorId}
+            onClick={() => selectedCounselorId && void onSave(selectedCounselorId)}
+          >
+            {saving ? "保存中" : "确定"}
+          </QueryButton>
+          {boundCounselorId && (
+            <QueryResetButton disabled={saving} onClick={() => void onSave(null)}>
+              解除绑定
+            </QueryResetButton>
+          )}
+          <QueryResetButton disabled={saving} onClick={onClose}>取消</QueryResetButton>
+        </div>
+      </section>
+    </div>
   );
 }
 

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { DetailDrawer } from "@/components/boards/DetailDrawer";
 import { formatDateTime, statusLabel } from "@/lib/format";
+import { formatPatientNameWithContractTag } from "@/lib/patientContract";
 import { getPageItems } from "@/lib/pagination";
 import type { FeedbackItem } from "@/types/api";
 
@@ -55,6 +56,7 @@ export function FeedbackPanel({
     ? items.filter((item) =>
         [
           item.userName,
+          item.patientContractTag,
           item.userMobile,
           item.category,
           item.content,
@@ -148,7 +150,9 @@ export function FeedbackPanel({
                   <tr key={item.id} className="border-t border-[var(--lxxl-border)] align-top">
                     <td className="px-5 py-4 text-[var(--lxxl-muted)]">{formatDateTime(item.createdAt)}</td>
                     <td className="px-5 py-4">
-                      <div className="font-medium">{item.userName || "未留姓名用户"}</div>
+                      <div className="font-medium">
+                        {formatPatientNameWithContractTag(item.userName, item.patientContractTag) || "未留姓名用户"}
+                      </div>
                       <div className="mt-1 text-xs text-[var(--lxxl-muted)]">{item.userMobile || "-"}</div>
                     </td>
                     <td className="px-5 py-4">{item.category || "其他"}</td>
@@ -181,7 +185,12 @@ export function FeedbackPanel({
           <div className="space-y-6 text-sm">
             <section className="border-b border-[var(--lxxl-border)] pb-5">
               <div className="text-xs text-[var(--lxxl-muted)]">反馈用户</div>
-              <div className="mt-2 text-lg font-semibold">{selectedFeedback.userName || "未留姓名用户"}</div>
+              <div className="mt-2 text-lg font-semibold">
+                {formatPatientNameWithContractTag(
+                  selectedFeedback.userName,
+                  selectedFeedback.patientContractTag,
+                ) || "未留姓名用户"}
+              </div>
               <div className="mt-1 text-[var(--lxxl-muted)]">{selectedFeedback.userMobile || "暂无手机号"}</div>
             </section>
 

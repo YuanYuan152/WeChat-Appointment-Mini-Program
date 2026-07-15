@@ -91,12 +91,18 @@ def notify_admins_new_exemption(
     consultation: AppConsultation,
 ) -> None:
     patient_name = _patient_display_name(db, exemption.AccountId)
+    patient = db.query(AppAccount).filter(AppAccount.Id == exemption.AccountId).first()
+    from patient_contract_service import patient_contract_extras
+
+    patient_tag = patient_contract_extras(db, patient).get("contractTag")
+    patient_label = f"{patient_name} {patient_tag}" if patient_tag else patient_name
     counselor_name = _counselor_display_name(db, consultation.CounselorId)
     amount_yuan = f"{exemption.Amount / 100:.2f}"
     title = "新的退款豁免申请待审核"
-    summary = f"{patient_name} · {counselor_name} · ¥{amount_yuan}"
+    summary = f"{patient_label} · {counselor_name} · ¥{amount_yuan}"
     detail = {
         "patientName": patient_name,
+        "patientContractTag": patient_tag,
         "counselorName": counselor_name,
         "amountYuan": amount_yuan,
         "reason": exemption.Reason,

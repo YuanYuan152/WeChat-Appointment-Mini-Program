@@ -288,6 +288,8 @@ def _user_admin_out(db: Session, account: AppAccount, *, staff_remark: str = "")
     }
     if active_role in ("Counselor", "Patient"):
         out["staffRemark"] = staff_remark
+    if active_role == "Patient":
+        out["contractTag"] = patient_contract_extras(db, account).get("contractTag")
     if access_revoked_at or _is_staff_revoked(db, account):
         out.update(_last_revoke_meta(db, account.Id, access_revoked_at))
     return out
@@ -400,6 +402,7 @@ class RefundExemptionAdminOut(BaseModel):
     accountId: int
     patientName: str
     patientMobile: Optional[str] = None
+    patientContractTag: Optional[str] = None
     counselorId: int
     counselorName: str
     amount: int
@@ -749,6 +752,7 @@ def _build_exemption_admin_out(
         accountId=row.AccountId,
         patientName=patient_name,
         patientMobile=patient.Mobile if patient else None,
+        patientContractTag=patient_contract_extras(db, patient).get("contractTag"),
         counselorId=counselor_id,
         counselorName=counselor_name,
         amount=row.Amount,
@@ -1285,6 +1289,7 @@ class AdminCaseRecordViewOut(BaseModel):
     CounselorId: int
     CounselorName: str
     PatientName: str
+    PatientContractTag: Optional[str] = None
     StartTime: Optional[datetime] = None
     EndTime: Optional[datetime] = None
     Subjective: Optional[str] = None
@@ -1325,6 +1330,7 @@ class AdminConsultationRecordOut(BaseModel):
     consultationId: int
     patientId: int
     patientName: str
+    patientContractTag: Optional[str] = None
     startTime: Optional[datetime] = None
     endTime: Optional[datetime] = None
     caseRecordId: Optional[int] = None
@@ -1464,6 +1470,7 @@ def list_counselor_consultation_records(
         a.Id: a
         for a in db.query(AppAccount).filter(AppAccount.Id.in_(patient_ids)).all()
     }
+    contract_map = batch_patient_contract_extras(db, list(patients.values()))
     consultation_ids = [c.Id for c in consultations]
     records = {
         r.ConsultationId: r
@@ -1493,6 +1500,7 @@ def list_counselor_consultation_records(
                 consultationId=c.Id,
                 patientId=c.PatientId,
                 patientName=_admin_patient_name(patients.get(c.PatientId)),
+                patientContractTag=contract_map.get(c.PatientId, {}).get("contractTag"),
                 startTime=c.StartTime,
                 endTime=c.EndTime,
                 caseRecordId=record.Id if record else None,
@@ -1534,6 +1542,7 @@ def get_admin_case_record(
         CounselorId=record.CounselorId,
         CounselorName=_admin_counselor_name(db, record.CounselorId),
         PatientName=_admin_patient_name(patient),
+        PatientContractTag=patient_contract_extras(db, patient).get("contractTag"),
         StartTime=consultation.StartTime if consultation else None,
         EndTime=consultation.EndTime if consultation else None,
         Subjective=record.Subjective,
@@ -2389,9 +2398,14 @@ def approve_leave_request_api(
     return {"message": message, "status": status}
 
 
+class LeaveRequestRejectPayload(BaseModel):
+    rejectReason: Optional[str] = Field(None, max_length=500)
+
+
 @router.post("/leave-requests/{leave_id}/reject", summary="拒绝咨询师请假")
 def reject_leave_request_api(
     leave_id: int,
+    body: Optional[LeaveRequestRejectPayload] = None,
     admin: AppAccount = Depends(require_staff_workbench),
     db: Session = Depends(get_db),
 ):
@@ -2399,7 +2413,12 @@ def reject_leave_request_api(
     if not row:
         raise HTTPException(status_code=404, detail="请假记录不存在")
     try:
-        reject_leave_request(db, row, admin.Id)
+        reject_leave_request(
+            db,
+            row,
+            admin.Id,
+            reject_reason=body.rejectReason if body else None,
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     db.commit()
@@ -2424,6 +2443,15 @@ class AdminCounselorDefaultSharePayload(BaseModel):
     revenueSharePercent: Optional[int] = Field(None, ge=0, le=100)
 
 
+class AdminCounselorBatchDefaultSharePayload(BaseModel):
+    counselorIds: List[int] = Field(..., min_length=1, max_length=200)
+    revenueSharePercent: int = Field(..., ge=0, le=100)
+    overridePatientShares: bool = Field(
+        True,
+        description="是否清除所选咨询师现有的来访个体分成；默认与单项调整一致进行覆盖",
+    )
+
+
 class AdminCounselorBasePricePayload(BaseModel):
     basePriceYuan: int = Field(..., ge=0, le=99999, description="咨询师统一基础价（元）")
     defaultRevenueShareYuan: Optional[int] = Field(None, ge=0, le=99999, description="咨询师默认分成金额（元）")
@@ -2443,6 +2471,62 @@ def list_pricing_counselors(
 
     items = list_counselor_pricing_summaries(db, keyword=keyword)
     return {"total": len(items), "items": items}
+
+
+@router.post(
+    "/pricing/counselors/default-share/batch-preview",
+    summary="预览批量调整咨询师默认分成比例",
+)
+def preview_pricing_counselor_default_share_batch(
+    body: AdminCounselorBatchDefaultSharePayload,
+    _actor: AppAccount = Depends(require_ops_or_admin),
+    db: Session = Depends(get_db),
+):
+    from pricing_service import preview_batch_counselor_default_share_percent
+
+    try:
+        return preview_batch_counselor_default_share_percent(
+            db,
+            body.counselorIds,
+            revenue_share_percent=body.revenueSharePercent,
+            override_patient_shares=body.overridePatientShares,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post(
+    "/pricing/counselors/default-share/batch",
+    summary="批量调整咨询师默认分成比例",
+)
+def update_pricing_counselor_default_share_batch(
+    body: AdminCounselorBatchDefaultSharePayload,
+    actor: AppAccount = Depends(require_ops_or_admin),
+    db: Session = Depends(get_db),
+):
+    from pricing_notify_service import notify_counselor_default_share_batch_updated
+    from pricing_service import update_batch_counselor_default_share_percent
+
+    try:
+        result = update_batch_counselor_default_share_percent(
+            db,
+            body.counselorIds,
+            revenue_share_percent=body.revenueSharePercent,
+            override_patient_shares=body.overridePatientShares,
+        )
+        notify_counselor_default_share_batch_updated(
+            db,
+            actor_id=actor.Id,
+            result=result,
+        )
+        db.commit()
+        return result
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        db.rollback()
+        raise
 
 
 @router.put("/pricing/counselors/{counselor_id}", summary="更新咨询师统一基础价")

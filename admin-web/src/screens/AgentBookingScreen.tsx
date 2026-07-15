@@ -5,6 +5,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AppRoute, useAppRoute } from "@/components/AppRoute";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
 import { getLocalDateValue } from "@/lib/date";
+import { boundCounselorFromPatient, formatPatientInline } from "@/lib/patientContract";
+import { fetchPatientContractInfo } from "@/services/boards";
 import {
   AGENT_BOOKING_CENTER_OPTIONS,
   AgentBookingPanel,
@@ -16,7 +18,6 @@ import {
   fetchProxyScheduleCalendar,
   fetchProxySlotOptions,
   pushProxyOrder,
-  searchProxyCounselors,
   searchProxyPatients,
 } from "@/services/proxyBooking";
 import type { ProxyPersonOption, ProxySlotOption } from "@/types/api";
@@ -33,6 +34,7 @@ const INITIAL_DRAFT = (): AgentBookingDraft => ({
   centerId: AGENT_BOOKING_CENTER_OPTIONS[0]?.value || "yangpu",
   slotKey: "",
   roomId: "",
+  agreementIsAdult: null,
 });
 
 export function AgentBookingScreen() {
@@ -59,11 +61,39 @@ function AgentBookingScreenContent() {
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const lastRefreshKey = useRef(refreshKey);
 
-  useEffect(() => {
-    const { patient: initialPatient, counselor: initialCounselor } = readPrefillFromLocation();
-    setPatientState(initialPatient);
-    setCounselorState(initialCounselor);
+  const applyPatient = useCallback((value?: ProxyPersonOption) => {
+    setPatientState(value);
+    setCounselorState(boundCounselorFromPatient(value));
   }, []);
+
+  const hydratePrefilledPatient = useCallback(async () => {
+    const fallback = readPrefillFromLocation();
+    if (!fallback) {
+      applyPatient(undefined);
+      return;
+    }
+    try {
+      const detail = await fetchPatientContractInfo(fallback.id);
+      const patient: ProxyPersonOption = {
+        id: detail.patientId,
+        name: detail.name,
+        mobile: detail.mobile,
+        isContractSigned: detail.isContractSigned,
+        boundCounselorId: detail.boundCounselorId,
+        boundCounselorName: detail.boundCounselorName,
+        contractTag: detail.contractTag,
+        label: detail.name,
+      };
+      patient.label = formatPatientInline(patient);
+      applyPatient(patient);
+    } catch {
+      applyPatient(fallback);
+    }
+  }, [applyPatient]);
+
+  useEffect(() => {
+    void hydratePrefilledPatient();
+  }, [hydratePrefilledPatient]);
 
   const clearCalendar = useCallback(() => {
     setData((prev) => ({ ...prev, proxyScheduleCalendar: undefined, proxySlotOptions: undefined }));
@@ -73,18 +103,11 @@ function AgentBookingScreenContent() {
 
   const setPatient = useCallback(
     (value?: ProxyPersonOption) => {
-      setPatientState(value);
+      applyPatient(value);
+      setDraft((prev) => ({ ...prev, slotKey: "", roomId: "", agreementIsAdult: null }));
       clearCalendar();
     },
-    [clearCalendar],
-  );
-
-  const setCounselor = useCallback(
-    (value?: ProxyPersonOption) => {
-      setCounselorState(value);
-      clearCalendar();
-    },
-    [clearCalendar],
+    [applyPatient, clearCalendar],
   );
 
   const loadCalendar = useCallback(
@@ -140,9 +163,7 @@ function AgentBookingScreenContent() {
   const reset = useCallback(() => {
     const nextQuery = INITIAL_QUERY();
     const nextDraft = INITIAL_DRAFT();
-    const { patient: initialPatient, counselor: initialCounselor } = readPrefillFromLocation();
-    setPatientState(initialPatient);
-    setCounselorState(initialCounselor);
+    void hydratePrefilledPatient();
     setActiveQuery(nextQuery);
     setDraftQuery(nextQuery);
     setDraft(nextDraft);
@@ -151,16 +172,14 @@ function AgentBookingScreenContent() {
     setSlotError(null);
     setHasSearched(false);
     clearNotice();
-  }, [clearNotice]);
+  }, [clearNotice, hydratePrefilledPatient]);
 
   const searchPatients = useCallback(async (keyword: string) => {
     const result = await searchProxyPatients(keyword);
-    return result.items || [];
-  }, []);
-
-  const searchCounselors = useCallback(async (keyword: string) => {
-    const result = await searchProxyCounselors(keyword);
-    return result.items || [];
+    return (result.items || []).map((item) => ({
+      ...item,
+      label: formatPatientInline(item),
+    }));
   }, []);
 
   const loadSlots = useCallback(async () => {
@@ -209,6 +228,11 @@ function AgentBookingScreenContent() {
           endTime: slot.endTime,
           roomId: roomId || undefined,
           scheduleId: slot.existingAvailableScheduleId || slot.counselorScheduleId || undefined,
+          agreementIsAdult: patient.isContractSigned
+            ? undefined
+            : draft.agreementIsAdult === null
+              ? undefined
+              : draft.agreementIsAdult,
         });
         showNotice("success", proxyOrderSuccessText(result));
         await loadCalendar(activeQuery);
@@ -221,7 +245,7 @@ function AgentBookingScreenContent() {
         return undefined;
       }
     },
-    [activeQuery, clearNotice, counselor, draft.centerId, loadCalendar, loadSlots, patient, showNotice],
+    [activeQuery, clearNotice, counselor, draft.agreementIsAdult, draft.centerId, loadCalendar, loadSlots, patient, showNotice],
   );
 
   const changePageSize = useCallback((nextPageSize: number) => {
@@ -239,7 +263,6 @@ function AgentBookingScreenContent() {
       pageSize={pageSize}
       patient={patient}
       query={draftQuery}
-      setCounselor={setCounselor}
       setDraft={setDraft}
       setPatient={setPatient}
       setQuery={setDraftQuery}
@@ -253,34 +276,31 @@ function AgentBookingScreenContent() {
       onPushOrder={submitProxyOrder}
       onReset={reset}
       onSearch={search}
-      onSearchCounselors={searchCounselors}
       onSearchPatients={searchPatients}
     />
   );
 }
 
-function readPrefillFromLocation() {
+function readPrefillFromLocation(): ProxyPersonOption | undefined {
   if (typeof window === "undefined") {
-    return {};
+    return undefined;
   }
   const params = new URLSearchParams(window.location.search);
-  return {
-    patient: readPerson(params, "patient"),
-    counselor: readPerson(params, "counselor"),
-  };
-}
-
-function readPerson(params: URLSearchParams, prefix: "patient" | "counselor"): ProxyPersonOption | undefined {
-  const id = Number(params.get(`${prefix}Id`));
+  const id = Number(params.get("patientId"));
   if (!Number.isFinite(id) || id <= 0) {
     return undefined;
   }
-  const name = params.get(`${prefix}Name`) || (prefix === "patient" ? `来访#${id}` : `咨询师#${id}`);
-  const mobile = params.get(`${prefix}Mobile`) || undefined;
+  const name = params.get("patientName") || `来访#${id}`;
+  const mobile = params.get("patientMobile") || undefined;
+  const boundCounselorId = Number(params.get("boundCounselorId"));
+  const boundCounselorName = params.get("boundCounselorName") || undefined;
   return {
     id,
     name,
     mobile,
+    isContractSigned: params.get("isContractSigned") === "1",
+    boundCounselorId: Number.isFinite(boundCounselorId) && boundCounselorId > 0 ? boundCounselorId : undefined,
+    boundCounselorName,
     label: mobile ? `${name} · ${mobile}` : `${name} · ID ${id}`,
   };
 }

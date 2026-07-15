@@ -11,7 +11,10 @@ import {
   queryControlClass,
 } from "@/components/ui";
 import { formatMoneyFromCents } from "@/lib/format";
+import { formatPatientNameWithContractTag, patientContractTag } from "@/lib/patientContract";
 import type {
+  PricingBatchDefaultSharePayload,
+  PricingBatchDefaultShareResult,
   PricingCounselorListResponse,
   PricingCounselorSummary,
   PricingCounselorUpdatePayload,
@@ -41,6 +44,8 @@ export function PricingPanel({
   onPageSizeChange,
   onSaveCounselor,
   onSavePatient,
+  onPreviewBatchShare,
+  onApplyBatchShare,
 }: {
   counselors?: PricingCounselorListResponse;
   patients?: PricingPatientListResponse;
@@ -62,10 +67,23 @@ export function PricingPanel({
   onPageSizeChange: (pageSize: number) => void;
   onSaveCounselor: (counselor: PricingCounselorSummary, payload: PricingCounselorUpdatePayload) => Promise<void>;
   onSavePatient: (patient: PricingPatientRow, payload: PricingPatientUpdatePayload) => Promise<void>;
+  onPreviewBatchShare: (payload: PricingBatchDefaultSharePayload) => Promise<PricingBatchDefaultShareResult>;
+  onApplyBatchShare: (payload: PricingBatchDefaultSharePayload) => Promise<PricingBatchDefaultShareResult>;
 }) {
   const [editingCounselor, setEditingCounselor] = useState<PricingCounselorSummary | null>(null);
   const [editingPatient, setEditingPatient] = useState<PricingPatientRow | null>(null);
+  const [selectedCounselorIds, setSelectedCounselorIds] = useState<number[]>([]);
+  const [batchShareOpen, setBatchShareOpen] = useState(false);
   const selectedCounselor = counselors?.items.find((item) => item.counselorId === selectedCounselorId);
+  const visibleCounselorIds = useMemo(
+    () => counselors?.items.map((item) => item.counselorId) || [],
+    [counselors?.items],
+  );
+  const allVisibleSelected = visibleCounselorIds.length > 0 && visibleCounselorIds.every((id) => selectedCounselorIds.includes(id));
+
+  useEffect(() => {
+    setSelectedCounselorIds((current) => current.filter((id) => visibleCounselorIds.includes(id)));
+  }, [visibleCounselorIds]);
 
   return (
     <div className="space-y-5">
@@ -98,6 +116,13 @@ export function PricingPanel({
           <div className="mt-4 flex flex-wrap gap-3">
             <QueryButton type="submit" />
             <QueryResetButton onClick={onResetCounselors} />
+            <QueryButton
+              disabled={selectedCounselorIds.length === 0}
+              type="button"
+              onClick={() => setBatchShareOpen(true)}
+            >
+              批量调整分成（{selectedCounselorIds.length}）
+            </QueryButton>
           </div>
         </form>
 
@@ -113,6 +138,16 @@ export function PricingPanel({
             <table className="w-full border-collapse text-sm">
               <thead className="bg-[#FAF8F4] text-left text-[var(--lxxl-muted)]">
                 <tr>
+                  <th className="w-12 px-5 py-3 font-medium">
+                    <input
+                      aria-label="选择全部咨询师"
+                      checked={allVisibleSelected}
+                      type="checkbox"
+                      onChange={(event) => {
+                        setSelectedCounselorIds(event.target.checked ? visibleCounselorIds : []);
+                      }}
+                    />
+                  </th>
                   <th className="px-5 py-3 font-medium">咨询师</th>
                   <th className="px-5 py-3 font-medium">类型</th>
                   <th className="px-5 py-3 font-medium">基础价</th>
@@ -130,6 +165,20 @@ export function PricingPanel({
                       key={item.counselorId}
                       className={`border-t border-[var(--lxxl-border)] ${active ? "bg-[#F5F8F6]" : ""}`}
                     >
+                      <td className="px-5 py-4">
+                        <input
+                          aria-label={`选择${item.counselorName}`}
+                          checked={selectedCounselorIds.includes(item.counselorId)}
+                          type="checkbox"
+                          onChange={(event) => {
+                            setSelectedCounselorIds((current) =>
+                              event.target.checked
+                                ? Array.from(new Set([...current, item.counselorId]))
+                                : current.filter((id) => id !== item.counselorId),
+                            );
+                          }}
+                        />
+                      </td>
                       <td className="px-5 py-4">
                         <div className="font-medium">{item.counselorName}</div>
                         <div className="mt-1 text-xs text-[var(--lxxl-muted)]">编号 {item.counselorId}</div>
@@ -232,6 +281,19 @@ export function PricingPanel({
                       <td className="px-5 py-4">
                         <div className="font-medium">{item.patientName}</div>
                         <div className="mt-1 text-xs text-[var(--lxxl-muted)]">{item.patientMobile || `编号 ${item.patientId}`}</div>
+                        {patientContractTag({
+                          isContractSigned: item.isContractSigned,
+                          boundCounselorName: item.boundCounselorName,
+                          contractTag: item.contractTag,
+                        }) && (
+                          <div className="mt-1 text-xs font-medium text-[#315D4B]">
+                            {patientContractTag({
+                              isContractSigned: item.isContractSigned,
+                              boundCounselorName: item.boundCounselorName,
+                              contractTag: item.contractTag,
+                            })}
+                          </div>
+                        )}
                       </td>
                       <td className="px-5 py-4">
                         <div>平台完成 {item.totalCompletedConsultations}</div>
@@ -305,8 +367,181 @@ export function PricingPanel({
           }}
         />
       )}
+      {batchShareOpen && (
+        <BatchShareModal
+          counselors={counselors?.items || []}
+          counselorIds={selectedCounselorIds}
+          onApply={async (payload) => {
+            const result = await onApplyBatchShare(payload);
+            setBatchShareOpen(false);
+            setSelectedCounselorIds([]);
+            return result;
+          }}
+          onClose={() => setBatchShareOpen(false)}
+          onPreview={onPreviewBatchShare}
+        />
+      )}
     </div>
   );
+}
+
+function BatchShareModal({
+  counselors,
+  counselorIds,
+  onClose,
+  onPreview,
+  onApply,
+}: {
+  counselors: PricingCounselorSummary[];
+  counselorIds: number[];
+  onClose: () => void;
+  onPreview: (payload: PricingBatchDefaultSharePayload) => Promise<PricingBatchDefaultShareResult>;
+  onApply: (payload: PricingBatchDefaultSharePayload) => Promise<PricingBatchDefaultShareResult>;
+}) {
+  const [revenueSharePercent, setRevenueSharePercent] = useState(50);
+  const [overridePatientShares, setOverridePatientShares] = useState(true);
+  const [preview, setPreview] = useState<PricingBatchDefaultShareResult>();
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const payload = useMemo<PricingBatchDefaultSharePayload>(
+    () => ({ counselorIds, revenueSharePercent, overridePatientShares }),
+    [counselorIds, overridePatientShares, revenueSharePercent],
+  );
+
+  useEffect(() => {
+    setPreview(undefined);
+  }, [overridePatientShares, revenueSharePercent]);
+
+  async function loadPreview() {
+    if (revenueSharePercent < 0 || revenueSharePercent > 100) {
+      setError("分成比例需要在 0 到 100 之间");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      setPreview(await onPreview(payload));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "批量调整预览失败");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function apply() {
+    if (!preview || saving) {
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      await onApply(payload);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "批量调整失败");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Drawer title="批量调整咨询师分成比例" onClose={onClose}>
+      <div className="space-y-5 px-6 py-5">
+        <div className="rounded-xl bg-[#FAF8F4] px-4 py-3 text-sm">
+          已选择 <span className="font-semibold">{counselorIds.length}</span> 名咨询师
+        </div>
+        <QueryField label="新的默认分成比例" required>
+          <div className="flex items-center gap-3">
+            <input
+              className={queryControlClass}
+              max={100}
+              min={0}
+              type="number"
+              value={revenueSharePercent}
+              onChange={(event) => setRevenueSharePercent(Number(event.target.value || 0))}
+            />
+            <span className="text-sm text-[var(--lxxl-muted)]">%</span>
+          </div>
+        </QueryField>
+        <label className="flex items-start gap-3 rounded-xl border border-[var(--lxxl-border)] px-4 py-3 text-sm">
+          <input
+            checked={overridePatientShares}
+            className="mt-1"
+            type="checkbox"
+            onChange={(event) => setOverridePatientShares(event.target.checked)}
+          />
+          <span>
+            <span className="block font-medium">同时覆盖来访个体分成</span>
+            <span className="mt-1 block text-xs leading-5 text-[var(--lxxl-muted)]">
+              默认按新的咨询师分成比例覆盖来访个体分成；取消勾选可保留已有个体分成。来访调价不会被清除。
+            </span>
+          </span>
+        </label>
+
+        <QueryButton disabled={loading || saving} onClick={loadPreview}>
+          {loading ? "预览中" : "预览影响"}
+        </QueryButton>
+
+        {preview && (
+          <div className="space-y-3 rounded-xl border border-[var(--lxxl-border)] p-4 text-sm">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <ReadonlyInfo label="选择咨询师" value={preview.selectedCount} />
+              <ReadonlyInfo label="实际变化" value={preview.changedCount} />
+              <ReadonlyInfo label="个体分成配置" value={preview.patientShareOverrideCount} />
+              <ReadonlyInfo label="将清除配置" value={preview.willClearPatientShareOverrideCount} />
+            </div>
+            <div className="max-h-60 overflow-y-auto rounded-lg bg-[#FAF8F4]">
+              {preview.items.map((item) => {
+                const beforePercent = resolveBatchBeforeSharePercent(item, counselors);
+                return (
+                  <div className="flex justify-between gap-3 border-b border-[var(--lxxl-border)] px-3 py-2 last:border-0" key={item.counselorId}>
+                    <span>{item.counselorName}</span>
+                    <span className="text-[var(--lxxl-muted)]">
+                      {beforePercent == null ? "系统默认" : `${beforePercent}%`} → {item.afterShare.revenueSharePercent ?? revenueSharePercent}%
+                      {item.willClearPatientShareOverrideCount > 0 ? `，清除 ${item.willClearPatientShareOverrideCount} 项个体分成` : ""}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {error && (
+          <div className="rounded-xl border border-[#E7B8B2] bg-[#FFF5F3] px-4 py-3 text-sm text-[#A13F37]">{error}</div>
+        )}
+      </div>
+      <DrawerFooter>
+        <QueryButton disabled={!preview || saving} onClick={apply}>
+          {saving ? "提交中" : "确认批量调整"}
+        </QueryButton>
+        <QueryResetButton disabled={saving} onClick={onClose}>关闭</QueryResetButton>
+      </DrawerFooter>
+    </Drawer>
+  );
+}
+
+function resolveBatchBeforeSharePercent(
+  item: PricingBatchDefaultShareResult["items"][number],
+  counselors: PricingCounselorSummary[],
+) {
+  if (item.beforeShare.revenueSharePercent != null) {
+    return item.beforeShare.revenueSharePercent;
+  }
+
+  const counselor = counselors.find((candidate) => candidate.counselorId === item.counselorId);
+  if (counselor?.defaultSharePercent != null) {
+    return counselor.defaultSharePercent;
+  }
+
+  const revenueShareCents = item.beforeShare.revenueShareCents ?? counselor?.defaultRevenueShareCents;
+  const basePriceCents = counselor?.basePriceCents;
+  if (revenueShareCents != null && basePriceCents && basePriceCents > 0) {
+    return Math.round((revenueShareCents * 100) / basePriceCents);
+  }
+
+  return null;
 }
 
 function CounselorPricingModal({
@@ -451,11 +686,19 @@ function PatientPricingModal({
   }
 
   return (
-    <Drawer title={`${patient.patientName} 个体调价`} onClose={onClose}>
+    <Drawer
+      title={`${formatPatientNameWithContractTag(patient.patientName, patient.patientContractTag || patient.contractTag)} 个体调价`}
+      onClose={onClose}
+    >
       <div className="space-y-5 px-6 py-5">
         <div className="grid grid-cols-2 gap-3 text-sm">
           <ReadonlyInfo label="咨询师" value={patient.counselorName} />
-          <ReadonlyInfo label="来访者" value={patient.patientMobile || patient.patientName} />
+          <ReadonlyInfo
+            label="来访者"
+            value={`${formatPatientNameWithContractTag(patient.patientName, patient.patientContractTag || patient.contractTag)}${
+              patient.patientMobile ? `（${patient.patientMobile}）` : ""
+            }`}
+          />
           <ReadonlyInfo label="基础价" value={`¥${patient.basePriceYuan}`} />
           <ReadonlyInfo label="系统状态" value={patient.needsNegotiation ? (patient.priceLabel || "需议价") : "无系统调价"} />
         </div>

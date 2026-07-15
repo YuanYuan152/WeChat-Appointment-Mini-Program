@@ -8,11 +8,14 @@ import { PricingPanel } from "@/panels/PricingPanel";
 import {
   fetchPricingCounselors,
   fetchPricingPatients,
+  previewPricingBatchDefaultShare,
+  updatePricingBatchDefaultShare,
   updatePricingCounselor,
   updatePricingPatient,
 } from "@/services/pricing";
 import type {
   PricingCounselorListResponse,
+  PricingBatchDefaultSharePayload,
   PricingCounselorSummary,
   PricingCounselorUpdatePayload,
   PricingPatientListResponse,
@@ -230,6 +233,23 @@ function PricingScreenContent() {
       onPageSizeChange={changePageSize}
       onSaveCounselor={saveCounselor}
       onSavePatient={savePatient}
+      onPreviewBatchShare={previewPricingBatchDefaultShare}
+      onApplyBatchShare={async (payload: PricingBatchDefaultSharePayload) => {
+        const result = await updatePricingBatchDefaultShare(payload);
+        await loadCounselors();
+        if (selectedCounselorId) {
+          await loadPatients();
+        }
+        showNotice(
+          "success",
+          `已调整 ${result.changedCount} 名咨询师的默认分成${
+            result.clearedPatientShareOverrideCount
+              ? `，清除 ${result.clearedPatientShareOverrideCount} 项个体分成`
+              : ""
+          }`,
+        );
+        return result;
+      }}
     />
   );
 }

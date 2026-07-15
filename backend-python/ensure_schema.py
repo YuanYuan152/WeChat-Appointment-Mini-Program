@@ -39,6 +39,16 @@ APP_REFUND_EXEMPTION_COLUMNS = {
     "ReviewedAt": "DATETIME NULL",
 }
 
+APP_LEAVE_REQUEST_COLUMNS = {
+    "RejectReason": "NVARCHAR(MAX) NULL",
+    "ReviewedBy": "INT NULL",
+    "ReviewedAt": "DATETIME NULL",
+}
+
+APP_SCHEDULE_CANCEL_LOG_COLUMNS = {
+    "LeaveRequestId": "INT NULL",
+}
+
 APP_CASE_RECORD_COLUMNS = {
     "PhotoUrls": "NVARCHAR(MAX) NULL",
     "RiskAssessment": "NVARCHAR(MAX) NULL",
@@ -182,6 +192,46 @@ def ensure_refund_exemption_columns():
             print(f"[OK] Added AppRefundExemption.{name}")
 
 
+def ensure_leave_request_columns():
+    inspector = inspect(engine)
+    if not inspector.has_table("AppLeaveRequest"):
+        return
+
+    existing = {column["name"] for column in inspector.get_columns("AppLeaveRequest")}
+    missing = [
+        (name, ddl) for name, ddl in APP_LEAVE_REQUEST_COLUMNS.items() if name not in existing
+    ]
+    if not missing:
+        print("[OK] AppLeaveRequest columns already complete")
+        return
+
+    with engine.begin() as conn:
+        for name, ddl in missing:
+            conn.execute(text(f"ALTER TABLE [dbo].[AppLeaveRequest] ADD [{name}] {ddl}"))
+            print(f"[OK] Added AppLeaveRequest.{name}")
+
+
+def ensure_schedule_cancel_log_columns():
+    inspector = inspect(engine)
+    if not inspector.has_table("AppScheduleCancelLog"):
+        return
+
+    existing = {column["name"] for column in inspector.get_columns("AppScheduleCancelLog")}
+    missing = [
+        (name, ddl)
+        for name, ddl in APP_SCHEDULE_CANCEL_LOG_COLUMNS.items()
+        if name not in existing
+    ]
+    if not missing:
+        print("[OK] AppScheduleCancelLog columns already complete")
+        return
+
+    with engine.begin() as conn:
+        for name, ddl in missing:
+            conn.execute(text(f"ALTER TABLE [dbo].[AppScheduleCancelLog] ADD [{name}] {ddl}"))
+            print(f"[OK] Added AppScheduleCancelLog.{name}")
+
+
 def ensure_counselor_profile_columns():
     inspector = inspect(engine)
     if not inspector.has_table("AppCounselorProfile"):
@@ -239,17 +289,23 @@ def main():
     ensure_app_order_columns()
     ensure_case_record_columns()
     ensure_refund_exemption_columns()
+    ensure_leave_request_columns()
+    ensure_schedule_cancel_log_columns()
     ensure_counselor_profile_columns()
     ensure_counselor_patient_pricing_columns()
     from database import SessionLocal
     from charity_milestone_service import backfill_charity_negotiation_state
+    from patient_contract_service import backfill_patient_contract_signed_from_orders
 
     db = SessionLocal()
     try:
         n = backfill_charity_negotiation_state(db)
+        signed_n = backfill_patient_contract_signed_from_orders(db)
         db.commit()
         if n:
             print(f"[OK] Backfilled charity negotiation timestamps: {n}")
+        if signed_n:
+            print(f"[OK] Backfilled patient contract signed states: {signed_n}")
     finally:
         db.close()
     print_summary()

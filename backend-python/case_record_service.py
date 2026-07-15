@@ -435,6 +435,13 @@ def notify_admins_crisis_report_if_needed(
         if consultation
         else "来访者"
     )
+    patient_tag = None
+    if consultation:
+        from patient_contract_service import patient_contract_extras
+
+        patient = db.query(AppAccount).filter(AppAccount.Id == consultation.PatientId).first()
+        patient_tag = patient_contract_extras(db, patient).get("contractTag")
+    patient_label = f"{patient_name} {patient_tag}" if patient_tag else patient_name
     patient_phone = (
         _account_phone(db, consultation.PatientId) if consultation else ""
     )
@@ -447,7 +454,7 @@ def notify_admins_crisis_report_if_needed(
     level_label = crisis_level_text_only(new_choice)
     title = "个案风险需上报"
     summary = (
-        f"{counselor_name} · {patient_name} · {level_label}"
+        f"{counselor_name} · {patient_label} · {level_label}"
         f" · 来访 {patient_phone or '未填写'}"
         f" · 咨询师 {counselor_phone or '未填写'}"
     )
@@ -457,6 +464,7 @@ def notify_admins_crisis_report_if_needed(
         "counselorName": counselor_name,
         "counselorPhone": counselor_phone or None,
         "patientName": patient_name,
+        "patientContractTag": patient_tag,
         "patientPhone": patient_phone or None,
         "caseRecordId": record.Id,
         "consultationId": record.ConsultationId,

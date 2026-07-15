@@ -7,22 +7,25 @@ import time
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from models import (
     AppAccount,
+    AppConsultation,
     AppCounselorProfile,
     AppOrder,
     AppRoleBinding,
     AppSchedule,
 )
-from pricing_service import get_counselor_profile, resolve_display_price_cents
+from pricing_service import resolve_display_price_cents
 from schedule_meta import (
     CENTER_NAMES,
     center_display_name,
     get_consultation_rooms,
     is_video_center,
     parse_center_id,
+    parse_pref_room_id,
     parse_room_id,
     release_assigned_room,
     schedule_note,
@@ -42,10 +45,105 @@ from app_time import china_now
 
 PROXY_ORDER_TTL_HOURS = 2
 DISPLAY_PENDING_PAYMENT = "PENDING_PAYMENT"
+PROXY_SCHEDULE_NEW = "schedule:new"
+PROXY_SCHEDULE_EXISTING = "schedule:existing"
 
 
 def _now() -> datetime:
     return china_now()
+
+
+def _proxy_order_created_schedule(order: AppOrder) -> bool:
+    description = order.Description or ""
+    # 旧订单没有排期来源标记，安全起见按复用排期处理，避免误删咨询师原排期。
+    return PROXY_SCHEDULE_NEW in description
+
+
+def _cancel_pending_proxy_order(db: Session, order: AppOrder) -> None:
+    if order.Status != "PENDING":
+        return
+    order.Status = "CANCELLED"
+    order.UpdatedAt = _now()
+    if not order.SlotId:
+        return
+    schedule = db.query(AppSchedule).filter(AppSchedule.Id == order.SlotId).first()
+    if not schedule or schedule.Status != "AVAILABLE":
+        return
+    if _proxy_order_created_schedule(order):
+        schedule.Status = "CANCELLED"
+    else:
+        schedule.Note = release_assigned_room(schedule.Note)
+    schedule.UpdatedAt = _now()
+
+
+def cancel_pending_proxy_orders_for_patient(
+    db: Session,
+    patient_id: int,
+    *,
+    keep_counselor_id: Optional[int],
+) -> int:
+    """换绑/解绑时取消与当前绑定咨询师不一致的待支付代理订单。"""
+    rows = (
+        db.query(AppOrder)
+        .filter(
+            AppOrder.AccountId == patient_id,
+            AppOrder.Status == "PENDING",
+            AppOrder.Description.like("proxy:%"),
+        )
+        .all()
+    )
+    cancelled = 0
+    for order in rows:
+        schedule = (
+            db.query(AppSchedule).filter(AppSchedule.Id == order.SlotId).first()
+            if order.SlotId
+            else None
+        )
+        if (
+            keep_counselor_id is not None
+            and schedule
+            and int(schedule.CounselorId) == int(keep_counselor_id)
+        ):
+            continue
+        _cancel_pending_proxy_order(db, order)
+        cancelled += 1
+    if cancelled:
+        db.flush()
+    return cancelled
+
+
+def _acquire_proxy_booking_locks(
+    db: Session,
+    *,
+    counselor_id: int,
+    center_id: str,
+    start_time: datetime,
+    room_id: Optional[str],
+) -> None:
+    """SQL Server 事务级互斥，防止同一咨询师/咨询室并发双占。"""
+    bind = db.get_bind()
+    if not bind or bind.dialect.name != "mssql":
+        return
+    slot_key = start_time.strftime("%Y%m%d%H%M%S")
+    resources = [
+        f"booking:center:{center_id}:{slot_key}",
+        f"proxy:counselor:{int(counselor_id)}:{slot_key}",
+    ]
+    if room_id:
+        resources.append(f"proxy:room:{center_id}:{room_id}:{slot_key}")
+    for resource in sorted(resources):
+        result = db.execute(
+            text(
+                "SET NOCOUNT ON; DECLARE @result int; "
+                "EXEC @result = sys.sp_getapplock "
+                "@Resource=:resource, @LockMode='Exclusive', "
+                "@LockOwner='Transaction', @LockTimeout=10000; "
+                "SELECT @result"
+            ),
+            {"resource": resource},
+        ).scalar()
+        if result is None or int(result) < 0:
+            raise ValueError("该时段正在被其他预约占用，请稍后重试")
 
 
 def expire_pending_proxy_orders(db: Session) -> int:
@@ -58,20 +156,18 @@ def expire_pending_proxy_orders(db: Session) -> int:
             AppOrder.ExpiresAt.isnot(None),
             AppOrder.ExpiresAt < now,
         )
+        .order_by(AppOrder.AccountId.asc(), AppOrder.Id.asc())
         .all()
     )
     expired = 0
+    from patient_contract_service import acquire_patient_contract_lock
+
     for order in rows:
-        order.Status = "CANCELLED"
-        order.UpdatedAt = now
-        if order.SlotId:
-            schedule = db.query(AppSchedule).filter(AppSchedule.Id == order.SlotId).first()
-            if schedule and schedule.Status == "AVAILABLE":
-                if (order.Description or "").startswith("proxy:"):
-                    schedule.Status = "CANCELLED"
-                else:
-                    schedule.Note = release_assigned_room(schedule.Note)
-                schedule.UpdatedAt = now
+        acquire_patient_contract_lock(db, order.AccountId)
+        db.refresh(order)
+        if order.Status != "PENDING" or not order.ExpiresAt or order.ExpiresAt >= now:
+            continue
+        _cancel_pending_proxy_order(db, order)
         expired += 1
     if expired:
         db.flush()
@@ -90,6 +186,7 @@ def pending_proxy_orders_for_schedules(
         .filter(
             AppOrder.SlotId.in_(schedule_ids),
             AppOrder.Status == "PENDING",
+            AppOrder.Description.like("proxy:%"),
             AppOrder.ExpiresAt.isnot(None),
             AppOrder.ExpiresAt >= now,
         )
@@ -107,10 +204,43 @@ def pending_proxy_order_for_schedule(db: Session, schedule_id: int) -> Optional[
     return pending_proxy_orders_for_schedules(db, [schedule_id]).get(schedule_id)
 
 
+def _proxy_patient_ids(db: Session) -> set[int]:
+    """与小程序来访管理的口径一致：Patient 角色与历史咨询来访都可搜索，
+    但工作人员账号不作为来访出现。
+    """
+    from staff_roles import staff_workbench_account_ids
+
+    staff_ids = set(staff_workbench_account_ids(db))
+    staff_ids.update(
+        int(value)
+        for (value,) in db.query(AppRoleBinding.AccountId)
+        .filter(AppRoleBinding.RoleType == "Counselor")
+        .all()
+    )
+    role_ids = {
+        int(value)
+        for (value,) in db.query(AppRoleBinding.AccountId)
+        .filter(AppRoleBinding.RoleType == "Patient")
+        .all()
+    }
+    consultation_ids = {
+        int(value)
+        for (value,) in db.query(AppConsultation.PatientId).distinct().all()
+        if value
+    }
+    return (role_ids | consultation_ids) - staff_ids
+
+
 def search_proxy_patients(db: Session, keyword: Optional[str] = None, limit: int = 30) -> List[Dict[str, Any]]:
     from patient_contract_service import batch_patient_contract_extras
 
-    q = db.query(AppAccount).filter(AppAccount.IsActive == True)
+    patient_ids = _proxy_patient_ids(db)
+    if not patient_ids:
+        return []
+    q = db.query(AppAccount).filter(
+        AppAccount.IsActive == True,
+        AppAccount.Id.in_(patient_ids),
+    )
     if keyword:
         kw = keyword.strip()
         if kw:
@@ -119,11 +249,7 @@ def search_proxy_patients(db: Session, keyword: Optional[str] = None, limit: int
                 | (AppAccount.RealName.like(f"%{kw}%"))
                 | (AppAccount.Mobile.like(f"%{kw}%"))
             )
-    accounts = q.order_by(AppAccount.Id.desc()).limit(limit * 3).all()
-    patient_ids = {
-        b.AccountId
-        for b in db.query(AppRoleBinding).filter(AppRoleBinding.RoleType == "Patient").all()
-    }
+    accounts = q.order_by(AppAccount.Id.desc()).limit(limit).all()
     contract_map = batch_patient_contract_extras(db, accounts)
     result: List[Dict[str, Any]] = []
     for acc in accounts:
@@ -158,15 +284,18 @@ def search_counselor_proxy_patients(
     keyword: Optional[str] = None,
     limit: int = 30,
 ) -> List[Dict[str, Any]]:
-    """咨询师代理预约：按关键词搜索来访，并标注是否已绑定且已签约（可推送）。"""
+    """咨询师代理预约：仅搜索已绑定当前咨询师且已签约的来访。"""
     from patient_contract_service import batch_patient_contract_extras
-    from models import AppRoleBinding
-
-    patient_ids = {
-        b.AccountId
-        for b in db.query(AppRoleBinding).filter(AppRoleBinding.RoleType == "Patient").all()
-    }
-    q = db.query(AppAccount).filter(AppAccount.IsActive == True)
+    patient_ids = _proxy_patient_ids(db)
+    if not patient_ids:
+        return []
+    q = db.query(AppAccount).filter(
+        AppAccount.IsActive == True,
+        AppAccount.Id.in_(patient_ids),
+        AppAccount.BoundCounselorId == counselor_id,
+        # SQL Server 的 BIT 列不能使用 ``IS 1``，需使用等值比较。
+        AppAccount.IsContractSigned == True,
+    )
     if keyword:
         kw = keyword.strip()
         if kw:
@@ -175,37 +304,27 @@ def search_counselor_proxy_patients(
                 | (AppAccount.RealName.like(f"%{kw}%"))
                 | (AppAccount.Mobile.like(f"%{kw}%"))
             )
-    accounts = q.order_by(AppAccount.Id.desc()).limit(limit * 3).all()
+    accounts = q.order_by(AppAccount.Id.desc()).limit(limit).all()
     contract_map = batch_patient_contract_extras(db, accounts)
     result: List[Dict[str, Any]] = []
     for acc in accounts:
-        if acc.Id not in patient_ids:
-            continue
         contract = contract_map.get(acc.Id, {})
         bound_id = contract.get("boundCounselorId")
-        is_bound = bool(bound_id and int(bound_id) == int(counselor_id))
-        is_signed = bool(contract.get("isContractSigned"))
-        can_proxy_push = is_bound and is_signed
         name = acc.RealName or acc.Nickname or f"来访#{acc.Id}"
         tag = contract.get("contractTag")
         label = f"{name} · {acc.Mobile or acc.Id}"
         if tag:
             label = f"{name} {tag} · {acc.Mobile or acc.Id}"
-        elif not can_proxy_push:
-            if not is_bound:
-                label = f"{name} · 未绑定您 · {acc.Mobile or acc.Id}"
-            elif not is_signed:
-                label = f"{name} · 未签约 · {acc.Mobile or acc.Id}"
         result.append(
             {
                 "id": acc.Id,
                 "name": name,
                 "mobile": acc.Mobile,
                 "contractTag": tag,
-                "isContractSigned": is_signed,
+                "isContractSigned": True,
                 "boundCounselorId": bound_id,
-                "isBoundToCounselor": is_bound,
-                "canProxyPush": can_proxy_push,
+                "isBoundToCounselor": True,
+                "canProxyPush": True,
                 "label": label,
             }
         )
@@ -256,14 +375,19 @@ def search_proxy_counselors(db: Session, keyword: Optional[str] = None, limit: i
         .all()
     }
     accounts = {
-        a.Id: a for a in db.query(AppAccount).filter(AppAccount.Id.in_(counselor_ids)).all()
+        a.Id: a
+        for a in db.query(AppAccount)
+        .filter(AppAccount.Id.in_(counselor_ids), AppAccount.IsActive == True)
+        .all()
     }
     kw = (keyword or "").strip().lower()
     result: List[Dict[str, Any]] = []
     for cid in counselor_ids:
         prof = profiles.get(cid)
         acc = accounts.get(cid)
-        name = (prof.Name if prof else None) or (acc.Nickname if acc else None) or f"咨询师#{cid}"
+        if not prof or not acc:
+            continue
+        name = prof.Name or acc.RealName or acc.Nickname or f"咨询师#{cid}"
         if kw and kw not in name.lower() and kw not in str(cid) and kw not in (acc.Mobile or ""):
             continue
         result.append(
@@ -411,6 +535,9 @@ def push_proxy_order(
     agreement_is_adult: Optional[bool] = None,
 ) -> Dict[str, Any]:
     expire_pending_proxy_orders(db)
+    from patient_contract_service import acquire_patient_contract_lock
+
+    acquire_patient_contract_lock(db, patient_id)
 
     patient = db.query(AppAccount).filter(AppAccount.Id == patient_id, AppAccount.IsActive == True).first()
     if not patient:
@@ -420,8 +547,29 @@ def push_proxy_order(
         raise ValueError("该来访尚未绑定签约咨询师，请先在来访者详情中绑定")
     if int(counselor_id) != int(bound_id):
         raise ValueError("只能为来访已绑定的咨询师推送代理预约订单")
-    if not get_counselor_profile(db, counselor_id):
-        raise ValueError("咨询师不存在")
+    counselor_account = (
+        db.query(AppAccount)
+        .filter(AppAccount.Id == counselor_id, AppAccount.IsActive == True)
+        .first()
+    )
+    counselor_role = (
+        db.query(AppRoleBinding.Id)
+        .filter(
+            AppRoleBinding.AccountId == counselor_id,
+            AppRoleBinding.RoleType == "Counselor",
+        )
+        .first()
+    )
+    active_profile = (
+        db.query(AppCounselorProfile.Id)
+        .filter(
+            AppCounselorProfile.AccountId == counselor_id,
+            AppCounselorProfile.IsActive == True,
+        )
+        .first()
+    )
+    if not counselor_account or not counselor_role or not active_profile:
+        raise ValueError("咨询师不存在或已停用")
 
     from order_contract_agreement import is_signed_with_counselor
 
@@ -448,6 +596,14 @@ def push_proxy_order(
         raise ValueError("请使用标准时间槽（50分钟/节）")
     validate_slot_in_rolling_window(start_time)
 
+    _acquire_proxy_booking_locks(
+        db,
+        counselor_id=counselor_id,
+        center_id=center_id,
+        start_time=start_time,
+        room_id=room_id,
+    )
+
     if not is_video_center(center_id):
         if not room_id:
             raise ValueError("请选择咨询室")
@@ -460,6 +616,7 @@ def push_proxy_order(
             raise ValueError("该咨询室在该时段已被占用")
 
     schedule: Optional[AppSchedule] = None
+    existing_pref_room_id: Optional[str] = None
     if existing_schedule_id:
         schedule = (
             db.query(AppSchedule)
@@ -471,12 +628,13 @@ def push_proxy_order(
         )
         if not schedule:
             raise ValueError("排期不存在")
-        if schedule.Status == "BOOKED":
-            raise ValueError("该时段已被预约，不可代理")
+        if schedule.Status != "AVAILABLE":
+            raise ValueError("该排期当前不可预约")
         if pending_proxy_order_for_schedule(db, schedule.Id):
             raise ValueError("该时段已有待支付代理订单")
-        if schedule.StartTime != start_time:
+        if schedule.StartTime != start_time or schedule.EndTime != end_time:
             raise ValueError("排期时间与所选时间不一致")
+        existing_pref_room_id = parse_pref_room_id(schedule.Note) or parse_room_id(schedule.Note)
     else:
         if counselor_has_slot(db, counselor_id, start_time):
             raise ValueError("该咨询师在该时间槽已有排期")
@@ -485,7 +643,15 @@ def push_proxy_order(
             if not has_available_room_at_center(db, center_id, start_time, usable):
                 raise ValueError("该时段咨询室不可用")
 
-    note = schedule_note(center_id, room_id=room_id if not is_video_center(center_id) else None)
+    note = schedule_note(
+        center_id,
+        room_id=room_id if not is_video_center(center_id) else None,
+        pref_room_id=(
+            existing_pref_room_id
+            if existing_pref_room_id and not is_video_center(center_id)
+            else None
+        ),
+    )
     if schedule:
         schedule.Note = note
         schedule.UpdatedAt = _now()
@@ -503,13 +669,14 @@ def push_proxy_order(
     total_fee = resolve_display_price_cents(db, patient_id, counselor_id)
     out_trade_no = f"PROXY{int(time.time())}{random.randint(1000, 9999)}"
     expires_at = _now() + timedelta(hours=PROXY_ORDER_TTL_HOURS)
+    schedule_mode = PROXY_SCHEDULE_EXISTING if existing_schedule_id else PROXY_SCHEDULE_NEW
     order = AppOrder(
         AccountId=patient_id,
         SlotId=schedule.Id,
         OutTradeNo=out_trade_no,
         TotalFee=total_fee,
         Status="PENDING",
-        Description=f"proxy:{staff_account_id}|center:{center_id}",
+        Description=f"proxy:{staff_account_id}|center:{center_id}|{schedule_mode}",
         ExpiresAt=expires_at,
         ProxyCreatedByAccountId=staff_account_id,
         ProxyAgreementIsAdult=agreement_is_adult if needs_agreement else None,

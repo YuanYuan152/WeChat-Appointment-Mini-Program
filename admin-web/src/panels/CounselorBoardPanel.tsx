@@ -361,9 +361,10 @@ function placeLabel(centerName?: string | null, roomName?: string | null) {
   return compactMeta([centerName, roomName]);
 }
 
-function patientLabel(patientName?: string | null, patientMobile?: string | null) {
+function patientLabel(patientName?: string | null, patientMobile?: string | null, patientContractTag?: string | null) {
   const name = patientName || "来访者未填";
-  return patientMobile ? `${name}（${patientMobile}）` : name;
+  const contact = patientMobile ? `${name}（${patientMobile}）` : name;
+  return patientContractTag ? `${contact} ${patientContractTag}` : contact;
 }
 
 function CounselorDetailPanel({
@@ -392,11 +393,11 @@ function CounselorDetailPanel({
 
     return {
       label: compactMeta([
-        patientLabel(item.patientName, item.patientMobile),
+        patientLabel(item.patientName, item.patientMobile, item.patientContractTag),
         `咨询 ${item.consultationCount} 次`,
       ]),
       detail: [
-        `来访者：${patientLabel(item.patientName, item.patientMobile)}`,
+        `来访者：${patientLabel(item.patientName, item.patientMobile, item.patientContractTag)}`,
         `咨询次数：${item.consultationCount}`,
         `总预约次数：${item.appointmentCount}`,
         `取消次数：${item.cancelledCount}`,
@@ -407,9 +408,9 @@ function CounselorDetailPanel({
     };
   });
   const consultationItems = detail.consultations.map((item) => ({
-    label: compactMeta([patientLabel(item.patientName, item.patientMobile), timeRangeLabel(item.startTime, item.endTime), statusLabel(item.status)]),
+    label: compactMeta([patientLabel(item.patientName, item.patientMobile, item.patientContractTag), timeRangeLabel(item.startTime, item.endTime), statusLabel(item.status)]),
     detail: [
-      `来访者：${item.patientName}${item.patientMobile ? `（${item.patientMobile}）` : ""}`,
+      `来访者：${patientLabel(item.patientName, item.patientMobile, item.patientContractTag)}`,
       `状态：${statusLabel(item.status)}`,
       `咨询时间：${timeRangeLabel(item.startTime, item.endTime)}`,
       `咨询地点：${placeLabel(item.centerName, item.roomName)}`,
@@ -418,9 +419,9 @@ function CounselorDetailPanel({
     ],
   }));
   const cancelledConsultationItems = cancelledConsultations.map((item) => ({
-    label: compactMeta(["取消咨询", patientLabel(item.patientName, item.patientMobile), timeRangeLabel(item.startTime, item.endTime)]),
+    label: compactMeta(["取消咨询", patientLabel(item.patientName, item.patientMobile, item.patientContractTag), timeRangeLabel(item.startTime, item.endTime)]),
     detail: [
-      `来访者：${item.patientName}${item.patientMobile ? `（${item.patientMobile}）` : ""}`,
+      `来访者：${patientLabel(item.patientName, item.patientMobile, item.patientContractTag)}`,
       `状态：${statusLabel(item.status)}`,
       `咨询时间：${timeRangeLabel(item.startTime, item.endTime)}`,
       `咨询地点：${placeLabel(item.centerName, item.roomName)}`,
@@ -430,12 +431,12 @@ function CounselorDetailPanel({
   }));
   const caseRecordItems = detail.caseRecords.map((item) => ({
     label: compactMeta([
-      patientLabel(item.patientName, item.patientMobile),
+      patientLabel(item.patientName, item.patientMobile, item.patientContractTag),
       timeRangeLabel(item.startTime, item.endTime),
       item.updatedAt ? `更新 ${formatDateTime(item.updatedAt)}` : "未更新",
     ]),
     detail: [
-      `来访者：${patientLabel(item.patientName, item.patientMobile)}`,
+      `来访者：${patientLabel(item.patientName, item.patientMobile, item.patientContractTag)}`,
       `咨询状态：${statusLabel(item.status)}`,
       `咨询时间：${timeRangeLabel(item.startTime, item.endTime)}`,
       `咨询地点：${placeLabel(item.centerName, item.roomName)}`,
@@ -447,7 +448,7 @@ function CounselorDetailPanel({
   const leaveItems = detail.leaveRequests.map((item) => ({
     label: compactMeta(["请假", timeRangeLabel(item.startTime, item.endTime), statusLabel(item.status)]),
     detail: [
-      `关联来访：${item.patientName ? patientLabel(item.patientName, item.patientMobile) : "-"}`,
+      `关联来访：${item.patientName ? patientLabel(item.patientName, item.patientMobile, item.patientContractTag) : "-"}`,
       `排期时间：${timeRangeLabel(item.startTime, item.endTime)}`,
       `排期地点：${placeLabel(item.centerName, item.roomName)}`,
       `提交时间：${formatDateTime(item.createdAt)}`,
@@ -460,37 +461,37 @@ function CounselorDetailPanel({
     label: compactMeta([
       "排期",
       timeRangeLabel(item.startTime, item.endTime),
-      item.patientName ? patientLabel(item.patientName, item.patientMobile) : null,
+      item.patientName ? patientLabel(item.patientName, item.patientMobile, item.patientContractTag) : null,
       statusLabel(item.status),
     ]),
     detail: [
       `状态：${statusLabel(item.status)}`,
       `排期时间：${timeRangeLabel(item.startTime, item.endTime)}`,
       `排期地点：${placeLabel(item.centerName, item.roomName)}`,
-      `关联来访：${item.patientName ? patientLabel(item.patientName, item.patientMobile) : "-"}`,
+      `关联来访：${item.patientName ? patientLabel(item.patientName, item.patientMobile, item.patientContractTag) : "-"}`,
     ],
   }));
   const roomUsageItems = detail.roomUsage.map((item) => ({
     label: compactMeta([
       timeRangeLabel(item.startTime, item.endTime),
       placeLabel(item.centerName, item.roomName),
-      item.patientName ? patientLabel(item.patientName, item.patientMobile) : null,
+      item.patientName ? patientLabel(item.patientName, item.patientMobile, item.patientContractTag) : null,
     ]),
     detail: [
       `状态：${statusLabel(item.status)}`,
       `使用时间：${timeRangeLabel(item.startTime, item.endTime)}`,
       `咨询室：${placeLabel(item.centerName, item.roomName)}`,
-      `关联来访：${item.patientName ? patientLabel(item.patientName, item.patientMobile) : "-"}`,
+      `关联来访：${item.patientName ? patientLabel(item.patientName, item.patientMobile, item.patientContractTag) : "-"}`,
     ],
   }));
   const cancelLogItems = detail.scheduleCancelLogs.map((item) => ({
     label: compactMeta([
       "取消排期",
       item.startTime || item.endTime ? timeRangeLabel(item.startTime, item.endTime) : formatDateTime(item.createdAt),
-      item.patientName ? patientLabel(item.patientName, item.patientMobile) : null,
+      item.patientName ? patientLabel(item.patientName, item.patientMobile, item.patientContractTag) : null,
     ]),
     detail: [
-      `关联来访：${item.patientName ? patientLabel(item.patientName, item.patientMobile) : "-"}`,
+      `关联来访：${item.patientName ? patientLabel(item.patientName, item.patientMobile, item.patientContractTag) : "-"}`,
       `排期时间：${timeRangeLabel(item.startTime, item.endTime)}`,
       `排期地点：${placeLabel(item.centerName, item.roomName)}`,
       `提交时间：${formatDateTime(item.createdAt)}`,

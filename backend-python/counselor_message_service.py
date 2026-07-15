@@ -188,6 +188,7 @@ def _leave_notice_detail(
     leave_reason: str,
     leave_request_id: int,
     status: str,
+    reject_reason: Optional[str] = None,
     consultation: Optional[AppConsultation] = None,
 ) -> tuple[str, str, Dict[str, Any]]:
     ctx = _consultation_context(db, consultation) if consultation else None
@@ -199,8 +200,16 @@ def _leave_notice_detail(
     pending = status == "PENDING"
     if pending:
         title = "请假申请已提交"
-        tip = "您的请假申请已提交，请等待管理员审核并协助来访者改约。"
+        tip = "您的请假申请已提交，请等待管理工作台审核并协助来访者改约。"
         status_label = "待审核"
+    elif status == "REJECTED":
+        title = "请假申请未通过"
+        tip = (
+            f"您的请假申请未通过：{reject_reason}。原预约与排期保持不变。"
+            if reject_reason
+            else "您的请假申请未通过，原预约与排期保持不变。"
+        )
+        status_label = "已拒绝"
     else:
         title = "请假已成功"
         tip = "您的请假已生效，相关预约已取消，来访者将收到通知。"
@@ -208,6 +217,8 @@ def _leave_notice_detail(
     summary = f"{time_text} · {location}"
     if patient_label:
         summary = f"{patient_label} · {summary}"
+    if status == "REJECTED" and reject_reason:
+        summary = f"{summary} · 拒绝原因：{reject_reason}"
     detail: Dict[str, Any] = {
         "startTime": time_text,
         "endTime": _format_datetime(schedule.EndTime),
@@ -219,6 +230,8 @@ def _leave_notice_detail(
         "statusLabel": status_label,
         "tip": tip,
     }
+    if reject_reason:
+        detail["rejectReason"] = reject_reason
     if patient_name and ctx:
         detail.update(_patient_detail_fields(ctx))
     if consultation:
@@ -276,7 +289,7 @@ def notify_counselor_leave_success(
     leave_request_id: int,
     consultation: Optional[AppConsultation] = None,
 ) -> None:
-    """请假生效（直接取消或管理员审核通过）后通知咨询师本人。"""
+    """请假生效（直接取消或管理工作台审核通过）后通知咨询师本人。"""
     existing = (
         db.query(AppMessage)
         .filter(
@@ -304,6 +317,49 @@ def notify_counselor_leave_success(
         title=title,
         content=content,
         related_type="COUNSELOR_LEAVE_SUCCESS",
+        related_id=leave_request_id,
+    )
+
+
+def notify_counselor_leave_rejected(
+    db: Session,
+    *,
+    counselor_id: int,
+    schedule: AppSchedule,
+    leave_reason: str,
+    leave_request_id: int,
+    reject_reason: Optional[str] = None,
+    consultation: Optional[AppConsultation] = None,
+) -> None:
+    """管理工作台拒绝请假后通知咨询师本人。"""
+    existing = (
+        db.query(AppMessage)
+        .filter(
+            AppMessage.AccountId == counselor_id,
+            AppMessage.RelatedType == "COUNSELOR_LEAVE_REJECTED",
+            AppMessage.RelatedId == leave_request_id,
+        )
+        .first()
+    )
+    if existing:
+        return
+
+    title, content, _ = _leave_notice_detail(
+        db,
+        schedule=schedule,
+        leave_reason=leave_reason,
+        leave_request_id=leave_request_id,
+        status="REJECTED",
+        reject_reason=reject_reason,
+        consultation=consultation,
+    )
+    _notify_counselor(
+        db,
+        counselor_id,
+        type_="CONSULTATION",
+        title=title,
+        content=content,
+        related_type="COUNSELOR_LEAVE_REJECTED",
         related_id=leave_request_id,
     )
 
@@ -550,6 +606,7 @@ def notify_counselor_proxy_order_pending(
         "endTime": _format_datetime(schedule.EndTime),
         "location": center_name,
         "orderId": order.Id,
+        "scheduleId": schedule.Id,
         "tip": "助理已为来访推送预约订单，待来访支付后生效",
     }
     _notify_counselor(

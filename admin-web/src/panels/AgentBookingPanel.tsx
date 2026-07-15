@@ -12,6 +12,11 @@ import {
 } from "@/components/ui";
 import { getLocalDateValue } from "@/lib/date";
 import { formatDateTime, formatMoneyFromCents, statusLabel } from "@/lib/format";
+import {
+  formatPatientInline,
+  formatPatientNameWithContractTag,
+  patientContractTag,
+} from "@/lib/patientContract";
 import type {
   ProxyPersonOption,
   ProxyPushOrderResult,
@@ -38,6 +43,7 @@ export interface AgentBookingDraft {
   centerId: string;
   slotKey: string;
   roomId: string;
+  agreementIsAdult: boolean | null;
 }
 
 export function AgentBookingPanel({
@@ -53,11 +59,9 @@ export function AgentBookingPanel({
   page,
   pageSize,
   setPatient,
-  setCounselor,
   setQuery,
   setDraft,
   onSearchPatients,
-  onSearchCounselors,
   onSearch,
   onReset,
   onClearSlotError,
@@ -78,11 +82,9 @@ export function AgentBookingPanel({
   page: number;
   pageSize: number;
   setPatient: (value?: ProxyPersonOption) => void;
-  setCounselor: (value?: ProxyPersonOption) => void;
   setQuery: Dispatch<SetStateAction<AgentBookingQuery>>;
   setDraft: Dispatch<SetStateAction<AgentBookingDraft>>;
   onSearchPatients: (keyword: string) => Promise<ProxyPersonOption[]>;
-  onSearchCounselors: (keyword: string) => Promise<ProxyPersonOption[]>;
   onSearch: () => void;
   onReset: () => void;
   onClearSlotError: () => void;
@@ -119,7 +121,7 @@ export function AgentBookingPanel({
             <div>
               <h2 className="text-xl font-semibold tracking-normal">代理预约</h2>
               <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">
-                为来访选择咨询师和可用时段，推送待支付订单。
+                选择来访后自动使用其绑定咨询师，推送待支付订单。
               </p>
             </div>
             <QueryButton
@@ -144,14 +146,29 @@ export function AgentBookingPanel({
               value={patient}
               onChange={setPatient}
             />
-            <SearchablePersonSelect
-              label="咨询师"
-              placeholder="姓名或电话"
-              required
-              search={onSearchCounselors}
-              value={counselor}
-              onChange={setCounselor}
-            />
+            <QueryField label="绑定咨询师" required>
+              <div
+                className={`${queryControlClass} flex items-center ${
+                  counselor ? "font-medium" : "text-[var(--lxxl-muted)]"
+                }`}
+              >
+                {counselor?.name || "来访尚未绑定咨询师"}
+              </div>
+            </QueryField>
+            <QueryField label="签约状态">
+              <div className={`${queryControlClass} flex items-center gap-2`}>
+                {patient ? (
+                  <Badge tone={patient.isContractSigned ? "green" : "gold"}>
+                    {patient.isContractSigned ? "已签约" : "未签约"}
+                  </Badge>
+                ) : (
+                  <span className="text-[var(--lxxl-muted)]">请先选择来访</span>
+                )}
+                {patientContractTag(patient) && (
+                  <span className="truncate text-xs text-[var(--lxxl-muted)]">{patientContractTag(patient)}</span>
+                )}
+              </div>
+            </QueryField>
             <QueryField label="开始日期">
               <input
                 className={queryControlClass}
@@ -199,7 +216,17 @@ export function AgentBookingPanel({
             </div>
           )}
           {!calendar ? (
-            <EmptyState text={listLoading ? "正在加载排期..." : "请选择来访者和咨询师后点击查询。"} />
+            <EmptyState
+              text={
+                listLoading
+                  ? "正在加载排期..."
+                  : !patient
+                    ? "请先选择来访者。"
+                    : !counselor
+                      ? "该来访尚未绑定咨询师，请先在来访者详情中绑定。"
+                      : "点击查询查看绑定咨询师的排期。"
+              }
+            />
           ) : rows.length === 0 ? (
             <EmptyState text={listLoading ? "正在加载排期..." : "当前咨询师暂无未来排期，可点击代理预约创建新时段。"} />
           ) : query.mode === "calendar" ? (
@@ -257,14 +284,14 @@ function SearchablePersonSelect({
   search: (keyword: string) => Promise<ProxyPersonOption[]>;
   onChange: (value?: ProxyPersonOption) => void;
 }) {
-  const [inputValue, setInputValue] = useState(value?.label || value?.name || "");
+  const [inputValue, setInputValue] = useState(formatPatientInline(value) || value?.label || value?.name || "");
   const [options, setOptions] = useState<ProxyPersonOption[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const searchSeq = useRef(0);
 
   useEffect(() => {
-    setInputValue(value?.label || value?.name || "");
+    setInputValue(formatPatientInline(value) || value?.label || value?.name || "");
   }, [value]);
 
   useEffect(() => {
@@ -327,11 +354,11 @@ function SearchablePersonSelect({
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={() => {
                     onChange(item);
-                    setInputValue(item.label || item.name);
+                    setInputValue(formatPatientInline(item) || item.label || item.name);
                     setOpen(false);
                   }}
                 >
-                  <span className="block font-medium">{item.name}</span>
+                  <span className="block font-medium">{formatPatientInline(item)}</span>
                   <span className="mt-1 block text-xs text-[var(--lxxl-muted)]">{item.mobile || `ID ${item.id}`}</span>
                 </button>
               ))
@@ -365,7 +392,9 @@ function ScheduleTable({ rows }: { rows: ProxyScheduleCalendarItem[] }) {
             <td className="px-5 py-4">
               <Badge tone={statusTone(item.status)}>{item.displayStatus || statusLabel(item.status)}</Badge>
             </td>
-            <td className="px-5 py-4 text-[var(--lxxl-muted)]">{item.patientName || "-"}</td>
+            <td className="px-5 py-4 text-[var(--lxxl-muted)]">
+              {formatPatientNameWithContractTag(item.patientName, item.patientContractTag) || "-"}
+            </td>
             <td className="px-5 py-4 text-[var(--lxxl-muted)]">{item.hasCaseRecord ? "已填写" : "-"}</td>
           </tr>
         ))}
@@ -400,7 +429,11 @@ function ScheduleCalendarView({ rows }: { rows: ProxyScheduleCalendarItem[] }) {
                   <Badge tone={statusTone(item.status)}>{item.displayStatus || statusLabel(item.status)}</Badge>
                 </div>
                 <div className="mt-2 text-xs leading-5 text-[var(--lxxl-muted)]">
-                  {[item.centerName, item.roomName, item.patientName].filter(Boolean).join(" · ") || "-"}
+                  {[
+                    item.centerName,
+                    item.roomName,
+                    formatPatientNameWithContractTag(item.patientName, item.patientContractTag),
+                  ].filter(Boolean).join(" · ") || "-"}
                 </div>
               </div>
             ))}
@@ -447,6 +480,7 @@ function ProxyBookingModal({
       selectedSlot.selectable &&
       !selectedSlot.past &&
       !selectedSlot.counselorOccupied &&
+      (patient?.isContractSigned || draft.agreementIsAdult !== null) &&
       (!needsRoom || selectedRoom?.available),
   );
 
@@ -476,7 +510,7 @@ function ProxyBookingModal({
         <div className="border-b border-[var(--lxxl-border)] px-6 py-5">
           <h3 className="text-lg font-semibold">代理预约</h3>
           <p className="mt-1 text-sm text-[var(--lxxl-muted)]">
-            {patient ? `来访者：${patient.name}` : "未选择来访者"} ·{" "}
+            {patient ? `来访者：${formatPatientInline(patient)}` : "未选择来访者"} ·{" "}
             {counselor ? `咨询师：${counselor.name}` : "未选择咨询师"}
           </p>
         </div>
@@ -520,6 +554,38 @@ function ProxyBookingModal({
             <div className="mt-4 rounded-xl border border-[#F3C9BB] bg-[#FFF4EF] px-4 py-3 text-sm leading-6 text-[#C7542F]">
               {slotError}
             </div>
+          )}
+
+          {patient && !patient.isContractSigned && (
+            <QueryField className="mt-5" label="签约协议" required>
+              <p className="mb-3 text-xs leading-5 text-[var(--lxxl-muted)]">
+                未签约来访需选择推送的协议，来访支付前将按此协议签署。
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <button
+                  className={`rounded-xl border px-4 py-3 text-sm transition ${
+                    draft.agreementIsAdult === true
+                      ? "border-[var(--lxxl-green)] bg-[#F4FBF7] text-[var(--lxxl-green-dark)]"
+                      : "border-[var(--lxxl-border)] bg-white hover:border-[var(--lxxl-green)]"
+                  }`}
+                  type="button"
+                  onClick={() => setDraft((prev) => ({ ...prev, agreementIsAdult: true }))}
+                >
+                  成年来访者协议
+                </button>
+                <button
+                  className={`rounded-xl border px-4 py-3 text-sm transition ${
+                    draft.agreementIsAdult === false
+                      ? "border-[var(--lxxl-green)] bg-[#F4FBF7] text-[var(--lxxl-green-dark)]"
+                      : "border-[var(--lxxl-border)] bg-white hover:border-[var(--lxxl-green)]"
+                  }`}
+                  type="button"
+                  onClick={() => setDraft((prev) => ({ ...prev, agreementIsAdult: false }))}
+                >
+                  未成年来访者协议
+                </button>
+              </div>
+            </QueryField>
           )}
 
           {!slotOptions ? (

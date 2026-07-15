@@ -178,7 +178,12 @@ def notify_staff_new_appointment(
     ctx = _consultation_context(db, consultation)
     patient = ctx["patientContact"]
     time_text = _format_datetime(ctx["startTime"])
-    summary = f"{patient['name']} · {ctx['counselorName']} · {time_text}"
+    patient_label = (
+        f"{patient['name']} {patient['contractTag']}"
+        if patient.get("contractTag")
+        else patient["name"]
+    )
+    summary = f"{patient_label} · {ctx['counselorName']} · {time_text}"
     amount_yuan = None
     if order and order.TotalFee:
         amount_yuan = f"{order.TotalFee / 100:.2f}"
@@ -215,7 +220,12 @@ def notify_staff_appointment_cancelled(
     ctx = _consultation_context(db, consultation)
     patient = ctx["patientContact"]
     time_text = _format_datetime(ctx["startTime"])
-    summary = f"{patient['name']} · {ctx['counselorName']} · {time_text}"
+    patient_label = (
+        f"{patient['name']} {patient['contractTag']}"
+        if patient.get("contractTag")
+        else patient["name"]
+    )
+    summary = f"{patient_label} · {ctx['counselorName']} · {time_text}"
 
     order_status = None
     if consultation.OrderId:

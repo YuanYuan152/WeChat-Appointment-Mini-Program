@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { formatDateTime, formatMoneyFromCents, statusLabel } from "@/lib/format";
+import { formatPatientNameWithContractTag } from "@/lib/patientContract";
 import type { CounselorDashboardDetailItem } from "@/types/api";
 import type { CounselorDashboardPeriod } from "@/services/counselor";
 
@@ -94,6 +95,7 @@ export function CounselorConsultationDetailsPanel({
         item.extra,
         item.status,
         item.patientMobile,
+        item.patientContractTag,
         item.caseRecordStatus,
         item.amount != null ? formatMoneyFromCents(item.amount) : "",
       ]
@@ -228,7 +230,7 @@ export function CounselorConsultationDetailsPanel({
                   >
                     <span className="min-w-0">
                       <span className="block text-base font-semibold text-[#2C2C2C]">
-                        {item.title}
+                        {patientTitle(item)}
                         {item.patientMobile ? (
                           <span className="ml-2 font-normal text-[var(--lxxl-muted)]">{item.patientMobile}</span>
                         ) : null}
@@ -258,7 +260,10 @@ function ConsultationDetail({ item }: { item: CounselorDashboardDetailItem }) {
   return (
     <div className="mt-3 rounded-xl bg-[#FAF8F4] px-4 py-3 text-sm leading-6">
       <div className="grid gap-1 text-[var(--lxxl-muted)]">
-        <DetailLine label="来访者" value={item.patientMobile ? `${item.title} ${item.patientMobile}` : item.title} />
+        <DetailLine
+          label="来访者"
+          value={item.patientMobile ? `${patientTitle(item)} ${item.patientMobile}` : patientTitle(item)}
+        />
         <DetailLine label="时间" value={formatDateTime(item.subtitle)} />
         <DetailLine label="状态" value={statusLabel(item.status)} />
         {item.amount != null && <DetailLine label="金额" value={formatMoneyFromCents(item.amount)} />}
@@ -275,6 +280,10 @@ function ConsultationDetail({ item }: { item: CounselorDashboardDetailItem }) {
       )}
     </div>
   );
+}
+
+function patientTitle(item: CounselorDashboardDetailItem) {
+  return formatPatientNameWithContractTag(item.title, item.patientContractTag);
 }
 
 function DetailLine({ label, value }: { label: string; value?: string | null }) {

@@ -2,6 +2,7 @@ import { DetailDrawer } from "@/components/boards/DetailDrawer";
 import { formatDateTime, formatFullDateTime, statusLabel } from "@/lib/format";
 import type { MessageActionTarget } from "@/lib/messageNavigation";
 import { getPageItems } from "@/lib/pagination";
+import { formatPatientNameWithContractTag } from "@/lib/patientContract";
 import type { AdminLeaveRequestDetail, MessageItem } from "@/types/api";
 
 import {
@@ -40,28 +41,49 @@ export type MessageCategoryFilter =
   | "appointment_new"
   | "appointment_cancel"
   | "appointment_remind"
+  | "consultation_remind"
   | "leave_submitted"
   | "consultation_done"
   | "activity"
-  | "leave_notice";
+  | "leave_notice"
+  | "charity_milestone"
+  | "professional_pair_milestone"
+  | "pricing"
+  | "proxy_booking";
 
 const adminMessageCategoryOptions: Array<{ value: MessageCategoryFilter; label: string }> = [
   { value: "ALL", label: "全部类型" },
   { value: "case_record_crisis", label: "风险上报" },
-  { value: "exemption", label: "豁免审核" },
+  { value: "exemption", label: "用户豁免" },
   { value: "counselor_leave", label: "咨询师请假" },
   { value: "case_record_amendment", label: "咨询记录修改" },
+  { value: "charity_milestone", label: "公益咨询里程碑" },
+  { value: "professional_pair_milestone", label: "正价咨询里程碑" },
+  { value: "pricing", label: "定价与抽成" },
+  { value: "proxy_booking", label: "代理预约" },
 ];
 
-const staffMessageCategoryOptions: Array<{ value: MessageCategoryFilter; label: string }> = [
+const assistantMessageCategoryOptions: Array<{ value: MessageCategoryFilter; label: string }> = [
+  { value: "ALL", label: "全部类型" },
+  { value: "appointment_new", label: "新增预约" },
+  { value: "appointment_cancel", label: "预约取消" },
+  { value: "exemption", label: "用户豁免" },
+  { value: "counselor_leave", label: "咨询师请假" },
+  { value: "charity_milestone", label: "公益咨询里程碑" },
+  { value: "professional_pair_milestone", label: "正价咨询里程碑" },
+  { value: "pricing", label: "定价与抽成" },
+  { value: "proxy_booking", label: "代理预约" },
+];
+
+const counselorMessageCategoryOptions: Array<{ value: MessageCategoryFilter; label: string }> = [
   { value: "ALL", label: "全部类型" },
   { value: "appointment_new", label: "新预约" },
-  { value: "appointment_cancel", label: "预约取消" },
-  { value: "appointment_remind", label: "咨询提醒" },
-  { value: "leave_submitted", label: "请假结果" },
+  { value: "leave_submitted", label: "请假提交" },
+  { value: "consultation_remind", label: "咨询提醒" },
   { value: "consultation_done", label: "咨询完成" },
-  { value: "activity", label: "活动提醒" },
-  { value: "leave_notice", label: "咨询师请假" },
+  { value: "case_record_amendment", label: "记录修改" },
+  { value: "appointment_cancel", label: "预约取消" },
+  { value: "proxy_booking", label: "代理预约" },
 ];
 
 export function MessagesPanel({
@@ -77,6 +99,7 @@ export function MessagesPanel({
   selectedBusinessDetail,
   selectedMessage,
   showCrisisBanner,
+  showStaffReviewCategories,
   statusFilter,
   onCloseDetail,
   onKeywordChange,
@@ -101,6 +124,7 @@ export function MessagesPanel({
   selectedBusinessDetail?: MessageBusinessDetail;
   selectedMessage?: MessageItem | null;
   showCrisisBanner?: boolean;
+  showStaffReviewCategories?: boolean;
   statusFilter: MessageReadFilter;
   onCloseDetail: () => void;
   onKeywordChange: (value: string) => void;
@@ -118,7 +142,11 @@ export function MessagesPanel({
   const crisisMessages = items.filter(isCrisisReportMessage);
   const currentListCrisisCount = crisisMessages.length;
   const unreadCrisisCount = crisisUnreadCount ?? crisisMessages.filter((item) => !item.IsRead).length;
-  const categoryOptions = showCrisisBanner ? adminMessageCategoryOptions : staffMessageCategoryOptions;
+  const categoryOptions = showCrisisBanner
+    ? adminMessageCategoryOptions
+    : showStaffReviewCategories
+      ? assistantMessageCategoryOptions
+      : counselorMessageCategoryOptions;
 
   return (
     <section className="rounded-xl border border-[var(--lxxl-border)] bg-white">
@@ -319,7 +347,15 @@ function MessageDetailDrawer({
   const display = getMessageDisplay(message);
   const detail = parseMessagePayload(message.Content)?.detail || {};
   const businessSections = buildMessageBusinessSections(businessDetail);
-  const sections = [...businessSections, ...buildMessageDetailSections(message, detail, display.summary)];
+  const sections = [
+    ...businessSections,
+    ...buildMessageDetailSections(
+      message,
+      detail,
+      display.summary,
+      leaveBusinessStatus(businessDetail, message),
+    ),
+  ];
   const isCrisis = isCrisisReportMessage(message);
   const footer =
     actionTarget && onNavigateTarget ? (
@@ -409,22 +445,31 @@ function buildMessageBusinessSections(businessDetail?: MessageBusinessDetail): D
         { label: "咨询时间", value: timeRangeFromValues(data.startTime, data.endTime) },
         { label: "咨询地点", value: data.location || "" },
         { label: "提交时间", value: formatFullDateTime(data.createdAt) },
+        { label: "拒绝理由", value: data.rejectReason || "" },
+        { label: "审核人", value: data.reviewedBy ? `账号 #${data.reviewedBy}` : "" },
         { label: "处理时间", value: data.reviewedAt ? formatFullDateTime(data.reviewedAt) : "" },
+        { label: "退款安排", value: leaveReviewOutcomeText(data.status) },
       ]),
     },
     {
       title: "受影响来访",
-      rows: affectedLeavePatientRows(data.affectedPatients),
+      rows: affectedLeavePatientRows(data.affectedPatients, data.status),
     },
   ];
 
   return sections.filter((section) => section.rows.length > 0);
 }
 
-function affectedLeavePatientRows(patients: AdminLeaveRequestDetail["affectedPatients"] = []) {
+function affectedLeavePatientRows(
+  patients: AdminLeaveRequestDetail["affectedPatients"] = [],
+  status = "PENDING",
+) {
   return patients
     .map((patient, index) => {
-      const patientName = patient.patientName || "";
+      const patientName = formatPatientNameWithContractTag(
+        patient.patientName,
+        patient.patientContractTag,
+      );
       const patientPhone = patient.patientPhone || "";
       const emergency =
         patient.emergencyContact && patient.emergencyPhone
@@ -439,11 +484,36 @@ function affectedLeavePatientRows(patients: AdminLeaveRequestDetail["affectedPat
             ? `咨询时间：${timeRangeFromValues(patient.startTime, patient.endTime)}`
             : "",
           patient.location ? `地点：${patient.location}` : "",
-          patient.refundText ? `退款说明：${patient.refundText}` : "",
+          `退款安排：${leaveRefundDisplayText(status, patient.refundText)}`,
         ]),
       };
     })
     .filter((row) => row.value);
+}
+
+function leaveReviewOutcomeText(status: string) {
+  if (status === "APPROVED") {
+    return "请假已通过，受影响预约已取消；已支付订单按原支付路径全额退款。";
+  }
+  if (status === "REJECTED") {
+    return "请假未通过，预约与原支付状态保持不变。";
+  }
+  return "审核通过后将取消受影响预约，已支付订单将按原支付路径全额退款。";
+}
+
+function leaveRefundDisplayText(status: string, backendText?: string | null) {
+  if (status === "PENDING") {
+    return "审核通过后，已支付款项将按原支付路径全额退回";
+  }
+  if (status === "REJECTED") {
+    return "请假未通过，预约与原支付状态保持不变";
+  }
+  if (status === "APPROVED") {
+    return backendText?.includes("原路")
+      ? "已支付款项已按原支付路径全额退回"
+      : "本次预约无可退支付款项";
+  }
+  return backendText || "-";
 }
 
 type DetailRow = {
@@ -460,6 +530,7 @@ function buildMessageDetailSections(
   message: MessageItem,
   detail: Record<string, unknown>,
   summary: string,
+  leaveStatus?: string,
 ): DetailSection[] {
   const consultationTime = timeRangeText(detail);
   const location =
@@ -487,18 +558,23 @@ function buildMessageDetailSections(
         { label: "处理状态", value: status },
         { label: "风险等级", value: isCrisisReportMessage(message) ? crisisLevel : "" },
         { label: "咨询师", value: personText(detail, "counselorName", "counselorPhone") },
-        { label: "来访者", value: personText(detail, "patientName", "patientPhone") },
+        { label: "来访者", value: patientPersonText(detail) },
         { label: "时间", value: consultationTime },
         { label: "地点", value: location },
         { label: "请假原因", value: detailText(detail, "leaveReason") },
-        { label: "退款说明", value: detailText(detail, "refundText") },
+        {
+          label: leaveStatus ? "退款安排" : "退款说明",
+          value: leaveStatus
+            ? leaveRefundDisplayText(leaveStatus, detailText(detail, "refundText"))
+            : detailText(detail, "refundText"),
+        },
         { label: "豁免申请", value: detailText(detail, "exemptionLabel") },
         { label: "摘要", value: summary },
       ]),
     },
     {
       title: "受影响预约",
-      rows: affectedAppointmentRows(detail),
+      rows: affectedAppointmentRows(detail, leaveStatus),
     },
     {
       title: "补充字段",
@@ -507,6 +583,25 @@ function buildMessageDetailSections(
   ];
 
   return sections.filter((section) => section.rows.length > 0);
+}
+
+function leaveBusinessStatus(
+  businessDetail: MessageBusinessDetail | undefined,
+  message: MessageItem,
+) {
+  if (message.RelatedType !== "COUNSELOR_LEAVE") {
+    return undefined;
+  }
+  if (businessDetail?.type === "leave-request" && businessDetail.data?.status) {
+    return businessDetail.data.status;
+  }
+  if (message.Type === "COUNSELOR_LEAVE_SUCCESS") {
+    return "APPROVED";
+  }
+  if (message.Type === "COUNSELOR_LEAVE_REJECTED") {
+    return "REJECTED";
+  }
+  return "PENDING";
 }
 
 function compactRows(rows: DetailRow[]) {
@@ -562,7 +657,24 @@ function personText(detail: Record<string, unknown>, nameKey: string, phoneKey: 
   return phone ? `${name}（${phone}）` : name;
 }
 
-function affectedAppointmentRows(detail: Record<string, unknown>) {
+function patientPersonText(
+  detail: Record<string, unknown>,
+  nameKey = "patientName",
+  phoneKey = "patientPhone",
+  contractTagKey = "patientContractTag",
+) {
+  const name = formatPatientNameWithContractTag(
+    detailText(detail, nameKey),
+    detailText(detail, contractTagKey),
+  );
+  const phone = detailText(detail, phoneKey);
+  if (!name) {
+    return "";
+  }
+  return phone ? `${name}（${phone}）` : name;
+}
+
+function affectedAppointmentRows(detail: Record<string, unknown>, leaveStatus?: string) {
   const appointments = Array.isArray(detail.affectedAppointments) ? detail.affectedAppointments : [];
   return appointments
     .map((appointment, index) => {
@@ -571,25 +683,28 @@ function affectedAppointmentRows(detail: Record<string, unknown>) {
       }
       return {
         label: `预约 ${index + 1}`,
-        value: affectedAppointmentText(appointment as Record<string, unknown>),
+        value: affectedAppointmentText(appointment as Record<string, unknown>, leaveStatus),
       };
     })
     .filter((row): row is DetailRow => !!row && !!row.value);
 }
 
-function affectedAppointmentText(appointment: Record<string, unknown>) {
-  const patient = personText(appointment, "patientName", "patientPhone") || detailText(appointment, "patientName");
+function affectedAppointmentText(appointment: Record<string, unknown>, leaveStatus?: string) {
+  const patient = patientPersonText(appointment) || detailText(appointment, "patientName");
   const emergency = personText(appointment, "emergencyContact", "emergencyPhone");
   const time = timeRangeText(appointment);
   const location = detailText(appointment, "location");
-  const refund = detailText(appointment, "refundText");
+  const backendRefund = detailText(appointment, "refundText");
+  const refund = leaveStatus
+    ? leaveRefundDisplayText(leaveStatus, backendRefund)
+    : backendRefund;
   const status = detailText(appointment, "orderStatus");
   return compactTextLines([
     patient ? `来访者：${patient}` : "",
     emergency ? `紧急联系人：${emergency}` : "",
     time ? `咨询时间：${time}` : "",
     location ? `地点：${location}` : "",
-    refund ? `退款说明：${refund}` : "",
+    refund ? `${leaveStatus ? "退款安排" : "退款说明"}：${refund}` : "",
     status ? `订单状态：${statusLabel(status)}` : "",
   ]);
 }
@@ -610,6 +725,7 @@ const knownDetailKeys = new Set([
   "leaveRequestId",
   "location",
   "patientName",
+  "patientContractTag",
   "patientPhone",
   "refundText",
   "rejectReason",
@@ -687,6 +803,7 @@ function messageDetailRows(detail: Record<string, unknown>, item: MessageItem) {
   const counselorName = stringValue(detail.counselorName);
   const counselorPhone = stringValue(detail.counselorPhone);
   const patientName = stringValue(detail.patientName);
+  const patientContractTag = stringValue(detail.patientContractTag);
   const patientPhone = stringValue(detail.patientPhone);
   const crisisLevelLabel = stringValue(detail.crisisLevelLabel) || stringValue(detail.crisisLevel);
 
@@ -707,7 +824,11 @@ function messageDetailRows(detail: Record<string, unknown>, item: MessageItem) {
     rows.push({ label: "咨询师", value: counselorPhone ? `${counselorName}（${counselorPhone}）` : counselorName });
   }
   if (patientName) {
-    rows.push({ label: "来访者", value: patientPhone ? `${patientName}（${patientPhone}）` : patientName });
+    const taggedPatientName = formatPatientNameWithContractTag(patientName, patientContractTag);
+    rows.push({
+      label: "来访者",
+      value: patientPhone ? `${taggedPatientName}（${patientPhone}）` : taggedPatientName,
+    });
   }
 
   return rows.slice(0, isCrisisReportMessage(item) ? 4 : 3);
@@ -731,11 +852,21 @@ function relatedTypeLabel(type?: string | null) {
     COUNSELOR_CONSULTATION_REMIND: "咨询提醒",
     COUNSELOR_LEAVE_SUBMITTED: "请假申请",
     COUNSELOR_LEAVE_SUCCESS: "请假结果",
+    COUNSELOR_LEAVE_REJECTED: "请假未通过",
     COUNSELOR_CONSULTATION_DONE: "咨询完成",
     PATIENT_APPOINTMENT_SUCCESS: "预约成功",
     PATIENT_APPOINTMENT_CANCEL: "预约取消",
     PATIENT_LEAVE_APPROVED: "咨询师请假",
     PATIENT_NEW_ACTIVITY: "活动提醒",
+    PATIENT_PROXY_ORDER_PENDING: "代理预约待支付",
+    COUNSELOR_PROXY_ORDER_PENDING: "代理预约待支付",
+    STAFF_PROXY_ORDER_PUSHED: "代理预约已推送",
+    CHARITY_CONSULTATION_30_BOOKING: "公益咨询里程碑",
+    CHARITY_CONSULTATION_30_DONE: "公益咨询里程碑",
+    PROFESSIONAL_PAIR_CONSULTATION_30_BOOKING: "正价咨询里程碑",
+    PRICING_COUNSELOR_BASE_UPDATED: "咨询师定价调整",
+    PRICING_PATIENT_PRICE_UPDATED: "来访调价",
+    PRICING_PATIENT_SHARE_UPDATED: "来访分成调整",
   };
 
   return type ? labels[type] || humanizeText(type) : "-";

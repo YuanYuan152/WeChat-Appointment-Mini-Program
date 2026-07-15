@@ -156,14 +156,24 @@ function CounselorSchedulesScreenContent() {
   );
 
   const submitLeave = useCallback(
-    async (scheduleId: number, reason: string) => {
+    async (
+      scheduleId: number,
+      reason: string,
+      communicationScreenshotUrl: string,
+    ) => {
       clearNotice();
       try {
-        const result = await submitCounselorLeaveRequest(scheduleId, reason);
+        const result = await submitCounselorLeaveRequest(
+          scheduleId,
+          reason,
+          communicationScreenshotUrl,
+        );
         showNotice("success", getMessage(result, "请假申请已提交"));
         await loadData();
+        return true;
       } catch (error) {
         showNotice("error", error instanceof Error ? error.message : "请假申请提交失败");
+        return false;
       }
     },
     [clearNotice, loadData, showNotice],
@@ -196,6 +206,10 @@ function CounselorSchedulesScreenContent() {
       onCreate={createSchedule}
       onCancel={cancelSchedule}
       onLeave={submitLeave}
+      onProxyOrderCreated={async (message) => {
+        showNotice("success", message || "订单已推送");
+        await loadData();
+      }}
       onPageChange={setPage}
       onPageSizeChange={changePageSize}
     />

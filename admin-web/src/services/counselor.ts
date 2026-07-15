@@ -10,6 +10,8 @@ import type {
   CounselorDashboardStats,
   CounselorScheduleCalendar,
   CounselorSlotOptions,
+  ProxyPushOrderResult,
+  ProxySlotOptions,
 } from "@/types/api";
 
 export type CounselorDashboardPeriod = "month" | "quarter" | "half_year" | "all";
@@ -33,6 +35,21 @@ export interface CounselorCaseRecordPayload {
 
 export interface CounselorCaseRecordAmendmentPayload extends CounselorCaseRecordPayload {
   reason: string;
+}
+
+export interface CounselorProxyPatientOption {
+  id: number;
+  name: string;
+  mobile?: string | null;
+  label?: string;
+  contractTag?: string | null;
+  isContractSigned?: boolean;
+  isBoundToCounselor?: boolean;
+  canProxyPush?: boolean;
+}
+
+export interface CounselorProxyPatientSearchResult {
+  items: CounselorProxyPatientOption[];
 }
 
 export function fetchCounselorDashboard(period: CounselorDashboardPeriod) {
@@ -82,10 +99,49 @@ export function cancelCounselorSchedule(
   });
 }
 
-export function submitCounselorLeaveRequest(scheduleId: number, reason: string) {
+export function submitCounselorLeaveRequest(
+  scheduleId: number,
+  reason: string,
+  communicationScreenshotUrl: string,
+) {
   return apiRequest<ApiMessage>(`/api/mini/counselor/schedules/${scheduleId}/leave-request`, {
     method: "POST",
-    body: JSON.stringify({ reason }),
+    body: JSON.stringify({
+      reason,
+      communication_screenshot_url: communicationScreenshotUrl,
+    }),
+  });
+}
+
+export function searchCounselorProxyPatients(keyword = "") {
+  const params = new URLSearchParams();
+  if (keyword.trim()) {
+    params.set("keyword", keyword.trim());
+  }
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+  return apiRequest<CounselorProxyPatientSearchResult>(
+    `/api/mini/counselor/proxy-booking/patients${suffix}`,
+  );
+}
+
+export function fetchCounselorProxySlotOptions(date: string, centerId: string) {
+  const params = new URLSearchParams({ date, center_id: centerId });
+  return apiRequest<ProxySlotOptions>(
+    `/api/mini/counselor/proxy-booking/slot-options?${params.toString()}`,
+  );
+}
+
+export function pushCounselorProxyOrder(body: {
+  patient_id: number;
+  center_id: string;
+  start_time: string;
+  end_time: string;
+  room_id?: string | null;
+  schedule_id?: number | null;
+}) {
+  return apiRequest<ProxyPushOrderResult>("/api/mini/counselor/proxy-booking/push-order", {
+    method: "POST",
+    body: JSON.stringify(body),
   });
 }
 

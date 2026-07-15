@@ -29,6 +29,13 @@ def _patient_name(db: Session, patient_id: int) -> str:
     return acc.RealName or acc.Nickname or acc.Mobile or "来访者"
 
 
+def _patient_contract_tag(db: Session, patient_id: int) -> Optional[str]:
+    from patient_contract_service import patient_contract_extras
+
+    acc = db.query(AppAccount).filter(AppAccount.Id == patient_id).first()
+    return patient_contract_extras(db, acc).get("contractTag")
+
+
 def _actor_label(db: Session, actor_id: int) -> str:
     role = get_account_role(db, actor_id) or ""
     name = _account_display_name(db, actor_id)
@@ -150,6 +157,80 @@ def notify_counselor_base_price_updated(
     )
 
 
+def notify_counselor_default_share_batch_updated(
+    db: Session,
+    *,
+    actor_id: int,
+    result: Dict[str, Any],
+) -> None:
+    """批量分成调整：工作人员仅收一条汇总消息，咨询师各收一条结果消息。"""
+    changed_items = [item for item in result.get("items", []) if item.get("willChange")]
+    if not changed_items:
+        return
+
+    actor = _actor_label(db, actor_id)
+    percent = int(result.get("revenueSharePercent") or 0)
+    override_patient_shares = bool(result.get("overridePatientShares"))
+    cleared_count = int(result.get("clearedPatientShareOverrideCount") or 0)
+    counselor_ids = [int(item["counselorId"]) for item in changed_items]
+    counselor_names = [str(item.get("counselorName") or "咨询师") for item in changed_items]
+    override_text = (
+        f"，并清除 {cleared_count} 项来访个体分成"
+        if override_patient_shares
+        else "，来访个体分成保持不变"
+    )
+    staff_summary = (
+        f"{actor}已将 {len(changed_items)} 名咨询师的默认分成比例批量调整为 "
+        f"{percent}%{override_text}"
+    )
+    staff_detail: Dict[str, Any] = {
+        "actorId": actor_id,
+        "actorLabel": actor,
+        "counselorIds": counselor_ids,
+        "counselorNames": counselor_names,
+        "changedCount": len(changed_items),
+        "revenueSharePercent": percent,
+        "overridePatientShares": override_patient_shares,
+        "clearedPatientShareOverrideCount": cleared_count,
+        "messageText": staff_summary,
+        "changeKind": "BATCH_DEFAULT_SHARE",
+    }
+    notify_staff_workbench_inbox(
+        db,
+        type_="SYSTEM",
+        title="批量抽成比例调整成功",
+        content=_message_payload(staff_summary, staff_detail),
+        related_type=RELATED_TYPE_BASE_PRICE,
+        related_id=None,
+    )
+
+    for item in changed_items:
+        counselor_id = int(item["counselorId"])
+        counselor_name = str(item.get("counselorName") or f"咨询师#{counselor_id}")
+        counselor_summary = f"针对所有来访的默认分成比例已调整为 {percent}%"
+        detail = {
+            "actorId": actor_id,
+            "actorLabel": actor,
+            "counselorId": counselor_id,
+            "counselorName": counselor_name,
+            "beforeShare": item.get("beforeShare"),
+            "afterShare": item.get("afterShare"),
+            "shareText": f"抽成比例 {percent}%",
+            "messageText": counselor_summary,
+            "counselorMessageText": counselor_summary,
+            "changeKind": "BATCH_DEFAULT_SHARE",
+        }
+        _notify_counselor(
+            db,
+            counselor_id,
+            type_="SYSTEM",
+            title="抽成已调整",
+            content=_message_payload(counselor_summary, detail),
+            related_type=RELATED_TYPE_BASE_PRICE,
+            related_id=counselor_id,
+        )
+
+
 def notify_patient_price_adjustment_updated(
     db: Session,
     *,
@@ -160,15 +241,17 @@ def notify_patient_price_adjustment_updated(
 ) -> None:
     counselor_name = _counselor_name(db, counselor_id)
     patient_name = _patient_name(db, patient_id)
+    patient_tag = _patient_contract_tag(db, patient_id)
+    patient_label = f"{patient_name} {patient_tag}" if patient_tag else patient_name
     actor = _actor_label(db, actor_id)
     display_yuan = int(breakdown.get("displayPriceYuan") or 0)
     adjustment_yuan = int(breakdown.get("adjustmentYuan") or 0)
 
     staff_summary = (
-        f"{actor}为{counselor_name}咨询师的{patient_name}来访改价成功，"
+        f"{actor}为{counselor_name}咨询师的{patient_label}来访改价成功，"
         f"现展示价 ¥{display_yuan}（调价 ¥{adjustment_yuan}）"
     )
-    counselor_summary = f"针对来访{patient_name}已调价成功"
+    counselor_summary = f"针对来访{patient_label}已调价成功"
     detail: Dict[str, Any] = {
         "actorId": actor_id,
         "actorLabel": actor,
@@ -176,6 +259,7 @@ def notify_patient_price_adjustment_updated(
         "counselorName": counselor_name,
         "patientId": patient_id,
         "patientName": patient_name,
+        "patientContractTag": patient_tag,
         "displayPriceYuan": display_yuan,
         "adjustmentYuan": adjustment_yuan,
         "basePriceYuan": breakdown.get("basePriceYuan"),
@@ -213,14 +297,16 @@ def notify_patient_share_updated(
 ) -> None:
     counselor_name = _counselor_name(db, counselor_id)
     patient_name = _patient_name(db, patient_id)
+    patient_tag = _patient_contract_tag(db, patient_id)
+    patient_label = f"{patient_name} {patient_tag}" if patient_tag else patient_name
     actor = _actor_label(db, actor_id)
     display_yuan = int(breakdown.get("displayPriceYuan") or 0)
     share_text = _format_share_text(share_after, display_yuan=display_yuan)
 
     staff_summary = (
-        f"{actor}已将{counselor_name}咨询师针对来访{patient_name}的{share_text}调整成功"
+        f"{actor}已将{counselor_name}咨询师针对来访{patient_label}的{share_text}调整成功"
     )
-    counselor_summary = f"针对来访{patient_name}{share_text}已调整"
+    counselor_summary = f"针对来访{patient_label}{share_text}已调整"
     detail: Dict[str, Any] = {
         "actorId": actor_id,
         "actorLabel": actor,
@@ -228,6 +314,7 @@ def notify_patient_share_updated(
         "counselorName": counselor_name,
         "patientId": patient_id,
         "patientName": patient_name,
+        "patientContractTag": patient_tag,
         "displayPriceYuan": display_yuan,
         "revenueShareYuan": breakdown.get("revenueShareYuan"),
         "shareMode": share_after.get("shareMode"),

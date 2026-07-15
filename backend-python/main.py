@@ -38,17 +38,25 @@ def _ensure_db_schema():
         from ensure_schema import (
             ensure_app_order_columns,
             ensure_app_account_columns,
+            ensure_counselor_profile_columns,
+            ensure_leave_request_columns,
+            ensure_schedule_cancel_log_columns,
             ensure_tables,
         )
         ensure_tables()
         ensure_app_account_columns()
         ensure_app_order_columns()
+        ensure_leave_request_columns()
+        ensure_schedule_cancel_log_columns()
+        ensure_counselor_profile_columns()
         from database import SessionLocal
         from charity_milestone_service import backfill_charity_negotiation_state
+        from patient_contract_service import backfill_patient_contract_signed_from_orders
 
         db = SessionLocal()
         try:
             backfill_charity_negotiation_state(db)
+            backfill_patient_contract_signed_from_orders(db)
             db.commit()
         finally:
             db.close()

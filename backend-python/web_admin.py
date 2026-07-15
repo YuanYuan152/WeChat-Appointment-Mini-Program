@@ -43,6 +43,8 @@ from models import (
 from consultation_feedback import feedback_summary
 from schedule_meta import center_display_name, parse_center_id, parse_room_id, room_display_name
 from schedule_meta import schedule_note
+from patient_contract_service import patient_contract_extras
+from staff_roles import account_has_staff_workbench, staff_workbench_account_ids
 
 router = APIRouter(prefix="/api/web/admin", tags=["WebAdmin"])
 
@@ -58,6 +60,55 @@ def require_ops_or_admin(
     if not binding:
         raise HTTPException(status_code=403, detail="无 Web 管理端权限")
     return current_account
+
+
+def require_staff_workbench(
+    current_account: AppAccount = Depends(get_current_account),
+    db: Session = Depends(get_db),
+) -> AppAccount:
+    """与小程序管理工作台一致：咨询助理、咨询主任和管理员可访问。"""
+    if not account_has_staff_workbench(
+        db,
+        current_account.Id,
+        getattr(current_account, "ActiveRole", None),
+    ):
+        raise HTTPException(status_code=403, detail="无管理工作台权限")
+    return current_account
+
+
+def _has_ops_or_admin_role(db: Session, account_id: int) -> bool:
+    return (
+        db.query(AppRoleBinding.Id)
+        .filter(
+            AppRoleBinding.AccountId == account_id,
+            AppRoleBinding.RoleType.in_(["Ops", "Admin"]),
+        )
+        .first()
+        is not None
+    )
+
+
+def _visitor_account_ids(db: Session) -> set[int]:
+    """与小程序来访管理一致，兼容缺少 Patient 角色的历史来访数据。"""
+    staff_ids = set(staff_workbench_account_ids(db))
+    staff_ids.update(
+        int(value)
+        for (value,) in db.query(AppRoleBinding.AccountId)
+        .filter(AppRoleBinding.RoleType == "Counselor")
+        .all()
+    )
+    role_ids = {
+        int(value)
+        for (value,) in db.query(AppRoleBinding.AccountId)
+        .filter(AppRoleBinding.RoleType == "Patient")
+        .all()
+    } - staff_ids
+    consultation_ids = {
+        int(value)
+        for (value,) in db.query(AppConsultation.PatientId).distinct().all()
+        if value
+    } - staff_ids
+    return role_ids | consultation_ids
 
 
 def _dt(value: Optional[datetime]) -> Optional[datetime]:
@@ -573,11 +624,24 @@ def _import_completed_order_row(db: Session, row_number: int, row_map: dict[str,
         AppConsultation.StartTime == start_at,
     ).first()
     if existing_consultation:
+        if existing_consultation.OrderId:
+            existing_paid_order = (
+                db.query(AppOrder)
+                .filter(AppOrder.Id == existing_consultation.OrderId)
+                .first()
+            )
+            if existing_paid_order and (
+                existing_paid_order.PaidAt is not None or existing_paid_order.Status == "PAID"
+            ):
+                from patient_contract_service import sync_patient_contract_signed_from_orders
+
+                sync_patient_contract_signed_from_orders(db, patient.Id)
         return {
             "rowNumber": row_number,
             "status": "SKIPPED",
             "message": "同一来访者、咨询师和开始时间的咨询已存在",
             "patientName": _account_name(patient),
+            "patientContractTag": patient_contract_extras(db, patient).get("contractTag"),
             "counselorName": _account_name(counselor),
             "startTime": start_at,
             "endTime": existing_consultation.EndTime,
@@ -590,11 +654,16 @@ def _import_completed_order_row(db: Session, row_number: int, row_map: dict[str,
     out_trade_no = f"IMPORT-{hashlib.sha1(unique_key.encode('utf-8')).hexdigest()[:24].upper()}"
     existing_order = db.query(AppOrder).filter(AppOrder.OutTradeNo == out_trade_no).first()
     if existing_order:
+        if existing_order.PaidAt is not None or existing_order.Status == "PAID":
+            from patient_contract_service import sync_patient_contract_signed_from_orders
+
+            sync_patient_contract_signed_from_orders(db, patient.Id)
         return {
             "rowNumber": row_number,
             "status": "SKIPPED",
             "message": "导入订单号已存在",
             "patientName": _account_name(patient),
+            "patientContractTag": patient_contract_extras(db, patient).get("contractTag"),
             "counselorName": _account_name(counselor),
             "startTime": start_at,
             "endTime": end_at,
@@ -643,6 +712,12 @@ def _import_completed_order_row(db: Session, row_number: int, row_map: dict[str,
     db.add(order)
     db.flush()
 
+    # 导入完成订单同样属于已支付事实；若来访当前正绑定该咨询师，立即同步签约
+    # 状态，避免必须重启服务或再次换绑后才显示已签约。
+    from patient_contract_service import sync_patient_contract_signed_from_orders
+
+    sync_patient_contract_signed_from_orders(db, patient.Id)
+
     consultation = AppConsultation(
         OrderId=order.Id,
         PatientId=patient.Id,
@@ -663,6 +738,7 @@ def _import_completed_order_row(db: Session, row_number: int, row_map: dict[str,
         "status": "IMPORTED",
         "message": "已导入为完成订单",
         "patientName": _account_name(patient),
+        "patientContractTag": patient_contract_extras(db, patient).get("contractTag"),
         "counselorName": _account_name(counselor),
         "startTime": start_at,
         "endTime": end_at,
@@ -707,6 +783,7 @@ async def import_completed_orders(
                 "status": "FAILED",
                 "message": str(exc),
                 "patientName": _strip_value(_row_value(row_map, "来访者")) or None,
+                "patientContractTag": None,
                 "counselorName": _strip_value(_row_value(row_map, "咨询师")) or None,
                 "startTime": None,
                 "endTime": None,
@@ -782,7 +859,7 @@ def operation_records(
             "id": f"refund-exemption-{row.Id}",
             "occurredAt": row.ReviewedAt or row.CreatedAt,
             "actionType": "REFUND_EXEMPTION",
-            "actionLabel": "豁免审核",
+            "actionLabel": "用户豁免审核",
             "operatorId": row.ReviewedBy or row.AccountId,
             "operatorRole": "Admin/Ops" if row.ReviewedBy else "Patient",
             "targetType": "RefundExemption",
@@ -1139,6 +1216,17 @@ def operation_records(
 
     accounts = _accounts_by_id(db, account_ids)
     roles_by_account = _roles_for_accounts(db, account_ids)
+    from patient_contract_service import batch_patient_contract_extras
+
+    operation_patient_ids = {
+        int(item["patientId"])
+        for item in records
+        if item.get("patientId") and int(item["patientId"]) in accounts
+    }
+    operation_patient_contracts = batch_patient_contract_extras(
+        db,
+        [accounts[patient_id] for patient_id in operation_patient_ids],
+    )
     keyword_norm = keyword.strip().lower() if keyword else None
     action_norm = action_type.strip().upper() if action_type else None
     role_norm = role.strip() if role else None
@@ -1164,6 +1252,9 @@ def operation_records(
         if patient:
             item["patientName"] = _account_name(patient)
             item["patientContact"] = _account_contact(patient)
+            item["patientContractTag"] = operation_patient_contracts.get(
+                int(patient.Id), {}
+            ).get("contractTag")
         if counselor:
             item["counselorName"] = _counselor_name(accounts, item["counselorId"])
             item["counselorContact"] = _account_contact(counselor)
@@ -1208,13 +1299,18 @@ def _user_summary(db: Session, account: AppAccount, roles: list[str]) -> dict[st
     exemptions = db.query(AppRefundExemption).filter(AppRefundExemption.AccountId == account.Id).all()
     paid_orders = [o for o in orders if o.Status == "PAID"]
     refunded_orders = [o for o in orders if o.Status == "REFUNDED"]
-    return {
+    # 与小程序 _admin_visitor_patient_ids 保持同一口径，
+    # 避免 Web 端把咨询师账号当成来访并展示无法执行的绑定入口。
+    is_staff = any(role in ("Counselor", "Assistant", "Ops", "Admin") for role in roles)
+    is_visitor = not is_staff and ("Patient" in roles or bool(consultations))
+    summary = {
         "id": account.Id,
         "name": _account_name(account),
         "mobile": account.Mobile,
         "gender": account.Gender,
         "roles": roles,
         "activeRole": account.ActiveRole,
+        "isVisitor": is_visitor,
         "orderCount": len(orders),
         "paidOrderCount": len(paid_orders),
         "paidAmount": sum(o.TotalFee or 0 for o in paid_orders),
@@ -1228,6 +1324,11 @@ def _user_summary(db: Session, account: AppAccount, roles: list[str]) -> dict[st
         "latestConsultationAt": max([c.StartTime for c in consultations if c.StartTime] or [None]),
         "createdAt": account.CreatedAt,
     }
+    if is_visitor:
+        from patient_contract_service import patient_contract_extras
+
+        summary.update(patient_contract_extras(db, account))
+    return summary
 
 
 @router.get("/users/board", summary="用户看板列表")
@@ -1237,10 +1338,15 @@ def user_board_list(
     mobile: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    _admin: AppAccount = Depends(require_ops_or_admin),
+    _staff: AppAccount = Depends(require_staff_workbench),
     db: Session = Depends(get_db),
 ):
     query = db.query(AppAccount)
+    if not _has_ops_or_admin_role(db, _staff.Id):
+        visitor_ids = _visitor_account_ids(db)
+        if not visitor_ids:
+            return _paginate([], page, page_size)
+        query = query.filter(AppAccount.Id.in_(visitor_ids))
     if keyword:
         like = f"%{keyword}%"
         query = query.filter(
@@ -1264,12 +1370,14 @@ def user_board_list(
 @router.get("/users/{account_id}/board", summary="用户看板详情")
 def user_board_detail(
     account_id: int,
-    _admin: AppAccount = Depends(require_ops_or_admin),
+    _staff: AppAccount = Depends(require_staff_workbench),
     db: Session = Depends(get_db),
 ):
     account = db.query(AppAccount).filter(AppAccount.Id == account_id).first()
     if not account:
         raise HTTPException(status_code=404, detail="用户不存在")
+    if not _has_ops_or_admin_role(db, _staff.Id) and account_id not in _visitor_account_ids(db):
+        raise HTTPException(status_code=403, detail="咨询助理仅可查看来访者详情")
 
     roles = _roles_for_accounts(db, {account_id}).get(account_id, [])
     orders = db.query(AppOrder).filter(AppOrder.AccountId == account_id).order_by(AppOrder.CreatedAt.desc()).all()
@@ -1426,6 +1534,9 @@ def counselor_board_detail(
     )
     patient_ids = {c.PatientId for c in consultations}
     patients = _accounts_by_id(db, patient_ids)
+    from patient_contract_service import batch_patient_contract_extras
+
+    patient_contracts = batch_patient_contract_extras(db, list(patients.values())) if patients else {}
     records = db.query(AppCaseRecord).filter(AppCaseRecord.CounselorId == account_id).all()
     records_by_consultation = {r.ConsultationId: r for r in records}
     schedules = (
@@ -1459,6 +1570,7 @@ def counselor_board_detail(
             return {
                 "patientName": None,
                 "patientMobile": None,
+                "patientContractTag": None,
                 "status": None,
                 "startTime": None,
                 "endTime": None,
@@ -1469,6 +1581,7 @@ def counselor_board_detail(
         return {
             "patientName": _account_name(patient),
             "patientMobile": _account_contact(patient),
+            "patientContractTag": patient_contracts.get(consultation.PatientId, {}).get("contractTag"),
             "status": consultation.Status,
             "startTime": consultation.StartTime,
             "endTime": consultation.EndTime,
@@ -1483,6 +1596,11 @@ def counselor_board_detail(
             "endTime": schedule.EndTime if schedule else None,
             "patientName": _account_name(patient) if patient else None,
             "patientMobile": _account_contact(patient),
+            "patientContractTag": (
+                patient_contracts.get(consultation.PatientId, {}).get("contractTag")
+                if consultation
+                else None
+            ),
             "consultationStatus": consultation.Status if consultation else None,
             **_room_payload(schedule),
         }
@@ -1496,6 +1614,7 @@ def counselor_board_detail(
                 "patientId": consultation.PatientId,
                 "patientName": _account_name(patient),
                 "patientMobile": _account_contact(patient),
+                "patientContractTag": patient_contracts.get(consultation.PatientId, {}).get("contractTag"),
                 "consultationCount": 0,
                 "appointmentCount": 0,
                 "cancelledCount": 0,
@@ -1541,6 +1660,7 @@ def counselor_board_detail(
                 "patientId": c.PatientId,
                 "patientName": _account_name(patients.get(c.PatientId)),
                 "patientMobile": _account_contact(patients.get(c.PatientId)),
+                "patientContractTag": patient_contracts.get(c.PatientId, {}).get("contractTag"),
                 "scheduleId": c.ScheduleId,
                 "status": c.Status,
                 "startTime": c.StartTime,

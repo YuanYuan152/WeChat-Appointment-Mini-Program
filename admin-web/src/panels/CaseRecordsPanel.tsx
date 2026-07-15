@@ -15,6 +15,7 @@ import {
 } from "@/constants/caseRecordRiskAssessment";
 import { API_BASE_URL } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
+import { formatPatientNameWithContractTag } from "@/lib/patientContract";
 
 import { getPageItems } from "@/lib/pagination";
 import { Badge, CollapsibleSection, EmptyState, Pagination, PanelHeader, TableActionButton } from "@/components/ui";
@@ -340,7 +341,9 @@ function CounselorRecordListView({
             <section key={item.consultationId} className="rounded-xl bg-[#FAF8F4] p-4">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                  <div className="text-sm font-semibold">{item.patientName}</div>
+                  <div className="text-sm font-semibold">
+                    {formatPatientNameWithContractTag(item.patientName, item.patientContractTag)}
+                  </div>
                   <div className="mt-1 text-xs text-[var(--lxxl-muted)]">
                     {formatDateTime(item.startTime)} 至 {formatDateTime(item.endTime)}
                   </div>
@@ -376,7 +379,7 @@ function CaseRecordDetailView({ record, onBack }: { record: AdminCaseRecordDetai
         <div className="min-w-0">
           <h4 className="text-base font-semibold">咨询记录详情</h4>
           <p className="mt-2 text-xs leading-5 text-[var(--lxxl-muted)]">
-            {record.PatientName} · {formatDateTime(record.StartTime)} 至 {formatDateTime(record.EndTime)}
+            {formatPatientNameWithContractTag(record.PatientName, record.PatientContractTag)} · {formatDateTime(record.StartTime)} 至 {formatDateTime(record.EndTime)}
           </p>
           <p className="mt-1 text-xs leading-5 text-[var(--lxxl-muted)]">
             创建 {formatDateTime(record.CreatedAt)} · 更新 {formatDateTime(record.UpdatedAt)}

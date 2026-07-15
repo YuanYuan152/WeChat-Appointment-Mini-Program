@@ -4,11 +4,16 @@ import { useCallback, useEffect, useState } from "react";
 import type { SetStateAction } from "react";
 import { useRouter } from "next/navigation";
 
-import { fetchUserBoard, fetchUserBoardDetail } from "@/services/boards";
+import {
+  fetchUserBoard,
+  fetchUserBoardDetail,
+  updatePatientBoundCounselor,
+} from "@/services/boards";
+import { searchProxyCounselors } from "@/services/proxyBooking";
 import { AppRoute, useAppRoute } from "@/components/AppRoute";
 import { UserBoardPanel, type UserProxyBookingTarget } from "@/panels/UserBoardPanel";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
-import type { UserBoardDetail } from "@/types/api";
+import type { ProxyPersonOption, UserBoardDetail } from "@/types/api";
 import type { ScreenData, UserBoardFilters } from "@/types/app";
 
 const INITIAL_USER_BOARD_FILTERS: UserBoardFilters = {
@@ -120,6 +125,13 @@ function UserBoardScreenContent() {
       if (target.patientMobile) {
         params.set("patientMobile", target.patientMobile);
       }
+      params.set("isContractSigned", target.isContractSigned ? "1" : "0");
+      if (target.boundCounselorId) {
+        params.set("boundCounselorId", String(target.boundCounselorId));
+      }
+      if (target.boundCounselorName) {
+        params.set("boundCounselorName", target.boundCounselorName);
+      }
       if (target.counselorId) {
         params.set("counselorId", String(target.counselorId));
         params.set("counselorName", target.counselorName || `咨询师#${target.counselorId}`);
@@ -130,6 +142,40 @@ function UserBoardScreenContent() {
       router.push(`/proxy-booking?${params.toString()}`);
     },
     [router],
+  );
+
+  const searchCounselors = useCallback(async (keyword: string): Promise<ProxyPersonOption[]> => {
+    const result = await searchProxyCounselors(keyword);
+    return result.items || [];
+  }, []);
+
+  const bindCounselor = useCallback(
+    async (patientId: number, counselorId: number | null) => {
+      clearNotice();
+      try {
+        const contract = await updatePatientBoundCounselor(patientId, counselorId);
+        setSelectedUserBoard((current) => {
+          if (!current || current.profile.id !== patientId) {
+            return current;
+          }
+          return {
+            ...current,
+            profile: {
+              ...current.profile,
+              isContractSigned: contract.isContractSigned,
+              boundCounselorId: contract.boundCounselorId,
+              boundCounselorName: contract.boundCounselorName,
+              contractTag: contract.contractTag,
+            },
+          };
+        });
+        showNotice("success", counselorId ? "已更新签约咨询师" : "已解除咨询师绑定");
+      } catch (error) {
+        showNotice("error", error instanceof Error ? error.message : "签约咨询师更新失败");
+        throw error;
+      }
+    },
+    [clearNotice, showNotice],
   );
 
   return (
@@ -147,6 +193,8 @@ function UserBoardScreenContent() {
       onOpen={openUserDetail}
       onCloseDetail={closeDetail}
       onProxyBooking={openProxyBooking}
+      onSearchCounselors={searchCounselors}
+      onBindCounselor={bindCounselor}
     />
   );
 }

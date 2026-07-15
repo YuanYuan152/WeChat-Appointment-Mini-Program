@@ -486,6 +486,7 @@ def notify_patient_proxy_order_pending(
         "endTime": _format_datetime(schedule.EndTime),
         "location": center_name,
         "orderId": order.Id,
+        "scheduleId": schedule.Id,
         "totalFeeYuan": fee_yuan,
         "expiresAt": order.ExpiresAt.isoformat() if order.ExpiresAt else None,
         "tip": "请在 2 小时内完成支付，逾期订单将自动取消",

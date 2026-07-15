@@ -2,6 +2,7 @@ import { apiRequest } from "@/lib/api";
 import type {
   CounselorBoardDetail,
   CounselorBoardSummary,
+  PatientContractInfo,
   PagedResult,
   UserBoardDetail,
   UserBoardSummary,
@@ -26,6 +27,17 @@ export function fetchUserBoard(filters: UserBoardFilters, pagination: Pagination
 
 export function fetchUserBoardDetail(accountId: number) {
   return apiRequest<UserBoardDetail>(`/api/web/admin/users/${accountId}/board`);
+}
+
+export function fetchPatientContractInfo(accountId: number) {
+  return apiRequest<PatientContractInfo>(`/api/mini/admin/patients/${accountId}`);
+}
+
+export function updatePatientBoundCounselor(accountId: number, counselorId: number | null) {
+  return apiRequest<PatientContractInfo>(`/api/mini/admin/patients/${accountId}/bound-counselor`, {
+    method: "PUT",
+    body: JSON.stringify({ counselorId }),
+  });
 }
 
 export function fetchCounselorBoard(keyword: string, pagination: PaginationParams) {

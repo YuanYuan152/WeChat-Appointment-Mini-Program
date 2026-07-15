@@ -1,4 +1,5 @@
 import { formatDateTime, formatMoneyFromCents, statusLabel } from "@/lib/format";
+import { formatPatientNameWithContractTag } from "@/lib/patientContract";
 import type { RefundExemption } from "@/types/api";
 import { useEffect, useState } from "react";
 
@@ -65,7 +66,7 @@ export function RefundsPanel({
   return (
     <section className="rounded-xl border border-[var(--lxxl-border)] bg-white">
       <PanelHeader
-        title="豁免审核"
+        title="用户豁免"
         description="来访取消不满足常规退款条件时，由管理员或运营审核豁免。"
         action={
           pendingCount > 0 ? (
@@ -129,7 +130,9 @@ export function RefundsPanel({
                 >
                   <td className="px-5 py-4">{formatDateTime(item.createdAt)}</td>
                   <td className="px-5 py-4">
-                    <div className="font-medium">{item.patientName}</div>
+                    <div className="font-medium">
+                      {formatPatientNameWithContractTag(item.patientName, item.patientContractTag)}
+                    </div>
                     <div className="mt-1 text-xs text-[var(--lxxl-muted)]">{item.patientMobile || "-"}</div>
                   </td>
                   <td className="px-5 py-4">{item.counselorName}</td>
@@ -193,7 +196,8 @@ export function RefundsPanel({
             <div className="border-b border-[var(--lxxl-border)] px-6 py-5">
               <h3 className="text-lg font-semibold">填写拒绝原因</h3>
               <p className="mt-1 text-sm text-[var(--lxxl-muted)]">
-                {rejectTarget.patientName}，{formatDateTime(rejectTarget.consultationStartTime)}
+                {formatPatientNameWithContractTag(rejectTarget.patientName, rejectTarget.patientContractTag)}，
+                {formatDateTime(rejectTarget.consultationStartTime)}
               </p>
             </div>
             <div className="px-6 py-5">

@@ -119,7 +119,12 @@ export function SchedulesPanel({
                   </td>
                   <td className="px-5 py-4">{row.centerName || "-"}</td>
                   <td className="px-5 py-4">{row.roomName || row.roomId || "-"}</td>
-                  <td className="px-5 py-4">{row.patientName || "-"}</td>
+                  <td className="px-5 py-4">
+                    <div>{row.patientName || "-"}</div>
+                    {row.patientContractTag && (
+                      <div className="mt-1 text-xs font-medium text-[#315D4B]">{row.patientContractTag}</div>
+                    )}
+                  </td>
                   <td className="px-5 py-4">
                     <Badge tone="green">{scheduleStatusLabel(row.status)}</Badge>
                   </td>

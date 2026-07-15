@@ -3,6 +3,7 @@
 import { roles } from "@/config/navigation";
 import { COUNSELOR_TYPE_OPTIONS, type CounselorType } from "@/config/userRoleMeta";
 import { getName } from "@/lib/display";
+import { formatPatientNameWithContractTag } from "@/lib/patientContract";
 import { roleLabel } from "@/lib/format";
 import type { AdminUser, Role } from "@/types/api";
 import { QueryField, queryControlClass } from "@/components/ui";
@@ -48,7 +49,7 @@ export function RoleEditModal({
         <div className="border-b border-[var(--lxxl-border)] px-6 py-5">
           <h3 className="text-lg font-semibold">修改绑定角色</h3>
           <p className="mt-2 text-sm text-[var(--lxxl-muted)]">
-            {getName(user)} {user.mobile ? `· ${user.mobile}` : ""}
+            {formatPatientNameWithContractTag(getName(user), user.contractTag)} {user.mobile ? `· ${user.mobile}` : ""}
           </p>
         </div>
 

@@ -2,11 +2,22 @@ import { useEffect, useMemo, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 
 import { formatDateTime, statusLabel } from "@/lib/format";
+import { getLocalDateValue } from "@/lib/date";
+import { API_BASE_URL } from "@/lib/api";
+import {
+  fetchCounselorProxySlotOptions,
+  pushCounselorProxyOrder,
+  searchCounselorProxyPatients,
+  type CounselorProxyPatientOption,
+} from "@/services/counselor";
+import { uploadImage } from "@/services/uploads";
 import type {
   CounselorScheduleCalendar,
   CounselorScheduleCalendarItem,
   CounselorSlotOption,
   CounselorSlotOptions,
+  ProxySlotOption,
+  ProxySlotOptions,
 } from "@/types/api";
 
 import {
@@ -59,6 +70,7 @@ export function CounselorSchedulesPanel({
   onCreate,
   onCancel,
   onLeave,
+  onProxyOrderCreated,
   onPageChange,
   onPageSizeChange,
 }: {
@@ -81,17 +93,28 @@ export function CounselorSchedulesPanel({
   onLoadSlots: () => Promise<boolean> | boolean;
   onCreate: (slot: CounselorSlotOption, roomId: string) => Promise<boolean> | boolean;
   onCancel: (scheduleId: number, reason?: string) => void;
-  onLeave: (scheduleId: number, reason: string) => void;
+  onLeave: (
+    scheduleId: number,
+    reason: string,
+    communicationScreenshotUrl: string,
+  ) => Promise<boolean> | boolean;
+  onProxyOrderCreated: (message: string) => Promise<void> | void;
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
 }) {
   const [createOpen, setCreateOpen] = useState(false);
+  const [proxyOpen, setProxyOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<
     | { type: "cancel"; schedule: CounselorScheduleCalendarItem }
     | { type: "leave"; schedule: CounselorScheduleCalendarItem }
     | null
   >(null);
   const [reason, setReason] = useState("");
+  const [communicationScreenshotUrl, setCommunicationScreenshotUrl] = useState("");
+  const [screenshotUploading, setScreenshotUploading] = useState(false);
+  const [screenshotError, setScreenshotError] = useState("");
+  const [actionSubmitting, setActionSubmitting] = useState(false);
+  const communicationScreenshotPreviewUrl = resolveUploadedAssetUrl(communicationScreenshotUrl);
   const visibleSlotOptions =
     slotOptions && slotOptions.date === draft.date && slotOptions.centerId === draft.centerId ? slotOptions : undefined;
   const selectedSlot = visibleSlotOptions?.slots.find((slot) => slot.key === draft.slotKey);
@@ -125,17 +148,73 @@ export function CounselorSchedulesPanel({
     }
   }, [focusedRowId, onPageChange, page, pageSize, rows]);
 
-  const confirmPendingAction = () => {
+  const resetPendingAction = () => {
+    setPendingAction(null);
+    setReason("");
+    setCommunicationScreenshotUrl("");
+    setScreenshotError("");
+    setScreenshotUploading(false);
+    setActionSubmitting(false);
+  };
+
+  const handleScreenshotUpload = async (file?: File) => {
+    if (!file) {
+      return;
+    }
+    if (!["image/jpeg", "image/png", "image/gif", "image/webp"].includes(file.type)) {
+      setScreenshotError("仅支持 JPG、PNG、GIF 或 WebP 图片");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setScreenshotError("图片大小不能超过 10MB");
+      return;
+    }
+
+    setScreenshotUploading(true);
+    setScreenshotError("");
+    try {
+      const result = await uploadImage(file);
+      if (!result.url?.trim()) {
+        throw new Error("上传接口未返回图片地址");
+      }
+      setCommunicationScreenshotUrl(result.url.trim());
+    } catch (error) {
+      setCommunicationScreenshotUrl("");
+      setScreenshotError(error instanceof Error ? error.message : "沟通截图上传失败");
+    } finally {
+      setScreenshotUploading(false);
+    }
+  };
+
+  const confirmPendingAction = async () => {
     if (!pendingAction) {
       return;
     }
     if (pendingAction.type === "leave") {
-      onLeave(pendingAction.schedule.id, reason);
+      if (!reason.trim() || !communicationScreenshotUrl || screenshotUploading || actionSubmitting) {
+        return;
+      }
+      setActionSubmitting(true);
+      try {
+        const submitted = await onLeave(
+          pendingAction.schedule.id,
+          reason.trim(),
+          communicationScreenshotUrl,
+        );
+        if (submitted) {
+          resetPendingAction();
+        } else {
+          setScreenshotError("请假申请未提交，请根据页面提示检查后重试");
+        }
+      } catch (error) {
+        setScreenshotError(error instanceof Error ? error.message : "请假申请提交失败");
+      } finally {
+        setActionSubmitting(false);
+      }
     } else {
       onCancel(pendingAction.schedule.id, reason || undefined);
+      resetPendingAction();
     }
-    setPendingAction(null);
-    setReason("");
   };
 
   return (
@@ -155,16 +234,21 @@ export function CounselorSchedulesPanel({
                 查看自己的排期；已预约咨询可按规则取消或提交请假申请。
               </p>
             </div>
-            <QueryButton
-              className="w-28"
-              type="button"
-              onClick={() => {
-                onClearSlotError();
-                setCreateOpen(true);
-              }}
-            >
-              新增排期
-            </QueryButton>
+            <div className="flex flex-col gap-3">
+              <QueryButton
+                className="w-28"
+                type="button"
+                onClick={() => {
+                  onClearSlotError();
+                  setCreateOpen(true);
+                }}
+              >
+                新增排期
+              </QueryButton>
+              <QueryButton className="w-28" type="button" onClick={() => setProxyOpen(true)}>
+                代理预约
+              </QueryButton>
+            </div>
           </div>
 
           <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -235,7 +319,14 @@ export function CounselorSchedulesPanel({
                           {item.displayStatus || statusLabel(item.status)}
                         </Badge>
                       </td>
-                      <td className="px-5 py-4 text-[var(--lxxl-muted)]">{item.patientName || "-"}</td>
+                      <td className="px-5 py-4 text-[var(--lxxl-muted)]">
+                        <div>{item.patientName || "-"}</div>
+                        {item.patientContractTag && (
+                          <div className="mt-1 text-xs font-medium text-[#315D4B]">
+                            {formatCounselorContractTag(item.patientContractTag)}
+                          </div>
+                        )}
+                      </td>
                       <td className="px-5 py-4 text-[var(--lxxl-muted)]">{item.hasCaseRecord ? "已填写" : "-"}</td>
                       <td className="px-5 py-4">
                         <div className="flex flex-wrap gap-3">
@@ -244,6 +335,8 @@ export function CounselorSchedulesPanel({
                               onClick={() => {
                                 setPendingAction({ type: "leave", schedule: item });
                                 setReason(item.leaveReason || "");
+                                setCommunicationScreenshotUrl("");
+                                setScreenshotError("");
                               }}
                             >
                               请假
@@ -255,6 +348,8 @@ export function CounselorSchedulesPanel({
                               onClick={() => {
                                 setPendingAction({ type: "cancel", schedule: item });
                                 setReason("");
+                                setCommunicationScreenshotUrl("");
+                                setScreenshotError("");
                               }}
                             >
                               取消排期
@@ -299,6 +394,16 @@ export function CounselorSchedulesPanel({
         />
       )}
 
+      {proxyOpen && (
+        <CounselorProxyBookingModal
+          onClose={() => setProxyOpen(false)}
+          onCreated={async (message) => {
+            await onProxyOrderCreated(message);
+            setProxyOpen(false);
+          }}
+        />
+      )}
+
       {pendingAction && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/30 px-6">
           <section className="w-full max-w-lg rounded-xl border border-[var(--lxxl-border)] bg-white p-6 shadow-xl">
@@ -319,17 +424,65 @@ export function CounselorSchedulesPanel({
                 onChange={(event) => setReason(event.target.value)}
               />
             </label>
+            {pendingAction.type === "leave" && (
+              <div className="mt-5">
+                <span className="mb-2 block text-xs font-medium text-[var(--lxxl-muted)]">
+                  沟通截图（必填）
+                </span>
+                <input
+                  accept="image/jpeg,image/png,image/gif,image/webp"
+                  className={`${queryControlClass} h-auto py-3 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-[#EEF5F1] file:px-3 file:py-2 file:text-sm file:font-medium file:text-[var(--lxxl-green-dark)]`}
+                  disabled={screenshotUploading || actionSubmitting}
+                  type="file"
+                  onChange={(event) => {
+                    const file = event.currentTarget.files?.[0];
+                    event.currentTarget.value = "";
+                    void handleScreenshotUpload(file);
+                  }}
+                />
+                <p className="mt-2 text-xs leading-5 text-[var(--lxxl-muted)]">
+                  请上传已与来访沟通的截图，支持 JPG、PNG、GIF、WebP，最大 10MB。
+                </p>
+                {screenshotUploading && (
+                  <p className="mt-2 text-sm text-[var(--lxxl-muted)]">正在上传沟通截图...</p>
+                )}
+                {screenshotError && (
+                  <p className="mt-2 text-sm text-[#A13F37]">{screenshotError}</p>
+                )}
+                {communicationScreenshotUrl && !screenshotUploading && (
+                  <a
+                    className="mt-3 block rounded-xl border border-[var(--lxxl-border)] bg-[#FAF8F4] p-2"
+                    href={communicationScreenshotPreviewUrl}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      alt="沟通截图预览"
+                      className="max-h-44 w-full rounded-lg object-contain"
+                      src={communicationScreenshotPreviewUrl}
+                    />
+                  </a>
+                )}
+              </div>
+            )}
             <div className="mt-5 flex justify-end gap-3">
               <QueryResetButton
-                onClick={() => {
-                  setPendingAction(null);
-                  setReason("");
-                }}
+                disabled={screenshotUploading || actionSubmitting}
+                onClick={resetPendingAction}
               >
                 关闭
               </QueryResetButton>
-              <QueryButton disabled={pendingAction.type === "leave" && !reason.trim()} onClick={confirmPendingAction}>
-                确认
+              <QueryButton
+                disabled={
+                  actionSubmitting ||
+                  screenshotUploading ||
+                  (pendingAction.type === "leave" &&
+                    (!reason.trim() || !communicationScreenshotUrl))
+                }
+                onClick={() => void confirmPendingAction()}
+              >
+                {actionSubmitting ? "提交中" : "确认"}
               </QueryButton>
             </div>
           </section>
@@ -337,6 +490,360 @@ export function CounselorSchedulesPanel({
       )}
     </>
   );
+}
+
+function CounselorProxyBookingModal({
+  onClose,
+  onCreated,
+}: {
+  onClose: () => void;
+  onCreated: (message: string) => Promise<void> | void;
+}) {
+  const [patientKeyword, setPatientKeyword] = useState("");
+  const [patients, setPatients] = useState<CounselorProxyPatientOption[]>([]);
+  const [selectedPatient, setSelectedPatient] = useState<CounselorProxyPatientOption | null>(null);
+  const [centerId, setCenterId] = useState("yangpu");
+  const [date, setDate] = useState(getLocalDateValue());
+  const [slotKey, setSlotKey] = useState("");
+  const [roomId, setRoomId] = useState("");
+  const [slotOptions, setSlotOptions] = useState<ProxySlotOptions>();
+  const [patientLoading, setPatientLoading] = useState(false);
+  const [slotLoading, setSlotLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    const timer = window.setTimeout(async () => {
+      setPatientLoading(true);
+      try {
+        const result = await searchCounselorProxyPatients(patientKeyword);
+        if (active) {
+          setPatients((result.items || []).filter((patient) => patient.canProxyPush === true));
+          setError("");
+        }
+      } catch (err) {
+        if (active) {
+          setError(err instanceof Error ? err.message : "来访搜索失败");
+        }
+      } finally {
+        if (active) {
+          setPatientLoading(false);
+        }
+      }
+    }, patientKeyword ? 250 : 0);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [patientKeyword]);
+
+  useEffect(() => {
+    let active = true;
+    setSlotLoading(true);
+    setSlotOptions(undefined);
+    setSlotKey("");
+    setRoomId("");
+    void fetchCounselorProxySlotOptions(date, centerId)
+      .then((result) => {
+        if (active) {
+          setSlotOptions(result);
+          setError("");
+        }
+      })
+      .catch((err) => {
+        if (active) {
+          setSlotOptions(undefined);
+          setError(err instanceof Error ? err.message : "可预约时段加载失败");
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setSlotLoading(false);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [centerId, date]);
+
+  const selectedSlot = slotOptions?.slots.find((slot) => slot.key === slotKey);
+  const selectedRoom = selectedSlot?.rooms.find((room) => room.roomId === roomId);
+  const isVideo = centerId === "video";
+  const canSubmit = Boolean(
+    selectedPatient?.canProxyPush &&
+      selectedSlot?.selectable &&
+      !selectedSlot.past &&
+      !selectedSlot.counselorOccupied &&
+      !selectedSlot.allRoomsFull &&
+      (isVideo || (selectedRoom?.available && !selectedRoom.occupiedByOther)),
+  );
+
+  async function submit() {
+    if (!selectedPatient || !selectedSlot || !canSubmit || submitting) {
+      return;
+    }
+    setSubmitting(true);
+    setError("");
+    try {
+      const result = await pushCounselorProxyOrder({
+        patient_id: selectedPatient.id,
+        center_id: centerId,
+        start_time: selectedSlot.startTime,
+        end_time: selectedSlot.endTime,
+        room_id: isVideo ? null : roomId,
+        schedule_id: selectedSlot.existingAvailableScheduleId ?? null,
+      });
+      await onCreated(result.message || "订单已推送");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "代理预约订单推送失败");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/35 px-4 py-6">
+      <section
+        aria-label="代理预约"
+        aria-modal="true"
+        className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-[var(--lxxl-border)] bg-white shadow-2xl"
+        role="dialog"
+      >
+        <div className="border-b border-[var(--lxxl-border)] px-6 py-5">
+          <h3 className="text-lg font-semibold">代理预约</h3>
+          <p className="mt-1 text-sm text-[var(--lxxl-muted)]">
+            仅可为已绑定您且已签约的来访推送订单，订单需在 2 小时内支付。
+          </p>
+        </div>
+
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5">
+          <QueryField label="选择来访" required>
+            <input
+              className={queryControlClass}
+              placeholder="输入姓名或手机号搜索"
+              value={patientKeyword}
+              onChange={(event) => {
+                setPatientKeyword(event.target.value);
+                if (selectedPatient && event.target.value !== selectedPatient.name) {
+                  setSelectedPatient(null);
+                }
+              }}
+            />
+          </QueryField>
+
+          <div className="max-h-52 overflow-y-auto rounded-xl border border-[var(--lxxl-border)]">
+            {patientLoading ? (
+              <div className="px-4 py-4 text-sm text-[var(--lxxl-muted)]">正在搜索来访...</div>
+            ) : patients.length === 0 ? (
+              <div className="px-4 py-4 text-sm text-[var(--lxxl-muted)]">
+                没有匹配的已签约且已绑定来访。
+              </div>
+            ) : (
+              patients.map((patient) => (
+                <button
+                  className={`flex w-full items-center justify-between gap-4 border-b border-[var(--lxxl-border)] px-4 py-3 text-left last:border-b-0 hover:bg-[#F5F8F6] ${
+                    selectedPatient?.id === patient.id ? "bg-[#EEF5F1]" : ""
+                  }`}
+                  key={patient.id}
+                  onClick={() => {
+                    setSelectedPatient(patient);
+                    setPatientKeyword(patient.name);
+                  }}
+                  type="button"
+                >
+                  <span>
+                    <span className="font-medium">{patient.name}</span>
+                    <span className="ml-2 text-xs text-[var(--lxxl-muted)]">
+                      {patient.mobile || `编号 ${patient.id}`}
+                    </span>
+                  </span>
+                  <span className="text-xs text-[#315D4B]">
+                    {formatCounselorContractTag(patient.contractTag)}
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <QueryField label="日期" required>
+              <input
+                className={queryControlClass}
+                min={getLocalDateValue()}
+                type="date"
+                value={date}
+                onChange={(event) => setDate(event.target.value)}
+              />
+            </QueryField>
+            <QueryField label="预约中心" required>
+              <select
+                className={queryControlClass}
+                value={centerId}
+                onChange={(event) => setCenterId(event.target.value)}
+              >
+                {COUNSELOR_CENTER_OPTIONS.map((item) => (
+                  <option key={item.value} value={item.value}>{item.label}</option>
+                ))}
+              </select>
+            </QueryField>
+          </div>
+
+          {slotLoading ? (
+            <div className="rounded-xl bg-[#FAF8F4] px-4 py-4 text-sm text-[var(--lxxl-muted)]">
+              正在加载可预约时段...
+            </div>
+          ) : !slotOptions ? (
+            <div className="rounded-xl bg-[#FAF8F4] px-4 py-4 text-sm text-[var(--lxxl-muted)]">
+              暂时无法读取可预约时段。
+            </div>
+          ) : (
+            <div className="space-y-6">
+              <QueryField label="时段" required>
+                <div className="mb-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-[var(--lxxl-muted)]">
+                  <span className="inline-flex items-center gap-2">
+                    <span className="h-3 w-3 rounded-sm border border-[#BFD9C9] bg-[#EAF2ED]" />
+                    已排期、尚未预约
+                  </span>
+                  <span className="inline-flex items-center gap-2">
+                    <span className="h-3 w-3 rounded-sm border border-[var(--lxxl-border)] bg-white" />
+                    尚未排期，可新建
+                  </span>
+                  <span className="inline-flex items-center gap-2">
+                    <span className="h-3 w-3 rounded-sm border border-[var(--lxxl-border)] bg-[#F4F1EB]" />
+                    已预约或不可用
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {slotOptions.slots.map((slot) => {
+                    const selectable =
+                      slot.selectable && !slot.past && !slot.counselorOccupied && !slot.allRoomsFull;
+                    const selected = slotKey === slot.key;
+                    const existingAvailableSchedule = Boolean(slot.existingAvailableScheduleId);
+                    return (
+                      <button
+                        className={`rounded-xl border px-4 py-3 text-left text-sm transition ${
+                          selected
+                            ? "border-[var(--lxxl-green)] bg-[#F4FBF7]"
+                            : selectable && existingAvailableSchedule
+                              ? "border-[#BFD9C9] bg-[#EAF2ED] text-[var(--lxxl-green-dark)] hover:border-[var(--lxxl-green)]"
+                              : selectable
+                                ? "border-[var(--lxxl-border)] bg-white hover:border-[var(--lxxl-green)]"
+                                : "cursor-not-allowed border-[var(--lxxl-border)] bg-[#F4F1EB] text-[var(--lxxl-muted)]"
+                        }`}
+                        disabled={!selectable}
+                        key={slot.key}
+                        type="button"
+                        onClick={() => {
+                          const firstRoom = slot.rooms.find(
+                            (room) => room.available && !room.occupiedByOther,
+                          );
+                          setSlotKey(slot.key);
+                          setRoomId(isVideo ? "" : firstRoom?.roomId || "");
+                        }}
+                      >
+                        <span className="block font-medium">{slot.label}</span>
+                        <span className="mt-1 block text-xs text-[var(--lxxl-muted)]">
+                          {proxySlotHint(slot)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </QueryField>
+
+              {!isVideo && selectedSlot && (
+                <QueryField label="咨询室" required>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    {selectedSlot.rooms.map((room) => {
+                      const selected = roomId === room.roomId;
+                      const selectable = room.available && !room.occupiedByOther;
+                      return (
+                        <button
+                          className={`rounded-xl border px-4 py-3 text-left text-sm transition ${
+                            selected
+                              ? "border-[var(--lxxl-green)] bg-[#F4FBF7]"
+                              : selectable
+                                ? "border-[var(--lxxl-border)] bg-white hover:border-[var(--lxxl-green)]"
+                                : "cursor-not-allowed border-[var(--lxxl-border)] bg-[#F4F1EB] text-[var(--lxxl-muted)]"
+                          }`}
+                          disabled={!selectable}
+                          key={room.roomId}
+                          type="button"
+                          onClick={() => setRoomId(room.roomId)}
+                        >
+                          <span className="block font-medium">{room.roomName}</span>
+                          <span className="mt-1 block text-xs text-[var(--lxxl-muted)]">
+                            {selectable ? "可预约" : "已占用"}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </QueryField>
+              )}
+
+              {selectedSlot && (
+                <div className="rounded-xl bg-[#FAF8F4] px-4 py-3 text-sm leading-6 text-[var(--lxxl-muted)]">
+                  将推送待支付订单：{formatDateTime(selectedSlot.startTime)} 至{" "}
+                  {formatDateTime(selectedSlot.endTime)}
+                  {!isVideo && selectedRoom ? ` · ${selectedRoom.roomName}` : ""}。
+                </div>
+              )}
+            </div>
+          )}
+
+          {error && (
+            <div className="rounded-xl border border-[#E7B8B2] bg-[#FFF5F3] px-4 py-3 text-sm text-[#A13F37]">
+              {error}
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-3 border-t border-[var(--lxxl-border)] px-6 py-4">
+          <QueryButton disabled={!canSubmit || submitting} onClick={submit}>
+            {submitting ? "推送中" : "推送订单"}
+          </QueryButton>
+          <QueryResetButton disabled={submitting} onClick={onClose}>取消</QueryResetButton>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function formatCounselorContractTag(tag?: string | null) {
+  if (!tag) {
+    return "已签约";
+  }
+  const counselorName = tag.replace(/^已签约[-—]?\s*/, "").replace(/^【|】$/g, "");
+  return counselorName ? `已签约-【${counselorName}】` : "已签约";
+}
+
+function resolveUploadedAssetUrl(url: string) {
+  const value = url.trim();
+  if (!value || /^https?:\/\//i.test(value)) {
+    return value;
+  }
+  return `${API_BASE_URL}${value.startsWith("/") ? value : `/${value}`}`;
+}
+
+function proxySlotHint(slot: ProxySlotOption) {
+  if (slot.past) {
+    return "已过期";
+  }
+  if (slot.counselorOccupied) {
+    return "当前时段已占用";
+  }
+  if (slot.allRoomsFull) {
+    return "咨询室已满";
+  }
+  if (slot.existingAvailableScheduleId) {
+    return "已有可约排期，可直接代理预约";
+  }
+  if (slot.selectable) {
+    return "尚未排期，可新建代理预约";
+  }
+  return "不可预约";
 }
 
 function CreateScheduleModal({

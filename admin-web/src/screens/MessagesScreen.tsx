@@ -47,7 +47,9 @@ function MessagesScreenContent() {
   const [selectedActionTarget, setSelectedActionTarget] = useState<MessageActionTarget | null>(null);
   const [listLoading, setListLoading] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
-  const showCrisisBanner = currentUser.roles.includes("Admin") || currentUser.roles.includes("Ops");
+  const showCrisisBanner =
+    currentUser.activeRole === "Admin" || currentUser.activeRole === "Ops";
+  const showStaffReviewCategories = currentUser.activeRole === "Assistant";
 
   const loadCrisisUnreadCount = useCallback(async () => {
     if (!showCrisisBanner) {
@@ -164,6 +166,7 @@ function MessagesScreenContent() {
       selectedActionTarget={selectedActionTarget}
       selectedMessage={selectedMessage}
       showCrisisBanner={showCrisisBanner}
+      showStaffReviewCategories={showStaffReviewCategories}
       statusFilter={statusFilter}
       onCloseDetail={() => {
         setSelectedMessage(null);

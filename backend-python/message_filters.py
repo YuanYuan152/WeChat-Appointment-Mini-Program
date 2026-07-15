@@ -30,13 +30,18 @@ ADMIN_OPS_INBOX_CATEGORIES: Tuple[str, ...] = (
     "charity_milestone",
     "professional_pair_milestone",
     "pricing",
+    "proxy_booking",
 )
 
 CATEGORY_RELATED_TYPES: dict[str, list[str]] = {
     "appointment_new": ["APPOINTMENT_NEW", "COUNSELOR_APPOINTMENT_NEW", "CHARITY_CONSULTATION_30_BOOKING"],
     "appointment_cancel": ["APPOINTMENT_CANCEL", "COUNSELOR_APPOINTMENT_CANCEL", "PATIENT_APPOINTMENT_CANCEL"],
     "counselor_leave": ["COUNSELOR_LEAVE"],
-    "leave_submitted": ["COUNSELOR_LEAVE_SUBMITTED", "COUNSELOR_LEAVE_SUCCESS"],
+    "leave_submitted": [
+        "COUNSELOR_LEAVE_SUBMITTED",
+        "COUNSELOR_LEAVE_SUCCESS",
+        "COUNSELOR_LEAVE_REJECTED",
+    ],
     "exemption": ["REFUND_EXEMPTION", "REFUND_EXEMPTION_PENDING"],
     "case_record_amendment": ["CASE_RECORD_AMENDMENT", "CASE_RECORD_AMENDMENT_PENDING"],
     "case_record_crisis": ["CASE_RECORD_CRISIS_REPORT"],
@@ -50,6 +55,11 @@ CATEGORY_RELATED_TYPES: dict[str, list[str]] = {
         "PRICING_COUNSELOR_BASE_UPDATED",
         "PRICING_PATIENT_PRICE_UPDATED",
         "PRICING_PATIENT_SHARE_UPDATED",
+    ],
+    "proxy_booking": [
+        "PATIENT_PROXY_ORDER_PENDING",
+        "COUNSELOR_PROXY_ORDER_PENDING",
+        "STAFF_PROXY_ORDER_PUSHED",
     ],
     "leave_notice": ["PATIENT_LEAVE_APPROVED"],
     "charity_negotiation": ["PATIENT_CHARITY_NEGOTIATION_TIP"],
@@ -70,6 +80,7 @@ CATEGORY_KEYWORDS: dict[str, list[str]] = {
     "charity_milestone": ["公益咨询第30次", "第三十次公益咨询", "30次公益咨询"],
     "professional_pair_milestone": ["正价咨询第30次", "第三十次预约", "调整抽成比例"],
     "pricing": ["改价成功", "调价成功", "基础价格", "抽成比例", "价格调整", "抽成已调整"],
+    "proxy_booking": ["代理预约", "待支付预约", "订单已推送"],
     "charity_negotiation": ["公益咨询议价", "议价后方可再次预约"],
     "leave_notice": ["咨询师请假，预约已取消"],
 }

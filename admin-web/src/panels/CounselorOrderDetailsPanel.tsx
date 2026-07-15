@@ -10,6 +10,7 @@ import {
 } from "@/constants/caseRecordRiskAssessment";
 import { API_BASE_URL } from "@/lib/api";
 import { formatDateTime, formatMoneyFromCents, statusLabel } from "@/lib/format";
+import { formatPatientNameWithContractTag } from "@/lib/patientContract";
 import type { CounselorCaseRecord, CounselorDashboardDetailItem } from "@/types/api";
 import type { CounselorDashboardPeriod } from "@/services/counselor";
 
@@ -84,7 +85,7 @@ export function CounselorOrderDetailsPanel({
       if (!normalizedKeyword) {
         return true;
       }
-      return [item.title, item.patientMobile]
+      return [item.title, item.patientMobile, item.patientContractTag]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(normalizedKeyword));
     });
@@ -106,7 +107,7 @@ export function CounselorOrderDetailsPanel({
       const key = `${item.patientId ?? item.title}-${item.patientMobile ?? ""}`;
       const current = groups.get(key) || {
         key,
-        title: item.title,
+        title: formatPatientNameWithContractTag(item.title, item.patientContractTag),
         mobile: item.patientMobile,
         totalAmount: 0,
         personalIncome: 0,
@@ -312,7 +313,9 @@ function CounselorOrderRecordDetail({
   return (
     <div className="space-y-5 text-sm">
       <section className="border-b border-[var(--lxxl-border)] pb-4">
-        <div className="text-base font-semibold text-[#2C2C2C]">{item.title}</div>
+        <div className="text-base font-semibold text-[#2C2C2C]">
+          {formatPatientNameWithContractTag(item.title, item.patientContractTag)}
+        </div>
         <div className="mt-2 text-[var(--lxxl-muted)]">
           {formatDateTime(item.subtitle)} · {statusLabel(item.status)} · {item.extra || `咨询单 #${record.ConsultationId}`}
         </div>

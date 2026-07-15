@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 
 import { formatDateTime } from "@/lib/format";
+import { formatPatientNameWithContractTag } from "@/lib/patientContract";
 import { API_BASE_URL } from "@/lib/api";
 import {
   RISK_ASSESSMENT_ITEMS,
@@ -266,7 +267,9 @@ export function CounselorRecordsPanel({
                     const record = item.CaseRecordId ? recordById.get(item.CaseRecordId) : undefined;
                     return (
                       <tr key={item.Id} className="border-t border-[var(--lxxl-border)]">
-                        <td className="px-5 py-4 font-medium">{item.PatientName}</td>
+                        <td className="px-5 py-4 font-medium">
+                          {formatPatientNameWithContractTag(item.PatientName, item.PatientContractTag)}
+                        </td>
                         <td className="px-5 py-4 text-[var(--lxxl-muted)]">
                           {formatDateTime(item.StartTime)} 至 {formatDateTime(item.EndTime)}
                         </td>
