@@ -1,4 +1,4 @@
-import { memo, useState } from "react";
+import { memo, useRef, useState } from "react";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
 
 import { formatDateTime, formatMoneyFromCents, statusLabel } from "@/lib/format";
@@ -26,12 +26,6 @@ export interface UserProxyBookingTarget {
   patientId: number;
   patientName: string;
   patientMobile?: string | null;
-  counselorId?: number | null;
-  counselorName?: string | null;
-  counselorMobile?: string | null;
-  isContractSigned?: boolean;
-  boundCounselorId?: number | null;
-  boundCounselorName?: string | null;
 }
 
 export function UserBoardPanel({
@@ -241,6 +235,9 @@ function UserDetailPanel({
   const [selectedCounselorId, setSelectedCounselorId] = useState<number | null>(null);
   const [bindLoading, setBindLoading] = useState(false);
   const [bindSaving, setBindSaving] = useState(false);
+  const [bindError, setBindError] = useState("");
+  const [bindPrompt, setBindPrompt] = useState("");
+  const bindSearchSeq = useRef(0);
   const canProxyBooking = detail.profile.isVisitor === true;
   const contractTag = patientContractTag(detail.profile);
   const completedConsultations = detail.consultations.filter((item) => item.status === "DONE");
@@ -251,19 +248,70 @@ function UserDetailPanel({
     patientId: detail.profile.id,
     patientName: detail.profile.name,
     patientMobile: detail.profile.mobile,
-    counselorId: detail.profile.boundCounselorId,
-    counselorName: detail.profile.boundCounselorName,
-    isContractSigned: detail.profile.isContractSigned,
-    boundCounselorId: detail.profile.boundCounselorId,
-    boundCounselorName: detail.profile.boundCounselorName,
   });
+  const loadCounselors = async (keyword: string) => {
+    if (!onSearchCounselors) {
+      return;
+    }
+    const requestSeq = bindSearchSeq.current + 1;
+    bindSearchSeq.current = requestSeq;
+    setBindLoading(true);
+    setBindError("");
+    try {
+      const options = await onSearchCounselors(keyword);
+      if (bindSearchSeq.current !== requestSeq) {
+        return;
+      }
+      setBindOptions(options);
+      setSelectedCounselorId((current) => {
+        if (current === detail.profile.boundCounselorId || options.some((item) => item.id === current)) {
+          return current;
+        }
+        return null;
+      });
+    } catch (error) {
+      if (bindSearchSeq.current !== requestSeq) {
+        return;
+      }
+      setBindOptions([]);
+      setSelectedCounselorId((current) =>
+        current === detail.profile.boundCounselorId ? current : null,
+      );
+      setBindError(error instanceof Error ? error.message : "咨询师搜索失败，请重试");
+    } finally {
+      if (bindSearchSeq.current === requestSeq) {
+        setBindLoading(false);
+      }
+    }
+  };
+  const openBindingModal = (prompt = "") => {
+    if (!onSearchCounselors || !onBindCounselor) {
+      return;
+    }
+    setBindKeyword("");
+    setBindError("");
+    setBindPrompt(prompt);
+    setSelectedCounselorId(detail.profile.boundCounselorId || null);
+    setBindOpen(true);
+    void loadCounselors("");
+  };
+  const requestProxyBooking = () => {
+    if (!onProxyBooking) {
+      return;
+    }
+    if (!detail.profile.boundCounselorId) {
+      openBindingModal("代理预约前需先绑定咨询师。完成绑定后，再继续创建代理预约。");
+      return;
+    }
+    onProxyBooking(proxyTarget());
+  };
   const consultationCard = (item: UserBoardDetail["consultations"][number]) => {
     const note = cleanBusinessNote(item.note);
     return (
       <DetailCard
         action={
           canProxyBooking && onProxyBooking ? (
-            <TableActionButton onClick={() => onProxyBooking(proxyTarget())}>再约一单</TableActionButton>
+            <TableActionButton onClick={requestProxyBooking}>再约一单</TableActionButton>
           ) : undefined
         }
         title={`${timeRangeText(item.startTime, item.endTime)} · ${statusLabel(item.status)}`}
@@ -304,24 +352,20 @@ function UserDetailPanel({
       )}
       {canProxyBooking && onProxyBooking && (
         <div className="mt-4 flex flex-col items-start gap-3">
-          <QueryButton className="w-28" onClick={() => onProxyBooking(proxyTarget())}>
+          <QueryButton className="w-28" onClick={requestProxyBooking}>
             代理预约
           </QueryButton>
+          {!detail.profile.boundCounselorId && (
+            <p className="text-xs leading-5 text-[#A46A22]">
+              代理预约前需先绑定咨询师；点击“代理预约”或“再约一单”将先打开绑定窗口。
+            </p>
+          )}
           {onSearchCounselors && onBindCounselor && (
             <QueryResetButton
               className="w-40"
-              onClick={() => {
-                setBindKeyword("");
-                setSelectedCounselorId(detail.profile.boundCounselorId || null);
-                setBindOpen(true);
-                setBindLoading(true);
-                void onSearchCounselors("")
-                  .then(setBindOptions)
-                  .catch(() => setBindOptions([]))
-                  .finally(() => setBindLoading(false));
-              }}
+              onClick={() => openBindingModal()}
             >
-              {detail.profile.boundCounselorId ? "更换签约咨询师" : "绑定签约咨询师"}
+              {detail.profile.boundCounselorId ? "更换绑定咨询师" : "绑定咨询师"}
             </QueryResetButton>
           )}
         </div>
@@ -415,14 +459,19 @@ function UserDetailPanel({
       {bindOpen && onSearchCounselors && onBindCounselor && (
         <BindCounselorModal
           boundCounselorId={detail.profile.boundCounselorId}
+          error={bindError}
           keyword={bindKeyword}
           loading={bindLoading}
           options={bindOptions}
+          prompt={bindPrompt}
           saving={bindSaving}
           selectedCounselorId={selectedCounselorId}
           setKeyword={setBindKeyword}
           setSelectedCounselorId={setSelectedCounselorId}
-          onClose={() => setBindOpen(false)}
+          onClose={() => {
+            bindSearchSeq.current += 1;
+            setBindOpen(false);
+          }}
           onSave={async (counselorId) => {
             setBindSaving(true);
             try {
@@ -434,14 +483,7 @@ function UserDetailPanel({
               setBindSaving(false);
             }
           }}
-          onSearch={async () => {
-            setBindLoading(true);
-            try {
-              setBindOptions(await onSearchCounselors(bindKeyword));
-            } finally {
-              setBindLoading(false);
-            }
-          }}
+          onSearch={() => loadCounselors(bindKeyword)}
         />
       )}
     </>
@@ -450,9 +492,11 @@ function UserDetailPanel({
 
 function BindCounselorModal({
   boundCounselorId,
+  error,
   keyword,
   loading,
   options,
+  prompt,
   saving,
   selectedCounselorId,
   setKeyword,
@@ -462,9 +506,11 @@ function BindCounselorModal({
   onSearch,
 }: {
   boundCounselorId?: number | null;
+  error: string;
   keyword: string;
   loading: boolean;
   options: ProxyPersonOption[];
+  prompt: string;
   saving: boolean;
   selectedCounselorId: number | null;
   setKeyword: (value: string) => void;
@@ -473,24 +519,44 @@ function BindCounselorModal({
   onSave: (counselorId: number | null) => Promise<void>;
   onSearch: () => Promise<void>;
 }) {
+  const [pendingCounselorId, setPendingCounselorId] = useState<number | null | undefined>(undefined);
+  const selectedCounselor = options.find((item) => item.id === selectedCounselorId);
+  const isSameCounselor = Boolean(boundCounselorId && selectedCounselorId === boundCounselorId);
+  const needsChangeConfirmation = Boolean(
+    boundCounselorId && pendingCounselorId !== undefined && pendingCounselorId !== boundCounselorId,
+  );
+
+  const requestSave = (counselorId: number | null) => {
+    if (counselorId === boundCounselorId) {
+      return;
+    }
+    if (boundCounselorId) {
+      setPendingCounselorId(counselorId);
+      return;
+    }
+    void onSave(counselorId);
+  };
+
   return (
     <div className="fixed inset-0 z-[60] grid place-items-center bg-black/30 px-6 py-6">
       <section
-        aria-label="选择签约咨询师"
+        aria-label="选择绑定咨询师"
         aria-modal="true"
         className="flex max-h-[80vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-[var(--lxxl-border)] bg-white shadow-2xl"
         role="dialog"
       >
         <div className="border-b border-[var(--lxxl-border)] px-6 py-5">
-          <h3 className="text-lg font-semibold">选择签约咨询师</h3>
+          <h3 className="text-lg font-semibold">选择绑定咨询师</h3>
           <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">
-            绑定关系变化后，系统会按照与小程序一致的规则重新判定签约状态。
+            绑定咨询师用于限定代理预约对象，绑定本身不等于签约。系统会根据来访与所选咨询师是否存在历史已支付订单重新判定签约状态；没有历史已支付订单时仍为未签约，代理预约需同时选择协议。
           </p>
+          {prompt && <p className="mt-2 text-sm font-medium text-[#A46A22]">{prompt}</p>}
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
           <div className="flex gap-3">
             <input
               className={queryControlClass}
+              disabled={needsChangeConfirmation}
               placeholder="搜索咨询师姓名或电话"
               value={keyword}
               onChange={(event) => setKeyword(event.target.value)}
@@ -501,10 +567,15 @@ function BindCounselorModal({
                 }
               }}
             />
-            <QueryButton disabled={loading} onClick={() => void onSearch()}>
+            <QueryButton disabled={loading || needsChangeConfirmation} onClick={() => void onSearch()}>
               {loading ? "搜索中" : "查询"}
             </QueryButton>
           </div>
+          {error && (
+            <div className="mt-3 rounded-lg bg-[#FFF2F0] px-3 py-2 text-sm text-[#B42318]" role="alert">
+              {error}
+            </div>
+          )}
           <div className="mt-4 divide-y divide-[var(--lxxl-border)] rounded-xl border border-[var(--lxxl-border)]">
             {loading ? (
               <div className="px-4 py-6 text-center text-sm text-[var(--lxxl-muted)]">正在加载咨询师...</div>
@@ -515,13 +586,20 @@ function BindCounselorModal({
                 <label className="flex cursor-pointer items-center gap-3 px-4 py-3" key={item.id}>
                   <input
                     checked={selectedCounselorId === item.id}
+                    disabled={needsChangeConfirmation}
                     name="bound-counselor"
                     type="radio"
-                    onChange={() => setSelectedCounselorId(item.id)}
+                    onChange={() => {
+                      setPendingCounselorId(undefined);
+                      setSelectedCounselorId(item.id);
+                    }}
                   />
                   <span className="min-w-0 flex-1">
                     <span className="block font-medium">{item.name}</span>
                     <span className="mt-1 block text-xs text-[var(--lxxl-muted)]">{item.mobile || `ID ${item.id}`}</span>
+                    {boundCounselorId === item.id && (
+                      <span className="mt-1 block text-xs font-medium text-[#315D4B]">当前绑定</span>
+                    )}
                   </span>
                 </label>
               ))
@@ -529,19 +607,45 @@ function BindCounselorModal({
           </div>
         </div>
         <div className="flex flex-wrap gap-3 border-t border-[var(--lxxl-border)] px-6 py-4">
-          <QueryButton
-            className="w-28"
-            disabled={saving || !selectedCounselorId}
-            onClick={() => selectedCounselorId && void onSave(selectedCounselorId)}
-          >
-            {saving ? "保存中" : "确定"}
-          </QueryButton>
-          {boundCounselorId && (
-            <QueryResetButton disabled={saving} onClick={() => void onSave(null)}>
-              解除绑定
-            </QueryResetButton>
+          {needsChangeConfirmation ? (
+            <div className="w-full rounded-xl border border-[#E7C9A3] bg-[#FFF8ED] p-4">
+              <p className="text-sm font-medium text-[#7A4B16]">
+                {pendingCounselorId === null
+                  ? "确认解除当前咨询师绑定？"
+                  : `确认更换为${selectedCounselor?.name || "所选咨询师"}？`}
+              </p>
+              <p className="mt-1 text-xs leading-5 text-[#8A6438]">
+                换绑或解绑可能取消与原绑定咨询师关联的待支付代理订单，此操作完成后请核对来访的订单与预约记录。
+              </p>
+              <div className="mt-3 flex flex-wrap gap-3">
+                <QueryButton
+                  disabled={saving}
+                  onClick={() => pendingCounselorId !== undefined && void onSave(pendingCounselorId)}
+                >
+                  {saving ? "保存中" : pendingCounselorId === null ? "确认解绑" : "确认更换"}
+                </QueryButton>
+                <QueryResetButton disabled={saving} onClick={() => setPendingCounselorId(undefined)}>
+                  返回
+                </QueryResetButton>
+              </div>
+            </div>
+          ) : (
+            <>
+              <QueryButton
+                className="w-28"
+                disabled={saving || !selectedCounselorId || isSameCounselor}
+                onClick={() => selectedCounselorId && requestSave(selectedCounselorId)}
+              >
+                {saving ? "保存中" : isSameCounselor ? "当前已绑定" : "确定"}
+              </QueryButton>
+              {boundCounselorId && (
+                <QueryResetButton disabled={saving} onClick={() => requestSave(null)}>
+                  解除绑定
+                </QueryResetButton>
+              )}
+              <QueryResetButton disabled={saving} onClick={onClose}>取消</QueryResetButton>
+            </>
           )}
-          <QueryResetButton disabled={saving} onClick={onClose}>取消</QueryResetButton>
         </div>
       </section>
     </div>

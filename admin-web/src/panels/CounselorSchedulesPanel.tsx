@@ -510,21 +510,25 @@ function CounselorProxyBookingModal({
   const [patientLoading, setPatientLoading] = useState(false);
   const [slotLoading, setSlotLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
+  const [slotReloadKey, setSlotReloadKey] = useState(0);
+  const [patientError, setPatientError] = useState("");
+  const [slotFetchError, setSlotFetchError] = useState("");
+  const [submitError, setSubmitError] = useState("");
 
   useEffect(() => {
     let active = true;
     const timer = window.setTimeout(async () => {
       setPatientLoading(true);
+      setPatientError("");
       try {
         const result = await searchCounselorProxyPatients(patientKeyword);
         if (active) {
           setPatients((result.items || []).filter((patient) => patient.canProxyPush === true));
-          setError("");
         }
       } catch (err) {
         if (active) {
-          setError(err instanceof Error ? err.message : "来访搜索失败");
+          setPatients([]);
+          setPatientError(err instanceof Error ? err.message : "来访搜索失败");
         }
       } finally {
         if (active) {
@@ -544,17 +548,17 @@ function CounselorProxyBookingModal({
     setSlotOptions(undefined);
     setSlotKey("");
     setRoomId("");
+    setSlotFetchError("");
     void fetchCounselorProxySlotOptions(date, centerId)
       .then((result) => {
         if (active) {
           setSlotOptions(result);
-          setError("");
         }
       })
       .catch((err) => {
         if (active) {
           setSlotOptions(undefined);
-          setError(err instanceof Error ? err.message : "可预约时段加载失败");
+          setSlotFetchError(err instanceof Error ? err.message : "可预约时段加载失败");
         }
       })
       .finally(() => {
@@ -565,7 +569,7 @@ function CounselorProxyBookingModal({
     return () => {
       active = false;
     };
-  }, [centerId, date]);
+  }, [centerId, date, slotReloadKey]);
 
   const selectedSlot = slotOptions?.slots.find((slot) => slot.key === slotKey);
   const selectedRoom = selectedSlot?.rooms.find((room) => room.roomId === roomId);
@@ -584,7 +588,7 @@ function CounselorProxyBookingModal({
       return;
     }
     setSubmitting(true);
-    setError("");
+    setSubmitError("");
     try {
       const result = await pushCounselorProxyOrder({
         patient_id: selectedPatient.id,
@@ -596,10 +600,30 @@ function CounselorProxyBookingModal({
       });
       await onCreated(result.message || "订单已推送");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "代理预约订单推送失败");
+      setSubmitError(err instanceof Error ? err.message : "代理预约订单推送失败");
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function closeAndReset() {
+    if (submitting) {
+      return;
+    }
+    setPatientKeyword("");
+    setPatients([]);
+    setSelectedPatient(null);
+    setCenterId("yangpu");
+    setDate(getLocalDateValue());
+    setSlotKey("");
+    setRoomId("");
+    setSlotOptions(undefined);
+    setPatientLoading(false);
+    setSlotLoading(false);
+    setPatientError("");
+    setSlotFetchError("");
+    setSubmitError("");
+    onClose();
   }
 
   return (
@@ -665,6 +689,11 @@ function CounselorProxyBookingModal({
               ))
             )}
           </div>
+          {patientError && (
+            <div className="rounded-xl border border-[#E7B8B2] bg-[#FFF5F3] px-4 py-3 text-sm text-[#A13F37]">
+              {patientError}
+            </div>
+          )}
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <QueryField label="日期" required>
@@ -673,14 +702,22 @@ function CounselorProxyBookingModal({
                 min={getLocalDateValue()}
                 type="date"
                 value={date}
-                onChange={(event) => setDate(event.target.value)}
+                onChange={(event) => {
+                  setDate(event.target.value);
+                  setSlotKey("");
+                  setRoomId("");
+                }}
               />
             </QueryField>
             <QueryField label="预约中心" required>
               <select
                 className={queryControlClass}
                 value={centerId}
-                onChange={(event) => setCenterId(event.target.value)}
+                onChange={(event) => {
+                  setCenterId(event.target.value);
+                  setSlotKey("");
+                  setRoomId("");
+                }}
               >
                 {COUNSELOR_CENTER_OPTIONS.map((item) => (
                   <option key={item.value} value={item.value}>{item.label}</option>
@@ -689,11 +726,25 @@ function CounselorProxyBookingModal({
             </QueryField>
           </div>
 
+          {slotFetchError && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#E7B8B2] bg-[#FFF5F3] px-4 py-3 text-sm text-[#A13F37]">
+              <span>{slotFetchError}</span>
+              <button
+                className="font-medium text-[var(--lxxl-green-dark)] hover:underline"
+                disabled={slotLoading}
+                onClick={() => setSlotReloadKey((value) => value + 1)}
+                type="button"
+              >
+                重新加载
+              </button>
+            </div>
+          )}
+
           {slotLoading ? (
             <div className="rounded-xl bg-[#FAF8F4] px-4 py-4 text-sm text-[var(--lxxl-muted)]">
               正在加载可预约时段...
             </div>
-          ) : !slotOptions ? (
+          ) : slotFetchError ? null : !slotOptions ? (
             <div className="rounded-xl bg-[#FAF8F4] px-4 py-4 text-sm text-[var(--lxxl-muted)]">
               暂时无法读取可预约时段。
             </div>
@@ -735,11 +786,8 @@ function CounselorProxyBookingModal({
                         key={slot.key}
                         type="button"
                         onClick={() => {
-                          const firstRoom = slot.rooms.find(
-                            (room) => room.available && !room.occupiedByOther,
-                          );
                           setSlotKey(slot.key);
-                          setRoomId(isVideo ? "" : firstRoom?.roomId || "");
+                          setRoomId("");
                         }}
                       >
                         <span className="block font-medium">{slot.label}</span>
@@ -787,15 +835,20 @@ function CounselorProxyBookingModal({
                 <div className="rounded-xl bg-[#FAF8F4] px-4 py-3 text-sm leading-6 text-[var(--lxxl-muted)]">
                   将推送待支付订单：{formatDateTime(selectedSlot.startTime)} 至{" "}
                   {formatDateTime(selectedSlot.endTime)}
-                  {!isVideo && selectedRoom ? ` · ${selectedRoom.roomName}` : ""}。
+                  {!isVideo
+                    ? selectedRoom
+                      ? ` · ${selectedRoom.roomName}`
+                      : " · 请继续选择咨询室"
+                    : ""}
+                  。
                 </div>
               )}
             </div>
           )}
 
-          {error && (
+          {submitError && (
             <div className="rounded-xl border border-[#E7B8B2] bg-[#FFF5F3] px-4 py-3 text-sm text-[#A13F37]">
-              {error}
+              {submitError}
             </div>
           )}
         </div>
@@ -804,7 +857,7 @@ function CounselorProxyBookingModal({
           <QueryButton disabled={!canSubmit || submitting} onClick={submit}>
             {submitting ? "推送中" : "推送订单"}
           </QueryButton>
-          <QueryResetButton disabled={submitting} onClick={onClose}>取消</QueryResetButton>
+          <QueryResetButton disabled={submitting} onClick={closeAndReset}>取消</QueryResetButton>
         </div>
       </section>
     </div>

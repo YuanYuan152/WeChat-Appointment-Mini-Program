@@ -50,6 +50,8 @@ function AgentBookingScreenContent() {
   const [data, setData] = useState<ScreenData>({});
   const [patient, setPatientState] = useState<ProxyPersonOption>();
   const [counselor, setCounselorState] = useState<ProxyPersonOption>();
+  const [patientStatusLoading, setPatientStatusLoading] = useState(false);
+  const [patientStatusError, setPatientStatusError] = useState<string | null>(null);
   const [activeQuery, setActiveQuery] = useState(INITIAL_QUERY);
   const [draftQuery, setDraftQuery] = useState(INITIAL_QUERY);
   const [draft, setDraft] = useState(INITIAL_DRAFT);
@@ -60,42 +62,96 @@ function AgentBookingScreenContent() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const lastRefreshKey = useRef(refreshKey);
+  const patientRef = useRef<ProxyPersonOption | undefined>(undefined);
+  const counselorRef = useRef<ProxyPersonOption | undefined>(undefined);
+  const patientRequestSeq = useRef(0);
+  const calendarRequestSeq = useRef(0);
+  const slotRequestSeq = useRef(0);
 
   const applyPatient = useCallback((value?: ProxyPersonOption) => {
+    const nextCounselor = boundCounselorFromPatient(value);
+    patientRef.current = value;
+    counselorRef.current = nextCounselor;
     setPatientState(value);
-    setCounselorState(boundCounselorFromPatient(value));
+    setCounselorState(nextCounselor);
   }, []);
 
-  const hydratePrefilledPatient = useCallback(async () => {
+  const refreshPatientContract = useCallback(
+    async (selectedPatient = patientRef.current, notifyOnError = false) => {
+      if (!selectedPatient) {
+        return undefined;
+      }
+
+      const patientId = selectedPatient.id;
+      const requestSeq = patientRequestSeq.current + 1;
+      patientRequestSeq.current = requestSeq;
+      setPatientStatusLoading(true);
+      setPatientStatusError(null);
+
+      try {
+        const detail = await fetchPatientContractInfo(patientId);
+        if (patientRequestSeq.current !== requestSeq || patientRef.current?.id !== patientId) {
+          return undefined;
+        }
+
+        const nextPatient = patientFromContractDetail(detail);
+        const bindingChanged = patientRef.current?.boundCounselorId !== nextPatient.boundCounselorId;
+        applyPatient(nextPatient);
+        if (bindingChanged) {
+          calendarRequestSeq.current += 1;
+          slotRequestSeq.current += 1;
+          setListLoading(false);
+          setSlotLoading(false);
+          setData((prev) => ({
+            ...prev,
+            proxyScheduleCalendar: undefined,
+            proxySlotOptions: undefined,
+          }));
+          setHasSearched(false);
+          setPage(1);
+          setDraft((prev) => ({ ...prev, slotKey: "", roomId: "" }));
+        }
+        return nextPatient;
+      } catch {
+        if (patientRequestSeq.current === requestSeq && patientRef.current?.id === patientId) {
+          const message = "签约与绑定状态读取失败，请重试";
+          setPatientStatusError(message);
+          if (notifyOnError) {
+            showNotice("error", message);
+          }
+        }
+        return undefined;
+      } finally {
+        if (patientRequestSeq.current === requestSeq) {
+          setPatientStatusLoading(false);
+        }
+      }
+    },
+    [applyPatient, showNotice],
+  );
+
+  const hydratePrefilledPatient = useCallback(() => {
     const fallback = readPrefillFromLocation();
     if (!fallback) {
+      patientRequestSeq.current += 1;
       applyPatient(undefined);
+      setPatientStatusLoading(false);
+      setPatientStatusError(null);
       return;
     }
-    try {
-      const detail = await fetchPatientContractInfo(fallback.id);
-      const patient: ProxyPersonOption = {
-        id: detail.patientId,
-        name: detail.name,
-        mobile: detail.mobile,
-        isContractSigned: detail.isContractSigned,
-        boundCounselorId: detail.boundCounselorId,
-        boundCounselorName: detail.boundCounselorName,
-        contractTag: detail.contractTag,
-        label: detail.name,
-      };
-      patient.label = formatPatientInline(patient);
-      applyPatient(patient);
-    } catch {
-      applyPatient(fallback);
-    }
-  }, [applyPatient]);
+    applyPatient(fallback);
+    void refreshPatientContract(fallback);
+  }, [applyPatient, refreshPatientContract]);
 
   useEffect(() => {
-    void hydratePrefilledPatient();
+    hydratePrefilledPatient();
   }, [hydratePrefilledPatient]);
 
   const clearCalendar = useCallback(() => {
+    calendarRequestSeq.current += 1;
+    slotRequestSeq.current += 1;
+    setListLoading(false);
+    setSlotLoading(false);
     setData((prev) => ({ ...prev, proxyScheduleCalendar: undefined, proxySlotOptions: undefined }));
     setHasSearched(false);
     setPage(1);
@@ -103,37 +159,50 @@ function AgentBookingScreenContent() {
 
   const setPatient = useCallback(
     (value?: ProxyPersonOption) => {
+      patientRequestSeq.current += 1;
+      setPatientStatusLoading(false);
+      setPatientStatusError(null);
       applyPatient(value);
-      setDraft((prev) => ({ ...prev, slotKey: "", roomId: "", agreementIsAdult: null }));
+      setDraft(INITIAL_DRAFT());
+      setSlotError(null);
       clearCalendar();
     },
     [applyPatient, clearCalendar],
   );
 
   const loadCalendar = useCallback(
-    async (query: AgentBookingQuery) => {
-      if (!counselor) {
+    async (query: AgentBookingQuery, selectedCounselor = counselorRef.current) => {
+      if (!selectedCounselor) {
         showNotice("error", "请先选择咨询师");
         return;
       }
+      const requestSeq = calendarRequestSeq.current + 1;
+      calendarRequestSeq.current = requestSeq;
       setListLoading(true);
       clearNotice();
       try {
         const proxyScheduleCalendar = await fetchProxyScheduleCalendar({
-          counselorId: counselor.id,
+          counselorId: selectedCounselor.id,
           start: query.start,
           days: query.days,
         });
+        if (calendarRequestSeq.current !== requestSeq || counselorRef.current?.id !== selectedCounselor.id) {
+          return;
+        }
         setData((prev) => ({ ...prev, proxyScheduleCalendar }));
         setActiveQuery(query);
         setHasSearched(true);
       } catch (error) {
-        showNotice("error", error instanceof Error ? error.message : "代理预约排期加载失败");
+        if (calendarRequestSeq.current === requestSeq) {
+          showNotice("error", error instanceof Error ? error.message : "代理预约排期加载失败");
+        }
       } finally {
-        setListLoading(false);
+        if (calendarRequestSeq.current === requestSeq) {
+          setListLoading(false);
+        }
       }
     },
-    [clearNotice, counselor, showNotice],
+    [clearNotice, showNotice],
   );
 
   useEffect(() => {
@@ -141,33 +210,57 @@ function AgentBookingScreenContent() {
       return;
     }
     lastRefreshKey.current = refreshKey;
-    if (!hasSearched) {
-      return;
-    }
-    void loadCalendar(activeQuery);
-  }, [activeQuery, hasSearched, loadCalendar, refreshKey]);
+    void (async () => {
+      const selectedPatient = patientRef.current;
+      const latestPatient = selectedPatient ? await refreshPatientContract(selectedPatient) : undefined;
+      const latestCounselor = boundCounselorFromPatient(latestPatient);
+      if (hasSearched && latestCounselor) {
+        await loadCalendar(activeQuery, latestCounselor);
+      }
+    })();
+  }, [activeQuery, hasSearched, loadCalendar, refreshKey, refreshPatientContract]);
 
-  const search = useCallback(() => {
-    if (!patient) {
+  useEffect(() => {
+    const refreshOnFocus = () => {
+      if (patientRef.current) {
+        void refreshPatientContract(patientRef.current);
+      }
+    };
+    window.addEventListener("focus", refreshOnFocus);
+    return () => window.removeEventListener("focus", refreshOnFocus);
+  }, [refreshPatientContract]);
+
+  const search = useCallback(async () => {
+    const selectedPatient = patientRef.current;
+    if (!selectedPatient) {
       showNotice("error", "请先选择来访者");
       return;
     }
-    if (!counselor) {
-      showNotice("error", "请先选择咨询师");
+    const latestPatient = await refreshPatientContract(selectedPatient, true);
+    if (!latestPatient) {
+      return;
+    }
+    const latestCounselor = boundCounselorFromPatient(latestPatient);
+    if (!latestCounselor) {
+      showNotice("error", "该来访尚未绑定咨询师，请先在来访者详情中绑定");
       return;
     }
     setPage(1);
-    void loadCalendar(draftQuery);
-  }, [counselor, draftQuery, loadCalendar, patient, showNotice]);
+    await loadCalendar(draftQuery, latestCounselor);
+  }, [draftQuery, loadCalendar, refreshPatientContract, showNotice]);
 
   const reset = useCallback(() => {
     const nextQuery = INITIAL_QUERY();
-    const nextDraft = INITIAL_DRAFT();
-    void hydratePrefilledPatient();
+    patientRequestSeq.current += 1;
+    calendarRequestSeq.current += 1;
+    slotRequestSeq.current += 1;
+    hydratePrefilledPatient();
     setActiveQuery(nextQuery);
     setDraftQuery(nextQuery);
-    setDraft(nextDraft);
+    setDraft(INITIAL_DRAFT());
     setPage(1);
+    setListLoading(false);
+    setSlotLoading(false);
     setData((prev) => ({ ...prev, proxyScheduleCalendar: undefined, proxySlotOptions: undefined }));
     setSlotError(null);
     setHasSearched(false);
@@ -182,61 +275,143 @@ function AgentBookingScreenContent() {
     }));
   }, []);
 
-  const loadSlots = useCallback(async () => {
-    if (!patient) {
+  const loadSlots = useCallback(async (
+    selection: Pick<AgentBookingDraft, "date" | "centerId"> = {
+      date: draft.date,
+      centerId: draft.centerId,
+    },
+    selectedPatient = patientRef.current,
+  ) => {
+    if (!selectedPatient) {
       setSlotError("请先选择来访者");
       return false;
     }
-    if (!counselor) {
-      setSlotError("请先选择咨询师");
+    const selectedCounselor = boundCounselorFromPatient(selectedPatient);
+    if (!selectedCounselor) {
+      setSlotError("该来访尚未绑定咨询师，请先在来访者详情中绑定");
       return false;
     }
+    const requestSeq = slotRequestSeq.current + 1;
+    slotRequestSeq.current = requestSeq;
     setSlotLoading(true);
     setSlotError(null);
+    setData((prev) => ({ ...prev, proxySlotOptions: undefined }));
+    setDraft((prev) => ({ ...prev, ...selection, slotKey: "", roomId: "" }));
     try {
       const proxySlotOptions = await fetchProxySlotOptions({
-        counselorId: counselor.id,
-        date: draft.date,
-        centerId: draft.centerId,
+        counselorId: selectedCounselor.id,
+        date: selection.date,
+        centerId: selection.centerId,
       });
+      if (
+        slotRequestSeq.current !== requestSeq ||
+        patientRef.current?.id !== selectedPatient.id ||
+        counselorRef.current?.id !== selectedCounselor.id
+      ) {
+        return false;
+      }
       setData((prev) => ({ ...prev, proxySlotOptions }));
-      setDraft((prev) => ({ ...prev, slotKey: "", roomId: "" }));
       return true;
     } catch (error) {
-      setSlotError(error instanceof Error ? error.message : "可代理时段加载失败");
-      setData((prev) => ({ ...prev, proxySlotOptions: undefined }));
+      if (slotRequestSeq.current === requestSeq) {
+        setSlotError(error instanceof Error ? error.message : "可代理时段加载失败");
+        setData((prev) => ({ ...prev, proxySlotOptions: undefined }));
+      }
       return false;
     } finally {
-      setSlotLoading(false);
+      if (slotRequestSeq.current === requestSeq) {
+        setSlotLoading(false);
+      }
     }
-  }, [counselor, draft.centerId, draft.date, patient]);
+  }, [draft.centerId, draft.date]);
+
+  const prepareCreate = useCallback(async () => {
+    const selectedPatient = patientRef.current;
+    if (!selectedPatient) {
+      showNotice("error", "请先选择来访者");
+      return false;
+    }
+    const latestPatient = await refreshPatientContract(selectedPatient, true);
+    if (!latestPatient) {
+      return false;
+    }
+    if (!boundCounselorFromPatient(latestPatient)) {
+      showNotice("error", "该来访尚未绑定咨询师，请先在来访者详情中绑定");
+      return false;
+    }
+
+    const nextDraft = INITIAL_DRAFT();
+    slotRequestSeq.current += 1;
+    setSlotLoading(false);
+    setSlotError(null);
+    setData((prev) => ({ ...prev, proxySlotOptions: undefined }));
+    setDraft(nextDraft);
+    void loadSlots(nextDraft, latestPatient);
+    return true;
+  }, [loadSlots, refreshPatientContract, showNotice]);
+
+  const closeCreate = useCallback(() => {
+    slotRequestSeq.current += 1;
+    setSlotLoading(false);
+    setSlotError(null);
+    setData((prev) => ({ ...prev, proxySlotOptions: undefined }));
+    setDraft(INITIAL_DRAFT());
+  }, []);
 
   const submitProxyOrder = useCallback(
     async (slot: ProxySlotOption, roomId: string) => {
-      if (!patient || !counselor) {
+      const selectedPatient = patientRef.current;
+      const selectedCounselor = counselorRef.current;
+      if (!selectedPatient || !selectedCounselor) {
         showNotice("error", "请先选择来访者和咨询师");
         return undefined;
       }
       clearNotice();
       setSlotError(null);
       try {
+        const latestPatient = await refreshPatientContract(selectedPatient, true);
+        if (!latestPatient) {
+          setSlotError("签约与绑定状态读取失败，请重试");
+          return undefined;
+        }
+        const latestCounselor = boundCounselorFromPatient(latestPatient);
+        if (!latestCounselor) {
+          const message = "该来访尚未绑定咨询师，不能推送订单";
+          setSlotError(message);
+          showNotice("error", message);
+          return undefined;
+        }
+        if (latestCounselor.id !== selectedCounselor.id) {
+          const message = "来访绑定咨询师已变更，请重新选择时段";
+          setSlotError(message);
+          showNotice("error", message);
+          setData((prev) => ({ ...prev, proxySlotOptions: undefined }));
+          setDraft((prev) => ({ ...prev, slotKey: "", roomId: "" }));
+          return undefined;
+        }
+        if (!latestPatient.isContractSigned && draft.agreementIsAdult === null) {
+          const message = "该来访当前未签约，请先选择需要推送的签约协议";
+          setSlotError(message);
+          showNotice("error", message);
+          return undefined;
+        }
+
         const result = await pushProxyOrder({
-          patientId: patient.id,
-          counselorId: counselor.id,
+          patientId: latestPatient.id,
+          counselorId: latestCounselor.id,
           centerId: draft.centerId,
           startTime: slot.startTime,
           endTime: slot.endTime,
           roomId: roomId || undefined,
           scheduleId: slot.existingAvailableScheduleId || slot.counselorScheduleId || undefined,
-          agreementIsAdult: patient.isContractSigned
+          agreementIsAdult: latestPatient.isContractSigned
             ? undefined
             : draft.agreementIsAdult === null
               ? undefined
               : draft.agreementIsAdult,
         });
+        await loadCalendar(activeQuery, latestCounselor);
         showNotice("success", proxyOrderSuccessText(result));
-        await loadCalendar(activeQuery);
-        await loadSlots();
         return result;
       } catch (error) {
         const message = error instanceof Error ? error.message : "代理预约订单推送失败";
@@ -245,7 +420,12 @@ function AgentBookingScreenContent() {
         return undefined;
       }
     },
-    [activeQuery, clearNotice, counselor, draft.agreementIsAdult, draft.centerId, loadCalendar, loadSlots, patient, showNotice],
+    [activeQuery, clearNotice, draft.agreementIsAdult, draft.centerId, loadCalendar, refreshPatientContract, showNotice],
+  );
+
+  const refreshCurrentPatient = useCallback(
+    () => refreshPatientContract(patientRef.current, true),
+    [refreshPatientContract],
   );
 
   const changePageSize = useCallback((nextPageSize: number) => {
@@ -262,6 +442,8 @@ function AgentBookingScreenContent() {
       page={page}
       pageSize={pageSize}
       patient={patient}
+      patientStatusError={patientStatusError}
+      patientStatusLoading={patientStatusLoading}
       query={draftQuery}
       setDraft={setDraft}
       setPatient={setPatient}
@@ -269,12 +451,14 @@ function AgentBookingScreenContent() {
       slotError={slotError}
       slotLoading={slotLoading}
       slotOptions={data.proxySlotOptions}
-      onClearSlotError={() => setSlotError(null)}
+      onCloseCreate={closeCreate}
       onLoadSlots={loadSlots}
+      onOpenCreate={prepareCreate}
       onPageChange={setPage}
       onPageSizeChange={changePageSize}
       onPushOrder={submitProxyOrder}
       onReset={reset}
+      onRefreshPatient={refreshCurrentPatient}
       onSearch={search}
       onSearchPatients={searchPatients}
     />
@@ -292,15 +476,25 @@ function readPrefillFromLocation(): ProxyPersonOption | undefined {
   }
   const name = params.get("patientName") || `来访#${id}`;
   const mobile = params.get("patientMobile") || undefined;
-  const boundCounselorId = Number(params.get("boundCounselorId"));
-  const boundCounselorName = params.get("boundCounselorName") || undefined;
   return {
     id,
     name,
     mobile,
-    isContractSigned: params.get("isContractSigned") === "1",
-    boundCounselorId: Number.isFinite(boundCounselorId) && boundCounselorId > 0 ? boundCounselorId : undefined,
-    boundCounselorName,
-    label: mobile ? `${name} · ${mobile}` : `${name} · ID ${id}`,
+    label: name,
   };
+}
+
+function patientFromContractDetail(detail: Awaited<ReturnType<typeof fetchPatientContractInfo>>): ProxyPersonOption {
+  const patient: ProxyPersonOption = {
+    id: detail.patientId,
+    name: detail.name,
+    mobile: detail.mobile,
+    isContractSigned: detail.isContractSigned,
+    boundCounselorId: detail.boundCounselorId,
+    boundCounselorName: detail.boundCounselorName,
+    contractTag: detail.contractTag,
+    label: detail.name,
+  };
+  patient.label = formatPatientInline(patient);
+  return patient;
 }

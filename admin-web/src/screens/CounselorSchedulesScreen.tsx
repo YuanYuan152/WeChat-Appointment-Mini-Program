@@ -60,8 +60,10 @@ function CounselorSchedulesScreenContent() {
     try {
       const counselorScheduleCalendar = await fetchCounselorScheduleCalendar(filters);
       setData((prev) => ({ ...prev, counselorScheduleCalendar }));
+      return true;
     } catch (error) {
       showNotice("error", error instanceof Error ? error.message : "排期加载失败");
+      return false;
     } finally {
       setListLoading(false);
     }
@@ -207,8 +209,13 @@ function CounselorSchedulesScreenContent() {
       onCancel={cancelSchedule}
       onLeave={submitLeave}
       onProxyOrderCreated={async (message) => {
-        showNotice("success", message || "订单已推送");
-        await loadData();
+        const refreshed = await loadData();
+        showNotice(
+          refreshed ? "success" : "info",
+          refreshed
+            ? message || "订单已推送"
+            : `${message || "订单已推送"}，但排期刷新失败，请手动刷新后核对`,
+        );
       }}
       onPageChange={setPage}
       onPageSizeChange={changePageSize}

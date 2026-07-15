@@ -54,6 +54,8 @@ export function AgentBookingPanel({
   listLoading,
   slotLoading,
   slotError,
+  patientStatusLoading,
+  patientStatusError,
   query,
   draft,
   page,
@@ -64,7 +66,9 @@ export function AgentBookingPanel({
   onSearchPatients,
   onSearch,
   onReset,
-  onClearSlotError,
+  onRefreshPatient,
+  onOpenCreate,
+  onCloseCreate,
   onLoadSlots,
   onPushOrder,
   onPageChange,
@@ -77,6 +81,8 @@ export function AgentBookingPanel({
   listLoading: boolean;
   slotLoading: boolean;
   slotError?: string | null;
+  patientStatusLoading: boolean;
+  patientStatusError?: string | null;
   query: AgentBookingQuery;
   draft: AgentBookingDraft;
   page: number;
@@ -87,14 +93,17 @@ export function AgentBookingPanel({
   onSearchPatients: (keyword: string) => Promise<ProxyPersonOption[]>;
   onSearch: () => void;
   onReset: () => void;
-  onClearSlotError: () => void;
-  onLoadSlots: () => Promise<boolean> | boolean;
+  onRefreshPatient: () => Promise<ProxyPersonOption | undefined>;
+  onOpenCreate: () => Promise<boolean>;
+  onCloseCreate: () => void;
+  onLoadSlots: (selection?: Pick<AgentBookingDraft, "date" | "centerId">) => Promise<boolean> | boolean;
   onPushOrder: (slot: ProxySlotOption, roomId: string) => Promise<ProxyPushOrderResult | undefined>;
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
 }) {
   const today = getLocalDateValue();
   const [createOpen, setCreateOpen] = useState(false);
+  const [openingCreate, setOpeningCreate] = useState(false);
   const rows = useMemo(() => calendar?.slots || [], [calendar?.slots]);
   const total = rows.length;
   const pagedRows = useMemo(() => {
@@ -105,7 +114,23 @@ export function AgentBookingPanel({
     slotOptions && slotOptions.date === draft.date && slotOptions.centerId === draft.centerId ? slotOptions : undefined;
   const selectedSlot = visibleSlotOptions?.slots.find((slot) => slot.key === draft.slotKey);
   const selectedRoom = selectedSlot?.rooms.find((room) => room.roomId === draft.roomId);
-  const canOpenCreate = Boolean(patient && counselor);
+  const canOpenCreate = Boolean(patient && counselor && !patientStatusLoading && !patientStatusError);
+
+  const openCreate = async () => {
+    setOpeningCreate(true);
+    try {
+      if (await onOpenCreate()) {
+        setCreateOpen(true);
+      }
+    } finally {
+      setOpeningCreate(false);
+    }
+  };
+
+  const closeCreate = () => {
+    onCloseCreate();
+    setCreateOpen(false);
+  };
 
   return (
     <>
@@ -126,14 +151,11 @@ export function AgentBookingPanel({
             </div>
             <QueryButton
               className="w-28"
-              disabled={!canOpenCreate}
+              disabled={!canOpenCreate || openingCreate}
               type="button"
-              onClick={() => {
-                onClearSlotError();
-                setCreateOpen(true);
-              }}
+              onClick={() => void openCreate()}
             >
-              代理预约
+              {openingCreate ? "校验中" : "代理预约"}
             </QueryButton>
           </div>
 
@@ -157,7 +179,11 @@ export function AgentBookingPanel({
             </QueryField>
             <QueryField label="签约状态">
               <div className={`${queryControlClass} flex items-center gap-2`}>
-                {patient ? (
+                {patientStatusLoading ? (
+                  <Badge>读取中</Badge>
+                ) : patientStatusError ? (
+                  <Badge tone="red">读取失败</Badge>
+                ) : patient ? (
                   <Badge tone={patient.isContractSigned ? "green" : "gold"}>
                     {patient.isContractSigned ? "已签约" : "未签约"}
                   </Badge>
@@ -203,6 +229,19 @@ export function AgentBookingPanel({
             </QueryField>
           </div>
 
+          {patient && patientStatusError && (
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#F3C9BB] bg-[#FFF4EF] px-4 py-3 text-sm text-[#C7542F]">
+              <span>签约与绑定状态读取失败，已停止代理预约。请重试后再继续。</span>
+              <button
+                className="font-medium underline underline-offset-2"
+                type="button"
+                onClick={() => void onRefreshPatient()}
+              >
+                重新读取
+              </button>
+            </div>
+          )}
+
           <div className="mt-4 flex flex-wrap gap-3">
             <QueryButton type="submit" />
             <QueryResetButton onClick={onReset} />
@@ -222,6 +261,8 @@ export function AgentBookingPanel({
                   ? "正在加载排期..."
                   : !patient
                     ? "请先选择来访者。"
+                    : patientStatusError
+                      ? "签约与绑定状态读取失败，请重新读取后再预约。"
                     : !counselor
                       ? "该来访尚未绑定咨询师，请先在来访者详情中绑定。"
                       : "点击查询查看绑定咨询师的排期。"
@@ -257,12 +298,12 @@ export function AgentBookingPanel({
           slotError={slotError}
           slotLoading={slotLoading}
           slotOptions={visibleSlotOptions}
-          onClose={() => {
-            onClearSlotError();
-            setCreateOpen(false);
-          }}
+          patientStatusError={patientStatusError}
+          patientStatusLoading={patientStatusLoading}
+          onClose={closeCreate}
           onLoadSlots={onLoadSlots}
           onPushOrder={onPushOrder}
+          onRefreshPatient={onRefreshPatient}
         />
       )}
     </>
@@ -284,14 +325,20 @@ function SearchablePersonSelect({
   search: (keyword: string) => Promise<ProxyPersonOption[]>;
   onChange: (value?: ProxyPersonOption) => void;
 }) {
-  const [inputValue, setInputValue] = useState(formatPatientInline(value) || value?.label || value?.name || "");
+  const [inputValue, setInputValue] = useState(value?.name || "");
   const [options, setOptions] = useState<ProxyPersonOption[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const searchSeq = useRef(0);
+  const preserveTypedInput = useRef(false);
 
   useEffect(() => {
-    setInputValue(formatPatientInline(value) || value?.label || value?.name || "");
+    if (!value && preserveTypedInput.current) {
+      preserveTypedInput.current = false;
+      return;
+    }
+    preserveTypedInput.current = false;
+    setInputValue(value?.name || "");
   }, [value]);
 
   useEffect(() => {
@@ -333,10 +380,12 @@ function SearchablePersonSelect({
           onChange={(event) => {
             setInputValue(event.target.value);
             if (value) {
+              preserveTypedInput.current = true;
               onChange(undefined);
             }
             setOpen(true);
           }}
+          onClick={() => setOpen(true)}
           onFocus={() => setOpen(true)}
         />
         {open && (
@@ -354,7 +403,7 @@ function SearchablePersonSelect({
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={() => {
                     onChange(item);
-                    setInputValue(formatPatientInline(item) || item.label || item.name);
+                    setInputValue(item.name);
                     setOpen(false);
                   }}
                 >
@@ -454,8 +503,11 @@ function ProxyBookingModal({
   selectedRoom,
   slotLoading,
   slotError,
+  patientStatusLoading,
+  patientStatusError,
   onLoadSlots,
   onPushOrder,
+  onRefreshPatient,
   onClose,
 }: {
   patient?: ProxyPersonOption;
@@ -467,8 +519,11 @@ function ProxyBookingModal({
   selectedRoom?: ProxySlotOption["rooms"][number];
   slotLoading: boolean;
   slotError?: string | null;
-  onLoadSlots: () => Promise<boolean> | boolean;
+  patientStatusLoading: boolean;
+  patientStatusError?: string | null;
+  onLoadSlots: (selection?: Pick<AgentBookingDraft, "date" | "centerId">) => Promise<boolean> | boolean;
   onPushOrder: (slot: ProxySlotOption, roomId: string) => Promise<ProxyPushOrderResult | undefined>;
+  onRefreshPatient: () => Promise<ProxyPersonOption | undefined>;
   onClose: () => void;
 }) {
   const [submitting, setSubmitting] = useState(false);
@@ -476,12 +531,14 @@ function ProxyBookingModal({
   const canSubmit = Boolean(
     patient &&
       counselor &&
+      !patientStatusLoading &&
+      !patientStatusError &&
       selectedSlot &&
       selectedSlot.selectable &&
       !selectedSlot.past &&
       !selectedSlot.counselorOccupied &&
       (patient?.isContractSigned || draft.agreementIsAdult !== null) &&
-      (!needsRoom || selectedRoom?.available),
+      (!needsRoom || (selectedRoom?.available && !selectedRoom.occupiedByOther)),
   );
 
   const handlePush = async () => {
@@ -523,18 +580,22 @@ function ProxyBookingModal({
                 min={getLocalDateValue()}
                 type="date"
                 value={draft.date}
-                onChange={(event) =>
-                  setDraft((prev) => ({ ...prev, date: event.target.value, slotKey: "", roomId: "" }))
-                }
+                onChange={(event) => {
+                  const selection = { date: event.target.value, centerId: draft.centerId };
+                  setDraft((prev) => ({ ...prev, ...selection, slotKey: "", roomId: "" }));
+                  void onLoadSlots(selection);
+                }}
               />
             </QueryField>
             <QueryField label="预约中心" required>
               <select
                 className={queryControlClass}
                 value={draft.centerId}
-                onChange={(event) =>
-                  setDraft((prev) => ({ ...prev, centerId: event.target.value, slotKey: "", roomId: "" }))
-                }
+                onChange={(event) => {
+                  const selection = { date: draft.date, centerId: event.target.value };
+                  setDraft((prev) => ({ ...prev, ...selection, slotKey: "", roomId: "" }));
+                  void onLoadSlots(selection);
+                }}
               >
                 {AGENT_BOOKING_CENTER_OPTIONS.map((item) => (
                   <option key={item.value} value={item.value}>
@@ -544,8 +605,8 @@ function ProxyBookingModal({
               </select>
             </QueryField>
             <div className="flex items-end">
-              <QueryButton className="w-28" disabled={slotLoading} onClick={onLoadSlots}>
-                {slotLoading ? "加载中" : "读取时段"}
+              <QueryButton className="w-28" disabled={slotLoading} onClick={() => void onLoadSlots()}>
+                {slotLoading ? "加载中" : "重新读取"}
               </QueryButton>
             </div>
           </div>
@@ -553,6 +614,19 @@ function ProxyBookingModal({
           {slotError && (
             <div className="mt-4 rounded-xl border border-[#F3C9BB] bg-[#FFF4EF] px-4 py-3 text-sm leading-6 text-[#C7542F]">
               {slotError}
+            </div>
+          )}
+
+          {patientStatusError && (
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#F3C9BB] bg-[#FFF4EF] px-4 py-3 text-sm text-[#C7542F]">
+              <span>签约与绑定状态读取失败，暂时不能推送订单。</span>
+              <button
+                className="font-medium underline underline-offset-2"
+                type="button"
+                onClick={() => void onRefreshPatient()}
+              >
+                重新读取
+              </button>
             </div>
           )}
 
@@ -590,7 +664,7 @@ function ProxyBookingModal({
 
           {!slotOptions ? (
             <div className="mt-5 rounded-xl bg-[#FAF8F4] px-4 py-4 text-sm text-[var(--lxxl-muted)]">
-              请先读取当前日期和预约中心的可用时段。
+              {slotLoading ? "正在读取当前日期和预约中心的可用时段..." : "暂无可用时段，请重新读取。"}
             </div>
           ) : (
             <div className="mt-5 space-y-6">
@@ -609,40 +683,39 @@ function ProxyBookingModal({
                     已预约或不可用
                   </span>
                 </div>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                  {slotOptions.slots.map((slot) => {
-                    const selectable = slot.selectable && !slot.past && !slot.counselorOccupied && !slot.allRoomsFull;
-                    const selected = draft.slotKey === slot.key;
-                    const existingAvailableSchedule = Boolean(slot.existingAvailableScheduleId);
-                    return (
-                      <button
-                        className={`rounded-xl border px-4 py-3 text-left text-sm transition ${
-                          selected
-                            ? "border-[var(--lxxl-green)] bg-[#F4FBF7]"
-                            : selectable && existingAvailableSchedule
-                              ? "border-[#BFD9C9] bg-[#EAF2ED] text-[var(--lxxl-green-dark)] hover:border-[var(--lxxl-green)]"
-                              : selectable
-                              ? "border-[var(--lxxl-border)] bg-white hover:border-[var(--lxxl-green)]"
-                              : "cursor-not-allowed border-[var(--lxxl-border)] bg-[#F4F1EB] text-[var(--lxxl-muted)]"
-                        }`}
-                        disabled={!selectable}
-                        key={slot.key}
-                        type="button"
-                        onClick={() => {
-                          const firstRoom = slot.rooms.find((room) => room.available && !room.occupiedByOther);
-                          setDraft((prev) => ({
-                            ...prev,
-                            slotKey: slot.key,
-                            roomId: prev.centerId === "video" ? "" : firstRoom?.roomId || "",
-                          }));
-                        }}
-                      >
-                        <span className="block font-medium">{slot.label}</span>
-                        <span className="mt-1 block text-xs text-[var(--lxxl-muted)]">{slotHint(slot)}</span>
-                      </button>
-                    );
-                  })}
-                </div>
+                {slotOptions.slots.length === 0 ? (
+                  <div className="rounded-xl bg-[#FAF8F4] px-4 py-4 text-sm text-[var(--lxxl-muted)]">
+                    当前日期和预约中心暂无可代理时段。
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    {slotOptions.slots.map((slot) => {
+                      const selectable = slot.selectable && !slot.past && !slot.counselorOccupied && !slot.allRoomsFull;
+                      const selected = draft.slotKey === slot.key;
+                      const existingAvailableSchedule = Boolean(slot.existingAvailableScheduleId);
+                      return (
+                        <button
+                          className={`rounded-xl border px-4 py-3 text-left text-sm transition ${
+                            selected
+                              ? "border-[var(--lxxl-green)] bg-[#F4FBF7]"
+                              : selectable && existingAvailableSchedule
+                                ? "border-[#BFD9C9] bg-[#EAF2ED] text-[var(--lxxl-green-dark)] hover:border-[var(--lxxl-green)]"
+                                : selectable
+                                  ? "border-[var(--lxxl-border)] bg-white hover:border-[var(--lxxl-green)]"
+                                  : "cursor-not-allowed border-[var(--lxxl-border)] bg-[#F4F1EB] text-[var(--lxxl-muted)]"
+                          }`}
+                          disabled={!selectable}
+                          key={slot.key}
+                          type="button"
+                          onClick={() => setDraft((prev) => ({ ...prev, slotKey: slot.key, roomId: "" }))}
+                        >
+                          <span className="block font-medium">{slot.label}</span>
+                          <span className="mt-1 block text-xs text-[var(--lxxl-muted)]">{slotHint(slot)}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </QueryField>
 
               {draft.centerId !== "video" && selectedSlot && (
@@ -679,7 +752,12 @@ function ProxyBookingModal({
               {selectedSlot && (
                 <div className="rounded-xl bg-[#FAF8F4] px-4 py-3 text-sm leading-6 text-[var(--lxxl-muted)]">
                   将推送待支付订单：{timeRangeText(selectedSlot.startTime, selectedSlot.endTime)}
-                  {draft.centerId !== "video" && selectedRoom ? ` · ${selectedRoom.roomName}` : ""}。
+                  {draft.centerId !== "video"
+                    ? selectedRoom
+                      ? ` · ${selectedRoom.roomName}`
+                      : " · 请继续选择咨询室"
+                    : ""}
+                  。
                 </div>
               )}
             </div>
@@ -690,7 +768,7 @@ function ProxyBookingModal({
           <QueryButton className="w-28" disabled={!canSubmit || submitting} onClick={handlePush}>
             {submitting ? "推送中" : "推送订单"}
           </QueryButton>
-          <QueryResetButton onClick={onClose}>取消</QueryResetButton>
+          <QueryResetButton disabled={submitting} onClick={onClose}>取消</QueryResetButton>
         </div>
       </section>
     </div>

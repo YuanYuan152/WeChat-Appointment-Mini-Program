@@ -125,20 +125,6 @@ function UserBoardScreenContent() {
       if (target.patientMobile) {
         params.set("patientMobile", target.patientMobile);
       }
-      params.set("isContractSigned", target.isContractSigned ? "1" : "0");
-      if (target.boundCounselorId) {
-        params.set("boundCounselorId", String(target.boundCounselorId));
-      }
-      if (target.boundCounselorName) {
-        params.set("boundCounselorName", target.boundCounselorName);
-      }
-      if (target.counselorId) {
-        params.set("counselorId", String(target.counselorId));
-        params.set("counselorName", target.counselorName || `咨询师#${target.counselorId}`);
-      }
-      if (target.counselorMobile) {
-        params.set("counselorMobile", target.counselorMobile);
-      }
       router.push(`/proxy-booking?${params.toString()}`);
     },
     [router],
@@ -154,28 +140,41 @@ function UserBoardScreenContent() {
       clearNotice();
       try {
         const contract = await updatePatientBoundCounselor(patientId, counselorId);
-        setSelectedUserBoard((current) => {
-          if (!current || current.profile.id !== patientId) {
-            return current;
-          }
-          return {
-            ...current,
-            profile: {
-              ...current.profile,
-              isContractSigned: contract.isContractSigned,
-              boundCounselorId: contract.boundCounselorId,
-              boundCounselorName: contract.boundCounselorName,
-              contractTag: contract.contractTag,
-            },
-          };
-        });
-        showNotice("success", counselorId ? "已更新签约咨询师" : "已解除咨询师绑定");
+        setListLoading(true);
+        setDetailLoading(true);
+        const [userBoardResult, detailResult] = await Promise.allSettled([
+          fetchUserBoard(filters, { page, pageSize }),
+          fetchUserBoardDetail(patientId),
+        ]);
+
+        if (userBoardResult.status === "fulfilled") {
+          setData((current) => ({ ...current, userBoard: userBoardResult.value }));
+        }
+        if (detailResult.status === "fulfilled") {
+          setSelectedUserBoard(detailResult.value);
+        } else {
+          // 避免继续展示绑定操作前的订单和预约快照，用户可重新打开详情重试。
+          setSelectedUserBoard(undefined);
+        }
+
+        const actionText = counselorId ? "已更新绑定咨询师" : "已解除咨询师绑定";
+        const contractText = contract.isContractSigned
+          ? "当前签约状态：已签约"
+          : "当前签约状态：未签约，代理预约时需选择协议";
+        if (userBoardResult.status === "rejected" || detailResult.status === "rejected") {
+          showNotice("info", `${actionText}，但最新数据刷新失败，请刷新页面后核对。${contractText}`);
+        } else {
+          showNotice("success", `${actionText}。${contractText}`);
+        }
       } catch (error) {
-        showNotice("error", error instanceof Error ? error.message : "签约咨询师更新失败");
+        showNotice("error", error instanceof Error ? error.message : "绑定咨询师更新失败");
         throw error;
+      } finally {
+        setListLoading(false);
+        setDetailLoading(false);
       }
     },
-    [clearNotice, showNotice],
+    [clearNotice, filters, page, pageSize, showNotice],
   );
 
   return (
