@@ -92,6 +92,7 @@ export function messageSummary(item: MessageItem): string {
   if (
     item.RelatedType === 'PATIENT_APPOINTMENT_SUCCESS'
     || item.RelatedType === 'PATIENT_APPOINTMENT_REMIND'
+    || item.RelatedType === 'PATIENT_PROXY_ORDER_PENDING'
   ) {
     const center = (detail.centerName || detail.location) as string | undefined
     if (center && payload.summary && typeof payload.summary === 'string' && payload.summary.includes(' · ')) {

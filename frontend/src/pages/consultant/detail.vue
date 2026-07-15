@@ -319,18 +319,17 @@
             
             <view v-if="showSignatureCanvas" class="sig-canvas-wrap">
               <text class="sig-tip">请在下方区域内绘制您的签名</text>
-              <view class="sig-canvas-inner">
+              <view class="sig-canvas-inner" :style="{ height: sigCanvasHeightPx + 'px' }">
                 <l-signature 
                   ref="signatureRef"
                   :penColor="'#000000'"
                   :penSize="3"
                   :backgroundColor="'#F9FAFB'"
                   :disableScroll="true"
-                  :beforeDelay="100"
+                  :beforeDelay="280"
                   :maxHistoryLength="20"
                   :openSmooth="false"
                   :type="'2d'"
-                  style="width: 100%; height: 200px;"
                 ></l-signature>
               </view>
               <view class="sig-actions">
@@ -540,6 +539,8 @@ const showAgreement = ref(false)
 const showPayment = ref(false)
 const showAssistantContact = ref(false)
 const showSignatureCanvas = ref(false)
+/** 签字区高度（px），按屏宽自适应 */
+const sigCanvasHeightPx = ref(180)
 /** 是否仍需首次协议签署（年龄确认 + 签字） */
 const needsIntakeAgreement = ref(true)
 /** 协议类型：true=同心理咨询协议，false=扬帆计划协议（沿用 is_adult 字段） */
@@ -1159,9 +1160,16 @@ const closeAgreement = () => {
 
 // 签名相关方法
 const startSignature = () => {
+  try {
+    const { windowWidth = 375, windowHeight = 667 } = uni.getSystemInfoSync()
+    const byWidth = Math.round(windowWidth * 0.52)
+    const byHeight = Math.round(windowHeight * 0.28)
+    sigCanvasHeightPx.value = Math.max(160, Math.min(byWidth, byHeight, 260))
+  } catch {
+    sigCanvasHeightPx.value = 180
+  }
   showSignatureCanvas.value = true
   hasSignature.value = false
-  // 延迟初始化，确保DOM已渲染
   nextTick(() => {
     console.log('lime-signature组件已初始化')
   })
@@ -2268,8 +2276,11 @@ onMounted(() => {
 .modal-content.bottom-sheet {
   width: 100%;
   max-width: 100%;
+  max-height: 92vh;
   border-radius: 40rpx 40rpx 0 0;
   margin-top: auto;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .modal-content.full-height {
@@ -2311,6 +2322,7 @@ onMounted(() => {
 .modal-body {
   padding: 0 40rpx 40rpx;
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
 }
 
@@ -2325,6 +2337,7 @@ onMounted(() => {
 }
 
 .modal-footer-modern {
+  flex-shrink: 0;
   padding: 24rpx 40rpx calc(24rpx + env(safe-area-inset-bottom));
   background: #ffffff;
   border-top: 1px solid #F3F4F6;
@@ -2347,6 +2360,12 @@ onMounted(() => {
   line-height: 96rpx;
   border-radius: 100rpx;
   border: none;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .btn-fill.disabled {
@@ -2551,9 +2570,11 @@ onMounted(() => {
 
 .sig-canvas-wrap {
   background: #ffffff;
-  border: 1px solid #E5E7EB;
+  border: 2rpx solid #D1D5DB;
   border-radius: 24rpx;
   overflow: hidden;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .sig-tip {
@@ -2566,6 +2587,12 @@ onMounted(() => {
 }
 
 .sig-canvas-inner {
+  width: 100%;
+  /* height 由 inline 动态设置，保证 canvas 有完整可绘区域 */
+  background: #F9FAFB;
+  box-sizing: border-box;
+  position: relative;
+  overflow: hidden;
   border-top: 1px solid #E5E7EB;
   border-bottom: 1px solid #E5E7EB;
 }

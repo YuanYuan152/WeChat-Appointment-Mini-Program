@@ -27,7 +27,13 @@
         </view>
 
         <template v-else>
-          <scroll-view class="agreement-body-scroll" scroll-y :show-scrollbar="false">
+          <scroll-view
+            class="agreement-body-scroll"
+            scroll-y
+            :show-scrollbar="false"
+            :scroll-into-view="signatureScrollIntoView"
+            scroll-with-animation
+          >
             <view class="agreement-scroll">
               <text class="agreement-text">{{ agreementText }}</text>
             </view>
@@ -70,7 +76,7 @@
               </view>
             </view>
 
-            <view class="signature-box">
+            <view id="signature-anchor" class="signature-box">
               <view class="sig-header">
                 <text class="sig-title">来访者签字 <text class="sig-required">*</text></text>
                 <text class="sig-date">{{ agreementDate }}</text>
@@ -81,19 +87,18 @@
               </view>
 
               <view v-if="showSignatureCanvas" class="sig-canvas-wrap">
-                <text class="sig-tip">请在下方区域内绘制您的签名</text>
-                <view class="sig-canvas-inner">
+                <text class="sig-tip">请在下方框内绘制您的签名</text>
+                <view class="sig-canvas-inner" :style="{ height: sigCanvasHeightPx + 'px' }">
                   <l-signature
                     ref="signatureRef"
                     penColor="#000000"
                     :penSize="3"
                     backgroundColor="#F9FAFB"
                     :disableScroll="true"
-                    :beforeDelay="100"
+                    :beforeDelay="280"
                     :maxHistoryLength="20"
                     :openSmooth="false"
                     type="2d"
-                    style="width: 100%; height: 200px;"
                   />
                 </view>
                 <view class="sig-actions">
@@ -122,64 +127,64 @@
 
       <!-- 支付确认步骤 -->
       <template v-else-if="order">
-        <view class="amount-box">
-          <text class="amount-currency">¥</text>
-          <text class="amount-value">{{ (order.TotalFee / 100).toFixed(2) }}</text>
-        </view>
+        <scroll-view class="pay-body-scroll" scroll-y :show-scrollbar="false">
+          <view class="amount-box">
+            <text class="amount-currency">¥</text>
+            <text class="amount-value">{{ (order.TotalFee / 100).toFixed(2) }}</text>
+          </view>
 
-        <view class="detail-block">
-          <text class="block-title">预约信息</text>
-          <view class="detail-row">
-            <text class="label">咨询师</text>
-            <text class="value">{{ order.counselorName || '—' }}</text>
+          <view class="detail-block">
+            <text class="block-title">预约信息</text>
+            <view class="detail-row">
+              <text class="label">咨询师</text>
+              <text class="value">{{ order.counselorName || '—' }}</text>
+            </view>
+            <view class="detail-row">
+              <text class="label">预约时间</text>
+              <text class="value highlight">{{ formatOrderTime(order.startTime, order.endTime) }}</text>
+            </view>
+            <view v-if="order.centerName" class="detail-row">
+              <text class="label">预约中心</text>
+              <text class="value">{{ order.centerName }}</text>
+            </view>
           </view>
-          <view class="detail-row">
-            <text class="label">预约时间</text>
-            <text class="value highlight">{{ formatOrderTime(order.startTime, order.endTime) }}</text>
-          </view>
-          <view v-if="order.centerName" class="detail-row">
-            <text class="label">预约中心</text>
-            <text class="value">{{ order.centerName }}</text>
-          </view>
-          <view v-if="order.roomName" class="detail-row">
-            <text class="label">咨询室</text>
-            <text class="value">{{ order.roomName }}</text>
-          </view>
-        </view>
 
-        <view class="detail-block">
-          <text class="block-title">订单信息</text>
-          <view class="detail-row">
-            <text class="label">订单号</text>
-            <text class="value mono">{{ order.OutTradeNo }}</text>
+          <view class="detail-block">
+            <text class="block-title">订单信息</text>
+            <view class="detail-row">
+              <text class="label">订单号</text>
+              <text class="value mono">{{ order.OutTradeNo }}</text>
+            </view>
+            <view class="detail-row">
+              <text class="label">订单状态</text>
+              <text class="value pending">待支付</text>
+            </view>
+            <view v-if="expireText" class="expire-tip">{{ expireText }}</view>
           </view>
-          <view class="detail-row">
-            <text class="label">订单状态</text>
-            <text class="value pending">待支付</text>
+
+          <view class="tips-block">
+            <text class="tips-title">温馨提示</text>
+            <text class="tips-line">· 支付成功后预约立即生效；</text>
+            <text class="tips-line">· 距咨询开始超过 24 小时可免费取消；</text>
+            <text class="tips-line">· 24 小时内取消或爽约，按规定不予退款。</text>
           </view>
-          <view v-if="expireText" class="expire-tip">{{ expireText }}</view>
-        </view>
 
-        <view class="tips-block">
-          <text class="tips-title">温馨提示</text>
-          <text class="tips-line">· 支付成功后预约立即生效；</text>
-          <text class="tips-line">· 距咨询开始超过 24 小时可免费取消；</text>
-          <text class="tips-line">· 24 小时内取消或爽约，按规定不予退款。</text>
-        </view>
-
-        <view class="agree-row" @tap="agreed = !agreed">
-          <view class="checkbox" :class="{ checked: agreed }">
-            <text v-if="agreed" class="check-icon">✓</text>
+          <view class="agree-row" @tap="agreed = !agreed">
+            <view class="checkbox" :class="{ checked: agreed }">
+              <text v-if="agreed" class="check-icon">✓</text>
+            </view>
+            <text class="agree-text">我已阅读并同意上述预约与退款规则</text>
           </view>
-          <text class="agree-text">我已阅读并同意上述预约与退款规则</text>
-        </view>
+        </scroll-view>
 
-        <button
-          class="confirm-btn"
-          :class="{ disabled: !agreed || paying }"
-          :disabled="!agreed || paying"
-          @tap="onConfirm"
-        >{{ paying ? '支付中...' : '确认支付' }}</button>
+        <view class="sheet-footer pay-footer">
+          <button
+            class="confirm-btn"
+            :class="{ disabled: !agreed || paying }"
+            :disabled="!agreed || paying"
+            @tap="onConfirm"
+          >{{ paying ? '支付中...' : '确认支付' }}</button>
+        </view>
       </template>
     </view>
   </view>
@@ -233,9 +238,24 @@ const hasSignature = ref(false)
 const showSignatureCanvas = ref(false)
 const signatureData = ref('')
 const signatureRef = ref<any>(null)
+/** 签字区高度（px），按屏宽自适应，确保父容器有明确尺寸供 lime-signature 测量 */
+const sigCanvasHeightPx = ref(180)
+const signatureScrollIntoView = ref('')
 const emergencyName = ref('')
 const emergencyRelation = ref('')
 const emergencyPhone = ref('')
+
+const resolveSigCanvasHeight = () => {
+  try {
+    const { windowWidth = 375, windowHeight = 667 } = uni.getSystemInfoSync()
+    // 宽度约一半作签名高度，并夹在合理范围内，避免过扁或占满屏
+    const byWidth = Math.round(windowWidth * 0.52)
+    const byHeight = Math.round(windowHeight * 0.28)
+    sigCanvasHeightPx.value = Math.max(160, Math.min(byWidth, byHeight, 260))
+  } catch {
+    sigCanvasHeightPx.value = 180
+  }
+}
 
 const expireText = computed(() => expireHintText(order.value?.ExpiresAt))
 const emergencyPayload = computed(() => ({
@@ -295,6 +315,7 @@ const resetAgreementState = () => {
   hasSignature.value = false
   showSignatureCanvas.value = false
   signatureData.value = ''
+  signatureScrollIntoView.value = ''
   emergencyName.value = ''
   emergencyRelation.value = ''
   emergencyPhone.value = ''
@@ -400,9 +421,15 @@ const onEmergencyPhoneInput = (e: { detail: { value: string } }) => {
 }
 
 const startSignature = () => {
+  resolveSigCanvasHeight()
   showSignatureCanvas.value = true
   hasSignature.value = false
   signatureData.value = ''
+  // 展开后滚到签字区，避免画布在可视区域外导致测量不全
+  signatureScrollIntoView.value = ''
+  setTimeout(() => {
+    signatureScrollIntoView.value = 'signature-anchor'
+  }, 50)
 }
 
 const clearSignature = () => {
@@ -521,9 +548,19 @@ const onConfirm = async () => {
   min-height: 320rpx;
   margin-bottom: 16rpx;
 }
+.pay-body-scroll {
+  flex: 1;
+  height: 0;
+  min-height: 240rpx;
+  margin-bottom: 8rpx;
+}
 .sheet-footer {
   flex-shrink: 0;
   padding-top: 8rpx;
+}
+.pay-footer {
+  padding-top: 16rpx;
+  padding-bottom: 8rpx;
 }
 .submit-hint {
   display: block;
@@ -670,6 +707,8 @@ const onConfirm = async () => {
 }
 .signature-box {
   margin-bottom: 24rpx;
+  width: 100%;
+  box-sizing: border-box;
 }
 .sig-header {
   display: flex;
@@ -695,15 +734,19 @@ const onConfirm = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
+  box-sizing: border-box;
 }
 .sig-placeholder-text {
   font-size: 28rpx;
   color: #9CA3AF;
 }
 .sig-canvas-wrap {
-  border: 1rpx solid #E5E7EB;
+  width: 100%;
+  box-sizing: border-box;
+  border: 2rpx solid #D1D5DB;
   border-radius: 16rpx;
   overflow: hidden;
+  background: #fff;
 }
 .sig-tip {
   display: block;
@@ -712,12 +755,22 @@ const onConfirm = async () => {
   color: #9CA3AF;
   padding: 12rpx 0;
   background: #F9FAFB;
+  border-bottom: 1rpx solid #E5E7EB;
+}
+.sig-canvas-inner {
+  width: 100%;
+  /* height 由 inline style 按屏宽动态设置，保证 canvas 有完整可绘区域 */
+  background: #F9FAFB;
+  box-sizing: border-box;
+  position: relative;
+  overflow: hidden;
 }
 .sig-actions {
   display: flex;
   gap: 16rpx;
   padding: 16rpx;
   background: #F9FAFB;
+  border-top: 1rpx solid #E5E7EB;
 }
 .sig-btn {
   flex: 1;
@@ -872,13 +925,19 @@ const onConfirm = async () => {
 }
 .confirm-btn {
   width: 100%;
-  height: 88rpx;
-  line-height: 88rpx;
+  height: 96rpx;
+  line-height: 96rpx;
   background: #0D9488;
   color: #fff;
   border-radius: 100rpx;
   font-size: 30rpx;
   font-weight: 600;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .confirm-btn.disabled {
   opacity: 0.5;

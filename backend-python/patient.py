@@ -140,6 +140,8 @@ def _build_order_out(
     counselor_name = (prof.Name if prof and prof.Name else None) or (
         acc.Nickname if acc else None
     ) or f"咨询师#{schedule.CounselorId}"
+    # 待支付阶段不向来访展示咨询室（付款占用前为内部预留）
+    show_room = order.Status != "PENDING" and bool(room_id)
     return base.model_copy(
         update={
             "counselorId": schedule.CounselorId,
@@ -148,7 +150,7 @@ def _build_order_out(
             "endTime": schedule.EndTime,
             "centerId": center_id,
             "centerName": center_display_name(center_id),
-            "roomName": room_display_name(center_id, room_id, db) if room_id else None,
+            "roomName": room_display_name(center_id, room_id, db) if show_room else None,
             **contract_fields,
         }
     )
