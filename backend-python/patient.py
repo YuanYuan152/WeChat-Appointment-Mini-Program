@@ -117,8 +117,6 @@ def _build_order_out(
     account: Optional[AppAccount] = None,
 ) -> OrderOut:
     """补充订单关联的预约时段与咨询师信息。"""
-    from schedule_meta import parse_room_id, room_display_name
-
     if account is None:
         account = db.query(AppAccount).filter(AppAccount.Id == order.AccountId).first()
 
@@ -130,7 +128,6 @@ def _build_order_out(
     if not schedule:
         return base
     center_id = parse_center_id(schedule.Note)
-    room_id = parse_room_id(schedule.Note)
     prof = (
         db.query(AppCounselorProfile)
         .filter(AppCounselorProfile.AccountId == schedule.CounselorId)
@@ -140,8 +137,7 @@ def _build_order_out(
     counselor_name = (prof.Name if prof and prof.Name else None) or (
         acc.Nickname if acc else None
     ) or f"咨询师#{schedule.CounselorId}"
-    # 待支付阶段不向来访展示咨询室（付款占用前为内部预留）
-    show_room = order.Status != "PENDING" and bool(room_id)
+    # 来访端不展示咨询室（内部排班信息，仅展示预约中心）
     return base.model_copy(
         update={
             "counselorId": schedule.CounselorId,
@@ -150,7 +146,7 @@ def _build_order_out(
             "endTime": schedule.EndTime,
             "centerId": center_id,
             "centerName": center_display_name(center_id),
-            "roomName": room_display_name(center_id, room_id, db) if show_room else None,
+            "roomName": None,
             **contract_fields,
         }
     )
