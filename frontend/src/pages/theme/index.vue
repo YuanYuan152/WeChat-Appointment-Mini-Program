@@ -32,7 +32,7 @@
         >
           <view class="theme-img-wrap">
             <image 
-              :src="theme.image || '/static/images/place11.png'" 
+              :src="theme.image || '/static/images-opt/place11.jpg'" 
               class="theme-img" 
               mode="aspectFill" 
               @error="handleImageError"
@@ -71,7 +71,7 @@
           <text v-if="loading">加载中...</text>
           <text v-else-if="!hasMore && themes.length > 0">没有更多了</text>
           <view v-else-if="themes.length === 0 && !loading" class="empty-box">
-            <image src="/static/images/place13.png" class="empty-img" mode="aspectFit" />
+            <image src="/static/images-opt/place13.jpg" class="empty-img" mode="aspectFit" />
             <text class="empty-text">暂无主题月活动</text>
           </view>
         </view>
@@ -150,7 +150,7 @@ const mapTheme = (a: ApiActivity): Theme => {
     description: a.summary || '',
     month,
     status: isActive ? 'active' : 'ended',
-    image: a.coverUrl || '/static/images/place11.png',
+    image: a.coverUrl || '/static/images-opt/place11.jpg',
     views: a.views || 0,
   }
 }

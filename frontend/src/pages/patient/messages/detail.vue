@@ -245,6 +245,29 @@
         </view>
       </view>
 
+      <view v-else-if="relatedType === 'PATIENT_PROXY_ORDER_PENDING'" class="detail-body">
+        <view v-if="detail.tip" class="tip-box pending">
+          <text class="tip-text">{{ detail.tip }}</text>
+        </view>
+        <view v-if="detail.counselorName" class="detail-row">
+          <text class="label">咨询师</text>
+          <text class="value">{{ detail.counselorName }}</text>
+        </view>
+        <view v-if="detail.startTime" class="detail-row">
+          <text class="label">预约时间</text>
+          <text class="value">{{ detail.startTime }}<text v-if="detail.endTime"> - {{ formatEndTime(detail.endTime) }}</text></text>
+        </view>
+        <view v-if="proxyPendingLocation" class="detail-row">
+          <text class="label">预约中心</text>
+          <text class="value">{{ proxyPendingLocation }}</text>
+        </view>
+        <view v-if="detail.totalFeeYuan != null" class="detail-row">
+          <text class="label">订单金额</text>
+          <text class="value">¥{{ detail.totalFeeYuan }}</text>
+        </view>
+        <button v-if="proxyOrderId" class="review-btn" @click="goProxyOrderPay">去支付</button>
+      </view>
+
       <view v-else-if="isPatientMessage" class="detail-body">
         <view v-if="detail.tip" class="tip-box">
           <text class="tip-text">{{ detail.tip }}</text>
@@ -429,6 +452,16 @@ const messageId = ref(0)
 const payload = computed(() => parseMessageContent(message.value?.Content))
 const detail = computed(() => (payload.value.detail || {}) as Record<string, any>)
 const relatedType = computed(() => message.value?.RelatedType || '')
+/** 待支付预约仅展示中心名，过滤历史消息中可能带有的咨询室后缀 */
+const proxyPendingLocation = computed(() => {
+  const raw = String(detail.value.centerName || detail.value.location || '').trim()
+  if (!raw) return ''
+  if (raw.includes(' · ')) {
+    const [left, right] = raw.split(' · ')
+    if (/咨询室|室\s*[A-Z]?$/i.test(right || '')) return left.trim()
+  }
+  return raw
+})
 const isCounselorMessage = computed(() => COUNSELOR_MESSAGE_TYPES.has(relatedType.value))
 const isPatientMessage = computed(() => PATIENT_MESSAGE_TYPES.has(relatedType.value))
 const isExemptionPending = computed(() => {
@@ -508,6 +541,11 @@ const affectedList = computed(() => {
   return Array.isArray(list) ? (list as AffectedAppointment[]) : []
 })
 
+const proxyOrderId = computed(() => {
+  const id = detail.value.orderId || message.value?.RelatedId
+  return id ? Number(id) : 0
+})
+
 const formatTime = (dt?: string) => dt ? dt.slice(0, 16).replace('T', ' ') : ''
 
 const formatEndTime = (value?: string) => {
@@ -568,6 +606,14 @@ const goCaseRecordView = () => {
       })
     },
   })
+}
+
+const goProxyOrderPay = () => {
+  if (!proxyOrderId.value) {
+    uni.showToast({ title: '缺少订单编号', icon: 'none' })
+    return
+  }
+  uni.navigateTo({ url: `/pages/patient/orders/detail?id=${proxyOrderId.value}` })
 }
 
 onLoad((options) => {

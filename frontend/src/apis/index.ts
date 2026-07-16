@@ -5,35 +5,29 @@ import { API_ENDPOINTS } from '@/config/api'
 
 const ok = <T>(data: T, msg = '请求成功'): ApiResponse<T> => ({ code: 0, msg, data })
 
-const mapDoctor = (item: any): Doctor & { title?: string; workYears?: number; consultHours?: number; _source?: string } => {
-    const needsNegotiation = Boolean(item.needsNegotiation ?? item.needs_negotiation)
-    const priceNegotiation = Boolean(item.priceNegotiation || item.billingLabel === '议价')
-    return {
-        id: Number(item.id || item.Id || item.accountId || 0),
-        name: item.name || item.Name || item.nickname || '咨询师',
-        avatar: item.avatarUrl || item.AvatarUrl || item.avatar || '/static/images/tc59.png',
-        specialty: item.specialty || item.Specialty || item.field || item.Field || '心理咨询',
-        experience: `${item.workYears || item.WorkYears || 0}年经验`,
-        rating: item.rating || 5,
-        province: item.province || item.Province || item.city || item.City || '线下/线上',
-        description: item.introduce || item.Introduce || item.description || '暂无介绍',
-        price: Math.round(Number(item.billing || item.Billing || 0) / 100) || item.price || 500,
-        needsNegotiation,
-        priceLabel: item.priceLabel || item.price_label || (needsNegotiation ? '需议价' : undefined),
-        priceNegotiation,
-        billingLabel: item.billingLabel || (priceNegotiation ? '议价' : ''),
-        title: item.title || item.Title || '心理咨询师',
-        workYears: Number(item.workYears || item.WorkYears || 0),
-        consultHours: Number(item.consultHours || item.ConsultHours || 0),
-        _source: item._source,
-    }
-}
+const mapDoctor = (item: any): Doctor & { title?: string; workYears?: number; consultHours?: number; _source?: string } => ({
+    id: Number(item.id || item.Id || item.accountId || 0),
+    name: item.name || item.Name || item.nickname || '咨询师',
+    avatar: item.avatarUrl || item.AvatarUrl || item.avatar || '/static/images-opt/tc59.jpg',
+    specialty: item.specialty || item.Specialty || item.field || item.Field || '心理咨询',
+    experience: `${item.workYears || item.WorkYears || 0}年经验`,
+    rating: item.rating || 5,
+    province: item.province || item.Province || item.city || item.City || '线下/线上',
+    description: item.introduce || item.Introduce || item.description || '暂无介绍',
+    price: Math.round(Number(item.billing || item.Billing || 0) / 100) || item.price || 500,
+    priceNegotiation: !!(item.priceNegotiation || item.billingLabel === '议价'),
+    billingLabel: item.billingLabel || '',
+    title: item.title || item.Title || '心理咨询师',
+    workYears: Number(item.workYears || item.WorkYears || 0),
+    consultHours: Number(item.consultHours || item.ConsultHours || 0),
+    _source: item._source,
+})
 
 const mapActivity = (item: any): Activity => ({
     id: Number(item.id || item.Id || 0),
     title: item.title || item.Title || '活动',
     description: item.summary || item.Content || item.content || '',
-    image: item.coverUrl || item.CoverUrl || item.image || '/static/images/slide11.png',
+    image: item.coverUrl || item.CoverUrl || item.image || '/static/images-opt/slide11.jpg',
     date: item.startAt || item.StartAt || item.createdAt || item.CreatedAt || '',
     status: item.IsActive === false || item.isActive === false ? '已结束' : '进行中',
 })
@@ -41,7 +35,7 @@ const mapActivity = (item: any): Activity => ({
 const mapBanner = (item: any): Banner => ({
     id: Number(item.id || item.Id || 0),
     title: item.title || item.Title || '',
-    image: item.imageUrl || item.ImageUrl || '/static/images/slide11.png',
+    image: item.imageUrl || item.ImageUrl || '/static/images-opt/slide11.jpg',
     buttonText: '查看详情',
     date: '',
 })
@@ -220,4 +214,4 @@ export const testApi = {
     health: () => {
         return http.get<ApiResponse<any>>(API_ENDPOINTS.TEST.HEALTH)
     }
-}
+} 

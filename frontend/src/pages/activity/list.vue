@@ -53,7 +53,7 @@
         >
           <view class="act-img-wrap">
             <image 
-              :src="activity.image || '/static/images/huodong11.png'" 
+              :src="activity.image || '/static/images-opt/huodong11.jpg'" 
               class="act-img" 
               mode="aspectFill" 
               @error="handleImageError"
@@ -106,7 +106,7 @@
           <text v-if="loading">加载中...</text>
           <text v-else-if="!hasMore && activities.length > 0">没有更多了</text>
           <view v-else-if="activities.length === 0 && !loading" class="empty-box">
-            <image src="/static/images/place14.png" class="empty-img" mode="aspectFit" />
+            <image src="/static/images-opt/place14.jpg" class="empty-img" mode="aspectFit" />
             <text class="empty-text">暂无相关活动</text>
           </view>
         </view>

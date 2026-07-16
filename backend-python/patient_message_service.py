@@ -71,23 +71,8 @@ def _appointment_location(
     *,
     status: str = "BOOKED",
 ) -> str:
-    from schedule_meta import (
-        center_display_name,
-        display_room_id,
-        is_video_center,
-        parse_center_id,
-        room_display_name,
-    )
-
-    center_id = parse_center_id(note)
-    center_name = center_display_name(center_id) or "未知地点"
-    if is_video_center(center_id):
-        return center_name
-    room_id = display_room_id(note, status)
-    room_name = room_display_name(center_id, room_id, db) if room_id else None
-    if room_name:
-        return f"{center_name} · {room_name}"
-    return center_name
+    """来访端仅展示预约中心，不暴露咨询室。"""
+    return _appointment_center_name(note)
 
 
 def _consultation_context(db: Session, consultation: AppConsultation) -> Dict[str, Any]:
@@ -479,6 +464,9 @@ def notify_patient_proxy_order_pending(
     center_name = center_display_name(center_id) if center_id else "待定"
     time_text = _format_datetime(schedule.StartTime)
     fee_yuan = int(order.TotalFee or 0) // 100
+    from system_setting_service import get_proxy_order_ttl_minutes, proxy_order_ttl_patient_tip
+
+    ttl_minutes = get_proxy_order_ttl_minutes(db)
     summary = f"{counselor_name} · {time_text} · ¥{fee_yuan}"
     detail = {
         "counselorName": counselor_name,
@@ -489,7 +477,8 @@ def notify_patient_proxy_order_pending(
         "scheduleId": schedule.Id,
         "totalFeeYuan": fee_yuan,
         "expiresAt": order.ExpiresAt.isoformat() if order.ExpiresAt else None,
-        "tip": "请在 2 小时内完成支付，逾期订单将自动取消",
+        "proxyOrderTtlMinutes": ttl_minutes,
+        "tip": proxy_order_ttl_patient_tip(ttl_minutes),
     }
     _notify_patient(
         db,

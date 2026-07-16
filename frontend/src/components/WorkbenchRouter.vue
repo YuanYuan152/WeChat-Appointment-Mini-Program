@@ -52,6 +52,8 @@ type RouterState = 'loading' | 'needLogin' | 'error' | 'patientBlocked'
 
 const state = ref<RouterState>('loading')
 const errorMsg = ref('')
+/** 防止 onMounted + onShow 并发重复进工作台 */
+let routing = false
 
 const ROLE_ROUTES: Record<string, string> = {
   Counselor: '/pages/counselor/workbench/index',
@@ -66,7 +68,9 @@ const goConsult = () => uni.switchTab({ url: '/pages/consultant/list' })
 const goRecords = () => uni.switchTab({ url: '/pages/tab-slot/index' })
 
 const goLogin = async () => {
+  if (routing) return
   state.value = 'loading'
+  routing = true
   try {
     const code = (await resolveWxLoginCode()) || getDevLoginCode()
     await AuthApi.wxLogin(code)
@@ -74,6 +78,8 @@ const goLogin = async () => {
   } catch (e: any) {
     state.value = 'error'
     errorMsg.value = e?.message || '登录失败'
+  } finally {
+    routing = false
   }
 }
 
@@ -99,6 +105,11 @@ const routeToWorkbench = async () => {
     updateTabBarForRole(role)
 
     const target = ROLE_ROUTES[role]
+    if (!target) {
+      state.value = 'error'
+      errorMsg.value = `未知角色：${role}`
+      return
+    }
     uni.redirectTo({ url: target })
   } catch (e: any) {
     state.value = 'error'
@@ -106,12 +117,23 @@ const routeToWorkbench = async () => {
   }
 }
 
-const activate = () => {
-  if (isLoggedIn()) routeToWorkbench()
-  else state.value = 'needLogin'
+const activate = async () => {
+  if (routing) return
+  if (!isLoggedIn()) {
+    state.value = 'needLogin'
+    return
+  }
+  routing = true
+  try {
+    await routeToWorkbench()
+  } finally {
+    routing = false
+  }
 }
 
-onMounted(activate)
+onMounted(() => {
+  void activate()
+})
 defineExpose({ activate })
 </script>
 

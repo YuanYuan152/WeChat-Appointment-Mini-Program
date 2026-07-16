@@ -107,6 +107,7 @@ def _sync_patient_appointment_content(
     if related_type not in (
         "PATIENT_APPOINTMENT_SUCCESS",
         "PATIENT_APPOINTMENT_REMIND",
+        "PATIENT_PROXY_ORDER_PENDING",
     ):
         return content
 
@@ -124,6 +125,7 @@ def _sync_patient_appointment_content(
 
     detail["centerName"] = center
     detail["location"] = center
+    detail.pop("roomName", None)
     payload["detail"] = detail
 
     summary = payload.get("summary")

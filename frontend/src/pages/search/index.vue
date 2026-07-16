@@ -126,7 +126,7 @@ const keyword = ref('')
 const searched = ref(false)
 const loading = ref(false)
 const history = ref<string[]>([])
-const defaultAvatar = '/static/images/tc59.png'
+const defaultAvatar = '/static/images-opt/tc59.jpg'
 const result = ref<SearchResult>({
   keyword: '',
   counselors: [],

@@ -1,4 +1,4 @@
-"""助理/管理员代理预约：创建排期 + 待支付订单（2 小时有效）。"""
+"""助理/管理员代理预约：创建排期 + 带可配置有效期的待支付订单。"""
 
 from __future__ import annotations
 
@@ -43,7 +43,6 @@ from schedule_slots import (
 )
 from app_time import china_now
 
-PROXY_ORDER_TTL_HOURS = 2
 DISPLAY_PENDING_PAYMENT = "PENDING_PAYMENT"
 PROXY_SCHEDULE_NEW = "schedule:new"
 PROXY_SCHEDULE_EXISTING = "schedule:existing"
@@ -534,10 +533,13 @@ def push_proxy_order(
     existing_schedule_id: Optional[int] = None,
     agreement_is_adult: Optional[bool] = None,
 ) -> Dict[str, Any]:
+    from system_setting_service import get_proxy_order_ttl_minutes, proxy_order_ttl_push_message
+
     expire_pending_proxy_orders(db)
     from patient_contract_service import acquire_patient_contract_lock
 
     acquire_patient_contract_lock(db, patient_id)
+    ttl_minutes = get_proxy_order_ttl_minutes(db)
 
     patient = db.query(AppAccount).filter(AppAccount.Id == patient_id, AppAccount.IsActive == True).first()
     if not patient:
@@ -668,7 +670,7 @@ def push_proxy_order(
 
     total_fee = resolve_display_price_cents(db, patient_id, counselor_id)
     out_trade_no = f"PROXY{int(time.time())}{random.randint(1000, 9999)}"
-    expires_at = _now() + timedelta(hours=PROXY_ORDER_TTL_HOURS)
+    expires_at = _now() + timedelta(minutes=ttl_minutes)
     schedule_mode = PROXY_SCHEDULE_EXISTING if existing_schedule_id else PROXY_SCHEDULE_NEW
     order = AppOrder(
         AccountId=patient_id,
@@ -702,5 +704,6 @@ def push_proxy_order(
         "totalFee": total_fee,
         "totalFeeYuan": total_fee // 100,
         "expiresAt": expires_at.isoformat(),
-        "message": "订单已推送，来访需在 2 小时内完成支付",
+        "message": proxy_order_ttl_push_message(ttl_minutes),
+        "proxyOrderTtlMinutes": ttl_minutes,
     }

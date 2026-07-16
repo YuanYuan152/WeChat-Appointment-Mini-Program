@@ -328,38 +328,6 @@
                     }
                 },
                 {
-                    "path": "banner/index",
-                    "style": {
-                        "navigationBarTitleText": "Banner 管理",
-                        "navigationBarBackgroundColor": "#ffffff",
-                        "navigationBarTextStyle": "black"
-                    }
-                },
-                {
-                    "path": "articles/index",
-                    "style": {
-                        "navigationBarTitleText": "文章管理",
-                        "navigationBarBackgroundColor": "#ffffff",
-                        "navigationBarTextStyle": "black"
-                    }
-                },
-                {
-                    "path": "activities/index",
-                    "style": {
-                        "navigationBarTitleText": "活动管理",
-                        "navigationBarBackgroundColor": "#ffffff",
-                        "navigationBarTextStyle": "black"
-                    }
-                },
-                {
-                    "path": "themes/index",
-                    "style": {
-                        "navigationBarTitleText": "主题月管理",
-                        "navigationBarBackgroundColor": "#ffffff",
-                        "navigationBarTextStyle": "black"
-                    }
-                },
-                {
                     "path": "dashboard/index",
                     "style": {
                         "navigationBarTitleText": "运营看板",
@@ -493,6 +461,14 @@
                         "navigationBarTitleText": "来访者详情",
                         "navigationBarBackgroundColor": "#ffffff",
                         "navigationBarTextStyle": "black"
+                    }
+                },
+                {
+                    "path": "system-settings/index",
+                    "style": {
+                        "navigationBarTitleText": "系统设置",
+                        "navigationBarBackgroundColor": "#3D5A4E",
+                        "navigationBarTextStyle": "white"
                     }
                 },
                 {
@@ -742,26 +718,26 @@
         "list": [
             {
                 "pagePath": "pages/index/index",
-                "iconPath": "static/images/bottom1.png",
-                "selectedIconPath": "static/images/bottom1.png",
+                "iconPath": "static/images-opt/bottom1.png",
+                "selectedIconPath": "static/images-opt/bottom1.png",
                 "text": "首页"
             },
             {
                 "pagePath": "pages/consultant/list",
-                "iconPath": "static/images/bottom2.png",
-                "selectedIconPath": "static/images/bottom2.png",
+                "iconPath": "static/images-opt/bottom2.png",
+                "selectedIconPath": "static/images-opt/bottom2.png",
                 "text": "心理咨询"
             },
             {
                 "pagePath": "pages/tab-slot/index",
-                "iconPath": "static/images/bottom3.png",
-                "selectedIconPath": "static/images/bottom3.png",
+                "iconPath": "static/images-opt/bottom3.png",
+                "selectedIconPath": "static/images-opt/bottom3.png",
                 "text": "预约记录"
             },
             {
                 "pagePath": "pages/user/profile",
-                "iconPath": "static/images/bottom4.png",
-                "selectedIconPath": "static/images/bottom4.png",
+                "iconPath": "static/images-opt/bottom4.png",
+                "selectedIconPath": "static/images-opt/bottom4.png",
                 "text": "我的"
             }
         ]

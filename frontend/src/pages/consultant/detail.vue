@@ -243,11 +243,11 @@
           <view class="modal-icon-wrap">
             <text class="modal-icon">!</text>
           </view>
-          <text class="modal-title-large">年龄确认</text>
-          <text class="modal-desc">为了提供更合适的咨询服务，请确认您是否已满18周岁？</text>
+          <text class="modal-title-large">选择签署协议</text>
+          <text class="modal-desc">请选择需要签署的心理咨询协议</text>
           <view class="modal-btn-group">
-            <button class="btn-outline" @click="confirmAge(false)">未成年</button>
-            <button class="btn-fill" @click="confirmAge(true)">已成年</button>
+            <button class="btn-fill" @click="confirmAge(true)">{{ tongxinAgreementTitle }}</button>
+            <button class="btn-outline" @click="confirmAge(false)">{{ yangfanAgreementTitle }}</button>
           </view>
           <text class="modal-close-text" @click="closeAgeConfirm">取消</text>
         </view>
@@ -258,7 +258,7 @@
     <view v-if="showAgreement" class="modal-overlay modern-modal modal-overlay--bottom">
       <view class="modal-content full-height">
         <view class="modal-header-modern">
-          <text class="modal-title">心理咨询协议</text>
+          <text class="modal-title">签署心理咨询协议</text>
           <view class="modal-close-btn" @click="closeAgreement">×</view>
         </view>
         <view class="modal-body no-padding">
@@ -269,6 +269,44 @@
               </view>
             </scroll-view>
           </view>
+
+          <view class="emergency-box">
+            <text class="emergency-title">紧急联系人信息 <text class="text-red">*</text></text>
+            <text class="emergency-hint">签署协议前请完整填写以下三项</text>
+            <view class="emergency-field">
+              <text class="emergency-label">紧急联系人姓名</text>
+              <input
+                class="emergency-input"
+                type="text"
+                maxlength="50"
+                placeholder="请输入姓名"
+                :value="emergencyName"
+                @input="onEmergencyNameInput"
+              />
+            </view>
+            <view class="emergency-field">
+              <text class="emergency-label">与您的关系</text>
+              <input
+                class="emergency-input"
+                type="text"
+                maxlength="30"
+                placeholder="如：父亲 / 配偶 / 朋友"
+                :value="emergencyRelation"
+                @input="onEmergencyRelationInput"
+              />
+            </view>
+            <view class="emergency-field">
+              <text class="emergency-label">联系电话</text>
+              <input
+                class="emergency-input"
+                type="text"
+                maxlength="20"
+                placeholder="请输入手机号"
+                :value="emergencyPhone"
+                @input="onEmergencyPhoneInput"
+              />
+            </view>
+          </view>
           
           <!-- 签名区域 -->
           <view class="signature-box">
@@ -277,34 +315,11 @@
               <text class="sig-date">{{ currentDate }}</text>
             </view>
             
-            <view v-if="!hasSignature && !showSignatureCanvas" class="sig-placeholder" @click="startSignature">
+            <view v-if="!hasSignature" class="sig-placeholder" @click="startSignature">
               <text class="sig-placeholder-text">点击此处手写签名</text>
             </view>
             
-            <view v-if="showSignatureCanvas" class="sig-canvas-wrap">
-              <text class="sig-tip">请在下方区域内绘制您的签名</text>
-              <view class="sig-canvas-inner">
-                <l-signature 
-                  ref="signatureRef"
-                  :penColor="'#000000'"
-                  :penSize="3"
-                  :backgroundColor="'#F9FAFB'"
-                  :disableScroll="true"
-                  :beforeDelay="100"
-                  :maxHistoryLength="20"
-                  :openSmooth="false"
-                  :type="'2d'"
-                  style="width: 100%; height: 200px;"
-                ></l-signature>
-              </view>
-              <view class="sig-actions">
-                <button class="sig-btn outline" @click="clearSignature">重写</button>
-                <button class="sig-btn outline" @click="goBackFromSignature">取消</button>
-                <button class="sig-btn fill" @click="confirmSignature">确认签名</button>
-              </view>
-            </view>
-            
-            <view v-if="hasSignature && !showSignatureCanvas" class="sig-result">
+            <view v-if="hasSignature" class="sig-result">
               <image :src="signatureData" class="sig-img" mode="aspectFit" @error="onSignatureImageError" />
               <view class="sig-re-sign" @click="startSignature">重新签名</view>
             </view>
@@ -312,7 +327,41 @@
         </view>
         
         <view class="modal-footer-modern">
-          <button class="btn-fill full-width" :class="{ 'disabled': !hasSignature }" @click="confirmAgreement">同意协议并继续</button>
+          <text v-if="agreementSubmitHint" class="agreement-submit-hint">{{ agreementSubmitHint }}</text>
+          <button class="btn-fill full-width" :class="{ 'disabled': !canConfirmAgreement }" @click="confirmAgreement">同意协议并继续</button>
+        </view>
+      </view>
+    </view>
+
+    <!-- 签名浮层：遮罩与画布分离，避免 catchtouchmove 吃掉笔画事件 -->
+    <view v-if="showSignatureCanvas" class="sig-pad-overlay">
+      <view class="sig-pad-mask" @tap="goBackFromSignature" @touchmove.stop.prevent></view>
+      <view class="sig-pad-card" @tap.stop>
+        <view class="sig-pad-header">
+          <text class="sig-pad-title">来访者签字</text>
+          <text class="sig-pad-close" @click="goBackFromSignature">×</text>
+        </view>
+        <text class="sig-pad-tip">请在下方区域内书写签名</text>
+        <view
+          class="sig-pad-canvas"
+          :style="{ width: sigCanvasWidthPx + 'px', height: sigCanvasHeightPx + 'px' }"
+        >
+          <l-signature
+            v-if="signaturePadReady"
+            ref="signatureRef"
+            :penColor="'#111111'"
+            :penSize="4"
+            :backgroundColor="'#FFFFFF'"
+            :disableScroll="true"
+            :beforeDelay="400"
+            :maxHistoryLength="20"
+            :openSmooth="false"
+            :type="'2d'"
+          />
+        </view>
+        <view class="sig-pad-actions">
+          <button class="sig-btn outline" @click="clearSignature">重写</button>
+          <button class="sig-btn fill" @click="confirmSignature">确认签名</button>
         </view>
       </view>
     </view>
@@ -405,6 +454,35 @@ import {
 } from '@/utils/bookingSlots'
 import ContactUsContent from '@/components/ContactUsContent.vue'
 import { isLoggedIn, handleRequireLogin } from '@/utils/auth'
+import {
+  TONGXIN_AGREEMENT_TITLE,
+  YANGFAN_AGREEMENT_TITLE,
+  buildTongxinConsultationAgreement,
+  buildYangfanConsultationAgreement,
+  currentAgreementDate,
+  normalizeAgreementPhone,
+  validateAgreementEmergencyContact,
+} from '@/utils/consultationAgreement'
+
+const tongxinAgreementTitle = TONGXIN_AGREEMENT_TITLE
+const yangfanAgreementTitle = YANGFAN_AGREEMENT_TITLE
+const emergencyName = ref('')
+const emergencyRelation = ref('')
+const emergencyPhone = ref('')
+const emergencyPayload = computed(() => ({
+  name: emergencyName.value.trim(),
+  relation: emergencyRelation.value.trim(),
+  phone: normalizeAgreementPhone(emergencyPhone.value),
+}))
+const emergencyError = computed(() => validateAgreementEmergencyContact(emergencyPayload.value))
+const canConfirmAgreement = computed(() =>
+  hasSignature.value && !emergencyError.value,
+)
+const agreementSubmitHint = computed(() => {
+  if (emergencyError.value) return emergencyError.value
+  if (!hasSignature.value) return '请先完成来访者签字'
+  return ''
+})
 
 interface Doctor {
   id: number
@@ -482,9 +560,14 @@ const showAgreement = ref(false)
 const showPayment = ref(false)
 const showAssistantContact = ref(false)
 const showSignatureCanvas = ref(false)
+/** 签字浮层布局稳定后再挂载画布，避免坐标漂移 */
+const signaturePadReady = ref(false)
+const sigCanvasWidthPx = ref(320)
+/** 签字区高度（px） */
+const sigCanvasHeightPx = ref(220)
 /** 是否仍需首次协议签署（年龄确认 + 签字） */
 const needsIntakeAgreement = ref(true)
-/** 首次来访年龄确认结果：true=已成年，false=未成年 */
+/** 协议类型：true=同心理咨询协议，false=扬帆计划协议（沿用 is_adult 字段） */
 const intakeIsAdult = ref<boolean | null>(null)
 /** 确认订单页：是否已勾选同意温馨提示与隐私协议 */
 const payRulesAgreed = ref(false)
@@ -880,6 +963,10 @@ const resetSignatureForNewBooking = () => {
   signatureData.value = ''
   intakeIsAdult.value = null
   showSignatureCanvas.value = false
+  signaturePadReady.value = false
+  emergencyName.value = ''
+  emergencyRelation.value = ''
+  emergencyPhone.value = ''
   try {
     uni.removeStorageSync('signatureImage')
   } catch {
@@ -1049,7 +1136,7 @@ const getAvatarUrl = (avatar: string) => {
 
 // 获取默认头像
 const getDefaultAvatar = () => {
-  return '/static/images/default-doctor.png'
+  return '/static/images-opt/default-doctor.jpg'
 }
 
 // 处理图片加载错误
@@ -1058,16 +1145,6 @@ const handleImageError = () => {
   // 图片加载失败时，可以在这里添加错误处理逻辑
 }
 
-// 获取当前日期
-const getCurrentDate = () => {
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-  return `${year}年${month}月${day}日`
-}
-
-// 年龄确认相关方法
 const showAgeConfirmDialog = () => {
   showAgeConfirm.value = true
 }
@@ -1076,25 +1153,60 @@ const closeAgeConfirm = () => {
   showAgeConfirm.value = false
 }
 
-const confirmAge = (isAdult: boolean) => {
-  intakeIsAdult.value = isAdult
+const rebuildCurrentAgreement = () => {
+  if (intakeIsAdult.value === null) return
+  const counselorName = doctor.value.name || '咨询师'
+  const priceYuan = selectedSlot.value?.Price || doctor.value.price || 0
+  currentAgreement.value = intakeIsAdult.value
+    ? buildTongxinConsultationAgreement(counselorName, priceYuan, emergencyPayload.value)
+    : buildYangfanConsultationAgreement(counselorName, priceYuan, emergencyPayload.value)
+  currentDate.value = currentAgreementDate()
+}
+
+const prefillEmergencyContact = async () => {
+  try {
+    const res = await httpV2.get<{
+      emergencyContact?: string
+      emergencyRelation?: string
+      emergencyPhone?: string
+    }>(API_ENDPOINTS.patient.me, undefined, { showLoading: false, showError: false })
+    if (res.code === 0 && res.data) {
+      emergencyName.value = res.data.emergencyContact || ''
+      emergencyRelation.value = res.data.emergencyRelation || ''
+      emergencyPhone.value = res.data.emergencyPhone || ''
+      rebuildCurrentAgreement()
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+const onEmergencyNameInput = (e: { detail: { value: string } }) => {
+  emergencyName.value = e.detail.value
+  rebuildCurrentAgreement()
+}
+const onEmergencyRelationInput = (e: { detail: { value: string } }) => {
+  emergencyRelation.value = e.detail.value
+  rebuildCurrentAgreement()
+}
+const onEmergencyPhoneInput = (e: { detail: { value: string } }) => {
+  emergencyPhone.value = e.detail.value
+  rebuildCurrentAgreement()
+}
+
+const confirmAge = (isTongxin: boolean) => {
+  intakeIsAdult.value = isTongxin
   closeAgeConfirm()
   showAgreement.value = true
-  
-  // 根据年龄显示不同协议
-  if (isAdult) {
-    currentAgreement.value = getAdultAgreement()
-  } else {
-    currentAgreement.value = getMinorAgreement()
-  }
-  
-  currentDate.value = getCurrentDate()
+  rebuildCurrentAgreement()
+  prefillEmergencyContact()
 }
 
 // 仅关闭协议弹层（去支付时调用，不清空已签内容）
 const hideAgreementModal = () => {
   showAgreement.value = false
   showSignatureCanvas.value = false
+  signaturePadReady.value = false
 }
 
 // 用户取消协议：关闭并重置签名，便于下次重新签
@@ -1103,110 +1215,26 @@ const closeAgreement = () => {
   resetSignatureForNewBooking()
 }
 
-const getAdultAgreement = () => {
-  return `重要提示：
-本协议是您与上海连心心理咨询有限公司（以下简称"连心"或"公司"）之间具有法律约束力的协议。请您仔细阅读并理解本协议的所有条款，特别是那些限制责任的条款（将以粗体显示）。通过阅读和签署本协议，您表示接受本协议的所有条款。如果您不同意本协议的任何条款，请停止使用我们的服务。
-
-第一条 协议适用
-本协议适用于具有完全民事行为能力的个人，不包括限制民事行为能力人或无民事行为能力人（如未成年人）。如果发现来访者不符合上述资格，来访者及其监护人将承担所有后果，连心保留终止服务的权利。
-
-第二条 服务目的
-来访者寻求专业的心理咨询和治疗服务，连心使用专业的技术和方法提供这些服务。
-
-第三条 服务内容
-连心指定咨询师${doctor.value.name}，费用为每次50分钟咨询${selectedSlot.value?.Price || 0}元。双方同意遵守合同约定。
-
-第四条 服务预约
-每次咨询通常持续50分钟，具体时间由来访者和咨询师确认。
-
-第五条 服务流程
-咨询是以精神分析取向的心理咨询，这意味着当前状况的缓解可能不是一个很快的过程，但是你会通过这样一个逐步展开的咨询得到一个更深入的转变，无论是自我认识，还是自我的接纳和自尊的改善，以及生活的关系中的动力和快乐。
-
-第六条 咨询频率
-前面的3-4次为初始访谈，每周的频率在1-2次，有些可以是3-4次。短程咨询在15-30次，中长程持续50-100次，长程在100次以上。
-
-第七条 替代疗法
-如果你不喜欢精神分析，也可以采用人本主义聚焦疗法的方式，是从身体的感受入手来工作。所以需要通过一点点地增加对自己的身体的理解，来帮助自己解决困扰，增强自己对于自己的情绪及反应的领悟。会有一个更加自主性的过程。每次也是50分钟，频率一周1-2次。每次会包括聚焦和讨论。
-
-第八条 服务方式
-目前面询与视频都可以工作。
-
-第九条 保密原则
-咨询师将严格保护来访者的隐私，除非法律要求或来访者同意，否则不会向第三方透露咨询内容。
-
-第十条 服务终止
-来访者与连心之间的咨询关系是自愿建立的，任何一方都可以单方面终止服务，此时协议终止。任何未解决的事项需要补充协议。
-
-第十一条 法律适用及争议解决
-1. 本协议的订立、效力、解释、履行及争议的解决均适用中华人民共和国法律。
-2. 因履行本协议发生的争议，双方可以协商解决；协商不成的，提交连心所在地人民法院解决。
-3. 争议期间，非争议条款仍然有效。
-
-第十二条 合同的效力
-1. 本合同自双方签字盖章之日起生效。
-2. 任何一方不得在未经所有方一致同意的情况下单方面变更或终止协议。
-3. 部分条款的无效不影响其他条款的效力和履行。
-
-（以下无正文）`
-}
-
-const getMinorAgreement = () => {
-  return `重要提示：
-本协议是您与上海连心心理咨询有限公司（以下简称"连心"或"公司"）之间具有法律约束力的协议。由于您是未成年人，本协议需要您的监护人共同签署。请您和监护人仔细阅读并理解本协议的所有条款，特别是那些限制责任的条款（将以粗体显示）。通过阅读和签署本协议，您和监护人表示接受本协议的所有条款。如果您或监护人不同意本协议的任何条款，请停止使用我们的服务。
-
-第一条 协议适用
-本协议适用于未成年人及其监护人。未成年人必须在监护人的陪同下进行咨询，监护人必须全程参与咨询过程并承担相应责任。
-
-第二条 服务目的
-未成年人寻求专业的心理咨询和治疗服务，连心使用专业的技术和方法提供这些服务。监护人将全程参与并协助咨询过程。
-
-第三条 服务内容
-连心指定咨询师${doctor.value.name}，费用为每次50分钟咨询${selectedSlot.value?.Price || 0}元。双方同意遵守合同约定。
-
-第四条 监护人责任
-1. 监护人必须全程陪同未成年人进行咨询
-2. 监护人需要签署知情同意书
-3. 监护人承担咨询费用和法律责任
-4. 监护人有权了解咨询进展和内容
-
-第五条 服务流程
-咨询是以精神分析取向的心理咨询，这意味着当前状况的缓解可能不是一个很快的过程，但是你会通过这样一个逐步展开的咨询得到一个更深入的转变，无论是自我认识，还是自我的接纳和自尊的改善，以及生活的关系中的动力和快乐。
-
-第六条 咨询频率
-前面的3-4次为初始访谈，每周的频率在1-2次，有些可以是3-4次。短程咨询在15-30次，中长程持续50-100次，长程在100次以上。
-
-第七条 替代疗法
-如果你不喜欢精神分析，也可以采用人本主义聚焦疗法的方式，是从身体的感受入手来工作。所以需要通过一点点地增加对自己的身体的理解，来帮助自己解决困扰，增强自己对于自己的情绪及反应的领悟。会有一个更加自主性的过程。每次也是50分钟，频率一周1-2次。每次会包括聚焦和讨论。
-
-第八条 服务方式
-目前面询与视频都可以工作。
-
-第九条 保密原则
-咨询师将严格保护未成年人的隐私，除非法律要求或监护人同意，否则不会向第三方透露咨询内容。
-
-第十条 服务终止
-未成年人、监护人与连心之间的咨询关系是自愿建立的，任何一方都可以单方面终止服务，此时协议终止。任何未解决的事项需要补充协议。
-
-第十一条 法律适用及争议解决
-1. 本协议的订立、效力、解释、履行及争议的解决均适用中华人民共和国法律。
-2. 因履行本协议发生的争议，双方可以协商解决；协商不成的，提交连心所在地人民法院解决。
-3. 争议期间，非争议条款仍然有效。
-
-第十二条 合同的效力
-1. 本合同自双方签字盖章之日起生效。
-2. 任何一方不得在未经所有方一致同意的情况下单方面变更或终止协议。
-3. 部分条款的无效不影响其他条款的效力和履行。
-
-（以下无正文）`
-}
-
 // 签名相关方法
 const startSignature = () => {
-  showSignatureCanvas.value = true
+  try {
+    const { windowWidth = 375, windowHeight = 667 } = uni.getSystemInfoSync()
+    sigCanvasWidthPx.value = Math.max(260, Math.round(windowWidth - 64))
+    const byWidth = Math.round(sigCanvasWidthPx.value * 0.55)
+    const byHeight = Math.round(windowHeight * 0.34)
+    sigCanvasHeightPx.value = Math.max(200, Math.min(byWidth, byHeight, 320))
+  } catch {
+    sigCanvasWidthPx.value = 320
+    sigCanvasHeightPx.value = 220
+  }
   hasSignature.value = false
-  // 延迟初始化，确保DOM已渲染
+  signatureData.value = ''
+  signaturePadReady.value = false
+  showSignatureCanvas.value = true
   nextTick(() => {
-    console.log('lime-signature组件已初始化')
+    setTimeout(() => {
+      signaturePadReady.value = true
+    }, 50)
   })
 }
 
@@ -1215,10 +1243,10 @@ const confirmSignature = () => {
   if (signatureRef.value) {
     signatureRef.value.canvasToTempFilePath({
       success: (res: any) => {
-        console.log('签名保存成功:', res)
         if (!res.isEmpty) {
           hasSignature.value = true
           showSignatureCanvas.value = false
+          signaturePadReady.value = false
           // 仅本次预约流程使用，不写本地存储，避免下次预约仍显示旧签名
           signatureData.value = res.tempFilePath
           uni.showToast({
@@ -1254,12 +1282,7 @@ const signatureData = ref<string>('')
 
 // 清空签名时也要清空签名数据
 const clearSignature = () => {
-  hasSignature.value = false
-  signatureData.value = ''
-  // 使用lime-signature组件的clear方法
-  if (signatureRef.value) {
-    signatureRef.value.clear()
-  }
+  signatureRef.value?.clear?.()
 }
 
 // 签名图片加载错误处理
@@ -1276,6 +1299,11 @@ const confirmAgreement = () => {
       title: '请先完成签名',
       icon: 'none'
     })
+    return
+  }
+  const emergencyError = validateAgreementEmergencyContact(emergencyPayload.value)
+  if (emergencyError) {
+    uni.showToast({ title: emergencyError, icon: 'none' })
     return
   }
   
@@ -1335,7 +1363,7 @@ const confirmPayment = async () => {
   let signatureUrl: string | undefined
   if (needsIntakeAgreement.value) {
     if (intakeIsAdult.value === null) {
-      uni.showToast({ title: '请先确认是否成年', icon: 'none' })
+      uni.showToast({ title: '请先选择签署协议', icon: 'none' })
       return
     }
     if (!hasSignature.value || !signatureData.value) {
@@ -1365,8 +1393,16 @@ const confirmPayment = async () => {
     description: `心理咨询预约 - ${doctor.value.name}`,
   }
   if (needsIntakeAgreement.value) {
+    const emergencyError = validateAgreementEmergencyContact(emergencyPayload.value)
+    if (emergencyError) {
+      uni.showToast({ title: emergencyError, icon: 'none' })
+      return
+    }
     payBody.is_adult = intakeIsAdult.value
     payBody.signature_url = signatureUrl
+    payBody.emergency_contact = emergencyPayload.value.name
+    payBody.emergency_relation = emergencyPayload.value.relation
+    payBody.emergency_phone = emergencyPayload.value.phone
   }
 
   // 默认：一键模拟支付（点击确认即预约成功）
@@ -1426,7 +1462,7 @@ const confirmPayment = async () => {
 // 返回按钮点击事件
 const goBackFromSignature = () => {
   showSignatureCanvas.value = false
-  // 只关闭绘制区域，保持其他状态不变
+  signaturePadReady.value = false
 }
 
 onLoad((opts) => {
@@ -2306,8 +2342,11 @@ onMounted(() => {
 .modal-content.bottom-sheet {
   width: 100%;
   max-width: 100%;
+  max-height: 92vh;
   border-radius: 40rpx 40rpx 0 0;
   margin-top: auto;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .modal-content.full-height {
@@ -2349,6 +2388,7 @@ onMounted(() => {
 .modal-body {
   padding: 0 40rpx 40rpx;
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
 }
 
@@ -2363,9 +2403,18 @@ onMounted(() => {
 }
 
 .modal-footer-modern {
+  flex-shrink: 0;
   padding: 24rpx 40rpx calc(24rpx + env(safe-area-inset-bottom));
   background: #ffffff;
   border-top: 1px solid #F3F4F6;
+}
+
+.agreement-submit-hint {
+  display: block;
+  font-size: 22rpx;
+  color: #DC2626;
+  margin-bottom: 12rpx;
+  line-height: 1.4;
 }
 
 .btn-fill {
@@ -2377,6 +2426,12 @@ onMounted(() => {
   line-height: 96rpx;
   border-radius: 100rpx;
   border: none;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .btn-fill.disabled {
@@ -2499,6 +2554,44 @@ onMounted(() => {
   overflow-wrap: anywhere;
 }
 
+.emergency-box {
+  margin: 24rpx 32rpx 0;
+  padding: 24rpx;
+  background: #F9FAFB;
+  border-radius: 16rpx;
+}
+.emergency-title {
+  display: block;
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #1F2937;
+  margin-bottom: 8rpx;
+}
+.emergency-hint {
+  display: block;
+  font-size: 22rpx;
+  color: #6B7280;
+  margin-bottom: 16rpx;
+}
+.emergency-field { margin-bottom: 14rpx; }
+.emergency-label {
+  display: block;
+  font-size: 24rpx;
+  color: #4B5563;
+  margin-bottom: 8rpx;
+}
+.emergency-input {
+  width: 100%;
+  box-sizing: border-box;
+  height: 72rpx;
+  padding: 0 20rpx;
+  background: #fff;
+  border: 1rpx solid #E5E7EB;
+  border-radius: 12rpx;
+  font-size: 26rpx;
+  color: #1F2937;
+}
+
 .signature-box {
   flex-shrink: 0;
   padding: 0 40rpx 24rpx;
@@ -2541,32 +2634,72 @@ onMounted(() => {
   font-weight: 500;
 }
 
-.sig-canvas-wrap {
-  background: #ffffff;
-  border: 1px solid #E5E7EB;
-  border-radius: 24rpx;
-  overflow: hidden;
-}
-
-.sig-tip {
-  display: block;
-  text-align: center;
-  font-size: 24rpx;
-  color: #9CA3AF;
-  padding: 16rpx 0;
-  background: #F9FAFB;
-}
-
-.sig-canvas-inner {
-  border-top: 1px solid #E5E7EB;
-  border-bottom: 1px solid #E5E7EB;
-}
-
-.sig-actions {
+.sig-pad-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
   display: flex;
-  padding: 16rpx;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.sig-pad-mask {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.sig-pad-card {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  background: #fff;
+  border-radius: 32rpx 32rpx 0 0;
+  padding: 28rpx 32rpx calc(28rpx + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+}
+
+.sig-pad-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12rpx;
+}
+
+.sig-pad-title {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #1F2937;
+}
+
+.sig-pad-close {
+  font-size: 48rpx;
+  color: #9CA3AF;
+  line-height: 1;
+  padding: 0 8rpx;
+}
+
+.sig-pad-tip {
+  display: block;
+  font-size: 24rpx;
+  color: #6B7280;
+  margin-bottom: 16rpx;
+}
+
+.sig-pad-canvas {
+  box-sizing: border-box;
+  border: 2rpx solid #D1D5DB;
+  border-radius: 16rpx;
+  overflow: hidden;
+  background: #FFFFFF;
+  position: relative;
+  margin: 0 auto;
+}
+
+.sig-pad-actions {
+  display: flex;
   gap: 16rpx;
-  background: #F9FAFB;
+  margin-top: 20rpx;
 }
 
 .sig-btn {
@@ -2588,6 +2721,8 @@ onMounted(() => {
   background: #3D5A4E;
   color: white;
 }
+
+.sig-btn::after { border: none; }
 
 .sig-result {
   position: relative;

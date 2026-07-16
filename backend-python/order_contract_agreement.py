@@ -1,9 +1,47 @@
 """订单支付前：来访与咨询师未签约时需签署心理咨询协议。"""
+import re
 from typing import Optional
 
 from sqlalchemy.orm import Session
 
 from models import AppAccount, AppOrder, AppSchedule
+
+
+def normalize_emergency_fields(
+    *,
+    emergency_contact: Optional[str],
+    emergency_relation: Optional[str],
+    emergency_phone: Optional[str],
+) -> tuple[str, str, str]:
+    name = (emergency_contact or "").strip()
+    relation = (emergency_relation or "").strip()
+    phone = re.sub(r"[\s-]+", "", (emergency_phone or "").strip())
+    if not name:
+        raise ValueError("请填写紧急联系人姓名")
+    if not relation:
+        raise ValueError("请填写与紧急联系人的关系")
+    if not phone:
+        raise ValueError("请填写紧急联系人电话")
+    if not re.fullmatch(r"1\d{10}", phone) and not re.fullmatch(r"0\d{2,3}\d{7,8}", phone):
+        raise ValueError("请填写有效的紧急联系人电话")
+    return name, relation, phone
+
+
+def apply_emergency_contact_to_account(
+    account: AppAccount,
+    *,
+    emergency_contact: Optional[str],
+    emergency_relation: Optional[str],
+    emergency_phone: Optional[str],
+) -> None:
+    name, relation, phone = normalize_emergency_fields(
+        emergency_contact=emergency_contact,
+        emergency_relation=emergency_relation,
+        emergency_phone=emergency_phone,
+    )
+    account.EmergencyContact = name
+    account.EmergencyRelation = relation
+    account.EmergencyPhone = phone
 
 
 def order_schedule_counselor_id(db: Session, order: AppOrder) -> Optional[int]:
@@ -50,6 +88,9 @@ def attach_contract_agreement_to_order(
     *,
     is_adult: Optional[bool],
     signature_url: Optional[str],
+    emergency_contact: Optional[str] = None,
+    emergency_relation: Optional[str] = None,
+    emergency_phone: Optional[str] = None,
 ) -> None:
     if not needs_contract_agreement_for_order(db, account, order):
         return
@@ -65,6 +106,12 @@ def attach_contract_agreement_to_order(
     url = (signature_url or "").strip()
     if effective_adult is None or not url:
         raise ValueError("请先签署心理咨询协议")
+    apply_emergency_contact_to_account(
+        account,
+        emergency_contact=emergency_contact,
+        emergency_relation=emergency_relation,
+        emergency_phone=emergency_phone,
+    )
     order.IntakeIsAdult = effective_adult
     order.IntakeSignatureUrl = url
     db.flush()

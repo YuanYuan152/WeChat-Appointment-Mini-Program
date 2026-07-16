@@ -231,7 +231,7 @@
     <view v-if="showProxy" class="modal-overlay" @touchmove.stop.prevent>
       <view class="modal-card" @tap.stop @touchmove.stop.prevent>
         <text class="modal-title">代理预约</text>
-        <text class="modal-sub">为已签约来访推送待支付订单，来访需在 2 小时内完成支付</text>
+        <text class="modal-sub">为已签约来访推送待支付订单，{{ proxyOrderPayHint }}</text>
 
         <view class="form-item">
           <text class="form-label">选择来访 <text class="required">*</text></text>
@@ -427,6 +427,10 @@ import { SCHEDULE_DISPLAY_META, type ScheduleDisplayStatus } from '@/constants/s
 import { formatDateLocal, ROLLING_WINDOW_DAYS, PAST_WINDOW_DAYS, LIST_WINDOW_DAYS, addDays } from '@/constants/scheduleSlots'
 import { openCounselorCaseRecord } from '@/utils/case-record'
 import { formatPatientInline } from '@/utils/patientContract'
+import { fetchSystemSettings, formatProxyOrderPushHint } from '@/utils/systemSettings'
+
+const proxyOrderTtlMinutes = ref(120)
+const proxyOrderPayHint = computed(() => formatProxyOrderPushHint(proxyOrderTtlMinutes.value))
 
 interface RoomOpt {
   roomId: string
@@ -1357,7 +1361,12 @@ const submitSlot = async () => {
   }
 }
 
-onMounted(loadCalendar)
+onMounted(() => {
+  loadCalendar()
+  fetchSystemSettings().then(data => {
+    proxyOrderTtlMinutes.value = data.proxyOrderTtlMinutes
+  })
+})
 
 const refresh = async () => {
   if (viewMode.value === 'calendar') await loadMonthCalendar()

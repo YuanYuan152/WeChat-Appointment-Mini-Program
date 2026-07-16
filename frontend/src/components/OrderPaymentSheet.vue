@@ -1,6 +1,7 @@
 <template>
-  <view v-if="visible" class="sheet-overlay" @touchmove.stop.prevent @tap="onClose">
-    <view class="sheet-card" @tap.stop @touchmove.stop.prevent>
+  <view v-if="visible" class="sheet-root">
+    <view class="sheet-overlay" @touchmove.stop.prevent @tap="onClose">
+      <view class="sheet-card" @tap.stop>
       <view class="sheet-header">
         <text class="sheet-title">{{ sheetTitle }}</text>
         <text class="sheet-close" @tap="onClose">×</text>
@@ -18,127 +19,185 @@
         </view>
 
         <view v-if="showAgeConfirm" class="age-card">
-          <text class="age-title">年龄确认</text>
-          <text class="age-desc">请确认您是否已满18周岁？</text>
+          <text class="age-title">选择签署协议</text>
+          <text class="age-desc">请选择需要签署的心理咨询协议</text>
           <view class="age-btns">
-            <button class="age-btn outline" @tap="confirmAge(false)">未成年</button>
-            <button class="age-btn fill" @tap="confirmAge(true)">已成年</button>
+            <button class="age-btn fill" @tap="confirmAge(true)">{{ tongxinAgreementTitle }}</button>
+            <button class="age-btn outline" @tap="confirmAge(false)">{{ yangfanAgreementTitle }}</button>
           </view>
         </view>
 
         <template v-else>
-          <scroll-view class="agreement-scroll" scroll-y :show-scrollbar="false">
-            <text class="agreement-text">{{ agreementText }}</text>
-          </scroll-view>
-
-          <view class="signature-box">
-            <view class="sig-header">
-              <text class="sig-title">来访者签字 <text class="sig-required">*</text></text>
-              <text class="sig-date">{{ agreementDate }}</text>
+          <scroll-view
+            class="agreement-body-scroll"
+            scroll-y
+            :show-scrollbar="false"
+          >
+            <view class="agreement-scroll">
+              <text class="agreement-text">{{ agreementText }}</text>
             </view>
 
-            <view v-if="!hasSignature && !showSignatureCanvas" class="sig-placeholder" @tap="startSignature">
-              <text class="sig-placeholder-text">点击此处手写签名</text>
-            </view>
-
-            <view v-if="showSignatureCanvas" class="sig-canvas-wrap">
-              <text class="sig-tip">请在下方区域内绘制您的签名</text>
-              <view class="sig-canvas-inner">
-                <l-signature
-                  ref="signatureRef"
-                  penColor="#000000"
-                  :penSize="3"
-                  backgroundColor="#F9FAFB"
-                  :disableScroll="true"
-                  :beforeDelay="100"
-                  :maxHistoryLength="20"
-                  :openSmooth="false"
-                  type="2d"
-                  style="width: 100%; height: 200px;"
+            <view class="emergency-box">
+              <text class="emergency-title">紧急联系人信息 <text class="sig-required">*</text></text>
+              <text class="emergency-hint">签署协议前请完整填写以下三项</text>
+              <view class="emergency-field">
+                <text class="emergency-label">紧急联系人姓名</text>
+                <input
+                  class="emergency-input"
+                  type="text"
+                  maxlength="50"
+                  placeholder="请输入姓名"
+                  :value="emergencyName"
+                  @input="onEmergencyNameInput"
                 />
               </view>
-              <view class="sig-actions">
-                <button class="sig-btn outline" @tap="clearSignature">重写</button>
-                <button class="sig-btn fill" @tap="confirmSignature">确认签名</button>
+              <view class="emergency-field">
+                <text class="emergency-label">与您的关系</text>
+                <input
+                  class="emergency-input"
+                  type="text"
+                  maxlength="30"
+                  placeholder="如：父亲 / 配偶 / 朋友"
+                  :value="emergencyRelation"
+                  @input="onEmergencyRelationInput"
+                />
+              </view>
+              <view class="emergency-field">
+                <text class="emergency-label">联系电话</text>
+                <input
+                  class="emergency-input"
+                  type="text"
+                  maxlength="20"
+                  placeholder="请输入手机号"
+                  :value="emergencyPhone"
+                  @input="onEmergencyPhoneInput"
+                />
               </view>
             </view>
 
-            <view v-if="hasSignature && !showSignatureCanvas" class="sig-result">
-              <image :src="signatureData" class="sig-img" mode="aspectFit" />
-              <view class="sig-re-sign" @tap="startSignature">重新签名</view>
-            </view>
-          </view>
+            <view class="signature-box">
+              <view class="sig-header">
+                <text class="sig-title">来访者签字 <text class="sig-required">*</text></text>
+                <text class="sig-date">{{ agreementDate }}</text>
+              </view>
 
-          <button
-            class="confirm-btn"
-            :class="{ disabled: !hasSignature || submittingAgreement }"
-            :disabled="!hasSignature || submittingAgreement"
-            @tap="submitAgreement"
-          >{{ submittingAgreement ? '提交中...' : '同意协议并继续支付' }}</button>
+              <view v-if="!hasSignature" class="sig-placeholder" @tap="startSignature">
+                <text class="sig-placeholder-text">点击此处手写签名</text>
+              </view>
+
+              <view v-if="hasSignature" class="sig-result">
+                <image :src="signatureData" class="sig-img" mode="aspectFit" />
+                <view class="sig-re-sign" @tap="startSignature">重新签名</view>
+              </view>
+            </view>
+          </scroll-view>
+
+          <view class="sheet-footer">
+            <text v-if="agreementSubmitHint" class="submit-hint">{{ agreementSubmitHint }}</text>
+            <button
+              class="confirm-btn"
+              :class="{ disabled: !canSubmitAgreement || submittingAgreement }"
+              @tap="submitAgreement"
+            >{{ submittingAgreement ? '提交中...' : '同意协议并继续支付' }}</button>
+          </view>
         </template>
       </template>
 
       <!-- 支付确认步骤 -->
       <template v-else-if="order">
-        <view class="amount-box">
-          <text class="amount-currency">¥</text>
-          <text class="amount-value">{{ (order.TotalFee / 100).toFixed(2) }}</text>
-        </view>
+        <scroll-view class="pay-body-scroll" scroll-y :show-scrollbar="false">
+          <view class="amount-box">
+            <text class="amount-currency">¥</text>
+            <text class="amount-value">{{ (order.TotalFee / 100).toFixed(2) }}</text>
+          </view>
 
-        <view class="detail-block">
-          <text class="block-title">预约信息</text>
-          <view class="detail-row">
-            <text class="label">咨询师</text>
-            <text class="value">{{ order.counselorName || '—' }}</text>
+          <view class="detail-block">
+            <text class="block-title">预约信息</text>
+            <view class="detail-row">
+              <text class="label">咨询师</text>
+              <text class="value">{{ order.counselorName || '—' }}</text>
+            </view>
+            <view class="detail-row">
+              <text class="label">预约时间</text>
+              <text class="value highlight">{{ formatOrderTime(order.startTime, order.endTime) }}</text>
+            </view>
+            <view v-if="order.centerName" class="detail-row">
+              <text class="label">预约中心</text>
+              <text class="value">{{ order.centerName }}</text>
+            </view>
           </view>
-          <view class="detail-row">
-            <text class="label">预约时间</text>
-            <text class="value highlight">{{ formatOrderTime(order.startTime, order.endTime) }}</text>
-          </view>
-          <view v-if="order.centerName" class="detail-row">
-            <text class="label">预约中心</text>
-            <text class="value">{{ order.centerName }}</text>
-          </view>
-          <view v-if="order.roomName" class="detail-row">
-            <text class="label">咨询室</text>
-            <text class="value">{{ order.roomName }}</text>
-          </view>
-        </view>
 
-        <view class="detail-block">
-          <text class="block-title">订单信息</text>
-          <view class="detail-row">
-            <text class="label">订单号</text>
-            <text class="value mono">{{ order.OutTradeNo }}</text>
+          <view class="detail-block">
+            <text class="block-title">订单信息</text>
+            <view class="detail-row">
+              <text class="label">订单号</text>
+              <text class="value mono">{{ order.OutTradeNo }}</text>
+            </view>
+            <view class="detail-row">
+              <text class="label">订单状态</text>
+              <text class="value pending">待支付</text>
+            </view>
+            <view v-if="expireText" class="expire-tip">{{ expireText }}</view>
           </view>
-          <view class="detail-row">
-            <text class="label">订单状态</text>
-            <text class="value pending">待支付</text>
+
+          <view class="tips-block">
+            <text class="tips-title">温馨提示</text>
+            <text class="tips-line">· 支付成功后预约立即生效；</text>
+            <text class="tips-line">· 距咨询开始超过 24 小时可免费取消；</text>
+            <text class="tips-line">· 24 小时内取消或爽约，按规定不予退款。</text>
           </view>
-          <view v-if="expireText" class="expire-tip">{{ expireText }}</view>
-        </view>
 
-        <view class="tips-block">
-          <text class="tips-title">温馨提示</text>
-          <text class="tips-line">· 支付成功后预约立即生效；</text>
-          <text class="tips-line">· 距咨询开始超过 24 小时可免费取消；</text>
-          <text class="tips-line">· 24 小时内取消或爽约，按规定不予退款。</text>
-        </view>
-
-        <view class="agree-row" @tap="agreed = !agreed">
-          <view class="checkbox" :class="{ checked: agreed }">
-            <text v-if="agreed" class="check-icon">✓</text>
+          <view class="agree-row" @tap="agreed = !agreed">
+            <view class="checkbox" :class="{ checked: agreed }">
+              <text v-if="agreed" class="check-icon">✓</text>
+            </view>
+            <text class="agree-text">我已阅读并同意上述预约与退款规则</text>
           </view>
-          <text class="agree-text">我已阅读并同意上述预约与退款规则</text>
-        </view>
+        </scroll-view>
 
-        <button
-          class="confirm-btn"
-          :class="{ disabled: !agreed || paying }"
-          :disabled="!agreed || paying"
-          @tap="onConfirm"
-        >{{ paying ? '支付中...' : '确认支付' }}</button>
+        <view class="sheet-footer pay-footer">
+          <button
+            class="confirm-btn"
+            :class="{ disabled: !agreed || paying }"
+            :disabled="!agreed || paying"
+            @tap="onConfirm"
+          >{{ paying ? '支付中...' : '确认支付' }}</button>
+        </view>
       </template>
+    </view>
+    </view>
+
+    <!-- 签名浮层：不能挂在 catchtouchmove 祖先下，否则触点事件收不到、无笔画 -->
+    <view v-if="showSignatureCanvas" class="sig-pad-overlay">
+      <view class="sig-pad-mask" @tap="cancelSignaturePad" @touchmove.stop.prevent></view>
+      <view class="sig-pad-card" @tap.stop>
+        <view class="sig-pad-header">
+          <text class="sig-pad-title">来访者签字</text>
+          <text class="sig-pad-close" @tap="cancelSignaturePad">×</text>
+        </view>
+        <text class="sig-pad-tip">请在下方区域内书写签名</text>
+        <view
+          class="sig-pad-canvas"
+          :style="{ width: sigCanvasWidthPx + 'px', height: sigCanvasHeightPx + 'px' }"
+        >
+          <l-signature
+            v-if="signaturePadReady"
+            ref="signatureRef"
+            penColor="#111111"
+            :penSize="4"
+            backgroundColor="#FFFFFF"
+            :disableScroll="true"
+            :beforeDelay="400"
+            :maxHistoryLength="20"
+            :openSmooth="false"
+            type="2d"
+          />
+        </view>
+        <view class="sig-pad-actions">
+          <button class="sig-btn outline" @tap="clearSignature">重写</button>
+          <button class="sig-btn fill" @tap="confirmSignature">确认签名</button>
+        </view>
+      </view>
     </view>
   </view>
 </template>
@@ -148,9 +207,13 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
 import {
-  buildAdultConsultationAgreement,
-  buildMinorConsultationAgreement,
+  TONGXIN_AGREEMENT_TITLE,
+  YANGFAN_AGREEMENT_TITLE,
+  buildTongxinConsultationAgreement,
+  buildYangfanConsultationAgreement,
   currentAgreementDate,
+  normalizeAgreementPhone,
+  validateAgreementEmergencyContact,
 } from '@/utils/consultationAgreement'
 import {
   type PatientOrder,
@@ -158,6 +221,9 @@ import {
   expireHintText,
   formatOrderTime,
 } from '@/utils/orderPayment'
+
+const tongxinAgreementTitle = TONGXIN_AGREEMENT_TITLE
+const yangfanAgreementTitle = YANGFAN_AGREEMENT_TITLE
 
 const props = defineProps<{
   visible: boolean
@@ -184,8 +250,49 @@ const hasSignature = ref(false)
 const showSignatureCanvas = ref(false)
 const signatureData = ref('')
 const signatureRef = ref<any>(null)
+/** 签字区画布显式宽高（px），保证 lime-signature 能正确测量 */
+const sigCanvasWidthPx = ref(320)
+const sigCanvasHeightPx = ref(220)
+const signaturePadReady = ref(false)
+const emergencyName = ref('')
+const emergencyRelation = ref('')
+const emergencyPhone = ref('')
+
+const resolveSigCanvasHeight = () => {
+  try {
+    const { windowWidth = 375, windowHeight = 667 } = uni.getSystemInfoSync()
+    // 左右各留 32px 边距
+    sigCanvasWidthPx.value = Math.max(260, Math.round(windowWidth - 64))
+    const byWidth = Math.round(sigCanvasWidthPx.value * 0.55)
+    const byHeight = Math.round(windowHeight * 0.34)
+    sigCanvasHeightPx.value = Math.max(200, Math.min(byWidth, byHeight, 320))
+  } catch {
+    sigCanvasWidthPx.value = 320
+    sigCanvasHeightPx.value = 220
+  }
+}
 
 const expireText = computed(() => expireHintText(order.value?.ExpiresAt))
+const emergencyPayload = computed(() => ({
+  name: emergencyName.value.trim(),
+  relation: emergencyRelation.value.trim(),
+  phone: normalizeAgreementPhone(emergencyPhone.value),
+}))
+const emergencyError = computed(() => validateAgreementEmergencyContact(emergencyPayload.value))
+const canSubmitAgreement = computed(() =>
+  hasSignature.value
+  && effectiveIsAdult.value !== null
+  && !emergencyError.value,
+)
+const agreementSubmitHint = computed(() => {
+  if (submittingAgreement.value) return ''
+  if (effectiveIsAdult.value === null) {
+    return hasPresetAgreement.value ? '请先完成签名' : '请先选择协议并完成签名'
+  }
+  if (emergencyError.value) return emergencyError.value
+  if (!hasSignature.value) return '请先完成来访者签字'
+  return ''
+})
 
 const showAgreementStep = computed(() =>
   Boolean(
@@ -202,7 +309,7 @@ const presetAgreementTip = computed(() => {
   if (hasPresetAgreement.value && order.value?.proxyAgreementLabel) {
     return `助理已为您选定《${order.value.proxyAgreementLabel}》，请阅读协议并完成电子签名后再支付。`
   }
-  return '您与该咨询师尚未签约，支付前请先阅读协议并完成电子签名。'
+  return '您与该咨询师尚未签约，支付前请先选择协议并完成电子签名。'
 })
 
 const effectiveIsAdult = computed(() => {
@@ -222,10 +329,42 @@ const resetAgreementState = () => {
   agreementDate.value = ''
   hasSignature.value = false
   showSignatureCanvas.value = false
+  signaturePadReady.value = false
   signatureData.value = ''
+  emergencyName.value = ''
+  emergencyRelation.value = ''
+  emergencyPhone.value = ''
   nextTick(() => {
     try { signatureRef.value?.clear?.() } catch { /* ignore */ }
   })
+}
+
+const rebuildAgreementText = () => {
+  if (!order.value || effectiveIsAdult.value === null) return
+  const counselorName = order.value.counselorName || '咨询师'
+  const priceYuan = Math.round((order.value.TotalFee || 0) / 100)
+  agreementText.value = effectiveIsAdult.value
+    ? buildTongxinConsultationAgreement(counselorName, priceYuan, emergencyPayload.value)
+    : buildYangfanConsultationAgreement(counselorName, priceYuan, emergencyPayload.value)
+  agreementDate.value = currentAgreementDate()
+}
+
+const prefillEmergencyContact = async () => {
+  try {
+    const res = await httpV2.get<{
+      emergencyContact?: string
+      emergencyRelation?: string
+      emergencyPhone?: string
+    }>(API_ENDPOINTS.patient.me, undefined, { showLoading: false, showError: false })
+    if (res.code === 0 && res.data) {
+      emergencyName.value = res.data.emergencyContact || ''
+      emergencyRelation.value = res.data.emergencyRelation || ''
+      emergencyPhone.value = res.data.emergencyPhone || ''
+      rebuildAgreementText()
+    }
+  } catch {
+    /* ignore */
+  }
 }
 
 const applyPresetAgreementIfNeeded = () => {
@@ -233,12 +372,8 @@ const applyPresetAgreementIfNeeded = () => {
   if (preset !== true && preset !== false) return false
   intakeIsAdult.value = preset
   showAgeConfirm.value = false
-  const counselorName = order.value?.counselorName || '咨询师'
-  const priceYuan = Math.round((order.value?.TotalFee || 0) / 100)
-  agreementText.value = preset
-    ? buildAdultConsultationAgreement(counselorName, priceYuan)
-    : buildMinorConsultationAgreement(counselorName, priceYuan)
-  agreementDate.value = currentAgreementDate()
+  rebuildAgreementText()
+  prefillEmergencyContact()
   return true
 }
 
@@ -283,23 +418,43 @@ const confirmAge = (isAdult: boolean) => {
   if (!order.value) return
   intakeIsAdult.value = isAdult
   showAgeConfirm.value = false
-  const counselorName = order.value.counselorName || '咨询师'
-  const priceYuan = Math.round(order.value.TotalFee / 100)
-  agreementText.value = isAdult
-    ? buildAdultConsultationAgreement(counselorName, priceYuan)
-    : buildMinorConsultationAgreement(counselorName, priceYuan)
-  agreementDate.value = currentAgreementDate()
+  rebuildAgreementText()
+  prefillEmergencyContact()
+}
+
+const onEmergencyNameInput = (e: { detail: { value: string } }) => {
+  emergencyName.value = e.detail.value
+  rebuildAgreementText()
+}
+const onEmergencyRelationInput = (e: { detail: { value: string } }) => {
+  emergencyRelation.value = e.detail.value
+  rebuildAgreementText()
+}
+const onEmergencyPhoneInput = (e: { detail: { value: string } }) => {
+  emergencyPhone.value = e.detail.value
+  rebuildAgreementText()
 }
 
 const startSignature = () => {
-  showSignatureCanvas.value = true
+  resolveSigCanvasHeight()
   hasSignature.value = false
   signatureData.value = ''
+  signaturePadReady.value = false
+  showSignatureCanvas.value = true
+  // 浮层渲染完成后再挂载画布；配合组件 beforeDelay，避免宽高为 0
+  nextTick(() => {
+    setTimeout(() => {
+      signaturePadReady.value = true
+    }, 50)
+  })
+}
+
+const cancelSignaturePad = () => {
+  showSignatureCanvas.value = false
+  signaturePadReady.value = false
 }
 
 const clearSignature = () => {
-  hasSignature.value = false
-  signatureData.value = ''
   signatureRef.value?.clear?.()
 }
 
@@ -313,6 +468,7 @@ const confirmSignature = () => {
       if (!res.isEmpty && res.tempFilePath) {
         hasSignature.value = true
         showSignatureCanvas.value = false
+        signaturePadReady.value = false
         signatureData.value = res.tempFilePath
         uni.showToast({ title: '签名完成', icon: 'success' })
       } else {
@@ -324,8 +480,16 @@ const confirmSignature = () => {
 }
 
 const submitAgreement = async () => {
+  if (submittingAgreement.value) return
   if (!order.value || !hasSignature.value || effectiveIsAdult.value === null) {
-    uni.showToast({ title: hasPresetAgreement.value ? '请先完成签名' : '请先完成年龄确认与签名', icon: 'none' })
+    uni.showToast({
+      title: agreementSubmitHint.value || (hasPresetAgreement.value ? '请先完成签名' : '请先选择协议并完成签名'),
+      icon: 'none',
+    })
+    return
+  }
+  if (emergencyError.value) {
+    uni.showToast({ title: emergencyError.value, icon: 'none' })
     return
   }
   submittingAgreement.value = true
@@ -341,6 +505,9 @@ const submitAgreement = async () => {
       order_id: order.value.Id,
       is_adult: effectiveIsAdult.value,
       signature_url: uploadRes.data.url,
+      emergency_contact: emergencyPayload.value.name,
+      emergency_relation: emergencyPayload.value.relation,
+      emergency_phone: emergencyPayload.value.phone,
     })
     if (res.code === 0 && res.data) {
       order.value = res.data
@@ -377,22 +544,55 @@ const onConfirm = async () => {
 </script>
 
 <style scoped>
-.sheet-overlay {
+.sheet-root {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.45);
   z-index: 200;
+}
+.sheet-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
   display: flex;
   align-items: flex-end;
 }
 .sheet-card {
   width: 100%;
   max-height: 92vh;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   background: #fff;
   border-radius: 32rpx 32rpx 0 0;
   padding: 32rpx 32rpx calc(32rpx + env(safe-area-inset-bottom));
   box-sizing: border-box;
+}
+.agreement-body-scroll {
+  flex: 1;
+  height: 0;
+  min-height: 320rpx;
+  margin-bottom: 16rpx;
+}
+.pay-body-scroll {
+  flex: 1;
+  height: 0;
+  min-height: 240rpx;
+  margin-bottom: 8rpx;
+}
+.sheet-footer {
+  flex-shrink: 0;
+  padding-top: 8rpx;
+}
+.pay-footer {
+  padding-top: 16rpx;
+  padding-bottom: 8rpx;
+}
+.submit-hint {
+  display: block;
+  font-size: 22rpx;
+  color: #DC2626;
+  margin-bottom: 12rpx;
+  line-height: 1.4;
 }
 .sheet-header {
   display: flex;
@@ -437,6 +637,45 @@ const onConfirm = async () => {
   color: #B45309;
   line-height: 1.6;
 }
+.emergency-box {
+  margin: 20rpx 0;
+  padding: 24rpx;
+  background: #F9FAFB;
+  border-radius: 16rpx;
+}
+.emergency-title {
+  display: block;
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #1F2937;
+  margin-bottom: 8rpx;
+}
+.emergency-hint {
+  display: block;
+  font-size: 22rpx;
+  color: #6B7280;
+  margin-bottom: 16rpx;
+}
+.emergency-field {
+  margin-bottom: 14rpx;
+}
+.emergency-label {
+  display: block;
+  font-size: 24rpx;
+  color: #4B5563;
+  margin-bottom: 8rpx;
+}
+.emergency-input {
+  width: 100%;
+  box-sizing: border-box;
+  height: 72rpx;
+  padding: 0 20rpx;
+  background: #fff;
+  border: 1rpx solid #E5E7EB;
+  border-radius: 12rpx;
+  font-size: 26rpx;
+  color: #1F2937;
+}
 .age-card {
   background: #F9FAFB;
   border-radius: 20rpx;
@@ -479,7 +718,6 @@ const onConfirm = async () => {
 }
 .age-btn::after { border: none; }
 .agreement-scroll {
-  max-height: 36vh;
   background: #F9FAFB;
   border-radius: 16rpx;
   padding: 24rpx;
@@ -494,6 +732,8 @@ const onConfirm = async () => {
 }
 .signature-box {
   margin-bottom: 24rpx;
+  width: 100%;
+  box-sizing: border-box;
 }
 .sig-header {
   display: flex;
@@ -519,29 +759,79 @@ const onConfirm = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
+  box-sizing: border-box;
 }
 .sig-placeholder-text {
   font-size: 28rpx;
   color: #9CA3AF;
 }
-.sig-canvas-wrap {
-  border: 1rpx solid #E5E7EB;
+.sig-result {
+  position: relative;
+  height: 200rpx;
+  background: #F9FAFB;
   border-radius: 16rpx;
+  border: 1rpx solid #E5E7EB;
   overflow: hidden;
 }
-.sig-tip {
-  display: block;
-  text-align: center;
-  font-size: 22rpx;
-  color: #9CA3AF;
-  padding: 12rpx 0;
-  background: #F9FAFB;
+.sig-pad-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
 }
-.sig-actions {
+.sig-pad-mask {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+}
+.sig-pad-card {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  background: #fff;
+  border-radius: 32rpx 32rpx 0 0;
+  padding: 28rpx 32rpx calc(28rpx + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+}
+.sig-pad-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12rpx;
+}
+.sig-pad-title {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #1F2937;
+}
+.sig-pad-close {
+  font-size: 48rpx;
+  color: #9CA3AF;
+  line-height: 1;
+  padding: 0 8rpx;
+}
+.sig-pad-tip {
+  display: block;
+  font-size: 24rpx;
+  color: #6B7280;
+  margin-bottom: 16rpx;
+}
+.sig-pad-canvas {
+  /* width/height 由 inline 明确指定，供 canvas 2d 正确采样 */
+  box-sizing: border-box;
+  border: 2rpx solid #D1D5DB;
+  border-radius: 16rpx;
+  overflow: hidden;
+  background: #FFFFFF;
+  position: relative;
+  margin: 0 auto;
+}
+.sig-pad-actions {
   display: flex;
   gap: 16rpx;
-  padding: 16rpx;
-  background: #F9FAFB;
+  margin-top: 20rpx;
 }
 .sig-btn {
   flex: 1;
@@ -560,14 +850,6 @@ const onConfirm = async () => {
   color: #fff;
 }
 .sig-btn::after { border: none; }
-.sig-result {
-  position: relative;
-  height: 200rpx;
-  background: #F9FAFB;
-  border-radius: 16rpx;
-  border: 1rpx solid #E5E7EB;
-  overflow: hidden;
-}
 .sig-img {
   width: 100%;
   height: 100%;
@@ -696,13 +978,19 @@ const onConfirm = async () => {
 }
 .confirm-btn {
   width: 100%;
-  height: 88rpx;
-  line-height: 88rpx;
+  height: 96rpx;
+  line-height: 96rpx;
   background: #0D9488;
   color: #fff;
   border-radius: 100rpx;
   font-size: 30rpx;
   font-weight: 600;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .confirm-btn.disabled {
   opacity: 0.5;

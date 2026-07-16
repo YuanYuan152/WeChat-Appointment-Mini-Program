@@ -49,7 +49,7 @@ class ProxyPushOrderRequest(BaseModel):
     schedule_id: Optional[int] = None
     agreement_is_adult: Optional[bool] = Field(
         None,
-        description="未签约来访必填：true=成年来访者协议，false=未成年来访者协议",
+        description="未签约来访必填：true=同心理咨询协议，false=“扬帆计划”协议",
     )
 
 

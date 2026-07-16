@@ -101,9 +101,9 @@ def _order_contract_fields(
     preset = getattr(order, "ProxyAgreementIsAdult", None)
     preset_label = None
     if preset is True:
-        preset_label = "成年来访者协议"
+        preset_label = "同心理咨询协议"
     elif preset is False:
-        preset_label = "未成年来访者协议"
+        preset_label = "“扬帆计划”协议"
     return {
         "needsContractAgreement": needs,
         "contractAgreementSigned": order_has_contract_agreement(order),
@@ -119,8 +119,6 @@ def _build_order_out(
     account: Optional[AppAccount] = None,
 ) -> OrderOut:
     """补充订单关联的预约时段与咨询师信息。"""
-    from schedule_meta import parse_room_id, room_display_name
-
     if account is None:
         account = db.query(AppAccount).filter(AppAccount.Id == order.AccountId).first()
 
@@ -132,7 +130,6 @@ def _build_order_out(
     if not schedule:
         return base
     center_id = parse_center_id(schedule.Note)
-    room_id = parse_room_id(schedule.Note)
     prof = (
         db.query(AppCounselorProfile)
         .filter(AppCounselorProfile.AccountId == schedule.CounselorId)
@@ -142,6 +139,7 @@ def _build_order_out(
     counselor_name = (prof.Name if prof and prof.Name else None) or (
         acc.Nickname if acc else None
     ) or f"咨询师#{schedule.CounselorId}"
+    # 来访端不展示咨询室（内部排班信息，仅展示预约中心）
     return base.model_copy(
         update={
             "counselorId": schedule.CounselorId,
@@ -150,7 +148,7 @@ def _build_order_out(
             "endTime": schedule.EndTime,
             "centerId": center_id,
             "centerName": center_display_name(center_id),
-            "roomName": room_display_name(center_id, room_id, db) if room_id else None,
+            "roomName": None,
             **contract_fields,
         }
     )
@@ -174,6 +172,7 @@ class PatientProfileUpdate(BaseModel):
     gender: Optional[str] = None
     birthday: Optional[datetime] = None
     emergencyContact: Optional[str] = None
+    emergencyRelation: Optional[str] = None
     emergencyPhone: Optional[str] = None
 
 
@@ -187,6 +186,7 @@ class PatientProfileOut(BaseModel):
     gender: Optional[str] = None
     birthday: Optional[datetime] = None
     emergencyContact: Optional[str] = None
+    emergencyRelation: Optional[str] = None
     emergencyPhone: Optional[str] = None
     needsIntakeAgreement: bool = True
     isContractSigned: bool = False
@@ -250,6 +250,7 @@ def _profile_out(account: AppAccount, db: Session) -> PatientProfileOut:
         gender=account.Gender,
         birthday=account.Birthday,
         emergencyContact=account.EmergencyContact,
+        emergencyRelation=getattr(account, "EmergencyRelation", None),
         emergencyPhone=account.EmergencyPhone,
         needsIntakeAgreement=needs_intake_agreement(db, account),
         isContractSigned=bool(contract.get("isContractSigned")),
@@ -777,6 +778,7 @@ def update_patient_me(
         "gender": "Gender",
         "birthday": "Birthday",
         "emergencyContact": "EmergencyContact",
+        "emergencyRelation": "EmergencyRelation",
         "emergencyPhone": "EmergencyPhone",
     }
     for src, dst in mapping.items():

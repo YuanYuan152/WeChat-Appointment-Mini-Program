@@ -10,7 +10,7 @@
     </view>
 
     <view v-else-if="favorites.length === 0" class="state-box">
-      <image src="/static/images/place12.png" class="empty-img" mode="aspectFit" />
+      <image src="/static/images-opt/place12.jpg" class="empty-img" mode="aspectFit" />
       <text class="state-text">暂无收藏的咨询师</text>
       <button class="login-btn outline" @tap="goConsultants">去预约咨询师</button>
     </view>
@@ -84,7 +84,7 @@ const isLoggedIn = ref(false)
 const favorites = ref<FavoriteItem[]>([])
 
 const getAvatarUrl = (avatar?: string) => {
-  if (!avatar) return '/static/images/tc59.png'
+  if (!avatar) return '/static/images-opt/tc59.jpg'
   if (avatar.startsWith('http')) return avatar
   return avatar
 }

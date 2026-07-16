@@ -92,6 +92,7 @@ export function messageSummary(item: MessageItem): string {
   if (
     item.RelatedType === 'PATIENT_APPOINTMENT_SUCCESS'
     || item.RelatedType === 'PATIENT_APPOINTMENT_REMIND'
+    || item.RelatedType === 'PATIENT_PROXY_ORDER_PENDING'
   ) {
     const center = (detail.centerName || detail.location) as string | undefined
     if (center && payload.summary && typeof payload.summary === 'string' && payload.summary.includes(' · ')) {
@@ -145,6 +146,7 @@ export const RELATED_TYPE_LABELS: Record<string, string> = {
   PATIENT_APPOINTMENT_SUCCESS: '预约成功',
   PATIENT_APPOINTMENT_CANCEL: '预约取消',
   PATIENT_APPOINTMENT_REMIND: '预约提醒',
+  PATIENT_PROXY_ORDER_PENDING: '待支付预约',
   PATIENT_LEAVE_APPROVED: '请假通知',
   CHARITY_CONSULTATION_30_BOOKING: '公益咨询第30次预约',
   CHARITY_CONSULTATION_30_DONE: '公益咨询第30次完成',
@@ -172,6 +174,7 @@ export const PATIENT_MESSAGE_TYPES = new Set([
   'PATIENT_APPOINTMENT_SUCCESS',
   'PATIENT_APPOINTMENT_CANCEL',
   'PATIENT_APPOINTMENT_REMIND',
+  'PATIENT_PROXY_ORDER_PENDING',
   'PATIENT_LEAVE_APPROVED',
   'REFUND_EXEMPTION',
   'REFUND_EXEMPTION_PENDING',
@@ -399,6 +402,14 @@ export function resolveMessageNavigation(
       return `/pages/activity/list?highlight=${activityId}`
     }
     return '/pages/activity/list'
+  }
+
+  if (item.RelatedType === 'PATIENT_PROXY_ORDER_PENDING' && activeRole === 'Patient') {
+    const orderId = detail?.orderId || item.RelatedId
+    if (orderId) {
+      return `/pages/patient/orders/detail?id=${orderId}`
+    }
+    return '/pages/patient/orders/list'
   }
 
   if (item.RelatedType === 'PATIENT_APPOINTMENT_SUCCESS' && activeRole === 'Patient') {

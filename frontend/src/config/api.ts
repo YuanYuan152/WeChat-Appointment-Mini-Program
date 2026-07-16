@@ -99,6 +99,7 @@ export const API_ENDPOINTS = {
     counselorDetail: (id: number | string) => `/api/mini/common/counselors/${id}`,
     counselorTimeSlots: (id: number | string) => `/api/mini/common/counselors/${id}/time-slots`,
     search: '/api/mini/common/search',
+    systemSettings: '/api/mini/common/system-settings',
   },
 
   // 患者
@@ -220,6 +221,8 @@ export const API_ENDPOINTS = {
     proxyBookingCalendar: '/api/mini/admin/proxy-booking/calendar',
     proxyBookingSlotOptions: '/api/mini/admin/proxy-booking/slot-options',
     proxyBookingPushOrder: '/api/mini/admin/proxy-booking/push-order',
+    systemSettings: '/api/mini/admin/system-settings',
+    updateProxyOrderTtl: '/api/mini/admin/system-settings/proxy-order-ttl',
   },
 
   // 意见反馈
