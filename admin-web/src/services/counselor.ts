@@ -1,4 +1,5 @@
 import { apiRequest } from "@/lib/api";
+import { addLocalDays } from "@/lib/date";
 import type { RiskAssessmentData } from "@/constants/caseRecordRiskAssessment";
 import type {
   ApiMessage,
@@ -64,12 +65,24 @@ export function fetchCounselorDashboardDetails(
   return apiRequest<CounselorDashboardDetailItem[]>(`/api/mini/counselor/stats/details?${params.toString()}`);
 }
 
-export function fetchCounselorScheduleCalendar(filters: CounselorScheduleFilters) {
+export async function fetchCounselorScheduleCalendar(filters: CounselorScheduleFilters) {
   const params = new URLSearchParams({
     start: filters.start,
     days: String(filters.days),
   });
-  return apiRequest<CounselorScheduleCalendar>(`/api/mini/counselor/schedules/calendar?${params.toString()}`);
+  const calendar = await apiRequest<CounselorScheduleCalendar>(
+    `/api/mini/counselor/schedules/calendar?${params.toString()}`,
+  );
+  const endDateExclusive = addLocalDays(filters.start, filters.days);
+  return {
+    ...calendar,
+    startDate: filters.start,
+    days: filters.days,
+    slots: calendar.slots.filter((item) => {
+      const itemDate = item.startTime.slice(0, 10);
+      return itemDate >= filters.start && itemDate < endDateExclusive;
+    }),
+  };
 }
 
 export function fetchCounselorSlotOptions(date: string, centerId: string) {

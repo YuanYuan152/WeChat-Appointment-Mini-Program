@@ -531,14 +531,19 @@ def update_counselor_base_pricing_cents(
     *,
     base_price_cents: int,
     default_share_cents: Optional[int] = None,
+    default_share_percent: Optional[int] = None,
 ) -> AppCounselorProfile:
     if base_price_cents < 0:
         raise ValueError("基础价格不能为负数")
+    if default_share_cents is not None and default_share_percent is not None:
+        raise ValueError("默认分成金额与比例不能同时设置")
     if default_share_cents is not None:
         if default_share_cents < 0:
             raise ValueError("默认分成金额不能为负数")
         if default_share_cents > base_price_cents:
             raise ValueError("默认分成金额不能超过基础价格")
+    if default_share_percent is not None and not 0 <= default_share_percent <= 100:
+        raise ValueError("默认分成比例须在 0–100 之间")
     profile = get_counselor_profile(db, counselor_account_id)
     if not profile:
         raise ValueError("咨询师档案不存在")
@@ -548,7 +553,7 @@ def update_counselor_base_pricing_cents(
         counselor_account_id,
         old_base_price_cents,
     )
-    if default_share_cents is None:
+    if default_share_cents is None and default_share_percent is None:
         default_share_cents = _scale_share_cents_by_display_ratio(
             old_share_cents=old_default_share_cents,
             old_display_price_cents=old_base_price_cents,
@@ -586,10 +591,21 @@ def update_counselor_base_pricing_cents(
                 row.RevenueSharePercent = None
 
     profile.Billing = base_price_cents
-    profile.FaceBilling = default_share_cents
-    profile.DefaultShareMode = SHARE_MODE_AMOUNT
-    profile.DefaultRevenueShareCents = default_share_cents
-    profile.DefaultRevenueSharePercent = None
+    if default_share_percent is not None:
+        # FaceBilling 仍保留按当前基础价换算出的兼容金额；实际默认分成以
+        # PERCENT 字段为准，后续来访调价时继续按同一比例计算。
+        profile.FaceBilling = _clamp_share_cents(
+            int(base_price_cents * default_share_percent / 100),
+            base_price_cents,
+        )
+        profile.DefaultShareMode = SHARE_MODE_PERCENT
+        profile.DefaultRevenueShareCents = None
+        profile.DefaultRevenueSharePercent = default_share_percent
+    else:
+        profile.FaceBilling = default_share_cents
+        profile.DefaultShareMode = SHARE_MODE_AMOUNT
+        profile.DefaultRevenueShareCents = default_share_cents
+        profile.DefaultRevenueSharePercent = None
     db.flush()
     return profile
 

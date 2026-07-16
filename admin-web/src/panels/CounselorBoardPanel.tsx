@@ -10,6 +10,7 @@ import type {
 } from "@/types/api";
 
 import { DetailDrawer } from "@/components/boards/DetailDrawer";
+import { StaffRemarkEditor } from "@/components/boards/StaffRemarkEditor";
 import { CounselorIntroEditor } from "@/components/counselors/CounselorIntroEditor";
 import {
   Badge,
@@ -45,6 +46,8 @@ export function CounselorBoardPanel({
   onOpenIntroEditor,
   onCloseIntroEditor,
   onSaveIntro,
+  remarkSaving,
+  onSaveRemark,
 }: {
   records?: PagedResult<CounselorBoardSummary>;
   listLoading: boolean;
@@ -66,6 +69,8 @@ export function CounselorBoardPanel({
   onOpenIntroEditor: (accountId: number) => void;
   onCloseIntroEditor: () => void;
   onSaveIntro: (payload: AdminCounselorIntroUpdatePayload) => Promise<void>;
+  remarkSaving: boolean;
+  onSaveRemark: (accountId: number, remark: string) => Promise<string>;
 }) {
   return (
     <>
@@ -91,6 +96,8 @@ export function CounselorBoardPanel({
               canEditIntro={canEditIntro}
               detail={selected}
               onEditIntro={() => onOpenIntroEditor(selected.profile.id)}
+              remarkSaving={remarkSaving}
+              onSaveRemark={onSaveRemark}
             />
           ) : null}
         </DetailDrawer>
@@ -155,7 +162,7 @@ const CounselorBoardListSection = memo(function CounselorBoardListSection({
         <div>
           <h2 className="text-xl font-semibold tracking-normal">咨询师管理</h2>
           <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">
-            管理咨询师介绍页资料，并查看咨询单、记录填写、请假申请和排期情况。
+            查看咨询师资料、咨询单、记录填写和请假申请，并维护内部备注。
           </p>
         </div>
 
@@ -177,7 +184,7 @@ const CounselorBoardListSection = memo(function CounselorBoardListSection({
       </form>
       <div className="border-t border-[var(--lxxl-border)] bg-[#FCFBF8] px-6 py-3 text-xs leading-5 text-[var(--lxxl-muted)] sm:px-7 lg:px-8">
         <span className="font-medium text-[var(--lxxl-text)]">统计口径：</span>
-        咨询单包含全部状态；取消咨询暂不区分取消方；记录待补仅统计已完成但尚无记录的咨询；请假申请包含全部审核状态；排期是咨询师创建的时间槽，与咨询单并非一一对应；已占用排期包含完成后仍保持占用状态的历史排期。
+        咨询单包含全部状态；取消咨询暂不区分取消方；记录待补仅统计已完成但尚无记录的咨询；请假申请包含全部审核状态。
       </div>
       <div className="relative">
         {listLoading && records && records.items.length > 0 && (
@@ -190,16 +197,14 @@ const CounselorBoardListSection = memo(function CounselorBoardListSection({
       ) : (
         <>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1280px] table-fixed border-collapse text-sm">
+            <table className="w-full min-w-[1000px] table-fixed border-collapse text-sm">
               <colgroup>
+                <col className="w-[16%]" />
+                <col className="w-[15%]" />
                 <col className="w-[12%]" />
+                <col className="w-[11%]" />
+                <col className="w-[18%]" />
                 <col className="w-[12%]" />
-                <col className="w-[9%]" />
-                <col className="w-[8%]" />
-                <col className="w-[13%]" />
-                <col className="w-[7%]" />
-                <col className="w-[10%]" />
-                <col className="w-[13%]" />
                 <col className="w-[16%]" />
               </colgroup>
               <thead className="bg-[#FAF8F4] text-left text-[var(--lxxl-muted)]">
@@ -210,8 +215,6 @@ const CounselorBoardListSection = memo(function CounselorBoardListSection({
                   <MetricTableHeader hint="取消来源未区分" title="取消咨询" />
                   <MetricTableHeader hint="已有 / 待补" title="记录完成情况" />
                   <MetricTableHeader hint="全部申请状态" title="请假申请" />
-                  <MetricTableHeader hint="总排期 / 已占用" title="排期情况" />
-                  <MetricTableHeader hint="时间最大的一条" title="最晚排期时间" />
                   <th className="px-5 py-3 text-right font-medium">操作</th>
                 </tr>
               </thead>
@@ -225,6 +228,14 @@ const CounselorBoardListSection = memo(function CounselorBoardListSection({
                       <div className="truncate font-semibold" title={record.name}>
                         {record.name}
                       </div>
+                      {record.staffRemark && (
+                        <div
+                          className="mt-1 truncate text-xs font-normal text-[#8A6438]"
+                          title={`内部备注：${record.staffRemark}`}
+                        >
+                          内部备注：{record.staffRemark}
+                        </div>
+                      )}
                     </td>
                     <td className="px-5 py-4 text-[var(--lxxl-muted)]">
                       <div className="truncate" title={record.mobile || "-"}>
@@ -254,19 +265,6 @@ const CounselorBoardListSection = memo(function CounselorBoardListSection({
                     </td>
                     <td className="px-5 py-4">
                       <SingleMetric hint="累计申请" value={record.leaveRequestCount} />
-                    </td>
-                    <td className="px-5 py-4">
-                      <RatioMetric
-                        part={record.bookedScheduleCount}
-                        partLabel="已占用"
-                        total={record.scheduleCount}
-                        totalLabel="总计"
-                      />
-                    </td>
-                    <td className="px-5 py-4 text-[var(--lxxl-muted)]">
-                      <div className="truncate" title={record.latestScheduleAt ? formatDateTime(record.latestScheduleAt) : "-"}>
-                        {record.latestScheduleAt ? formatDateTime(record.latestScheduleAt) : "-"}
-                      </div>
                     </td>
                     <td className="px-5 py-4 text-right">
                       <div className="flex flex-wrap justify-end gap-3">
@@ -371,10 +369,14 @@ function CounselorDetailPanel({
   detail,
   canEditIntro,
   onEditIntro,
+  remarkSaving,
+  onSaveRemark,
 }: {
   detail: CounselorBoardDetail;
   canEditIntro: boolean;
   onEditIntro: () => void;
+  remarkSaving: boolean;
+  onSaveRemark: (accountId: number, remark: string) => Promise<string>;
 }) {
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const visitors = detail.visitors ?? [];
@@ -509,6 +511,12 @@ function CounselorDetailPanel({
         </div>
         {canEditIntro && <TableActionButton onClick={onEditIntro}>编辑介绍页</TableActionButton>}
       </div>
+      <StaffRemarkEditor
+        accountId={detail.profile.id}
+        saving={remarkSaving}
+        value={detail.profile.staffRemark}
+        onSave={(remark) => onSaveRemark(detail.profile.id, remark)}
+      />
       <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
         <MiniStat label="咨询单总数" value={detail.profile.consultationCount} />
         <MiniStat label="已完成咨询" value={detail.profile.completedConsultationCount} />

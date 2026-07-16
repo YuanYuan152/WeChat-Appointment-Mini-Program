@@ -581,6 +581,19 @@ def notify_counselor_proxy_order_pending(
     order: AppOrder,
 ) -> None:
     """助理代理预约推送待支付订单后通知咨询师。"""
+    pending = next(
+        (
+            row
+            for row in db.new
+            if isinstance(row, AppMessage)
+            and row.AccountId == counselor_id
+            and row.RelatedType == "COUNSELOR_PROXY_ORDER_PENDING"
+            and row.RelatedId == order.Id
+        ),
+        None,
+    )
+    if pending:
+        return
     existing = (
         db.query(AppMessage)
         .filter(

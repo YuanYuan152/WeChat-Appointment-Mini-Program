@@ -119,10 +119,11 @@ def complete_paid_order(
 
     from patient_contract_service import maybe_mark_patient_contract_signed
 
-    maybe_mark_patient_contract_signed(db, order)
+    paid_at = datetime.utcnow()
+    maybe_mark_patient_contract_signed(db, order, paid_at=paid_at)
 
     order.Status = "PAID"
-    order.PaidAt = datetime.utcnow()
+    order.PaidAt = paid_at
     if transaction_id:
         order.TransactionId = transaction_id
 

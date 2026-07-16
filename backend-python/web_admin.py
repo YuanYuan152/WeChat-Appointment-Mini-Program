@@ -44,6 +44,7 @@ from consultation_feedback import feedback_summary
 from schedule_meta import center_display_name, parse_center_id, parse_room_id, room_display_name
 from schedule_meta import schedule_note
 from patient_contract_service import patient_contract_extras
+from staff_remark_service import get_staff_remark, get_staff_remarks_map
 from staff_roles import account_has_staff_workbench, staff_workbench_account_ids
 
 router = APIRouter(prefix="/api/web/admin", tags=["WebAdmin"])
@@ -74,18 +75,6 @@ def require_staff_workbench(
     ):
         raise HTTPException(status_code=403, detail="无管理工作台权限")
     return current_account
-
-
-def _has_ops_or_admin_role(db: Session, account_id: int) -> bool:
-    return (
-        db.query(AppRoleBinding.Id)
-        .filter(
-            AppRoleBinding.AccountId == account_id,
-            AppRoleBinding.RoleType.in_(["Ops", "Admin"]),
-        )
-        .first()
-        is not None
-    )
 
 
 def _visitor_account_ids(db: Session) -> set[int]:
@@ -624,18 +613,6 @@ def _import_completed_order_row(db: Session, row_number: int, row_map: dict[str,
         AppConsultation.StartTime == start_at,
     ).first()
     if existing_consultation:
-        if existing_consultation.OrderId:
-            existing_paid_order = (
-                db.query(AppOrder)
-                .filter(AppOrder.Id == existing_consultation.OrderId)
-                .first()
-            )
-            if existing_paid_order and (
-                existing_paid_order.PaidAt is not None or existing_paid_order.Status == "PAID"
-            ):
-                from patient_contract_service import sync_patient_contract_signed_from_orders
-
-                sync_patient_contract_signed_from_orders(db, patient.Id)
         return {
             "rowNumber": row_number,
             "status": "SKIPPED",
@@ -654,10 +631,6 @@ def _import_completed_order_row(db: Session, row_number: int, row_map: dict[str,
     out_trade_no = f"IMPORT-{hashlib.sha1(unique_key.encode('utf-8')).hexdigest()[:24].upper()}"
     existing_order = db.query(AppOrder).filter(AppOrder.OutTradeNo == out_trade_no).first()
     if existing_order:
-        if existing_order.PaidAt is not None or existing_order.Status == "PAID":
-            from patient_contract_service import sync_patient_contract_signed_from_orders
-
-            sync_patient_contract_signed_from_orders(db, patient.Id)
         return {
             "rowNumber": row_number,
             "status": "SKIPPED",
@@ -711,12 +684,6 @@ def _import_completed_order_row(db: Session, row_number: int, row_map: dict[str,
     )
     db.add(order)
     db.flush()
-
-    # 导入完成订单同样属于已支付事实；若来访当前正绑定该咨询师，立即同步签约
-    # 状态，避免必须重启服务或再次换绑后才显示已签约。
-    from patient_contract_service import sync_patient_contract_signed_from_orders
-
-    sync_patient_contract_signed_from_orders(db, patient.Id)
 
     consultation = AppConsultation(
         OrderId=order.Id,
@@ -1293,7 +1260,12 @@ def operation_records(
     return _paginate(filtered, page, page_size)
 
 
-def _user_summary(db: Session, account: AppAccount, roles: list[str]) -> dict[str, Any]:
+def _user_summary(
+    db: Session,
+    account: AppAccount,
+    roles: list[str],
+    staff_remark: Optional[str] = None,
+) -> dict[str, Any]:
     orders = db.query(AppOrder).filter(AppOrder.AccountId == account.Id).all()
     consultations = db.query(AppConsultation).filter(AppConsultation.PatientId == account.Id).all()
     exemptions = db.query(AppRefundExemption).filter(AppRefundExemption.AccountId == account.Id).all()
@@ -1323,6 +1295,7 @@ def _user_summary(db: Session, account: AppAccount, roles: list[str]) -> dict[st
         "cancelledConsultationCount": len([c for c in consultations if c.Status in ("CANCELLED", "CANCELED")]),
         "latestConsultationAt": max([c.StartTime for c in consultations if c.StartTime] or [None]),
         "createdAt": account.CreatedAt,
+        "staffRemark": staff_remark if staff_remark is not None else get_staff_remark(db, account.Id),
     }
     if is_visitor:
         from patient_contract_service import patient_contract_extras
@@ -1331,7 +1304,7 @@ def _user_summary(db: Session, account: AppAccount, roles: list[str]) -> dict[st
     return summary
 
 
-@router.get("/users/board", summary="用户看板列表")
+@router.get("/users/board", summary="来访管理列表")
 def user_board_list(
     keyword: Optional[str] = Query(None, description="姓名/昵称/手机号"),
     gender: Optional[str] = Query(None),
@@ -1341,12 +1314,12 @@ def user_board_list(
     _staff: AppAccount = Depends(require_staff_workbench),
     db: Session = Depends(get_db),
 ):
-    query = db.query(AppAccount)
-    if not _has_ops_or_admin_role(db, _staff.Id):
-        visitor_ids = _visitor_account_ids(db)
-        if not visitor_ids:
-            return _paginate([], page, page_size)
-        query = query.filter(AppAccount.Id.in_(visitor_ids))
+    # 来访管理对所有管理角色使用同一数据口径。即使管理员拥有更高权限，
+    # 咨询师与工作人员账号也只能从咨询师管理或权限管理进入。
+    visitor_ids = _visitor_account_ids(db)
+    if not visitor_ids:
+        return _paginate([], page, page_size)
+    query = db.query(AppAccount).filter(AppAccount.Id.in_(visitor_ids))
     if keyword:
         like = f"%{keyword}%"
         query = query.filter(
@@ -1361,23 +1334,43 @@ def user_board_list(
     if mobile:
         query = query.filter(AppAccount.Mobile.like(f"%{mobile}%"))
 
-    accounts = query.order_by(AppAccount.Id.desc()).limit(300).all()
+    total = query.count()
+    accounts = (
+        query.order_by(AppAccount.Id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
     roles_by_account = _roles_for_accounts(db, {a.Id for a in accounts})
-    items = [_user_summary(db, account, roles_by_account.get(account.Id, [])) for account in accounts]
-    return _paginate(items, page, page_size)
+    staff_remarks = get_staff_remarks_map(db, [account.Id for account in accounts])
+    items = [
+        _user_summary(
+            db,
+            account,
+            roles_by_account.get(account.Id, []),
+            staff_remarks.get(account.Id, ""),
+        )
+        for account in accounts
+    ]
+    return {
+        "total": total,
+        "page": page,
+        "pageSize": page_size,
+        "items": items,
+    }
 
 
-@router.get("/users/{account_id}/board", summary="用户看板详情")
+@router.get("/users/{account_id}/board", summary="来访管理详情")
 def user_board_detail(
     account_id: int,
     _staff: AppAccount = Depends(require_staff_workbench),
     db: Session = Depends(get_db),
 ):
+    if account_id not in _visitor_account_ids(db):
+        raise HTTPException(status_code=404, detail="来访者不存在")
     account = db.query(AppAccount).filter(AppAccount.Id == account_id).first()
     if not account:
-        raise HTTPException(status_code=404, detail="用户不存在")
-    if not _has_ops_or_admin_role(db, _staff.Id) and account_id not in _visitor_account_ids(db):
-        raise HTTPException(status_code=403, detail="咨询助理仅可查看来访者详情")
+        raise HTTPException(status_code=404, detail="来访者不存在")
 
     roles = _roles_for_accounts(db, {account_id}).get(account_id, [])
     orders = db.query(AppOrder).filter(AppOrder.AccountId == account_id).order_by(AppOrder.CreatedAt.desc()).all()
@@ -1463,7 +1456,11 @@ def user_board_detail(
     }
 
 
-def _counselor_summary(db: Session, account: AppAccount) -> dict[str, Any]:
+def _counselor_summary(
+    db: Session,
+    account: AppAccount,
+    staff_remark: Optional[str] = None,
+) -> dict[str, Any]:
     consultations = db.query(AppConsultation).filter(AppConsultation.CounselorId == account.Id).all()
     records = db.query(AppCaseRecord).filter(AppCaseRecord.CounselorId == account.Id).all()
     schedules = db.query(AppSchedule).filter(AppSchedule.CounselorId == account.Id).all()
@@ -1485,21 +1482,27 @@ def _counselor_summary(db: Session, account: AppAccount) -> dict[str, Any]:
         "bookedScheduleCount": len([s for s in schedules if s.Status == "BOOKED"]),
         "leaveRequestCount": len(leave_requests),
         "latestScheduleAt": max([s.StartTime for s in schedules if s.StartTime] or [None]),
+        "staffRemark": staff_remark if staff_remark is not None else get_staff_remark(db, account.Id),
     }
 
 
-@router.get("/counselors/board", summary="咨询师看板列表")
+@router.get("/counselors/board", summary="咨询师管理列表")
 def counselor_board_list(
     keyword: Optional[str] = Query(None, description="姓名/昵称/手机号"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    _admin: AppAccount = Depends(require_ops_or_admin),
+    _staff: AppAccount = Depends(require_staff_workbench),
     db: Session = Depends(get_db),
 ):
     bindings = db.query(AppRoleBinding).filter(AppRoleBinding.RoleType == "Counselor").all()
     counselor_ids = sorted({b.AccountId for b in bindings})
     accounts = _accounts_by_id(db, set(counselor_ids))
-    items = [_counselor_summary(db, accounts[cid]) for cid in counselor_ids if cid in accounts]
+    staff_remarks = get_staff_remarks_map(db, [cid for cid in counselor_ids if cid in accounts])
+    items = [
+        _counselor_summary(db, accounts[cid], staff_remarks.get(cid, ""))
+        for cid in counselor_ids
+        if cid in accounts
+    ]
     if keyword:
         keyword_norm = keyword.lower()
         items = [
@@ -1510,10 +1513,10 @@ def counselor_board_list(
     return _paginate(items, page, page_size)
 
 
-@router.get("/counselors/{account_id}/board", summary="咨询师看板详情")
+@router.get("/counselors/{account_id}/board", summary="咨询师管理详情")
 def counselor_board_detail(
     account_id: int,
-    _admin: AppAccount = Depends(require_ops_or_admin),
+    _staff: AppAccount = Depends(require_staff_workbench),
     db: Session = Depends(get_db),
 ):
     binding = db.query(AppRoleBinding).filter(

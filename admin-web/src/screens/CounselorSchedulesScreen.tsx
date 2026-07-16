@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { AppRoute, useAppRoute } from "@/components/AppRoute";
@@ -53,19 +53,35 @@ function CounselorSchedulesScreenContent() {
   const [slotError, setSlotError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const calendarRequestSeq = useRef(0);
+  const slotRequestSeq = useRef(0);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (
+    options: { clearExistingNotice?: boolean; notifyOnError?: boolean } = {},
+  ) => {
+    const { clearExistingNotice = true, notifyOnError = true } = options;
+    const requestSeq = calendarRequestSeq.current + 1;
+    calendarRequestSeq.current = requestSeq;
     setListLoading(true);
-    clearNotice();
+    if (clearExistingNotice) {
+      clearNotice();
+    }
     try {
       const counselorScheduleCalendar = await fetchCounselorScheduleCalendar(filters);
+      if (calendarRequestSeq.current !== requestSeq) {
+        return false;
+      }
       setData((prev) => ({ ...prev, counselorScheduleCalendar }));
       return true;
     } catch (error) {
-      showNotice("error", error instanceof Error ? error.message : "排期加载失败");
+      if (calendarRequestSeq.current === requestSeq && notifyOnError) {
+        showNotice("error", error instanceof Error ? error.message : "排期加载失败");
+      }
       return false;
     } finally {
-      setListLoading(false);
+      if (calendarRequestSeq.current === requestSeq) {
+        setListLoading(false);
+      }
     }
   }, [clearNotice, filters, showNotice]);
 
@@ -103,20 +119,35 @@ function CounselorSchedulesScreenContent() {
     setFilters(next);
   }, [filters.days, filters.start, loadData]);
 
-  const loadSlots = useCallback(async () => {
+  const loadSlots = useCallback(async (
+    selection: Pick<CounselorScheduleDraft, "date" | "centerId"> = {
+      date: draft.date,
+      centerId: draft.centerId,
+    },
+  ) => {
+    const requestSeq = slotRequestSeq.current + 1;
+    slotRequestSeq.current = requestSeq;
     setSlotLoading(true);
     setSlotError(null);
+    setData((prev) => ({ ...prev, counselorSlotOptions: undefined }));
+    setDraft((prev) => ({ ...prev, ...selection, slotKey: "", roomId: "" }));
     try {
-      const counselorSlotOptions = await fetchCounselorSlotOptions(draft.date, draft.centerId);
+      const counselorSlotOptions = await fetchCounselorSlotOptions(selection.date, selection.centerId);
+      if (slotRequestSeq.current !== requestSeq) {
+        return false;
+      }
       setData((prev) => ({ ...prev, counselorSlotOptions }));
-      setDraft((prev) => ({ ...prev, slotKey: "", roomId: "" }));
       return true;
     } catch (error) {
-      setSlotError(error instanceof Error ? error.message : "可排时段加载失败");
-      setData((prev) => ({ ...prev, counselorSlotOptions: undefined }));
+      if (slotRequestSeq.current === requestSeq) {
+        setSlotError(error instanceof Error ? error.message : "可排时段加载失败");
+        setData((prev) => ({ ...prev, counselorSlotOptions: undefined }));
+      }
       return false;
     } finally {
-      setSlotLoading(false);
+      if (slotRequestSeq.current === requestSeq) {
+        setSlotLoading(false);
+      }
     }
   }, [draft.centerId, draft.date]);
 
@@ -131,9 +162,17 @@ function CounselorSchedulesScreenContent() {
           center_id: draft.centerId,
           room_id: roomId || undefined,
         });
-        showNotice("success", getMessage(result, "排期已新增"));
-        await loadData();
-        await loadSlots();
+        const successText = getMessage(result, "排期已新增");
+        const [calendarRefreshed, slotsRefreshed] = await Promise.all([
+          loadData({ clearExistingNotice: false, notifyOnError: false }),
+          loadSlots(),
+        ]);
+        showNotice(
+          calendarRefreshed && slotsRefreshed ? "success" : "info",
+          calendarRefreshed && slotsRefreshed
+            ? successText
+            : `${successText}，但排期刷新失败，请手动刷新后核对`,
+        );
         return true;
       } catch (error) {
         showNotice("error", error instanceof Error ? error.message : "新增排期失败");
@@ -148,8 +187,12 @@ function CounselorSchedulesScreenContent() {
       clearNotice();
       try {
         const result = await cancelCounselorSchedule(scheduleId, { leave_reason: reason });
-        showNotice("success", getMessage(result, "排期已取消"));
-        await loadData();
+        const successText = getMessage(result, "排期已取消");
+        const refreshed = await loadData({ clearExistingNotice: false, notifyOnError: false });
+        showNotice(
+          refreshed ? "success" : "info",
+          refreshed ? successText : `${successText}，但排期刷新失败，请手动刷新后核对`,
+        );
       } catch (error) {
         showNotice("error", error instanceof Error ? error.message : "取消排期失败");
       }
@@ -170,8 +213,12 @@ function CounselorSchedulesScreenContent() {
           reason,
           communicationScreenshotUrl,
         );
-        showNotice("success", getMessage(result, "请假申请已提交"));
-        await loadData();
+        const successText = getMessage(result, "请假申请已提交");
+        const refreshed = await loadData({ clearExistingNotice: false, notifyOnError: false });
+        showNotice(
+          refreshed ? "success" : "info",
+          refreshed ? successText : `${successText}，但排期刷新失败，请手动刷新后核对`,
+        );
         return true;
       } catch (error) {
         showNotice("error", error instanceof Error ? error.message : "请假申请提交失败");
@@ -203,13 +250,18 @@ function CounselorSchedulesScreenContent() {
       setDraft={setDraft}
       onSearch={search}
       onReset={reset}
-      onClearSlotError={() => setSlotError(null)}
+      onClearSlotError={() => {
+        slotRequestSeq.current += 1;
+        setSlotLoading(false);
+        setSlotError(null);
+        setData((prev) => ({ ...prev, counselorSlotOptions: undefined }));
+      }}
       onLoadSlots={loadSlots}
       onCreate={createSchedule}
       onCancel={cancelSchedule}
       onLeave={submitLeave}
       onProxyOrderCreated={async (message) => {
-        const refreshed = await loadData();
+        const refreshed = await loadData({ clearExistingNotice: false, notifyOnError: false });
         showNotice(
           refreshed ? "success" : "info",
           refreshed
@@ -217,6 +269,7 @@ function CounselorSchedulesScreenContent() {
             : `${message || "订单已推送"}，但排期刷新失败，请手动刷新后核对`,
         );
       }}
+      onProxyOrderError={(message) => showNotice("error", message)}
       onPageChange={setPage}
       onPageSizeChange={changePageSize}
     />

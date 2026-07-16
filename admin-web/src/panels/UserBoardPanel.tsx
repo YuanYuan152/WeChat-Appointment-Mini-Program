@@ -5,6 +5,7 @@ import { formatDateTime, formatMoneyFromCents, statusLabel } from "@/lib/format"
 import type { PagedResult, ProxyPersonOption, UserBoardDetail, UserBoardSummary } from "@/types/api";
 
 import { DetailDrawer } from "@/components/boards/DetailDrawer";
+import { StaffRemarkEditor } from "@/components/boards/StaffRemarkEditor";
 import {
   Badge,
   CollapsibleSection,
@@ -19,7 +20,6 @@ import {
   queryControlClass,
 } from "@/components/ui";
 import type { UserBoardFilters } from "@/types/app";
-import { roleText } from "@/lib/display";
 import { patientContractTag } from "@/lib/patientContract";
 
 export interface UserProxyBookingTarget {
@@ -44,6 +44,8 @@ export function UserBoardPanel({
   onProxyBooking,
   onSearchCounselors,
   onBindCounselor,
+  remarkSaving,
+  onSaveRemark,
 }: {
   users?: PagedResult<UserBoardSummary>;
   listLoading: boolean;
@@ -60,6 +62,8 @@ export function UserBoardPanel({
   onProxyBooking?: (target: UserProxyBookingTarget) => void;
   onSearchCounselors?: (keyword: string) => Promise<ProxyPersonOption[]>;
   onBindCounselor?: (patientId: number, counselorId: number | null) => Promise<void>;
+  remarkSaving: boolean;
+  onSaveRemark: (accountId: number, remark: string) => Promise<string>;
 }) {
   return (
     <>
@@ -75,7 +79,7 @@ export function UserBoardPanel({
         users={users}
       />
       {(detailLoading || selected) && (
-        <DetailDrawer title="用户详情" onClose={onCloseDetail}>
+        <DetailDrawer title="来访者详情" onClose={onCloseDetail}>
           {detailLoading && !selected ? (
             <div className="py-10 text-sm text-[var(--lxxl-muted)]">正在加载详情...</div>
           ) : selected ? (
@@ -84,6 +88,8 @@ export function UserBoardPanel({
               onBindCounselor={onBindCounselor}
               onProxyBooking={onProxyBooking}
               onSearchCounselors={onSearchCounselors}
+              remarkSaving={remarkSaving}
+              onSaveRemark={onSaveRemark}
             />
           ) : null}
         </DetailDrawer>
@@ -123,9 +129,9 @@ const UserBoardListSection = memo(function UserBoardListSection({
         }}
       >
         <div>
-          <h2 className="text-xl font-semibold tracking-normal">用户管理</h2>
+          <h2 className="text-xl font-semibold tracking-normal">来访管理</h2>
           <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">
-            按用户聚合订单、退款、豁免、预约和咨询室预约记录。
+            查看来访资料，以及订单、退款、豁免和预约记录。
           </p>
         </div>
 
@@ -160,13 +166,13 @@ const UserBoardListSection = memo(function UserBoardListSection({
           </div>
         )}
         {!users || users.items.length === 0 ? (
-          <EmptyState text={listLoading ? "正在加载列表..." : "暂无用户数据。"} />
+          <EmptyState text={listLoading ? "正在加载列表..." : "暂无来访数据。"} />
         ) : (
           <>
             <table className="w-full border-collapse text-sm">
               <thead className="bg-[#FAF8F4] text-left text-[var(--lxxl-muted)]">
                 <tr>
-                  <th className="px-5 py-3 font-medium">用户</th>
+                  <th className="px-5 py-3 font-medium">来访者</th>
                   <th className="px-5 py-3 font-medium">手机</th>
                   <th className="px-5 py-3 font-medium">订单/金额</th>
                   <th className="px-5 py-3 font-medium">预约</th>
@@ -179,9 +185,17 @@ const UserBoardListSection = memo(function UserBoardListSection({
                   <tr key={user.id} className="border-t border-[var(--lxxl-border)]">
                     <td className="px-5 py-4">
                       <div className="font-medium">{user.name}</div>
-                      <div className="mt-1 text-xs text-[var(--lxxl-muted)]">{roleText(user.roles)}</div>
+                      <div className="mt-1 text-xs text-[var(--lxxl-muted)]">来访者</div>
                       {patientContractTag(user) && (
                         <div className="mt-1 text-xs font-medium text-[#315D4B]">{patientContractTag(user)}</div>
+                      )}
+                      {user.staffRemark && (
+                        <div
+                          className="mt-1 max-w-72 truncate text-xs text-[#8A6438]"
+                          title={`内部备注：${user.staffRemark}`}
+                        >
+                          内部备注：{user.staffRemark}
+                        </div>
                       )}
                     </td>
                     <td className="px-5 py-4">{user.mobile || "-"}</td>
@@ -223,11 +237,15 @@ function UserDetailPanel({
   onProxyBooking,
   onSearchCounselors,
   onBindCounselor,
+  remarkSaving,
+  onSaveRemark,
 }: {
   detail: UserBoardDetail;
   onProxyBooking?: (target: UserProxyBookingTarget) => void;
   onSearchCounselors?: (keyword: string) => Promise<ProxyPersonOption[]>;
   onBindCounselor?: (patientId: number, counselorId: number | null) => Promise<void>;
+  remarkSaving: boolean;
+  onSaveRemark: (accountId: number, remark: string) => Promise<string>;
 }) {
   const [bindOpen, setBindOpen] = useState(false);
   const [bindKeyword, setBindKeyword] = useState("");
@@ -237,8 +255,10 @@ function UserDetailPanel({
   const [bindSaving, setBindSaving] = useState(false);
   const [bindError, setBindError] = useState("");
   const [bindPrompt, setBindPrompt] = useState("");
+  const [continueProxyAfterBind, setContinueProxyAfterBind] = useState(false);
   const bindSearchSeq = useRef(0);
   const canProxyBooking = detail.profile.isVisitor === true;
+  const canEditStaffRemark = detail.profile.isVisitor === true;
   const contractTag = patientContractTag(detail.profile);
   const completedConsultations = detail.consultations.filter((item) => item.status === "DONE");
   const cancelledConsultations = detail.consultations.filter(
@@ -284,13 +304,14 @@ function UserDetailPanel({
       }
     }
   };
-  const openBindingModal = (prompt = "") => {
+  const openBindingModal = (prompt = "", continueAfterBind = false) => {
     if (!onSearchCounselors || !onBindCounselor) {
       return;
     }
     setBindKeyword("");
     setBindError("");
     setBindPrompt(prompt);
+    setContinueProxyAfterBind(continueAfterBind);
     setSelectedCounselorId(detail.profile.boundCounselorId || null);
     setBindOpen(true);
     void loadCounselors("");
@@ -300,7 +321,7 @@ function UserDetailPanel({
       return;
     }
     if (!detail.profile.boundCounselorId) {
-      openBindingModal("代理预约前需先绑定咨询师。完成绑定后，再继续创建代理预约。");
+      openBindingModal("代理预约前需先绑定咨询师。完成绑定后将自动继续创建代理预约。", true);
       return;
     }
     onProxyBooking(proxyTarget());
@@ -332,14 +353,22 @@ function UserDetailPanel({
 
   return (
     <>
-      <div className="text-sm text-[var(--lxxl-muted)]">用户详情</div>
+      <div className="text-sm text-[var(--lxxl-muted)]">来访者详情</div>
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <h3 className="text-lg font-semibold">{detail.profile.name}</h3>
         {contractTag && <Badge tone="green">{contractTag}</Badge>}
       </div>
       <div className="mt-1 text-sm text-[var(--lxxl-muted)]">
-        {detail.profile.mobile || "-"} · {detail.profile.gender || "性别未填"} · {roleText(detail.profile.roles)}
+        {detail.profile.mobile || "-"} · {detail.profile.gender || "性别未填"} · 来访者
       </div>
+      {canEditStaffRemark && (
+        <StaffRemarkEditor
+          accountId={detail.profile.id}
+          saving={remarkSaving}
+          value={detail.profile.staffRemark}
+          onSave={(remark) => onSaveRemark(detail.profile.id, remark)}
+        />
+      )}
       {canProxyBooking && (
         <div className="mt-4 rounded-xl bg-[#FAF8F4] px-4 py-3 text-sm leading-6">
           <div className="grid grid-cols-[5rem_minmax(0,1fr)] gap-x-3">
@@ -470,6 +499,7 @@ function UserDetailPanel({
           setSelectedCounselorId={setSelectedCounselorId}
           onClose={() => {
             bindSearchSeq.current += 1;
+            setContinueProxyAfterBind(false);
             setBindOpen(false);
           }}
           onSave={async (counselorId) => {
@@ -477,6 +507,10 @@ function UserDetailPanel({
             try {
               await onBindCounselor(detail.profile.id, counselorId);
               setBindOpen(false);
+              if (continueProxyAfterBind && counselorId && onProxyBooking) {
+                setContinueProxyAfterBind(false);
+                onProxyBooking(proxyTarget());
+              }
             } catch {
               // 页面级通知已展示接口返回的业务错误，保留弹窗便于重新选择。
             } finally {
@@ -548,7 +582,7 @@ function BindCounselorModal({
         <div className="border-b border-[var(--lxxl-border)] px-6 py-5">
           <h3 className="text-lg font-semibold">选择绑定咨询师</h3>
           <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">
-            绑定咨询师用于限定代理预约对象，绑定本身不等于签约。系统会根据来访与所选咨询师是否存在历史已支付订单重新判定签约状态；没有历史已支付订单时仍为未签约，代理预约需同时选择协议。
+            绑定咨询师用于限定代理预约对象。首次绑定、更换或解除绑定都会将签约状态重置为未签约；来访完成协议并支付当前绑定咨询师的订单后，才会变为已签约。
           </p>
           {prompt && <p className="mt-2 text-sm font-medium text-[#A46A22]">{prompt}</p>}
         </div>

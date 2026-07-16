@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 
 import { formatDateTime, statusLabel } from "@/lib/format";
-import { getLocalDateValue } from "@/lib/date";
+import { getLocalDateValue, getRollingScheduleMaxDateValue } from "@/lib/date";
 import { API_BASE_URL } from "@/lib/api";
 import {
   fetchCounselorProxySlotOptions,
@@ -49,6 +49,15 @@ export interface CounselorScheduleDraft {
   roomId: string;
 }
 
+function initialCounselorScheduleDraft(): CounselorScheduleDraft {
+  return {
+    date: getLocalDateValue(),
+    centerId: COUNSELOR_CENTER_OPTIONS[0]?.value || "yangpu",
+    slotKey: "",
+    roomId: "",
+  };
+}
+
 export function CounselorSchedulesPanel({
   calendar,
   slotOptions,
@@ -71,6 +80,7 @@ export function CounselorSchedulesPanel({
   onCancel,
   onLeave,
   onProxyOrderCreated,
+  onProxyOrderError,
   onPageChange,
   onPageSizeChange,
 }: {
@@ -90,7 +100,7 @@ export function CounselorSchedulesPanel({
   onSearch: () => void;
   onReset: () => void;
   onClearSlotError: () => void;
-  onLoadSlots: () => Promise<boolean> | boolean;
+  onLoadSlots: (selection?: Pick<CounselorScheduleDraft, "date" | "centerId">) => Promise<boolean> | boolean;
   onCreate: (slot: CounselorSlotOption, roomId: string) => Promise<boolean> | boolean;
   onCancel: (scheduleId: number, reason?: string) => void;
   onLeave: (
@@ -99,6 +109,7 @@ export function CounselorSchedulesPanel({
     communicationScreenshotUrl: string,
   ) => Promise<boolean> | boolean;
   onProxyOrderCreated: (message: string) => Promise<void> | void;
+  onProxyOrderError: (message: string) => void;
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
 }) {
@@ -239,8 +250,11 @@ export function CounselorSchedulesPanel({
                 className="w-28"
                 type="button"
                 onClick={() => {
+                  const nextDraft = initialCounselorScheduleDraft();
                   onClearSlotError();
+                  setDraft(nextDraft);
                   setCreateOpen(true);
+                  void onLoadSlots(nextDraft);
                 }}
               >
                 新增排期
@@ -255,6 +269,8 @@ export function CounselorSchedulesPanel({
             <QueryField label="开始日期">
               <input
                 className={queryControlClass}
+                max={getRollingScheduleMaxDateValue()}
+                min={getLocalDateValue()}
                 type="date"
                 value={query.start}
                 onChange={(event) => setQuery((prev) => ({ ...prev, start: event.target.value }))}
@@ -315,8 +331,8 @@ export function CounselorSchedulesPanel({
                       <td className="px-5 py-4 text-[var(--lxxl-muted)]">{item.centerName || "-"}</td>
                       <td className="px-5 py-4 text-[var(--lxxl-muted)]">{item.roomName || "-"}</td>
                       <td className="px-5 py-4">
-                        <Badge tone={item.status === "AVAILABLE" ? "green" : item.status === "BOOKED" ? "gold" : "neutral"}>
-                          {item.displayStatus || statusLabel(item.status)}
+                        <Badge tone={scheduleStatusTone(item.displayStatus || item.status)}>
+                          {item.displayLabel || statusLabel(item.displayStatus || item.status)}
                         </Badge>
                       </td>
                       <td className="px-5 py-4 text-[var(--lxxl-muted)]">
@@ -382,6 +398,7 @@ export function CounselorSchedulesPanel({
           draft={draft}
           onClose={() => {
             onClearSlotError();
+            setDraft(initialCounselorScheduleDraft());
             setCreateOpen(false);
           }}
           onCreate={onCreate}
@@ -397,10 +414,11 @@ export function CounselorSchedulesPanel({
       {proxyOpen && (
         <CounselorProxyBookingModal
           onClose={() => setProxyOpen(false)}
-          onCreated={async (message) => {
-            await onProxyOrderCreated(message);
+          onCreated={(message) => {
             setProxyOpen(false);
+            void onProxyOrderCreated(message);
           }}
+          onError={onProxyOrderError}
         />
       )}
 
@@ -495,9 +513,11 @@ export function CounselorSchedulesPanel({
 function CounselorProxyBookingModal({
   onClose,
   onCreated,
+  onError,
 }: {
   onClose: () => void;
   onCreated: (message: string) => Promise<void> | void;
+  onError: (message: string) => void;
 }) {
   const [patientKeyword, setPatientKeyword] = useState("");
   const [patients, setPatients] = useState<CounselorProxyPatientOption[]>([]);
@@ -600,7 +620,9 @@ function CounselorProxyBookingModal({
       });
       await onCreated(result.message || "订单已推送");
     } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : "代理预约订单推送失败");
+      const message = err instanceof Error ? err.message : "代理预约订单推送失败";
+      setSubmitError(message);
+      onError(message);
     } finally {
       setSubmitting(false);
     }
@@ -637,7 +659,7 @@ function CounselorProxyBookingModal({
         <div className="border-b border-[var(--lxxl-border)] px-6 py-5">
           <h3 className="text-lg font-semibold">代理预约</h3>
           <p className="mt-1 text-sm text-[var(--lxxl-muted)]">
-            仅可为已绑定您且已签约的来访推送订单，订单需在 2 小时内支付。
+            仅可为已绑定您且已签约的来访推送订单，支付有效期以推送结果为准。
           </p>
         </div>
 
@@ -649,6 +671,7 @@ function CounselorProxyBookingModal({
               value={patientKeyword}
               onChange={(event) => {
                 setPatientKeyword(event.target.value);
+                setSubmitError("");
                 if (selectedPatient && event.target.value !== selectedPatient.name) {
                   setSelectedPatient(null);
                 }
@@ -673,6 +696,7 @@ function CounselorProxyBookingModal({
                   onClick={() => {
                     setSelectedPatient(patient);
                     setPatientKeyword(patient.name);
+                    setSubmitError("");
                   }}
                   type="button"
                 >
@@ -699,6 +723,7 @@ function CounselorProxyBookingModal({
             <QueryField label="日期" required>
               <input
                 className={queryControlClass}
+                max={getRollingScheduleMaxDateValue()}
                 min={getLocalDateValue()}
                 type="date"
                 value={date}
@@ -706,6 +731,7 @@ function CounselorProxyBookingModal({
                   setDate(event.target.value);
                   setSlotKey("");
                   setRoomId("");
+                  setSubmitError("");
                 }}
               />
             </QueryField>
@@ -717,6 +743,7 @@ function CounselorProxyBookingModal({
                   setCenterId(event.target.value);
                   setSlotKey("");
                   setRoomId("");
+                  setSubmitError("");
                 }}
               >
                 {COUNSELOR_CENTER_OPTIONS.map((item) => (
@@ -788,6 +815,7 @@ function CounselorProxyBookingModal({
                         onClick={() => {
                           setSlotKey(slot.key);
                           setRoomId("");
+                          setSubmitError("");
                         }}
                       >
                         <span className="block font-medium">{slot.label}</span>
@@ -818,7 +846,10 @@ function CounselorProxyBookingModal({
                           disabled={!selectable}
                           key={room.roomId}
                           type="button"
-                          onClick={() => setRoomId(room.roomId)}
+                          onClick={() => {
+                            setRoomId(room.roomId);
+                            setSubmitError("");
+                          }}
                         >
                           <span className="block font-medium">{room.roomName}</span>
                           <span className="mt-1 block text-xs text-[var(--lxxl-muted)]">
@@ -872,6 +903,19 @@ function formatCounselorContractTag(tag?: string | null) {
   return counselorName ? `已签约-【${counselorName}】` : "已签约";
 }
 
+function scheduleStatusTone(status?: string | null): "neutral" | "green" | "gold" | "red" {
+  if (status === "AVAILABLE" || status === "OPEN") {
+    return "green";
+  }
+  if (status === "BOOKED" || status === "PENDING") {
+    return "gold";
+  }
+  if (status === "CANCELLED" || status === "CANCELED" || status === "ON_LEAVE") {
+    return "red";
+  }
+  return "neutral";
+}
+
 function resolveUploadedAssetUrl(url: string) {
   const value = url.trim();
   if (!value || /^https?:\/\//i.test(value)) {
@@ -915,20 +959,27 @@ function CreateScheduleModal({
   draft: CounselorScheduleDraft;
   onClose: () => void;
   onCreate: (slot: CounselorSlotOption, roomId: string) => Promise<boolean> | boolean;
-  onLoadSlots: () => Promise<boolean> | boolean;
+  onLoadSlots: (selection?: Pick<CounselorScheduleDraft, "date" | "centerId">) => Promise<boolean> | boolean;
   selectedSlot?: CounselorSlotOption;
   setDraft: Dispatch<SetStateAction<CounselorScheduleDraft>>;
   slotError?: string | null;
   slotLoading: boolean;
   slotOptions?: CounselorSlotOptions;
 }) {
+  const [submitting, setSubmitting] = useState(false);
+
   const handleCreate = async () => {
-    if (!selectedSlot) {
+    if (!selectedSlot || submitting) {
       return;
     }
-    const created = await onCreate(selectedSlot, draft.roomId);
-    if (created) {
-      onClose();
+    setSubmitting(true);
+    try {
+      const created = await onCreate(selectedSlot, draft.roomId);
+      if (created) {
+        onClose();
+      }
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -952,20 +1003,28 @@ function CreateScheduleModal({
             <QueryField label="新增日期">
               <input
                 className={queryControlClass}
+                disabled={submitting}
+                max={getRollingScheduleMaxDateValue()}
+                min={getLocalDateValue()}
                 type="date"
                 value={draft.date}
-                onChange={(event) =>
-                  setDraft((prev) => ({ ...prev, date: event.target.value, slotKey: "", roomId: "" }))
-                }
+                onChange={(event) => {
+                  const selection = { date: event.target.value, centerId: draft.centerId };
+                  setDraft((prev) => ({ ...prev, ...selection, slotKey: "", roomId: "" }));
+                  void onLoadSlots(selection);
+                }}
               />
             </QueryField>
             <QueryField label="预约中心">
               <select
                 className={queryControlClass}
+                disabled={submitting}
                 value={draft.centerId}
-                onChange={(event) =>
-                  setDraft((prev) => ({ ...prev, centerId: event.target.value, slotKey: "", roomId: "" }))
-                }
+                onChange={(event) => {
+                  const selection = { date: draft.date, centerId: event.target.value };
+                  setDraft((prev) => ({ ...prev, ...selection, slotKey: "", roomId: "" }));
+                  void onLoadSlots(selection);
+                }}
               >
                 {COUNSELOR_CENTER_OPTIONS.map((item) => (
                   <option key={item.value} value={item.value}>
@@ -975,7 +1034,7 @@ function CreateScheduleModal({
               </select>
             </QueryField>
             <div className="flex items-end">
-              <QueryButton className="w-28" disabled={slotLoading} onClick={onLoadSlots}>
+              <QueryButton className="w-28" disabled={slotLoading} onClick={() => void onLoadSlots()}>
                 {slotLoading ? "加载中" : "读取时段"}
               </QueryButton>
             </div>
@@ -995,7 +1054,8 @@ function CreateScheduleModal({
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <QueryField label="时段">
                 <select
-                  className={queryControlClass}
+                className={queryControlClass}
+                  disabled={submitting}
                   value={draft.slotKey}
                   onChange={(event) => setDraft((prev) => ({ ...prev, slotKey: event.target.value, roomId: "" }))}
                 >
@@ -1016,6 +1076,7 @@ function CreateScheduleModal({
                 <QueryField label="咨询室">
                   <select
                     className={queryControlClass}
+                    disabled={submitting}
                     value={draft.roomId}
                     onChange={(event) => setDraft((prev) => ({ ...prev, roomId: event.target.value }))}
                   >
@@ -1034,12 +1095,12 @@ function CreateScheduleModal({
 
         <div className="flex justify-start gap-3 border-t border-[var(--lxxl-border)] px-6 py-4">
           <QueryButton
-            disabled={!selectedSlot || selectedSlot.past || selectedSlot.counselorOccupied || selectedSlot.allRoomsFull}
+            disabled={submitting || !selectedSlot || selectedSlot.past || selectedSlot.counselorOccupied || selectedSlot.allRoomsFull}
             onClick={handleCreate}
           >
-            新增
+            {submitting ? "新增中" : "新增"}
           </QueryButton>
-          <QueryResetButton onClick={onClose}>取消</QueryResetButton>
+          <QueryResetButton disabled={submitting} onClick={onClose}>取消</QueryResetButton>
         </div>
       </section>
     </div>

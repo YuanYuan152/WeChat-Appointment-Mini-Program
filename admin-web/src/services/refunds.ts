@@ -1,8 +1,31 @@
 import { apiRequest } from "@/lib/api";
 import type { RefundExemption } from "@/types/api";
 
-export function fetchRefundExemptions(status: "ALL" | "PENDING" | "APPROVED" | "REJECTED" = "ALL") {
-  return apiRequest<RefundExemption[]>(`/api/mini/admin/refund-exemptions?status=${status}`);
+export async function fetchRefundExemptions(
+  status: "ALL" | "PENDING" | "APPROVED" | "REJECTED" = "ALL",
+  keyword = "",
+) {
+  const items: RefundExemption[] = [];
+  const pageSize = 500;
+
+  for (let offset = 0; ; offset += pageSize) {
+    const params = new URLSearchParams({
+      status,
+      offset: String(offset),
+      limit: String(pageSize),
+    });
+    const normalizedKeyword = keyword.trim();
+    if (normalizedKeyword) {
+      params.set("keyword", normalizedKeyword);
+    }
+    const page = await apiRequest<RefundExemption[]>(
+      `/api/mini/admin/refund-exemptions?${params.toString()}`,
+    );
+    items.push(...page);
+    if (page.length < pageSize) {
+      return items;
+    }
+  }
 }
 
 export function approveRefundExemption(id: number) {

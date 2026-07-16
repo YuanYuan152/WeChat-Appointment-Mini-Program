@@ -6,7 +6,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import exists, not_, or_
+from sqlalchemy import exists, not_, or_, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -774,13 +774,30 @@ def _build_exemption_admin_out(
 )
 def list_refund_exemptions(
     status: Optional[str] = Query(None, description="PENDING / APPROVED / REJECTED / ALL"),
+    keyword: Optional[str] = Query(None, max_length=100, description="按来访者姓名或手机号筛选"),
+    offset: int = Query(0, ge=0, description="Web 管理端分批加载偏移量；不传时保持原列表行为"),
+    limit: int = Query(100, ge=1, le=500, description="Web 管理端分批加载数量；不传时仍返回前 100 条"),
     _staff: AppAccount = Depends(require_staff_workbench),
     db: Session = Depends(get_db),
 ):
-    q = db.query(AppRefundExemption).order_by(AppRefundExemption.CreatedAt.desc())
+    q = db.query(AppRefundExemption).order_by(
+        AppRefundExemption.CreatedAt.desc(),
+        AppRefundExemption.Id.desc(),
+    )
     if status and status.upper() != "ALL":
         q = q.filter(AppRefundExemption.Status == status.upper())
-    rows = q.limit(100).all()
+    normalized_keyword = (keyword or "").strip()
+    if normalized_keyword:
+        like = f"%{normalized_keyword}%"
+        matching_patient_ids = select(AppAccount.Id).where(
+            or_(
+                AppAccount.RealName.like(like),
+                AppAccount.Nickname.like(like),
+                AppAccount.Mobile.like(like),
+            )
+        )
+        q = q.filter(AppRefundExemption.AccountId.in_(matching_patient_ids))
+    rows = q.offset(offset).limit(limit).all()
     consultation_ids = [r.ConsultationId for r in rows]
     consultations = {
         c.Id: c
@@ -2359,13 +2376,39 @@ def update_admin_counselor(
 @router.get("/leave-requests", summary="咨询师请假列表（管理工作台审批）")
 def list_leave_requests(
     status: str = Query("ALL", description="PENDING|APPROVED|REJECTED|ALL"),
+    keyword: Optional[str] = Query(None, max_length=100, description="按咨询师姓名或手机号筛选"),
+    offset: int = Query(0, ge=0, description="Web 管理端分批加载偏移量；不传时保持原列表行为"),
+    limit: int = Query(100, ge=1, le=500, description="Web 管理端分批加载数量；不传时仍返回前 100 条"),
     _staff: AppAccount = Depends(require_staff_workbench),
     db: Session = Depends(get_db),
 ):
-    q = db.query(AppLeaveRequest).order_by(AppLeaveRequest.CreatedAt.desc())
-    if status and status != "ALL":
-        q = q.filter(AppLeaveRequest.Status == status)
-    rows = q.limit(100).all()
+    q = db.query(AppLeaveRequest).order_by(
+        AppLeaveRequest.CreatedAt.desc(),
+        AppLeaveRequest.Id.desc(),
+    )
+    normalized_status = (status or "ALL").upper()
+    if normalized_status != "ALL":
+        q = q.filter(AppLeaveRequest.Status == normalized_status)
+    normalized_keyword = (keyword or "").strip()
+    if normalized_keyword:
+        like = f"%{normalized_keyword}%"
+        matching_account_ids = select(AppAccount.Id).where(
+            or_(
+                AppAccount.RealName.like(like),
+                AppAccount.Nickname.like(like),
+                AppAccount.Mobile.like(like),
+            )
+        )
+        matching_profile_ids = select(AppCounselorProfile.AccountId).where(
+            AppCounselorProfile.Name.like(like)
+        )
+        q = q.filter(
+            or_(
+                AppLeaveRequest.CounselorId.in_(matching_account_ids),
+                AppLeaveRequest.CounselorId.in_(matching_profile_ids),
+            )
+        )
+    rows = q.offset(offset).limit(limit).all()
     return [build_leave_request_out(db, row) for row in rows]
 
 
@@ -2455,6 +2498,7 @@ class AdminCounselorBatchDefaultSharePayload(BaseModel):
 class AdminCounselorBasePricePayload(BaseModel):
     basePriceYuan: int = Field(..., ge=0, le=99999, description="咨询师统一基础价（元）")
     defaultRevenueShareYuan: Optional[int] = Field(None, ge=0, le=99999, description="咨询师默认分成金额（元）")
+    defaultRevenueSharePercent: Optional[int] = Field(None, ge=0, le=100, description="咨询师默认分成比例（百分比）")
 
 
 @router.get("/pricing/counselors", summary="定价管理：咨询师列表（含统一基础价）")
@@ -2550,19 +2594,28 @@ def update_pricing_counselor_base(
     before_profile = get_counselor_profile(db, counselor_id)
     before_share = _counselor_default_share_snapshot(before_profile)
     try:
-        if body.defaultRevenueShareYuan is None:
+        if body.defaultRevenueShareYuan is not None and body.defaultRevenueSharePercent is not None:
+            raise ValueError("默认分成金额与比例不能同时设置")
+        if body.defaultRevenueShareYuan is None and body.defaultRevenueSharePercent is None:
             update_counselor_base_price_cents(db, counselor_id, body.basePriceYuan * 100)
         else:
             update_counselor_base_pricing_cents(
                 db,
                 counselor_id,
                 base_price_cents=body.basePriceYuan * 100,
-                default_share_cents=body.defaultRevenueShareYuan * 100,
+                default_share_cents=(
+                    body.defaultRevenueShareYuan * 100
+                    if body.defaultRevenueShareYuan is not None
+                    else None
+                ),
+                default_share_percent=body.defaultRevenueSharePercent,
             )
     except ValueError as e:
+        db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
-    if old_yuan != body.basePriceYuan:
-        after_profile = get_counselor_profile(db, counselor_id)
+    after_profile = get_counselor_profile(db, counselor_id)
+    after_share = _counselor_default_share_snapshot(after_profile)
+    if old_yuan != body.basePriceYuan or before_share != after_share:
         notify_counselor_base_pricing_updated(
             db,
             actor_id=actor.Id,
@@ -2570,7 +2623,7 @@ def update_pricing_counselor_base(
             old_base_yuan=old_yuan,
             new_base_yuan=body.basePriceYuan,
             before_share=before_share,
-            after_share=_counselor_default_share_snapshot(after_profile),
+            after_share=after_share,
         )
     db.commit()
     return counselor_pricing_summary(db, counselor_id)

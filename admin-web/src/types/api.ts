@@ -143,7 +143,7 @@ export interface PricingPatientListResponse {
 
 export interface PricingCounselorUpdatePayload {
   basePriceYuan: number;
-  defaultRevenueShareYuan: number;
+  defaultRevenueSharePercent: number;
 }
 
 export interface PricingBatchDefaultSharePayload {
@@ -560,6 +560,7 @@ export interface UserBoardSummary {
   cancelledConsultationCount: number;
   latestConsultationAt?: string | null;
   createdAt?: string | null;
+  staffRemark: string;
   isContractSigned?: boolean;
   boundCounselorId?: number | null;
   boundCounselorName?: string | null;
@@ -637,6 +638,12 @@ export interface CounselorBoardSummary {
   bookedScheduleCount: number;
   leaveRequestCount: number;
   latestScheduleAt?: string | null;
+  staffRemark: string;
+}
+
+export interface StaffRemarkUpdateResult {
+  accountId: number;
+  staffRemark: string;
 }
 
 export interface AdminCounselorIntroProfile {

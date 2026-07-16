@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { DetailDrawer } from "@/components/boards/DetailDrawer";
 import {
@@ -6,7 +6,11 @@ import {
   EmptyState,
   Pagination,
   PanelHeader,
+  QueryButton,
+  QueryField,
+  QueryResetButton,
   TableActionButton,
+  queryControlClass,
 } from "@/components/ui";
 import { API_BASE_URL } from "@/lib/api";
 import { formatFullDateTime, formatMoneyFromCents } from "@/lib/format";
@@ -37,6 +41,7 @@ export function ReviewsPanel({
   items,
   category,
   status,
+  keywordInput,
   page,
   pageSize,
   listLoading,
@@ -44,6 +49,9 @@ export function ReviewsPanel({
   selectedItem,
   onCategoryChange,
   onStatusChange,
+  onKeywordInputChange,
+  onSearch,
+  onReset,
   onPageChange,
   onPageSizeChange,
   onOpen,
@@ -55,6 +63,7 @@ export function ReviewsPanel({
   items: ReviewItem[];
   category: ReviewCategory;
   status: ReviewStatus;
+  keywordInput: string;
   page: number;
   pageSize: number;
   listLoading: boolean;
@@ -62,6 +71,9 @@ export function ReviewsPanel({
   selectedItem: ReviewItem | null;
   onCategoryChange: (category: ReviewCategory) => void;
   onStatusChange: (status: ReviewStatus) => void;
+  onKeywordInputChange: (keyword: string) => void;
+  onSearch: () => void;
+  onReset: () => void;
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
   onOpen: (item: ReviewItem) => void;
@@ -78,6 +90,11 @@ export function ReviewsPanel({
     () => items.slice((currentPage - 1) * pageSize, currentPage * pageSize),
     [currentPage, items, pageSize],
   );
+
+  useEffect(() => {
+    setRejecting(false);
+    setRejectReason("");
+  }, [selectedItem?.id, selectedItem?.kind]);
 
   const closeDetail = () => {
     setRejecting(false);
@@ -99,7 +116,28 @@ export function ReviewsPanel({
         }
       />
 
-      <div className="space-y-5 border-b border-[var(--lxxl-border)] px-6 py-5">
+      <form
+        className="space-y-5 border-b border-[var(--lxxl-border)] px-6 py-5"
+        onSubmit={(event) => {
+          event.preventDefault();
+          onSearch();
+        }}
+      >
+        <div className="grid max-w-3xl grid-cols-1 items-end gap-4 md:grid-cols-[minmax(0,1fr)_auto]">
+          <QueryField label="申请人">
+            <input
+              className={queryControlClass}
+              maxLength={100}
+              placeholder="输入来访者或咨询师姓名、手机号"
+              value={keywordInput}
+              onChange={(event) => onKeywordInputChange(event.target.value)}
+            />
+          </QueryField>
+          <div className="flex flex-wrap gap-3">
+            <QueryButton type="submit" disabled={listLoading} />
+            <QueryResetButton type="button" disabled={listLoading} onClick={onReset} />
+          </div>
+        </div>
         <FilterTabs
           label="审核类型"
           options={categories}
@@ -112,7 +150,7 @@ export function ReviewsPanel({
           value={status}
           onChange={onStatusChange}
         />
-      </div>
+      </form>
 
       <div className="relative overflow-x-auto">
         {listLoading && items.length > 0 && (
@@ -176,6 +214,7 @@ export function ReviewsPanel({
 
       {selectedItem && (
         <DetailDrawer
+          closeDisabled={processing}
           title={selectedItem.kind === "EXEMPTION" ? "用户豁免详情" : "咨询师请假审核"}
           onClose={closeDetail}
           footer={

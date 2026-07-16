@@ -166,20 +166,35 @@ function AgentBookingScreenContent() {
       setDraft(INITIAL_DRAFT());
       setSlotError(null);
       clearCalendar();
+      // 搜索结果先用于即时回填绑定咨询师，再立即读取来访详情进行权威校准。
+      // 这样既不会让用户等待才能看到绑定关系，也不会一直依赖可能过期的
+      // 搜索快照；校准失败时 patientStatusError 会锁住查询和推单。
+      if (value) {
+        void refreshPatientContract(value);
+      }
     },
-    [applyPatient, clearCalendar],
+    [applyPatient, clearCalendar, refreshPatientContract],
   );
 
   const loadCalendar = useCallback(
-    async (query: AgentBookingQuery, selectedCounselor = counselorRef.current) => {
+    async (
+      query: AgentBookingQuery,
+      selectedCounselor = counselorRef.current,
+      options: { clearExistingNotice?: boolean; notifyOnError?: boolean } = {},
+    ) => {
+      const { clearExistingNotice = true, notifyOnError = true } = options;
       if (!selectedCounselor) {
-        showNotice("error", "请先选择咨询师");
-        return;
+        if (notifyOnError) {
+          showNotice("error", "请先选择咨询师");
+        }
+        return "error" as const;
       }
       const requestSeq = calendarRequestSeq.current + 1;
       calendarRequestSeq.current = requestSeq;
       setListLoading(true);
-      clearNotice();
+      if (clearExistingNotice) {
+        clearNotice();
+      }
       try {
         const proxyScheduleCalendar = await fetchProxyScheduleCalendar({
           counselorId: selectedCounselor.id,
@@ -187,15 +202,17 @@ function AgentBookingScreenContent() {
           days: query.days,
         });
         if (calendarRequestSeq.current !== requestSeq || counselorRef.current?.id !== selectedCounselor.id) {
-          return;
+          return "stale" as const;
         }
         setData((prev) => ({ ...prev, proxyScheduleCalendar }));
         setActiveQuery(query);
         setHasSearched(true);
+        return "success" as const;
       } catch (error) {
-        if (calendarRequestSeq.current === requestSeq) {
+        if (calendarRequestSeq.current === requestSeq && notifyOnError) {
           showNotice("error", error instanceof Error ? error.message : "代理预约排期加载失败");
         }
+        return "error" as const;
       } finally {
         if (calendarRequestSeq.current === requestSeq) {
           setListLoading(false);
@@ -410,8 +427,16 @@ function AgentBookingScreenContent() {
               ? undefined
               : draft.agreementIsAdult,
         });
-        await loadCalendar(activeQuery, latestCounselor);
-        showNotice("success", proxyOrderSuccessText(result));
+        const successText = proxyOrderSuccessText(result);
+        showNotice("success", successText);
+        void loadCalendar(activeQuery, latestCounselor, {
+          clearExistingNotice: false,
+          notifyOnError: false,
+        }).then((refreshResult) => {
+          if (refreshResult === "error") {
+            showNotice("info", `${successText}，但排期刷新失败，请手动刷新后核对`);
+          }
+        });
         return result;
       } catch (error) {
         const message = error instanceof Error ? error.message : "代理预约订单推送失败";
@@ -470,6 +495,8 @@ function readPrefillFromLocation(): ProxyPersonOption | undefined {
     return undefined;
   }
   const params = new URLSearchParams(window.location.search);
+  // 三个入口都只允许预填来访；即使旧链接携带 counselorId，也不能将其
+  // 作为当前绑定关系。hydratePrefilledPatient 会按 patientId 重新读取权威状态。
   const id = Number(params.get("patientId"));
   if (!Number.isFinite(id) || id <= 0) {
     return undefined;

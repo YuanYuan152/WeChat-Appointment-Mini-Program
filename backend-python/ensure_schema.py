@@ -24,6 +24,7 @@ APP_ACCOUNT_COLUMNS = {
     "CharityPricingNegotiatedAt": "DATETIME NULL",
     "IsContractSigned": "BIT NOT NULL CONSTRAINT DF_AppAccount_IsContractSigned DEFAULT 0",
     "BoundCounselorId": "INT NULL",
+    "BoundCounselorChangedAt": "DATETIME2 NULL",
 }
 
 APP_ORDER_COLUMNS = {
@@ -93,14 +94,27 @@ def ensure_app_account_columns():
 
     existing = {column["name"] for column in inspector.get_columns("AppAccount")}
     missing = [(name, ddl) for name, ddl in APP_ACCOUNT_COLUMNS.items() if name not in existing]
-    if not missing:
-        print("[OK] AppAccount columns already complete")
-        return
-
     with engine.begin() as conn:
-        for name, ddl in missing:
-            conn.execute(text(f"ALTER TABLE [dbo].[AppAccount] ADD [{name}] {ddl}"))
-            print(f"[OK] Added AppAccount.{name}")
+        if not missing:
+            print("[OK] AppAccount columns already complete")
+        else:
+            for name, ddl in missing:
+                conn.execute(text(f"ALTER TABLE [dbo].[AppAccount] ADD [{name}] {ddl}"))
+                print(f"[OK] Added AppAccount.{name}")
+
+        # Preserve the current signed/unsigned state for existing accounts, but
+        # establish a boundary so paid orders from before this deployment can
+        # never re-sign an account after its counselor binding changes.
+        initialized = conn.execute(
+            text(
+                "UPDATE [dbo].[AppAccount] "
+                "SET [BoundCounselorChangedAt] = SYSUTCDATETIME() "
+                "WHERE [BoundCounselorId] IS NOT NULL "
+                "AND [BoundCounselorChangedAt] IS NULL"
+            )
+        ).rowcount
+        if initialized:
+            print(f"[OK] Initialized binding timestamps for {initialized} AppAccount rows")
 
 
 def ensure_app_order_columns():
@@ -296,17 +310,12 @@ def main():
     ensure_counselor_patient_pricing_columns()
     from database import SessionLocal
     from charity_milestone_service import backfill_charity_negotiation_state
-    from patient_contract_service import backfill_patient_contract_signed_from_orders
-
     db = SessionLocal()
     try:
         n = backfill_charity_negotiation_state(db)
-        signed_n = backfill_patient_contract_signed_from_orders(db)
         db.commit()
         if n:
             print(f"[OK] Backfilled charity negotiation timestamps: {n}")
-        if signed_n:
-            print(f"[OK] Backfilled patient contract signed states: {signed_n}")
     finally:
         db.close()
     print_summary()

@@ -28,10 +28,12 @@ from models import (
     AppCounselorPatientPricing,
     AppCounselorProfile,
     AppLeaveRequest,
+    AppMessage,
     AppOrder,
     AppRoleBinding,
     AppSchedule,
     AppScheduleCancelLog,
+    AppSystemSetting,
 )
 from patient_contract_service import (
     assert_patient_can_self_book,
@@ -46,9 +48,11 @@ from order_contract_agreement import (
     needs_contract_agreement_for_order,
 )
 from pricing_service import (
+    counselor_pricing_summary,
     list_counselor_pricing_summaries,
     pricing_breakdown,
     preview_batch_counselor_default_share_percent,
+    update_counselor_base_pricing_cents,
     update_batch_counselor_default_share_percent,
 )
 from proxy_booking_service import (
@@ -58,6 +62,8 @@ from proxy_booking_service import (
     search_proxy_patients,
     validate_counselor_proxy_patient,
 )
+from proxy_booking_notify import notify_proxy_order_created
+from counselor_message_service import notify_counselor_proxy_order_pending
 from payment_service import (
     _assert_order_binding_current,
     _assert_proxy_order_binding_current,
@@ -79,9 +85,11 @@ class BackendServiceTestCase(unittest.TestCase):
                 AppSchedule.__table__,
                 AppConsultation.__table__,
                 AppLeaveRequest.__table__,
+                AppMessage.__table__,
                 AppScheduleCancelLog.__table__,
                 AppCounselorProfile.__table__,
                 AppCounselorPatientPricing.__table__,
+                AppSystemSetting.__table__,
             ],
         )
         self.Session = sessionmaker(bind=self.engine, autoflush=False)
@@ -168,31 +176,47 @@ class PatientContractTests(BackendServiceTestCase):
         )
         self.db.flush()
 
-    def test_binding_uses_historical_paid_fact_for_target_counselor(self):
-        self.add_order(1, 101, "REFUNDED")
-        self.add_order(2, 102, "PAID")
+    def test_binding_change_resets_signed_even_with_historical_paid_order(self):
+        self.add_order(1, 101, "REFUNDED", paid_at=datetime(2025, 12, 30, 12, 0))
+        self.add_order(2, 102, "PAID", paid_at=datetime(2025, 12, 31, 12, 0))
 
         bind_patient_counselor(self.db, self.patient.Id, 10)
         self.assertEqual(self.patient.BoundCounselorId, 10)
         self.assertFalse(self.patient.IsContractSigned)
+        first_changed_at = self.patient.BoundCounselorChangedAt
+        self.assertIsNotNone(first_changed_at)
 
-        refunded_order = self.db.query(AppOrder).filter(AppOrder.Id == 1).one()
-        refunded_order.PaidAt = datetime(2025, 12, 30, 12, 0)
+        bind_patient_counselor(self.db, self.patient.Id, 10)
+        self.assertFalse(self.patient.IsContractSigned)
+        self.assertEqual(self.patient.BoundCounselorChangedAt, first_changed_at)
+
+        # A real payment under the current binding signs the visitor.
+        self.add_order(3, 101, "PENDING")
+        pending_order = self.db.query(AppOrder).filter(AppOrder.Id == 3).one()
+        maybe_mark_patient_contract_signed(
+            self.db,
+            pending_order,
+            paid_at=datetime.utcnow(),
+        )
+        self.assertTrue(self.patient.IsContractSigned)
+
+        # Saving the same counselor is a no-op and preserves both state and time.
         self.db.flush()
         bind_patient_counselor(self.db, self.patient.Id, 10)
         self.assertTrue(self.patient.IsContractSigned)
+        self.assertEqual(self.patient.BoundCounselorChangedAt, first_changed_at)
 
+        # Historical payment to counselor B cannot carry the signed state across.
         bind_patient_counselor(self.db, self.patient.Id, 20)
         self.assertEqual(self.patient.BoundCounselorId, 20)
-        self.assertTrue(self.patient.IsContractSigned)
-        self.assertEqual(
-            patient_contract_extras(self.db, self.patient)["contractTag"],
-            "已签约-【咨询师乙】",
-        )
+        self.assertFalse(self.patient.IsContractSigned)
+        self.assertEqual(backfill_patient_contract_signed_from_orders(self.db), 0)
+        self.assertFalse(self.patient.IsContractSigned)
+        self.assertIsNone(patient_contract_extras(self.db, self.patient)["contractTag"])
         pricing_row = pricing_breakdown(self.db, self.patient.Id, 20)
-        self.assertTrue(pricing_row["isContractSigned"])
+        self.assertFalse(pricing_row["isContractSigned"])
         self.assertEqual(pricing_row["boundCounselorName"], "咨询师乙")
-        self.assertEqual(pricing_row["contractTag"], "已签约-【咨询师乙】")
+        self.assertIsNone(pricing_row["contractTag"])
 
         bind_patient_counselor(self.db, self.patient.Id, None)
         self.assertIsNone(self.patient.BoundCounselorId)
@@ -211,11 +235,16 @@ class PatientContractTests(BackendServiceTestCase):
     def test_rebinding_same_counselor_preserves_signed_state(self):
         self.patient.BoundCounselorId = 10
         self.patient.IsContractSigned = True
+        self.patient.BoundCounselorChangedAt = datetime(2026, 1, 1, 8, 0)
         self.db.flush()
 
         bind_patient_counselor(self.db, self.patient.Id, 10)
 
         self.assertTrue(self.patient.IsContractSigned)
+        self.assertEqual(
+            self.patient.BoundCounselorChangedAt,
+            datetime(2026, 1, 1, 8, 0),
+        )
 
     def test_binding_change_cancels_mismatched_pending_proxy_orders(self):
         schedule_10 = self.db.query(AppSchedule).filter(AppSchedule.Id == 101).one()
@@ -248,13 +277,33 @@ class PatientContractTests(BackendServiceTestCase):
 
     def test_payment_transition_keeps_marking_current_binding_signed(self):
         self.patient.BoundCounselorId = 10
+        self.patient.BoundCounselorChangedAt = datetime(2026, 1, 1, 8, 0)
         self.patient.IsContractSigned = False
         self.add_order(4, 101, "PENDING")
         pending_order = self.db.query(AppOrder).filter(AppOrder.Id == 4).one()
 
-        maybe_mark_patient_contract_signed(self.db, pending_order)
+        maybe_mark_patient_contract_signed(
+            self.db,
+            pending_order,
+            paid_at=datetime(2026, 1, 1, 8, 1),
+        )
 
         self.assertTrue(self.patient.IsContractSigned)
+
+    def test_payment_before_current_binding_does_not_mark_signed(self):
+        self.patient.BoundCounselorId = 10
+        self.patient.BoundCounselorChangedAt = datetime(2026, 1, 1, 8, 0)
+        self.patient.IsContractSigned = False
+        self.add_order(16, 101, "PENDING")
+        pending_order = self.db.query(AppOrder).filter(AppOrder.Id == 16).one()
+
+        maybe_mark_patient_contract_signed(
+            self.db,
+            pending_order,
+            paid_at=datetime(2026, 1, 1, 7, 59),
+        )
+
+        self.assertFalse(self.patient.IsContractSigned)
 
     def test_self_booking_and_counselor_proxy_require_current_signed_binding(self):
         bind_patient_counselor(self.db, self.patient.Id, 10)
@@ -264,8 +313,13 @@ class PatientContractTests(BackendServiceTestCase):
         with self.assertRaisesRegex(ValueError, "签约且绑定"):
             validate_counselor_proxy_patient(self.db, self.patient, 10)
 
-        self.add_order(7, 101, "PAID")
-        bind_patient_counselor(self.db, self.patient.Id, 10)
+        self.add_order(7, 101, "PENDING")
+        order = self.db.query(AppOrder).filter(AppOrder.Id == 7).one()
+        maybe_mark_patient_contract_signed(
+            self.db,
+            order,
+            paid_at=datetime.utcnow(),
+        )
         assert_patient_can_self_book(self.db, self.patient.Id, 10)
         validate_counselor_proxy_patient(self.db, self.patient, 10)
 
@@ -287,6 +341,9 @@ class PatientContractTests(BackendServiceTestCase):
             order,
             is_adult=True,
             signature_url="https://example.invalid/signature.png",
+            emergency_contact="紧急联系人甲",
+            emergency_relation="家属",
+            emergency_phone="13800000002",
         )
         assert_order_contract_agreement_ready(self.db, self.patient, order)
         self.assertTrue(order.IntakeIsAdult)
@@ -313,6 +370,9 @@ class PatientContractTests(BackendServiceTestCase):
             order,
             is_adult=False,
             signature_url="https://example.invalid/signature.png",
+            emergency_contact="紧急联系人甲",
+            emergency_relation="家属",
+            emergency_phone="13800000002",
         )
         self.assertFalse(order.IntakeIsAdult)
 
@@ -380,12 +440,120 @@ class PatientContractTests(BackendServiceTestCase):
                 agreement_is_adult=True,
             )
 
-    def test_backfill_only_promotes_matching_bound_counselor_paid_orders(self):
+    def test_staff_proxy_push_notifies_target_counselor(self):
+        schedule = self.db.query(AppSchedule).filter(AppSchedule.Id == 101).one()
+        self.add_order(16, schedule.Id, "PENDING")
+        order = self.db.query(AppOrder).filter(AppOrder.Id == 16).one()
+
+        with (
+            patch("patient_message_service.notify_patient_proxy_order_pending") as patient_notify,
+            patch("staff_message_service.notify_staff_proxy_order_pushed") as staff_notify,
+            patch("counselor_message_service.notify_counselor_proxy_order_pending") as counselor_notify,
+        ):
+            notify_proxy_order_created(
+                self.db,
+                order=order,
+                schedule=schedule,
+                patient=self.patient,
+                counselor_id=10,
+                staff_account_id=99,
+            )
+
+        patient_notify.assert_called_once()
+        staff_notify.assert_called_once()
+        counselor_notify.assert_called_once_with(
+            self.db,
+            counselor_id=10,
+            schedule=schedule,
+            patient_id=self.patient.Id,
+            order=order,
+        )
+
+    def test_counselor_self_proxy_keeps_existing_notifications_without_duplicate_target_message(self):
+        schedule = self.db.query(AppSchedule).filter(AppSchedule.Id == 101).one()
+        self.add_order(17, schedule.Id, "PENDING")
+        order = self.db.query(AppOrder).filter(AppOrder.Id == 17).one()
+
+        with (
+            patch("patient_message_service.notify_patient_proxy_order_pending") as patient_notify,
+            patch("staff_message_service.notify_staff_proxy_order_pushed") as staff_notify,
+            patch("counselor_message_service.notify_counselor_proxy_order_pending") as counselor_notify,
+        ):
+            notify_proxy_order_created(
+                self.db,
+                order=order,
+                schedule=schedule,
+                patient=self.patient,
+                counselor_id=10,
+                staff_account_id=10,
+                notify_target_counselor=False,
+            )
+
+        patient_notify.assert_called_once()
+        staff_notify.assert_called_once()
+        counselor_notify.assert_not_called()
+
+    def test_counselor_proxy_pending_message_is_idempotent(self):
+        self.patient.BoundCounselorId = 10
+        self.patient.IsContractSigned = True
+        schedule = self.db.query(AppSchedule).filter(AppSchedule.Id == 101).one()
+        schedule.Note = "center:video"
+        self.add_order(18, schedule.Id, "PENDING")
+        order = self.db.query(AppOrder).filter(AppOrder.Id == 18).one()
+
+        notify_counselor_proxy_order_pending(
+            self.db,
+            counselor_id=10,
+            schedule=schedule,
+            patient_id=self.patient.Id,
+            order=order,
+        )
+        notify_counselor_proxy_order_pending(
+            self.db,
+            counselor_id=10,
+            schedule=schedule,
+            patient_id=self.patient.Id,
+            order=order,
+        )
+
+        pending_messages = [
+            row
+            for row in self.db.new
+            if isinstance(row, AppMessage)
+            and row.RelatedType == "COUNSELOR_PROXY_ORDER_PENDING"
+            and row.RelatedId == order.Id
+        ]
+        self.assertEqual(len(pending_messages), 1)
+        self.assertEqual(pending_messages[0].AccountId, 10)
+        self.assertEqual(pending_messages[0].Title, "代理预约待支付")
+
+        pending_messages[0].Id = 9001
+        self.db.flush()
+        notify_counselor_proxy_order_pending(
+            self.db,
+            counselor_id=10,
+            schedule=schedule,
+            patient_id=self.patient.Id,
+            order=order,
+        )
+        persisted = (
+            self.db.query(AppMessage)
+            .filter(
+                AppMessage.AccountId == 10,
+                AppMessage.RelatedType == "COUNSELOR_PROXY_ORDER_PENDING",
+                AppMessage.RelatedId == order.Id,
+            )
+            .all()
+        )
+        self.assertEqual(len(persisted), 1)
+
+    def test_backfill_only_promotes_payments_after_current_binding(self):
         matching = AppAccount(
             Id=2,
             Mobile="13800000002",
             RealName="来访乙",
             BoundCounselorId=10,
+            BoundCounselorChangedAt=datetime(2026, 1, 1, 8, 0),
             IsContractSigned=False,
             IsActive=True,
         )
@@ -394,6 +562,7 @@ class PatientContractTests(BackendServiceTestCase):
             Mobile="13800000003",
             RealName="来访丙",
             BoundCounselorId=20,
+            BoundCounselorChangedAt=datetime(2026, 1, 1, 8, 0),
             IsContractSigned=False,
             IsActive=True,
         )
@@ -402,6 +571,7 @@ class PatientContractTests(BackendServiceTestCase):
             Mobile="13800000004",
             RealName="来访丁",
             BoundCounselorId=20,
+            BoundCounselorChangedAt=datetime(2026, 1, 1, 8, 0),
             IsContractSigned=True,
             IsActive=True,
         )
@@ -416,6 +586,7 @@ class PatientContractTests(BackendServiceTestCase):
                     OutTradeNo="TEST-5",
                     TotalFee=60_000,
                     Status="PAID",
+                    PaidAt=datetime(2026, 1, 1, 9, 0),
                 ),
                 AppOrder(
                     Id=6,
@@ -424,6 +595,7 @@ class PatientContractTests(BackendServiceTestCase):
                     OutTradeNo="TEST-6",
                     TotalFee=60_000,
                     Status="PAID",
+                    PaidAt=datetime(2026, 1, 1, 9, 0),
                 ),
             ]
         )
@@ -608,6 +780,28 @@ class CounselorSafetyTests(BackendServiceTestCase):
             [item["id"] for item in search_proxy_patients(self.db)],
             [1],
         )
+
+    def test_proxy_patient_search_returns_current_bound_counselor(self):
+        self.add_counselor(10, "咨询师甲")
+        patient = AppAccount(
+            Id=1,
+            Mobile="13800000001",
+            RealName="来访甲",
+            BoundCounselorId=10,
+            IsContractSigned=False,
+            IsActive=True,
+        )
+        self.db.add(patient)
+        self.db.add(AppRoleBinding(AccountId=1, RoleType="Patient"))
+        self.db.flush()
+
+        items = search_proxy_patients(self.db, keyword="13800000001")
+
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["id"], 1)
+        self.assertEqual(items[0]["boundCounselorId"], 10)
+        self.assertEqual(items[0]["boundCounselorName"], "咨询师甲")
+        self.assertFalse(items[0]["isContractSigned"])
 
     def test_proxy_counselor_search_only_returns_active_accounts_and_profiles(self):
         self.add_counselor(10, "咨询师甲")
@@ -964,6 +1158,65 @@ class BatchDefaultShareTests(BackendServiceTestCase):
             ]
         )
         self.db.flush()
+
+    def test_single_counselor_base_update_persists_percent_mode(self):
+        profile = (
+            self.db.query(AppCounselorProfile)
+            .filter(AppCounselorProfile.AccountId == 10)
+            .one()
+        )
+        profile.DefaultShareMode = "AMOUNT"
+        profile.DefaultRevenueShareCents = 30_000
+        profile.DefaultRevenueSharePercent = None
+        self.db.flush()
+
+        update_counselor_base_pricing_cents(
+            self.db,
+            10,
+            base_price_cents=68_000,
+            default_share_percent=60,
+        )
+
+        self.assertEqual(profile.Billing, 68_000)
+        self.assertEqual(profile.FaceBilling, 40_800)
+        self.assertEqual(profile.DefaultShareMode, "PERCENT")
+        self.assertIsNone(profile.DefaultRevenueShareCents)
+        self.assertEqual(profile.DefaultRevenueSharePercent, 60)
+        summary = counselor_pricing_summary(self.db, 10)
+        self.assertEqual(summary["defaultShareMode"], "PERCENT")
+        self.assertEqual(summary["defaultRevenueSharePercent"], 60)
+        self.assertEqual(summary["defaultRevenueShareCents"], 40_800)
+
+    def test_invalid_single_counselor_percent_does_not_mutate_pricing(self):
+        profile = (
+            self.db.query(AppCounselorProfile)
+            .filter(AppCounselorProfile.AccountId == 10)
+            .one()
+        )
+        before = (
+            profile.Billing,
+            profile.FaceBilling,
+            profile.DefaultShareMode,
+            profile.DefaultRevenueShareCents,
+            profile.DefaultRevenueSharePercent,
+        )
+
+        with self.assertRaisesRegex(ValueError, "0–100"):
+            update_counselor_base_pricing_cents(
+                self.db,
+                10,
+                base_price_cents=68_000,
+                default_share_percent=101,
+            )
+
+        after = (
+            profile.Billing,
+            profile.FaceBilling,
+            profile.DefaultShareMode,
+            profile.DefaultRevenueShareCents,
+            profile.DefaultRevenueSharePercent,
+        )
+        self.assertEqual(after, before)
 
     def test_preview_and_update_clear_patient_overrides_by_default(self):
         preview = preview_batch_counselor_default_share_percent(

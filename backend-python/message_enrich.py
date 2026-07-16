@@ -6,7 +6,7 @@ from typing import Any, Dict, Optional
 from sqlalchemy.orm import Session
 
 from model_compat import optional_model_value
-from models import AppMessage, AppRefundExemption
+from models import AppLeaveRequest, AppMessage, AppRefundExemption
 
 _ROOM_SUFFIX = re.compile(r"\s*·\s*.+(?:咨询室|室\s*[A-Z]?)$")
 
@@ -100,6 +100,182 @@ def _sync_exemption_payload(
     return title, _dump_content(payload), related_type
 
 
+def _positive_int(value: Any) -> Optional[int]:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value if value > 0 else None
+    if isinstance(value, str):
+        text = value.strip()
+        if text.isdigit():
+            parsed = int(text)
+            return parsed if parsed > 0 else None
+    return None
+
+
+def _latest_leave_for_schedule(
+    db: Session,
+    schedule_id: int,
+    counselor_id: Optional[int] = None,
+) -> Optional[AppLeaveRequest]:
+    query = db.query(AppLeaveRequest).filter(
+        AppLeaveRequest.ScheduleId == schedule_id,
+    )
+    if counselor_id:
+        query = query.filter(AppLeaveRequest.CounselorId == counselor_id)
+    return (
+        query.order_by(
+            AppLeaveRequest.CreatedAt.desc(),
+            AppLeaveRequest.Id.desc(),
+        )
+        .first()
+    )
+
+
+def _leave_request_for_message(
+    msg: AppMessage,
+    db: Session,
+) -> Optional[AppLeaveRequest]:
+    """Resolve both current leave messages and historical schedule-linked messages."""
+    payload = _parse_content(msg.Content)
+    raw_detail = payload.get("detail")
+    detail = raw_detail if isinstance(raw_detail, dict) else {}
+
+    leave_request_id = _positive_int(detail.get("leaveRequestId"))
+    if leave_request_id:
+        leave = (
+            db.query(AppLeaveRequest)
+            .filter(AppLeaveRequest.Id == leave_request_id)
+            .first()
+        )
+        if leave:
+            return leave
+
+    counselor_id = _positive_int(detail.get("counselorId"))
+    schedule_id = _positive_int(detail.get("scheduleId"))
+    if schedule_id:
+        leave = _latest_leave_for_schedule(db, schedule_id, counselor_id)
+        if leave:
+            return leave
+
+    related_id = _positive_int(msg.RelatedId)
+    if not related_id:
+        return None
+
+    leave_by_id = (
+        db.query(AppLeaveRequest)
+        .filter(AppLeaveRequest.Id == related_id)
+        .first()
+    )
+    leave_by_schedule = _latest_leave_for_schedule(db, related_id, counselor_id)
+
+    if leave_by_id and leave_by_schedule and leave_by_id.Id != leave_by_schedule.Id:
+        leave_reason = detail.get("leaveReason")
+        if isinstance(leave_reason, str) and leave_reason.strip():
+            reason = leave_reason.strip()
+            id_matches = (leave_by_id.Reason or "").strip() == reason
+            schedule_matches = (leave_by_schedule.Reason or "").strip() == reason
+            if id_matches != schedule_matches:
+                return leave_by_id if id_matches else leave_by_schedule
+    return leave_by_id or leave_by_schedule
+
+
+def _iso_datetime(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    isoformat = getattr(value, "isoformat", None)
+    if callable(isoformat):
+        return isoformat()
+    text = str(value).strip()
+    return text or None
+
+
+def _leave_summary(detail: Dict[str, Any], status_text: str) -> str:
+    context = [
+        detail.get("counselorName"),
+        detail.get("startTime"),
+        detail.get("location"),
+    ]
+    parts = [str(value).strip() for value in context if str(value or "").strip()]
+    parts.append(status_text)
+    return " · ".join(parts)
+
+
+def _sync_leave_payload(
+    title: str,
+    content: Optional[str],
+    leave: AppLeaveRequest,
+) -> tuple[str, str]:
+    status = (leave.Status or "PENDING").upper()
+    if status not in ("PENDING", "APPROVED", "REJECTED"):
+        status = "PENDING"
+
+    payload = _parse_content(content)
+    raw_detail = payload.get("detail")
+    detail = dict(raw_detail) if isinstance(raw_detail, dict) else {}
+    detail.update(
+        {
+            "status": status,
+            "leaveRequestId": leave.Id,
+            "scheduleId": leave.ScheduleId,
+            "leaveReason": leave.Reason,
+        }
+    )
+
+    reviewed_by = optional_model_value(leave, "ReviewedBy")
+    reviewed_at = optional_model_value(leave, "ReviewedAt")
+    if reviewed_by is not None:
+        detail["reviewedBy"] = reviewed_by
+    else:
+        detail.pop("reviewedBy", None)
+    reviewed_at_text = _iso_datetime(reviewed_at)
+    if reviewed_at_text:
+        detail["reviewedAt"] = reviewed_at_text
+    else:
+        detail.pop("reviewedAt", None)
+
+    if status == "APPROVED":
+        title = "咨询师请假已通过"
+        detail.update(
+            {
+                "approved": True,
+                "statusLabel": "已通过",
+                "resultText": "请假申请已通过，相关预约已取消；已支付订单将按原支付路径退款。",
+            }
+        )
+        detail.pop("rejectReason", None)
+        status_text = "审核已通过"
+    elif status == "REJECTED":
+        title = "咨询师请假未通过"
+        reason = (
+            optional_model_value(leave, "RejectReason") or ""
+        ).strip() or "未说明具体原因"
+        detail.update(
+            {
+                "approved": False,
+                "statusLabel": "已拒绝",
+                "rejectReason": reason,
+                "resultText": "请假申请未通过审核，关联排期和预约维持不变。",
+            }
+        )
+        status_text = f"审核未通过：{reason}"
+    else:
+        title = "咨询师请假待审核"
+        detail.update(
+            {
+                "approved": None,
+                "statusLabel": "待审核",
+                "resultText": "请假申请正在审核中，请等待处理。",
+            }
+        )
+        detail.pop("rejectReason", None)
+        status_text = "待审核"
+
+    payload["summary"] = _leave_summary(detail, status_text)
+    payload["detail"] = detail
+    return title, _dump_content(payload)
+
+
 def _sync_patient_appointment_content(
     content: Optional[str],
     related_type: Optional[str],
@@ -158,6 +334,11 @@ def enrich_message(msg: AppMessage, db: Session) -> AppMessage:
             )
         elif related_type == "REFUND_EXEMPTION_PENDING":
             title = "豁免申请待审核"
+
+    if related_type == "COUNSELOR_LEAVE":
+        leave = _leave_request_for_message(msg, db)
+        if leave:
+            title, content = _sync_leave_payload(title, content, leave)
 
     content = _sync_patient_appointment_content(content, related_type)
 

@@ -532,6 +532,7 @@ def push_proxy_order(
     room_id: Optional[str] = None,
     existing_schedule_id: Optional[int] = None,
     agreement_is_adult: Optional[bool] = None,
+    notify_target_counselor: bool = True,
 ) -> Dict[str, Any]:
     from system_setting_service import get_proxy_order_ttl_minutes, proxy_order_ttl_push_message
 
@@ -695,6 +696,7 @@ def push_proxy_order(
         patient=patient,
         counselor_id=counselor_id,
         staff_account_id=staff_account_id,
+        notify_target_counselor=notify_target_counselor,
     )
 
     return {

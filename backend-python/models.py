@@ -38,6 +38,7 @@ class AppAccount(Base):
     CharityPricingNegotiatedAt = Column(DateTime, nullable=True)
     IsContractSigned = Column(Boolean, nullable=False, default=False, server_default="0")
     BoundCounselorId = Column(Integer, nullable=True)
+    BoundCounselorChangedAt = Column(DateTime, nullable=True)
     AccessRevokedAt = Column(DateTime, nullable=True)
     IsActive = Column(Boolean, nullable=False, default=True, server_default="1")
     DeletedAt = Column(DateTime, nullable=True)

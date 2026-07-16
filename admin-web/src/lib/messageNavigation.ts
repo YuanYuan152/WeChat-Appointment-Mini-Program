@@ -46,15 +46,19 @@ export function resolveMessageActionTarget(
     }
 
     if (relatedType === "COUNSELOR_LEAVE") {
+      const leaveStatus = leaveReviewStatusFromDetail(detail);
+      const isPending = leaveStatus === "PENDING";
       return {
         href: buildHref(sectionPathById.refunds, {
           category: "LEAVE",
-          status: "PENDING",
+          status: leaveStatus,
           leaveId: firstNumber(detail.leaveRequestId, item.RelatedId),
           messageId: item.Id,
         }),
-        label: "前往请假审核",
-        description: "进入这条咨询师请假申请的审核入口，完成通过或拒绝处理。",
+        label: isPending ? "前往请假审核" : "查看请假审核结果",
+        description: isPending
+          ? "进入这条咨询师请假申请的审核入口，完成通过或拒绝处理。"
+          : "进入这条咨询师请假申请，查看最新审核结果。",
       };
     }
   }
@@ -145,6 +149,22 @@ function canReviewAsOpsAdmin(activeRole?: Role | string | null) {
 
 function canReviewAsStaff(activeRole?: Role | string | null) {
   return staffReviewRoles.has(activeRole as Role);
+}
+
+export function leaveReviewStatusFromDetail(
+  detail: Record<string, unknown>,
+): "PENDING" | "APPROVED" | "REJECTED" {
+  const status = typeof detail.status === "string" ? detail.status.trim().toUpperCase() : "";
+  if (status === "APPROVED" || status === "REJECTED" || status === "PENDING") {
+    return status;
+  }
+  if (detail.approved === true) {
+    return "APPROVED";
+  }
+  if (detail.approved === false) {
+    return "REJECTED";
+  }
+  return "PENDING";
 }
 
 function isExemptionPendingMessage(item: MessageItem) {

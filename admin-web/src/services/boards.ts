@@ -4,6 +4,7 @@ import type {
   CounselorBoardSummary,
   PatientContractInfo,
   PagedResult,
+  StaffRemarkUpdateResult,
   UserBoardDetail,
   UserBoardSummary,
 } from "@/types/api";
@@ -37,6 +38,13 @@ export function updatePatientBoundCounselor(accountId: number, counselorId: numb
   return apiRequest<PatientContractInfo>(`/api/mini/admin/patients/${accountId}/bound-counselor`, {
     method: "PUT",
     body: JSON.stringify({ counselorId }),
+  });
+}
+
+export function updateStaffRemark(accountId: number, remark: string) {
+  return apiRequest<StaffRemarkUpdateResult>(`/api/mini/admin/accounts/${accountId}/staff-remark`, {
+    method: "PUT",
+    body: JSON.stringify({ remark }),
   });
 }
 

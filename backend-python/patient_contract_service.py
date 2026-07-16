@@ -1,7 +1,8 @@
 """来访者签约状态与绑定咨询师。"""
+from datetime import datetime
 from typing import Any, Dict, Optional
 
-from sqlalchemy import or_, text
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from models import AppAccount, AppCounselorProfile, AppOrder, AppRoleBinding, AppSchedule
@@ -155,7 +156,7 @@ def bind_patient_counselor(
     patient_id: int,
     counselor_id: Optional[int],
 ) -> AppAccount:
-    """绑定/更换/解除签约咨询师，并按目标咨询师的历史有效订单同步签约状态。"""
+    """绑定/更换/解除咨询师；绑定关系变化后必须重新签约。"""
     acquire_patient_contract_lock(db, patient_id)
     patient = db.query(AppAccount).filter(AppAccount.Id == patient_id).first()
     if not patient:
@@ -188,7 +189,8 @@ def bind_patient_counselor(
         if not profile:
             raise ValueError("咨询师档案不存在或已停用")
 
-    old_id = getattr(patient, "BoundCounselorId", None)
+    old_value = getattr(patient, "BoundCounselorId", None)
+    old_id = int(old_value) if old_value else None
     if old_id != new_id:
         from proxy_booking_service import cancel_pending_proxy_orders_for_patient
 
@@ -198,11 +200,9 @@ def bind_patient_counselor(
             keep_counselor_id=new_id,
         )
 
-    patient.BoundCounselorId = new_id
-    if new_id and (old_id != new_id or not bool(patient.IsContractSigned)):
-        sync_patient_contract_signed_from_orders(db, patient_id)
-    elif not new_id:
+        patient.BoundCounselorId = new_id
         patient.IsContractSigned = False
+        patient.BoundCounselorChangedAt = datetime.utcnow()
     db.flush()
     return patient
 
@@ -215,10 +215,10 @@ def _paid_order_counselor_id(db: Session, order: AppOrder) -> Optional[int]:
 
 
 def sync_patient_contract_signed_from_orders(db: Session, patient_id: int) -> bool:
-    """按当前绑定咨询师的历史已支付订单同步签约状态。
+    """修复当前绑定建立后的支付签约状态，不采纳绑定前历史订单。
 
-    ``PaidAt`` 是历史支付事实；兼容旧数据中状态已为 ``PAID`` 但尚未补
-    ``PaidAt`` 的订单。退款或取消不会抹去已经发生过的支付事实。
+    正常支付通过 :func:`maybe_mark_patient_contract_signed` 实时签约。这个
+    函数只用于显式修复，且必须有可证明晚于当前绑定变更时间的 ``PaidAt``。
     """
     account = db.query(AppAccount).filter(AppAccount.Id == patient_id).first()
     if not account:
@@ -230,27 +230,35 @@ def sync_patient_contract_signed_from_orders(db: Session, patient_id: int) -> bo
         db.flush()
         return False
 
+    binding_changed_at = getattr(account, "BoundCounselorChangedAt", None)
+    if not binding_changed_at:
+        # 存量数据无法证明订单发生在当前绑定之后，保留现状而不从历史订单
+        # 推导新的签约状态。
+        return bool(account.IsContractSigned)
+
     has_paid_order = (
         db.query(AppOrder.Id)
         .join(AppSchedule, AppSchedule.Id == AppOrder.SlotId)
         .filter(
             AppOrder.AccountId == patient_id,
-            or_(AppOrder.PaidAt.isnot(None), AppOrder.Status == "PAID"),
+            AppOrder.PaidAt.isnot(None),
+            AppOrder.PaidAt >= binding_changed_at,
             AppSchedule.CounselorId == int(bound_id),
         )
         .first()
         is not None
     )
-    account.IsContractSigned = has_paid_order
-    db.flush()
-    return has_paid_order
+    if has_paid_order:
+        account.IsContractSigned = True
+        db.flush()
+    return bool(account.IsContractSigned)
 
 
 def backfill_patient_contract_signed_from_orders(db: Session) -> int:
-    """为已绑定咨询师的存量来访补齐签约状态。
+    """显式修复绑定变更后已有真实支付、但尚未签约的异常数据。
 
-    仅把当前仍为未签约、且对当前绑定咨询师存在有效已支付订单的来访提升为
-    已签约；不会反向覆盖人工维护过的已签约状态。
+    不再在服务启动时调用；绑定前的历史订单和缺少 ``PaidAt`` 的旧订单均
+    不参与，避免换绑后状态被重新提升。
     """
     accounts = (
         db.query(AppAccount)
@@ -258,10 +266,12 @@ def backfill_patient_contract_signed_from_orders(db: Session) -> int:
         .join(AppSchedule, AppSchedule.Id == AppOrder.SlotId)
         .filter(
             AppAccount.BoundCounselorId.isnot(None),
+            AppAccount.BoundCounselorChangedAt.isnot(None),
             # SQL Server 的 BIT 列不能使用 ``IS 0``；布尔等值比较会正确
             # 编译为 ``= 0``，同时兼容 SQLite 单元测试。
             AppAccount.IsContractSigned == False,
-            or_(AppOrder.PaidAt.isnot(None), AppOrder.Status == "PAID"),
+            AppOrder.PaidAt.isnot(None),
+            AppOrder.PaidAt >= AppAccount.BoundCounselorChangedAt,
             AppSchedule.CounselorId == AppAccount.BoundCounselorId,
         )
         .distinct()
@@ -274,11 +284,14 @@ def backfill_patient_contract_signed_from_orders(db: Session) -> int:
     return len(accounts)
 
 
-def maybe_mark_patient_contract_signed(db: Session, order: AppOrder) -> None:
-    """支付成功后，若订单咨询师为当前绑定咨询师则标记为已签约。"""
-    # 支付服务会在订单由 PENDING 切换为 PAID 前调用本函数；同时允许对已经
-    # 标记为 PAID 的订单幂等补偿。退款/取消订单不能作为签约依据。
-    if order.Status not in ("PENDING", "PAID"):
+def maybe_mark_patient_contract_signed(
+    db: Session,
+    order: AppOrder,
+    *,
+    paid_at: datetime,
+) -> None:
+    """真实支付由 ``PENDING`` 转为 ``PAID`` 时标记当前绑定为已签约。"""
+    if order.Status != "PENDING":
         return
     account = db.query(AppAccount).filter(AppAccount.Id == order.AccountId).first()
     if not account or not getattr(account, "BoundCounselorId", None):
@@ -287,6 +300,10 @@ def maybe_mark_patient_contract_signed(db: Session, order: AppOrder) -> None:
     counselor_id = _paid_order_counselor_id(db, order)
     bound_id = int(account.BoundCounselorId)
     if not counselor_id or counselor_id != bound_id:
+        return
+
+    binding_changed_at = getattr(account, "BoundCounselorChangedAt", None)
+    if binding_changed_at and paid_at < binding_changed_at:
         return
 
     account.IsContractSigned = True

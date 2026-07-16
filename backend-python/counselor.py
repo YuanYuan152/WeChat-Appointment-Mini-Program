@@ -2066,6 +2066,7 @@ def counselor_proxy_push_order(
             room_id=body.room_id,
             existing_schedule_id=body.schedule_id,
             agreement_is_adult=None,
+            notify_target_counselor=False,
         )
         db.commit()
         return result

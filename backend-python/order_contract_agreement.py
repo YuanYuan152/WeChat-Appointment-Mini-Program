@@ -58,7 +58,7 @@ def is_signed_with_counselor(
     account: AppAccount,
     counselor_id: int,
 ) -> bool:
-    """来访与指定咨询师是否已签约（绑定时已按该咨询师历史支付记录同步状态）。"""
+    """来访是否已与当前绑定咨询师完成签约。"""
     bound_id = getattr(account, "BoundCounselorId", None)
     if not bound_id or int(bound_id) != int(counselor_id):
         return False

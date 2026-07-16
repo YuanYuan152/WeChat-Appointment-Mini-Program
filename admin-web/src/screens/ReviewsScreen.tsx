@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { AppRoute, useAppRoute } from "@/components/AppRoute";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
@@ -30,6 +30,8 @@ export function ReviewsScreen() {
 }
 
 function ReviewsScreenContent() {
+  const pathname = usePathname();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const { clearNotice, refreshKey, showNotice } = useAppRoute();
   const categoryParam = searchParams.get("category");
@@ -45,6 +47,8 @@ function ReviewsScreenContent() {
     initialCategory(categoryParam, exemptionId, leaveId),
   );
   const [status, setStatus] = useState<ReviewStatus>(() => initialStatus(statusParam));
+  const [keywordInput, setKeywordInput] = useState("");
+  const [keyword, setKeyword] = useState("");
   const [items, setItems] = useState<ReviewItem[]>([]);
   const [selectedItem, setSelectedItem] = useState<ReviewItem | null>(null);
   const [page, setPage] = useState(1);
@@ -62,7 +66,7 @@ function ReviewsScreenContent() {
     setPage(1);
   }, [categoryParam, exemptionId, leaveId, statusParam]);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (): Promise<boolean> => {
     const requestId = loadRequestId.current + 1;
     loadRequestId.current = requestId;
     setListLoading(true);
@@ -71,15 +75,15 @@ function ReviewsScreenContent() {
       const needExemptions = category === "ALL" || category === "EXEMPTION";
       const needLeaves = category === "ALL" || category === "LEAVE";
       const [exemptions, leaves] = await Promise.all([
-        needExemptions ? fetchRefundExemptions(status) : Promise.resolve([]),
-        needLeaves ? fetchLeaveRequests(status) : Promise.resolve([]),
+        needExemptions ? fetchRefundExemptions(status, keyword) : Promise.resolve([]),
+        needLeaves ? fetchLeaveRequests(status, keyword) : Promise.resolve([]),
       ]);
       const nextItems: ReviewItem[] = [
         ...exemptions.map((data) => ({ kind: "EXEMPTION" as const, id: data.id, data })),
         ...leaves.map((data) => ({ kind: "LEAVE" as const, id: data.id, data })),
       ].sort((left, right) => timestamp(right.data.createdAt) - timestamp(left.data.createdAt));
       if (requestId !== loadRequestId.current) {
-        return;
+        return false;
       }
       setItems(nextItems);
 
@@ -98,33 +102,79 @@ function ReviewsScreenContent() {
             setSelectedItem({ kind: "LEAVE", id: detail.id, data: detail });
           }
         } else if (exemptionId) {
-          const allExemptions = status === "ALL" ? exemptions : await fetchRefundExemptions("ALL");
+          const allExemptions =
+            status === "ALL" && !keyword
+              ? exemptions
+              : await fetchRefundExemptions("ALL");
           const exemption = allExemptions.find((item) => item.id === exemptionId);
           if (exemption && requestId === loadRequestId.current) {
             setSelectedItem({ kind: "EXEMPTION", id: exemption.id, data: exemption });
           }
         }
       }
+      return requestId === loadRequestId.current;
     } catch (error) {
       if (requestId === loadRequestId.current) {
         setItems([]);
         showNotice("error", error instanceof Error ? error.message : "审核记录加载失败");
       }
+      return false;
     } finally {
       if (requestId === loadRequestId.current) {
         setListLoading(false);
       }
     }
-  }, [category, clearNotice, deepLinkKey, exemptionId, leaveId, showNotice, status]);
+  }, [category, clearNotice, deepLinkKey, exemptionId, keyword, leaveId, showNotice, status]);
 
   useEffect(() => {
     void loadData();
   }, [loadData, refreshKey]);
 
-  const refreshAfterAction = useCallback(async () => {
+  const closeDetail = useCallback(() => {
     setSelectedItem(null);
-    await loadData();
-  }, [loadData]);
+    if (
+      !searchParams.has("exemptionId") &&
+      !searchParams.has("leaveId") &&
+      !searchParams.has("id")
+    ) {
+      return;
+    }
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.delete("exemptionId");
+    nextParams.delete("leaveId");
+    nextParams.delete("id");
+    const nextQuery = nextParams.toString();
+    router.replace(`${pathname}${nextQuery ? `?${nextQuery}` : ""}`, { scroll: false });
+  }, [pathname, router, searchParams]);
+
+  const refreshAfterAction = useCallback(async (): Promise<boolean> => {
+    closeDetail();
+    return loadData();
+  }, [closeDetail, loadData]);
+
+  const search = useCallback(() => {
+    const nextKeyword = keywordInput.trim();
+    setSelectedItem(null);
+    setPage(1);
+    if (nextKeyword === keyword) {
+      void loadData();
+      return;
+    }
+    setKeyword(nextKeyword);
+  }, [keyword, keywordInput, loadData]);
+
+  const reset = useCallback(() => {
+    setKeywordInput("");
+    setSelectedItem(null);
+    setPage(1);
+    setCategory("ALL");
+    setStatus("PENDING");
+    if (category === "ALL" && status === "PENDING" && !keyword) {
+      void loadData();
+      return;
+    }
+    setKeyword("");
+  }, [category, keyword, loadData, status]);
 
   const approve = useCallback(
     async (item: ReviewItem) => {
@@ -135,11 +185,15 @@ function ReviewsScreenContent() {
           item.kind === "EXEMPTION"
             ? await approveRefundExemption(item.id)
             : await approveLeaveRequest(item.id);
-        showNotice(
-          "success",
-          getMessage(result, item.kind === "EXEMPTION" ? "已同意豁免" : "已通过请假申请"),
+        const successMessage = getMessage(
+          result,
+          item.kind === "EXEMPTION" ? "已同意豁免" : "已通过请假申请",
         );
-        await refreshAfterAction();
+        const refreshed = await refreshAfterAction();
+        showNotice(
+          refreshed ? "success" : "info",
+          refreshed ? successMessage : `${successMessage}；审核列表刷新失败，请手动刷新`,
+        );
       } catch (error) {
         showNotice("error", error instanceof Error ? error.message : "审核操作失败");
       } finally {
@@ -155,8 +209,12 @@ function ReviewsScreenContent() {
       clearNotice();
       try {
         const result = await rejectRefundExemption(item.id, reason);
-        showNotice("success", getMessage(result, "已拒绝豁免申请"));
-        await refreshAfterAction();
+        const successMessage = getMessage(result, "已拒绝豁免申请");
+        const refreshed = await refreshAfterAction();
+        showNotice(
+          refreshed ? "success" : "info",
+          refreshed ? successMessage : `${successMessage}；审核列表刷新失败，请手动刷新`,
+        );
       } catch (error) {
         showNotice("error", error instanceof Error ? error.message : "拒绝豁免申请失败");
       } finally {
@@ -172,8 +230,12 @@ function ReviewsScreenContent() {
       clearNotice();
       try {
         const result = await rejectLeaveRequest(item.id, reason);
-        showNotice("success", getMessage(result, "已拒绝请假申请"));
-        await refreshAfterAction();
+        const successMessage = getMessage(result, "已拒绝请假申请");
+        const refreshed = await refreshAfterAction();
+        showNotice(
+          refreshed ? "success" : "info",
+          refreshed ? successMessage : `${successMessage}；审核列表刷新失败，请手动刷新`,
+        );
       } catch (error) {
         showNotice("error", error instanceof Error ? error.message : "拒绝请假申请失败");
       } finally {
@@ -188,6 +250,7 @@ function ReviewsScreenContent() {
       items={items}
       category={category}
       status={status}
+      keywordInput={keywordInput}
       page={page}
       pageSize={pageSize}
       listLoading={listLoading}
@@ -203,13 +266,16 @@ function ReviewsScreenContent() {
         setSelectedItem(null);
         setPage(1);
       }}
+      onKeywordInputChange={setKeywordInput}
+      onSearch={search}
+      onReset={reset}
       onPageChange={setPage}
       onPageSizeChange={(nextPageSize) => {
         setPageSize(nextPageSize);
         setPage(1);
       }}
       onOpen={setSelectedItem}
-      onClose={() => setSelectedItem(null)}
+      onClose={closeDetail}
       onApprove={approve}
       onRejectExemption={rejectExemption}
       onRejectLeave={rejectLeave}

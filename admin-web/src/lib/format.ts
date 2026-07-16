@@ -91,6 +91,7 @@ export function roleLabel(role?: Role | string | null) {
 export function statusLabel(status?: string | null) {
   const labels: Record<string, string> = {
     PENDING: "待处理",
+    PENDING_PAYMENT: "待支付",
     APPROVED: "已通过",
     REJECTED: "已拒绝",
     PAID: "已支付",
@@ -108,6 +109,7 @@ export function statusLabel(status?: string | null) {
     CANCELLED: "已取消",
     CANCELED: "已取消",
     OPEN: "未处理",
+    ON_LEAVE: "已请假",
     CLOSED: "已处理",
     SUBMITTED: "已提交",
     ACTIVE: "启用",

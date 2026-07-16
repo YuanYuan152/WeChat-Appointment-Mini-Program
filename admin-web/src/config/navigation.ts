@@ -42,12 +42,18 @@ export const sections: NavigationSection[] = [
   { id: "dataImport", label: "数据导入", desc: "导入完成订单", path: "/data-import", allowedRoles: ["Admin", "Ops"] },
   {
     id: "userBoard",
-    label: "用户管理",
-    desc: "来访者和咨询师检索",
+    label: "来访管理",
+    desc: "来访资料与预约记录",
     path: "/user-board",
     allowedRoles: ["Admin", "Ops", "Assistant"],
   },
-  { id: "counselorBoard", label: "咨询师管理", desc: "资料与记录管理", path: "/counselor-board", allowedRoles: ["Admin", "Ops"] },
+  {
+    id: "counselorBoard",
+    label: "咨询师管理",
+    desc: "资料、记录与内部备注",
+    path: "/counselor-board",
+    allowedRoles: ["Admin", "Ops", "Assistant"],
+  },
   {
     id: "counselorDashboard",
     label: "个人看板",
@@ -94,7 +100,7 @@ export const navigationGroups: NavigationGroup[] = [
   { id: "admin", label: "权限管理", sectionIds: ["roles"] },
   { id: "business", label: "业务处理", sectionIds: ["refunds", "feedback", "caseRecords", "operationLogs", "dataImport"] },
   { id: "operation", label: "运营配置", sectionIds: ["content", "schedules", "rooms", "pricing"] },
-  { id: "boards", label: "数据看板", sectionIds: ["userBoard", "counselorBoard"] },
+  { id: "boards", label: "用户管理", sectionIds: ["userBoard", "counselorBoard"] },
   {
     id: "counselor",
     label: "咨询师工作台",

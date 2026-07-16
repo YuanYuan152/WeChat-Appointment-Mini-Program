@@ -10,7 +10,7 @@ import {
   QueryResetButton,
   queryControlClass,
 } from "@/components/ui";
-import { getLocalDateValue } from "@/lib/date";
+import { getLocalDateValue, getRollingScheduleMaxDateValue } from "@/lib/date";
 import { formatDateTime, formatMoneyFromCents, statusLabel } from "@/lib/format";
 import {
   formatPatientInline,
@@ -102,6 +102,7 @@ export function AgentBookingPanel({
   onPageSizeChange: (pageSize: number) => void;
 }) {
   const today = getLocalDateValue();
+  const rollingMaxDate = getRollingScheduleMaxDateValue();
   const [createOpen, setCreateOpen] = useState(false);
   const [openingCreate, setOpeningCreate] = useState(false);
   const rows = useMemo(() => calendar?.slots || [], [calendar?.slots]);
@@ -170,12 +171,34 @@ export function AgentBookingPanel({
             />
             <QueryField label="绑定咨询师" required>
               <div
-                className={`${queryControlClass} flex items-center ${
-                  counselor ? "font-medium" : "text-[var(--lxxl-muted)]"
+                aria-invalid={Boolean(patientStatusError)}
+                aria-readonly="true"
+                className={`${queryControlClass} flex items-center justify-between gap-3 ${
+                  patientStatusError
+                    ? "text-[#A13F37]"
+                    : counselor
+                      ? "font-medium"
+                      : "text-[var(--lxxl-muted)]"
                 }`}
               >
-                {counselor?.name || "来访尚未绑定咨询师"}
+                <span className="truncate">
+                  {patientStatusError
+                    ? "绑定状态读取失败"
+                    : counselor?.name || (patient ? "来访尚未绑定咨询师" : "请先选择来访")}
+                </span>
+                {patientStatusError ? (
+                  <Badge tone="red">已锁定</Badge>
+                ) : patientStatusLoading ? (
+                  <Badge>校验中</Badge>
+                ) : counselor ? (
+                  <Badge>自动锁定</Badge>
+                ) : patient ? (
+                  <Badge tone="gold">不可预约</Badge>
+                ) : null}
               </div>
+              <p className="mt-1 text-xs leading-5 text-[var(--lxxl-muted)]">
+                根据来访当前绑定关系自动带出，不能在代理预约中更换。
+              </p>
             </QueryField>
             <QueryField label="签约状态">
               <div className={`${queryControlClass} flex items-center gap-2`}>
@@ -198,6 +221,7 @@ export function AgentBookingPanel({
             <QueryField label="开始日期">
               <input
                 className={queryControlClass}
+                max={rollingMaxDate}
                 min={today}
                 type="date"
                 value={query.start}
@@ -329,6 +353,8 @@ function SearchablePersonSelect({
   const [options, setOptions] = useState<ProxyPersonOption[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [searchError, setSearchError] = useState("");
+  const [retryKey, setRetryKey] = useState(0);
   const searchSeq = useRef(0);
   const preserveTypedInput = useRef(false);
 
@@ -343,21 +369,31 @@ function SearchablePersonSelect({
 
   useEffect(() => {
     if (!open) {
+      searchSeq.current += 1;
+      setLoading(false);
       return;
     }
     const seq = searchSeq.current + 1;
     searchSeq.current = seq;
     setLoading(true);
+    setSearchError("");
     const timer = window.setTimeout(() => {
       void search(inputValue)
         .then((items) => {
           if (searchSeq.current === seq) {
             setOptions(items);
+            const exactMatch = value ? undefined : uniqueExactPersonMatch(items, inputValue);
+            if (exactMatch) {
+              onChange(exactMatch);
+              setInputValue(exactMatch.name);
+              setOpen(false);
+            }
           }
         })
-        .catch(() => {
+        .catch((error) => {
           if (searchSeq.current === seq) {
             setOptions([]);
+            setSearchError(error instanceof Error ? error.message : "搜索失败，请重试");
           }
         })
         .finally(() => {
@@ -367,7 +403,7 @@ function SearchablePersonSelect({
         });
     }, 220);
     return () => window.clearTimeout(timer);
-  }, [inputValue, open, search]);
+  }, [inputValue, onChange, open, retryKey, search, value]);
 
   return (
     <QueryField label={label} required={required}>
@@ -392,6 +428,18 @@ function SearchablePersonSelect({
           <div className="absolute z-30 mt-2 max-h-64 w-full overflow-auto rounded-xl border border-[var(--lxxl-border)] bg-white p-1 text-sm shadow-lg">
             {loading ? (
               <div className="px-3 py-3 text-[var(--lxxl-muted)]">正在搜索...</div>
+            ) : searchError ? (
+              <div className="flex items-center justify-between gap-3 px-3 py-3 text-[#A13F37]">
+                <span>{searchError}</span>
+                <button
+                  className="shrink-0 font-medium underline underline-offset-2"
+                  type="button"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => setRetryKey((value) => value + 1)}
+                >
+                  重试
+                </button>
+              </div>
             ) : options.length === 0 ? (
               <div className="px-3 py-3 text-[var(--lxxl-muted)]">暂无匹配结果</div>
             ) : (
@@ -408,7 +456,9 @@ function SearchablePersonSelect({
                   }}
                 >
                   <span className="block font-medium">{formatPatientInline(item)}</span>
-                  <span className="mt-1 block text-xs text-[var(--lxxl-muted)]">{item.mobile || `ID ${item.id}`}</span>
+                  <span className="mt-1 block text-xs text-[var(--lxxl-muted)]">
+                    {[item.mobile || `ID ${item.id}`, item.boundCounselorName ? `绑定：${item.boundCounselorName}` : "未绑定咨询师"].join(" · ")}
+                  </span>
                 </button>
               ))
             )}
@@ -417,6 +467,21 @@ function SearchablePersonSelect({
       </div>
     </QueryField>
   );
+}
+
+function uniqueExactPersonMatch(items: ProxyPersonOption[], inputValue: string) {
+  const keyword = normalizePersonSearchValue(inputValue);
+  if (!keyword) {
+    return undefined;
+  }
+  const matches = items.filter((item) =>
+    [item.name, item.mobile].some((value) => normalizePersonSearchValue(value) === keyword),
+  );
+  return matches.length === 1 ? matches[0] : undefined;
+}
+
+function normalizePersonSearchValue(value?: string | null) {
+  return (value || "").trim().toLocaleLowerCase();
 }
 
 function ScheduleTable({ rows }: { rows: ProxyScheduleCalendarItem[] }) {
@@ -439,7 +504,7 @@ function ScheduleTable({ rows }: { rows: ProxyScheduleCalendarItem[] }) {
             <td className="px-5 py-4 text-[var(--lxxl-muted)]">{item.centerName || "-"}</td>
             <td className="px-5 py-4 text-[var(--lxxl-muted)]">{item.roomName || "-"}</td>
             <td className="px-5 py-4">
-              <Badge tone={statusTone(item.status)}>{item.displayStatus || statusLabel(item.status)}</Badge>
+              <Badge tone={scheduleStatusTone(item)}>{scheduleStatusLabel(item)}</Badge>
             </td>
             <td className="px-5 py-4 text-[var(--lxxl-muted)]">
               {formatPatientNameWithContractTag(item.patientName, item.patientContractTag) || "-"}
@@ -475,7 +540,7 @@ function ScheduleCalendarView({ rows }: { rows: ProxyScheduleCalendarItem[] }) {
               <div className="rounded-xl bg-[#FAF8F4] p-3 text-sm" key={item.id}>
                 <div className="flex items-center justify-between gap-3">
                   <span className="font-medium">{timeRangeText(item.startTime, item.endTime)}</span>
-                  <Badge tone={statusTone(item.status)}>{item.displayStatus || statusLabel(item.status)}</Badge>
+                  <Badge tone={scheduleStatusTone(item)}>{scheduleStatusLabel(item)}</Badge>
                 </div>
                 <div className="mt-2 text-xs leading-5 text-[var(--lxxl-muted)]">
                   {[
@@ -577,6 +642,7 @@ function ProxyBookingModal({
             <QueryField label="日期" required>
               <input
                 className={queryControlClass}
+                max={getRollingScheduleMaxDateValue()}
                 min={getLocalDateValue()}
                 type="date"
                 value={draft.date}
@@ -645,7 +711,7 @@ function ProxyBookingModal({
                   type="button"
                   onClick={() => setDraft((prev) => ({ ...prev, agreementIsAdult: true }))}
                 >
-                  成年来访者协议
+                  同心理咨询协议
                 </button>
                 <button
                   className={`rounded-xl border px-4 py-3 text-sm transition ${
@@ -656,7 +722,7 @@ function ProxyBookingModal({
                   type="button"
                   onClick={() => setDraft((prev) => ({ ...prev, agreementIsAdult: false }))}
                 >
-                  未成年来访者协议
+                  “扬帆计划”协议
                 </button>
               </div>
             </QueryField>
@@ -780,6 +846,9 @@ function timeRangeText(startTime?: string | null, endTime?: string | null) {
 }
 
 function statusTone(status?: string | null): "neutral" | "green" | "gold" | "red" {
+  if (status === "PENDING_PAYMENT") {
+    return "neutral";
+  }
   if (status === "AVAILABLE" || status === "OPEN") {
     return "green";
   }
@@ -790,6 +859,14 @@ function statusTone(status?: string | null): "neutral" | "green" | "gold" | "red
     return "red";
   }
   return "neutral";
+}
+
+function scheduleStatusLabel(item: ProxyScheduleCalendarItem) {
+  return item.displayLabel || statusLabel(item.displayStatus || item.status);
+}
+
+function scheduleStatusTone(item: ProxyScheduleCalendarItem) {
+  return statusTone(item.displayStatus || item.status);
 }
 
 function slotHint(slot: ProxySlotOption) {
