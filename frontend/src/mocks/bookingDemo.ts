@@ -31,7 +31,7 @@ export const MOCK_SOURCE_DOCTORS: Array<{
   {
     id: 101,
     name: '演示咨询师·林心',
-    avatar: '/static/images/tc59.png',
+    avatar: '/static/images-opt/tc59.jpg',
     specialty: '情绪压力 | 人际关系',
     experience: '9年经验',
     rating: 4.9,
@@ -44,7 +44,7 @@ export const MOCK_SOURCE_DOCTORS: Array<{
   {
     id: 102,
     name: '演示咨询师·陈悦',
-    avatar: '/static/images/zixunshi11.png',
+    avatar: '/static/images-opt/zixunshi11.jpg',
     specialty: '青少年心理 | 家庭养育',
     experience: '6年经验',
     rating: 4.8,
@@ -57,7 +57,7 @@ export const MOCK_SOURCE_DOCTORS: Array<{
   {
     id: 103,
     name: '演示咨询师·周远',
-    avatar: '/static/images/tc59.png',
+    avatar: '/static/images-opt/tc59.jpg',
     specialty: '职场压力 | 个人成长',
     experience: '12年经验',
     rating: 4.7,
@@ -70,7 +70,7 @@ export const MOCK_SOURCE_DOCTORS: Array<{
   {
     id: 104,
     name: '演示咨询师·何宁',
-    avatar: '/static/images/tc59.png',
+    avatar: '/static/images-opt/tc59.jpg',
     specialty: '婚姻情感 | 家庭治疗',
     experience: '8年经验',
     rating: 4.85,
@@ -83,7 +83,7 @@ export const MOCK_SOURCE_DOCTORS: Array<{
   {
     id: 105,
     name: '演示咨询师·吴岚',
-    avatar: '/static/images/zixunshi11.png',
+    avatar: '/static/images-opt/zixunshi11.jpg',
     specialty: '焦虑抑郁 | 睡眠困扰',
     experience: '10年经验',
     rating: 4.9,

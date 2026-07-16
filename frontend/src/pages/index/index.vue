@@ -2,7 +2,7 @@
   <view class="page-index">
     <!-- 顶部氛围大图 -->
     <view class="hero-wrap">
-      <image class="hero-bg" src="/static/images/slide11.png" mode="aspectFill" />
+      <image class="hero-bg" src="/static/images-opt/slide11.jpg" mode="aspectFill" />
       <view class="hero-mask" />
       <view class="hero-content">
         <text class="hero-brand">连心心理</text>
@@ -148,7 +148,7 @@
             :key="doctor.id"
             @tap="navigateTo(`/pages/consultant/detail?id=${doctor.id}`)"
           >
-            <image :src="doctor.avatar || '/static/images/tc59.png'" class="doc-avatar" mode="aspectFill" @error="handleImageError" />
+            <image :src="doctor.avatar || '/static/images-opt/tc59.jpg'" class="doc-avatar" mode="aspectFill" @error="handleImageError" />
             <view class="doc-info">
               <view class="doc-head">
                 <text class="doc-name">{{ doctor.name }}</text>
@@ -286,14 +286,14 @@ const loadMockData = () => {
     {
       id: 1,
       title: '防疫新知识',
-      image: '/static/images/slide11.png',
+      image: '/static/images-opt/slide11.jpg',
       buttonText: '预约讲座',
       date: ''
     },
     {
       id: 2,
       title: '心理健康讲座',
-      image: '/static/images/slide11.png',
+      image: '/static/images-opt/slide11.jpg',
       buttonText: '预约讲座',
       date: ''
     }
@@ -303,7 +303,7 @@ const loadMockData = () => {
     {
       id: 1,
       name: '沈世琴',
-      avatar: '/static/images/zixunshi11.png',
+      avatar: '/static/images-opt/zixunshi11.jpg',
       province: '上海',
       specialty: '家庭婚姻 | 亲子关系',
       experience: '9年经验',
@@ -314,7 +314,7 @@ const loadMockData = () => {
     {
       id: 2,
       name: '王医生',
-      avatar: '/static/images/tc59.png',
+      avatar: '/static/images-opt/tc59.jpg',
       province: '北京',
       specialty: '青少年心理 | 学业压力',
       experience: '5年经验',
@@ -329,7 +329,7 @@ const loadMockData = () => {
       id: 1,
       title: '益家之言论坛',
       description: '家庭热点问题系列公益论坛',
-      image: '/static/images/huodong11.png',
+      image: '/static/images-opt/huodong11.jpg',
       date: '2024-05-15',
       status: 'active'
     },
@@ -337,7 +337,7 @@ const loadMockData = () => {
       id: 2,
       title: '系列读书会【第二期火热招募中】',
       description: '让阅读成为一种习惯',
-      image: '/static/images/huodong11.png',
+      image: '/static/images-opt/huodong11.jpg',
       date: '2024-05-20',
       status: 'active'
     }
@@ -348,7 +348,7 @@ const loadMockData = () => {
       id: 1,
       title: '益家之言论坛直播预告',
       description: '家庭热点问题系列公益论坛',
-      image: '/static/images/huodong11.png',
+      image: '/static/images-opt/huodong11.jpg',
       time: '2024-05-15 19:30',
       status: 'upcoming'
     }

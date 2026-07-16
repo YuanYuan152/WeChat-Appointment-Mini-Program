@@ -1095,7 +1095,7 @@ const getAvatarUrl = (avatar: string) => {
 
 // 获取默认头像
 const getDefaultAvatar = () => {
-  return '/static/images/default-doctor.png'
+  return '/static/images-opt/default-doctor.jpg'
 }
 
 // 处理图片加载错误

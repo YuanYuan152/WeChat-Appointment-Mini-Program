@@ -21,10 +21,6 @@
             <text class="label">预约中心</text>
             <text class="value">{{ order.centerName }}</text>
           </view>
-          <view v-if="order.roomName && order.Status !== 'PENDING'" class="detail-row">
-            <text class="label">咨询室</text>
-            <text class="value">{{ order.roomName }}</text>
-          </view>
         </view>
 
         <view class="section">

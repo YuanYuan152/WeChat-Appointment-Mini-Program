@@ -4,14 +4,14 @@ import { API_V2_CONFIG } from '@/config/api'
 
 /**
  * 修复图片URL路径
- * - 本地前端资源 (/static/images/*) 直接返回，由小程序本地加载
+ * - 本地前端资源 (/static/images-opt/*、/static/*) 直接返回，由小程序本地加载
  * - FastAPI 上传/静态目录 (/static/uploads/*、/api/static/*) 走 V2 baseURL
  * - 其它绝对路径（如旧 C# 后端 /Uploadfile/*）继续拼 V1 baseURL，保持兼容
  * - 完整 http(s) URL 原样返回
  */
 export const fixImageUrl = (imagePath: string): string => {
   if (!imagePath) {
-    return '/static/images/default-placeholder.png'
+    return '/static/images-opt/place21.jpg'
   }
 
   if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {

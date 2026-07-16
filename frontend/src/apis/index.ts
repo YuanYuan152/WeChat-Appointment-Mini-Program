@@ -8,7 +8,7 @@ const ok = <T>(data: T, msg = '请求成功'): ApiResponse<T> => ({ code: 0, msg
 const mapDoctor = (item: any): Doctor & { title?: string; workYears?: number; consultHours?: number; _source?: string } => ({
     id: Number(item.id || item.Id || item.accountId || 0),
     name: item.name || item.Name || item.nickname || '咨询师',
-    avatar: item.avatarUrl || item.AvatarUrl || item.avatar || '/static/images/tc59.png',
+    avatar: item.avatarUrl || item.AvatarUrl || item.avatar || '/static/images-opt/tc59.jpg',
     specialty: item.specialty || item.Specialty || item.field || item.Field || '心理咨询',
     experience: `${item.workYears || item.WorkYears || 0}年经验`,
     rating: item.rating || 5,
@@ -27,7 +27,7 @@ const mapActivity = (item: any): Activity => ({
     id: Number(item.id || item.Id || 0),
     title: item.title || item.Title || '活动',
     description: item.summary || item.Content || item.content || '',
-    image: item.coverUrl || item.CoverUrl || item.image || '/static/images/slide11.png',
+    image: item.coverUrl || item.CoverUrl || item.image || '/static/images-opt/slide11.jpg',
     date: item.startAt || item.StartAt || item.createdAt || item.CreatedAt || '',
     status: item.IsActive === false || item.isActive === false ? '已结束' : '进行中',
 })
@@ -35,7 +35,7 @@ const mapActivity = (item: any): Activity => ({
 const mapBanner = (item: any): Banner => ({
     id: Number(item.id || item.Id || 0),
     title: item.title || item.Title || '',
-    image: item.imageUrl || item.ImageUrl || '/static/images/slide11.png',
+    image: item.imageUrl || item.ImageUrl || '/static/images-opt/slide11.jpg',
     buttonText: '查看详情',
     date: '',
 })

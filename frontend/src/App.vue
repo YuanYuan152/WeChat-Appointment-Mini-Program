@@ -1,35 +1,29 @@
-<template>
-  <view id="app">
-    <!-- UniApp会自动处理页面路由 -->
-  </view>
-</template>
-
-<script setup lang="ts">
-import { onLaunch, onShow, onHide } from '@dcloudio/uni-app'
+<script lang="ts">
+/**
+ * uni-app App 入口：不要写 <template>，不要用 script setup 的 render。
+ * 真机（尤其 iOS）上错误写法会触发 Vue Proxy `$` 自递归：
+ * Maximum call stack size exceeded → getApp().$vm undefined。
+ */
 import { updateTabBarForRole, readStoredRole } from '@/utils/tabBar'
+import { warnIfDeviceCannotReachLocalApi } from '@/utils/auth'
 
-// 应用启动时执行
-onLaunch(() => {
-  console.log('App Launch')
-  // 初始化应用配置
-  initApp()
-})
-
-// 应用显示时执行
-onShow(() => {
-  console.log('App Show')
-  updateTabBarForRole(readStoredRole())
-})
-
-// 应用隐藏时执行
-onHide(() => {
-  console.log('App Hide')
-})
-
-// 初始化应用
-const initApp = () => {
-  console.log('应用初始化完成')
-  console.log('API地址:', import.meta.env.VITE_API_BASE_URL)
+export default {
+  onLaunch() {
+    console.log('App Launch')
+    console.log('API地址:', import.meta.env.VITE_API_BASE_URL)
+    setTimeout(() => {
+      warnIfDeviceCannotReachLocalApi()
+    }, 0)
+  },
+  onShow() {
+    console.log('App Show')
+    setTimeout(() => {
+      updateTabBarForRole(readStoredRole())
+    }, 0)
+  },
+  onHide() {
+    console.log('App Hide')
+  },
 }
 </script>
 
@@ -44,19 +38,9 @@ page {
   line-height: 1.6;
 }
 
-#app {
-  min-height: 100vh;
-}
-
-/* 隐藏滚动条但保留滚动功能 (提升美观度) */
 ::-webkit-scrollbar {
   width: 0;
   height: 0;
   color: transparent;
-}
-
-/* 统一图片默认行为 */
-image {
-  will-change: transform;
 }
 </style>

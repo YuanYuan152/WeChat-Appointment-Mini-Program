@@ -48,7 +48,7 @@ const mapArticleToCard = (a: any): ContentCard => ({
   summary: a.summary || a.content?.slice(0, 80) || '',
   date: a.publishedAt ? String(a.publishedAt).slice(0, 7) : undefined,
   tag: a.category || '文章',
-  image: a.coverUrl || '/static/images/slide11.png',
+  image: a.coverUrl || '/static/images-opt/slide11.jpg',
   articleId: a.id,
 })
 

@@ -23,7 +23,7 @@ export const HIGHLIGHT_CARDS: ContentCard[] = [
     summary: '聚焦家庭热点议题的系列公益论坛，探讨亲子沟通、婚姻经营与代际关系。',
     date: '2024-05',
     tag: '论坛',
-    image: '/static/images/huodong11.png',
+    image: '/static/images-opt/huodong11.jpg',
   },
   {
     id: 'hl-2',
@@ -31,7 +31,7 @@ export const HIGHLIGHT_CARDS: ContentCard[] = [
     summary: '以心理学经典读物为线索，在共读与讨论中理解自我与关系。',
     date: '2024-03',
     tag: '读书会',
-    image: '/static/images/huodong11.png',
+    image: '/static/images-opt/huodong11.jpg',
   },
   {
     id: 'hl-3',
@@ -39,7 +39,7 @@ export const HIGHLIGHT_CARDS: ContentCard[] = [
     summary: '围绕学业压力、情绪管理与同伴关系，提供科普文章与团体活动。',
     date: '2023-11',
     tag: '主题月',
-    image: '/static/images/slide11.png',
+    image: '/static/images-opt/slide11.jpg',
   },
   {
     id: 'hl-4',
@@ -47,7 +47,7 @@ export const HIGHLIGHT_CARDS: ContentCard[] = [
     summary: '邀请资深咨询师分享居家情绪调节、家庭共处与复工适应策略。',
     date: '2022-04',
     tag: '讲座',
-    image: '/static/images/slide11.png',
+    image: '/static/images-opt/slide11.jpg',
   },
   {
     id: 'hl-5',
@@ -55,7 +55,7 @@ export const HIGHLIGHT_CARDS: ContentCard[] = [
     summary: '从系统视角解读夫妻冲突与重建信任的路径，帮助来访者建立合理的期待。',
     date: '2023-06',
     tag: '案例',
-    image: '/static/images/huodong11.png',
+    image: '/static/images-opt/huodong11.jpg',
   },
   {
     id: 'hl-6',
@@ -63,7 +63,7 @@ export const HIGHLIGHT_CARDS: ContentCard[] = [
     summary: '内部督导与技能训练记录摘要，持续保障团队专业水准与服务伦理。',
     date: '2024-01',
     tag: '专业',
-    image: '/static/images/slide11.png',
+    image: '/static/images-opt/slide11.jpg',
   },
 ]
 

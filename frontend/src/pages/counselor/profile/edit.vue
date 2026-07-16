@@ -99,7 +99,7 @@ const displayPrice = computed(() => Math.round(Number(profile.value.billing || 0
 
 const avatarSrc = computed(() => {
   const url = profile.value.avatarUrl
-  return url ? fixImageUrl(url) : '/static/images/default-avatar.png'
+  return url ? fixImageUrl(url) : '/static/images-opt/default-avatar.jpg'
 })
 
 const displayYears = (years?: number) => {

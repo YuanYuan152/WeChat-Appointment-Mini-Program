@@ -12,7 +12,7 @@
       <!-- 搜索栏 -->
       <view class="search-section">
         <view class="search-bar-modern">
-          <image src="/static/images/seI.png" class="search-icon" mode="aspectFit" />
+          <image src="/static/images-opt/seI.png" class="search-icon" mode="aspectFit" />
           <input 
             class="search-input" 
             placeholder="搜索咨询师姓名、地区、专业" 
@@ -167,7 +167,7 @@
           <view class="doc-card-top">
             <view class="doc-avatar-wrap">
               <image 
-                :src="doctor.avatar || '/static/images/tc59.png'" 
+                :src="doctor.avatar || '/static/images-opt/tc59.jpg'" 
                 class="doc-avatar" 
                 mode="aspectFill" 
                 @error="handleImageError"
@@ -227,7 +227,7 @@
           <text v-if="loading">加载中...</text>
           <text v-else-if="!hasMore && doctors.length > 0">没有更多了</text>
           <view v-else-if="doctors.length === 0 && !loading" class="empty-box">
-            <image src="/static/images/place12.png" class="empty-img" mode="aspectFit" />
+            <image src="/static/images-opt/place12.jpg" class="empty-img" mode="aspectFit" />
             <text class="empty-text">暂无符合条件的咨询师</text>
           </view>
         </view>
@@ -389,7 +389,7 @@ function normalizeConsultant(item: Consultant): Consultant {
   const priceNegotiation = !!(item.priceNegotiation || item.billingLabel === '议价')
   return {
     ...item,
-    avatar: fixImageUrl(item.avatar || '/static/images/tc59.png'),
+    avatar: fixImageUrl(item.avatar || '/static/images-opt/tc59.jpg'),
     title: item.title || '心理咨询师',
     workYears: parseWorkYears(item),
     consultHours: item.consultHours ?? 0,
@@ -480,7 +480,7 @@ const handleImageError = (e: any) => {
   
   // 可以在这里设置默认头像
   if (e.target) {
-    e.target.src = '/static/images/default-doctor.png'
+    e.target.src = '/static/images-opt/default-doctor.jpg'
   }
 }
 

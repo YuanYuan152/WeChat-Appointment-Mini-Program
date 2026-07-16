@@ -17,32 +17,32 @@
     "list": [
       {
         "pagePath": "pages/index/index",
-        "iconPath": "static/images/bottom1.png",
-        "selectedIconPath": "static/images/bottom1.png",
+        "iconPath": "static/images-opt/bottom1.png",
+        "selectedIconPath": "static/images-opt/bottom1.png",
         "text": "首页"
       },
       {
         "pagePath": "pages/activity/list",
-        "iconPath": "static/images/bottom2.png",
-        "selectedIconPath": "static/images/bottom2.png",
+        "iconPath": "static/images-opt/bottom2.png",
+        "selectedIconPath": "static/images-opt/bottom2.png",
         "text": "活动招募"
       },
       {
         "pagePath": "pages/consultant/list",
-        "iconPath": "static/images/bottom10.png",
-        "selectedIconPath": "static/images/bottom10.png",
+        "iconPath": "static/images-opt/bottom10.jpg",
+        "selectedIconPath": "static/images-opt/bottom10.jpg",
         "text": "心理咨询"
       },
       {
         "pagePath": "pages/theme/index",
-        "iconPath": "static/images/bottom3.png",
-        "selectedIconPath": "static/images/bottom3.png",
+        "iconPath": "static/images-opt/bottom3.png",
+        "selectedIconPath": "static/images-opt/bottom3.png",
         "text": "主题月"
       },
       {
         "pagePath": "pages/user/profile",
-        "iconPath": "static/images/bottom4.png",
-        "selectedIconPath": "static/images/bottom4.png",
+        "iconPath": "static/images-opt/bottom4.png",
+        "selectedIconPath": "static/images-opt/bottom4.png",
         "text": "我的"
       }
     ]

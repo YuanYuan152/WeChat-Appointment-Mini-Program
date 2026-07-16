@@ -6,7 +6,7 @@
       <view class="user-card">
         <view class="avatar-wrap" @click="handleAvatarClick">
           <image 
-            :src="userInfo.avatar || '/static/images/default-avatar.png'" 
+            :src="userInfo.avatar || '/static/images-opt/default-avatar.jpg'" 
             class="avatar-img" 
             mode="aspectFill" 
           />

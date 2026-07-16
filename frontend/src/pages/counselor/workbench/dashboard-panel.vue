@@ -170,7 +170,7 @@ const showFilter = ref(false)
 const periodFilter = ref<PeriodFilter>('month')
 const profileHeader = ref<ProfileHeader>({
   name: '',
-  avatar: '/static/images/default-avatar.png',
+  avatar: '/static/images-opt/default-avatar.jpg',
   title: '',
   phone: '',
   meta: '',
@@ -234,7 +234,7 @@ const loadProfileHeader = async () => {
     if (profile?.workYears) metaParts.push(`从业 ${profile.workYears} 年`)
     profileHeader.value = {
       name: profile?.name || me?.nickname || '咨询师',
-      avatar: avatarRaw ? fixImageUrl(avatarRaw) : '/static/images/default-avatar.png',
+      avatar: avatarRaw ? fixImageUrl(avatarRaw) : '/static/images-opt/default-avatar.jpg',
       title: profile?.title || '咨询师',
       phone: me?.mobile || '',
       meta: metaParts.join(' · '),

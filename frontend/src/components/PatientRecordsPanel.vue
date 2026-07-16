@@ -60,7 +60,7 @@
 
         <view class="record-header">
 
-          <image class="avatar" :src="r.counselorAvatar || '/static/images/tc59.png'" mode="aspectFill" />
+          <image class="avatar" :src="r.counselorAvatar || '/static/images-opt/tc59.jpg'" mode="aspectFill" />
 
           <view class="meta">
 

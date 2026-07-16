@@ -16,7 +16,7 @@ export const useUserStore = defineStore('user', {
   getters: {
     userId: (state) => state.userInfo?.id,
     userName: (state) => state.userInfo?.nickname || '未登录',
-    userAvatar: (state) => state.userInfo?.avatarUrl || '/static/images/default-doctor.png',
+    userAvatar: (state) => state.userInfo?.avatarUrl || '/static/images-opt/default-doctor.jpg',
     hasRole: (state) => (role: string) => state.roles.includes(role),
   },
 

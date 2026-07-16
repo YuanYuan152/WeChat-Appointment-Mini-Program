@@ -24,6 +24,32 @@ const isLocalV2Backend = (): boolean => {
   return /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?\/?$/i.test(base)
 }
 
+/** 是否在微信开发者工具内（非真机） */
+export const isWechatDevtools = (): boolean => {
+  try {
+    const info = uni.getSystemInfoSync() as UniApp.GetSystemInfoResult & { platform?: string }
+    return String(info?.platform || '').toLowerCase() === 'devtools'
+  } catch {
+    return false
+  }
+}
+
+/**
+ * 真机调试时若 V2 仍指向 127.0.0.1/localhost，手机访问不到开发机后端，
+ * Mock 角色切换与登录都会失败。启动时提示一次。
+ */
+export const warnIfDeviceCannotReachLocalApi = (): void => {
+  if (!isMockLoginEnabled() || !isLocalV2Backend() || isWechatDevtools()) return
+  const tip =
+    '真机无法访问本机 127.0.0.1。请将 VITE_API_V2_BASE_URL 改为电脑局域网 IP（如 http://192.168.x.x:8000），并确保手机与电脑同网、后端已启动。'
+  console.warn('[MockLogin]', tip)
+  uni.showModal({
+    title: '真机联调提示',
+    content: tip,
+    showCancel: false,
+  })
+}
+
 /** 测试/开发联调：登录页可选角色，wx.login 走 dev_* mock code */
 export const isMockLoginEnabled = (): boolean =>
   import.meta.env.DEV
