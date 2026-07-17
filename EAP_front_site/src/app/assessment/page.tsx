@@ -2,7 +2,8 @@ import Link from "next/link";
 import { Sparkles } from "lucide-react";
 import { PageHero } from "@/components/layout/page-hero";
 import { buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";import { ProfessionalAssessmentEntry } from "@/components/assessment/professional-assessment-privacy";
+import { cn } from "@/lib/utils";
+import { ProfessionalAssessmentEntry } from "@/components/assessment/professional-assessment-privacy";
 import { AssessmentReportsEntry } from "@/components/assessment/assessment-reports-entry";
 
 export default function AssessmentPage() {
@@ -34,7 +35,8 @@ export default function AssessmentPage() {
                 )}
               >
                 进入趣味测评
-              </span>            </div>
+              </span>
+            </div>
           </Link>
         </div>
 

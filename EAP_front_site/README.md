@@ -17,6 +17,12 @@ npm install
 npm run dev
 ```
 
+默认使用 **Webpack** 开发模式（避免 Windows 上 Turbopack 偶发 `Next.js package not found` 崩溃）。若要试用 Turbopack：
+
+```bash
+npm run dev:turbo
+```
+
 访问 [http://localhost:3000](http://localhost:3000)
 
 ## 项目结构
