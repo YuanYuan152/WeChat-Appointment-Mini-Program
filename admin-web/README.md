@@ -60,4 +60,4 @@ NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
 - 后端继续复用 `backend-python`。
 - 小程序继续保留在 `frontend`。
 - Web 端可以新增后端接口，但不要破坏小程序原接口。
-- 当前迁移不改数据库表；操作记录、用户看板、咨询师看板已先通过 `/api/web/admin/*` 只读聚合接口读取现有业务表。后续如需精确审计前后快照，再单独评估存储方案。
+- 当前迁移不改数据库表；来访/咨询师看板已并入 `/api/mini/admin/boards/patients|counselors`，与小程序管理端同一前缀。操作记录、数据导入若仍走 `/api/web/admin/*`，需单独落地实现。

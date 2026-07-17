@@ -999,6 +999,11 @@ def _admin_visitor_patient_ids(db: Session) -> set[int]:
     return role_ids | cons_ids
 
 
+def _admin_counselor_ids(db: Session) -> list[int]:
+    bindings = db.query(AppRoleBinding).filter(AppRoleBinding.RoleType == "Counselor").all()
+    return sorted({b.AccountId for b in bindings})
+
+
 def _admin_consultation_location(
     db: Session,
     consultation: AppConsultation,
@@ -1566,6 +1571,16 @@ def list_admin_case_record_revisions(
     ]
 
 
+from admin_board_routes import register_admin_board_routes
+
+register_admin_board_routes(
+    router,
+    require_staff_workbench=require_staff_workbench,
+    visitor_patient_ids=_admin_visitor_patient_ids,
+    counselor_account_ids=_admin_counselor_ids,
+)
+
+
 @router.get(
     "/patients",
     response_model=List[AdminPatientSummaryOut],
@@ -1804,11 +1819,6 @@ def list_consultation_feedbacks(
                     continue
         result.append(item)
     return result
-
-
-def _admin_counselor_ids(db: Session) -> list[int]:
-    bindings = db.query(AppRoleBinding).filter(AppRoleBinding.RoleType == "Counselor").all()
-    return sorted({b.AccountId for b in bindings})
 
 
 def _admin_record_is_filled(record: Optional[AppCaseRecord]) -> bool:
@@ -2403,6 +2413,15 @@ class AdminCounselorDefaultSharePayload(BaseModel):
     revenueSharePercent: Optional[int] = Field(None, ge=0, le=100)
 
 
+class AdminCounselorBatchDefaultSharePayload(BaseModel):
+    counselorIds: List[int] = Field(..., min_length=1, max_length=200)
+    revenueSharePercent: int = Field(..., ge=0, le=100)
+    overridePatientShares: bool = Field(
+        True,
+        description="是否清除所选咨询师现有的来访个体分成；默认与单项调整一致进行覆盖",
+    )
+
+
 class AdminCounselorBasePricePayload(BaseModel):
     basePriceYuan: int = Field(..., ge=0, le=99999, description="咨询师统一基础价（元）")
 
@@ -2421,6 +2440,62 @@ def list_pricing_counselors(
 
     items = list_counselor_pricing_summaries(db, keyword=keyword)
     return {"total": len(items), "items": items}
+
+
+@router.post(
+    "/pricing/counselors/default-share/batch-preview",
+    summary="预览批量调整咨询师默认分成比例",
+)
+def preview_pricing_counselor_default_share_batch(
+    body: AdminCounselorBatchDefaultSharePayload,
+    _actor: AppAccount = Depends(require_ops_or_admin),
+    db: Session = Depends(get_db),
+):
+    from pricing_service import preview_batch_counselor_default_share_percent
+
+    try:
+        return preview_batch_counselor_default_share_percent(
+            db,
+            body.counselorIds,
+            revenue_share_percent=body.revenueSharePercent,
+            override_patient_shares=body.overridePatientShares,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post(
+    "/pricing/counselors/default-share/batch",
+    summary="批量调整咨询师默认分成比例",
+)
+def update_pricing_counselor_default_share_batch(
+    body: AdminCounselorBatchDefaultSharePayload,
+    actor: AppAccount = Depends(require_ops_or_admin),
+    db: Session = Depends(get_db),
+):
+    from pricing_notify_service import notify_counselor_default_share_batch_updated
+    from pricing_service import update_batch_counselor_default_share_percent
+
+    try:
+        result = update_batch_counselor_default_share_percent(
+            db,
+            body.counselorIds,
+            revenue_share_percent=body.revenueSharePercent,
+            override_patient_shares=body.overridePatientShares,
+        )
+        notify_counselor_default_share_batch_updated(
+            db,
+            actor_id=actor.Id,
+            result=result,
+        )
+        db.commit()
+        return result
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        db.rollback()
+        raise
 
 
 @router.put("/pricing/counselors/{counselor_id}", summary="更新咨询师统一基础价")

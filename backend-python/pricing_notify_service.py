@@ -150,6 +150,80 @@ def notify_counselor_base_price_updated(
     )
 
 
+def notify_counselor_default_share_batch_updated(
+    db: Session,
+    *,
+    actor_id: int,
+    result: Dict[str, Any],
+) -> None:
+    """批量分成调整：工作人员仅收一条汇总消息，咨询师各收一条结果消息。"""
+    changed_items = [item for item in result.get("items", []) if item.get("willChange")]
+    if not changed_items:
+        return
+
+    actor = _actor_label(db, actor_id)
+    percent = int(result.get("revenueSharePercent") or 0)
+    override_patient_shares = bool(result.get("overridePatientShares"))
+    cleared_count = int(result.get("clearedPatientShareOverrideCount") or 0)
+    counselor_ids = [int(item["counselorId"]) for item in changed_items]
+    counselor_names = [str(item.get("counselorName") or "咨询师") for item in changed_items]
+    override_text = (
+        f"，并清除 {cleared_count} 项来访个体分成"
+        if override_patient_shares
+        else "，来访个体分成保持不变"
+    )
+    staff_summary = (
+        f"{actor}已将 {len(changed_items)} 名咨询师的默认分成比例批量调整为 "
+        f"{percent}%{override_text}"
+    )
+    staff_detail: Dict[str, Any] = {
+        "actorId": actor_id,
+        "actorLabel": actor,
+        "counselorIds": counselor_ids,
+        "counselorNames": counselor_names,
+        "changedCount": len(changed_items),
+        "revenueSharePercent": percent,
+        "overridePatientShares": override_patient_shares,
+        "clearedPatientShareOverrideCount": cleared_count,
+        "messageText": staff_summary,
+        "changeKind": "BATCH_DEFAULT_SHARE",
+    }
+    notify_staff_workbench_inbox(
+        db,
+        type_="SYSTEM",
+        title="批量抽成比例调整成功",
+        content=_message_payload(staff_summary, staff_detail),
+        related_type=RELATED_TYPE_BASE_PRICE,
+        related_id=None,
+    )
+
+    for item in changed_items:
+        counselor_id = int(item["counselorId"])
+        counselor_name = str(item.get("counselorName") or f"咨询师#{counselor_id}")
+        counselor_summary = f"针对所有来访的默认分成比例已调整为 {percent}%"
+        detail = {
+            "actorId": actor_id,
+            "actorLabel": actor,
+            "counselorId": counselor_id,
+            "counselorName": counselor_name,
+            "beforeShare": item.get("beforeShare"),
+            "afterShare": item.get("afterShare"),
+            "shareText": f"抽成比例 {percent}%",
+            "messageText": counselor_summary,
+            "counselorMessageText": counselor_summary,
+            "changeKind": "BATCH_DEFAULT_SHARE",
+        }
+        _notify_counselor(
+            db,
+            counselor_id,
+            type_="SYSTEM",
+            title="抽成已调整",
+            content=_message_payload(counselor_summary, detail),
+            related_type=RELATED_TYPE_BASE_PRICE,
+            related_id=counselor_id,
+        )
+
+
 def notify_patient_price_adjustment_updated(
     db: Session,
     *,

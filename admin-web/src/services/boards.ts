@@ -11,6 +11,10 @@ import type {
 
 import type { PaginationParams, UserBoardFilters } from "@/types/app";
 
+/** 与小程序管理端共用 /api/mini/admin；看板走 /boards/*，避免与 /patients/{id} 冲突。 */
+const PATIENT_BOARD = "/api/mini/admin/boards/patients";
+const COUNSELOR_BOARD = "/api/mini/admin/boards/counselors";
+
 export function fetchUserBoard(filters: UserBoardFilters, pagination: PaginationParams) {
   const params = new URLSearchParams({
     page: String(pagination.page),
@@ -23,11 +27,11 @@ export function fetchUserBoard(filters: UserBoardFilters, pagination: Pagination
     params.set("mobile", filters.mobile);
   }
 
-  return apiRequest<PagedResult<UserBoardSummary>>(`/api/web/admin/users/board?${params.toString()}`);
+  return apiRequest<PagedResult<UserBoardSummary>>(`${PATIENT_BOARD}?${params.toString()}`);
 }
 
 export function fetchUserBoardDetail(accountId: number) {
-  return apiRequest<UserBoardDetail>(`/api/web/admin/users/${accountId}/board`);
+  return apiRequest<UserBoardDetail>(`${PATIENT_BOARD}/${accountId}`);
 }
 
 export function fetchPatientContractInfo(accountId: number) {
@@ -57,9 +61,9 @@ export function fetchCounselorBoard(keyword: string, pagination: PaginationParam
     params.set("keyword", keyword);
   }
 
-  return apiRequest<PagedResult<CounselorBoardSummary>>(`/api/web/admin/counselors/board?${params.toString()}`);
+  return apiRequest<PagedResult<CounselorBoardSummary>>(`${COUNSELOR_BOARD}?${params.toString()}`);
 }
 
 export function fetchCounselorBoardDetail(accountId: number) {
-  return apiRequest<CounselorBoardDetail>(`/api/web/admin/counselors/${accountId}/board`);
+  return apiRequest<CounselorBoardDetail>(`${COUNSELOR_BOARD}/${accountId}`);
 }
