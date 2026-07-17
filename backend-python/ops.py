@@ -604,9 +604,9 @@ def _room_occupancy_at(
     room_db_id: Optional[int] = None,
 ) -> dict:
     status_slot_start = standard_slot_start_for_status(at_time)
-    # 未单独设置的时段默认「可用」，不再回退咨询室全局 Status
+    # 单时段配置优先；未配置时沿用咨询室全局状态，避免停用房间仍显示可用。
     manual_status = resolve_slot_manual_status(
-        db, room_db_id, status_slot_start, "AVAILABLE",
+        db, room_db_id, status_slot_start, room_default_status or "AVAILABLE",
     )
     if manual_status == "DISABLED":
         return {
@@ -907,7 +907,7 @@ def get_room_detail(
         db,
         row.Id,
         [st for _, st, _ in all_bounds],
-        "AVAILABLE",
+        row.Status or "AVAILABLE",
     )
 
     by_date: dict[str, list] = {}
@@ -915,7 +915,7 @@ def get_room_detail(
         occ = _room_occupancy_at(
             db, row.CenterId, row.RoomCode, start_dt, row.Status, room_db_id=row.Id,
         )
-        manual_status = status_by_start.get(start_dt, "AVAILABLE")
+        manual_status = status_by_start.get(start_dt, row.Status or "AVAILABLE")
         occupancy = occ.get("occupancy")
         past = start_dt <= now
         editable = (not past) and occupancy != "IN_SESSION"
@@ -1039,7 +1039,10 @@ def _available_rooms_for_schedule(
         if exclude_current and room_code == current_room:
             continue
         slot_status = resolve_slot_manual_status(
-            db, room.get("dbId"), schedule.StartTime, "AVAILABLE",
+            db,
+            room.get("dbId"),
+            schedule.StartTime,
+            room.get("status", "AVAILABLE"),
         )
         if not is_slot_operational(slot_status):
             continue

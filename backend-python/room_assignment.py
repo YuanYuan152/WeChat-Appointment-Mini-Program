@@ -93,7 +93,10 @@ def assign_room_for_payment(
     available_ids = []
     for r in rooms:
         slot_status = resolve_slot_manual_status(
-            db, r.get("dbId"), schedule.StartTime, "AVAILABLE",
+            db,
+            r.get("dbId"),
+            schedule.StartTime,
+            r.get("status", "AVAILABLE"),
         )
         if is_slot_operational(slot_status):
             available_ids.append(r["id"])

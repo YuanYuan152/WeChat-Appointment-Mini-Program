@@ -818,6 +818,13 @@ def update_batch_counselor_default_share_percent(
     )
     for counselor_id in ids:
         profile = profiles[counselor_id]
+        base_price_cents = resolve_counselor_base_price_cents(db, counselor_id)
+        # FaceBilling 是小程序及存量逻辑仍会读取的兼容金额字段。批量改成
+        # 比例模式时同步写入按当前基础价换算的金额，避免新旧字段不一致。
+        profile.FaceBilling = _clamp_share_cents(
+            int(base_price_cents * revenue_share_percent / 100),
+            base_price_cents,
+        )
         profile.DefaultShareMode = SHARE_MODE_PERCENT
         profile.DefaultRevenueShareCents = None
         profile.DefaultRevenueSharePercent = revenue_share_percent

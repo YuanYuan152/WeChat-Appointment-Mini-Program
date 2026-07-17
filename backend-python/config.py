@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRATION_HOURS: int = 24 * 7
 
+    # 内部消息/提醒定时任务调用密钥；空值表示仅允许已登录后台工作人员。
+    MESSAGE_INTERNAL_TOKEN: str = ""
+
     # Web SMS (官网注册登录)
     SMS_MOCK: bool = True
     SMS_CODE_LENGTH: int = 6

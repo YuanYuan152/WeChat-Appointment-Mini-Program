@@ -25,6 +25,8 @@ from leave_request_service import (
 from models import (
     AppAccount,
     AppConsultation,
+    AppConsultationRoom,
+    AppConsultationRoomSlot,
     AppCounselorPatientPricing,
     AppCounselorProfile,
     AppLeaveRequest,
@@ -56,6 +58,7 @@ from pricing_service import (
     update_batch_counselor_default_share_percent,
 )
 from proxy_booking_service import (
+    build_proxy_slot_options,
     push_proxy_order,
     search_counselor_proxy_patients,
     search_proxy_counselors,
@@ -84,6 +87,8 @@ class BackendServiceTestCase(unittest.TestCase):
                 AppOrder.__table__,
                 AppSchedule.__table__,
                 AppConsultation.__table__,
+                AppConsultationRoom.__table__,
+                AppConsultationRoomSlot.__table__,
                 AppLeaveRequest.__table__,
                 AppMessage.__table__,
                 AppScheduleCancelLog.__table__,
@@ -439,6 +444,95 @@ class PatientContractTests(BackendServiceTestCase):
                 end_time=datetime(2026, 12, 1, 9, 50),
                 agreement_is_adult=True,
             )
+
+    def test_proxy_push_revalidates_selected_room_operational_status(self):
+        self.patient.BoundCounselorId = 10
+        self.patient.IsContractSigned = True
+        room = AppConsultationRoom(
+            CenterId="yangpu",
+            RoomCode="yangpu-disabled",
+            Name="停用咨询室",
+            Status="DISABLED",
+            SortOrder=1,
+        )
+        self.db.add(room)
+        self.db.flush()
+        room_payload = {
+            "id": room.RoomCode,
+            "name": room.Name,
+            "status": room.Status,
+            "dbId": room.Id,
+        }
+
+        with (
+            patch("proxy_booking_service.get_consultation_rooms", return_value=[room_payload]),
+            patch("proxy_booking_service.validate_slot_in_rolling_window"),
+            self.assertRaisesRegex(ValueError, "咨询室在该时段不可用"),
+        ):
+            push_proxy_order(
+                self.db,
+                staff_account_id=99,
+                patient_id=self.patient.Id,
+                counselor_id=10,
+                center_id="yangpu",
+                start_time=datetime(2099, 12, 1, 9, 0),
+                end_time=datetime(2099, 12, 1, 9, 50),
+                room_id=room.RoomCode,
+            )
+
+        self.assertEqual(
+            self.db.query(AppOrder).filter(AppOrder.Description.like("proxy:%")).count(),
+            0,
+        )
+
+        room.Status = "AVAILABLE"
+        room_payload["status"] = room.Status
+        self.db.add(
+            AppConsultationRoomSlot(
+                RoomId=room.Id,
+                StartTime=datetime(2099, 12, 1, 9, 0),
+                Status="DISABLED",
+            )
+        )
+        self.db.flush()
+        with (
+            patch("proxy_booking_service.get_consultation_rooms", return_value=[room_payload]),
+            patch("proxy_booking_service.validate_slot_in_rolling_window"),
+            self.assertRaisesRegex(ValueError, "咨询室在该时段不可用"),
+        ):
+            push_proxy_order(
+                self.db,
+                staff_account_id=99,
+                patient_id=self.patient.Id,
+                counselor_id=10,
+                center_id="yangpu",
+                start_time=datetime(2099, 12, 1, 9, 0),
+                end_time=datetime(2099, 12, 1, 9, 50),
+                room_id=room.RoomCode,
+            )
+
+    def test_proxy_push_returns_precise_yuan_value_for_cent_price(self):
+        self.patient.BoundCounselorId = 10
+        self.patient.IsContractSigned = True
+
+        with (
+            patch("proxy_booking_service.validate_slot_in_rolling_window"),
+            patch("proxy_booking_service.resolve_display_price_cents", return_value=60_001),
+            patch("proxy_booking_notify.notify_proxy_order_created"),
+            patch("system_setting_service.get_proxy_order_ttl_minutes", return_value=30),
+        ):
+            result = push_proxy_order(
+                self.db,
+                staff_account_id=99,
+                patient_id=self.patient.Id,
+                counselor_id=10,
+                center_id="video",
+                start_time=datetime(2099, 12, 1, 9, 0),
+                end_time=datetime(2099, 12, 1, 9, 50),
+            )
+
+        self.assertEqual(result["totalFee"], 60_001)
+        self.assertEqual(result["totalFeeYuan"], 600.01)
 
     def test_staff_proxy_push_notifies_target_counselor(self):
         schedule = self.db.query(AppSchedule).filter(AppSchedule.Id == 101).one()
@@ -997,6 +1091,176 @@ class CounselorSafetyTests(BackendServiceTestCase):
 
         self.assertEqual(leave.Status, "PENDING")
 
+    def test_proxy_slot_options_respect_global_and_per_slot_room_status(self):
+        room = AppConsultationRoom(
+            CenterId="yangpu",
+            RoomCode="yangpu-status-test",
+            Name="状态测试咨询室",
+            Status="DISABLED",
+            SortOrder=1,
+        )
+        self.db.add(room)
+        self.db.flush()
+        slot_start = datetime(2026, 2, 2, 9, 0)
+
+        def room_payload():
+            return [{
+                "id": room.RoomCode,
+                "name": room.Name,
+                "status": room.Status,
+                "dbId": room.Id,
+            }]
+
+        with (
+            patch("proxy_booking_service._now", return_value=datetime(2026, 2, 1, 8, 0)),
+            patch(
+                "proxy_booking_service.get_consultation_rooms",
+                side_effect=lambda *_args, **_kwargs: room_payload(),
+            ),
+        ):
+            globally_disabled = build_proxy_slot_options(
+                self.db, 10, slot_start.date(), "yangpu",
+            )[0]
+        self.assertFalse(globally_disabled["rooms"][0]["available"])
+        self.assertTrue(globally_disabled["allRoomsFull"])
+        self.assertFalse(globally_disabled["selectable"])
+
+        # 单时段配置覆盖咨询室默认状态：全局停用但明确开放该时段时可选。
+        override = AppConsultationRoomSlot(
+            RoomId=room.Id,
+            StartTime=slot_start,
+            Status="AVAILABLE",
+        )
+        self.db.add(override)
+        self.db.flush()
+        with (
+            patch("proxy_booking_service._now", return_value=datetime(2026, 2, 1, 8, 0)),
+            patch(
+                "proxy_booking_service.get_consultation_rooms",
+                side_effect=lambda *_args, **_kwargs: room_payload(),
+            ),
+        ):
+            explicitly_available = build_proxy_slot_options(
+                self.db, 10, slot_start.date(), "yangpu",
+            )[0]
+        self.assertTrue(explicitly_available["rooms"][0]["available"])
+        self.assertFalse(explicitly_available["allRoomsFull"])
+        self.assertTrue(explicitly_available["selectable"])
+
+        # 全局开放但单时段停用时仍必须不可选。
+        room.Status = "AVAILABLE"
+        override.Status = "DISABLED"
+        self.db.flush()
+        with (
+            patch("proxy_booking_service._now", return_value=datetime(2026, 2, 1, 8, 0)),
+            patch(
+                "proxy_booking_service.get_consultation_rooms",
+                side_effect=lambda *_args, **_kwargs: room_payload(),
+            ),
+        ):
+            slot_disabled = build_proxy_slot_options(
+                self.db, 10, slot_start.date(), "yangpu",
+            )[0]
+        self.assertFalse(slot_disabled["rooms"][0]["available"])
+        self.assertTrue(slot_disabled["allRoomsFull"])
+        self.assertFalse(slot_disabled["selectable"])
+
+    def test_existing_schedule_is_not_selectable_when_no_room_is_operational(self):
+        room = AppConsultationRoom(
+            CenterId="yangpu",
+            RoomCode="yangpu-slot-disabled",
+            Name="时段停用咨询室",
+            Status="AVAILABLE",
+            SortOrder=1,
+        )
+        self.db.add(room)
+        self.db.flush()
+        slot_start = datetime(2026, 2, 2, 9, 0)
+        self.db.add_all(
+            [
+                AppConsultationRoomSlot(
+                    RoomId=room.Id,
+                    StartTime=slot_start,
+                    Status="DISABLED",
+                ),
+                AppSchedule(
+                    CounselorId=10,
+                    StartTime=slot_start,
+                    EndTime=datetime(2026, 2, 2, 9, 50),
+                    Status="AVAILABLE",
+                    Note="center:yangpu",
+                ),
+            ]
+        )
+        self.db.flush()
+
+        with (
+            patch("proxy_booking_service._now", return_value=datetime(2026, 2, 1, 8, 0)),
+            patch(
+                "proxy_booking_service.get_consultation_rooms",
+                return_value=[{
+                    "id": room.RoomCode,
+                    "name": room.Name,
+                    "status": room.Status,
+                    "dbId": room.Id,
+                }],
+            ),
+        ):
+            slot = build_proxy_slot_options(
+                self.db, 10, slot_start.date(), "yangpu",
+            )[0]
+
+        self.assertIsNotNone(slot["existingAvailableScheduleId"])
+        self.assertFalse(slot["rooms"][0]["available"])
+        self.assertTrue(slot["allRoomsFull"])
+        self.assertFalse(slot["selectable"])
+
+    def test_payment_room_assignment_respects_global_and_per_slot_status(self):
+        room = AppConsultationRoom(
+            CenterId="yangpu",
+            RoomCode="yangpu-payment-test",
+            Name="付款状态测试咨询室",
+            Status="DISABLED",
+            SortOrder=1,
+        )
+        self.db.add(room)
+        self.db.flush()
+        schedule = AppSchedule(
+            Id=220,
+            CounselorId=10,
+            StartTime=datetime(2026, 2, 2, 9, 0),
+            EndTime=datetime(2026, 2, 2, 9, 50),
+            Status="AVAILABLE",
+        )
+        room_payload = [{
+            "id": room.RoomCode,
+            "name": room.Name,
+            "status": room.Status,
+            "dbId": room.Id,
+        }]
+
+        with (
+            patch("room_assignment.get_consultation_rooms", return_value=room_payload),
+            self.assertRaisesRegex(ValueError, "暂无可用咨询室"),
+        ):
+            assign_room_for_payment(self.db, schedule, "yangpu")
+
+        room.Status = "AVAILABLE"
+        self.db.add(
+            AppConsultationRoomSlot(
+                RoomId=room.Id,
+                StartTime=schedule.StartTime,
+                Status="DISABLED",
+            )
+        )
+        self.db.flush()
+        room_payload[0]["status"] = room.Status
+        with (
+            patch("room_assignment.get_consultation_rooms", return_value=room_payload),
+            self.assertRaisesRegex(ValueError, "暂无可用咨询室"),
+        ):
+            assign_room_for_payment(self.db, schedule, "yangpu")
+
     @patch("room_assignment.paid_occupied_rooms_at_center", return_value={"A"})
     @patch("room_assignment.is_slot_operational", return_value=True)
     @patch("room_assignment.resolve_slot_manual_status", return_value="AVAILABLE")
@@ -1219,6 +1483,13 @@ class BatchDefaultShareTests(BackendServiceTestCase):
         self.assertEqual(after, before)
 
     def test_preview_and_update_clear_patient_overrides_by_default(self):
+        second_profile = (
+            self.db.query(AppCounselorProfile)
+            .filter(AppCounselorProfile.AccountId == 20)
+            .one()
+        )
+        second_profile.Billing = 68_000
+        self.db.flush()
         preview = preview_batch_counselor_default_share_percent(
             self.db,
             [10, 20, 10],
@@ -1237,6 +1508,10 @@ class BatchDefaultShareTests(BackendServiceTestCase):
         profiles = self.db.query(AppCounselorProfile).order_by(AppCounselorProfile.AccountId).all()
         self.assertTrue(all(profile.DefaultShareMode == "PERCENT" for profile in profiles))
         self.assertTrue(all(profile.DefaultRevenueSharePercent == 45 for profile in profiles))
+        self.assertEqual(
+            {profile.AccountId: profile.FaceBilling for profile in profiles},
+            {10: 27_000, 20: 30_600},
+        )
         self.assertEqual(result["clearedPatientShareOverrideCount"], 2)
         override = (
             self.db.query(AppCounselorPatientPricing)

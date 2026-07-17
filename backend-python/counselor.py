@@ -937,7 +937,10 @@ def schedule_slot_options(
         paid_occupied = paid_occupied_rooms_at_center(db, center_id, start_dt) if rooms else set()
         for room in rooms:
             slot_status = resolve_slot_manual_status(
-                db, room.get("dbId"), start_dt, "AVAILABLE",
+                db,
+                room.get("dbId"),
+                start_dt,
+                room.get("status", "AVAILABLE"),
             )
             room_ok = is_slot_operational(slot_status)
             if room_ok:
@@ -955,10 +958,9 @@ def schedule_slot_options(
                 )
             )
         all_rooms_full = False if is_video_center(center_id) else (
-            self_row is not None or (
-                bool(usable_room_ids)
-                and not has_available_room_at_center(db, center_id, start_dt, usable_room_ids)
-            )
+            self_row is not None
+            or not usable_room_ids
+            or not has_available_room_at_center(db, center_id, start_dt, usable_room_ids)
         )
         options.append(
             TimeSlotOption(
@@ -1115,7 +1117,10 @@ def create_schedule(
         usable_room_ids = []
         for r in rooms:
             slot_status = resolve_slot_manual_status(
-                db, r.get("dbId"), body.start_time, "AVAILABLE",
+                db,
+                r.get("dbId"),
+                body.start_time,
+                r.get("status", "AVAILABLE"),
             )
             if is_slot_operational(slot_status):
                 usable_room_ids.append(r["id"])
@@ -1130,8 +1135,8 @@ def create_schedule(
             )
 
         pref = (body.room_id or "").strip() or None
-        if pref and pref not in {r["id"] for r in rooms}:
-            raise HTTPException(status_code=400, detail="无效的咨询室偏好")
+        if pref and pref not in usable_room_ids:
+            raise HTTPException(status_code=400, detail="咨询室偏好在该时段不可用")
 
     schedule = AppSchedule(
         CounselorId=counselor.Id,
@@ -1185,8 +1190,17 @@ def update_schedule(
         pref = (body.room_id or "").strip() or None
         if pref:
             rooms = get_consultation_rooms(db, body.center_id)
-            if pref not in {r["id"] for r in rooms}:
+            selected_room = next((room for room in rooms if room["id"] == pref), None)
+            if not selected_room:
                 raise HTTPException(status_code=400, detail="无效的咨询室偏好")
+            slot_status = resolve_slot_manual_status(
+                db,
+                selected_room.get("dbId"),
+                schedule.StartTime,
+                selected_room.get("status", "AVAILABLE"),
+            )
+            if not is_slot_operational(slot_status):
+                raise HTTPException(status_code=400, detail="咨询室偏好在该时段不可用")
         schedule.Note = schedule_pref_note(body.center_id, pref)
     elif body.note is not None:
         schedule.Note = body.note

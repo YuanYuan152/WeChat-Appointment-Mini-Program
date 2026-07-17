@@ -469,12 +469,16 @@ def build_proxy_slot_options(
         all_occupied = proxy_occupied | paid_occupied
 
         room_opts: List[Dict[str, Any]] = []
-        usable_room_ids: List[str] = []
         for room in rooms:
-            slot_status = resolve_slot_manual_status(db, room.get("dbId"), start_dt, "AVAILABLE")
+            # 单时段状态覆盖咨询室的全局状态；未配置单时段状态时必须沿用
+            # 房间本身的 AVAILABLE / DISABLED，不能把停用房间重新当成可用。
+            slot_status = resolve_slot_manual_status(
+                db,
+                room.get("dbId"),
+                start_dt,
+                room.get("status", "AVAILABLE"),
+            )
             room_ok = is_slot_operational(slot_status)
-            if room_ok:
-                usable_room_ids.append(room["id"])
             taken = room["id"] in all_occupied
             room_opts.append(
                 {
@@ -485,19 +489,17 @@ def build_proxy_slot_options(
                 }
             )
 
-        all_rooms_full = False if is_video_center(center_id) else (
-            counselor_occupied
-            or (
-                bool(usable_room_ids)
-                and not any(r["available"] for r in room_opts)
-            )
+        # 线下中心只要没有可选择的房间就应当约满。已有 AVAILABLE 排期
+        # 不能绕过咨询室可用性，否则前端会出现“时段可点、房间全灰”。
+        all_rooms_full = False if is_video_center(center_id) else not any(
+            room["available"] for room in room_opts
         )
 
         available_slot = (
             not past
             and not is_booked
             and not pending_on_self
-            and (is_video_center(center_id) or any(r["available"] for r in room_opts) or self_row is not None)
+            and (is_video_center(center_id) or any(r["available"] for r in room_opts))
         )
 
         options.append(
@@ -611,8 +613,17 @@ def push_proxy_order(
         if not room_id:
             raise ValueError("请选择咨询室")
         rooms = get_consultation_rooms(db, center_id)
-        if room_id not in {r["id"] for r in rooms}:
+        selected_room = next((room for room in rooms if room["id"] == room_id), None)
+        if not selected_room:
             raise ValueError("无效的咨询室")
+        selected_room_status = resolve_slot_manual_status(
+            db,
+            selected_room.get("dbId"),
+            start_time,
+            selected_room.get("status", "AVAILABLE"),
+        )
+        if not is_slot_operational(selected_room_status):
+            raise ValueError("该咨询室在该时段不可用")
         occupied = _rooms_with_proxy_pending(db, center_id, start_time)
         occupied |= paid_occupied_rooms_at_center(db, center_id, start_time)
         if room_id in occupied:
@@ -704,7 +715,7 @@ def push_proxy_order(
         "scheduleId": schedule.Id,
         "outTradeNo": out_trade_no,
         "totalFee": total_fee,
-        "totalFeeYuan": total_fee // 100,
+        "totalFeeYuan": total_fee / 100,
         "expiresAt": expires_at.isoformat(),
         "message": proxy_order_ttl_push_message(ttl_minutes),
         "proxyOrderTtlMinutes": ttl_minutes,

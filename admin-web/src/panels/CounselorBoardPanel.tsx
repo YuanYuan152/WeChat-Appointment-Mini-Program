@@ -103,7 +103,12 @@ export function CounselorBoardPanel({
         </DetailDrawer>
       )}
       {(introLoading || introProfile || introError) && (
-        <DetailDrawer footer={null} title="编辑咨询师介绍页" onClose={onCloseIntroEditor}>
+        <DetailDrawer
+          closeDisabled={introSaving}
+          footer={null}
+          title="编辑咨询师介绍页"
+          onClose={onCloseIntroEditor}
+        >
           {introLoading && !introProfile ? (
             <div className="py-10 text-sm text-[var(--lxxl-muted)]">正在加载介绍页资料...</div>
           ) : introError ? (

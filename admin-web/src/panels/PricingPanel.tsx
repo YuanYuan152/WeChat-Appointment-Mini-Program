@@ -540,7 +540,7 @@ function BatchShareModal({
   }
 
   return (
-    <Drawer title="批量调整咨询师分成比例" onClose={onClose}>
+    <Drawer closeDisabled={saving} title="批量调整咨询师分成比例" onClose={onClose}>
       <div className="space-y-5 px-6 py-5">
         <div className="rounded-xl bg-[#FAF8F4] px-4 py-3 text-sm">
           已选择 <span className="font-semibold">{counselorIds.length}</span> 名咨询师
@@ -712,7 +712,7 @@ function CounselorPricingModal({
   }
 
   return (
-    <Drawer title={`${counselor.counselorName} 基础配置`} onClose={onClose}>
+    <Drawer closeDisabled={saving} title={`${counselor.counselorName} 基础配置`} onClose={onClose}>
       <div className="space-y-5 px-6 py-5">
         <QueryField label="基础价格（元）" required>
           <input
@@ -847,6 +847,7 @@ function PatientPricingModal({
 
   return (
     <Drawer
+      closeDisabled={saving}
       title={`${formatPatientNameWithContractTag(patient.patientName, patient.patientContractTag || patient.contractTag)} 个体调价`}
       onClose={onClose}
     >
@@ -987,13 +988,23 @@ function SharePreviewItem({ label, percent, value }: { label: string; percent: n
   );
 }
 
-function Drawer({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
+function Drawer({
+  title,
+  children,
+  onClose,
+  closeDisabled = false,
+}: {
+  title: string;
+  children: ReactNode;
+  onClose: () => void;
+  closeDisabled?: boolean;
+}) {
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/35">
       <div className="flex h-full w-full max-w-2xl flex-col bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-[var(--lxxl-border)] px-6 py-4">
           <h3 className="text-lg font-semibold">{title}</h3>
-          <TableActionButton tone="muted" onClick={onClose}>关闭</TableActionButton>
+          <TableActionButton disabled={closeDisabled} tone="muted" onClick={onClose}>关闭</TableActionButton>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
       </div>

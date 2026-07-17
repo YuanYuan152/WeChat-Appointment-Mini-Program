@@ -39,7 +39,10 @@ function CounselorBoardScreenContent() {
   const [introError, setIntroError] = useState<string | null>(null);
   const listRequestSeq = useRef(0);
   const detailRequestSeq = useRef(0);
+  const introRequestSeq = useRef(0);
+  const introMutationSeq = useRef(0);
   const selectedAccountIdRef = useRef<number | undefined>(undefined);
+  const openIntroAccountIdRef = useRef<number | undefined>(undefined);
 
   const loadData = useCallback(async () => {
     const requestSeq = listRequestSeq.current + 1;
@@ -154,22 +157,36 @@ function CounselorBoardScreenContent() {
       showNotice("error", "只有管理员可以编辑咨询师介绍页");
       return;
     }
+    const requestSeq = introRequestSeq.current + 1;
+    introRequestSeq.current = requestSeq;
+    openIntroAccountIdRef.current = accountId;
     setIntroProfile(undefined);
     setIntroError(null);
     setIntroLoading(true);
     try {
       const profile = await fetchAdminCounselorIntro(accountId);
+      if (introRequestSeq.current !== requestSeq || openIntroAccountIdRef.current !== accountId) {
+        return;
+      }
       setIntroProfile(profile);
     } catch (error) {
+      if (introRequestSeq.current !== requestSeq || openIntroAccountIdRef.current !== accountId) {
+        return;
+      }
       const message = error instanceof Error ? error.message : "介绍页资料加载失败";
       setIntroError(message);
       showNotice("error", message);
     } finally {
-      setIntroLoading(false);
+      if (introRequestSeq.current === requestSeq) {
+        setIntroLoading(false);
+      }
     }
   }, [isAdmin, showNotice]);
 
   const closeIntroEditor = useCallback(() => {
+    introRequestSeq.current += 1;
+    introMutationSeq.current += 1;
+    openIntroAccountIdRef.current = undefined;
     setIntroLoading(false);
     setIntroSaving(false);
     setIntroProfile(undefined);
@@ -180,10 +197,20 @@ function CounselorBoardScreenContent() {
     if (!introProfile) {
       return;
     }
+    const counselorId = introProfile.counselorId;
+    const mutationSeq = introMutationSeq.current + 1;
+    introMutationSeq.current = mutationSeq;
     setIntroSaving(true);
     setIntroError(null);
     try {
-      const savedProfile = await updateAdminCounselorIntro(introProfile.counselorId, payload);
+      const savedProfile = await updateAdminCounselorIntro(counselorId, payload);
+      if (
+        introMutationSeq.current !== mutationSeq ||
+        openIntroAccountIdRef.current !== counselorId ||
+        savedProfile.counselorId !== counselorId
+      ) {
+        return;
+      }
       setIntroProfile(savedProfile);
       setData((prev) => ({
         ...prev,
@@ -203,12 +230,17 @@ function CounselorBoardScreenContent() {
       );
       showNotice("success", "咨询师介绍页已保存");
     } catch (error) {
+      if (introMutationSeq.current !== mutationSeq || openIntroAccountIdRef.current !== counselorId) {
+        return;
+      }
       const message = error instanceof Error ? error.message : "咨询师介绍页保存失败";
       setIntroError(message);
       showNotice("error", message);
       throw error;
     } finally {
-      setIntroSaving(false);
+      if (introMutationSeq.current === mutationSeq) {
+        setIntroSaving(false);
+      }
     }
   }, [introProfile, showNotice]);
 

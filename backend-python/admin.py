@@ -98,6 +98,7 @@ from patient_contract_service import (
     batch_patient_contract_extras,
     bind_patient_counselor,
     patient_contract_extras,
+    retire_counselor_booking_relationships,
 )
 from patient_registration import DEFAULT_PATIENT_SOURCE
 
@@ -651,7 +652,12 @@ def bind_user_role(
         return {"message": "角色未变更"}
 
     if previous_role == "Counselor" and new_role != "Counselor":
-        _set_counselor_profile_active(db, user_id, False)
+        try:
+            retire_counselor_booking_relationships(db, user_id)
+            _set_counselor_profile_active(db, user_id, False)
+        except ValueError as exc:
+            db.rollback()
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     set_account_role(db, user_id, new_role, body.target_id)
     _restore_account_on_role_bind(db, user, new_role)
@@ -2343,6 +2349,13 @@ def update_admin_counselor(
             FaceBilling=30000,
         )
         db.add(profile)
+
+    if body.isActive is False:
+        try:
+            retire_counselor_booking_relationships(db, counselor_id)
+        except ValueError as exc:
+            db.rollback()
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     mapping = {
         "name": "Name",

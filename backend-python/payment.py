@@ -177,9 +177,22 @@ def _create_pending_order(
     from proxy_booking_service import expire_pending_proxy_orders, pending_proxy_order_for_schedule
 
     expire_pending_proxy_orders(db)
+    from patient_contract_service import (
+        acquire_patient_contract_lock,
+        assert_counselor_active_for_booking,
+    )
+
+    # 与换绑、咨询师退役和支付完成共用来访级事务锁；等待后刷新账号，
+    # 避免使用锁等待期间已经失效的签约绑定快照创建新订单。
+    acquire_patient_contract_lock(db, account.Id)
+    db.refresh(account)
     schedule = db.query(AppSchedule).filter(AppSchedule.Id == req.slot_id).first()
     if not schedule or schedule.Status != "AVAILABLE":
         raise HTTPException(status_code=400, detail="该时段已被预约或不存在")
+    try:
+        assert_counselor_active_for_booking(db, schedule.CounselorId)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     schedule_center = parse_center_id(schedule.Note)
     if req.center_id and schedule_center and req.center_id != schedule_center:
         raise HTTPException(status_code=400, detail="预约中心与排期不一致，请刷新后重试")
@@ -295,6 +308,10 @@ def _load_payable_order(
             raise HTTPException(status_code=400, detail="预约时段已不可用")
     try:
         _assert_order_binding_current(db, account, order)
+        if order.SlotId:
+            from patient_contract_service import assert_counselor_active_for_booking
+
+            assert_counselor_active_for_booking(db, schedule.CounselorId)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return order

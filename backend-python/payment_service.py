@@ -106,6 +106,10 @@ def complete_paid_order(
         if not resolved_center:
             raise ValueError("排期未指定预约中心，无法完成付款")
 
+        from patient_contract_service import assert_counselor_active_for_booking
+
+        assert_counselor_active_for_booking(db, schedule.CounselorId)
+
     account = db.query(AppAccount).filter(AppAccount.Id == order.AccountId).first()
     if order.SlotId and not account:
         raise ValueError("来访账号不存在，无法完成支付")

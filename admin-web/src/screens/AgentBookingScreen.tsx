@@ -112,9 +112,9 @@ function AgentBookingScreenContent() {
           setDraft((prev) => ({ ...prev, slotKey: "", roomId: "" }));
         }
         return nextPatient;
-      } catch {
+      } catch (error) {
         if (patientRequestSeq.current === requestSeq && patientRef.current?.id === patientId) {
-          const message = "签约与绑定状态读取失败，请重试";
+          const message = error instanceof Error ? error.message : "签约与绑定状态读取失败，请重试";
           setPatientStatusError(message);
           if (notifyOnError) {
             showNotice("error", message);
@@ -388,7 +388,6 @@ function AgentBookingScreenContent() {
       try {
         const latestPatient = await refreshPatientContract(selectedPatient, true);
         if (!latestPatient) {
-          setSlotError("签约与绑定状态读取失败，请重试");
           return undefined;
         }
         const latestCounselor = boundCounselorFromPatient(latestPatient);

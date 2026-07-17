@@ -26,7 +26,7 @@ export function MainMenu({
   activeSection: SectionId;
   currentUser: CurrentUser;
   collapsed: boolean;
-  unreadMessageCount?: number;
+  unreadMessageCount?: number | null;
   onCollapsedChange: (collapsed: boolean) => void;
   onChangeSection: (section: SectionId) => void;
 }) {
@@ -123,7 +123,7 @@ export function MainMenu({
           }
           const expanded = expandedGroupIds.includes(group.id);
           const groupActive = group.id === activeGroupId;
-          const groupHasUnreadMessages = unreadMessageCount > 0 && visibleSectionIds.includes("messages");
+          const groupHasUnreadMessages = (unreadMessageCount ?? 0) > 0 && visibleSectionIds.includes("messages");
 
           return (
             <div key={group.id}>
@@ -175,7 +175,7 @@ export function MainMenu({
                       >
                         <span className="relative inline-block text-sm font-medium">
                           {section.label}
-                          {section.id === "messages" && unreadMessageCount > 0 && <UnreadDot />}
+                          {section.id === "messages" && (unreadMessageCount ?? 0) > 0 && <UnreadDot />}
                         </span>
                         <span className={`mt-1 block text-xs ${active ? "text-white/75" : "text-[var(--lxxl-muted)]"}`}>
                           {section.desc}

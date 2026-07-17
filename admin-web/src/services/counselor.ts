@@ -1,5 +1,6 @@
 import { apiRequest } from "@/lib/api";
 import { addLocalDays } from "@/lib/date";
+import type { CounselorScheduleRequest } from "@/lib/counselorSchedule";
 import type { RiskAssessmentData } from "@/constants/caseRecordRiskAssessment";
 import type {
   ApiMessage,
@@ -17,11 +18,6 @@ import type {
 
 export type CounselorDashboardPeriod = "month" | "quarter" | "half_year" | "all";
 export type CounselorDashboardCategory = "orders" | "case-records" | "appointments" | "leaves";
-
-export interface CounselorScheduleFilters {
-  start: string;
-  days: number;
-}
 
 export interface CounselorCaseRecordPayload {
   consultation_id?: number;
@@ -65,22 +61,29 @@ export function fetchCounselorDashboardDetails(
   return apiRequest<CounselorDashboardDetailItem[]>(`/api/mini/counselor/stats/details?${params.toString()}`);
 }
 
-export async function fetchCounselorScheduleCalendar(filters: CounselorScheduleFilters) {
-  const params = new URLSearchParams({
-    start: filters.start,
-    days: String(filters.days),
-  });
+export async function fetchCounselorScheduleCalendar(filters: CounselorScheduleRequest) {
+  const params = new URLSearchParams({ days: String(filters.days) });
+  if (filters.month) {
+    params.set("month", filters.month);
+  } else if (filters.start) {
+    params.set("start", filters.start);
+    params.set("past_days", String(filters.pastDays || 0));
+  }
   const calendar = await apiRequest<CounselorScheduleCalendar>(
     `/api/mini/counselor/schedules/calendar?${params.toString()}`,
   );
-  const endDateExclusive = addLocalDays(filters.start, filters.days);
+  if (filters.month || !filters.start) {
+    return calendar;
+  }
+  const start = filters.start;
+  const endDateExclusive = addLocalDays(start, filters.days);
   return {
     ...calendar,
-    startDate: filters.start,
+    startDate: start,
     days: filters.days,
     slots: calendar.slots.filter((item) => {
       const itemDate = item.startTime.slice(0, 10);
-      return itemDate >= filters.start && itemDate < endDateExclusive;
+      return itemDate >= start && itemDate < endDateExclusive;
     }),
   };
 }

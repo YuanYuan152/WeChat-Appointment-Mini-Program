@@ -2,10 +2,23 @@
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from sqlalchemy import text
+from sqlalchemy import or_, text
 from sqlalchemy.orm import Session
 
-from models import AppAccount, AppCounselorProfile, AppOrder, AppRoleBinding, AppSchedule
+from app_time import china_now
+from models import (
+    AppAccount,
+    AppConsultation,
+    AppCounselorProfile,
+    AppOrder,
+    AppRoleBinding,
+    AppSchedule,
+)
+
+
+COUNSELOR_UNAVAILABLE_FOR_PAYMENT = (
+    "咨询师账号已停用或不可预约，该订单已失效，请联系助理重新预约"
+)
 
 
 def acquire_patient_contract_lock(db: Session, patient_id: int) -> None:
@@ -25,6 +38,176 @@ def acquire_patient_contract_lock(db: Session, patient_id: int) -> None:
     ).scalar()
     if result is None or int(result) < 0:
         raise ValueError("该来访的签约状态正在更新，请稍后重试")
+
+
+def assert_counselor_active_for_booking(db: Session, counselor_id: int) -> None:
+    """支付及预约落单前复核咨询师仍具有完整、可用的咨询师身份。"""
+    counselor_id = int(counselor_id)
+    account = (
+        db.query(AppAccount.Id)
+        .filter(
+            AppAccount.Id == counselor_id,
+            AppAccount.IsActive == True,
+        )
+        .first()
+    )
+    role = (
+        db.query(AppRoleBinding.Id)
+        .filter(
+            AppRoleBinding.AccountId == counselor_id,
+            AppRoleBinding.RoleType == "Counselor",
+        )
+        .first()
+    )
+    profile = (
+        db.query(AppCounselorProfile.Id)
+        .filter(
+            AppCounselorProfile.AccountId == counselor_id,
+            AppCounselorProfile.IsActive == True,
+        )
+        .first()
+    )
+    if not account or not role or not profile:
+        raise ValueError(COUNSELOR_UNAVAILABLE_FOR_PAYMENT)
+
+
+def retire_counselor_booking_relationships(
+    db: Session,
+    counselor_id: int,
+) -> Dict[str, int]:
+    """咨询师停用、改角色或删除前，事务内清理仍可支付的业务关系。
+
+    调用方负责在同一个事务内完成咨询师状态变更并提交。通过来访级应用锁，
+    该清理与代理下单、换绑和支付完成使用同一套串行化边界。
+    """
+    counselor_id = int(counselor_id)
+    schedule_ids = [
+        int(row[0])
+        for row in (
+            db.query(AppSchedule.Id)
+            .filter(AppSchedule.CounselorId == counselor_id)
+            .all()
+        )
+    ]
+    bound_patient_ids = {
+        int(row[0])
+        for row in (
+            db.query(AppAccount.Id)
+            .filter(AppAccount.BoundCounselorId == counselor_id)
+            .all()
+        )
+    }
+    pending_patient_ids: set[int] = set()
+    if schedule_ids:
+        pending_patient_ids = {
+            int(row[0])
+            for row in (
+                db.query(AppOrder.AccountId)
+                .filter(
+                    AppOrder.SlotId.in_(schedule_ids),
+                    AppOrder.Status == "PENDING",
+                )
+                .distinct()
+                .all()
+            )
+        }
+
+    for patient_id in sorted(bound_patient_ids | pending_patient_ids):
+        acquire_patient_contract_lock(db, patient_id)
+
+    # 获取锁后重新查询，避免使用等待锁期间已经变化的绑定或订单状态。
+    business_now = china_now()
+    future_booked_schedule = (
+        db.query(AppSchedule.Id)
+        .filter(
+            AppSchedule.CounselorId == counselor_id,
+            AppSchedule.Status == "BOOKED",
+            AppSchedule.EndTime >= business_now,
+        )
+        .first()
+    )
+    future_paid_order = (
+        db.query(AppOrder.Id)
+        .join(AppSchedule, AppSchedule.Id == AppOrder.SlotId)
+        .filter(
+            AppSchedule.CounselorId == counselor_id,
+            AppSchedule.EndTime >= business_now,
+            AppOrder.Status == "PAID",
+        )
+        .first()
+    )
+    future_consultation = (
+        db.query(AppConsultation.Id)
+        .filter(
+            AppConsultation.CounselorId == counselor_id,
+            or_(
+                AppConsultation.EndTime >= business_now,
+                AppConsultation.StartTime >= business_now,
+            ),
+            AppConsultation.Status.in_(("PENDING", "CONFIRMED", "ONGOING")),
+        )
+        .first()
+    )
+    if future_booked_schedule or future_paid_order or future_consultation:
+        raise ValueError(
+            "该咨询师仍有未完成的预约，请先完成改约、取消及退款处理后再停用或更换角色"
+        )
+
+    patients = (
+        db.query(AppAccount)
+        .filter(AppAccount.BoundCounselorId == counselor_id)
+        .order_by(AppAccount.Id.asc())
+        .all()
+    )
+    pending_orders = []
+    if schedule_ids:
+        pending_orders = (
+            db.query(AppOrder)
+            .filter(
+                AppOrder.SlotId.in_(schedule_ids),
+                AppOrder.Status == "PENDING",
+            )
+            .order_by(AppOrder.Id.asc())
+            .all()
+        )
+
+    from proxy_booking_service import _cancel_pending_proxy_order
+
+    now = datetime.utcnow()
+    cancelled_orders = 0
+    for order in pending_orders:
+        if (order.Description or "").startswith("proxy:"):
+            _cancel_pending_proxy_order(db, order)
+        else:
+            order.Status = "CANCELLED"
+            order.UpdatedAt = now
+        cancelled_orders += 1
+
+    for patient in patients:
+        patient.BoundCounselorId = None
+        patient.IsContractSigned = False
+        patient.BoundCounselorChangedAt = now
+
+    future_available_schedules = (
+        db.query(AppSchedule)
+        .filter(
+            AppSchedule.CounselorId == counselor_id,
+            AppSchedule.Status == "AVAILABLE",
+            AppSchedule.StartTime >= business_now,
+        )
+        .all()
+    )
+    for schedule in future_available_schedules:
+        schedule.Status = "CANCELLED"
+        schedule.UpdatedAt = business_now
+
+    if patients or pending_orders or future_available_schedules:
+        db.flush()
+    return {
+        "unboundPatients": len(patients),
+        "cancelledPendingOrders": cancelled_orders,
+        "cancelledFutureSchedules": len(future_available_schedules),
+    }
 
 
 def _base_patient_name(account: Optional[AppAccount]) -> str:

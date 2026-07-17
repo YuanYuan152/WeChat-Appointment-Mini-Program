@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AppRoute, useAppRoute } from "@/components/AppRoute";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
 import { getMessage } from "@/lib/display";
+import { buildReviewsResetHref } from "@/lib/reviewFilters";
 import { ReviewsPanel } from "@/panels/ReviewsPanel";
 import type { ReviewCategory, ReviewItem } from "@/panels/ReviewsPanel";
 import {
@@ -169,12 +170,13 @@ function ReviewsScreenContent() {
     setPage(1);
     setCategory("ALL");
     setStatus("PENDING");
+    router.replace(buildReviewsResetHref(pathname, searchParams), { scroll: false });
     if (category === "ALL" && status === "PENDING" && !keyword) {
       void loadData();
       return;
     }
     setKeyword("");
-  }, [category, keyword, loadData, status]);
+  }, [category, keyword, loadData, pathname, router, searchParams, status]);
 
   const approve = useCallback(
     async (item: ReviewItem) => {

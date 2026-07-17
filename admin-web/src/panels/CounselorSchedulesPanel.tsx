@@ -3,6 +3,8 @@ import type { Dispatch, SetStateAction } from "react";
 
 import { formatDateTime, statusLabel } from "@/lib/format";
 import { getLocalDateValue, getRollingScheduleMaxDateValue } from "@/lib/date";
+import { getCounselorScheduleHistoryMinDate } from "@/lib/counselorSchedule";
+import type { CounselorScheduleQuery } from "@/lib/counselorSchedule";
 import { API_BASE_URL } from "@/lib/api";
 import {
   fetchCounselorProxySlotOptions,
@@ -36,11 +38,6 @@ export const COUNSELOR_CENTER_OPTIONS = [
   { value: "pudong", label: "浦东预约中心" },
   { value: "video", label: "视频咨询" },
 ];
-
-export interface CounselorScheduleQuery {
-  start: string;
-  days: number;
-}
 
 export interface CounselorScheduleDraft {
   date: string;
@@ -113,6 +110,8 @@ export function CounselorSchedulesPanel({
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
 }) {
+  const today = getLocalDateValue();
+  const historyMinDate = getCounselorScheduleHistoryMinDate(today);
   const [createOpen, setCreateOpen] = useState(false);
   const [proxyOpen, setProxyOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<
@@ -166,6 +165,20 @@ export function CounselorSchedulesPanel({
     setScreenshotError("");
     setScreenshotUploading(false);
     setActionSubmitting(false);
+  };
+
+  const requestLeave = (schedule: CounselorScheduleCalendarItem) => {
+    setPendingAction({ type: "leave", schedule });
+    setReason(schedule.leaveReason || "");
+    setCommunicationScreenshotUrl("");
+    setScreenshotError("");
+  };
+
+  const requestCancel = (schedule: CounselorScheduleCalendarItem) => {
+    setPendingAction({ type: "cancel", schedule });
+    setReason("");
+    setCommunicationScreenshotUrl("");
+    setScreenshotError("");
   };
 
   const handleScreenshotUpload = async (file?: File) => {
@@ -242,7 +255,7 @@ export function CounselorSchedulesPanel({
             <div>
               <h2 className="text-xl font-semibold tracking-normal">我的排期</h2>
               <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">
-                查看自己的排期；已预约咨询可按规则取消或提交请假申请。
+                普通模式可向前追溯 30 天，日历模式可按月查看历史；已预约咨询可按规则取消或提交请假申请。
               </p>
             </div>
             <div className="flex flex-col gap-3">
@@ -266,27 +279,56 @@ export function CounselorSchedulesPanel({
           </div>
 
           <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <QueryField label="开始日期">
-              <input
-                className={queryControlClass}
-                max={getRollingScheduleMaxDateValue()}
-                min={getLocalDateValue()}
-                type="date"
-                value={query.start}
-                onChange={(event) => setQuery((prev) => ({ ...prev, start: event.target.value }))}
-              />
-            </QueryField>
-            <QueryField label="天数">
+            <QueryField label="展示方式">
               <select
                 className={queryControlClass}
-                value={query.days}
-                onChange={(event) => setQuery((prev) => ({ ...prev, days: Number(event.target.value) }))}
+                value={query.mode}
+                onChange={(event) =>
+                  setQuery((prev) => ({
+                    ...prev,
+                    mode: event.target.value as CounselorScheduleQuery["mode"],
+                  }))
+                }
               >
-                <option value={7}>7 天</option>
-                <option value={14}>14 天</option>
-                <option value={30}>30 天</option>
+                <option value="list">普通模式</option>
+                <option value="calendar">日历模式</option>
               </select>
             </QueryField>
+            {query.mode === "calendar" ? (
+              <QueryField label="月份" required>
+                <input
+                  className={queryControlClass}
+                  required
+                  type="month"
+                  value={query.month}
+                  onChange={(event) => setQuery((prev) => ({ ...prev, month: event.target.value }))}
+                />
+              </QueryField>
+            ) : (
+              <>
+                <QueryField label="开始日期">
+                  <input
+                    className={queryControlClass}
+                    max={getRollingScheduleMaxDateValue()}
+                    min={historyMinDate}
+                    type="date"
+                    value={query.start}
+                    onChange={(event) => setQuery((prev) => ({ ...prev, start: event.target.value }))}
+                  />
+                </QueryField>
+                <QueryField label="天数">
+                  <select
+                    className={queryControlClass}
+                    value={query.days}
+                    onChange={(event) => setQuery((prev) => ({ ...prev, days: Number(event.target.value) }))}
+                  >
+                    <option value={7}>7 天</option>
+                    <option value={14}>14 天</option>
+                    <option value={30}>30 天</option>
+                  </select>
+                </QueryField>
+              </>
+            )}
           </div>
 
           <div className="mt-4 flex flex-wrap gap-3">
@@ -303,6 +345,13 @@ export function CounselorSchedulesPanel({
           )}
           {rows.length === 0 ? (
             <EmptyState text={listLoading ? "正在加载排期..." : "暂无排期。"} />
+          ) : query.mode === "calendar" ? (
+            <CounselorScheduleCalendarView
+              focusedRowId={focusedRowId}
+              rows={rows}
+              onRequestCancel={requestCancel}
+              onRequestLeave={requestLeave}
+            />
           ) : (
             <>
               <table className="w-full border-collapse text-sm">
@@ -346,34 +395,11 @@ export function CounselorSchedulesPanel({
                       <td className="px-5 py-4 text-[var(--lxxl-muted)]">{item.hasCaseRecord ? "已填写" : "-"}</td>
                       <td className="px-5 py-4">
                         <div className="flex flex-wrap gap-3">
-                          {item.requiresLeave && (
-                            <TableActionButton
-                              onClick={() => {
-                                setPendingAction({ type: "leave", schedule: item });
-                                setReason(item.leaveReason || "");
-                                setCommunicationScreenshotUrl("");
-                                setScreenshotError("");
-                              }}
-                            >
-                              请假
-                            </TableActionButton>
-                          )}
-                          {item.canCancel && !item.requiresLeave && (
-                            <TableActionButton
-                              tone="danger"
-                              onClick={() => {
-                                setPendingAction({ type: "cancel", schedule: item });
-                                setReason("");
-                                setCommunicationScreenshotUrl("");
-                                setScreenshotError("");
-                              }}
-                            >
-                              取消排期
-                            </TableActionButton>
-                          )}
-                          {!item.canCancel && !item.requiresLeave && (
-                            <span className="text-[var(--lxxl-muted)]">{item.cancelHint || "-"}</span>
-                          )}
+                          <ScheduleActionButtons
+                            item={item}
+                            onRequestCancel={requestCancel}
+                            onRequestLeave={requestLeave}
+                          />
                         </div>
                       </td>
                     </tr>
@@ -508,6 +534,96 @@ export function CounselorSchedulesPanel({
       )}
     </>
   );
+}
+
+function CounselorScheduleCalendarView({
+  focusedRowId,
+  rows,
+  onRequestCancel,
+  onRequestLeave,
+}: {
+  focusedRowId?: number | null;
+  rows: CounselorScheduleCalendarItem[];
+  onRequestCancel: (item: CounselorScheduleCalendarItem) => void;
+  onRequestLeave: (item: CounselorScheduleCalendarItem) => void;
+}) {
+  const groups = useMemo(() => {
+    const grouped = new Map<string, CounselorScheduleCalendarItem[]>();
+    rows.forEach((row) => {
+      const date = row.startTime.slice(0, 10);
+      grouped.set(date, [...(grouped.get(date) || []), row]);
+    });
+    return Array.from(grouped.entries());
+  }, [rows]);
+
+  return (
+    <div className="grid gap-4 border-t border-[var(--lxxl-border)] p-5 lg:grid-cols-2 2xl:grid-cols-3">
+      {groups.map(([date, items]) => (
+        <section className="rounded-xl border border-[var(--lxxl-border)] bg-white p-4" key={date}>
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="font-semibold">{date}</h3>
+            <span className="text-xs text-[var(--lxxl-muted)]">{items.length} 条</span>
+          </div>
+          <div className="mt-3 space-y-3">
+            {items.map((item) => (
+              <div
+                className={`rounded-xl p-3 text-sm ${
+                  item.id === focusedRowId ? "bg-[#FFF1CF] ring-1 ring-[#D9A94D]" : "bg-[#FAF8F4]"
+                }`}
+                key={item.id}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-medium">
+                    {formatDateTime(item.startTime)} 至 {formatDateTime(item.endTime)}
+                  </span>
+                  <Badge tone={scheduleStatusTone(item.displayStatus || item.status)}>
+                    {item.displayLabel || statusLabel(item.displayStatus || item.status)}
+                  </Badge>
+                </div>
+                <div className="mt-2 text-xs leading-5 text-[var(--lxxl-muted)]">
+                  {[item.centerName, item.roomName, item.patientName].filter(Boolean).join(" · ") || "-"}
+                </div>
+                {item.patientContractTag && (
+                  <div className="mt-1 text-xs font-medium text-[#315D4B]">
+                    {formatCounselorContractTag(item.patientContractTag)}
+                  </div>
+                )}
+                <div className="mt-3 flex flex-wrap gap-3">
+                  <ScheduleActionButtons
+                    item={item}
+                    onRequestCancel={onRequestCancel}
+                    onRequestLeave={onRequestLeave}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+function ScheduleActionButtons({
+  item,
+  onRequestCancel,
+  onRequestLeave,
+}: {
+  item: CounselorScheduleCalendarItem;
+  onRequestCancel: (item: CounselorScheduleCalendarItem) => void;
+  onRequestLeave: (item: CounselorScheduleCalendarItem) => void;
+}) {
+  if (item.requiresLeave) {
+    return <TableActionButton onClick={() => onRequestLeave(item)}>请假</TableActionButton>;
+  }
+  if (item.canCancel) {
+    return (
+      <TableActionButton tone="danger" onClick={() => onRequestCancel(item)}>
+        取消排期
+      </TableActionButton>
+    );
+  }
+  return <span className="text-[var(--lxxl-muted)]">{item.cancelHint || "-"}</span>;
 }
 
 function CounselorProxyBookingModal({

@@ -5,8 +5,16 @@ from typing import Any, Dict, Optional
 
 from sqlalchemy.orm import Session
 
+from app_time import china_now
 from model_compat import optional_model_value
-from models import AppLeaveRequest, AppMessage, AppRefundExemption
+from models import (
+    AppAccount,
+    AppLeaveRequest,
+    AppMessage,
+    AppOrder,
+    AppRefundExemption,
+    AppSchedule,
+)
 
 _ROOM_SUFFIX = re.compile(r"\s*·\s*.+(?:咨询室|室\s*[A-Z]?)$")
 
@@ -316,6 +324,100 @@ def _sync_patient_appointment_content(
     return _dump_content(payload)
 
 
+def _message_datetime(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    formatter = getattr(value, "strftime", None)
+    if callable(formatter):
+        return formatter("%Y-%m-%d %H:%M")
+    text = str(value).strip()
+    return text or None
+
+
+def _sync_counselor_proxy_order_payload(
+    title: str,
+    content: Optional[str],
+    order: AppOrder,
+    db: Session,
+) -> tuple[str, str]:
+    """代理预约通知使用订单和当前绑定关系，而不是创建时的状态快照。"""
+    payload = _parse_content(content)
+    raw_detail = payload.get("detail")
+    detail = dict(raw_detail) if isinstance(raw_detail, dict) else {}
+    schedule = (
+        db.query(AppSchedule).filter(AppSchedule.Id == order.SlotId).first()
+        if order.SlotId
+        else None
+    )
+    patient = (
+        db.query(AppAccount).filter(AppAccount.Id == order.AccountId).first()
+        if order.AccountId
+        else None
+    )
+
+    from patient_contract_service import patient_contract_extras
+
+    contract = patient_contract_extras(db, patient)
+    patient_name = (
+        (patient.RealName or patient.Nickname or patient.Mobile or "来访者").strip()
+        if patient
+        else str(detail.get("patientName") or "来访者").strip()
+    )
+    patient_tag = contract.get("contractTag")
+
+    status = (order.Status or "PENDING").upper()
+    if status == "PENDING" and order.ExpiresAt and order.ExpiresAt < china_now():
+        status = "EXPIRED"
+    if status == "CANCELED":
+        status = "CANCELLED"
+
+    display = {
+        "PENDING": (
+            "代理预约待支付",
+            "待支付",
+            "助理已为来访推送预约订单，待来访支付后生效",
+        ),
+        "PAID": ("代理预约已支付", "已支付", "来访已完成支付，预约已生效"),
+        "CANCELLED": ("代理预约已取消", "已取消", "该代理预约订单已取消"),
+        "REFUNDED": ("代理预约已退款", "已退款", "该代理预约订单已退款"),
+        "EXPIRED": ("代理预约已过期", "已过期", "该代理预约订单已过期"),
+    }
+    title, status_label, result_text = display.get(
+        status,
+        (title, status, f"订单当前状态：{status}"),
+    )
+
+    start_time = _message_datetime(schedule.StartTime) if schedule else detail.get("startTime")
+    end_time = _message_datetime(schedule.EndTime) if schedule else detail.get("endTime")
+    detail.update(
+        {
+            "patientName": patient_name,
+            "patientContractTag": patient_tag,
+            "startTime": start_time,
+            "endTime": end_time,
+            "orderId": order.Id,
+            "scheduleId": order.SlotId,
+            "status": status,
+            "statusLabel": status_label,
+            "resultText": result_text,
+            "tip": result_text,
+            "expiresAt": _iso_datetime(order.ExpiresAt),
+        }
+    )
+    patient_label = f"{patient_name} {patient_tag}" if patient_tag else patient_name
+    summary_parts = [
+        patient_label,
+        start_time,
+        detail.get("location"),
+        status_label,
+    ]
+    payload["summary"] = " · ".join(
+        str(value).strip() for value in summary_parts if str(value or "").strip()
+    )
+    payload["detail"] = detail
+    return title, _dump_content(payload)
+
+
 def enrich_message(msg: AppMessage, db: Session) -> AppMessage:
     """内存中归一化消息展示字段，不写回数据库。"""
     title = msg.Title
@@ -339,6 +441,13 @@ def enrich_message(msg: AppMessage, db: Session) -> AppMessage:
         leave = _leave_request_for_message(msg, db)
         if leave:
             title, content = _sync_leave_payload(title, content, leave)
+
+    if related_type == "COUNSELOR_PROXY_ORDER_PENDING" and msg.RelatedId:
+        order = db.query(AppOrder).filter(AppOrder.Id == msg.RelatedId).first()
+        if order:
+            title, content = _sync_counselor_proxy_order_payload(
+                title, content, order, db,
+            )
 
     content = _sync_patient_appointment_content(content, related_type)
 

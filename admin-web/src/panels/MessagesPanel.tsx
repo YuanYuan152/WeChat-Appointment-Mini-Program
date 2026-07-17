@@ -112,7 +112,7 @@ export function MessagesPanel({
   onSearch,
   onStatusFilterChange,
 }: {
-  crisisUnreadCount?: number;
+  crisisUnreadCount?: number | null;
   detailLoading?: boolean;
   listLoading?: boolean;
   messages?: MessageItem[];
@@ -141,7 +141,7 @@ export function MessagesPanel({
   const { currentPage, items: pageItems } = getPageItems(items, page, pageSize);
   const crisisMessages = items.filter(isCrisisReportMessage);
   const currentListCrisisCount = crisisMessages.length;
-  const unreadCrisisCount = crisisUnreadCount ?? crisisMessages.filter((item) => !item.IsRead).length;
+  const unreadCrisisCount = crisisUnreadCount;
   const categoryOptions = showCrisisBanner
     ? adminMessageCategoryOptions
     : showStaffReviewCategories
@@ -201,7 +201,7 @@ export function MessagesPanel({
         <div
           aria-live="polite"
           className={`mx-6 my-5 flex w-[calc(100%-3rem)] items-center justify-between gap-5 rounded-xl border px-5 py-4 text-sm ${
-            unreadCrisisCount > 0
+            unreadCrisisCount != null && unreadCrisisCount > 0
               ? "border-[#F3B18D] bg-[#FFF2EA] text-[#A94616]"
               : "border-[#F1D3C2] bg-[#FFF8F3] text-[#C45A1A]"
           }`}
@@ -211,7 +211,11 @@ export function MessagesPanel({
               !
             </span>
             <div className="min-w-0">
-              <div className="font-semibold">个案风险上报未读 {unreadCrisisCount} 条</div>
+              <div className="font-semibold">
+                {unreadCrisisCount == null
+                  ? "个案风险上报未读数量暂不可用"
+                  : `个案风险上报未读 ${unreadCrisisCount} 条`}
+              </div>
               <div className="mt-1 text-xs leading-5 opacity-80">
                 风险上报消息会在列表中高亮，可通过读取状态和关键词筛选定位。
               </div>

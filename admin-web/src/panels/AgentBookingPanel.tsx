@@ -255,7 +255,7 @@ export function AgentBookingPanel({
 
           {patient && patientStatusError && (
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#F3C9BB] bg-[#FFF4EF] px-4 py-3 text-sm text-[#C7542F]">
-              <span>签约与绑定状态读取失败，已停止代理预约。请重试后再继续。</span>
+              <span>{patientStatusError}</span>
               <button
                 className="font-medium underline underline-offset-2"
                 type="button"
@@ -685,7 +685,7 @@ function ProxyBookingModal({
 
           {patientStatusError && (
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#F3C9BB] bg-[#FFF4EF] px-4 py-3 text-sm text-[#C7542F]">
-              <span>签约与绑定状态读取失败，暂时不能推送订单。</span>
+              <span>{patientStatusError}</span>
               <button
                 className="font-medium underline underline-offset-2"
                 type="button"

@@ -68,6 +68,17 @@ def hard_delete_blocking_reason(db: Session, account_id: int) -> Optional[str]:
     ):
         return "该用户存在已支付订单，无法删除。"
 
+    if (
+        db.query(AppOrder.Id)
+        .join(AppSchedule, AppSchedule.Id == AppOrder.SlotId)
+        .filter(
+            AppSchedule.CounselorId == account_id,
+            AppOrder.Status.in_(("PAID", "REFUNDED")),
+        )
+        .first()
+    ):
+        return "该咨询师的排期存在已支付订单，无法删除。"
+
     return None
 
 
@@ -80,6 +91,11 @@ def hard_delete_account(db: Session, account_id: int) -> None:
     account = db.query(AppAccount).filter(AppAccount.Id == account_id).first()
     if not account:
         raise ValueError("用户不存在")
+
+    from patient_contract_service import retire_counselor_booking_relationships
+
+    # 即使角色数据已被部分清理，也要按账号 ID 清除残留绑定和待支付订单。
+    retire_counselor_booking_relationships(db, account_id)
 
     mobile = (account.Mobile or "").strip()
 
@@ -101,6 +117,20 @@ def hard_delete_account(db: Session, account_id: int) -> None:
     db.query(AppScheduleCancelLog).filter(AppScheduleCancelLog.CounselorId == account_id).delete(
         synchronize_session=False
     )
+    if schedule_ids:
+        # 未支付订单保留审计记录，但排期即将物理删除，必须解除引用避免孤儿 SlotId。
+        linked_unpaid_orders = (
+            db.query(AppOrder)
+            .filter(
+                AppOrder.SlotId.in_(schedule_ids),
+                ~AppOrder.Status.in_(("PAID", "REFUNDED")),
+            )
+            .all()
+        )
+        for order in linked_unpaid_orders:
+            order.SlotId = None
+        if linked_unpaid_orders:
+            db.flush()
     db.query(AppSchedule).filter(AppSchedule.CounselorId == account_id).delete(
         synchronize_session=False
     )

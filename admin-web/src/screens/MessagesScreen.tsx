@@ -41,7 +41,7 @@ function MessagesScreenContent() {
   const [appliedCategoryFilter, setAppliedCategoryFilter] = useState<MessageCategoryFilter>("ALL");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
-  const [crisisUnreadCount, setCrisisUnreadCount] = useState(0);
+  const [crisisUnreadCount, setCrisisUnreadCount] = useState<number | null>(null);
   const [selectedMessage, setSelectedMessage] = useState<MessageItem | null>(null);
   const [selectedBusinessDetail, setSelectedBusinessDetail] = useState<MessageBusinessDetail>(null);
   const [selectedActionTarget, setSelectedActionTarget] = useState<MessageActionTarget | null>(null);
@@ -60,7 +60,7 @@ function MessagesScreenContent() {
       const result = await fetchUnreadMessageCount("case_record_crisis");
       setCrisisUnreadCount(result.count || 0);
     } catch {
-      setCrisisUnreadCount(0);
+      // 保留最近一次成功读取的数量，避免加载失败时伪装成没有风险消息。
     }
   }, [showCrisisBanner]);
 

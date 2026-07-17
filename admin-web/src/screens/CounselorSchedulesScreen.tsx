@@ -6,7 +6,13 @@ import { useSearchParams } from "next/navigation";
 import { AppRoute, useAppRoute } from "@/components/AppRoute";
 import { getLocalDateValue } from "@/lib/date";
 import { getMessage } from "@/lib/display";
-import { CounselorSchedulesPanel, type CounselorScheduleDraft, type CounselorScheduleQuery } from "@/panels/CounselorSchedulesPanel";
+import {
+  counselorScheduleQueryKey,
+  createCounselorScheduleQuery,
+  toCounselorScheduleRequest,
+} from "@/lib/counselorSchedule";
+import type { CounselorScheduleQuery } from "@/lib/counselorSchedule";
+import { CounselorSchedulesPanel, type CounselorScheduleDraft } from "@/panels/CounselorSchedulesPanel";
 import {
   cancelCounselorSchedule,
   createCounselorSchedule,
@@ -18,10 +24,8 @@ import type { CounselorSlotOption } from "@/types/api";
 import type { ScreenData } from "@/types/app";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
 
-const INITIAL_QUERY = (start?: string | null): CounselorScheduleQuery => ({
-  start: start || getLocalDateValue(),
-  days: 14,
-});
+const INITIAL_QUERY = (start?: string | null): CounselorScheduleQuery =>
+  createCounselorScheduleQuery(start);
 
 const INITIAL_DRAFT = (): CounselorScheduleDraft => ({
   date: getLocalDateValue(),
@@ -55,6 +59,7 @@ function CounselorSchedulesScreenContent() {
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const calendarRequestSeq = useRef(0);
   const slotRequestSeq = useRef(0);
+  const focusedStartHandledRef = useRef<string | null>(focusedStart);
 
   const loadData = useCallback(async (
     options: { clearExistingNotice?: boolean; notifyOnError?: boolean } = {},
@@ -67,7 +72,9 @@ function CounselorSchedulesScreenContent() {
       clearNotice();
     }
     try {
-      const counselorScheduleCalendar = await fetchCounselorScheduleCalendar(filters);
+      const counselorScheduleCalendar = await fetchCounselorScheduleCalendar(
+        toCounselorScheduleRequest(filters),
+      );
       if (calendarRequestSeq.current !== requestSeq) {
         return false;
       }
@@ -90,34 +97,35 @@ function CounselorSchedulesScreenContent() {
   }, [loadData, refreshKey]);
 
   useEffect(() => {
-    if (!focusedStart || filters.start === focusedStart) {
+    if (!focusedStart || focusedStartHandledRef.current === focusedStart) {
       return;
     }
+    focusedStartHandledRef.current = focusedStart;
     const next = INITIAL_QUERY(focusedStart);
     setDraftFilters(next);
     setFilters(next);
     setPage(1);
-  }, [filters.start, focusedStart]);
+  }, [focusedStart]);
 
   const search = useCallback(() => {
     setPage(1);
-    if (filters.start === draftFilters.start && filters.days === draftFilters.days) {
+    if (counselorScheduleQueryKey(filters) === counselorScheduleQueryKey(draftFilters)) {
       void loadData();
       return;
     }
     setFilters(draftFilters);
-  }, [draftFilters, filters.days, filters.start, loadData]);
+  }, [draftFilters, filters, loadData]);
 
   const reset = useCallback(() => {
     const next = INITIAL_QUERY();
     setDraftFilters(next);
     setPage(1);
-    if (filters.start === next.start && filters.days === next.days) {
+    if (counselorScheduleQueryKey(filters) === counselorScheduleQueryKey(next)) {
       void loadData();
       return;
     }
     setFilters(next);
-  }, [filters.days, filters.start, loadData]);
+  }, [filters, loadData]);
 
   const loadSlots = useCallback(async (
     selection: Pick<CounselorScheduleDraft, "date" | "centerId"> = {
