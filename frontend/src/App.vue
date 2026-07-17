@@ -1,25 +1,36 @@
 <script lang="ts">
 /**
- * uni-app App 入口：不要写 <template>，不要用 script setup 的 render。
- * 真机（尤其 iOS）上错误写法会触发 Vue Proxy `$` 自递归：
- * Maximum call stack size exceeded → getApp().$vm undefined。
+ * uni-app App 入口：不要写 <template>。
+ * createApp().app.mount('#app') 在微信端必须保留。
  */
 import { updateTabBarForRole, readStoredRole } from '@/utils/tabBar'
 import { warnIfDeviceCannotReachLocalApi } from '@/utils/auth'
 
+let launched = false
+
 export default {
   onLaunch() {
+    if (launched) return
+    launched = true
     console.log('App Launch')
-    console.log('API地址:', import.meta.env.VITE_API_BASE_URL)
+    console.log('V2 API:', import.meta.env.VITE_API_V2_BASE_URL || 'http://localhost:8000')
     setTimeout(() => {
-      warnIfDeviceCannotReachLocalApi()
-    }, 0)
+      try {
+        warnIfDeviceCannotReachLocalApi()
+      } catch (e) {
+        console.warn('warnIfDeviceCannotReachLocalApi failed', e)
+      }
+    }, 300)
   },
   onShow() {
     console.log('App Show')
     setTimeout(() => {
-      updateTabBarForRole(readStoredRole())
-    }, 0)
+      try {
+        updateTabBarForRole(readStoredRole())
+      } catch (e) {
+        console.warn('updateTabBarForRole failed', e)
+      }
+    }, 300)
   },
   onHide() {
     console.log('App Hide')
@@ -28,7 +39,6 @@ export default {
 </script>
 
 <style>
-/* 全局样式 — 亚朵风简约高级 */
 page {
   background-color: #F7F5F2;
   color: #2C2C2C;

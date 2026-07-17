@@ -92,7 +92,7 @@ def maybe_notify_professional_pair_30th_booking(
         return
 
     patient = db.query(AppAccount).filter(AppAccount.Id == patient_id).first()
-    patient_name = _patient_display_name(patient)
+    patient_name = _patient_display_name(db, patient)
     counselor_contact = _counselor_contact(db, counselor_id)
     counselor_name = counselor_contact.get("name") or "咨询师"
     counselor_staff_remark = get_staff_remark(db, counselor_id)

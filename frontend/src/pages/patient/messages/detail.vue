@@ -195,10 +195,71 @@
           <text class="label">咨询时段</text>
           <text class="value">{{ detail.startTime }}</text>
         </view>
-        <view class="reason-box">
+        <view v-if="detail.submittedAt" class="detail-row">
+          <text class="label">提交时间</text>
+          <text class="value">{{ detail.submittedAt }}</text>
+        </view>
+        <view v-if="amendmentChangesText" class="reason-box">
+          <text class="reason-label">修改内容</text>
+          <text class="reason-text multiline">{{ amendmentChangesText }}</text>
+        </view>
+        <view v-else class="reason-box">
           <text class="reason-text">{{ payload.summary || message.Content }}</text>
         </view>
         <button class="review-btn" @click="goAmendmentReview">前往审核</button>
+      </view>
+
+      <view v-else-if="isCaseRecordAmendmentSubmitted" class="detail-body">
+        <view class="tip-box pending">
+          <text class="tip-text">您的咨询记录修改已提交，请等待管理员或助理审核。</text>
+        </view>
+        <view class="detail-row">
+          <text class="label">审核状态</text>
+          <text class="value pending-text">待审核</text>
+        </view>
+        <view v-if="detail.caseRecordId" class="detail-row">
+          <text class="label">记录编号</text>
+          <text class="value">#{{ detail.caseRecordId }}</text>
+        </view>
+        <view v-if="detail.submittedAt" class="detail-row">
+          <text class="label">提交时间</text>
+          <text class="value">{{ detail.submittedAt }}</text>
+        </view>
+        <view v-if="amendmentChangesText" class="reason-box">
+          <text class="reason-label">修改内容</text>
+          <text class="reason-text multiline">{{ amendmentChangesText }}</text>
+        </view>
+      </view>
+
+      <view v-else-if="isCaseRecordAmendmentResult" class="detail-body">
+        <view class="detail-row">
+          <text class="label">审核结果</text>
+          <text class="value" :class="amendmentResultClass">{{ amendmentResultLabel }}</text>
+        </view>
+        <view v-if="detail.caseRecordId" class="detail-row">
+          <text class="label">记录编号</text>
+          <text class="value">#{{ detail.caseRecordId }}</text>
+        </view>
+        <view v-if="detail.submittedAt" class="detail-row">
+          <text class="label">提交时间</text>
+          <text class="value">{{ detail.submittedAt }}</text>
+        </view>
+        <view v-if="detail.reviewedAt" class="detail-row">
+          <text class="label">处理时间</text>
+          <text class="value">{{ detail.reviewedAt }}</text>
+        </view>
+        <view v-if="detail.reviewedByName" class="detail-row">
+          <text class="label">处理人</text>
+          <text class="value">{{ detail.reviewedByName }}</text>
+        </view>
+        <view v-if="amendmentChangesText" class="reason-box">
+          <text class="reason-label">修改内容</text>
+          <text class="reason-text multiline">{{ amendmentChangesText }}</text>
+        </view>
+        <view v-if="detail.rejectReason" class="reason-box reject-box">
+          <text class="reason-label">驳回理由</text>
+          <text class="reason-text">{{ detail.rejectReason }}</text>
+        </view>
       </view>
 
       <view v-else-if="isCaseRecordCrisisReport" class="detail-body">
@@ -471,6 +532,29 @@ const isExemptionPending = computed(() => {
 const isCaseRecordAmendmentPending = computed(() => {
   if (!message.value) return false
   return isCaseRecordAmendmentPendingMessage(message.value)
+})
+const isCaseRecordAmendmentSubmitted = computed(() =>
+  relatedType.value === 'CASE_RECORD_AMENDMENT_SUBMITTED',
+)
+const isCaseRecordAmendmentResult = computed(() => {
+  if (relatedType.value !== 'CASE_RECORD_AMENDMENT') return false
+  const status = detail.value.status
+  return status === 'APPROVED' || status === 'REJECTED'
+    || detail.value.approved === true || detail.value.approved === false
+})
+const amendmentChangesText = computed(() => {
+  const text = detail.value.changesText
+  return typeof text === 'string' && text.trim() ? text.trim() : ''
+})
+const amendmentResultLabel = computed(() => {
+  if (detail.value.status === 'APPROVED' || detail.value.approved === true) return '已通过'
+  if (detail.value.status === 'REJECTED' || detail.value.approved === false) return '已驳回'
+  return '已处理'
+})
+const amendmentResultClass = computed(() => {
+  if (amendmentResultLabel.value === '已通过') return 'highlight'
+  if (amendmentResultLabel.value === '已驳回') return 'rejected-text'
+  return ''
 })
 const isCaseRecordCrisisReport = computed(() => relatedType.value === 'CASE_RECORD_CRISIS_REPORT')
 const isPricingNotice = computed(() =>

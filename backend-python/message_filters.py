@@ -38,7 +38,7 @@ CATEGORY_RELATED_TYPES: dict[str, list[str]] = {
     "counselor_leave": ["COUNSELOR_LEAVE"],
     "leave_submitted": ["COUNSELOR_LEAVE_SUBMITTED", "COUNSELOR_LEAVE_SUCCESS"],
     "exemption": ["REFUND_EXEMPTION", "REFUND_EXEMPTION_PENDING"],
-    "case_record_amendment": ["CASE_RECORD_AMENDMENT", "CASE_RECORD_AMENDMENT_PENDING"],
+    "case_record_amendment": ["CASE_RECORD_AMENDMENT", "CASE_RECORD_AMENDMENT_PENDING", "CASE_RECORD_AMENDMENT_SUBMITTED"],
     "case_record_crisis": ["CASE_RECORD_CRISIS_REPORT"],
     "activity": ["PATIENT_NEW_ACTIVITY"],
     "appointment_success": ["PATIENT_APPOINTMENT_SUCCESS"],

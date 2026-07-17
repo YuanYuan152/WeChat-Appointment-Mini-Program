@@ -1,0 +1,74 @@
+[
+  {
+    "id": "audio-01",
+    "title": "睡前冥想：放下一天的疲惫",
+    "series": "晚安心灵",
+    "seriesId": "series-night",
+    "cover": "/images/content/audio-night-01.jpg",
+    "description": "用十分钟的引导冥想，让身体和心灵慢慢沉入安宁的睡眠。",
+    "duration": 612,
+    "playCount": 28400,
+    "audioUrl": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+    "publishedAt": "2026-03-15"
+  },
+  {
+    "id": "audio-02",
+    "title": "焦虑时的呼吸锚点",
+    "series": "晚安心灵",
+    "seriesId": "series-night",
+    "cover": "/images/content/audio-night-02.jpg",
+    "description": "当焦虑来袭，这个练习帮你在三分钟内找回内心的平静。",
+    "duration": 485,
+    "playCount": 19200,
+    "audioUrl": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
+    "publishedAt": "2026-03-22"
+  },
+  {
+    "id": "audio-03",
+    "title": "与内在小孩对话",
+    "series": "晚安心灵",
+    "seriesId": "series-night",
+    "cover": "/images/content/audio-night-03.jpg",
+    "description": "温柔地触碰内心深处的那个孩子，给予TA迟来的拥抱。",
+    "duration": 720,
+    "playCount": 15600,
+    "audioUrl": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
+    "publishedAt": "2026-04-01"
+  },
+  {
+    "id": "audio-04",
+    "title": "情绪日记引导",
+    "series": "自我探索",
+    "seriesId": "series-explore",
+    "cover": "/images/content/audio-explore-01.jpg",
+    "description": "跟随引导写下今天的情绪，不加评判，只是看见。",
+    "duration": 540,
+    "playCount": 9800,
+    "audioUrl": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3",
+    "publishedAt": "2026-04-10"
+  },
+  {
+    "id": "audio-05",
+    "title": "关系中的边界感",
+    "series": "自我探索",
+    "seriesId": "series-explore",
+    "cover": "/images/content/audio-explore-02.jpg",
+    "description": "学会温柔而坚定地说「不」，是爱自己也是爱他人。",
+    "duration": 660,
+    "playCount": 12300,
+    "audioUrl": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3",
+    "publishedAt": "2026-04-18"
+  },
+  {
+    "id": "audio-06",
+    "title": "清晨正念唤醒",
+    "series": "自我探索",
+    "seriesId": "series-explore",
+    "cover": "/images/content/audio-explore-03.jpg",
+    "description": "用五分钟开启充满觉知的一天，带着意图而非惯性生活。",
+    "duration": 320,
+    "playCount": 21500,
+    "audioUrl": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3",
+    "publishedAt": "2026-05-02"
+  }
+]

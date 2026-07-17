@@ -48,6 +48,92 @@ def _counselor_display_name(db: Session, counselor_id: int) -> str:
     return f"咨询师#{counselor_id}"
 
 
+def _staff_display_name(db: Session, account_id: Optional[int]) -> Optional[str]:
+    if not account_id:
+        return None
+    acc = db.query(AppAccount).filter(AppAccount.Id == account_id).first()
+    if not acc:
+        return f"工作人员#{account_id}"
+    return acc.Nickname or acc.RealName or f"工作人员#{account_id}"
+
+
+def _format_message_time(dt: Optional[datetime]) -> Optional[str]:
+    if not dt:
+        return None
+    return dt.strftime("%Y-%m-%d %H:%M")
+
+
+_AMENDMENT_FIELD_LABELS = (
+    ("subjective", "来访者主诉和当前状况", "Subjective"),
+    ("objective", "咨询师观察", "Objective"),
+    ("assessment", "评估", "Assessment"),
+    ("plan", "计划", "Plan"),
+)
+
+
+def _build_amendment_proposed_payload(amendment: AppCaseRecordAmendmentRequest) -> dict:
+    return {
+        key: (getattr(amendment, attr) or "").strip()
+        for key, _, attr in _AMENDMENT_FIELD_LABELS
+    }
+
+
+def _build_amendment_changes_text(
+    amendment: AppCaseRecordAmendmentRequest,
+    *,
+    record: Optional[AppCaseRecord] = None,
+) -> str:
+    """生成消息中展示的修改内容（拟修改字段全文）。"""
+    lines: List[str] = []
+    for key, label, attr in _AMENDMENT_FIELD_LABELS:
+        proposed = (getattr(amendment, attr) or "").strip()
+        if record is not None:
+            current = (getattr(record, attr) or "").strip()
+            if current == proposed:
+                continue
+        if proposed:
+            lines.append(f"【{label}】\n{proposed}")
+    reason = (amendment.Reason or "").strip()
+    if reason:
+        lines.append(f"【修改说明】\n{reason}")
+    return "\n\n".join(lines) if lines else "（无文字修改内容）"
+
+
+def _build_amendment_message_detail(
+    db: Session,
+    amendment: AppCaseRecordAmendmentRequest,
+    record: AppCaseRecord,
+    *,
+    status: str,
+    consultation: Optional[AppConsultation] = None,
+    approved: Optional[bool] = None,
+    reject_reason: Optional[str] = None,
+) -> dict:
+    counselor_name = _counselor_display_name(db, amendment.CounselorId)
+    start_time = ""
+    if consultation and consultation.StartTime:
+        start_time = consultation.StartTime.strftime("%Y-%m-%d %H:%M")
+    detail = {
+        "status": status,
+        "caseRecordId": record.Id,
+        "consultationId": record.ConsultationId,
+        "amendmentId": amendment.Id,
+        "counselorName": counselor_name,
+        "startTime": start_time or None,
+        "submittedAt": _format_message_time(amendment.CreatedAt),
+        "changesText": _build_amendment_changes_text(amendment),
+        "proposed": _build_amendment_proposed_payload(amendment),
+    }
+    if approved is not None:
+        detail["approved"] = approved
+    if reject_reason:
+        detail["rejectReason"] = reject_reason.strip()
+    if amendment.ReviewedAt:
+        detail["reviewedAt"] = _format_message_time(amendment.ReviewedAt)
+        detail["reviewedByName"] = _staff_display_name(db, amendment.ReviewedBy)
+    return detail
+
+
 def latest_amendment_for_record(
     db: Session,
     case_record_id: int,
@@ -126,7 +212,37 @@ def submit_amendment_request(
     db.add(row)
     db.flush()
     notify_admins_new_amendment(db, row, record)
+    notify_counselor_amendment_submitted(db, row, record)
     return row
+
+
+def notify_counselor_amendment_submitted(
+    db: Session,
+    amendment: AppCaseRecordAmendmentRequest,
+    record: AppCaseRecord,
+) -> None:
+    consultation = (
+        db.query(AppConsultation)
+        .filter(AppConsultation.Id == record.ConsultationId)
+        .first()
+    )
+    detail = _build_amendment_message_detail(
+        db, amendment, record, status="SUBMITTED", consultation=consultation,
+    )
+    title = "咨询记录修改已提交待审核"
+    summary = f"记录#{record.Id} 修改已提交，等待审核"
+    if detail.get("submittedAt"):
+        summary += f" · 提交于 {detail['submittedAt']}"
+    content = json.dumps({"summary": summary, "detail": detail}, ensure_ascii=False)
+    create_message(
+        db,
+        amendment.CounselorId,
+        "SYSTEM",
+        title,
+        content,
+        related_type="CASE_RECORD_AMENDMENT_SUBMITTED",
+        related_id=amendment.Id,
+    )
 
 
 def notify_admins_new_amendment(
@@ -145,14 +261,12 @@ def notify_admins_new_amendment(
     summary = f"{counselor_name} · 记录#{record.Id}"
     if start_time:
         summary += f" · {start_time}"
-    detail = {
-        "counselorName": counselor_name,
-        "caseRecordId": record.Id,
-        "consultationId": record.ConsultationId,
-        "amendmentId": amendment.Id,
-        "status": "PENDING",
-        "startTime": start_time or None,
-    }
+    submitted_at = _format_message_time(amendment.CreatedAt)
+    if submitted_at:
+        summary += f" · 提交于 {submitted_at}"
+    detail = _build_amendment_message_detail(
+        db, amendment, record, status="PENDING", consultation=consultation,
+    )
     content = json.dumps({"summary": summary, "detail": detail}, ensure_ascii=False)
     from staff_message_service import notify_staff_workbench_inbox
 
@@ -169,25 +283,36 @@ def notify_admins_new_amendment(
 def _update_admin_pending_messages(
     db: Session,
     amendment: AppCaseRecordAmendmentRequest,
+    record: AppCaseRecord,
     *,
     approved: bool,
     reject_reason: Optional[str] = None,
 ) -> None:
     counselor_name = _counselor_display_name(db, amendment.CounselorId)
+    reviewed_at = _format_message_time(amendment.ReviewedAt)
+    reviewer_name = _staff_display_name(db, amendment.ReviewedBy)
     if approved:
         title = "咨询记录修改已通过"
         summary = f"{counselor_name} · 记录#{amendment.CaseRecordId} · 已同意修改"
-        detail = {"status": "APPROVED", "approved": True, "amendmentId": amendment.Id}
+        if reviewed_at:
+            summary += f" · 处理于 {reviewed_at}"
+        detail = _build_amendment_message_detail(
+            db, amendment, record, status="APPROVED", approved=True,
+        )
     else:
         reason_text = (reject_reason or "").strip() or "未说明具体原因"
         title = "咨询记录修改已驳回"
         summary = f"{counselor_name} · 记录#{amendment.CaseRecordId} · {reason_text}"
-        detail = {
-            "status": "REJECTED",
-            "approved": False,
-            "rejectReason": reason_text,
-            "amendmentId": amendment.Id,
-        }
+        if reviewed_at:
+            summary += f" · 处理于 {reviewed_at}"
+        detail = _build_amendment_message_detail(
+            db,
+            amendment,
+            record,
+            status="REJECTED",
+            approved=False,
+            reject_reason=reason_text,
+        )
     content = json.dumps({"summary": summary, "detail": detail}, ensure_ascii=False)
     rows = (
         db.query(AppMessage)
@@ -213,6 +338,7 @@ def _update_admin_pending_messages(
 def notify_counselor_amendment_result(
     db: Session,
     amendment: AppCaseRecordAmendmentRequest,
+    record: AppCaseRecord,
     *,
     approved: bool,
     reject_reason: Optional[str] = None,
@@ -220,23 +346,27 @@ def notify_counselor_amendment_result(
     if approved:
         title = "咨询记录修改已通过"
         summary = "您的修改申请已审核通过，记录内容已更新。"
-        detail = {
-            "status": "APPROVED",
-            "approved": True,
-            "caseRecordId": amendment.CaseRecordId,
-            "amendmentId": amendment.Id,
-        }
+        detail = _build_amendment_message_detail(
+            db, amendment, record, status="APPROVED", approved=True,
+        )
     else:
         reason_text = (reject_reason or "").strip() or "未说明具体原因"
         title = "咨询记录修改已驳回"
         summary = f"驳回理由：{reason_text}"
-        detail = {
-            "status": "REJECTED",
-            "approved": False,
-            "rejectReason": reason_text,
-            "caseRecordId": amendment.CaseRecordId,
-            "amendmentId": amendment.Id,
-        }
+        detail = _build_amendment_message_detail(
+            db,
+            amendment,
+            record,
+            status="REJECTED",
+            approved=False,
+            reject_reason=reason_text,
+        )
+    submitted_at = detail.get("submittedAt")
+    reviewed_at = detail.get("reviewedAt")
+    if submitted_at:
+        summary += f" · 提交于 {submitted_at}"
+    if reviewed_at:
+        summary += f" · 处理于 {reviewed_at}"
     content = json.dumps({"summary": summary, "detail": detail}, ensure_ascii=False)
     create_message(
         db,
@@ -283,8 +413,8 @@ def approve_amendment(
     amendment.ReviewedBy = admin_id
     amendment.ReviewedAt = now
 
-    _update_admin_pending_messages(db, amendment, approved=True)
-    notify_counselor_amendment_result(db, amendment, approved=True)
+    _update_admin_pending_messages(db, amendment, record, approved=True)
+    notify_counselor_amendment_result(db, amendment, record, approved=True)
     notify_admins_crisis_report_if_needed(
         db,
         record,
@@ -310,10 +440,17 @@ def reject_amendment(
     amendment.ReviewedBy = admin_id
     amendment.ReviewedAt = now
 
-    _update_admin_pending_messages(db, amendment, approved=False, reject_reason=reject_reason)
+    record = db.query(AppCaseRecord).filter(AppCaseRecord.Id == amendment.CaseRecordId).first()
+    if not record:
+        raise ValueError("关联咨询记录不存在")
+
+    _update_admin_pending_messages(
+        db, amendment, record, approved=False, reject_reason=reject_reason,
+    )
     notify_counselor_amendment_result(
         db,
         amendment,
+        record,
         approved=False,
         reject_reason=reject_reason,
     )

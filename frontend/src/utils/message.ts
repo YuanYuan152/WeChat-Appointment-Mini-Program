@@ -66,6 +66,9 @@ export function messageDisplayTitle(item: MessageItem): string {
   if (rt === 'CASE_RECORD_AMENDMENT_PENDING' || isCaseRecordAmendmentPendingMessage(item)) {
     return '咨询记录修改待审核'
   }
+  if (rt === 'CASE_RECORD_AMENDMENT_SUBMITTED') {
+    return '咨询记录修改已提交待审核'
+  }
   if (rt === 'CASE_RECORD_CRISIS_REPORT') {
     return '个案风险需上报'
   }
@@ -137,6 +140,7 @@ export const RELATED_TYPE_LABELS: Record<string, string> = {
   REFUND_EXEMPTION_PENDING: '豁免待审核',
   CASE_RECORD_AMENDMENT: '记录修改',
   CASE_RECORD_AMENDMENT_PENDING: '记录修改待审核',
+  CASE_RECORD_AMENDMENT_SUBMITTED: '记录修改已提交',
   CASE_RECORD_CRISIS_REPORT: '风险需上报',
   COUNSELOR_CONSULTATION_DONE: '咨询完成',
   COUNSELOR_CONSULTATION_REMIND: '咨询提醒',
@@ -167,6 +171,7 @@ export const COUNSELOR_MESSAGE_TYPES = new Set([
   'COUNSELOR_LEAVE_SUBMITTED',
   'COUNSELOR_LEAVE_SUCCESS',
   'CASE_RECORD_AMENDMENT',
+  'CASE_RECORD_AMENDMENT_SUBMITTED',
 ])
 
 export const PATIENT_MESSAGE_TYPES = new Set([
@@ -302,6 +307,9 @@ export function messageCategoryLabel(item: MessageItem): string {
   if (rt === 'CASE_RECORD_AMENDMENT_PENDING' || isCaseRecordAmendmentPendingMessage(item)) {
     return '记录修改待审核'
   }
+  if (rt === 'CASE_RECORD_AMENDMENT_SUBMITTED') {
+    return '记录修改已提交'
+  }
   if (rt === 'CASE_RECORD_CRISIS_REPORT') {
     return '风险需上报'
   }
@@ -389,11 +397,12 @@ export function resolveMessageNavigation(
     return `/pages/patient/messages/detail?id=${item.Id}`
   }
 
+  if (item.RelatedType === 'CASE_RECORD_AMENDMENT_SUBMITTED' && activeRole === 'Counselor') {
+    return `/pages/patient/messages/detail?id=${item.Id}`
+  }
+
   if (item.RelatedType === 'CASE_RECORD_AMENDMENT' && activeRole === 'Counselor') {
-    const caseRecordId = detail?.caseRecordId
-    if (caseRecordId) {
-      return `/pages/counselor/case-record/view?recordId=${caseRecordId}`
-    }
+    return `/pages/patient/messages/detail?id=${item.Id}`
   }
 
   if (item.RelatedType === 'PATIENT_NEW_ACTIVITY') {
