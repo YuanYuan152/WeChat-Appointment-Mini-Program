@@ -3,14 +3,13 @@
 import { useCallback, useEffect, useState } from "react";
 
 import type { Role } from "@/types/api";
-import type { CounselorType } from "@/config/userRoleMeta";
 
 import {
   bindUserRole,
   createUserByMobile,
   fetchAdminUsers,
+  type BindUserRolePayload,
   type CreateUserByMobilePayload,
-  unbindUserRole,
 } from "@/services/roles";
 import { AppRoute, useAppRoute } from "@/components/AppRoute";
 import { RolesPanel } from "@/panels/RolesPanel";
@@ -51,39 +50,12 @@ function RolesScreenContent() {
     void loadData();
   }, [loadData, refreshKey]);
 
-  const updateRoles = (userId: number, currentRoles: Role[], nextRoles: Role[], counselorType?: CounselorType) => {
+  const updateRole = (userId: number, role: Role, payload: BindUserRolePayload = {}) => {
     async function runUpdate() {
-      const currentRoleSet = new Set(currentRoles);
-      const nextRoleSet = new Set(nextRoles);
-      const rolesToBind = nextRoles.filter((role) => !currentRoleSet.has(role));
-      const rolesToUnbind = currentRoles.filter((role) => !nextRoleSet.has(role));
-      const needsCounselorTypeUpdate =
-        !!counselorType &&
-        currentRoleSet.has("Counselor") &&
-        nextRoleSet.has("Counselor") &&
-        !rolesToBind.includes("Counselor");
-
-      if (rolesToBind.length === 0 && rolesToUnbind.length === 0 && !needsCounselorTypeUpdate) {
-        showNotice("success", "角色无变化");
-        return;
-      }
-
       setListLoading(true);
       clearNotice();
       try {
-        for (const role of rolesToBind) {
-          await bindUserRole(
-            userId,
-            role,
-            role === "Counselor" && counselorType ? { counselor_type: counselorType } : undefined,
-          );
-        }
-        if (needsCounselorTypeUpdate) {
-          await bindUserRole(userId, "Counselor", { counselor_type: counselorType });
-        }
-        for (const role of rolesToUnbind) {
-          await unbindUserRole(userId, role);
-        }
+        await bindUserRole(userId, role, payload);
         const adminUsers = await fetchAdminUsers();
         setData((prev) => ({ ...prev, adminUsers }));
         showNotice("success", "角色已更新");
@@ -125,7 +97,7 @@ function RolesScreenContent() {
         setPageSize(nextPageSize);
       }}
       onCreateUser={createUser}
-      onUpdateRoles={updateRoles}
+      onUpdateRole={updateRole}
     />
   );
 }

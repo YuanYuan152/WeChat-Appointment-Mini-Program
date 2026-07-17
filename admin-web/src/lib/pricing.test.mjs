@@ -49,11 +49,18 @@ test("three party cent values always add up to the visible price", () => {
   assert.equal(preview.hospitalShareCents, 0);
 });
 
-test("single counselor pricing update keeps percentage semantics", () => {
-  const payload = pricing.buildCounselorPercentPricingUpdate(680, 60);
-  assert.deepEqual(payload, {
-    basePriceYuan: 680,
-    defaultRevenueSharePercent: 60,
-  });
-  assert.equal("defaultRevenueShareYuan" in payload, false);
+test("editable share sync keeps amounts summing to display price", () => {
+  const fromCounselor = pricing.threePartyFromCounselorAmount(620, 322, 0);
+  assert.equal(
+    fromCounselor.counselorShareYuan + fromCounselor.platformShareYuan + fromCounselor.hospitalShareYuan,
+    620,
+  );
+  const fromPlatform = pricing.threePartyFromPlatformAmount(620, 298, 0);
+  assert.equal(fromPlatform.counselorShareYuan, 322);
+  const fromHospital = pricing.threePartyFromHospitalAmount(620, 20, 300);
+  assert.equal(
+    fromHospital.counselorShareYuan + fromHospital.platformShareYuan + fromHospital.hospitalShareYuan,
+    620,
+  );
+  assert.equal(fromHospital.hospitalShareYuan, 20);
 });

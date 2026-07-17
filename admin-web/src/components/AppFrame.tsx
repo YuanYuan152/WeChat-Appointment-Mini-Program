@@ -19,5 +19,12 @@ export function AppFrame({ children }: { children: ReactNode }) {
 
 function getSectionIdByPathname(pathname: string): SectionId {
   const normalizedPathname = pathname === "/" ? "/" : pathname.replace(/\/$/, "");
-  return sections.find((section) => section.path === normalizedPathname)?.id || "dashboard";
+  const exact = sections.find((section) => section.path === normalizedPathname)?.id;
+  if (exact) {
+    return exact;
+  }
+  const nested = sections.find(
+    (section) => section.path !== "/" && normalizedPathname.startsWith(`${section.path}/`),
+  )?.id;
+  return nested || "dashboard";
 }

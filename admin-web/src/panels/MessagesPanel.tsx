@@ -51,26 +51,17 @@ export type MessageCategoryFilter =
   | "pricing"
   | "proxy_booking";
 
-const adminMessageCategoryOptions: Array<{ value: MessageCategoryFilter; label: string }> = [
-  { value: "ALL", label: "全部类型" },
-  { value: "case_record_crisis", label: "风险上报" },
-  { value: "exemption", label: "用户豁免" },
-  { value: "counselor_leave", label: "咨询师请假" },
-  { value: "case_record_amendment", label: "咨询记录修改" },
-  { value: "charity_milestone", label: "公益咨询里程碑" },
-  { value: "professional_pair_milestone", label: "正价咨询里程碑" },
-  { value: "pricing", label: "定价与抽成" },
-  { value: "proxy_booking", label: "代理预约" },
-];
-
-const assistantMessageCategoryOptions: Array<{ value: MessageCategoryFilter; label: string }> = [
+/** 管理工作台（助理/主任/管理员）共用消息类型，与小程序保持一致 */
+const staffWorkbenchMessageCategoryOptions: Array<{ value: MessageCategoryFilter; label: string }> = [
   { value: "ALL", label: "全部类型" },
   { value: "appointment_new", label: "新增预约" },
   { value: "appointment_cancel", label: "预约取消" },
-  { value: "exemption", label: "用户豁免" },
+  { value: "exemption", label: "豁免审核" },
   { value: "counselor_leave", label: "咨询师请假" },
-  { value: "charity_milestone", label: "公益咨询里程碑" },
-  { value: "professional_pair_milestone", label: "正价咨询里程碑" },
+  { value: "case_record_amendment", label: "记录修改审核" },
+  { value: "case_record_crisis", label: "风险上报" },
+  { value: "charity_milestone", label: "公益咨询30次提示" },
+  { value: "professional_pair_milestone", label: "正价咨询30次提示" },
   { value: "pricing", label: "定价与抽成" },
   { value: "proxy_booking", label: "代理预约" },
 ];
@@ -142,10 +133,9 @@ export function MessagesPanel({
   const crisisMessages = items.filter(isCrisisReportMessage);
   const currentListCrisisCount = crisisMessages.length;
   const unreadCrisisCount = crisisUnreadCount;
-  const categoryOptions = showCrisisBanner
-    ? adminMessageCategoryOptions
-    : showStaffReviewCategories
-      ? assistantMessageCategoryOptions
+  const categoryOptions =
+    showCrisisBanner || showStaffReviewCategories
+      ? staffWorkbenchMessageCategoryOptions
       : counselorMessageCategoryOptions;
 
   return (
@@ -851,6 +841,8 @@ function relatedTypeLabel(type?: string | null) {
     CONSULTATION: "咨询预约",
     SCHEDULE: "排期",
     COUNSELOR_LEAVE: "咨询师请假",
+    APPOINTMENT_NEW: "新增预约",
+    APPOINTMENT_CANCEL: "预约取消",
     COUNSELOR_APPOINTMENT_NEW: "新预约",
     COUNSELOR_APPOINTMENT_CANCEL: "预约取消",
     COUNSELOR_CONSULTATION_REMIND: "咨询提醒",
@@ -865,9 +857,9 @@ function relatedTypeLabel(type?: string | null) {
     PATIENT_PROXY_ORDER_PENDING: "代理预约待支付",
     COUNSELOR_PROXY_ORDER_PENDING: "代理预约待支付",
     STAFF_PROXY_ORDER_PUSHED: "代理预约已推送",
-    CHARITY_CONSULTATION_30_BOOKING: "公益咨询里程碑",
-    CHARITY_CONSULTATION_30_DONE: "公益咨询里程碑",
-    PROFESSIONAL_PAIR_CONSULTATION_30_BOOKING: "正价咨询里程碑",
+    CHARITY_CONSULTATION_30_BOOKING: "公益咨询30次提示",
+    CHARITY_CONSULTATION_30_DONE: "公益咨询30次提示",
+    PROFESSIONAL_PAIR_CONSULTATION_30_BOOKING: "正价咨询30次提示",
     PRICING_COUNSELOR_BASE_UPDATED: "咨询师定价调整",
     PRICING_PATIENT_PRICE_UPDATED: "来访调价",
     PRICING_PATIENT_SHARE_UPDATED: "来访分成调整",
