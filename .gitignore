@@ -71,6 +71,15 @@ frontend/dist/
 frontend/unpackage/
 frontend/.env.local
 
+# Next.js 本地编译产物（不要提交；含被占用的 .next/dev/lock）
+**/.next/
+admin-web/node_modules/
+admin-web/.env
+admin-web/.env.local
+EAP_front_site/node_modules/
+EAP_front_site/.env
+EAP_front_site/.env.local
+
 # Visual Studio 2015/2017 cache/options directory
 .vs/
 # Uncomment if you have tasks that create the project's static files in wwwroot

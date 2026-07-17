@@ -1,0 +1,32 @@
+@import "tailwindcss";
+
+@theme {
+  --color-lxxl-bg: #f7f5f2;
+  --color-lxxl-green: #3d5a4e;
+  --color-lxxl-green-dark: #2f4a40;
+  --color-lxxl-gold: #c9a96e;
+  --color-lxxl-text: #2c2c2c;
+  --color-lxxl-muted: #8a8a8a;
+  --color-lxxl-border: #e8e4de;
+}
+
+:root {
+  --lxxl-bg: #f7f5f2;
+  --lxxl-green: #3d5a4e;
+  --lxxl-green-dark: #2f4a40;
+  --lxxl-gold: #c9a96e;
+  --lxxl-text: #2c2c2c;
+  --lxxl-muted: #8a8a8a;
+  --lxxl-border: #e8e4de;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--lxxl-bg);
+  color: var(--lxxl-text);
+  font-family: Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
