@@ -32,6 +32,7 @@ export interface RefundExemption {
   accountId: number;
   patientName: string;
   patientMobile?: string | null;
+  patientContractTag?: string | null;
   counselorId: number;
   counselorName: string;
   amount: number;
@@ -58,6 +59,7 @@ export interface AdminUser {
   counselorType?: string | null;
   counselorTypeLabel?: string | null;
   roles: Role[];
+  contractTag?: string | null;
   created?: boolean;
   message?: string;
 }
@@ -99,6 +101,11 @@ export interface PricingPatientRow {
   patientId: number;
   patientName: string;
   patientMobile?: string | null;
+  isContractSigned?: boolean;
+  boundCounselorId?: number | null;
+  boundCounselorName?: string | null;
+  contractTag?: string | null;
+  patientContractTag?: string | null;
   counselorId: number;
   counselorName: string;
   counselorType?: string | null;
@@ -136,7 +143,41 @@ export interface PricingPatientListResponse {
 
 export interface PricingCounselorUpdatePayload {
   basePriceYuan: number;
-  defaultRevenueShareYuan: number;
+  defaultRevenueSharePercent: number;
+}
+
+export interface PricingBatchDefaultSharePayload {
+  counselorIds: number[];
+  revenueSharePercent: number;
+  overridePatientShares: boolean;
+}
+
+export interface PricingShareSnapshot {
+  shareMode?: "AMOUNT" | "PERCENT" | null;
+  revenueShareCents?: number | null;
+  revenueSharePercent?: number | null;
+}
+
+export interface PricingBatchDefaultShareItem {
+  counselorId: number;
+  counselorName: string;
+  beforeShare: PricingShareSnapshot;
+  afterShare: PricingShareSnapshot;
+  defaultShareWillChange: boolean;
+  willChange: boolean;
+  patientShareOverrideCount: number;
+  willClearPatientShareOverrideCount: number;
+}
+
+export interface PricingBatchDefaultShareResult {
+  revenueSharePercent: number;
+  overridePatientShares: boolean;
+  selectedCount: number;
+  changedCount: number;
+  patientShareOverrideCount: number;
+  willClearPatientShareOverrideCount: number;
+  clearedPatientShareOverrideCount?: number;
+  items: PricingBatchDefaultShareItem[];
 }
 
 export interface PricingPatientUpdatePayload {
@@ -169,6 +210,7 @@ export interface CompletedOrderImportRowResult {
   status: CompletedOrderImportStatus;
   message: string;
   patientName?: string | null;
+  patientContractTag?: string | null;
   counselorName?: string | null;
   startTime?: string | null;
   endTime?: string | null;
@@ -239,6 +281,7 @@ export interface ScheduleItem {
   roomId?: string | null;
   roomName?: string | null;
   patientName?: string | null;
+  patientContractTag?: string | null;
 }
 
 export interface CounselorSchedules {
@@ -273,6 +316,7 @@ export interface RoomStatus extends Room {
   counselorMobile?: string | null;
   patientName?: string | null;
   patientMobile?: string | null;
+  patientContractTag?: string | null;
   startTime?: string | null;
   endTime?: string | null;
   scheduleStatus?: string | null;
@@ -301,6 +345,7 @@ export interface RoomDetailSlot {
   counselorMobile?: string | null;
   patientName?: string | null;
   patientMobile?: string | null;
+  patientContractTag?: string | null;
   roomCode?: string | null;
   roomName?: string | null;
   scheduleStatus?: string | null;
@@ -350,6 +395,7 @@ export interface AdminConsultationRecord {
   consultationId: number;
   patientId: number;
   patientName: string;
+  patientContractTag?: string | null;
   startTime?: string | null;
   endTime?: string | null;
   caseRecordId?: number | null;
@@ -365,6 +411,7 @@ export interface AdminCaseRecordDetail {
   CounselorId: number;
   CounselorName: string;
   PatientName: string;
+  PatientContractTag?: string | null;
   StartTime?: string | null;
   EndTime?: string | null;
   Subjective?: string | null;
@@ -411,6 +458,7 @@ export interface AdminLeaveRequestDetail {
   counselorName: string;
   reason?: string | null;
   status: string;
+  rejectReason?: string | null;
   startTime?: string | null;
   endTime?: string | null;
   location?: string | null;
@@ -418,6 +466,7 @@ export interface AdminLeaveRequestDetail {
   affectedPatients: Array<{
     consultationId?: number | null;
     patientName?: string | null;
+    patientContractTag?: string | null;
     patientPhone?: string | null;
     emergencyContact?: string | null;
     emergencyPhone?: string | null;
@@ -427,6 +476,7 @@ export interface AdminLeaveRequestDetail {
     refundText?: string | null;
   }>;
   createdAt?: string | null;
+  reviewedBy?: number | null;
   reviewedAt?: string | null;
 }
 
@@ -447,6 +497,7 @@ export interface FeedbackItem {
   id: number;
   accountId: number;
   userName?: string | null;
+  patientContractTag?: string | null;
   userMobile?: string | null;
   category?: string | null;
   content: string;
@@ -473,6 +524,7 @@ export interface OperationRecord {
   status?: string | null;
   patientName?: string | null;
   patientContact?: string | null;
+  patientContractTag?: string | null;
   counselorName?: string | null;
   counselorContact?: string | null;
   patientId?: number | null;
@@ -495,6 +547,7 @@ export interface UserBoardSummary {
   gender?: string | null;
   roles: Role[];
   activeRole?: string | null;
+  isVisitor?: boolean;
   orderCount: number;
   paidOrderCount: number;
   paidAmount: number;
@@ -507,6 +560,22 @@ export interface UserBoardSummary {
   cancelledConsultationCount: number;
   latestConsultationAt?: string | null;
   createdAt?: string | null;
+  staffRemark: string;
+  isContractSigned?: boolean;
+  boundCounselorId?: number | null;
+  boundCounselorName?: string | null;
+  contractTag?: string | null;
+}
+
+export interface PatientContractInfo {
+  patientId: number;
+  name: string;
+  mobile?: string | null;
+  gender?: string | null;
+  isContractSigned: boolean;
+  boundCounselorId?: number | null;
+  boundCounselorName?: string | null;
+  contractTag?: string | null;
 }
 
 export interface UserBoardDetail {
@@ -569,6 +638,12 @@ export interface CounselorBoardSummary {
   bookedScheduleCount: number;
   leaveRequestCount: number;
   latestScheduleAt?: string | null;
+  staffRemark: string;
+}
+
+export interface StaffRemarkUpdateResult {
+  accountId: number;
+  staffRemark: string;
 }
 
 export interface AdminCounselorIntroProfile {
@@ -615,6 +690,7 @@ export interface CounselorBoardDetail {
     patientId: number;
     patientName: string;
     patientMobile?: string | null;
+    patientContractTag?: string | null;
     consultationCount: number;
     appointmentCount: number;
     cancelledCount: number;
@@ -637,6 +713,7 @@ export interface CounselorBoardDetail {
     patientId: number;
     patientName: string;
     patientMobile?: string | null;
+    patientContractTag?: string | null;
     scheduleId?: number | null;
     status: string;
     startTime?: string | null;
@@ -654,6 +731,7 @@ export interface CounselorBoardDetail {
     preview?: string | null;
     patientName?: string | null;
     patientMobile?: string | null;
+    patientContractTag?: string | null;
     status?: string | null;
     startTime?: string | null;
     endTime?: string | null;
@@ -673,6 +751,7 @@ export interface CounselorBoardDetail {
     roomName?: string | null;
     patientName?: string | null;
     patientMobile?: string | null;
+    patientContractTag?: string | null;
     consultationStatus?: string | null;
   }>;
   schedules: Array<{
@@ -684,6 +763,7 @@ export interface CounselorBoardDetail {
     roomName?: string | null;
     patientName?: string | null;
     patientMobile?: string | null;
+    patientContractTag?: string | null;
     consultationStatus?: string | null;
   }>;
   roomUsage: Array<{
@@ -695,6 +775,7 @@ export interface CounselorBoardDetail {
     roomName?: string | null;
     patientName?: string | null;
     patientMobile?: string | null;
+    patientContractTag?: string | null;
     consultationStatus?: string | null;
   }>;
   scheduleCancelLogs: Array<{
@@ -705,6 +786,7 @@ export interface CounselorBoardDetail {
     createdAt?: string | null;
     patientName?: string | null;
     patientMobile?: string | null;
+    patientContractTag?: string | null;
     status?: string | null;
     startTime?: string | null;
     endTime?: string | null;
@@ -737,6 +819,7 @@ export interface CounselorDashboardDetailItem {
   personalIncome?: number | null;
   patientId?: number | null;
   patientMobile?: string | null;
+  patientContractTag?: string | null;
   orderId?: number | null;
   consultationId?: number | null;
   caseRecordId?: number | null;
@@ -756,6 +839,7 @@ export interface CounselorScheduleCalendarItem {
   roomId?: string | null;
   roomName?: string | null;
   patientName?: string | null;
+  patientContractTag?: string | null;
   consultationId?: number | null;
   consultationStatus?: string | null;
   canCancel: boolean;
@@ -808,6 +892,12 @@ export interface ProxyPersonOption {
   name: string;
   mobile?: string | null;
   label: string;
+  contractTag?: string | null;
+  isContractSigned?: boolean;
+  boundCounselorId?: number | null;
+  boundCounselorName?: string | null;
+  isBoundToCounselor?: boolean;
+  canProxyPush?: boolean;
 }
 
 export interface ProxySearchResult {
@@ -866,6 +956,7 @@ export interface CounselorCompletedConsultation {
   Id: number;
   PatientId: number;
   PatientName: string;
+  PatientContractTag?: string | null;
   StartTime?: string | null;
   EndTime?: string | null;
   Note?: string | null;

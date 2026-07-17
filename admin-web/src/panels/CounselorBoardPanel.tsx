@@ -10,6 +10,7 @@ import type {
 } from "@/types/api";
 
 import { DetailDrawer } from "@/components/boards/DetailDrawer";
+import { StaffRemarkEditor } from "@/components/boards/StaffRemarkEditor";
 import { CounselorIntroEditor } from "@/components/counselors/CounselorIntroEditor";
 import {
   Badge,
@@ -45,6 +46,8 @@ export function CounselorBoardPanel({
   onOpenIntroEditor,
   onCloseIntroEditor,
   onSaveIntro,
+  remarkSaving,
+  onSaveRemark,
 }: {
   records?: PagedResult<CounselorBoardSummary>;
   listLoading: boolean;
@@ -66,6 +69,8 @@ export function CounselorBoardPanel({
   onOpenIntroEditor: (accountId: number) => void;
   onCloseIntroEditor: () => void;
   onSaveIntro: (payload: AdminCounselorIntroUpdatePayload) => Promise<void>;
+  remarkSaving: boolean;
+  onSaveRemark: (accountId: number, remark: string) => Promise<string>;
 }) {
   return (
     <>
@@ -91,12 +96,19 @@ export function CounselorBoardPanel({
               canEditIntro={canEditIntro}
               detail={selected}
               onEditIntro={() => onOpenIntroEditor(selected.profile.id)}
+              remarkSaving={remarkSaving}
+              onSaveRemark={onSaveRemark}
             />
           ) : null}
         </DetailDrawer>
       )}
       {(introLoading || introProfile || introError) && (
-        <DetailDrawer footer={null} title="编辑咨询师介绍页" onClose={onCloseIntroEditor}>
+        <DetailDrawer
+          closeDisabled={introSaving}
+          footer={null}
+          title="编辑咨询师介绍页"
+          onClose={onCloseIntroEditor}
+        >
           {introLoading && !introProfile ? (
             <div className="py-10 text-sm text-[var(--lxxl-muted)]">正在加载介绍页资料...</div>
           ) : introError ? (
@@ -155,7 +167,7 @@ const CounselorBoardListSection = memo(function CounselorBoardListSection({
         <div>
           <h2 className="text-xl font-semibold tracking-normal">咨询师管理</h2>
           <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">
-            管理咨询师介绍页资料，并查看咨询单、记录填写、请假申请和排期情况。
+            查看咨询师资料、咨询单、记录填写和请假申请，并维护内部备注。
           </p>
         </div>
 
@@ -177,7 +189,7 @@ const CounselorBoardListSection = memo(function CounselorBoardListSection({
       </form>
       <div className="border-t border-[var(--lxxl-border)] bg-[#FCFBF8] px-6 py-3 text-xs leading-5 text-[var(--lxxl-muted)] sm:px-7 lg:px-8">
         <span className="font-medium text-[var(--lxxl-text)]">统计口径：</span>
-        咨询单包含全部状态；取消咨询暂不区分取消方；记录待补仅统计已完成但尚无记录的咨询；请假申请包含全部审核状态；排期是咨询师创建的时间槽，与咨询单并非一一对应；已占用排期包含完成后仍保持占用状态的历史排期。
+        咨询单包含全部状态；取消咨询暂不区分取消方；记录待补仅统计已完成但尚无记录的咨询；请假申请包含全部审核状态。
       </div>
       <div className="relative">
         {listLoading && records && records.items.length > 0 && (
@@ -190,16 +202,14 @@ const CounselorBoardListSection = memo(function CounselorBoardListSection({
       ) : (
         <>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1280px] table-fixed border-collapse text-sm">
+            <table className="w-full min-w-[1000px] table-fixed border-collapse text-sm">
               <colgroup>
+                <col className="w-[16%]" />
+                <col className="w-[15%]" />
                 <col className="w-[12%]" />
+                <col className="w-[11%]" />
+                <col className="w-[18%]" />
                 <col className="w-[12%]" />
-                <col className="w-[9%]" />
-                <col className="w-[8%]" />
-                <col className="w-[13%]" />
-                <col className="w-[7%]" />
-                <col className="w-[10%]" />
-                <col className="w-[13%]" />
                 <col className="w-[16%]" />
               </colgroup>
               <thead className="bg-[#FAF8F4] text-left text-[var(--lxxl-muted)]">
@@ -210,8 +220,6 @@ const CounselorBoardListSection = memo(function CounselorBoardListSection({
                   <MetricTableHeader hint="取消来源未区分" title="取消咨询" />
                   <MetricTableHeader hint="已有 / 待补" title="记录完成情况" />
                   <MetricTableHeader hint="全部申请状态" title="请假申请" />
-                  <MetricTableHeader hint="总排期 / 已占用" title="排期情况" />
-                  <MetricTableHeader hint="时间最大的一条" title="最晚排期时间" />
                   <th className="px-5 py-3 text-right font-medium">操作</th>
                 </tr>
               </thead>
@@ -225,6 +233,14 @@ const CounselorBoardListSection = memo(function CounselorBoardListSection({
                       <div className="truncate font-semibold" title={record.name}>
                         {record.name}
                       </div>
+                      {record.staffRemark && (
+                        <div
+                          className="mt-1 truncate text-xs font-normal text-[#8A6438]"
+                          title={`内部备注：${record.staffRemark}`}
+                        >
+                          内部备注：{record.staffRemark}
+                        </div>
+                      )}
                     </td>
                     <td className="px-5 py-4 text-[var(--lxxl-muted)]">
                       <div className="truncate" title={record.mobile || "-"}>
@@ -254,19 +270,6 @@ const CounselorBoardListSection = memo(function CounselorBoardListSection({
                     </td>
                     <td className="px-5 py-4">
                       <SingleMetric hint="累计申请" value={record.leaveRequestCount} />
-                    </td>
-                    <td className="px-5 py-4">
-                      <RatioMetric
-                        part={record.bookedScheduleCount}
-                        partLabel="已占用"
-                        total={record.scheduleCount}
-                        totalLabel="总计"
-                      />
-                    </td>
-                    <td className="px-5 py-4 text-[var(--lxxl-muted)]">
-                      <div className="truncate" title={record.latestScheduleAt ? formatDateTime(record.latestScheduleAt) : "-"}>
-                        {record.latestScheduleAt ? formatDateTime(record.latestScheduleAt) : "-"}
-                      </div>
                     </td>
                     <td className="px-5 py-4 text-right">
                       <div className="flex flex-wrap justify-end gap-3">
@@ -361,19 +364,24 @@ function placeLabel(centerName?: string | null, roomName?: string | null) {
   return compactMeta([centerName, roomName]);
 }
 
-function patientLabel(patientName?: string | null, patientMobile?: string | null) {
+function patientLabel(patientName?: string | null, patientMobile?: string | null, patientContractTag?: string | null) {
   const name = patientName || "来访者未填";
-  return patientMobile ? `${name}（${patientMobile}）` : name;
+  const contact = patientMobile ? `${name}（${patientMobile}）` : name;
+  return patientContractTag ? `${contact} ${patientContractTag}` : contact;
 }
 
 function CounselorDetailPanel({
   detail,
   canEditIntro,
   onEditIntro,
+  remarkSaving,
+  onSaveRemark,
 }: {
   detail: CounselorBoardDetail;
   canEditIntro: boolean;
   onEditIntro: () => void;
+  remarkSaving: boolean;
+  onSaveRemark: (accountId: number, remark: string) => Promise<string>;
 }) {
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const visitors = detail.visitors ?? [];
@@ -392,11 +400,11 @@ function CounselorDetailPanel({
 
     return {
       label: compactMeta([
-        patientLabel(item.patientName, item.patientMobile),
+        patientLabel(item.patientName, item.patientMobile, item.patientContractTag),
         `咨询 ${item.consultationCount} 次`,
       ]),
       detail: [
-        `来访者：${patientLabel(item.patientName, item.patientMobile)}`,
+        `来访者：${patientLabel(item.patientName, item.patientMobile, item.patientContractTag)}`,
         `咨询次数：${item.consultationCount}`,
         `总预约次数：${item.appointmentCount}`,
         `取消次数：${item.cancelledCount}`,
@@ -407,9 +415,9 @@ function CounselorDetailPanel({
     };
   });
   const consultationItems = detail.consultations.map((item) => ({
-    label: compactMeta([patientLabel(item.patientName, item.patientMobile), timeRangeLabel(item.startTime, item.endTime), statusLabel(item.status)]),
+    label: compactMeta([patientLabel(item.patientName, item.patientMobile, item.patientContractTag), timeRangeLabel(item.startTime, item.endTime), statusLabel(item.status)]),
     detail: [
-      `来访者：${item.patientName}${item.patientMobile ? `（${item.patientMobile}）` : ""}`,
+      `来访者：${patientLabel(item.patientName, item.patientMobile, item.patientContractTag)}`,
       `状态：${statusLabel(item.status)}`,
       `咨询时间：${timeRangeLabel(item.startTime, item.endTime)}`,
       `咨询地点：${placeLabel(item.centerName, item.roomName)}`,
@@ -418,9 +426,9 @@ function CounselorDetailPanel({
     ],
   }));
   const cancelledConsultationItems = cancelledConsultations.map((item) => ({
-    label: compactMeta(["取消咨询", patientLabel(item.patientName, item.patientMobile), timeRangeLabel(item.startTime, item.endTime)]),
+    label: compactMeta(["取消咨询", patientLabel(item.patientName, item.patientMobile, item.patientContractTag), timeRangeLabel(item.startTime, item.endTime)]),
     detail: [
-      `来访者：${item.patientName}${item.patientMobile ? `（${item.patientMobile}）` : ""}`,
+      `来访者：${patientLabel(item.patientName, item.patientMobile, item.patientContractTag)}`,
       `状态：${statusLabel(item.status)}`,
       `咨询时间：${timeRangeLabel(item.startTime, item.endTime)}`,
       `咨询地点：${placeLabel(item.centerName, item.roomName)}`,
@@ -430,12 +438,12 @@ function CounselorDetailPanel({
   }));
   const caseRecordItems = detail.caseRecords.map((item) => ({
     label: compactMeta([
-      patientLabel(item.patientName, item.patientMobile),
+      patientLabel(item.patientName, item.patientMobile, item.patientContractTag),
       timeRangeLabel(item.startTime, item.endTime),
       item.updatedAt ? `更新 ${formatDateTime(item.updatedAt)}` : "未更新",
     ]),
     detail: [
-      `来访者：${patientLabel(item.patientName, item.patientMobile)}`,
+      `来访者：${patientLabel(item.patientName, item.patientMobile, item.patientContractTag)}`,
       `咨询状态：${statusLabel(item.status)}`,
       `咨询时间：${timeRangeLabel(item.startTime, item.endTime)}`,
       `咨询地点：${placeLabel(item.centerName, item.roomName)}`,
@@ -447,7 +455,7 @@ function CounselorDetailPanel({
   const leaveItems = detail.leaveRequests.map((item) => ({
     label: compactMeta(["请假", timeRangeLabel(item.startTime, item.endTime), statusLabel(item.status)]),
     detail: [
-      `关联来访：${item.patientName ? patientLabel(item.patientName, item.patientMobile) : "-"}`,
+      `关联来访：${item.patientName ? patientLabel(item.patientName, item.patientMobile, item.patientContractTag) : "-"}`,
       `排期时间：${timeRangeLabel(item.startTime, item.endTime)}`,
       `排期地点：${placeLabel(item.centerName, item.roomName)}`,
       `提交时间：${formatDateTime(item.createdAt)}`,
@@ -460,37 +468,37 @@ function CounselorDetailPanel({
     label: compactMeta([
       "排期",
       timeRangeLabel(item.startTime, item.endTime),
-      item.patientName ? patientLabel(item.patientName, item.patientMobile) : null,
+      item.patientName ? patientLabel(item.patientName, item.patientMobile, item.patientContractTag) : null,
       statusLabel(item.status),
     ]),
     detail: [
       `状态：${statusLabel(item.status)}`,
       `排期时间：${timeRangeLabel(item.startTime, item.endTime)}`,
       `排期地点：${placeLabel(item.centerName, item.roomName)}`,
-      `关联来访：${item.patientName ? patientLabel(item.patientName, item.patientMobile) : "-"}`,
+      `关联来访：${item.patientName ? patientLabel(item.patientName, item.patientMobile, item.patientContractTag) : "-"}`,
     ],
   }));
   const roomUsageItems = detail.roomUsage.map((item) => ({
     label: compactMeta([
       timeRangeLabel(item.startTime, item.endTime),
       placeLabel(item.centerName, item.roomName),
-      item.patientName ? patientLabel(item.patientName, item.patientMobile) : null,
+      item.patientName ? patientLabel(item.patientName, item.patientMobile, item.patientContractTag) : null,
     ]),
     detail: [
       `状态：${statusLabel(item.status)}`,
       `使用时间：${timeRangeLabel(item.startTime, item.endTime)}`,
       `咨询室：${placeLabel(item.centerName, item.roomName)}`,
-      `关联来访：${item.patientName ? patientLabel(item.patientName, item.patientMobile) : "-"}`,
+      `关联来访：${item.patientName ? patientLabel(item.patientName, item.patientMobile, item.patientContractTag) : "-"}`,
     ],
   }));
   const cancelLogItems = detail.scheduleCancelLogs.map((item) => ({
     label: compactMeta([
       "取消排期",
       item.startTime || item.endTime ? timeRangeLabel(item.startTime, item.endTime) : formatDateTime(item.createdAt),
-      item.patientName ? patientLabel(item.patientName, item.patientMobile) : null,
+      item.patientName ? patientLabel(item.patientName, item.patientMobile, item.patientContractTag) : null,
     ]),
     detail: [
-      `关联来访：${item.patientName ? patientLabel(item.patientName, item.patientMobile) : "-"}`,
+      `关联来访：${item.patientName ? patientLabel(item.patientName, item.patientMobile, item.patientContractTag) : "-"}`,
       `排期时间：${timeRangeLabel(item.startTime, item.endTime)}`,
       `排期地点：${placeLabel(item.centerName, item.roomName)}`,
       `提交时间：${formatDateTime(item.createdAt)}`,
@@ -508,6 +516,12 @@ function CounselorDetailPanel({
         </div>
         {canEditIntro && <TableActionButton onClick={onEditIntro}>编辑介绍页</TableActionButton>}
       </div>
+      <StaffRemarkEditor
+        accountId={detail.profile.id}
+        saving={remarkSaving}
+        value={detail.profile.staffRemark}
+        onSave={(remark) => onSaveRemark(detail.profile.id, remark)}
+      />
       <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
         <MiniStat label="咨询单总数" value={detail.profile.consultationCount} />
         <MiniStat label="已完成咨询" value={detail.profile.completedConsultationCount} />

@@ -37,7 +37,7 @@ function RefundsScreenContent() {
       const refunds = await fetchRefundExemptions(queryStatus as "ALL" | "PENDING" | "APPROVED" | "REJECTED");
       setData((prev) => ({ ...prev, refunds }));
     } catch (error) {
-      showNotice("error", error instanceof Error ? error.message : "豁免审核加载失败");
+      showNotice("error", error instanceof Error ? error.message : "用户豁免加载失败");
     } finally {
       setListLoading(false);
     }

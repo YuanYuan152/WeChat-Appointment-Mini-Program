@@ -2,6 +2,7 @@ import { type FormEvent, useMemo, useState } from "react";
 
 import { COUNSELOR_TYPE_OPTIONS, type CounselorType, getManageableRoles } from "@/config/userRoleMeta";
 import { roleLabel } from "@/lib/format";
+import { formatPatientNameWithContractTag } from "@/lib/patientContract";
 import type { AdminUser, Role } from "@/types/api";
 
 import { getName } from "@/lib/display";
@@ -59,7 +60,8 @@ export function RolesPanel({
     return allUsers.filter((user) => {
       const name = getName(user).toLowerCase();
       const mobile = user.mobile?.toLowerCase() || "";
-      return name.includes(normalizedKeyword) || mobile.includes(normalizedKeyword);
+      const contractTag = user.contractTag?.toLowerCase() || "";
+      return name.includes(normalizedKeyword) || mobile.includes(normalizedKeyword) || contractTag.includes(normalizedKeyword);
     });
   }, [allUsers, keyword]);
   const { currentPage, items } = getPageItems(filteredUsers, page, pageSize);
@@ -169,7 +171,9 @@ export function RolesPanel({
               ) : (
                 items.map((user) => (
                 <tr key={user.id} className="border-t border-[var(--lxxl-border)] align-top">
-                  <td className="px-5 py-4">{getName(user)}</td>
+                  <td className="px-5 py-4">
+                    {formatPatientNameWithContractTag(getName(user), user.contractTag)}
+                  </td>
                   <td className="px-5 py-4">{user.mobile || "-"}</td>
                   <td className="px-5 py-4">
                     <div>{user.activeRoleLabel || roleLabel(user.activeRole)}</div>

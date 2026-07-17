@@ -13,12 +13,15 @@ export type MessageActionTarget = {
 };
 
 const opsReviewRoles = new Set<Role>(["Admin", "Ops"]);
+const staffReviewRoles = new Set<Role>(["Admin", "Ops", "Assistant"]);
 const counselorScheduleTypes = new Set([
   "COUNSELOR_APPOINTMENT_NEW",
   "COUNSELOR_CONSULTATION_REMIND",
   "COUNSELOR_APPOINTMENT_CANCEL",
   "COUNSELOR_LEAVE_SUBMITTED",
   "COUNSELOR_LEAVE_SUCCESS",
+  "COUNSELOR_LEAVE_REJECTED",
+  "COUNSELOR_PROXY_ORDER_PENDING",
 ]);
 
 export function resolveMessageActionTarget(
@@ -28,17 +31,39 @@ export function resolveMessageActionTarget(
   const detail = parseMessagePayload(item.Content)?.detail || {};
   const relatedType = item.RelatedType || "";
 
-  if (canReviewAsOpsAdmin(activeRole)) {
+  if (canReviewAsStaff(activeRole)) {
     if (isExemptionPendingMessage(item)) {
       return {
         href: buildHref(sectionPathById.refunds, {
+          category: "EXEMPTION",
+          status: "PENDING",
           exemptionId: firstNumber(detail.refundExemptionId, detail.exemptionId, item.RelatedId),
           messageId: item.Id,
         }),
-        label: "前往豁免审核",
+        label: "前往用户豁免审核",
         description: "进入这条豁免申请的审核入口，完成通过或驳回处理。",
       };
     }
+
+    if (relatedType === "COUNSELOR_LEAVE") {
+      const leaveStatus = leaveReviewStatusFromDetail(detail);
+      const isPending = leaveStatus === "PENDING";
+      return {
+        href: buildHref(sectionPathById.refunds, {
+          category: "LEAVE",
+          status: leaveStatus,
+          leaveId: firstNumber(detail.leaveRequestId, item.RelatedId),
+          messageId: item.Id,
+        }),
+        label: isPending ? "前往请假审核" : "查看请假审核结果",
+        description: isPending
+          ? "进入这条咨询师请假申请的审核入口，完成通过或拒绝处理。"
+          : "进入这条咨询师请假申请，查看最新审核结果。",
+      };
+    }
+  }
+
+  if (canReviewAsOpsAdmin(activeRole)) {
 
     if (isCaseRecordAmendmentPendingMessage(item)) {
       return {
@@ -74,9 +99,6 @@ export function resolveMessageActionTarget(
       };
     }
 
-    if (relatedType === "COUNSELOR_LEAVE") {
-      return null;
-    }
   }
 
   if (activeRole === "Counselor") {
@@ -123,6 +145,26 @@ export function resolveMessageActionTarget(
 
 function canReviewAsOpsAdmin(activeRole?: Role | string | null) {
   return activeRole === "Admin" || activeRole === "Ops" || opsReviewRoles.has(activeRole as Role);
+}
+
+function canReviewAsStaff(activeRole?: Role | string | null) {
+  return staffReviewRoles.has(activeRole as Role);
+}
+
+export function leaveReviewStatusFromDetail(
+  detail: Record<string, unknown>,
+): "PENDING" | "APPROVED" | "REJECTED" {
+  const status = typeof detail.status === "string" ? detail.status.trim().toUpperCase() : "";
+  if (status === "APPROVED" || status === "REJECTED" || status === "PENDING") {
+    return status;
+  }
+  if (detail.approved === true) {
+    return "APPROVED";
+  }
+  if (detail.approved === false) {
+    return "REJECTED";
+  }
+  return "PENDING";
 }
 
 function isExemptionPendingMessage(item: MessageItem) {

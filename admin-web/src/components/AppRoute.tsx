@@ -6,7 +6,13 @@ import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { useRouter } from "next/navigation";
 
 import type { DevLoginCode } from "@/lib/api";
-import { clearStoredToken, fetchCurrentUser, getStoredToken, loginWithDevCode } from "@/lib/api";
+import {
+  AUTH_UNAUTHORIZED_EVENT,
+  clearStoredToken,
+  fetchCurrentUser,
+  getStoredToken,
+  loginWithDevCode,
+} from "@/lib/api";
 import { roleLabel } from "@/lib/format";
 import type { CurrentUser } from "@/types/api";
 
@@ -54,7 +60,7 @@ function AppRouteRoot({ sectionId, children }: { sectionId: SectionId; children:
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [unreadMessageCount, setUnreadMessageCount] = useState(0);
+  const [unreadMessageCount, setUnreadMessageCount] = useState<number | null>(null);
 
   const isAdmin = currentUser?.roles.includes("Admin") ?? false;
   const canEnterWeb =
@@ -84,16 +90,30 @@ function AppRouteRoot({ sectionId, children }: { sectionId: SectionId; children:
 
   const refreshUnreadMessageCount = useCallback(async () => {
     if (!currentUser) {
-      setUnreadMessageCount(0);
+      setUnreadMessageCount(null);
       return;
     }
     try {
       const result = await fetchUnreadMessageCount();
       setUnreadMessageCount(result.count || 0);
     } catch {
-      setUnreadMessageCount(0);
+      // 保留最近一次成功读取的数量，避免接口失败时把未读消息误显示为 0。
     }
   }, [currentUser]);
+
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      setCurrentUser(null);
+      setUnreadMessageCount(null);
+      setLoading(false);
+      setBooting(false);
+      clearNotice();
+      router.replace("/login");
+    };
+
+    window.addEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
+    return () => window.removeEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
+  }, [clearNotice, router]);
 
   useEffect(() => {
     async function boot() {
@@ -137,6 +157,7 @@ function AppRouteRoot({ sectionId, children }: { sectionId: SectionId; children:
     try {
       await loginWithDevCode(code);
       const me = await fetchCurrentUser();
+      setUnreadMessageCount(null);
       setCurrentUser(me);
       showNotice("success", `已进入${roleLabel(me.activeRole)}`);
       router.replace(sectionPathById[getDefaultSectionId(me.roles)]);
@@ -150,7 +171,7 @@ function AppRouteRoot({ sectionId, children }: { sectionId: SectionId; children:
   const handleLogout = () => {
     clearStoredToken();
     setCurrentUser(null);
-    setUnreadMessageCount(0);
+    setUnreadMessageCount(null);
     clearNotice();
     router.replace("/login");
   };

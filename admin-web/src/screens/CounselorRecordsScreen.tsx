@@ -24,6 +24,7 @@ import {
   normalizeRiskAssessment,
   riskAssessmentMissingLabel,
 } from "@/constants/caseRecordRiskAssessment";
+import { formatPatientNameWithContractTag } from "@/lib/patientContract";
 import type { CounselorCaseRecord, CounselorCaseRecordRevision, CounselorCompletedConsultation } from "@/types/api";
 import type { ScreenData } from "@/types/app";
 
@@ -77,7 +78,10 @@ function CounselorRecordsScreenContent() {
         setSelectedForm({
           mode: "create",
           consultationId: consultation.Id,
-          title: `填写咨询记录：${consultation.PatientName}`,
+          title: `填写咨询记录：${formatPatientNameWithContractTag(
+            consultation.PatientName,
+            consultation.PatientContractTag,
+          )}`,
           subjective: "",
           objective: "",
           assessment: "",

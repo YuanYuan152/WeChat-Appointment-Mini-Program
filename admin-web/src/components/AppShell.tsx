@@ -25,7 +25,7 @@ export function AppShell({
   currentUser: CurrentUser;
   loading: boolean;
   notice: Notice | null;
-  unreadMessageCount?: number;
+  unreadMessageCount?: number | null;
   children: ReactNode;
   onChangeSection: (section: SectionId) => void;
   onLogout: () => void;

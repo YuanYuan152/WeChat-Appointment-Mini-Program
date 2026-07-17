@@ -1,11 +1,13 @@
-import { memo, useState } from "react";
+import { memo, useRef, useState } from "react";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
 
 import { formatDateTime, formatMoneyFromCents, statusLabel } from "@/lib/format";
-import type { PagedResult, UserBoardDetail, UserBoardSummary } from "@/types/api";
+import type { PagedResult, ProxyPersonOption, UserBoardDetail, UserBoardSummary } from "@/types/api";
 
 import { DetailDrawer } from "@/components/boards/DetailDrawer";
+import { StaffRemarkEditor } from "@/components/boards/StaffRemarkEditor";
 import {
+  Badge,
   CollapsibleSection,
   DetailList,
   EmptyState,
@@ -18,15 +20,12 @@ import {
   queryControlClass,
 } from "@/components/ui";
 import type { UserBoardFilters } from "@/types/app";
-import { roleText } from "@/lib/display";
+import { patientContractTag } from "@/lib/patientContract";
 
 export interface UserProxyBookingTarget {
   patientId: number;
   patientName: string;
   patientMobile?: string | null;
-  counselorId?: number | null;
-  counselorName?: string | null;
-  counselorMobile?: string | null;
 }
 
 export function UserBoardPanel({
@@ -43,6 +42,10 @@ export function UserBoardPanel({
   onOpen,
   onCloseDetail,
   onProxyBooking,
+  onSearchCounselors,
+  onBindCounselor,
+  remarkSaving,
+  onSaveRemark,
 }: {
   users?: PagedResult<UserBoardSummary>;
   listLoading: boolean;
@@ -57,6 +60,10 @@ export function UserBoardPanel({
   onOpen: (accountId: number) => void;
   onCloseDetail: () => void;
   onProxyBooking?: (target: UserProxyBookingTarget) => void;
+  onSearchCounselors?: (keyword: string) => Promise<ProxyPersonOption[]>;
+  onBindCounselor?: (patientId: number, counselorId: number | null) => Promise<void>;
+  remarkSaving: boolean;
+  onSaveRemark: (accountId: number, remark: string) => Promise<string>;
 }) {
   return (
     <>
@@ -72,11 +79,18 @@ export function UserBoardPanel({
         users={users}
       />
       {(detailLoading || selected) && (
-        <DetailDrawer title="用户详情" onClose={onCloseDetail}>
+        <DetailDrawer title="来访者详情" onClose={onCloseDetail}>
           {detailLoading && !selected ? (
             <div className="py-10 text-sm text-[var(--lxxl-muted)]">正在加载详情...</div>
           ) : selected ? (
-            <UserDetailPanel detail={selected} onProxyBooking={onProxyBooking} />
+            <UserDetailPanel
+              detail={selected}
+              onBindCounselor={onBindCounselor}
+              onProxyBooking={onProxyBooking}
+              onSearchCounselors={onSearchCounselors}
+              remarkSaving={remarkSaving}
+              onSaveRemark={onSaveRemark}
+            />
           ) : null}
         </DetailDrawer>
       )}
@@ -115,9 +129,9 @@ const UserBoardListSection = memo(function UserBoardListSection({
         }}
       >
         <div>
-          <h2 className="text-xl font-semibold tracking-normal">用户管理</h2>
+          <h2 className="text-xl font-semibold tracking-normal">来访管理</h2>
           <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">
-            按用户聚合订单、退款、豁免、预约和咨询室预约记录。
+            查看来访资料，以及订单、退款、豁免和预约记录。
           </p>
         </div>
 
@@ -152,13 +166,13 @@ const UserBoardListSection = memo(function UserBoardListSection({
           </div>
         )}
         {!users || users.items.length === 0 ? (
-          <EmptyState text={listLoading ? "正在加载列表..." : "暂无用户数据。"} />
+          <EmptyState text={listLoading ? "正在加载列表..." : "暂无来访数据。"} />
         ) : (
           <>
             <table className="w-full border-collapse text-sm">
               <thead className="bg-[#FAF8F4] text-left text-[var(--lxxl-muted)]">
                 <tr>
-                  <th className="px-5 py-3 font-medium">用户</th>
+                  <th className="px-5 py-3 font-medium">来访者</th>
                   <th className="px-5 py-3 font-medium">手机</th>
                   <th className="px-5 py-3 font-medium">订单/金额</th>
                   <th className="px-5 py-3 font-medium">预约</th>
@@ -171,7 +185,18 @@ const UserBoardListSection = memo(function UserBoardListSection({
                   <tr key={user.id} className="border-t border-[var(--lxxl-border)]">
                     <td className="px-5 py-4">
                       <div className="font-medium">{user.name}</div>
-                      <div className="mt-1 text-xs text-[var(--lxxl-muted)]">{roleText(user.roles)}</div>
+                      <div className="mt-1 text-xs text-[var(--lxxl-muted)]">来访者</div>
+                      {patientContractTag(user) && (
+                        <div className="mt-1 text-xs font-medium text-[#315D4B]">{patientContractTag(user)}</div>
+                      )}
+                      {user.staffRemark && (
+                        <div
+                          className="mt-1 max-w-72 truncate text-xs text-[#8A6438]"
+                          title={`内部备注：${user.staffRemark}`}
+                        >
+                          内部备注：{user.staffRemark}
+                        </div>
+                      )}
                     </td>
                     <td className="px-5 py-4">{user.mobile || "-"}</td>
                     <td className="px-5 py-4">
@@ -210,29 +235,104 @@ const UserBoardListSection = memo(function UserBoardListSection({
 function UserDetailPanel({
   detail,
   onProxyBooking,
+  onSearchCounselors,
+  onBindCounselor,
+  remarkSaving,
+  onSaveRemark,
 }: {
   detail: UserBoardDetail;
   onProxyBooking?: (target: UserProxyBookingTarget) => void;
+  onSearchCounselors?: (keyword: string) => Promise<ProxyPersonOption[]>;
+  onBindCounselor?: (patientId: number, counselorId: number | null) => Promise<void>;
+  remarkSaving: boolean;
+  onSaveRemark: (accountId: number, remark: string) => Promise<string>;
 }) {
-  const canProxyBooking = detail.profile.roles.includes("Patient");
+  const [bindOpen, setBindOpen] = useState(false);
+  const [bindKeyword, setBindKeyword] = useState("");
+  const [bindOptions, setBindOptions] = useState<ProxyPersonOption[]>([]);
+  const [selectedCounselorId, setSelectedCounselorId] = useState<number | null>(null);
+  const [bindLoading, setBindLoading] = useState(false);
+  const [bindSaving, setBindSaving] = useState(false);
+  const [bindError, setBindError] = useState("");
+  const [bindPrompt, setBindPrompt] = useState("");
+  const [continueProxyAfterBind, setContinueProxyAfterBind] = useState(false);
+  const bindSearchSeq = useRef(0);
+  const canProxyBooking = detail.profile.isVisitor === true;
+  const canEditStaffRemark = detail.profile.isVisitor === true;
+  const contractTag = patientContractTag(detail.profile);
   const completedConsultations = detail.consultations.filter((item) => item.status === "DONE");
   const cancelledConsultations = detail.consultations.filter(
     (item) => item.status === "CANCELLED" || item.status === "CANCELED",
   );
-  const proxyTarget = (item?: UserBoardDetail["consultations"][number]): UserProxyBookingTarget => ({
+  const proxyTarget = (): UserProxyBookingTarget => ({
     patientId: detail.profile.id,
     patientName: detail.profile.name,
     patientMobile: detail.profile.mobile,
-    counselorId: item?.counselorId,
-    counselorName: item?.counselorName,
   });
+  const loadCounselors = async (keyword: string) => {
+    if (!onSearchCounselors) {
+      return;
+    }
+    const requestSeq = bindSearchSeq.current + 1;
+    bindSearchSeq.current = requestSeq;
+    setBindLoading(true);
+    setBindError("");
+    try {
+      const options = await onSearchCounselors(keyword);
+      if (bindSearchSeq.current !== requestSeq) {
+        return;
+      }
+      setBindOptions(options);
+      setSelectedCounselorId((current) => {
+        if (current === detail.profile.boundCounselorId || options.some((item) => item.id === current)) {
+          return current;
+        }
+        return null;
+      });
+    } catch (error) {
+      if (bindSearchSeq.current !== requestSeq) {
+        return;
+      }
+      setBindOptions([]);
+      setSelectedCounselorId((current) =>
+        current === detail.profile.boundCounselorId ? current : null,
+      );
+      setBindError(error instanceof Error ? error.message : "咨询师搜索失败，请重试");
+    } finally {
+      if (bindSearchSeq.current === requestSeq) {
+        setBindLoading(false);
+      }
+    }
+  };
+  const openBindingModal = (prompt = "", continueAfterBind = false) => {
+    if (!onSearchCounselors || !onBindCounselor) {
+      return;
+    }
+    setBindKeyword("");
+    setBindError("");
+    setBindPrompt(prompt);
+    setContinueProxyAfterBind(continueAfterBind);
+    setSelectedCounselorId(detail.profile.boundCounselorId || null);
+    setBindOpen(true);
+    void loadCounselors("");
+  };
+  const requestProxyBooking = () => {
+    if (!onProxyBooking) {
+      return;
+    }
+    if (!detail.profile.boundCounselorId) {
+      openBindingModal("代理预约前需先绑定咨询师。完成绑定后将自动继续创建代理预约。", true);
+      return;
+    }
+    onProxyBooking(proxyTarget());
+  };
   const consultationCard = (item: UserBoardDetail["consultations"][number]) => {
     const note = cleanBusinessNote(item.note);
     return (
       <DetailCard
         action={
           canProxyBooking && onProxyBooking ? (
-            <TableActionButton onClick={() => onProxyBooking(proxyTarget(item))}>再约一单</TableActionButton>
+            <TableActionButton onClick={requestProxyBooking}>再约一单</TableActionButton>
           ) : undefined
         }
         title={`${timeRangeText(item.startTime, item.endTime)} · ${statusLabel(item.status)}`}
@@ -253,16 +353,50 @@ function UserDetailPanel({
 
   return (
     <>
-      <div className="text-sm text-[var(--lxxl-muted)]">用户详情</div>
-      <h3 className="mt-2 text-lg font-semibold">{detail.profile.name}</h3>
-      <div className="mt-1 text-sm text-[var(--lxxl-muted)]">
-        {detail.profile.mobile || "-"} · {detail.profile.gender || "性别未填"} · {roleText(detail.profile.roles)}
+      <div className="text-sm text-[var(--lxxl-muted)]">来访者详情</div>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <h3 className="text-lg font-semibold">{detail.profile.name}</h3>
+        {contractTag && <Badge tone="green">{contractTag}</Badge>}
       </div>
+      <div className="mt-1 text-sm text-[var(--lxxl-muted)]">
+        {detail.profile.mobile || "-"} · {detail.profile.gender || "性别未填"} · 来访者
+      </div>
+      {canEditStaffRemark && (
+        <StaffRemarkEditor
+          accountId={detail.profile.id}
+          saving={remarkSaving}
+          value={detail.profile.staffRemark}
+          onSave={(remark) => onSaveRemark(detail.profile.id, remark)}
+        />
+      )}
+      {canProxyBooking && (
+        <div className="mt-4 rounded-xl bg-[#FAF8F4] px-4 py-3 text-sm leading-6">
+          <div className="grid grid-cols-[5rem_minmax(0,1fr)] gap-x-3">
+            <span className="text-[var(--lxxl-muted)]">是否签约</span>
+            <span className="font-medium">{detail.profile.isContractSigned ? "是" : "否"}</span>
+            <span className="text-[var(--lxxl-muted)]">绑定咨询师</span>
+            <span className="font-medium">{detail.profile.boundCounselorName || "未绑定"}</span>
+          </div>
+        </div>
+      )}
       {canProxyBooking && onProxyBooking && (
-        <div className="mt-4">
-          <QueryButton className="w-28" onClick={() => onProxyBooking(proxyTarget())}>
+        <div className="mt-4 flex flex-col items-start gap-3">
+          <QueryButton className="w-28" onClick={requestProxyBooking}>
             代理预约
           </QueryButton>
+          {!detail.profile.boundCounselorId && (
+            <p className="text-xs leading-5 text-[#A46A22]">
+              代理预约前需先绑定咨询师；点击“代理预约”或“再约一单”将先打开绑定窗口。
+            </p>
+          )}
+          {onSearchCounselors && onBindCounselor && (
+            <QueryResetButton
+              className="w-40"
+              onClick={() => openBindingModal()}
+            >
+              {detail.profile.boundCounselorId ? "更换绑定咨询师" : "绑定咨询师"}
+            </QueryResetButton>
+          )}
         </div>
       )}
       <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
@@ -351,7 +485,204 @@ function UserDetailPanel({
         title="预约咨询室记录"
         items={detail.roomBookings.map(roomBookingCard)}
       />
+      {bindOpen && onSearchCounselors && onBindCounselor && (
+        <BindCounselorModal
+          boundCounselorId={detail.profile.boundCounselorId}
+          error={bindError}
+          keyword={bindKeyword}
+          loading={bindLoading}
+          options={bindOptions}
+          prompt={bindPrompt}
+          saving={bindSaving}
+          selectedCounselorId={selectedCounselorId}
+          setKeyword={setBindKeyword}
+          setSelectedCounselorId={setSelectedCounselorId}
+          onClose={() => {
+            bindSearchSeq.current += 1;
+            setContinueProxyAfterBind(false);
+            setBindOpen(false);
+          }}
+          onSave={async (counselorId) => {
+            setBindSaving(true);
+            try {
+              await onBindCounselor(detail.profile.id, counselorId);
+              setBindOpen(false);
+              if (continueProxyAfterBind && counselorId && onProxyBooking) {
+                setContinueProxyAfterBind(false);
+                onProxyBooking(proxyTarget());
+              }
+            } catch {
+              // 页面级通知已展示接口返回的业务错误，保留弹窗便于重新选择。
+            } finally {
+              setBindSaving(false);
+            }
+          }}
+          onSearch={() => loadCounselors(bindKeyword)}
+        />
+      )}
     </>
+  );
+}
+
+function BindCounselorModal({
+  boundCounselorId,
+  error,
+  keyword,
+  loading,
+  options,
+  prompt,
+  saving,
+  selectedCounselorId,
+  setKeyword,
+  setSelectedCounselorId,
+  onClose,
+  onSave,
+  onSearch,
+}: {
+  boundCounselorId?: number | null;
+  error: string;
+  keyword: string;
+  loading: boolean;
+  options: ProxyPersonOption[];
+  prompt: string;
+  saving: boolean;
+  selectedCounselorId: number | null;
+  setKeyword: (value: string) => void;
+  setSelectedCounselorId: (value: number | null) => void;
+  onClose: () => void;
+  onSave: (counselorId: number | null) => Promise<void>;
+  onSearch: () => Promise<void>;
+}) {
+  const [pendingCounselorId, setPendingCounselorId] = useState<number | null | undefined>(undefined);
+  const selectedCounselor = options.find((item) => item.id === selectedCounselorId);
+  const isSameCounselor = Boolean(boundCounselorId && selectedCounselorId === boundCounselorId);
+  const needsChangeConfirmation = Boolean(
+    boundCounselorId && pendingCounselorId !== undefined && pendingCounselorId !== boundCounselorId,
+  );
+
+  const requestSave = (counselorId: number | null) => {
+    if (counselorId === boundCounselorId) {
+      return;
+    }
+    if (boundCounselorId) {
+      setPendingCounselorId(counselorId);
+      return;
+    }
+    void onSave(counselorId);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] grid place-items-center bg-black/30 px-6 py-6">
+      <section
+        aria-label="选择绑定咨询师"
+        aria-modal="true"
+        className="flex max-h-[80vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-[var(--lxxl-border)] bg-white shadow-2xl"
+        role="dialog"
+      >
+        <div className="border-b border-[var(--lxxl-border)] px-6 py-5">
+          <h3 className="text-lg font-semibold">选择绑定咨询师</h3>
+          <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">
+            绑定咨询师用于限定代理预约对象。首次绑定、更换或解除绑定都会将签约状态重置为未签约；来访完成协议并支付当前绑定咨询师的订单后，才会变为已签约。
+          </p>
+          {prompt && <p className="mt-2 text-sm font-medium text-[#A46A22]">{prompt}</p>}
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+          <div className="flex gap-3">
+            <input
+              className={queryControlClass}
+              disabled={needsChangeConfirmation}
+              placeholder="搜索咨询师姓名或电话"
+              value={keyword}
+              onChange={(event) => setKeyword(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  void onSearch();
+                }
+              }}
+            />
+            <QueryButton disabled={loading || needsChangeConfirmation} onClick={() => void onSearch()}>
+              {loading ? "搜索中" : "查询"}
+            </QueryButton>
+          </div>
+          {error && (
+            <div className="mt-3 rounded-lg bg-[#FFF2F0] px-3 py-2 text-sm text-[#B42318]" role="alert">
+              {error}
+            </div>
+          )}
+          <div className="mt-4 divide-y divide-[var(--lxxl-border)] rounded-xl border border-[var(--lxxl-border)]">
+            {loading ? (
+              <div className="px-4 py-6 text-center text-sm text-[var(--lxxl-muted)]">正在加载咨询师...</div>
+            ) : options.length === 0 ? (
+              <div className="px-4 py-6 text-center text-sm text-[var(--lxxl-muted)]">暂无咨询师</div>
+            ) : (
+              options.map((item) => (
+                <label className="flex cursor-pointer items-center gap-3 px-4 py-3" key={item.id}>
+                  <input
+                    checked={selectedCounselorId === item.id}
+                    disabled={needsChangeConfirmation}
+                    name="bound-counselor"
+                    type="radio"
+                    onChange={() => {
+                      setPendingCounselorId(undefined);
+                      setSelectedCounselorId(item.id);
+                    }}
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-medium">{item.name}</span>
+                    <span className="mt-1 block text-xs text-[var(--lxxl-muted)]">{item.mobile || `ID ${item.id}`}</span>
+                    {boundCounselorId === item.id && (
+                      <span className="mt-1 block text-xs font-medium text-[#315D4B]">当前绑定</span>
+                    )}
+                  </span>
+                </label>
+              ))
+            )}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-3 border-t border-[var(--lxxl-border)] px-6 py-4">
+          {needsChangeConfirmation ? (
+            <div className="w-full rounded-xl border border-[#E7C9A3] bg-[#FFF8ED] p-4">
+              <p className="text-sm font-medium text-[#7A4B16]">
+                {pendingCounselorId === null
+                  ? "确认解除当前咨询师绑定？"
+                  : `确认更换为${selectedCounselor?.name || "所选咨询师"}？`}
+              </p>
+              <p className="mt-1 text-xs leading-5 text-[#8A6438]">
+                换绑或解绑可能取消与原绑定咨询师关联的待支付代理订单，此操作完成后请核对来访的订单与预约记录。
+              </p>
+              <div className="mt-3 flex flex-wrap gap-3">
+                <QueryButton
+                  disabled={saving}
+                  onClick={() => pendingCounselorId !== undefined && void onSave(pendingCounselorId)}
+                >
+                  {saving ? "保存中" : pendingCounselorId === null ? "确认解绑" : "确认更换"}
+                </QueryButton>
+                <QueryResetButton disabled={saving} onClick={() => setPendingCounselorId(undefined)}>
+                  返回
+                </QueryResetButton>
+              </div>
+            </div>
+          ) : (
+            <>
+              <QueryButton
+                className="w-28"
+                disabled={saving || !selectedCounselorId || isSameCounselor}
+                onClick={() => selectedCounselorId && requestSave(selectedCounselorId)}
+              >
+                {saving ? "保存中" : isSameCounselor ? "当前已绑定" : "确定"}
+              </QueryButton>
+              {boundCounselorId && (
+                <QueryResetButton disabled={saving} onClick={() => requestSave(null)}>
+                  解除绑定
+                </QueryResetButton>
+              )}
+              <QueryResetButton disabled={saving} onClick={onClose}>取消</QueryResetButton>
+            </>
+          )}
+        </div>
+      </section>
+    </div>
   );
 }
 

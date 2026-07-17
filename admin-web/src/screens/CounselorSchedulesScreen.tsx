@@ -1,12 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { AppRoute, useAppRoute } from "@/components/AppRoute";
 import { getLocalDateValue } from "@/lib/date";
 import { getMessage } from "@/lib/display";
-import { CounselorSchedulesPanel, type CounselorScheduleDraft, type CounselorScheduleQuery } from "@/panels/CounselorSchedulesPanel";
+import {
+  counselorScheduleQueryKey,
+  createCounselorScheduleQuery,
+  toCounselorScheduleRequest,
+} from "@/lib/counselorSchedule";
+import type { CounselorScheduleQuery } from "@/lib/counselorSchedule";
+import { CounselorSchedulesPanel, type CounselorScheduleDraft } from "@/panels/CounselorSchedulesPanel";
 import {
   cancelCounselorSchedule,
   createCounselorSchedule,
@@ -18,10 +24,8 @@ import type { CounselorSlotOption } from "@/types/api";
 import type { ScreenData } from "@/types/app";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
 
-const INITIAL_QUERY = (start?: string | null): CounselorScheduleQuery => ({
-  start: start || getLocalDateValue(),
-  days: 14,
-});
+const INITIAL_QUERY = (start?: string | null): CounselorScheduleQuery =>
+  createCounselorScheduleQuery(start);
 
 const INITIAL_DRAFT = (): CounselorScheduleDraft => ({
   date: getLocalDateValue(),
@@ -53,17 +57,38 @@ function CounselorSchedulesScreenContent() {
   const [slotError, setSlotError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const calendarRequestSeq = useRef(0);
+  const slotRequestSeq = useRef(0);
+  const focusedStartHandledRef = useRef<string | null>(focusedStart);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (
+    options: { clearExistingNotice?: boolean; notifyOnError?: boolean } = {},
+  ) => {
+    const { clearExistingNotice = true, notifyOnError = true } = options;
+    const requestSeq = calendarRequestSeq.current + 1;
+    calendarRequestSeq.current = requestSeq;
     setListLoading(true);
-    clearNotice();
+    if (clearExistingNotice) {
+      clearNotice();
+    }
     try {
-      const counselorScheduleCalendar = await fetchCounselorScheduleCalendar(filters);
+      const counselorScheduleCalendar = await fetchCounselorScheduleCalendar(
+        toCounselorScheduleRequest(filters),
+      );
+      if (calendarRequestSeq.current !== requestSeq) {
+        return false;
+      }
       setData((prev) => ({ ...prev, counselorScheduleCalendar }));
+      return true;
     } catch (error) {
-      showNotice("error", error instanceof Error ? error.message : "排期加载失败");
+      if (calendarRequestSeq.current === requestSeq && notifyOnError) {
+        showNotice("error", error instanceof Error ? error.message : "排期加载失败");
+      }
+      return false;
     } finally {
-      setListLoading(false);
+      if (calendarRequestSeq.current === requestSeq) {
+        setListLoading(false);
+      }
     }
   }, [clearNotice, filters, showNotice]);
 
@@ -72,49 +97,65 @@ function CounselorSchedulesScreenContent() {
   }, [loadData, refreshKey]);
 
   useEffect(() => {
-    if (!focusedStart || filters.start === focusedStart) {
+    if (!focusedStart || focusedStartHandledRef.current === focusedStart) {
       return;
     }
+    focusedStartHandledRef.current = focusedStart;
     const next = INITIAL_QUERY(focusedStart);
     setDraftFilters(next);
     setFilters(next);
     setPage(1);
-  }, [filters.start, focusedStart]);
+  }, [focusedStart]);
 
   const search = useCallback(() => {
     setPage(1);
-    if (filters.start === draftFilters.start && filters.days === draftFilters.days) {
+    if (counselorScheduleQueryKey(filters) === counselorScheduleQueryKey(draftFilters)) {
       void loadData();
       return;
     }
     setFilters(draftFilters);
-  }, [draftFilters, filters.days, filters.start, loadData]);
+  }, [draftFilters, filters, loadData]);
 
   const reset = useCallback(() => {
     const next = INITIAL_QUERY();
     setDraftFilters(next);
     setPage(1);
-    if (filters.start === next.start && filters.days === next.days) {
+    if (counselorScheduleQueryKey(filters) === counselorScheduleQueryKey(next)) {
       void loadData();
       return;
     }
     setFilters(next);
-  }, [filters.days, filters.start, loadData]);
+  }, [filters, loadData]);
 
-  const loadSlots = useCallback(async () => {
+  const loadSlots = useCallback(async (
+    selection: Pick<CounselorScheduleDraft, "date" | "centerId"> = {
+      date: draft.date,
+      centerId: draft.centerId,
+    },
+  ) => {
+    const requestSeq = slotRequestSeq.current + 1;
+    slotRequestSeq.current = requestSeq;
     setSlotLoading(true);
     setSlotError(null);
+    setData((prev) => ({ ...prev, counselorSlotOptions: undefined }));
+    setDraft((prev) => ({ ...prev, ...selection, slotKey: "", roomId: "" }));
     try {
-      const counselorSlotOptions = await fetchCounselorSlotOptions(draft.date, draft.centerId);
+      const counselorSlotOptions = await fetchCounselorSlotOptions(selection.date, selection.centerId);
+      if (slotRequestSeq.current !== requestSeq) {
+        return false;
+      }
       setData((prev) => ({ ...prev, counselorSlotOptions }));
-      setDraft((prev) => ({ ...prev, slotKey: "", roomId: "" }));
       return true;
     } catch (error) {
-      setSlotError(error instanceof Error ? error.message : "可排时段加载失败");
-      setData((prev) => ({ ...prev, counselorSlotOptions: undefined }));
+      if (slotRequestSeq.current === requestSeq) {
+        setSlotError(error instanceof Error ? error.message : "可排时段加载失败");
+        setData((prev) => ({ ...prev, counselorSlotOptions: undefined }));
+      }
       return false;
     } finally {
-      setSlotLoading(false);
+      if (slotRequestSeq.current === requestSeq) {
+        setSlotLoading(false);
+      }
     }
   }, [draft.centerId, draft.date]);
 
@@ -129,9 +170,17 @@ function CounselorSchedulesScreenContent() {
           center_id: draft.centerId,
           room_id: roomId || undefined,
         });
-        showNotice("success", getMessage(result, "排期已新增"));
-        await loadData();
-        await loadSlots();
+        const successText = getMessage(result, "排期已新增");
+        const [calendarRefreshed, slotsRefreshed] = await Promise.all([
+          loadData({ clearExistingNotice: false, notifyOnError: false }),
+          loadSlots(),
+        ]);
+        showNotice(
+          calendarRefreshed && slotsRefreshed ? "success" : "info",
+          calendarRefreshed && slotsRefreshed
+            ? successText
+            : `${successText}，但排期刷新失败，请手动刷新后核对`,
+        );
         return true;
       } catch (error) {
         showNotice("error", error instanceof Error ? error.message : "新增排期失败");
@@ -146,8 +195,12 @@ function CounselorSchedulesScreenContent() {
       clearNotice();
       try {
         const result = await cancelCounselorSchedule(scheduleId, { leave_reason: reason });
-        showNotice("success", getMessage(result, "排期已取消"));
-        await loadData();
+        const successText = getMessage(result, "排期已取消");
+        const refreshed = await loadData({ clearExistingNotice: false, notifyOnError: false });
+        showNotice(
+          refreshed ? "success" : "info",
+          refreshed ? successText : `${successText}，但排期刷新失败，请手动刷新后核对`,
+        );
       } catch (error) {
         showNotice("error", error instanceof Error ? error.message : "取消排期失败");
       }
@@ -156,14 +209,28 @@ function CounselorSchedulesScreenContent() {
   );
 
   const submitLeave = useCallback(
-    async (scheduleId: number, reason: string) => {
+    async (
+      scheduleId: number,
+      reason: string,
+      communicationScreenshotUrl: string,
+    ) => {
       clearNotice();
       try {
-        const result = await submitCounselorLeaveRequest(scheduleId, reason);
-        showNotice("success", getMessage(result, "请假申请已提交"));
-        await loadData();
+        const result = await submitCounselorLeaveRequest(
+          scheduleId,
+          reason,
+          communicationScreenshotUrl,
+        );
+        const successText = getMessage(result, "请假申请已提交");
+        const refreshed = await loadData({ clearExistingNotice: false, notifyOnError: false });
+        showNotice(
+          refreshed ? "success" : "info",
+          refreshed ? successText : `${successText}，但排期刷新失败，请手动刷新后核对`,
+        );
+        return true;
       } catch (error) {
         showNotice("error", error instanceof Error ? error.message : "请假申请提交失败");
+        return false;
       }
     },
     [clearNotice, loadData, showNotice],
@@ -191,11 +258,26 @@ function CounselorSchedulesScreenContent() {
       setDraft={setDraft}
       onSearch={search}
       onReset={reset}
-      onClearSlotError={() => setSlotError(null)}
+      onClearSlotError={() => {
+        slotRequestSeq.current += 1;
+        setSlotLoading(false);
+        setSlotError(null);
+        setData((prev) => ({ ...prev, counselorSlotOptions: undefined }));
+      }}
       onLoadSlots={loadSlots}
       onCreate={createSchedule}
       onCancel={cancelSchedule}
       onLeave={submitLeave}
+      onProxyOrderCreated={async (message) => {
+        const refreshed = await loadData({ clearExistingNotice: false, notifyOnError: false });
+        showNotice(
+          refreshed ? "success" : "info",
+          refreshed
+            ? message || "订单已推送"
+            : `${message || "订单已推送"}，但排期刷新失败，请手动刷新后核对`,
+        );
+      }}
+      onProxyOrderError={(message) => showNotice("error", message)}
       onPageChange={setPage}
       onPageSizeChange={changePageSize}
     />

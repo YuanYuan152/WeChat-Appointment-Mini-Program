@@ -44,7 +44,7 @@ export function DashboardPanel({
             <div>
               <h2 className="text-lg font-semibold">代理预约</h2>
               <p className="mt-1 text-sm text-[var(--lxxl-muted)]">
-                为来访选择咨询师和时段，推送待支付订单。
+                选择来访并使用其绑定咨询师，推送待支付订单。
               </p>
             </div>
             <Link

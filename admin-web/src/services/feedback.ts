@@ -30,6 +30,7 @@ function mapConsultationFeedback(record: OperationRecord): FeedbackItem {
     id: record.targetId ?? (Number(record.id.replace(/\D/g, "")) || 0),
     accountId: record.patientId ?? record.operatorId ?? 0,
     userName: record.patientName || record.operatorName || record.targetName || "来访者",
+    patientContractTag: record.patientContractTag || null,
     userMobile: record.patientContact || record.operatorContact || null,
     category: "咨询反馈",
     content: record.summary || "-",

@@ -16,6 +16,7 @@ import {
 } from "@/components/ui";
 import { getLocalDateValue } from "@/lib/date";
 import { formatDateTime, statusLabel } from "@/lib/format";
+import { formatPatientNameWithContractTag } from "@/lib/patientContract";
 import { getPageItems } from "@/lib/pagination";
 import type {
   Room,
@@ -220,6 +221,9 @@ export function RoomsPanel({
                           {snapshot?.patientMobile && (
                             <div className="mt-1 text-xs text-[var(--lxxl-muted)]">{snapshot.patientMobile}</div>
                           )}
+                          {snapshot?.patientContractTag && (
+                            <div className="mt-1 text-xs font-medium text-[#315D4B]">{snapshot.patientContractTag}</div>
+                          )}
                         </td>
                         <td className="px-5 py-4 text-right">
                           <TableActionButton onClick={() => onOpenRoom(room, snapshot)}>查看</TableActionButton>
@@ -350,13 +354,20 @@ function RoomDetailPanel({
         <MiniStat label="咨询室状态" value={roomStatusLabel(room.status)} />
         <MiniStat label="当前时段" value={roomStatusLabel(activeSnapshot?.occupancy)} />
         <MiniStat label="咨询师" value={activeSnapshot?.counselorName || "-"} />
-        <MiniStat label="来访者" value={activeSnapshot?.patientName || "-"} />
+        <MiniStat
+          label="来访者"
+          value={[activeSnapshot?.patientName, activeSnapshot?.patientContractTag].filter(Boolean).join(" ") || "-"}
+        />
       </div>
 
       <CollapsibleSection title="联系方式">
         <div className="mt-3 grid gap-2 text-sm text-[var(--lxxl-muted)]">
           <div>咨询师：{activeSnapshot?.counselorName || "-"} {activeSnapshot?.counselorMobile || ""}</div>
-          <div>来访者：{activeSnapshot?.patientName || "-"} {activeSnapshot?.patientMobile || ""}</div>
+          <div>
+            来访者：
+            {formatPatientNameWithContractTag(activeSnapshot?.patientName, activeSnapshot?.patientContractTag) || "-"}{" "}
+            {activeSnapshot?.patientMobile || ""}
+          </div>
         </div>
       </CollapsibleSection>
 
@@ -507,6 +518,7 @@ function RoomSlotRow({
           <div>
             来访者：{slot.patientName || "-"}
             {slot.patientMobile ? `（${slot.patientMobile}）` : ""}
+            {slot.patientContractTag ? ` ${slot.patientContractTag}` : ""}
           </div>
         </div>
       </div>

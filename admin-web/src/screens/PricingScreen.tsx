@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AppRoute, useAppRoute } from "@/components/AppRoute";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
@@ -8,11 +8,14 @@ import { PricingPanel } from "@/panels/PricingPanel";
 import {
   fetchPricingCounselors,
   fetchPricingPatients,
+  previewPricingBatchDefaultShare,
+  updatePricingBatchDefaultShare,
   updatePricingCounselor,
   updatePricingPatient,
 } from "@/services/pricing";
 import type {
   PricingCounselorListResponse,
+  PricingBatchDefaultSharePayload,
   PricingCounselorSummary,
   PricingCounselorUpdatePayload,
   PricingPatientListResponse,
@@ -41,43 +44,84 @@ function PricingScreenContent() {
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [listLoading, setListLoading] = useState(false);
   const [patientLoading, setPatientLoading] = useState(false);
+  const counselorRequestSeq = useRef(0);
+  const patientRequestSeq = useRef(0);
+  const counselorMutationSeq = useRef(0);
+  const patientMutationSeq = useRef(0);
+  const selectedCounselorIdRef = useRef<number | null>(null);
 
-  const loadCounselors = useCallback(async () => {
+  const loadCounselors = useCallback(async (
+    options: { clearExistingNotice?: boolean; notifyOnError?: boolean } = {},
+  ) => {
+    const { clearExistingNotice = true, notifyOnError = true } = options;
+    const requestSeq = counselorRequestSeq.current + 1;
+    counselorRequestSeq.current = requestSeq;
     setListLoading(true);
-    clearNotice();
+    if (clearExistingNotice) {
+      clearNotice();
+    }
     try {
       const result = await fetchPricingCounselors(queryCounselorKeyword);
+      if (counselorRequestSeq.current !== requestSeq) {
+        return false;
+      }
       setCounselors(result);
       setSelectedCounselorId((current) => {
-        if (current && result.items.some((item) => item.counselorId === current)) {
-          return current;
-        }
-        return result.items[0]?.counselorId ?? null;
+        const next = current && result.items.some((item) => item.counselorId === current) ? current : null;
+        selectedCounselorIdRef.current = next;
+        return next;
       });
+      return true;
     } catch (error) {
-      showNotice("error", error instanceof Error ? error.message : "调价管理加载失败");
+      if (counselorRequestSeq.current === requestSeq && notifyOnError) {
+        showNotice("error", error instanceof Error ? error.message : "调价管理加载失败");
+      }
+      return false;
     } finally {
-      setListLoading(false);
+      if (counselorRequestSeq.current === requestSeq) {
+        setListLoading(false);
+      }
     }
   }, [clearNotice, queryCounselorKeyword, showNotice]);
 
-  const loadPatients = useCallback(async () => {
+  const loadPatients = useCallback(async (
+    options: { clearExistingNotice?: boolean; notifyOnError?: boolean } = {},
+  ) => {
+    const { clearExistingNotice = true, notifyOnError = true } = options;
+    const requestSeq = patientRequestSeq.current + 1;
+    patientRequestSeq.current = requestSeq;
     if (!selectedCounselorId) {
       setPatients(undefined);
-      return;
+      setPatientLoading(false);
+      return true;
     }
     setPatientLoading(true);
-    clearNotice();
+    if (clearExistingNotice) {
+      clearNotice();
+    }
     try {
       const result = await fetchPricingPatients(selectedCounselorId, queryPatientKeyword, {
         page,
         pageSize,
       });
+      if (
+        patientRequestSeq.current !== requestSeq ||
+        selectedCounselorIdRef.current !== selectedCounselorId ||
+        result.counselor.counselorId !== selectedCounselorId
+      ) {
+        return false;
+      }
       setPatients(result);
+      return true;
     } catch (error) {
-      showNotice("error", error instanceof Error ? error.message : "来访调价列表加载失败");
+      if (patientRequestSeq.current === requestSeq && notifyOnError) {
+        showNotice("error", error instanceof Error ? error.message : "来访调价列表加载失败");
+      }
+      return false;
     } finally {
-      setPatientLoading(false);
+      if (patientRequestSeq.current === requestSeq) {
+        setPatientLoading(false);
+      }
     }
   }, [clearNotice, page, pageSize, queryPatientKeyword, selectedCounselorId, showNotice]);
 
@@ -100,10 +144,13 @@ function PricingScreenContent() {
   }, [counselorKeyword, loadCounselors, queryCounselorKeyword]);
 
   const resetCounselors = useCallback(() => {
+    patientRequestSeq.current += 1;
     setCounselorKeyword("");
     setQueryCounselorKeyword("");
     setPatientKeyword("");
     setQueryPatientKeyword("");
+    selectedCounselorIdRef.current = null;
+    setSelectedCounselorId(null);
     setPage(1);
     setPatients(undefined);
     if (!queryCounselorKeyword) {
@@ -111,12 +158,31 @@ function PricingScreenContent() {
     }
   }, [loadCounselors, queryCounselorKeyword]);
 
+  const closePatientPricing = useCallback(() => {
+    patientRequestSeq.current += 1;
+    setPatientLoading(false);
+    selectedCounselorIdRef.current = null;
+    setSelectedCounselorId(null);
+    setPatientKeyword("");
+    setQueryPatientKeyword("");
+    setPage(1);
+    setPatients(undefined);
+  }, []);
+
   const selectCounselor = useCallback((counselorId: number) => {
+    if (selectedCounselorId === counselorId) {
+      closePatientPricing();
+      return;
+    }
+    patientRequestSeq.current += 1;
+    setPatientLoading(false);
+    selectedCounselorIdRef.current = counselorId;
     setSelectedCounselorId(counselorId);
     setPatientKeyword("");
     setQueryPatientKeyword("");
     setPage(1);
-  }, []);
+    setPatients(undefined);
+  }, [closePatientPricing, selectedCounselorId]);
 
   const searchPatients = useCallback(() => {
     setPage(1);
@@ -138,7 +204,12 @@ function PricingScreenContent() {
 
   const saveCounselor = useCallback(
     async (counselor: PricingCounselorSummary, payload: PricingCounselorUpdatePayload) => {
+      const mutationSeq = counselorMutationSeq.current + 1;
+      counselorMutationSeq.current = mutationSeq;
       const result = await updatePricingCounselor(counselor.counselorId, payload);
+      if (counselorMutationSeq.current !== mutationSeq || result.counselorId !== counselor.counselorId) {
+        return;
+      }
       setCounselors((current) =>
         current
           ? {
@@ -152,55 +223,53 @@ function PricingScreenContent() {
           ? { ...current, counselor: result }
           : current,
       );
-      if (selectedCounselorId === result.counselorId) {
-        const refreshedPatients = await fetchPricingPatients(result.counselorId, queryPatientKeyword, {
-          page,
-          pageSize,
-        });
-        setPatients(refreshedPatients);
+      if (selectedCounselorIdRef.current === result.counselorId) {
+        const refreshed = await loadPatients({ clearExistingNotice: false, notifyOnError: false });
+        showNotice(
+          refreshed ? "success" : "info",
+          refreshed ? "基础价和默认分成已保存" : "基础价和默认分成已保存，但来访调价列表刷新失败",
+        );
+        return;
       }
       showNotice("success", "基础价和默认分成已保存");
     },
-    [page, pageSize, queryPatientKeyword, selectedCounselorId, showNotice],
+    [loadPatients, showNotice],
   );
 
   const savePatient = useCallback(
     async (patient: PricingPatientRow, payload: PricingPatientUpdatePayload) => {
+      const mutationSeq = patientMutationSeq.current + 1;
+      patientMutationSeq.current = mutationSeq;
       const result = await updatePricingPatient(patient.counselorId, patient.patientId, payload);
-      const alreadyConfigured = Boolean(
-        patient.shareMode ||
-          patient.revenueShareAmountCents != null ||
-          patient.revenueSharePercent != null ||
-          patient.manualAdjustmentYuan !== 0,
-      );
+      if (
+        patientMutationSeq.current !== mutationSeq ||
+        result.counselorId !== patient.counselorId ||
+        result.patientId !== patient.patientId
+      ) {
+        return;
+      }
       setPatients((current) =>
-        current
-          ? {
-              ...current,
-              items: current.items.map((item) => (item.patientId === result.patientId ? result : item)),
-            }
-          : current,
-      );
-      setCounselors((current) =>
-        current
+        current && current.counselor.counselorId === result.counselorId
           ? {
               ...current,
               items: current.items.map((item) =>
-                item.counselorId === patient.counselorId
-                  ? {
-                      ...item,
-                      configuredPatientCount: alreadyConfigured
-                        ? item.configuredPatientCount
-                        : item.configuredPatientCount + 1,
-                    }
-                  : item,
+                item.counselorId === result.counselorId && item.patientId === result.patientId ? result : item,
               ),
             }
           : current,
       );
-      showNotice("success", "来访个体调价已保存");
+      const refreshed = await loadCounselors({
+        clearExistingNotice: false,
+        notifyOnError: false,
+      });
+      showNotice(
+        refreshed ? "success" : "info",
+        refreshed
+          ? "来访个体调价已保存"
+          : "来访个体调价已保存，但已个体调价数量刷新失败，请手动刷新后核对",
+      );
     },
-    [showNotice],
+    [loadCounselors, showNotice],
   );
 
   const changePageSize = useCallback((nextPageSize: number) => {
@@ -224,12 +293,36 @@ function PricingScreenContent() {
       onSearchCounselors={searchCounselors}
       onResetCounselors={resetCounselors}
       onSelectCounselor={selectCounselor}
+      onClosePatientPricing={closePatientPricing}
       onSearchPatients={searchPatients}
       onResetPatients={resetPatients}
       onPageChange={setPage}
       onPageSizeChange={changePageSize}
       onSaveCounselor={saveCounselor}
       onSavePatient={savePatient}
+      onPreviewBatchShare={previewPricingBatchDefaultShare}
+      onBatchError={(message) => showNotice("error", message)}
+      onApplyBatchShare={async (payload: PricingBatchDefaultSharePayload) => {
+        const result = await updatePricingBatchDefaultShare(payload);
+        const [counselorsRefreshed, patientsRefreshed] = await Promise.all([
+          loadCounselors({ clearExistingNotice: false, notifyOnError: false }),
+          selectedCounselorId
+            ? loadPatients({ clearExistingNotice: false, notifyOnError: false })
+            : Promise.resolve(true),
+        ]);
+        const successText = `已调整 ${result.changedCount} 名咨询师的默认分成${
+          result.clearedPatientShareOverrideCount
+            ? `，清除 ${result.clearedPatientShareOverrideCount} 项个体分成`
+            : ""
+        }`;
+        showNotice(
+          counselorsRefreshed && patientsRefreshed ? "success" : "info",
+          counselorsRefreshed && patientsRefreshed
+            ? successText
+            : `${successText}，但列表刷新失败，请手动刷新后核对`,
+        );
+        return result;
+      }}
     />
   );
 }

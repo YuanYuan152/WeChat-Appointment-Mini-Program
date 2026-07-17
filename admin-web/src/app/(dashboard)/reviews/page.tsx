@@ -1,5 +1,5 @@
 import { ReviewsScreen } from "@/screens/ReviewsScreen";
 
-export default function RefundExemptions() {
+export default function ReviewsPage() {
   return <ReviewsScreen />;
 }

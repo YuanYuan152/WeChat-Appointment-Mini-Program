@@ -5,6 +5,7 @@ import { useMemo, useRef, useState } from "react";
 import { AppRoute, useAppRoute } from "@/components/AppRoute";
 import { Badge, EmptyState, PanelHeader, QueryButton, QueryResetButton } from "@/components/ui";
 import { formatFullDateTime, formatMoneyFromCents } from "@/lib/format";
+import { formatPatientNameWithContractTag } from "@/lib/patientContract";
 import { importCompletedOrders } from "@/services/imports";
 import type { CompletedOrderImportResult, CompletedOrderImportRowResult, CompletedOrderImportStatus } from "@/types/api";
 
@@ -224,7 +225,9 @@ function ImportResultRow({ row }: { row: CompletedOrderImportRowResult }) {
       <td className="whitespace-nowrap px-5 py-4">
         <Badge tone={status.tone}>{status.label}</Badge>
       </td>
-      <td className="px-5 py-4">{row.patientName || "-"}</td>
+      <td className="px-5 py-4">
+        {formatPatientNameWithContractTag(row.patientName, row.patientContractTag) || "-"}
+      </td>
       <td className="px-5 py-4">{row.counselorName || "-"}</td>
       <td className="px-5 py-4 text-[var(--lxxl-muted)]">{timeRange}</td>
       <td className="whitespace-nowrap px-5 py-4">

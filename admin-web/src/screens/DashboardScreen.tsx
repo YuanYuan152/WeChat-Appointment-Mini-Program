@@ -43,8 +43,8 @@ function DashboardScreenContent() {
   const summaryRows = useMemo(() => {
     const pending = data.refunds?.slice(0, 4).map((item) => ({
       time: item.createdAt,
-      type: "豁免审核",
-      subject: `${item.patientName} / ${item.counselorName}`,
+      type: "用户豁免",
+      subject: `${[item.patientName, item.patientContractTag].filter(Boolean).join(" ")} / ${item.counselorName}`,
       status: statusLabel(item.status),
       amount: formatMoneyFromCents(item.amount),
     }));
@@ -55,7 +55,9 @@ function DashboardScreenContent() {
         time: room.startTime || room.atTime || "",
         type: "咨询室占用",
         subject: `${room.centerName} / ${room.name}`,
-        status: room.patientName || statusLabel(room.occupancy),
+        status:
+          [room.patientName, room.patientContractTag].filter(Boolean).join(" ") ||
+          statusLabel(room.occupancy),
         amount: room.counselorName || "-",
       }));
     const missingRecords = data.counselorRecords
@@ -112,14 +114,16 @@ function messageTypeLabel(message: MessageItem) {
     CASE_RECORD_CRISIS_REPORT: "风险上报",
     COUNSELOR_LEAVE_SUBMITTED: "咨询师请假",
     FEEDBACK: "咨询反馈",
-    REFUND_EXEMPTION_PENDING: "豁免审核",
+    REFUND_EXEMPTION_PENDING: "用户豁免",
   };
   return message.RelatedType ? labels[message.RelatedType] || message.Title || "消息提醒" : message.Title || "消息提醒";
 }
 
 function messageSubject(message: MessageItem, detail: Record<string, unknown>) {
   const counselor = stringValue(detail.counselorName);
-  const patient = stringValue(detail.patientName);
+  const patientName = stringValue(detail.patientName);
+  const patientContractTag = stringValue(detail.patientContractTag) || stringValue(detail.contractTag);
+  const patient = [patientName, patientContractTag].filter(Boolean).join(" ");
   const crisisLevel = stringValue(detail.crisisLevelLabel) || stringValue(detail.crisisLevel);
   const people = [counselor, patient].filter(Boolean).join(" / ");
   if (people && crisisLevel) {

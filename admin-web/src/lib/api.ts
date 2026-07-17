@@ -7,6 +7,7 @@ export const API_BASE_URL = (
 ).replace(/\/$/, "");
 
 const TOKEN_KEY = "lxxl_admin_web_token";
+export const AUTH_UNAUTHORIZED_EVENT = "lxxl-admin-web:unauthorized";
 
 export class ApiError extends Error {
   status: number;
@@ -44,6 +45,9 @@ export function clearStoredToken() {
 }
 
 function getErrorMessage(payload: unknown, fallback: string) {
+  if (typeof payload === "string" && payload.trim()) {
+    return payload.trim();
+  }
   if (payload && typeof payload === "object" && "msg" in payload) {
     const msg = (payload as { msg?: unknown }).msg;
     if (typeof msg === "string") {
@@ -63,6 +67,29 @@ function getErrorMessage(payload: unknown, fallback: string) {
     }
   }
   return fallback;
+}
+
+function parseResponsePayload(text: string): unknown {
+  if (!text) {
+    return null;
+  }
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return text;
+  }
+}
+
+function notifyUnauthorized(requestToken: string | null) {
+  // 只让当前登录凭证对应的 401 触发退出。旧页面请求若在重新登录后才返回，
+  // 不能清掉刚写入的新 token。
+  if (!requestToken || getStoredToken() !== requestToken) {
+    return;
+  }
+  clearStoredToken();
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(AUTH_UNAUTHORIZED_EVENT));
+  }
 }
 
 function isApiEnvelope(payload: unknown): payload is { code: number; msg?: string; data: unknown } {
@@ -92,7 +119,11 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
   });
 
   const text = await response.text();
-  const payload = text ? (JSON.parse(text) as unknown) : null;
+  const payload = parseResponsePayload(text);
+
+  if (response.status === 401) {
+    notifyUnauthorized(token);
+  }
 
   if (!response.ok) {
     throw new ApiError(

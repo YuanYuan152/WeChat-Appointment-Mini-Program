@@ -3,6 +3,8 @@ import type {
   PricingCounselorListResponse,
   PricingCounselorSummary,
   PricingCounselorUpdatePayload,
+  PricingBatchDefaultSharePayload,
+  PricingBatchDefaultShareResult,
   PricingPatientListResponse,
   PricingPatientRow,
   PricingPatientUpdatePayload,
@@ -24,6 +26,26 @@ export function updatePricingCounselor(counselorId: number, payload: PricingCoun
     method: "PUT",
     body: JSON.stringify(payload),
   });
+}
+
+export function previewPricingBatchDefaultShare(payload: PricingBatchDefaultSharePayload) {
+  return apiRequest<PricingBatchDefaultShareResult>(
+    "/api/mini/admin/pricing/counselors/default-share/batch-preview",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export function updatePricingBatchDefaultShare(payload: PricingBatchDefaultSharePayload) {
+  return apiRequest<PricingBatchDefaultShareResult>(
+    "/api/mini/admin/pricing/counselors/default-share/batch",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
 }
 
 export function fetchPricingPatients(
