@@ -84,6 +84,9 @@
                   <text class="diff-text">{{ field.proposed || '—' }}</text>
                 </view>
               </view>
+              <view v-if="!diffFields.length && !headerDiffChanged && !riskDiffChanged" class="diff-section">
+                <text class="diff-text old">本次申请无字段内容变更。</text>
+              </view>
 
               <view v-if="headerDiffChanged" class="diff-section">
                 <text class="diff-title">表头信息</text>
@@ -203,7 +206,7 @@ const diffFields = computed(() => {
     label,
     current: (current[key] as string) || '',
     proposed: (proposed[key] as string) || '',
-  }))
+  })).filter((field) => (field.current || '').trim() !== (field.proposed || '').trim())
 })
 
 const riskDiffCurrent = computed(() =>

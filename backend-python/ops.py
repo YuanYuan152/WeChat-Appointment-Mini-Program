@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 
 from auth import get_current_account, AppAccount
 from database import get_db
+from role_active import get_account_role
 from staff_roles import STAFF_WORKBENCH_ROLES, account_has_staff_workbench
 from models import (
     AppBanner, AppActivity, AppArticle, AppOrder, AppRoleBinding,
@@ -67,6 +68,17 @@ def require_ops(
         db, current_account.Id, getattr(current_account, "ActiveRole", None)
     ):
         raise HTTPException(status_code=403, detail="无管理工作台权限")
+    return current_account
+
+
+def require_ops_or_admin_dashboard(
+    current_account: AppAccount = Depends(get_current_account),
+    db: Session = Depends(get_db),
+) -> AppAccount:
+    """运营看板仅咨询主任、管理员可查看；咨询助理不可访问。"""
+    role = get_account_role(db, current_account.Id) or getattr(current_account, "ActiveRole", None)
+    if role not in ("Ops", "Admin"):
+        raise HTTPException(status_code=403, detail="咨询助理无权查看运营看板")
     return current_account
 
 
@@ -466,7 +478,7 @@ def delete_article(
 
 @router.get("/dashboard", summary="运营数据看板")
 def ops_dashboard(
-    _ops: AppAccount = Depends(require_ops),
+    _ops: AppAccount = Depends(require_ops_or_admin_dashboard),
     db: Session = Depends(get_db),
 ):
     user_count = db.query(AccountModel).count()

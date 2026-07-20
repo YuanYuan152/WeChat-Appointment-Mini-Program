@@ -533,6 +533,7 @@ function buildMessageDetailSections(
   const rawStatus = detailText(detail, "status");
   const status = detailText(detail, "statusLabel") || (rawStatus ? statusLabel(rawStatus) : "");
   const crisisLevel = detailText(detail, "crisisLevelLabel") || detailText(detail, "crisisLevel");
+  const amendmentSections = buildCaseRecordAmendmentSections(message, detail);
 
   const sections: DetailSection[] = [
     {
@@ -546,6 +547,7 @@ function buildMessageDetailSections(
         { label: "提示", value: detailText(detail, "tip") },
       ]),
     },
+    ...amendmentSections,
     {
       title: "业务详情",
       rows: compactRows([
@@ -563,7 +565,7 @@ function buildMessageDetailSections(
             : detailText(detail, "refundText"),
         },
         { label: "豁免申请", value: detailText(detail, "exemptionLabel") },
-        { label: "摘要", value: summary },
+        { label: "摘要", value: isCaseRecordAmendmentMessage(message) ? "" : summary },
       ]),
     },
     {
@@ -577,6 +579,65 @@ function buildMessageDetailSections(
   ];
 
   return sections.filter((section) => section.rows.length > 0);
+}
+
+function buildCaseRecordAmendmentSections(
+  message: MessageItem,
+  detail: Record<string, unknown>,
+): DetailSection[] {
+  if (!isCaseRecordAmendmentMessage(message)) {
+    return [];
+  }
+
+  const changedFieldLabels = Array.isArray(detail.changedFieldLabels)
+    ? detail.changedFieldLabels
+        .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+        .join("、")
+    : "";
+  const changeItems = Array.isArray(detail.changes)
+    ? detail.changes.filter(
+        (item): item is Record<string, unknown> => !!item && typeof item === "object" && !Array.isArray(item),
+      )
+    : [];
+  const changesText =
+    changeItems.length > 0
+      ? changeItems
+          .map((item) => {
+            const label = formatDetailValue(item.label) || "字段";
+            const before = formatDetailValue(item.before) || "—";
+            const after = formatDetailValue(item.after) || "—";
+            return `【${label}】\n修改前：\n${before}\n\n修改后：\n${after}`;
+          })
+          .join("\n\n")
+      : detailText(detail, "changesText");
+  const reviewedAt = detailText(detail, "reviewedAt");
+  const isReviewed =
+    message.RelatedType === "CASE_RECORD_AMENDMENT" &&
+    (detailText(detail, "status") === "APPROVED" ||
+      detailText(detail, "status") === "REJECTED" ||
+      detail.approved === true ||
+      detail.approved === false);
+
+  const rows = compactRows([
+    { label: "记录编号", value: detailText(detail, "caseRecordId") ? `#${detailText(detail, "caseRecordId")}` : "" },
+    { label: "咨询时段", value: detailText(detail, "startTime") },
+    { label: "提交时间", value: detailText(detail, "submittedAt") },
+    { label: "变动字段", value: changedFieldLabels },
+    { label: "修改内容", value: changesText },
+    { label: "修改说明", value: detailText(detail, "reason") },
+    { label: "审核时间", value: isReviewed ? reviewedAt : "" },
+    { label: "审核人", value: isReviewed ? detailText(detail, "reviewedByName") : "" },
+    { label: "驳回理由", value: isReviewed ? detailText(detail, "rejectReason") : "" },
+  ]);
+
+  return rows.length > 0
+    ? [
+        {
+          title: isReviewed ? "修改审核结果" : "修改申请内容",
+          rows,
+        },
+      ]
+    : [];
 }
 
 function leaveBusinessStatus(
@@ -706,8 +767,13 @@ function affectedAppointmentText(appointment: Record<string, unknown>, leaveStat
 const knownDetailKeys = new Set([
   "affectedAppointments",
   "amount",
+  "amendmentId",
+  "approved",
   "caseRecordId",
   "centerName",
+  "changedFieldLabels",
+  "changes",
+  "changesText",
   "consultationId",
   "counselorName",
   "counselorPhone",
@@ -723,12 +789,16 @@ const knownDetailKeys = new Set([
   "patientPhone",
   "refundText",
   "rejectReason",
+  "reason",
+  "reviewedAt",
+  "reviewedByName",
   "roomName",
   "scheduleId",
   "screenshotUrl",
   "startTime",
   "status",
   "statusLabel",
+  "submittedAt",
   "tip",
 ]);
 
@@ -800,6 +870,29 @@ function messageDetailRows(detail: Record<string, unknown>, item: MessageItem) {
   const patientContractTag = stringValue(detail.patientContractTag);
   const patientPhone = stringValue(detail.patientPhone);
   const crisisLevelLabel = stringValue(detail.crisisLevelLabel) || stringValue(detail.crisisLevel);
+
+  if (isCaseRecordAmendmentMessage(item)) {
+    const submittedAt = stringValue(detail.submittedAt);
+    const reviewedAt = stringValue(detail.reviewedAt);
+    const changedFieldLabels = Array.isArray(detail.changedFieldLabels)
+      ? detail.changedFieldLabels
+          .filter((label): label is string => typeof label === "string" && label.trim().length > 0)
+          .join("、")
+      : "";
+    if (submittedAt) {
+      rows.push({ label: "提交时间", value: submittedAt });
+    }
+    if (changedFieldLabels) {
+      rows.push({ label: "变动字段", value: changedFieldLabels });
+    }
+    if (reviewedAt) {
+      rows.push({ label: "审核时间", value: reviewedAt });
+    }
+    if (rejectReason) {
+      rows.push({ label: "驳回理由", value: rejectReason });
+    }
+    return rows.slice(0, 4);
+  }
 
   if (isCrisisReportMessage(item) && crisisLevelLabel) {
     rows.push({ label: "风险等级", value: crisisLevelLabel });
@@ -891,6 +984,14 @@ function isCrisisReportMessage(item: MessageItem) {
     return true;
   }
   return item.Type === "RISK" && title.includes("风险");
+}
+
+function isCaseRecordAmendmentMessage(item: MessageItem) {
+  return (
+    item.RelatedType === "CASE_RECORD_AMENDMENT" ||
+    item.RelatedType === "CASE_RECORD_AMENDMENT_PENDING" ||
+    item.RelatedType === "CASE_RECORD_AMENDMENT_SUBMITTED"
+  );
 }
 
 function humanizeText(value: string) {

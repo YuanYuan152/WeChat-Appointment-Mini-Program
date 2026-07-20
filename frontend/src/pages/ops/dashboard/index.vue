@@ -14,9 +14,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
+import { useUserStore } from '@/store/user'
+import { resolveAccountRole } from '@/constants/roles'
+import { readStoredRole } from '@/utils/tabBar'
+
+const userStore = useUserStore()
 
 const data = ref({
   userCount: 0,
@@ -36,12 +42,31 @@ const cards = computed(() => [
   { label: '活动数', value: data.value.activityCount },
 ])
 
+const canViewDashboard = () => {
+  const role =
+    userStore.activeRole ||
+    resolveAccountRole(userStore.roles) ||
+    readStoredRole()
+  return role === 'Ops' || role === 'Admin'
+}
+
 const load = async () => {
+  if (!canViewDashboard()) {
+    uni.showToast({ title: '咨询助理无权查看运营看板', icon: 'none' })
+    setTimeout(() => {
+      uni.navigateBack({
+        fail: () => uni.redirectTo({ url: '/pages/ops/index/index' }),
+      })
+    }, 400)
+    return
+  }
   const res = await httpV2.get<typeof data.value>(API_ENDPOINTS.ops.dashboard)
   if (res.code === 0 && res.data) data.value = res.data
 }
 
-onMounted(load)
+onShow(() => {
+  void load()
+})
 </script>
 
 <style scoped>
