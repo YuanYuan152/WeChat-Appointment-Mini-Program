@@ -514,11 +514,11 @@ function CounselorPricingModal({
         <div className="rounded-xl bg-[#FAF8F4] px-4 py-3 text-sm leading-6 text-[var(--lxxl-muted)]">
           <p>
             <span className="font-medium text-[var(--lxxl-text)]">基础价格：</span>
-            该咨询师接待来访时的统一标价，对所有来访生效；若某来访做了个体调价，显示价 = 基础价格 + 系统调价 + 该来访调整金额。
+            咨询师对所有来访端展示的价格，如果对个体价格单独做过设置那么该个体看到的是修改后的价格，而其余未做过个体价格调整的来访端显示的还是基础价格。
           </p>
           <p className="mt-2">
             <span className="font-medium text-[var(--lxxl-text)]">分成比例：</span>
-            咨询师默认分成占来访可见价的比例，对未单独设置个体分成的来访生效；已个体调价并单独设置分成的来访不受此默认比例覆盖（除非批量调整时选择清除）。
+            咨询师默认分成占来访可见价的比例，对未单独设置个体分成的来访生效；已个体调价并单独设置分成的来访不受此默认比例覆盖（除非批量调整时选择清除）。基础配置里的分成比例调整的是平台和咨询师之间的，如果包含医院分成比例需要进入个体调价里去调整分成比例。
           </p>
         </div>
         <QueryField label="基础价格（元，对全部来访生效）" required>

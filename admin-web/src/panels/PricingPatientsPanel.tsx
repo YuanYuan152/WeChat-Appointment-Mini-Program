@@ -360,10 +360,6 @@ function PatientPricingModal({
             }`}
           />
           <ReadonlyInfo label="基础价格（所有来访生效）" value={`¥${patient.basePriceYuan}`} />
-          <ReadonlyInfo
-            label="系统状态"
-            value={patient.needsNegotiation ? patient.priceLabel || "需议价" : "无系统调价"}
-          />
         </div>
 
         {patient.autoAdjustmentYuan ? (
