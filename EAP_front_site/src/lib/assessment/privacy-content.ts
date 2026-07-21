@@ -1,6 +1,4 @@
-function getProfessionalAssessmentPrivacyKey(assessmentId: string): string {
-  return `assessment-professional-privacy-accepted-${assessmentId}`;
-}
+const PROFESSIONAL_PRIVACY_KEY = "assessment-professional-privacy-accepted";
 
 export const privacyAgreementSections = [
   {
@@ -21,7 +19,7 @@ export const privacyAgreementSections = [
   {
     title: "四、数据存储与访问",
     content:
-      "测评过程中产生的答题进度可能临时保存在您的浏览器本地（如 sessionStorage），以便刷新页面后继续作答。我们不会将测评数据共享给无关第三方。",
+      "测评过程中产生的答题进度会保存在您的浏览器本地（localStorage），以便关闭页面后仍可继续作答。我们不会将测评数据共享给无关第三方。",
   },
   {
     title: "五、您的权利",
@@ -43,21 +41,16 @@ export const privacyAgreementSections = [
 export const privacyAgreementIntro =
   "欢迎使用连心心理专业测评服务。在您开始专业量表测评前，请仔细阅读以下《隐私保护协议》。我们重视您的隐私，并提醒您测评结果仅供参考。";
 
+/** 专业测评隐私协议：全站只需同意一次（localStorage 持久化） */
 export function isProfessionalAssessmentPrivacyAccepted(
-  assessmentId: string
+  _assessmentId?: string
 ): boolean {
   if (typeof window === "undefined") return false;
-  return (
-    sessionStorage.getItem(getProfessionalAssessmentPrivacyKey(assessmentId)) ===
-    "true"
-  );
+  return localStorage.getItem(PROFESSIONAL_PRIVACY_KEY) === "true";
 }
 
 export function acceptProfessionalAssessmentPrivacy(
-  assessmentId: string
+  _assessmentId?: string
 ): void {
-  sessionStorage.setItem(
-    getProfessionalAssessmentPrivacyKey(assessmentId),
-    "true"
-  );
+  localStorage.setItem(PROFESSIONAL_PRIVACY_KEY, "true");
 }

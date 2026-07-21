@@ -122,14 +122,6 @@
           </view>
           <text class="service-arrow">›</text>
         </view>
-        <view class="service-card" @tap="navigateTo('/pages/activity/list')">
-          <view class="service-icon gold"><text>活</text></view>
-          <view class="service-body">
-            <text class="service-name">精彩活动</text>
-            <text class="service-desc">团体沙龙体验</text>
-          </view>
-          <text class="service-arrow">›</text>
-        </view>
       </view>
     </view>
 

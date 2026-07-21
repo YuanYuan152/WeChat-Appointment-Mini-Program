@@ -47,22 +47,36 @@ export function ProfessionalAssessmentEntry() {
 
 interface StartProfessionalAssessmentButtonProps {
   assessmentId: string;
+  questionCount?: number;
 }
 
 export function StartProfessionalAssessmentButton({
   assessmentId,
+  questionCount = 0,
 }: StartProfessionalAssessmentButtonProps) {
   const router = useRouter();
   const clearSession = useQuizSession((s) => s.clearSession);
+  const getAnsweredCount = useQuizSession((s) => s.getAnsweredCount);
   const requireLogin = useRequireAssessmentLogin();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    const done = () => setHydrated(true);
+    done();
+    return useQuizSession.persist.onFinishHydration(done);
+  }, []);
 
   const targetPath = `/assessment/professional/${assessmentId}`;
+  const answeredCount = hydrated ? getAnsweredCount(assessmentId) : 0;
+  const completed = questionCount > 0 && answeredCount >= questionCount;
+  const inProgress = answeredCount > 0 && !completed;
+  const label = completed ? "再次测评" : inProgress ? "继续测评" : "开始测评";
 
   const navigate = useCallback(() => {
-    clearSession(assessmentId);
+    if (completed) clearSession(assessmentId);
     router.push(targetPath);
-  }, [assessmentId, clearSession, router, targetPath]);
+  }, [assessmentId, clearSession, completed, router, targetPath]);
 
   const handleStart = () => {
     requireLogin(targetPath, () => {
@@ -83,7 +97,7 @@ export function StartProfessionalAssessmentButton({
   return (
     <>
       <Button size="sm" onClick={handleStart}>
-        开始测评
+        {label}
       </Button>
       <PrivacyAgreementDialog
         open={dialogOpen}

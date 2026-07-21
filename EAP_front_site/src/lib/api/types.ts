@@ -98,6 +98,10 @@ export interface Assessment {
   title: string;
   subtitle: string;
   description: string;
+  /** 答题前指导语（来自量表文档） */
+  instructions?: string;
+  /** 测评功能说明（来自量表文档「功能」等章节） */
+  features?: string;
   cover: string;
   questionCount: number;
   duration: number;
@@ -107,6 +111,7 @@ export interface Assessment {
   matchResults?: MatchResult[];
   dimensions?: DimensionDefinition[];
   reverseQuestionIds?: string[];
+  /** 报告页引导/功能说明 */
   reportIntro?: string;
   disclaimer: string;
 }
