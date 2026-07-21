@@ -16,6 +16,11 @@ import type {
   QaItem,
   Story,
 } from "../types";
+import { enrichAssessmentGuidance } from "@/lib/assessment/scale-guidance";
+
+function withGuidance(list: Assessment[]): Assessment[] {
+  return list.map((a) => enrichAssessmentGuidance(a) as Assessment);
+}
 
 export class MockAdapter implements DataAdapter {
   async getStories(): Promise<Story[]> {
@@ -46,11 +51,11 @@ export class MockAdapter implements DataAdapter {
   }
 
   async getProfessionalAssessments(): Promise<Assessment[]> {
-    return professionalData as unknown as Assessment[];
+    return withGuidance(professionalData as unknown as Assessment[]);
   }
 
   async getFunAssessments(): Promise<Assessment[]> {
-    return funData as unknown as Assessment[];
+    return withGuidance(funData as unknown as Assessment[]);
   }
 
   async getAssessmentById(

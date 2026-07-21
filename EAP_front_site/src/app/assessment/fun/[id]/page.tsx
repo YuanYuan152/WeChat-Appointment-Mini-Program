@@ -25,8 +25,7 @@ export default async function FunQuizPage({ params }: QuizPageProps) {
           <ArrowLeft className="h-4 w-4" />
           返回列表
         </Link>
-        <h1 className="mb-2 font-serif text-2xl font-bold">{assessment.title}</h1>
-        <p className="mb-8 text-sm text-muted-foreground">{assessment.description}</p>
+        <h1 className="mb-8 font-serif text-2xl font-bold">{assessment.title}</h1>
         <AssessmentAuthGate requireUser>
           <QuizClient assessment={assessment} type="fun" />
         </AssessmentAuthGate>

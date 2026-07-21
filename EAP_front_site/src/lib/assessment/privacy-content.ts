@@ -21,7 +21,7 @@ export const privacyAgreementSections = [
   {
     title: "四、数据存储与访问",
     content:
-      "测评过程中产生的答题进度可能临时保存在您的浏览器本地（如 sessionStorage），以便刷新页面后继续作答。我们不会将测评数据共享给无关第三方。",
+      "测评过程中产生的答题进度会保存在您的浏览器本地（localStorage），以便关闭页面后仍可继续作答。我们不会将测评数据共享给无关第三方。",
   },
   {
     title: "五、您的权利",
