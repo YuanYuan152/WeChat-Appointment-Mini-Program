@@ -4,8 +4,8 @@
       <view class="filter-section">
         <view
           class="filter-trigger"
-          :class="{ active: activeCategory !== 'ALL', open: filterOpen }"
-          @click="toggleFilter"
+          :class="{ active: activeCategory !== 'ALL' || crisisUnreadView, open: filterOpen }"
+          @tap="toggleFilter"
         >
           <text class="filter-prefix">消息类型</text>
           <view class="filter-value-wrap">
@@ -20,14 +20,36 @@
           </view>
         </view>
 
-        <view v-if="filterOpen" class="filter-mask" @click="closeFilter" />
-        <view class="filter-dropdown" :class="{ show: filterOpen }">
+        <view v-if="showSearch" class="search-row">
+          <input
+            v-model="searchKeyword"
+            class="search-input"
+            type="text"
+            placeholder="搜索时间、姓名、消息类型..."
+            confirm-type="search"
+            @confirm="loadMessages"
+            @input="onSearchInput"
+          />
+          <text v-if="searchKeyword" class="search-clear" @tap="clearSearch">清除</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 全屏浮层：避免 absolute+overflow 在小程序底部白屏闪退 -->
+    <view v-if="filterOpen" class="filter-overlay" @tap="closeFilter">
+      <view class="filter-panel" @tap.stop>
+        <scroll-view
+          scroll-y
+          class="filter-scroll"
+          :style="{ height: `${filterScrollHeight}px` }"
+          :show-scrollbar="false"
+        >
           <view
             v-for="cat in categories"
             :key="cat.value"
             class="filter-option"
-            :class="{ selected: activeCategory === cat.value }"
-            @click="selectCategory(cat.value)"
+            :class="{ selected: !crisisUnreadView && activeCategory === cat.value }"
+            @tap="selectCategory(cat.value)"
           >
             <text class="option-label">{{ cat.label }}</text>
             <view class="option-right">
@@ -37,23 +59,13 @@
               >
                 {{ unreadCount > 99 ? '99+' : unreadCount }}
               </text>
-              <text v-if="activeCategory === cat.value" class="check-icon">✓</text>
+              <text
+                v-if="!crisisUnreadView && activeCategory === cat.value"
+                class="check-icon"
+              >✓</text>
             </view>
           </view>
-        </view>
-      </view>
-
-      <view v-if="showSearch" class="search-row">
-        <input
-          v-model="searchKeyword"
-          class="search-input"
-          type="text"
-          placeholder="搜索时间、姓名、消息类型..."
-          confirm-type="search"
-          @confirm="loadMessages"
-          @input="onSearchInput"
-        />
-        <text v-if="searchKeyword" class="search-clear" @click="clearSearch">清除</text>
+        </scroll-view>
       </view>
     </view>
 
@@ -140,6 +152,18 @@ const isAdminOpsInbox = computed(() => hasAdminOpsMessageInbox(activeRole.value,
 const categories = computed(() => getMessageCategoriesForRole(inboxRole.value))
 const showSearch = computed(() => canSearchMessages(inboxRole.value))
 const showCrisisUnreadBanner = computed(() => isAdminOpsInbox.value)
+/** 下拉高度按选项数计算，避免 scroll-view 固定过高出现底部白块 */
+const filterScrollHeight = computed(() => {
+  const count = categories.value.length
+  try {
+    const sys = uni.getSystemInfoSync()
+    const itemHeight = typeof uni.upx2px === 'function' ? uni.upx2px(96) : 48
+    const maxHeight = Math.floor((sys.windowHeight || 600) * 0.55)
+    return Math.max(itemHeight, Math.min(count * itemHeight, maxHeight))
+  } catch {
+    return Math.min(count * 48, 360)
+  }
+})
 const currentCategoryLabel = computed(() => {
   if (crisisUnreadView.value) return '个案风险上报（未读）'
   const cat = categories.value.find(c => c.value === activeCategory.value)
@@ -152,7 +176,7 @@ const emptyHint = computed(() => {
   const cat = categories.value.find(c => c.value === activeCategory.value)
   if (cat && cat.value !== 'ALL') return `暂无「${cat.label}」类消息`
   if (isAdminOpsInbox.value) {
-    return '豁免申请、咨询师请假、记录修改、风险上报、定价与抽成等通知会在这里显示'
+    return '新增预约、豁免审核、咨询师请假、记录修改、风险上报、定价与抽成、代理预约等通知会在这里显示'
   }
   return '预约、请假、取消等通知会在这里显示'
 })
@@ -362,6 +386,7 @@ const openMessage = async (item: MessageItem) => {
 onLoad(loadActiveRole)
 
 onShow(async () => {
+  closeFilter()
   await loadActiveRole()
   activeCategory.value = sanitizeMessageCategoryForRole(inboxRole.value, activeCategory.value)
   await loadUnreadCrisisCount()
@@ -380,12 +405,12 @@ onShow(async () => {
 
 .toolbar-card {
   position: relative;
-  z-index: 20;
+  z-index: 1;
   background: #fff;
   border-radius: 32rpx;
   margin-bottom: 24rpx;
   box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.02);
-  overflow: visible;
+  overflow: hidden;
 }
 
 .filter-section {
@@ -397,11 +422,6 @@ onShow(async () => {
   align-items: center;
   justify-content: space-between;
   padding: 24rpx 28rpx;
-  border-radius: 24rpx;
-}
-
-.filter-trigger.open {
-  border-radius: 24rpx 24rpx 0 0;
 }
 
 .filter-trigger.active .filter-value {
@@ -451,7 +471,7 @@ onShow(async () => {
   flex-shrink: 0;
   font-size: 24rpx;
   color: #9CA3AF;
-  transition: transform 0.25s;
+  transition: transform 0.2s;
 }
 
 .filter-arrow.up {
@@ -459,33 +479,31 @@ onShow(async () => {
   color: #3D5A4E;
 }
 
-.filter-mask {
+.filter-overlay {
   position: fixed;
+  left: 0;
+  right: 0;
   top: 0;
-  left: 0;
-  right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.35);
-  z-index: 90;
+  z-index: 1000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 120rpx 28rpx 48rpx;
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.4);
 }
 
-.filter-dropdown {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
+.filter-panel {
+  width: 100%;
   background: #fff;
-  z-index: 95;
-  max-height: 0;
+  border-radius: 24rpx;
+  box-shadow: 0 16rpx 48rpx rgba(15, 23, 42, 0.16);
   overflow: hidden;
-  border-radius: 0 0 24rpx 24rpx;
-  transition: max-height 0.25s ease;
-  box-shadow: 0 12rpx 32rpx rgba(15, 23, 42, 0.1);
 }
 
-.filter-dropdown.show {
-  max-height: 640rpx;
-  overflow-y: auto;
+.filter-scroll {
+  width: 100%;
 }
 
 .filter-option {
@@ -493,7 +511,11 @@ onShow(async () => {
   align-items: center;
   justify-content: space-between;
   padding: 28rpx 32rpx;
-  border-top: 1rpx solid #F3F4F6;
+  border-bottom: 1rpx solid #F3F4F6;
+}
+
+.filter-option:last-child {
+  border-bottom-width: 0;
 }
 
 .filter-option.selected .option-label {

@@ -207,7 +207,7 @@ def notify_staff_new_appointment(
         content=_message_payload(summary, detail),
         related_type="APPOINTMENT_NEW",
         related_id=consultation.Id,
-        account_ids=_assistant_account_ids(db),
+        account_ids=staff_workbench_account_ids(db),
     )
 
 
@@ -262,7 +262,7 @@ def notify_staff_appointment_cancelled(
         content=_message_payload(summary, detail),
         related_type="APPOINTMENT_CANCEL",
         related_id=consultation.Id,
-        account_ids=_assistant_account_ids(db),
+        account_ids=staff_workbench_account_ids(db),
     )
 
 

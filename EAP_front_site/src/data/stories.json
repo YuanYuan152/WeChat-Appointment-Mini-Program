@@ -1,0 +1,83 @@
+[
+  {
+    "id": "story-01",
+    "slug": "midnight-anxiety",
+    "title": "深夜的焦虑",
+    "subtitle": "当城市睡去，心事却醒着",
+    "cover": "/images/content/story-midnight-cover.jpg",
+    "tags": ["焦虑", "自我关怀"],
+    "readMinutes": 8,
+    "excerpt": "凌晨两点，手机屏幕的微光映在脸上。你告诉自己该睡了，但思绪像潮水一样涌来……",
+    "chapters": [
+      {
+        "title": "第一章 · 醒着的夜",
+        "content": "凌晨两点十七分，城市的大部分窗户已经暗了下去。你躺在床上，听着空调低沉的嗡鸣，脑子里却上演着一场没有终点的辩论——明天的工作汇报、上周说错的那句话、还有那个始终没有回复的消息。\n\n焦虑并不总是大声喧哗的。有时候，它只是在深夜轻轻敲门，提醒你：你还醒着，你还在意。",
+        "image": "/images/content/story-midnight-ch1.jpg"
+      },
+      {
+        "title": "第二章 · 呼吸的锚",
+        "content": "心理学家常说，焦虑是对未来的预演。我们的身体比意识更诚实——肩膀紧绷、呼吸变浅、心跳微微加速。这时候，一个简单的练习可以成为锚：吸气四秒，屏息四秒，呼气六秒。\n\n不需要立刻解决所有问题。你只需要在这一刻，让自己安全地待在这里。",
+        "image": "/images/content/story-midnight-ch2.jpg"
+      },
+      {
+        "title": "第三章 · 与自己和解",
+        "content": "天快亮的时候，你终于有了一丝困意。焦虑不会一夜消失，但你可以学会与它共处——不是对抗，而是承认：今晚我又失眠了，这没关系。\n\n每一个愿意面对自己情绪的夜晚，都是温柔的成长。明天太阳升起时，你会比昨天更了解自己一点。",
+        "image": "/images/content/story-midnight-ch3.jpg"
+      }
+    ]
+  },
+  {
+    "id": "story-02",
+    "slug": "letters-to-self",
+    "title": "写给自己的信",
+    "subtitle": "一封迟到多年的温柔",
+    "cover": "/images/content/story-letter-cover.jpg",
+    "tags": ["自我接纳", "成长"],
+    "readMinutes": 6,
+    "excerpt": "如果可以给过去的自己写一封信，你会说什么？",
+    "chapters": [
+      {
+        "title": "第一章 · 空白信纸",
+        "content": "书桌上的信纸已经泛黄。你握着笔，迟迟落不下第一个字。不是无话可说，而是想说的话太多——那些年的委屈、倔强、和无人知晓的努力。\n\n我们习惯了向外倾诉，却很少转向内心，对那个一路走来的自己说一声：辛苦了。",
+        "image": "/images/content/story-letter-ch1.jpg"
+      },
+      {
+        "title": "第二章 · 那些没说出口的话",
+        "content": "「你不需要完美才被爱。」「那次失败不代表你不够好。」「你的敏感是一种天赋，不是缺陷。」\n\n写下这些句子的时候，眼眶有些发热。原来我们内心一直住着一个等待被安慰的孩子。",
+        "image": "/images/content/story-letter-ch2.jpg"
+      },
+      {
+        "title": "第三章 · 寄出",
+        "content": "信不需要真的寄出。折好，放在抽屉里，或者烧掉，都是仪式。重要的是，你终于允许自己温柔地对待自己。\n\n从今天起，每天写一句肯定的话。一个月后，你会收到人生中最珍贵的一封回信。",
+        "image": "/images/content/story-letter-ch3.jpg"
+      }
+    ]
+  },
+  {
+    "id": "story-03",
+    "slug": "rainy-afternoon",
+    "title": "雨天的咖啡馆",
+    "subtitle": "在喧嚣中找到片刻宁静",
+    "cover": "/images/content/story-rain-cover.jpg",
+    "tags": ["正念", "情绪调节"],
+    "readMinutes": 7,
+    "excerpt": "窗外雨声淅沥，咖啡的香气缓缓升起。这一刻，世界可以很慢。",
+    "chapters": [
+      {
+        "title": "第一章 · 躲雨",
+        "content": "没带伞的你推门走进街角的咖啡馆。雨点敲打玻璃，店内暖气融融。老板递来毛巾，没有多问，只是微微一笑。\n\n有时候，生活给的暂停键，恰恰是我们最需要的礼物。",
+        "image": "/images/content/story-rain-ch1.jpg"
+      },
+      {
+        "title": "第二章 · 五感练习",
+        "content": "试着用五感安住当下：听见雨声和咖啡机的蒸汽声，看见暖黄灯光在木桌上投下柔和的影子，闻到咖啡豆烘焙的香气，感受陶瓷杯传来的温度，品尝一口微苦的拿铁。\n\n正念不是放空，而是全然地活在当下。",
+        "image": "/images/content/story-rain-ch2.jpg"
+      },
+      {
+        "title": "第三章 · 雨停之后",
+        "content": "雨小了。你走出咖啡馆，空气清冽，路面映着天光。心情并没有因为雨停而变好或变坏——但你多了一段属于自己的时光。\n\n情绪像天气，会来也会走。学会在雨中找到庇护，便不必害怕每一场雨季。",
+        "image": "/images/content/story-rain-ch3.jpg"
+      }
+    ]
+  }
+]

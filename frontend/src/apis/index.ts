@@ -2,13 +2,14 @@ import { http, httpV2 } from '@/utils/http'
 import type { RequestConfig } from '@/utils/http'
 import type { ApiResponse, Banner, Doctor, Activity, LiveStream, Feature, HomeData } from '@/types'
 import { API_ENDPOINTS } from '@/config/api'
+import { fixImageUrl } from '@/utils/image'
 
 const ok = <T>(data: T, msg = '请求成功'): ApiResponse<T> => ({ code: 0, msg, data })
 
 const mapDoctor = (item: any): Doctor & { title?: string; workYears?: number; consultHours?: number; _source?: string } => ({
     id: Number(item.id || item.Id || item.accountId || 0),
     name: item.name || item.Name || item.nickname || '咨询师',
-    avatar: item.avatarUrl || item.AvatarUrl || item.avatar || '/static/images-opt/tc59.jpg',
+    avatar: fixImageUrl(item.avatarUrl || item.AvatarUrl || item.avatar || '/static/images-opt/tc59.jpg'),
     specialty: item.specialty || item.Specialty || item.field || item.Field || '心理咨询',
     experience: `${item.workYears || item.WorkYears || 0}年经验`,
     rating: item.rating || 5,
@@ -27,7 +28,7 @@ const mapActivity = (item: any): Activity => ({
     id: Number(item.id || item.Id || 0),
     title: item.title || item.Title || '活动',
     description: item.summary || item.Content || item.content || '',
-    image: item.coverUrl || item.CoverUrl || item.image || '/static/images-opt/slide11.jpg',
+    image: fixImageUrl(item.coverUrl || item.CoverUrl || item.image || '/static/images-opt/huodong11.jpg'),
     date: item.startAt || item.StartAt || item.createdAt || item.CreatedAt || '',
     status: item.IsActive === false || item.isActive === false ? '已结束' : '进行中',
 })
@@ -35,7 +36,7 @@ const mapActivity = (item: any): Activity => ({
 const mapBanner = (item: any): Banner => ({
     id: Number(item.id || item.Id || 0),
     title: item.title || item.Title || '',
-    image: item.imageUrl || item.ImageUrl || '/static/images-opt/slide11.jpg',
+    image: fixImageUrl(item.imageUrl || item.ImageUrl || '/static/images-opt/slide11.jpg'),
     buttonText: '查看详情',
     date: '',
 })
@@ -43,10 +44,11 @@ const mapBanner = (item: any): Banner => ({
 // 首页相关API
 export const homeApi = {
     getIndexData: async () => {
+        // 单项失败不拖垮整页；真机连不上 V2 时至少能出空列表而不是整页白屏
         const [bannerRes, doctorRes, activityRes] = await Promise.all([
-            httpV2.get<any[]>(API_ENDPOINTS.common.banners),
-            httpV2.get<any>(API_ENDPOINTS.common.counselors, { page: 1, page_size: 8 }),
-            httpV2.get<any[]>(API_ENDPOINTS.ops.activities),
+            httpV2.get<any[]>(API_ENDPOINTS.common.banners, undefined, { showError: false }).catch(() => ({ code: -1, data: [] as any[] })),
+            httpV2.get<any>(API_ENDPOINTS.common.counselors, { page: 1, page_size: 8 }, { showError: false }).catch(() => ({ code: -1, data: { items: [] } })),
+            httpV2.get<any[]>(API_ENDPOINTS.ops.activities, undefined, { showError: false }).catch(() => ({ code: -1, data: [] as any[] })),
         ])
         const data: HomeData = {
             banners: (bannerRes.data || []).map(mapBanner),

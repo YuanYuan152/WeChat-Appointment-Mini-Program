@@ -36,15 +36,106 @@ export function normalizeIntegerDraft(value: string) {
   return parsed == null ? value : String(parsed);
 }
 
+export function clampSharePercent(value: number) {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+  return Math.max(0, Math.min(Math.round(value), 100));
+}
+
+export function clampShareYuan(value: number, displayYuan: number) {
+  const display = Math.max(0, Math.floor(displayYuan));
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+  return Math.max(0, Math.min(Math.floor(value), display));
+}
+
+export function shareYuanFromPercent(percent: number, displayYuan: number) {
+  const display = Math.max(0, Math.floor(displayYuan));
+  return clampShareYuan(Math.floor((display * clampSharePercent(percent)) / 100), display);
+}
+
+export function sharePercentFromYuan(amountYuan: number, displayYuan: number) {
+  const display = Math.max(0, Math.floor(displayYuan));
+  if (display <= 0) {
+    return 0;
+  }
+  return clampSharePercent(Math.round((clampShareYuan(amountYuan, display) * 100) / display));
+}
+
+/** 按咨询师分成金额锁定，医院金额锁定，平台取余额（与小程序一致）。 */
+export function threePartyFromCounselorAmount(
+  displayPriceYuan: number,
+  counselorShareYuan: number,
+  hospitalShareYuan = 0,
+): ThreePartySharePreview {
+  const display = Math.max(0, Math.floor(displayPriceYuan));
+  const hospital = clampShareYuan(hospitalShareYuan, display);
+  const counselor = clampShareYuan(counselorShareYuan, display - hospital);
+  const platform = Math.max(0, display - counselor - hospital);
+  return {
+    displayPriceYuan: display,
+    counselorShareYuan: counselor,
+    platformShareYuan: platform,
+    hospitalShareYuan: hospital,
+    counselorSharePercent: percentOf(counselor, display),
+    platformSharePercent: percentOf(platform, display),
+    hospitalSharePercent: percentOf(hospital, display),
+  };
+}
+
+/** 按平台分成金额锁定，医院金额锁定，咨询师取余额。 */
+export function threePartyFromPlatformAmount(
+  displayPriceYuan: number,
+  platformShareYuan: number,
+  hospitalShareYuan = 0,
+): ThreePartySharePreview {
+  const display = Math.max(0, Math.floor(displayPriceYuan));
+  const hospital = clampShareYuan(hospitalShareYuan, display);
+  const platform = clampShareYuan(platformShareYuan, display - hospital);
+  const counselor = Math.max(0, display - platform - hospital);
+  return {
+    displayPriceYuan: display,
+    counselorShareYuan: counselor,
+    platformShareYuan: platform,
+    hospitalShareYuan: hospital,
+    counselorSharePercent: percentOf(counselor, display),
+    platformSharePercent: percentOf(platform, display),
+    hospitalSharePercent: percentOf(hospital, display),
+  };
+}
+
+/** 按医院分成金额锁定，咨询师金额锁定，平台取余额。 */
+export function threePartyFromHospitalAmount(
+  displayPriceYuan: number,
+  hospitalShareYuan: number,
+  counselorShareYuan: number,
+): ThreePartySharePreview {
+  const display = Math.max(0, Math.floor(displayPriceYuan));
+  const hospital = clampShareYuan(hospitalShareYuan, display);
+  const counselor = clampShareYuan(counselorShareYuan, display - hospital);
+  const platform = Math.max(0, display - counselor - hospital);
+  return {
+    displayPriceYuan: display,
+    counselorShareYuan: counselor,
+    platformShareYuan: platform,
+    hospitalShareYuan: hospital,
+    counselorSharePercent: percentOf(counselor, display),
+    platformSharePercent: percentOf(platform, display),
+    hospitalSharePercent: percentOf(hospital, display),
+  };
+}
+
 export function calculateThreePartyShare(
   displayPriceYuan: number,
   counselorSharePercent: number,
   hospitalSharePercent = 0,
 ): ThreePartySharePreview {
   const display = Math.max(0, Math.floor(displayPriceYuan));
-  const hospitalPercent = clampPercent(hospitalSharePercent);
+  const hospitalPercent = clampSharePercent(hospitalSharePercent);
   const counselorPercent = Math.min(
-    clampPercent(counselorSharePercent),
+    clampSharePercent(counselorSharePercent),
     100 - hospitalPercent,
   );
   const hospitalShareYuan = Math.floor((display * hospitalPercent) / 100);
@@ -52,20 +143,7 @@ export function calculateThreePartyShare(
     display - hospitalShareYuan,
     Math.floor((display * counselorPercent) / 100),
   );
-  const platformShareYuan = Math.max(
-    0,
-    display - counselorShareYuan - hospitalShareYuan,
-  );
-
-  return {
-    displayPriceYuan: display,
-    counselorShareYuan,
-    platformShareYuan,
-    hospitalShareYuan,
-    counselorSharePercent: counselorPercent,
-    platformSharePercent: percentOf(platformShareYuan, display),
-    hospitalSharePercent: hospitalPercent,
-  };
+  return threePartyFromCounselorAmount(display, counselorShareYuan, hospitalShareYuan);
 }
 
 export function calculateThreePartyShareFromCents(
@@ -89,13 +167,6 @@ export function calculateThreePartyShareFromCents(
     platformSharePercent: percentOf(platform, display),
     hospitalSharePercent: percentOf(hospital, display),
   };
-}
-
-function clampPercent(value: number) {
-  if (!Number.isFinite(value)) {
-    return 0;
-  }
-  return Math.max(0, Math.min(Math.floor(value), 100));
 }
 
 function percentOf(amount: number, total: number) {

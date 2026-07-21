@@ -52,7 +52,7 @@ const HIDDEN_OPS_PATHS = new Set([
 const allEntries = [
   { title: '排期情况', desc: '按日浏览 · 点击进入普通/日历排期', symbol: '期', tone: 'tone-green', path: '/pages/ops/schedules/index' },
   { title: '咨询室情况', desc: '咨询室占用与管理', symbol: '室', tone: 'tone-green', path: '/pages/ops/rooms/index' },
-  { title: '运营看板', desc: '关键指标与日活数据', symbol: '数', tone: 'tone-muted', path: '/pages/ops/dashboard/index' },
+  { title: '运营看板', desc: '关键指标与日活数据', symbol: '数', tone: 'tone-muted', path: '/pages/ops/dashboard/index', roles: ['Ops', 'Admin'] },
   { title: '角色&权限绑定', desc: '为账号绑定角色并分配管理工作台权限', symbol: '人', tone: 'tone-green', path: '/pages/ops/admin-roles/index' },
   { title: '定价管理', desc: '咨询师基础价与个性化调价', symbol: '价', tone: 'tone-gold', path: '/pages/ops/pricing/index' },
   { title: '审批管理', desc: '退款豁免与咨询师请假 · 助理/主任/管理员', symbol: '审', tone: 'tone-gold', path: '/pages/ops/approvals/index' },
@@ -63,7 +63,15 @@ const allEntries = [
   { title: '用户反馈', desc: '来访者咨询完成后的评价反馈', symbol: '馈', tone: 'tone-green', path: '/pages/ops/consultation-feedbacks/index' },
   { title: '咨询记录', desc: '各咨询师近30天记录填写情况', symbol: '记', tone: 'tone-green', path: '/pages/ops/case-records/index' },
   { title: '重后台 (Web)', desc: 'WebView 嵌入旧管理后台', symbol: 'Web', tone: 'tone-dark', path: '/pages/admin-webview/index' },
-]
+] as Array<{
+  title: string
+  desc: string
+  symbol: string
+  tone: string
+  path: string
+  adminOnly?: boolean
+  roles?: string[]
+}>
 
 const entries = computed(() => {
   const role =
@@ -71,9 +79,12 @@ const entries = computed(() => {
     resolveAccountRole(userStore.roles) ||
     readStoredRole()
   const isAdmin = role === 'Admin'
-  return allEntries.filter(
-    e => !HIDDEN_OPS_PATHS.has(e.path) && (!e.adminOnly || isAdmin),
-  )
+  return allEntries.filter((e) => {
+    if (HIDDEN_OPS_PATHS.has(e.path)) return false
+    if (e.adminOnly && !isAdmin) return false
+    if (e.roles && !e.roles.includes(role)) return false
+    return true
+  })
 })
 
 const navigate = (path: string) => {

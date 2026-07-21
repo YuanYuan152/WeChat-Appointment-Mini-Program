@@ -96,7 +96,7 @@ export function CaseRecordsPanel({
 
   return (
     <section className="rounded-xl border border-[var(--lxxl-border)] bg-white">
-      <PanelHeader title="咨询记录" description="管理员/运营查看近 30 天咨询师记录提交情况；不允许助理查看内容。" />
+      <PanelHeader title="咨询记录" description="管理员、咨询主任、咨询助理可查看近 30 天咨询师记录提交情况。" />
       <div className="border-b border-[var(--lxxl-border)] px-6 py-5">
         <div className="flex flex-wrap items-end gap-4">
           <QueryField label="修改审核状态" className="w-full sm:w-56">
@@ -249,14 +249,24 @@ export function CaseRecordsPanel({
           <div className="text-sm text-[var(--lxxl-muted)]">
             咨询师：{selectedAmendment.counselorName} · 咨询时间：{amendmentConsultationTime(selectedAmendment)}
           </div>
-          <RecordCompareBlock
-            title="患者情况记录（主观陈述）"
-            current={selectedAmendment.current.subjective}
-            proposed={selectedAmendment.proposed.subjective}
-          />
-          <RecordCompareBlock title="客观观察" current={selectedAmendment.current.objective} proposed={selectedAmendment.proposed.objective} />
-          <RecordCompareBlock title="评估分析" current={selectedAmendment.current.assessment} proposed={selectedAmendment.proposed.assessment} />
-          <RecordCompareBlock title="计划方向" current={selectedAmendment.current.plan} proposed={selectedAmendment.proposed.plan} />
+          {(() => {
+            const changedFields = amendmentChangedFields(selectedAmendment);
+            return (
+              <>
+                {changedFields.map((field) => (
+                  <RecordCompareBlock
+                    key={field.key}
+                    title={field.title}
+                    current={field.current}
+                    proposed={field.proposed}
+                  />
+                ))}
+                {changedFields.length === 0 && (
+                  <div className="mt-4 text-sm text-[var(--lxxl-muted)]">本次申请无文字字段变更。</div>
+                )}
+              </>
+            );
+          })()}
           <div className="mt-6 text-sm">
             <div className="font-semibold">修改原因</div>
             <div className="mt-2 whitespace-pre-wrap text-[var(--lxxl-muted)]">{selectedAmendment.reason || "-"}</div>
@@ -308,6 +318,38 @@ export function CaseRecordsPanel({
 
 function amendmentConsultationTime(item: CaseRecordAmendment) {
   return item.consultationStartTime ? formatDateTime(item.consultationStartTime) : "-";
+}
+
+function amendmentChangedFields(item: CaseRecordAmendment) {
+  const fields = [
+    {
+      key: "subjective",
+      title: "患者情况记录（主观陈述）",
+      current: item.current.subjective,
+      proposed: item.proposed.subjective,
+    },
+    {
+      key: "objective",
+      title: "客观观察",
+      current: item.current.objective,
+      proposed: item.proposed.objective,
+    },
+    {
+      key: "assessment",
+      title: "评估分析",
+      current: item.current.assessment,
+      proposed: item.proposed.assessment,
+    },
+    {
+      key: "plan",
+      title: "计划方向",
+      current: item.current.plan,
+      proposed: item.proposed.plan,
+    },
+  ];
+  return fields.filter(
+    (field) => (field.current || "").trim() !== (field.proposed || "").trim(),
+  );
 }
 
 function CounselorRecordListView({

@@ -32,14 +32,14 @@ export const sections: NavigationSection[] = [
     path: "/reviews",
     allowedRoles: ["Admin", "Ops", "Assistant"],
   },
-  { id: "feedback", label: "咨询反馈", desc: "查看咨询反馈详情", path: "/feedback", allowedRoles: ["Admin", "Ops"] },
-  { id: "content", label: "内容管理", desc: "Banner / 活动 / 文章", path: "/ops-content", allowedRoles: ["Admin", "Ops"] },
-  { id: "schedules", label: "排期情况", desc: "咨询师排期总览", path: "/schedules", allowedRoles: ["Admin", "Ops"] },
-  { id: "rooms", label: "咨询室情况", desc: "咨询室状态与占用", path: "/rooms", allowedRoles: ["Admin", "Ops"] },
+  { id: "feedback", label: "咨询反馈", desc: "查看咨询反馈详情", path: "/feedback", allowedRoles: ["Admin", "Ops", "Assistant"] },
+  { id: "content", label: "内容管理", desc: "Banner / 活动 / 文章", path: "/ops-content", allowedRoles: ["Admin", "Ops", "Assistant"] },
+  { id: "schedules", label: "排期情况", desc: "咨询师排期总览", path: "/schedules", allowedRoles: ["Admin", "Ops", "Assistant"] },
+  { id: "rooms", label: "咨询室情况", desc: "咨询室状态与占用", path: "/rooms", allowedRoles: ["Admin", "Ops", "Assistant"] },
   { id: "pricing", label: "调价管理", desc: "基础价与个体调价", path: "/pricing", allowedRoles: ["Admin", "Ops", "Assistant"] },
-  { id: "caseRecords", label: "咨询记录", desc: "记录提交概览", path: "/case-records", allowedRoles: ["Admin", "Ops"] },
-  { id: "operationLogs", label: "操作记录", desc: "现有业务记录入口", path: "/operation-logs", allowedRoles: ["Admin", "Ops"] },
-  { id: "dataImport", label: "数据导入", desc: "导入完成订单", path: "/data-import", allowedRoles: ["Admin", "Ops"] },
+  { id: "caseRecords", label: "咨询记录", desc: "记录提交概览", path: "/case-records", allowedRoles: ["Admin", "Ops", "Assistant"] },
+  { id: "operationLogs", label: "操作记录", desc: "现有业务记录入口", path: "/operation-logs", allowedRoles: ["Admin", "Ops", "Assistant"] },
+  { id: "dataImport", label: "数据导入", desc: "导入完成订单", path: "/data-import", allowedRoles: ["Admin", "Ops", "Assistant"] },
   {
     id: "userBoard",
     label: "来访管理",
@@ -142,7 +142,7 @@ export function getDefaultSectionId(rolesValue: Role[]): NavigationSection["id"]
     return "dashboard";
   }
   if (rolesValue.includes("Assistant")) {
-    return "roles";
+    return "messages";
   }
   if (rolesValue.includes("Counselor")) {
     return "counselorDashboard";

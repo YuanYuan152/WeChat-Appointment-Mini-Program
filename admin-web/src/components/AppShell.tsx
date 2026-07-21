@@ -36,7 +36,9 @@ export function AppShell({
   const activeSectionConfig = getSectionById(activeSection);
   const activeRoleText = roleLabel(
     currentUser.activeRole ||
-      currentUser.roles.find((role) => role === "Admin" || role === "Ops" || role === "Counselor") ||
+      currentUser.roles.find(
+        (role) => role === "Admin" || role === "Ops" || role === "Assistant" || role === "Counselor",
+      ) ||
       currentUser.roles[0],
   );
 

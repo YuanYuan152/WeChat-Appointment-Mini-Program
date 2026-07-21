@@ -35,7 +35,15 @@ export function LoginScreen({
               type="button"
               onClick={() => onLogin("dev_admin")}
             >
-              以管理员身份进入
+              管理员
+            </button>
+            <button
+              className="w-full rounded-xl border border-[var(--lxxl-border)] px-4 py-3 text-sm font-medium disabled:opacity-60"
+              disabled={loading}
+              type="button"
+              onClick={() => onLogin("dev_assistant")}
+            >
+              咨询助理
             </button>
             <button
               className="w-full rounded-xl border border-[var(--lxxl-border)] px-4 py-3 text-sm font-medium disabled:opacity-60"
@@ -43,7 +51,7 @@ export function LoginScreen({
               type="button"
               onClick={() => onLogin("dev_ops")}
             >
-              以运营身份进入
+              咨询主任
             </button>
             <button
               className="w-full rounded-xl border border-[var(--lxxl-border)] px-4 py-3 text-sm font-medium disabled:opacity-60"
@@ -51,7 +59,7 @@ export function LoginScreen({
               type="button"
               onClick={() => onLogin("dev_counselor")}
             >
-              以咨询师身份进入
+              咨询师
             </button>
           </div>
         </div>

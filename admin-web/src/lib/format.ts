@@ -81,8 +81,8 @@ export function roleLabel(role?: Role | string | null) {
   const labels: Record<string, string> = {
     Patient: "来访者",
     Counselor: "咨询师",
-    Assistant: "助理",
-    Ops: "运营",
+    Assistant: "咨询助理",
+    Ops: "咨询主任",
     Admin: "管理员",
   };
   return role ? labels[role] || role : "-";

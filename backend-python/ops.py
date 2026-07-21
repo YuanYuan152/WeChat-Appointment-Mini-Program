@@ -11,8 +11,8 @@
   POST /api/mini/ops/activities          新增活动/公告
   PUT  /api/mini/ops/activities/{id}     更新活动/公告
   DELETE /api/mini/ops/activities/{id}   删除活动/公告
-  GET  /api/mini/ops/users               用户列表（分页搜索）
-  GET  /api/mini/ops/users/{id}          用户详情
+  GET  /api/mini/ops/users               用户列表（已委托 admin/users）
+  GET  /api/mini/ops/users/{id}          用户详情（已委托 admin 用户视图）
 """
 
 from datetime import datetime, time, date as date_type, timedelta
@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 
 from auth import get_current_account, AppAccount
 from database import get_db
+from role_active import get_account_role
 from staff_roles import STAFF_WORKBENCH_ROLES, account_has_staff_workbench
 from models import (
     AppBanner, AppActivity, AppArticle, AppOrder, AppRoleBinding,
@@ -68,6 +69,17 @@ def require_ops(
         db, current_account.Id, getattr(current_account, "ActiveRole", None)
     ):
         raise HTTPException(status_code=403, detail="无管理工作台权限")
+    return current_account
+
+
+def require_ops_or_admin_dashboard(
+    current_account: AppAccount = Depends(get_current_account),
+    db: Session = Depends(get_db),
+) -> AppAccount:
+    """运营看板仅咨询主任、管理员可查看；咨询助理不可访问。"""
+    role = get_account_role(db, current_account.Id) or getattr(current_account, "ActiveRole", None)
+    if role not in ("Ops", "Admin"):
+        raise HTTPException(status_code=403, detail="咨询助理无权查看运营看板")
     return current_account
 
 
@@ -467,7 +479,7 @@ def delete_article(
 
 @router.get("/dashboard", summary="运营数据看板")
 def ops_dashboard(
-    _ops: AppAccount = Depends(require_ops),
+    _ops: AppAccount = Depends(require_ops_or_admin_dashboard),
     db: Session = Depends(get_db),
 ):
     user_count = db.query(func.count(AccountModel.Id)).scalar() or 0
@@ -490,7 +502,7 @@ def ops_dashboard(
 # 用户管理（运营查阅）
 # ---------------------------------------------------------------------------
 
-@router.get("/users", summary="用户列表（运营）")
+@router.get("/users", summary="用户列表（运营，已收敛到 admin/users）")
 def list_users(
     keyword: Optional[str] = Query(None, description="手机号或昵称关键词"),
     page: int = Query(1, ge=1),
@@ -498,51 +510,29 @@ def list_users(
     _ops: AppAccount = Depends(require_ops),
     db: Session = Depends(get_db),
 ):
-    q = db.query(AccountModel)
-    if keyword:
-        q = q.filter(
-            AccountModel.Mobile.contains(keyword) |
-            AccountModel.Nickname.contains(keyword)
-        )
-    total = q.with_entities(func.count(AccountModel.Id)).scalar() or 0
-    items = q.order_by(AccountModel.Id.desc()).offset((page - 1) * page_size).limit(page_size).all()
-    return {
-        "total": total,
-        "page": page,
-        "pageSize": page_size,
-        "items": [
-            {
-                "id": u.Id,
-                "openId": u.OpenId,
-                "mobile": u.Mobile,
-                "nickname": u.Nickname,
-                "avatarUrl": u.AvatarUrl,
-                "createdAt": u.CreatedAt,
-            }
-            for u in items
-        ],
-    }
+    from admin import list_admin_users
+
+    return list_admin_users(
+        keyword=keyword,
+        page=page,
+        page_size=page_size,
+        _admin=_ops,
+        db=db,
+    )
 
 
-@router.get("/users/{user_id}", summary="用户详情（运营）")
+@router.get("/users/{user_id}", summary="用户详情（运营，已收敛到 admin 用户视图）")
 def get_user(
     user_id: int,
     _ops: AppAccount = Depends(require_ops),
     db: Session = Depends(get_db),
 ):
+    from admin import _user_admin_out
+
     user = db.query(AccountModel).filter(AccountModel.Id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
-    bindings = db.query(AppRoleBinding).filter(AppRoleBinding.AccountId == user_id).all()
-    return {
-        "id": user.Id,
-        "openId": user.OpenId,
-        "mobile": user.Mobile,
-        "nickname": user.Nickname,
-        "avatarUrl": user.AvatarUrl,
-        "createdAt": user.CreatedAt,
-        "roles": [b.RoleType for b in bindings],
-    }
+    return _user_admin_out(db, user)
 
 
 # ---------------------------------------------------------------------------

@@ -195,10 +195,125 @@
           <text class="label">咨询时段</text>
           <text class="value">{{ detail.startTime }}</text>
         </view>
-        <view class="reason-box">
+        <view v-if="detail.submittedAt" class="detail-row">
+          <text class="label">提交时间</text>
+          <text class="value">{{ detail.submittedAt }}</text>
+        </view>
+        <view v-if="amendmentChangedFieldLabels.length" class="detail-row">
+          <text class="label">变动字段</text>
+          <text class="value">{{ amendmentChangedFieldLabels.join('、') }}</text>
+        </view>
+        <view v-if="amendmentChangeItems.length" class="reason-box">
+          <text class="reason-label">修改内容</text>
+          <view v-for="item in amendmentChangeItems" :key="item.key || item.label" class="change-item">
+            <text class="change-title">【{{ item.label }}】</text>
+            <text class="change-sub">修改前</text>
+            <text class="reason-text multiline">{{ item.before || '—' }}</text>
+            <text class="change-sub">修改后</text>
+            <text class="reason-text multiline">{{ item.after || '—' }}</text>
+          </view>
+          <view v-if="amendmentReasonText" class="change-item">
+            <text class="change-title">【修改说明】</text>
+            <text class="reason-text multiline">{{ amendmentReasonText }}</text>
+          </view>
+        </view>
+        <view v-else-if="amendmentChangesText" class="reason-box">
+          <text class="reason-label">修改内容</text>
+          <text class="reason-text multiline">{{ amendmentChangesText }}</text>
+        </view>
+        <view v-else class="reason-box">
           <text class="reason-text">{{ payload.summary || message.Content }}</text>
         </view>
         <button class="review-btn" @click="goAmendmentReview">前往审核</button>
+      </view>
+
+      <view v-else-if="isCaseRecordAmendmentSubmitted" class="detail-body">
+        <view class="tip-box pending">
+          <text class="tip-text">您的咨询记录修改已提交，请等待管理员或助理审核。</text>
+        </view>
+        <view class="detail-row">
+          <text class="label">审核状态</text>
+          <text class="value pending-text">待审核</text>
+        </view>
+        <view v-if="detail.caseRecordId" class="detail-row">
+          <text class="label">记录编号</text>
+          <text class="value">#{{ detail.caseRecordId }}</text>
+        </view>
+        <view v-if="detail.submittedAt" class="detail-row">
+          <text class="label">提交时间</text>
+          <text class="value">{{ detail.submittedAt }}</text>
+        </view>
+        <view v-if="amendmentChangedFieldLabels.length" class="detail-row">
+          <text class="label">变动字段</text>
+          <text class="value">{{ amendmentChangedFieldLabels.join('、') }}</text>
+        </view>
+        <view v-if="amendmentChangeItems.length" class="reason-box">
+          <text class="reason-label">修改内容</text>
+          <view v-for="item in amendmentChangeItems" :key="item.key || item.label" class="change-item">
+            <text class="change-title">【{{ item.label }}】</text>
+            <text class="change-sub">修改前</text>
+            <text class="reason-text multiline">{{ item.before || '—' }}</text>
+            <text class="change-sub">修改后</text>
+            <text class="reason-text multiline">{{ item.after || '—' }}</text>
+          </view>
+          <view v-if="amendmentReasonText" class="change-item">
+            <text class="change-title">【修改说明】</text>
+            <text class="reason-text multiline">{{ amendmentReasonText }}</text>
+          </view>
+        </view>
+        <view v-else-if="amendmentChangesText" class="reason-box">
+          <text class="reason-label">修改内容</text>
+          <text class="reason-text multiline">{{ amendmentChangesText }}</text>
+        </view>
+      </view>
+
+      <view v-else-if="isCaseRecordAmendmentResult" class="detail-body">
+        <view class="detail-row">
+          <text class="label">审核结果</text>
+          <text class="value" :class="amendmentResultClass">{{ amendmentResultLabel }}</text>
+        </view>
+        <view v-if="detail.caseRecordId" class="detail-row">
+          <text class="label">记录编号</text>
+          <text class="value">#{{ detail.caseRecordId }}</text>
+        </view>
+        <view v-if="detail.submittedAt" class="detail-row">
+          <text class="label">提交时间</text>
+          <text class="value">{{ detail.submittedAt }}</text>
+        </view>
+        <view v-if="detail.reviewedAt" class="detail-row">
+          <text class="label">审核时间</text>
+          <text class="value">{{ detail.reviewedAt }}</text>
+        </view>
+        <view v-if="detail.reviewedByName" class="detail-row">
+          <text class="label">审核人</text>
+          <text class="value">{{ detail.reviewedByName }}</text>
+        </view>
+        <view v-if="amendmentChangedFieldLabels.length" class="detail-row">
+          <text class="label">变动字段</text>
+          <text class="value">{{ amendmentChangedFieldLabels.join('、') }}</text>
+        </view>
+        <view v-if="amendmentChangeItems.length" class="reason-box">
+          <text class="reason-label">修改内容</text>
+          <view v-for="item in amendmentChangeItems" :key="item.key || item.label" class="change-item">
+            <text class="change-title">【{{ item.label }}】</text>
+            <text class="change-sub">修改前</text>
+            <text class="reason-text multiline">{{ item.before || '—' }}</text>
+            <text class="change-sub">修改后</text>
+            <text class="reason-text multiline">{{ item.after || '—' }}</text>
+          </view>
+          <view v-if="amendmentReasonText" class="change-item">
+            <text class="change-title">【修改说明】</text>
+            <text class="reason-text multiline">{{ amendmentReasonText }}</text>
+          </view>
+        </view>
+        <view v-else-if="amendmentChangesText" class="reason-box">
+          <text class="reason-label">修改内容</text>
+          <text class="reason-text multiline">{{ amendmentChangesText }}</text>
+        </view>
+        <view v-if="detail.rejectReason" class="reason-box reject-box">
+          <text class="reason-label">驳回理由</text>
+          <text class="reason-text">{{ detail.rejectReason }}</text>
+        </view>
       </view>
 
       <view v-else-if="isCaseRecordCrisisReport" class="detail-body">
@@ -471,6 +586,50 @@ const isExemptionPending = computed(() => {
 const isCaseRecordAmendmentPending = computed(() => {
   if (!message.value) return false
   return isCaseRecordAmendmentPendingMessage(message.value)
+})
+const isCaseRecordAmendmentSubmitted = computed(() =>
+  relatedType.value === 'CASE_RECORD_AMENDMENT_SUBMITTED',
+)
+const isCaseRecordAmendmentResult = computed(() => {
+  if (relatedType.value !== 'CASE_RECORD_AMENDMENT') return false
+  const status = detail.value.status
+  return status === 'APPROVED' || status === 'REJECTED'
+    || detail.value.approved === true || detail.value.approved === false
+})
+const amendmentChangesText = computed(() => {
+  const text = detail.value.changesText
+  return typeof text === 'string' && text.trim() ? text.trim() : ''
+})
+const amendmentChangedFieldLabels = computed(() => {
+  const labels = detail.value.changedFieldLabels
+  return Array.isArray(labels) ? labels.filter((item): item is string => typeof item === 'string' && !!item.trim()) : []
+})
+const amendmentChangeItems = computed(() => {
+  const list = detail.value.changes
+  if (!Array.isArray(list)) return []
+  return list
+    .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
+    .map((item) => ({
+      key: typeof item.key === 'string' ? item.key : '',
+      label: typeof item.label === 'string' ? item.label : '',
+      before: typeof item.before === 'string' ? item.before : '',
+      after: typeof item.after === 'string' ? item.after : '',
+    }))
+    .filter((item) => item.label)
+})
+const amendmentReasonText = computed(() => {
+  const reason = detail.value.reason
+  return typeof reason === 'string' && reason.trim() ? reason.trim() : ''
+})
+const amendmentResultLabel = computed(() => {
+  if (detail.value.status === 'APPROVED' || detail.value.approved === true) return '已通过'
+  if (detail.value.status === 'REJECTED' || detail.value.approved === false) return '已驳回'
+  return '已处理'
+})
+const amendmentResultClass = computed(() => {
+  if (amendmentResultLabel.value === '已通过') return 'highlight'
+  if (amendmentResultLabel.value === '已驳回') return 'rejected-text'
+  return ''
 })
 const isCaseRecordCrisisReport = computed(() => relatedType.value === 'CASE_RECORD_CRISIS_REPORT')
 const isPricingNotice = computed(() =>
@@ -820,5 +979,28 @@ onLoad((options) => {
   color: #374151;
   line-height: 1.7;
   margin-bottom: 8rpx;
+}
+
+.change-item {
+  margin-top: 16rpx;
+}
+
+.change-item:first-of-type {
+  margin-top: 0;
+}
+
+.change-title {
+  display: block;
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 8rpx;
+}
+
+.change-sub {
+  display: block;
+  font-size: 22rpx;
+  color: #9CA3AF;
+  margin: 8rpx 0 4rpx;
 }
 </style>

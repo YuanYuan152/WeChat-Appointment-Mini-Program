@@ -24,6 +24,32 @@ export interface RequestConfig {
   showError?: boolean
 }
 
+/** 并发请求共用 loading，避免 hideLoading 在 toast 已顶掉 loading 时报错 */
+let loadingCount = 0
+
+function beginLoading() {
+  loadingCount += 1
+  if (loadingCount === 1) {
+    try {
+      uni.showLoading({ title: '加载中...', mask: true })
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+function endLoading() {
+  if (loadingCount <= 0) return
+  loadingCount -= 1
+  if (loadingCount === 0) {
+    try {
+      uni.hideLoading()
+    } catch {
+      /* ignore: toast can't be found */
+    }
+  }
+}
+
 // HTTP请求类
 class HttpRequest {
   private baseURL: string
@@ -43,15 +69,10 @@ class HttpRequest {
   async request<T = any>(config: RequestConfig): Promise<ApiResponse<T>> {
     const { url, method = 'GET', data, params, headers = {}, showLoading = true, showError = true, timeout } = config
 
-    // 显示加载提示
-    if (showLoading) {
-      uni.showLoading({ title: '加载中...' })
-    }
+    if (showLoading) beginLoading()
 
+    let fullUrl = url.startsWith('http') ? url : `${this.baseURL}${url}`
     try {
-      // 构建完整URL - 如果是相对路径，拼接baseURL
-      let fullUrl = url.startsWith('http') ? url : `${this.baseURL}${url}`
-      
       // 添加查询参数（跳过 undefined / null，避免被序列化成 "undefined"）
       if (params && Object.keys(params).length > 0) {
         const queryString = Object.keys(params)
@@ -89,21 +110,15 @@ class HttpRequest {
         timeout: timeout ?? this.timeout
       })
 
-      // 隐藏加载提示
-      if (showLoading) {
-        uni.hideLoading()
-      }
+      if (showLoading) endLoading()
 
       // 处理响应
       return this.handleResponse<T>(response, showError)
     } catch (error) {
-      // 隐藏加载提示
-      if (showLoading) {
-        uni.hideLoading()
-      }
+      if (showLoading) endLoading()
 
       // 处理错误
-      return this.handleError(error, showError)
+      return this.handleError(error, showError, fullUrl)
     }
   }
 
@@ -210,22 +225,33 @@ class HttpRequest {
   /**
    * 处理错误
    */
-  private handleError(error: any, showError: boolean): ApiResponse {
+  private handleError(error: any, showError: boolean, requestUrl?: string): ApiResponse {
     let message = '网络请求失败'
     let code = -1
+    const errMsg = String(error?.errMsg || error?.message || '')
+    const target = requestUrl || this.baseURL
 
-    if (error.errMsg) {
-      if (error.errMsg.includes('timeout')) {
-        message = '请求超时，请检查网络连接'
-        code = -2
-      } else if (error.errMsg.includes('fail')) {
-        message = '网络连接失败，请检查网络设置'
-        code = -3
-      }
+    if (errMsg.includes('timeout')) {
+      message = `请求超时：${target}`
+      code = -2
+    } else if (errMsg.includes('fail') || errMsg.includes('Failed') || !errMsg) {
+      const isLan = /^https?:\/\/(127\.|localhost|192\.168\.|10\.|172\.(1[6-9]|2\d|3[0-1])\.)/i.test(target)
+      message = isLan
+        ? `无法连接后端 ${target}（请确认手机与电脑同一 Wi‑Fi，后端已启动，并关闭代理）`
+        : '网络连接失败，请检查网络设置'
+      code = -3
     }
 
+    console.error('[HTTP]', message, errMsg || error)
+
     // 显示错误提示
-    this.showErrorToast(message, showError)
+    if (showError) {
+      uni.showToast({
+        title: message.length > 40 ? `无法连接后端，请检查局域网与后端` : message,
+        icon: 'none',
+        duration: 3500,
+      })
+    }
 
     return {
       code,

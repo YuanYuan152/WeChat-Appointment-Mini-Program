@@ -3,7 +3,7 @@ import type { Role } from "@/types/api";
 export const CREATABLE_ROLE_OPTIONS: Array<{ value: Role; label: string }> = [
   { value: "Counselor", label: "咨询师" },
   { value: "Assistant", label: "咨询助理" },
-  { value: "Ops", label: "运营" },
+  { value: "Ops", label: "咨询主任" },
   { value: "Patient", label: "来访者" },
   { value: "Admin", label: "管理员" },
 ];

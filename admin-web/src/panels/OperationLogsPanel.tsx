@@ -241,7 +241,7 @@ export function OperationLogsPanel({
             >
               <option value="">全部角色</option>
               <option value="Admin">管理员</option>
-              <option value="Ops">运营</option>
+              <option value="Ops">咨询主任</option>
               <option value="Counselor">咨询师</option>
               <option value="Patient">来访者</option>
             </select>

@@ -66,6 +66,9 @@ export function messageDisplayTitle(item: MessageItem): string {
   if (rt === 'CASE_RECORD_AMENDMENT_PENDING' || isCaseRecordAmendmentPendingMessage(item)) {
     return '咨询记录修改待审核'
   }
+  if (rt === 'CASE_RECORD_AMENDMENT_SUBMITTED') {
+    return '咨询记录修改已提交待审核'
+  }
   if (rt === 'CASE_RECORD_CRISIS_REPORT') {
     return '个案风险需上报'
   }
@@ -137,6 +140,7 @@ export const RELATED_TYPE_LABELS: Record<string, string> = {
   REFUND_EXEMPTION_PENDING: '豁免待审核',
   CASE_RECORD_AMENDMENT: '记录修改',
   CASE_RECORD_AMENDMENT_PENDING: '记录修改待审核',
+  CASE_RECORD_AMENDMENT_SUBMITTED: '记录修改已提交',
   CASE_RECORD_CRISIS_REPORT: '风险需上报',
   COUNSELOR_CONSULTATION_DONE: '咨询完成',
   COUNSELOR_CONSULTATION_REMIND: '咨询提醒',
@@ -167,6 +171,7 @@ export const COUNSELOR_MESSAGE_TYPES = new Set([
   'COUNSELOR_LEAVE_SUBMITTED',
   'COUNSELOR_LEAVE_SUCCESS',
   'CASE_RECORD_AMENDMENT',
+  'CASE_RECORD_AMENDMENT_SUBMITTED',
 ])
 
 export const PATIENT_MESSAGE_TYPES = new Set([
@@ -186,21 +191,29 @@ export interface MessageCategoryOption {
   label: string
 }
 
-/** 管理员/Ops 我的消息可用筛选项（不含预约类） */
-export const ADMIN_OPS_MESSAGE_CATEGORIES: MessageCategoryOption[] = [
+/** 管理工作台（助理/主任/管理员）共用消息类型筛选项 */
+export const STAFF_WORKBENCH_MESSAGE_CATEGORIES: MessageCategoryOption[] = [
+  { value: 'appointment_new', label: '新增预约' },
+  { value: 'appointment_cancel', label: '预约取消' },
   { value: 'exemption', label: '豁免审核' },
   { value: 'counselor_leave', label: '咨询师请假' },
   { value: 'case_record_amendment', label: '记录修改审核' },
   { value: 'case_record_crisis', label: '风险上报' },
-  { value: 'charity_milestone', label: '公益咨询里程碑' },
-  { value: 'professional_pair_milestone', label: '正价咨询里程碑' },
+  { value: 'charity_milestone', label: '公益咨询30次提示' },
+  { value: 'professional_pair_milestone', label: '正价咨询30次提示' },
   { value: 'pricing', label: '定价与抽成' },
+  { value: 'proxy_booking', label: '代理预约' },
 ]
 
-const ADMIN_OPS_FORBIDDEN_FILTER_VALUES = new Set(['appointment_new', 'appointment_cancel'])
+/** @deprecated 请使用 STAFF_WORKBENCH_MESSAGE_CATEGORIES */
+export const ADMIN_OPS_MESSAGE_CATEGORIES = STAFF_WORKBENCH_MESSAGE_CATEGORIES
 
 export function isAdminOpsMessageInbox(role: string): boolean {
   return role === 'Ops' || role === 'Admin'
+}
+
+export function isStaffWorkbenchMessageInbox(role: string): boolean {
+  return role === 'Assistant' || role === 'Ops' || role === 'Admin'
 }
 
 export function getStoredUserRoles(): string[] {
@@ -240,9 +253,12 @@ export function isCrisisReportMessage(item: MessageItem): boolean {
 }
 
 export function sanitizeMessageCategoryForRole(role: string, category: string): string {
-  if (!isAdminOpsMessageInbox(role)) return category
-  if (ADMIN_OPS_FORBIDDEN_FILTER_VALUES.has(category)) return 'ALL'
-  return category
+  if (!isStaffWorkbenchMessageInbox(role)) return category
+  if (category === 'ALL' || category === 'UNREAD') return category
+  if (STAFF_WORKBENCH_MESSAGE_CATEGORIES.some((item) => item.value === category)) {
+    return category
+  }
+  return 'ALL'
 }
 
 export function getMessageCategoriesForRole(role: string): MessageCategoryOption[] {
@@ -251,20 +267,8 @@ export function getMessageCategoriesForRole(role: string): MessageCategoryOption
     { value: 'UNREAD', label: '未读' },
   ]
 
-  if (isAdminOpsMessageInbox(role)) {
-    return [...common, ...ADMIN_OPS_MESSAGE_CATEGORIES]
-  }
-
-  if (role === 'Assistant') {
-    return [
-      ...common,
-      { value: 'appointment_new', label: '新增预约' },
-      { value: 'appointment_cancel', label: '预约取消' },
-      { value: 'counselor_leave', label: '咨询师请假' },
-      { value: 'charity_milestone', label: '公益咨询里程碑' },
-      { value: 'professional_pair_milestone', label: '正价咨询里程碑' },
-      { value: 'pricing', label: '定价与抽成' },
-    ]
+  if (isStaffWorkbenchMessageInbox(role)) {
+    return [...common, ...STAFF_WORKBENCH_MESSAGE_CATEGORIES]
   }
 
   if (role === 'Counselor') {
@@ -276,6 +280,7 @@ export function getMessageCategoriesForRole(role: string): MessageCategoryOption
       { value: 'consultation_done', label: '咨询完成' },
       { value: 'case_record_amendment', label: '记录修改' },
       { value: 'appointment_cancel', label: '预约取消' },
+      { value: 'proxy_booking', label: '代理预约' },
     ]
   }
 
@@ -301,6 +306,9 @@ export function messageCategoryLabel(item: MessageItem): string {
   }
   if (rt === 'CASE_RECORD_AMENDMENT_PENDING' || isCaseRecordAmendmentPendingMessage(item)) {
     return '记录修改待审核'
+  }
+  if (rt === 'CASE_RECORD_AMENDMENT_SUBMITTED') {
+    return '记录修改已提交'
   }
   if (rt === 'CASE_RECORD_CRISIS_REPORT') {
     return '风险需上报'
@@ -389,11 +397,12 @@ export function resolveMessageNavigation(
     return `/pages/patient/messages/detail?id=${item.Id}`
   }
 
+  if (item.RelatedType === 'CASE_RECORD_AMENDMENT_SUBMITTED' && activeRole === 'Counselor') {
+    return `/pages/patient/messages/detail?id=${item.Id}`
+  }
+
   if (item.RelatedType === 'CASE_RECORD_AMENDMENT' && activeRole === 'Counselor') {
-    const caseRecordId = detail?.caseRecordId
-    if (caseRecordId) {
-      return `/pages/counselor/case-record/view?recordId=${caseRecordId}`
-    }
+    return `/pages/patient/messages/detail?id=${item.Id}`
   }
 
   if (item.RelatedType === 'PATIENT_NEW_ACTIVITY') {

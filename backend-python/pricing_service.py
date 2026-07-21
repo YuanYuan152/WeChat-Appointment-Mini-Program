@@ -31,6 +31,12 @@ SHARE_MODE_PERCENT = "PERCENT"
 DEFAULT_SHARE_PERCENT_OF_BASE = 50  # 未单独配置时，咨询师分成 = 基础价 × 50%
 
 
+def _clamp_share_cents(share_cents: int, display_price_cents: int) -> int:
+    if display_price_cents <= 0:
+        return 0
+    return max(0, min(int(share_cents), int(display_price_cents)))
+
+
 def default_base_price_cents_for_type(counselor_type: Optional[str]) -> int:
     if counselor_type == "CHARITY":
         return CHARITY_BASE_LOW_CENTS
@@ -1113,3 +1119,187 @@ def _account_display_name(account: Optional[AppAccount], fallback_id: int) -> st
     if not account:
         return f"用户#{fallback_id}"
     return account.RealName or account.Nickname or account.Mobile or f"用户#{fallback_id}"
+
+
+def _normalized_batch_counselor_ids(counselor_account_ids: Iterable[int]) -> list[int]:
+    ids = list(dict.fromkeys(int(value) for value in counselor_account_ids))
+    if not ids:
+        raise ValueError("请选择至少一名咨询师")
+    if len(ids) > 200:
+        raise ValueError("单次最多调整 200 名咨询师")
+    if any(value <= 0 for value in ids):
+        raise ValueError("咨询师编号无效")
+    return ids
+
+
+def _batch_canonical_counselor_profiles(
+    db: Session,
+    counselor_account_ids: Iterable[int],
+) -> tuple[list[int], dict[int, AppCounselorProfile]]:
+    ids = _normalized_batch_counselor_ids(counselor_account_ids)
+    active_account_ids = {
+        int(row[0])
+        for row in db.query(AppAccount.Id)
+        .filter(AppAccount.Id.in_(ids), AppAccount.IsActive == True)  # noqa: E712
+        .all()
+    }
+    counselor_role_ids = {
+        int(row[0])
+        for row in db.query(AppRoleBinding.AccountId)
+        .filter(
+            AppRoleBinding.AccountId.in_(ids),
+            AppRoleBinding.RoleType == "Counselor",
+        )
+        .all()
+    }
+    rows = (
+        db.query(AppCounselorProfile)
+        .filter(
+            AppCounselorProfile.AccountId.in_(ids),
+            AppCounselorProfile.IsActive == True,  # noqa: E712
+        )
+        .all()
+    )
+    grouped: dict[int, list[AppCounselorProfile]] = {}
+    for row in rows:
+        grouped.setdefault(int(row.AccountId), []).append(row)
+    profiles = {
+        counselor_id: profile
+        for counselor_id in ids
+        if counselor_id in active_account_ids
+        and counselor_id in counselor_role_ids
+        and (profile := _pick_canonical_counselor_profile(grouped.get(counselor_id, [])))
+    }
+    missing = [counselor_id for counselor_id in ids if counselor_id not in profiles]
+    if missing:
+        missing_text = "、".join(str(counselor_id) for counselor_id in missing)
+        raise ValueError(f"咨询师不存在：{missing_text}")
+    return ids, profiles
+
+
+def _batch_patient_share_override_counts(
+    db: Session,
+    counselor_account_ids: list[int],
+) -> dict[int, int]:
+    rows = (
+        db.query(
+            AppCounselorPatientPricing.CounselorAccountId,
+            func.count(AppCounselorPatientPricing.Id),
+        )
+        .filter(
+            AppCounselorPatientPricing.CounselorAccountId.in_(counselor_account_ids),
+            or_(
+                AppCounselorPatientPricing.ShareMode.isnot(None),
+                AppCounselorPatientPricing.RevenueShareCents.isnot(None),
+                AppCounselorPatientPricing.RevenueSharePercent.isnot(None),
+            ),
+        )
+        .group_by(AppCounselorPatientPricing.CounselorAccountId)
+        .all()
+    )
+    return {int(counselor_id): int(count) for counselor_id, count in rows}
+
+
+def preview_batch_counselor_default_share_percent(
+    db: Session,
+    counselor_account_ids: Iterable[int],
+    *,
+    revenue_share_percent: int,
+    override_patient_shares: bool = True,
+) -> Dict[str, Any]:
+    """预览批量默认分成比例调整，不修改数据库。"""
+    if revenue_share_percent < 0 or revenue_share_percent > 100:
+        raise ValueError("分成比例须在 0–100 之间")
+    ids, profiles = _batch_canonical_counselor_profiles(db, counselor_account_ids)
+    override_counts = _batch_patient_share_override_counts(db, ids)
+    after_share = {
+        "shareMode": SHARE_MODE_PERCENT,
+        "revenueShareCents": None,
+        "revenueSharePercent": revenue_share_percent,
+    }
+    items: list[Dict[str, Any]] = []
+    for counselor_id in ids:
+        profile = profiles[counselor_id]
+        before_share = _counselor_default_share_snapshot(profile)
+        override_count = override_counts.get(counselor_id, 0)
+        default_share_will_change = before_share != after_share
+        will_clear_override_count = override_count if override_patient_shares else 0
+        items.append(
+            {
+                "counselorId": counselor_id,
+                "counselorName": profile.Name or f"咨询师#{counselor_id}",
+                "beforeShare": before_share,
+                "afterShare": dict(after_share),
+                "defaultShareWillChange": default_share_will_change,
+                "willChange": default_share_will_change or will_clear_override_count > 0,
+                "patientShareOverrideCount": override_count,
+                "willClearPatientShareOverrideCount": will_clear_override_count,
+            }
+        )
+    return {
+        "revenueSharePercent": revenue_share_percent,
+        "overridePatientShares": override_patient_shares,
+        "selectedCount": len(items),
+        "changedCount": sum(1 for item in items if item["willChange"]),
+        "patientShareOverrideCount": sum(
+            int(item["patientShareOverrideCount"]) for item in items
+        ),
+        "willClearPatientShareOverrideCount": sum(
+            int(item["willClearPatientShareOverrideCount"]) for item in items
+        ),
+        "items": items,
+    }
+
+
+def update_batch_counselor_default_share_percent(
+    db: Session,
+    counselor_account_ids: Iterable[int],
+    *,
+    revenue_share_percent: int,
+    override_patient_shares: bool = True,
+) -> Dict[str, Any]:
+    """原子地批量设置默认分成比例；默认覆盖来访个体分成，与单项调整一致。"""
+    preview = preview_batch_counselor_default_share_percent(
+        db,
+        counselor_account_ids,
+        revenue_share_percent=revenue_share_percent,
+        override_patient_shares=override_patient_shares,
+    )
+    ids, profiles = _batch_canonical_counselor_profiles(
+        db, (item["counselorId"] for item in preview["items"])
+    )
+    for counselor_id in ids:
+        profile = profiles[counselor_id]
+        base_price_cents = resolve_counselor_base_price_cents(db, counselor_id)
+        profile.FaceBilling = _clamp_share_cents(
+            int(base_price_cents * revenue_share_percent / 100),
+            base_price_cents,
+        )
+        profile.DefaultShareMode = SHARE_MODE_PERCENT
+        profile.DefaultRevenueShareCents = None
+        profile.DefaultRevenueSharePercent = revenue_share_percent
+
+    cleared_count = 0
+    if override_patient_shares:
+        cleared_count = (
+            db.query(AppCounselorPatientPricing)
+            .filter(
+                AppCounselorPatientPricing.CounselorAccountId.in_(ids),
+                or_(
+                    AppCounselorPatientPricing.ShareMode.isnot(None),
+                    AppCounselorPatientPricing.RevenueShareCents.isnot(None),
+                    AppCounselorPatientPricing.RevenueSharePercent.isnot(None),
+                ),
+            )
+            .update(
+                {
+                    AppCounselorPatientPricing.ShareMode: None,
+                    AppCounselorPatientPricing.RevenueShareCents: None,
+                    AppCounselorPatientPricing.RevenueSharePercent: None,
+                },
+                synchronize_session=False,
+            )
+        )
+    db.flush()
+    preview["clearedPatientShareOverrideCount"] = int(cleared_count or 0)
+    return preview

@@ -7,6 +7,8 @@ from sqlalchemy.orm import Query, Session
 from models import AppMessage
 
 ADMIN_OPS_INBOX_RELATED_TYPES: Tuple[str, ...] = (
+    "APPOINTMENT_NEW",
+    "APPOINTMENT_CANCEL",
     "REFUND_EXEMPTION",
     "REFUND_EXEMPTION_PENDING",
     "COUNSELOR_LEAVE",
@@ -23,6 +25,8 @@ ADMIN_OPS_INBOX_RELATED_TYPES: Tuple[str, ...] = (
 )
 
 ADMIN_OPS_INBOX_CATEGORIES: Tuple[str, ...] = (
+    "appointment_new",
+    "appointment_cancel",
     "exemption",
     "counselor_leave",
     "case_record_amendment",
@@ -34,7 +38,7 @@ ADMIN_OPS_INBOX_CATEGORIES: Tuple[str, ...] = (
 )
 
 CATEGORY_RELATED_TYPES: dict[str, list[str]] = {
-    "appointment_new": ["APPOINTMENT_NEW", "COUNSELOR_APPOINTMENT_NEW", "CHARITY_CONSULTATION_30_BOOKING"],
+    "appointment_new": ["APPOINTMENT_NEW", "COUNSELOR_APPOINTMENT_NEW"],
     "appointment_cancel": ["APPOINTMENT_CANCEL", "COUNSELOR_APPOINTMENT_CANCEL", "PATIENT_APPOINTMENT_CANCEL"],
     "counselor_leave": ["COUNSELOR_LEAVE"],
     "leave_submitted": [
@@ -43,7 +47,7 @@ CATEGORY_RELATED_TYPES: dict[str, list[str]] = {
         "COUNSELOR_LEAVE_REJECTED",
     ],
     "exemption": ["REFUND_EXEMPTION", "REFUND_EXEMPTION_PENDING"],
-    "case_record_amendment": ["CASE_RECORD_AMENDMENT", "CASE_RECORD_AMENDMENT_PENDING"],
+    "case_record_amendment": ["CASE_RECORD_AMENDMENT", "CASE_RECORD_AMENDMENT_PENDING", "CASE_RECORD_AMENDMENT_SUBMITTED"],
     "case_record_crisis": ["CASE_RECORD_CRISIS_REPORT"],
     "activity": ["PATIENT_NEW_ACTIVITY"],
     "appointment_success": ["PATIENT_APPOINTMENT_SUCCESS"],
@@ -57,9 +61,9 @@ CATEGORY_RELATED_TYPES: dict[str, list[str]] = {
         "PRICING_PATIENT_SHARE_UPDATED",
     ],
     "proxy_booking": [
+        "STAFF_PROXY_ORDER_PUSHED",
         "PATIENT_PROXY_ORDER_PENDING",
         "COUNSELOR_PROXY_ORDER_PENDING",
-        "STAFF_PROXY_ORDER_PUSHED",
     ],
     "leave_notice": ["PATIENT_LEAVE_APPROVED"],
     "charity_negotiation": ["PATIENT_CHARITY_NEGOTIATION_TIP"],
@@ -80,7 +84,7 @@ CATEGORY_KEYWORDS: dict[str, list[str]] = {
     "charity_milestone": ["公益咨询第30次", "第三十次公益咨询", "30次公益咨询"],
     "professional_pair_milestone": ["正价咨询第30次", "第三十次预约", "调整抽成比例"],
     "pricing": ["改价成功", "调价成功", "基础价格", "抽成比例", "价格调整", "抽成已调整"],
-    "proxy_booking": ["代理预约", "待支付预约", "订单已推送"],
+    "proxy_booking": ["代理预约", "代理预约已推送", "待支付预约"],
     "charity_negotiation": ["公益咨询议价", "议价后方可再次预约"],
     "leave_notice": ["咨询师请假，预约已取消"],
 }
@@ -156,7 +160,7 @@ def apply_admin_ops_inbox_scope(
     db: Optional[Session] = None,
     account_id: Optional[int] = None,
 ) -> Query:
-    """管理员/Ops 我的消息仅展示：豁免、请假、记录修改、风险上报。"""
+    """管理员/Ops 我的消息展示管理工作台相关类型（含预约、豁免、请假、记录、风险、定价、代理预约等）。"""
     use_scope = is_admin_ops_inbox_role(active_role)
     if not use_scope and db is not None and account_id is not None:
         use_scope = account_has_admin_ops_inbox(db, account_id, active_role)

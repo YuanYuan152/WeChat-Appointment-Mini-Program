@@ -164,7 +164,7 @@ export const API_ENDPOINTS = {
     bannersManage: '/api/mini/ops/banners/manage',
     activities: '/api/mini/ops/activities',
     articles: '/api/mini/ops/articles',
-    users: '/api/mini/ops/users',
+    users: '/api/mini/admin/users',
     dashboard: '/api/mini/ops/dashboard',
     schedulesOverview: '/api/mini/ops/schedules/overview',
     counselorScheduleCalendar: (counselorId: number | string) =>

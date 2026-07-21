@@ -1,6 +1,6 @@
 import type { CurrentUser, LoginResponse } from "@/types/api";
 
-export type DevLoginCode = "dev_admin" | "dev_ops" | "dev_counselor";
+export type DevLoginCode = "dev_admin" | "dev_ops" | "dev_assistant" | "dev_counselor";
 
 export const API_BASE_URL = (
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000"

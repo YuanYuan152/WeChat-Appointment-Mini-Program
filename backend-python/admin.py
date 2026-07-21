@@ -1045,6 +1045,11 @@ def _admin_visitor_patient_ids(db: Session) -> set[int]:
     return role_ids | cons_ids
 
 
+def _admin_counselor_ids(db: Session) -> list[int]:
+    bindings = db.query(AppRoleBinding).filter(AppRoleBinding.RoleType == "Counselor").all()
+    return sorted({b.AccountId for b in bindings})
+
+
 def _admin_consultation_location(
     db: Session,
     consultation: AppConsultation,
@@ -1618,6 +1623,16 @@ def list_admin_case_record_revisions(
     ]
 
 
+from admin_board_routes import register_admin_board_routes
+
+register_admin_board_routes(
+    router,
+    require_staff_workbench=require_staff_workbench,
+    visitor_patient_ids=_admin_visitor_patient_ids,
+    counselor_account_ids=_admin_counselor_ids,
+)
+
+
 @router.get(
     "/patients",
     response_model=List[AdminPatientSummaryOut],
@@ -1856,11 +1871,6 @@ def list_consultation_feedbacks(
                     continue
         result.append(item)
     return result
-
-
-def _admin_counselor_ids(db: Session) -> list[int]:
-    bindings = db.query(AppRoleBinding).filter(AppRoleBinding.RoleType == "Counselor").all()
-    return sorted({b.AccountId for b in bindings})
 
 
 def _admin_record_is_filled(record: Optional[AppCaseRecord]) -> bool:

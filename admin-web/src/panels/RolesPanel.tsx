@@ -1,13 +1,19 @@
 import { type FormEvent, useMemo, useState } from "react";
 
-import { COUNSELOR_TYPE_OPTIONS, type CounselorType, getManageableRoles } from "@/config/userRoleMeta";
+import {
+  COUNSELOR_TYPE_OPTIONS,
+  type CounselorType,
+  getManageableRoles,
+  PATIENT_SOURCE_OPTIONS,
+  type PatientSource,
+} from "@/config/userRoleMeta";
 import { roleLabel } from "@/lib/format";
 import { formatPatientNameWithContractTag } from "@/lib/patientContract";
 import type { AdminUser, Role } from "@/types/api";
 
 import { getName } from "@/lib/display";
 import { getPageItems } from "@/lib/pagination";
-import type { CreateUserByMobilePayload } from "@/services/roles";
+import type { BindUserRolePayload, CreateUserByMobilePayload } from "@/services/roles";
 import { RoleCreateModal } from "@/components/roles/RoleCreateModal";
 import { RoleEditModal } from "@/components/roles/RoleEditModal";
 import {
@@ -30,7 +36,7 @@ export function RolesPanel({
   onPageChange,
   onPageSizeChange,
   onCreateUser,
-  onUpdateRoles,
+  onUpdateRole,
 }: {
   users?: AdminUser[];
   currentUserRoles: Role[];
@@ -41,17 +47,17 @@ export function RolesPanel({
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
   onCreateUser: (payload: CreateUserByMobilePayload) => Promise<void>;
-  onUpdateRoles: (userId: number, currentRoles: Role[], nextRoles: Role[], counselorType?: CounselorType) => void;
+  onUpdateRole: (userId: number, role: Role, payload?: BindUserRolePayload) => void;
 }) {
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
   const [creating, setCreating] = useState(false);
-  const [selectedRoles, setSelectedRoles] = useState<Role[]>([]);
+  const [selectedRole, setSelectedRole] = useState<Role | null>(null);
+  const [selectedPatientSource, setSelectedPatientSource] = useState<PatientSource>("MINI_PROGRAM");
   const [selectedCounselorType, setSelectedCounselorType] = useState<CounselorType>("PROFESSIONAL");
   const [keywordInput, setKeywordInput] = useState("");
   const [keyword, setKeyword] = useState("");
   const allUsers = useMemo(() => users || [], [users]);
   const manageableRoleOptions = useMemo(() => getManageableRoles(currentUserRoles), [currentUserRoles]);
-  const manageableRoles = useMemo(() => manageableRoleOptions.map((option) => option.value), [manageableRoleOptions]);
   const filteredUsers = useMemo(() => {
     const normalizedKeyword = keyword.trim().toLowerCase();
     if (!normalizedKeyword) {
@@ -79,31 +85,41 @@ export function RolesPanel({
   };
 
   const openEditor = (user: AdminUser) => {
+    const currentRole = resolveCurrentRole(user);
+    const preferredRole =
+      (currentRole && manageableRoleOptions.some((option) => option.value === currentRole)
+        ? currentRole
+        : manageableRoleOptions[0]?.value) || null;
     setEditingUser(user);
-    setSelectedRoles(user.roles);
+    setSelectedRole(preferredRole);
+    setSelectedPatientSource(resolvePatientSource(user.patientSource));
     setSelectedCounselorType(resolveCounselorType(user.counselorType));
   };
 
   const closeEditor = () => {
     setEditingUser(null);
-    setSelectedRoles([]);
+    setSelectedRole(null);
+    setSelectedPatientSource("MINI_PROGRAM");
     setSelectedCounselorType("PROFESSIONAL");
   };
 
-  const saveRoles = () => {
-    if (!editingUser || selectedRoles.length === 0) {
+  const saveRole = () => {
+    if (!editingUser || !selectedRole) {
       return;
     }
-    const currentCounselorType = resolveCounselorType(editingUser.counselorType);
-    const shouldSubmitCounselorType =
-      selectedRoles.includes("Counselor") &&
-      (!editingUser.roles.includes("Counselor") || selectedCounselorType !== currentCounselorType);
-    onUpdateRoles(
-      editingUser.id,
-      editingUser.roles,
-      selectedRoles,
-      shouldSubmitCounselorType ? selectedCounselorType : undefined,
-    );
+    if (!manageableRoleOptions.some((option) => option.value === selectedRole)) {
+      return;
+    }
+
+    const payload: BindUserRolePayload = {};
+    if (selectedRole === "Patient") {
+      payload.patient_source = selectedPatientSource;
+    }
+    if (selectedRole === "Counselor") {
+      payload.counselor_type = selectedCounselorType;
+    }
+
+    onUpdateRole(editingUser.id, selectedRole, payload);
     closeEditor();
   };
 
@@ -114,7 +130,7 @@ export function RolesPanel({
           <div>
             <h2 className="text-xl font-semibold tracking-normal">用户与角色</h2>
             <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">
-              管理员可按手机号创建账号并绑定角色；已有账号会复用原数据。
+              管理员可按手机号创建账号并绑定角色；已有账号会复用原数据。每个账号仅保留一个角色。
             </p>
           </div>
           <button
@@ -220,13 +236,15 @@ export function RolesPanel({
       {editingUser && (
         <RoleEditModal
           user={editingUser}
-          manageableRoles={manageableRoles}
-          selectedRoles={selectedRoles}
+          roleOptions={manageableRoleOptions}
+          selectedRole={selectedRole}
+          patientSource={selectedPatientSource}
           counselorType={selectedCounselorType}
+          onRoleChange={setSelectedRole}
+          onPatientSourceChange={setSelectedPatientSource}
           onCounselorTypeChange={setSelectedCounselorType}
-          onChange={setSelectedRoles}
           onClose={closeEditor}
-          onSave={saveRoles}
+          onSave={saveRole}
         />
       )}
       {creating && (
@@ -239,6 +257,19 @@ export function RolesPanel({
       )}
     </section>
   );
+}
+
+function resolveCurrentRole(user: AdminUser): Role | null {
+  if (user.activeRole && user.roles.includes(user.activeRole as Role)) {
+    return user.activeRole as Role;
+  }
+  return user.roles[0] || null;
+}
+
+function resolvePatientSource(value?: string | null): PatientSource {
+  return PATIENT_SOURCE_OPTIONS.some((option) => option.value === value)
+    ? (value as PatientSource)
+    : "MINI_PROGRAM";
 }
 
 function resolveCounselorType(value?: string | null): CounselorType {

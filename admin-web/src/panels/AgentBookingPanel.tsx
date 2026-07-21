@@ -135,181 +135,200 @@ export function AgentBookingPanel({
 
   return (
     <>
-      <section className="rounded-xl border border-[var(--lxxl-border)] bg-white">
-        <form
-          className="px-6 py-5 sm:px-7 lg:px-8"
-          onSubmit={(event) => {
-            event.preventDefault();
-            onSearch();
-          }}
-        >
-          <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="space-y-5">
+        <section className="rounded-xl border border-[var(--lxxl-border)] bg-white">
+          <div className="px-6 py-5 sm:px-7 lg:px-8">
             <div>
               <h2 className="text-xl font-semibold tracking-normal">代理预约</h2>
               <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">
                 选择来访后自动使用其绑定咨询师，推送待支付订单。
               </p>
             </div>
-            <QueryButton
-              className="w-28"
-              disabled={!canOpenCreate || openingCreate}
-              type="button"
-              onClick={() => void openCreate()}
-            >
-              {openingCreate ? "校验中" : "代理预约"}
-            </QueryButton>
-          </div>
 
-          <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <SearchablePersonSelect
-              label="来访者"
-              placeholder="姓名或电话"
-              required
-              search={onSearchPatients}
-              value={patient}
-              onChange={setPatient}
-            />
-            <QueryField label="绑定咨询师" required>
-              <div
-                aria-invalid={Boolean(patientStatusError)}
-                aria-readonly="true"
-                className={`${queryControlClass} flex items-center justify-between gap-3 ${
-                  patientStatusError
-                    ? "text-[#A13F37]"
-                    : counselor
-                      ? "font-medium"
-                      : "text-[var(--lxxl-muted)]"
-                }`}
-              >
-                <span className="truncate">
-                  {patientStatusError
-                    ? "绑定状态读取失败"
-                    : counselor?.name || (patient ? "来访尚未绑定咨询师" : "请先选择来访")}
-                </span>
-                {patientStatusError ? (
-                  <Badge tone="red">已锁定</Badge>
-                ) : patientStatusLoading ? (
-                  <Badge>校验中</Badge>
-                ) : counselor ? (
-                  <Badge>自动锁定</Badge>
-                ) : patient ? (
-                  <Badge tone="gold">不可预约</Badge>
-                ) : null}
-              </div>
-              <p className="mt-1 text-xs leading-5 text-[var(--lxxl-muted)]">
-                根据来访当前绑定关系自动带出，不能在代理预约中更换。
-              </p>
-            </QueryField>
-            <QueryField label="签约状态">
-              <div className={`${queryControlClass} flex items-center gap-2`}>
-                {patientStatusLoading ? (
-                  <Badge>读取中</Badge>
-                ) : patientStatusError ? (
-                  <Badge tone="red">读取失败</Badge>
-                ) : patient ? (
-                  <Badge tone={patient.isContractSigned ? "green" : "gold"}>
-                    {patient.isContractSigned ? "已签约" : "未签约"}
-                  </Badge>
-                ) : (
-                  <span className="text-[var(--lxxl-muted)]">请先选择来访</span>
-                )}
-                {patientContractTag(patient) && (
-                  <span className="truncate text-xs text-[var(--lxxl-muted)]">{patientContractTag(patient)}</span>
-                )}
-              </div>
-            </QueryField>
-            <QueryField label="开始日期">
-              <input
-                className={queryControlClass}
-                max={rollingMaxDate}
-                min={today}
-                type="date"
-                value={query.start}
-                onChange={(event) => setQuery((prev) => ({ ...prev, start: event.target.value }))}
+            <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              <SearchablePersonSelect
+                label="来访者"
+                placeholder="姓名或电话"
+                required
+                search={onSearchPatients}
+                value={patient}
+                onChange={setPatient}
               />
-            </QueryField>
-            <QueryField label="展示方式">
-              <select
-                className={queryControlClass}
-                value={query.mode}
-                onChange={(event) =>
-                  setQuery((prev) => ({ ...prev, mode: event.target.value as AgentBookingQuery["mode"] }))
-                }
-              >
-                <option value="list">普通模式</option>
-                <option value="calendar">日历模式</option>
-              </select>
-            </QueryField>
-            <QueryField label="天数">
-              <select
-                className={queryControlClass}
-                value={query.days}
-                onChange={(event) => setQuery((prev) => ({ ...prev, days: Number(event.target.value) }))}
-              >
-                <option value={7}>7 天</option>
-                <option value={14}>14 天</option>
-                <option value={30}>30 天</option>
-              </select>
-            </QueryField>
-          </div>
+              <QueryField label="绑定咨询师" required>
+                <div
+                  aria-invalid={Boolean(patientStatusError)}
+                  aria-readonly="true"
+                  className={`${queryControlClass} flex items-center justify-between gap-3 ${
+                    patientStatusError
+                      ? "text-[#A13F37]"
+                      : counselor
+                        ? "font-medium"
+                        : "text-[var(--lxxl-muted)]"
+                  }`}
+                >
+                  <span className="truncate">
+                    {patientStatusError
+                      ? "绑定状态读取失败"
+                      : counselor?.name || (patient ? "来访尚未绑定咨询师" : "请先选择来访")}
+                  </span>
+                  {patientStatusError ? (
+                    <Badge tone="red">已锁定</Badge>
+                  ) : patientStatusLoading ? (
+                    <Badge>校验中</Badge>
+                  ) : counselor ? (
+                    <Badge>自动锁定</Badge>
+                  ) : patient ? (
+                    <Badge tone="gold">不可预约</Badge>
+                  ) : null}
+                </div>
+                <p className="mt-1 text-xs leading-5 text-[var(--lxxl-muted)]">
+                  根据来访当前绑定关系自动带出，不能在代理预约中更换。
+                </p>
+              </QueryField>
+              <QueryField label="签约状态">
+                <div className={`${queryControlClass} flex items-center gap-2`}>
+                  {patientStatusLoading ? (
+                    <Badge>读取中</Badge>
+                  ) : patientStatusError ? (
+                    <Badge tone="red">读取失败</Badge>
+                  ) : patient ? (
+                    <Badge tone={patient.isContractSigned ? "green" : "gold"}>
+                      {patient.isContractSigned ? "已签约" : "未签约"}
+                    </Badge>
+                  ) : (
+                    <span className="text-[var(--lxxl-muted)]">请先选择来访</span>
+                  )}
+                  {patientContractTag(patient) && (
+                    <span className="truncate text-xs text-[var(--lxxl-muted)]">{patientContractTag(patient)}</span>
+                  )}
+                </div>
+              </QueryField>
+            </div>
 
-          {patient && patientStatusError && (
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#F3C9BB] bg-[#FFF4EF] px-4 py-3 text-sm text-[#C7542F]">
-              <span>{patientStatusError}</span>
-              <button
-                className="font-medium underline underline-offset-2"
+            {patient && patientStatusError && (
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#F3C9BB] bg-[#FFF4EF] px-4 py-3 text-sm text-[#C7542F]">
+                <span>{patientStatusError}</span>
+                <button
+                  className="font-medium underline underline-offset-2"
+                  type="button"
+                  onClick={() => void onRefreshPatient()}
+                >
+                  重新读取
+                </button>
+              </div>
+            )}
+
+            <div className="mt-6 flex justify-start">
+              <QueryButton
+                className="w-28"
+                disabled={!canOpenCreate || openingCreate}
                 type="button"
-                onClick={() => void onRefreshPatient()}
+                onClick={() => void openCreate()}
               >
-                重新读取
-              </button>
+                {openingCreate ? "校验中" : "代理预约"}
+              </QueryButton>
             </div>
-          )}
-
-          <div className="mt-4 flex flex-wrap gap-3">
-            <QueryButton type="submit" />
-            <QueryResetButton onClick={onReset} />
           </div>
-        </form>
+        </section>
 
-        <div className="relative">
-          {listLoading && rows.length > 0 && (
-            <div className="absolute inset-x-0 top-0 z-10 border-t border-[var(--lxxl-border)] bg-white/80 px-5 py-3 text-sm text-[var(--lxxl-muted)] backdrop-blur-sm">
-              正在加载排期...
+        <section className="rounded-xl border border-[var(--lxxl-border)] bg-white">
+          <form
+            className="px-6 py-5 sm:px-7 lg:px-8"
+            onSubmit={(event) => {
+              event.preventDefault();
+              onSearch();
+            }}
+          >
+            <div>
+              <h2 className="text-xl font-semibold tracking-normal">咨询师排期查询</h2>
+              <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">
+                按开始日期与天数查看当前绑定咨询师的未来排期。
+              </p>
             </div>
-          )}
-          {!calendar ? (
-            <EmptyState
-              text={
-                listLoading
-                  ? "正在加载排期..."
-                  : !patient
-                    ? "请先选择来访者。"
-                    : patientStatusError
-                      ? "签约与绑定状态读取失败，请重新读取后再预约。"
-                    : !counselor
-                      ? "该来访尚未绑定咨询师，请先在来访者详情中绑定。"
-                      : "点击查询查看绑定咨询师的排期。"
-              }
-            />
-          ) : rows.length === 0 ? (
-            <EmptyState text={listLoading ? "正在加载排期..." : "当前咨询师暂无未来排期，可点击代理预约创建新时段。"} />
-          ) : query.mode === "calendar" ? (
-            <ScheduleCalendarView rows={rows} />
-          ) : (
-            <>
-              <ScheduleTable rows={pagedRows} />
-              <Pagination
-                page={page}
-                pageSize={pageSize}
-                total={total}
-                onPageChange={onPageChange}
-                onPageSizeChange={onPageSizeChange}
+
+            <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <QueryField label="开始日期">
+                <input
+                  className={queryControlClass}
+                  max={rollingMaxDate}
+                  min={today}
+                  type="date"
+                  value={query.start}
+                  onChange={(event) => setQuery((prev) => ({ ...prev, start: event.target.value }))}
+                />
+              </QueryField>
+              <QueryField label="天数">
+                <select
+                  className={queryControlClass}
+                  value={query.days}
+                  onChange={(event) => setQuery((prev) => ({ ...prev, days: Number(event.target.value) }))}
+                >
+                  <option value={7}>7 天</option>
+                  <option value={14}>14 天</option>
+                  <option value={30}>30 天</option>
+                </select>
+              </QueryField>
+              <QueryField label="展示方式">
+                <select
+                  className={queryControlClass}
+                  value={query.mode}
+                  onChange={(event) =>
+                    setQuery((prev) => ({ ...prev, mode: event.target.value as AgentBookingQuery["mode"] }))
+                  }
+                >
+                  <option value="list">普通模式</option>
+                  <option value="calendar">日历模式</option>
+                </select>
+              </QueryField>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-3">
+              <QueryButton type="submit" />
+              <QueryResetButton onClick={onReset} />
+            </div>
+          </form>
+
+          <div className="relative">
+            {listLoading && rows.length > 0 && (
+              <div className="absolute inset-x-0 top-0 z-10 border-t border-[var(--lxxl-border)] bg-white/80 px-5 py-3 text-sm text-[var(--lxxl-muted)] backdrop-blur-sm">
+                正在加载排期...
+              </div>
+            )}
+            {!calendar ? (
+              <EmptyState
+                text={
+                  listLoading
+                    ? "正在加载排期..."
+                    : !patient
+                      ? "请先在上方选择来访者。"
+                      : patientStatusError
+                        ? "签约与绑定状态读取失败，请重新读取后再查询排期。"
+                        : !counselor
+                          ? "该来访尚未绑定咨询师，请先在来访者详情中绑定。"
+                          : "点击查询查看绑定咨询师的排期。"
+                }
               />
-            </>
-          )}
-        </div>
-      </section>
+            ) : rows.length === 0 ? (
+              <EmptyState
+                text={listLoading ? "正在加载排期..." : "当前咨询师暂无未来排期，可点击代理预约创建新时段。"}
+              />
+            ) : query.mode === "calendar" ? (
+              <ScheduleCalendarView rows={rows} />
+            ) : (
+              <>
+                <ScheduleTable rows={pagedRows} />
+                <Pagination
+                  page={page}
+                  pageSize={pageSize}
+                  total={total}
+                  onPageChange={onPageChange}
+                  onPageSizeChange={onPageSizeChange}
+                />
+              </>
+            )}
+          </div>
+        </section>
+      </div>
 
       {createOpen && (
         <ProxyBookingModal

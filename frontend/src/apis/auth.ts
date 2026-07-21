@@ -38,7 +38,11 @@ export class AuthApi {
    * 微信小程序一键登录：用 wx.login 返回的 code 换 JWT
    */
   static async wxLogin(code: string): Promise<WxLoginResponse> {
-    const res = await httpV2.post<WxLoginResponse>(API_ENDPOINTS.auth.login, { code })
+    const res = await httpV2.post<WxLoginResponse>(
+      API_ENDPOINTS.auth.login,
+      { code },
+      { showLoading: false },
+    )
     if (res.code === 0 && res.data) {
       setToken(res.data.token)
       return res.data

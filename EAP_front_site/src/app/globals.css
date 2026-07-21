@@ -1,0 +1,116 @@
+@import "tailwindcss";
+
+:root {
+  --background: #faf7f2;
+  --foreground: #2c2c2c;
+  --card: #ffffff;
+  --card-foreground: #2c2c2c;
+  --primary: #c4795a;
+  --primary-foreground: #ffffff;
+  --secondary: #8b9a7b;
+  --secondary-foreground: #ffffff;
+  --muted: #f0ebe3;
+  --muted-foreground: #6b6560;
+  --accent: #d4a574;
+  --accent-foreground: #2c2c2c;
+  --border: #e8e0d5;
+  --ring: #c4795a;
+  --radius: 1.25rem;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --font-sans: var(--font-noto-sans);
+  --font-serif: var(--font-noto-serif);
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 4px);
+  --radius-sm: calc(var(--radius) - 8px);
+}
+
+* {
+  border-color: var(--border);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-noto-sans), system-ui, sans-serif;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  z-index: 9999;
+}
+
+.font-serif {
+  font-family: var(--font-noto-serif), "Noto Serif SC", serif;
+}
+
+@keyframes vinyl-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.vinyl-spin {
+  animation: vinyl-spin 4s linear infinite;
+  animation-play-state: paused;
+}
+
+.vinyl-spin.playing {
+  animation-play-state: running;
+}
+
+.gradient-warm {
+  background: linear-gradient(
+    135deg,
+    #faf7f2 0%,
+    #f5ede3 40%,
+    #ebe4d8 100%
+  );
+}
+
+.gradient-hero {
+  background: linear-gradient(
+    160deg,
+    #faf7f2 0%,
+    #f0e6da 35%,
+    #e8ddd0 70%,
+    #dfe8e0 100%
+  );
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  body::before {
+    display: none !important;
+  }
+
+  body {
+    background: #fff !important;
+  }
+}

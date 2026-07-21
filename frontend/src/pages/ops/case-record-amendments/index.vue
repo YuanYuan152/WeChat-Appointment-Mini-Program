@@ -29,7 +29,12 @@
 
     <view v-if="showDetail && detail" class="overlay" @touchmove.stop.prevent>
       <view class="detail-card" @tap.stop>
-        <text class="detail-title">{{ showRejectInput ? '填写驳回理由' : '咨询记录修改审核' }}</text>
+        <view class="detail-head-row">
+          <text class="detail-title">{{ showRejectInput ? '填写驳回理由' : '咨询记录修改审核' }}</text>
+          <view class="detail-close" @tap.stop="closeDetail">
+            <text class="detail-close-icon">×</text>
+          </view>
+        </view>
 
         <view v-if="showRejectInput" class="reject-panel">
           <text class="reject-form-hint">驳回理由将通知咨询师，请简要说明不予修改的原因</text>
@@ -78,6 +83,9 @@
                   <text class="diff-label">拟修改为</text>
                   <text class="diff-text">{{ field.proposed || '—' }}</text>
                 </view>
+              </view>
+              <view v-if="!diffFields.length && !headerDiffChanged && !riskDiffChanged" class="diff-section">
+                <text class="diff-text old">本次申请无字段内容变更。</text>
               </view>
 
               <view v-if="headerDiffChanged" class="diff-section">
@@ -198,7 +206,7 @@ const diffFields = computed(() => {
     label,
     current: (current[key] as string) || '',
     proposed: (proposed[key] as string) || '',
-  }))
+  })).filter((field) => (field.current || '').trim() !== (field.proposed || '').trim())
 })
 
 const riskDiffCurrent = computed(() =>
@@ -369,7 +377,35 @@ onShow(load)
   width: 100%; max-width: 680rpx; max-height: 85vh; background: #fff; border-radius: 24rpx; padding: 32rpx;
   display: flex; flex-direction: column;
 }
-.detail-title { display: block; text-align: center; font-size: 34rpx; font-weight: 700; margin-bottom: 16rpx; flex-shrink: 0; }
+.detail-head-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16rpx;
+  flex-shrink: 0;
+  min-height: 48rpx;
+}
+.detail-title { font-size: 34rpx; font-weight: 700; text-align: center; }
+.detail-close {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 56rpx;
+  height: 56rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #F3F4F6;
+}
+.detail-close-icon {
+  font-size: 40rpx;
+  line-height: 1;
+  color: #6B7280;
+  font-weight: 300;
+}
 .detail-scroll { flex: 1; max-height: 55vh; }
 .detail-row { display: flex; justify-content: space-between; gap: 20rpx; margin-bottom: 16rpx; }
 .label { font-size: 26rpx; color: #8A8A8A; flex-shrink: 0; }

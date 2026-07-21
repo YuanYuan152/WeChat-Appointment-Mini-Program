@@ -67,7 +67,7 @@ export function RefundsPanel({
     <section className="rounded-xl border border-[var(--lxxl-border)] bg-white">
       <PanelHeader
         title="用户豁免"
-        description="来访取消不满足常规退款条件时，由管理员或运营审核豁免。"
+        description="来访取消不满足常规退款条件时，由管理员或咨询主任审核豁免。"
         action={
           pendingCount > 0 ? (
             <span className="rounded-full bg-[#FBE8E6] px-3 py-1 text-xs font-medium text-[#A13F37]">

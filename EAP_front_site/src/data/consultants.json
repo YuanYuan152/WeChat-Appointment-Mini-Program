@@ -1,0 +1,72 @@
+[
+  {
+    "id": "consultant-01",
+    "name": "林晚晴",
+    "title": "国家二级心理咨询师",
+    "avatar": "/images/content/consultant-01.jpg",
+    "specialties": ["焦虑抑郁", "情感关系", "职场压力"],
+    "rating": 4.9,
+    "reviewCount": 328,
+    "experience": 12,
+    "price": 600,
+    "bio": "林晚晴老师拥有十二年临床经验，擅长认知行为疗法与正念减压。她以温暖而专业的风格，帮助来访者在安全的空间里探索内心、重建力量。",
+    "qualifications": ["北京师范大学心理学硕士", "国家二级心理咨询师", "CBT认证咨询师", "正念减压(MBSR)师资"],
+    "availableSlots": ["09:00-10:00", "10:30-11:30", "14:00-15:00", "15:30-16:30", "19:00-20:00"]
+  },
+  {
+    "id": "consultant-02",
+    "name": "陈宇航",
+    "title": "临床心理学博士",
+    "avatar": "/images/content/consultant-02.jpg",
+    "specialties": ["青少年心理", "家庭治疗", "创伤修复"],
+    "rating": 4.8,
+    "reviewCount": 256,
+    "experience": 15,
+    "price": 800,
+    "bio": "陈宇航博士专注于青少年与家庭系统治疗，善于在亲子沟通中找到突破口，帮助家庭重建健康的互动模式。",
+    "qualifications": ["北京大学临床心理学博士", "注册系统式治疗师", "青少年心理专项认证"],
+    "availableSlots": ["09:30-10:30", "11:00-12:00", "14:30-15:30", "16:00-17:00"]
+  },
+  {
+    "id": "consultant-03",
+    "name": "苏雅文",
+    "title": "婚姻家庭咨询师",
+    "avatar": "/images/content/consultant-03.jpg",
+    "specialties": ["婚姻情感", "亲密关系", "自我成长"],
+    "rating": 4.9,
+    "reviewCount": 412,
+    "experience": 10,
+    "price": 550,
+    "bio": "苏雅文老师以人本主义取向陪伴来访者，擅长帮助人们在亲密关系中找到自我与他人的平衡。",
+    "qualifications": ["华东师范大学心理学硕士", "国家一级婚姻家庭咨询师", "EFT情绪聚焦治疗认证"],
+    "availableSlots": ["10:00-11:00", "13:00-14:00", "15:00-16:00", "19:30-20:30"]
+  },
+  {
+    "id": "consultant-04",
+    "name": "张明远",
+    "title": "精神科主治医师",
+    "avatar": "/images/content/consultant-04.jpg",
+    "specialties": ["睡眠障碍", "情绪管理", "压力调适"],
+    "rating": 4.7,
+    "reviewCount": 189,
+    "experience": 18,
+    "price": 900,
+    "bio": "张明远医生兼具医学与心理学背景，在情绪障碍与睡眠问题的综合干预方面有丰富经验。",
+    "qualifications": ["首都医科大学精神科硕士", "主治医师资格证", "睡眠医学专项认证"],
+    "availableSlots": ["08:30-09:30", "11:30-12:30", "14:00-15:00", "16:30-17:30"]
+  },
+  {
+    "id": "consultant-05",
+    "name": "赵思琪",
+    "title": "沙盘游戏治疗师",
+    "avatar": "/images/content/consultant-05.jpg",
+    "specialties": ["儿童心理", "艺术疗愈", "创伤后成长"],
+    "rating": 4.8,
+    "reviewCount": 275,
+    "experience": 8,
+    "price": 500,
+    "bio": "赵思琪老师运用沙盘与艺术疗愈技术，为儿童和成人提供非言语的情感表达通道，特别适合难以用语言表达情绪的来访者。",
+    "qualifications": ["南京师范大学心理学硕士", "国际沙盘游戏治疗协会认证", "注册艺术疗愈师"],
+    "availableSlots": ["09:00-10:00", "10:30-11:30", "14:00-15:00", "16:00-17:00", "18:00-19:00"]
+  }
+]

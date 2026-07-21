@@ -42,10 +42,10 @@ export function RoleCreateModal({
       return "咨询师会同步创建或恢复咨询师档案。";
     }
     if (role === "Ops") {
-      return "运营可进入管理工作台。";
+      return "咨询主任可进入管理工作台，并可查看总览数据看板。";
     }
     if (role === "Assistant") {
-      return "咨询助理可进入管理工作台。";
+      return "咨询助理可进入管理工作台；与咨询主任权限一致，但不含总览数据看板。";
     }
     return "管理员可进入权限管理和全部后台功能。";
   }, [role]);
