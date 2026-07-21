@@ -190,13 +190,15 @@ interface DimensionRadarProps {
 
 /** 多维度雷达示意（简化多边形） */
 export function DimensionRadar({ dimensions, getMax }: DimensionRadarProps) {
-  if (dimensions.length < 3) return null;
+  const primaryDimensions = dimensions.filter((dimension) => !dimension.id.endsWith("-total"));
+  const radarDimensions = primaryDimensions.length >= 3 ? primaryDimensions : dimensions;
+  if (radarDimensions.length < 3) return null;
 
-  const size = 220;
+  const size = 360;
   const cx = size / 2;
   const cy = size / 2;
-  const radius = 78;
-  const n = dimensions.length;
+  const radius = 105;
+  const n = radarDimensions.length;
 
   const pointAt = (i: number, ratio: number) => {
     const angle = -Math.PI / 2 + (i * 2 * Math.PI) / n;
@@ -207,7 +209,7 @@ export function DimensionRadar({ dimensions, getMax }: DimensionRadarProps) {
   };
 
   const gridLevels = [0.25, 0.5, 0.75, 1];
-  const valuePoints = dimensions.map((d, i) => {
+  const valuePoints = radarDimensions.map((d, i) => {
     const max = Math.max(1, getMax(d.id));
     const ratio = Math.min(1, Math.max(0, d.score / max));
     return pointAt(i, ratio);
@@ -232,7 +234,7 @@ export function DimensionRadar({ dimensions, getMax }: DimensionRadarProps) {
             />
           );
         })}
-        {dimensions.map((_, i) => {
+        {radarDimensions.map((_, i) => {
           const tip = pointAt(i, 1);
           return (
             <line
@@ -251,18 +253,34 @@ export function DimensionRadar({ dimensions, getMax }: DimensionRadarProps) {
         {valuePoints.map((p, i) => (
           <circle key={i} cx={p.x} cy={p.y} r={3.5} fill="var(--primary)" />
         ))}
-        {dimensions.map((d, i) => {
-          const label = pointAt(i, 1.22);
+        {radarDimensions.map((d, i) => {
+          const label = pointAt(i, 1.38);
+          const [prefix, name] = d.title.includes("：")
+            ? d.title.split(/：(.*)/)
+            : ["", d.title];
+          const textAnchor =
+            label.x < cx - 20 ? "start" : label.x > cx + 20 ? "end" : "middle";
           return (
             <text
               key={d.id}
               x={label.x}
               y={label.y}
-              textAnchor="middle"
+              textAnchor={textAnchor}
               dominantBaseline="middle"
-              className="fill-muted-foreground text-[10px]"
+              className="fill-muted-foreground text-[11px]"
             >
-              {d.title.length > 6 ? `${d.title.slice(0, 5)}…` : d.title}
+              {prefix ? (
+                <>
+                  <tspan x={label.x} dy="-0.6em">
+                    {prefix}：
+                  </tspan>
+                  <tspan x={label.x} dy="1.35em">
+                    {name}
+                  </tspan>
+                </>
+              ) : (
+                d.title
+              )}
             </text>
           );
         })}

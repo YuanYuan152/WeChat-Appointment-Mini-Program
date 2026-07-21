@@ -207,7 +207,7 @@ export function ReportView({ assessment, result, type, showActions = true }: Rep
                       {dimDef.intro}
                     </p>
                   )}
-                  <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+                  <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
                     {dim.description}
                   </p>
                   {dim.suggestions.length > 0 && (
@@ -262,7 +262,7 @@ export function ReportView({ assessment, result, type, showActions = true }: Rep
 
         <div className="flex items-start gap-2 rounded-xl bg-muted/50 p-4 text-xs text-muted-foreground">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>测评结果仅供参考，不能替代专业诊断。 · 连心心理</span>
+          <span>{assessment.disclaimer || "测评结果仅供参考，不能替代专业诊断。"} · 连心心理</span>
         </div>
       </div>
 

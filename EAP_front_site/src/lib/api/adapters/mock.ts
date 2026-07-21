@@ -19,7 +19,17 @@ import type {
 import { enrichAssessmentGuidance } from "@/lib/assessment/scale-guidance";
 
 function withGuidance(list: Assessment[]): Assessment[] {
-  return list.map((a) => enrichAssessmentGuidance(a) as Assessment);
+  return list.map((assessment) => {
+    const normalized =
+      assessment.id === "dark-light-personality"
+        ? {
+            ...assessment,
+            questionCount: 12,
+            questions: assessment.questions.slice(0, 12),
+          }
+        : assessment;
+    return enrichAssessmentGuidance(normalized) as Assessment;
+  });
 }
 
 export class MockAdapter implements DataAdapter {
