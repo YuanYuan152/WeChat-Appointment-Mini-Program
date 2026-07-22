@@ -1,0 +1,17 @@
+{
+  "clientSubmissionId": "4fb5ec40-2f36-4c9b-b338-115807308d42",
+  "assessmentId": "wellbeing-demo",
+  "assessmentVersion": 1,
+  "demographicAnswers": {
+    "gender": "female",
+    "age": 30
+  },
+  "answers": {
+    "q1": "q1-b",
+    "q2": "q2-c",
+    "q3": "q3-b"
+  },
+  "entrySource": "web",
+  "shareCode": null,
+  "consentVersion": "2026-01"
+}
