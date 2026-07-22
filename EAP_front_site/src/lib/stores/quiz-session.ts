@@ -3,16 +3,26 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 
+export interface QuizDemographicsData {
+  name: string;
+  gender: string;
+  age: number;
+}
+
 interface QuizSessionState {
   answers: Record<string, Record<string, string>>;
   currentIndex: Record<string, number>;
   /** 用户是否已确认进入答题（看过指导语） */
   started: Record<string, boolean>;
+  /** 专业测评基本信息（姓名/性别/年龄） */
+  demographics: Record<string, QuizDemographicsData>;
   setAnswer: (assessmentId: string, questionId: string, optionId: string) => void;
   setCurrentIndex: (assessmentId: string, index: number) => void;
   markStarted: (assessmentId: string) => void;
+  setDemographics: (assessmentId: string, data: QuizDemographicsData) => void;
   getAnswers: (assessmentId: string) => Record<string, string>;
   getCurrentIndex: (assessmentId: string) => number;
+  getDemographics: (assessmentId: string) => QuizDemographicsData | null;
   hasStarted: (assessmentId: string) => boolean;
   /** 是否有未完成的作答进度 */
   hasInProgress: (assessmentId: string, questionCount: number) => boolean;
@@ -28,6 +38,7 @@ export const useQuizSession = create<QuizSessionState>()(
       answers: {},
       currentIndex: {},
       started: {},
+      demographics: {},
 
       setAnswer: (assessmentId, questionId, optionId) =>
         set((state) => ({
@@ -50,9 +61,16 @@ export const useQuizSession = create<QuizSessionState>()(
           started: { ...state.started, [assessmentId]: true },
         })),
 
+      setDemographics: (assessmentId, data) =>
+        set((state) => ({
+          demographics: { ...state.demographics, [assessmentId]: data },
+        })),
+
       getAnswers: (assessmentId) => get().answers[assessmentId] ?? {},
 
       getCurrentIndex: (assessmentId) => get().currentIndex[assessmentId] ?? 0,
+
+      getDemographics: (assessmentId) => get().demographics[assessmentId] ?? null,
 
       hasStarted: (assessmentId) => Boolean(get().started[assessmentId]),
 
@@ -75,7 +93,8 @@ export const useQuizSession = create<QuizSessionState>()(
           const { [assessmentId]: _a, ...answers } = state.answers;
           const { [assessmentId]: _i, ...currentIndex } = state.currentIndex;
           const { [assessmentId]: _s, ...started } = state.started;
-          return { answers, currentIndex, started };
+          const { [assessmentId]: _d, ...demographics } = state.demographics;
+          return { answers, currentIndex, started, demographics };
         }),
     }),
     {

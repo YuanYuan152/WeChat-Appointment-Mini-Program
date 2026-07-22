@@ -3,9 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuizSession } from "@/lib/stores/quiz-session";
+import { useAuthStore } from "@/lib/stores/auth-store";
 import { QuizProgress } from "./quiz-progress";
 import { QuestionCard } from "./question-card";
 import { QuizIntro } from "./quiz-intro";
+import {
+  QuizDemographicsForm,
+  type QuizDemographics,
+} from "./quiz-demographics-form";
 import { Button } from "@/components/ui/button";
 import type { Assessment } from "@/lib/api/types";
 
@@ -13,6 +18,9 @@ interface QuizClientProps {
   assessment: Assessment;
   type: "professional" | "fun";
 }
+
+type QuizPhase = "intro" | "profile" | "quiz";
+type PendingAction = "fresh" | "resume";
 
 function isAssessmentComplete(assessment: Assessment, answers: Record<string, string>) {
   return (
@@ -28,6 +36,14 @@ function findResumeIndex(assessment: Assessment, answers: Record<string, string>
   return idx;
 }
 
+function normalizeGender(value?: string | null): QuizDemographics["gender"] | undefined {
+  if (!value) return undefined;
+  if (value === "男" || value === "女") return value;
+  if (/male|^m$|男/i.test(value)) return "男";
+  if (/female|^f$|女/i.test(value)) return "女";
+  return undefined;
+}
+
 export function QuizClient({ assessment, type }: QuizClientProps) {
   const router = useRouter();
   const {
@@ -39,10 +55,14 @@ export function QuizClient({ assessment, type }: QuizClientProps) {
     markStarted,
     hasInProgress,
     getAnsweredCount,
+    setDemographics,
+    getDemographics,
   } = useQuizSession();
+  const authUser = useAuthStore((s) => s.user);
 
   const [hydrated, setHydrated] = useState(false);
-  const [phase, setPhase] = useState<"intro" | "quiz">("intro");
+  const [phase, setPhase] = useState<QuizPhase>("intro");
+  const [pendingAction, setPendingAction] = useState<PendingAction>("fresh");
   const advancingRef = useRef(false);
 
   useEffect(() => {
@@ -60,22 +80,55 @@ export function QuizClient({ assessment, type }: QuizClientProps) {
   const canResume = hasInProgress(assessment.id, assessment.questionCount);
   const isComplete = isAssessmentComplete(assessment, answers);
   const answeredCount = getAnsweredCount(assessment.id);
+  const needsDemographics = type === "professional";
 
   const goResult = () => {
     router.push(`/assessment/${type}/${assessment.id}/result`);
   };
 
-  const handleStartFresh = () => {
-    clearSession(assessment.id);
-    markStarted(assessment.id);
-    setCurrentIndex(assessment.id, 0);
+  const beginQuiz = (action: PendingAction) => {
+    if (action === "fresh") {
+      clearSession(assessment.id);
+      markStarted(assessment.id);
+      setCurrentIndex(assessment.id, 0);
+    } else {
+      const resumeIdx = findResumeIndex(assessment, getAnswers(assessment.id));
+      markStarted(assessment.id);
+      setCurrentIndex(assessment.id, resumeIdx);
+    }
     setPhase("quiz");
   };
 
-  const handleResume = () => {
-    const resumeIdx = findResumeIndex(assessment, getAnswers(assessment.id));
+  const requestStart = (action: PendingAction) => {
+    if (!needsDemographics) {
+      beginQuiz(action);
+      return;
+    }
+    // 续答且已有基本信息：直接继续
+    if (action === "resume" && getDemographics(assessment.id)) {
+      beginQuiz(action);
+      return;
+    }
+    setPendingAction(action);
+    setPhase("profile");
+  };
+
+  const handleStartFresh = () => requestStart("fresh");
+  const handleResume = () => requestStart("resume");
+
+  const handleDemographicsSubmit = (data: QuizDemographics) => {
+    // 重新开始时先清会话，再写入基本信息
+    if (pendingAction === "fresh") {
+      clearSession(assessment.id);
+    }
+    setDemographics(assessment.id, data);
     markStarted(assessment.id);
-    setCurrentIndex(assessment.id, resumeIdx);
+    if (pendingAction === "fresh") {
+      setCurrentIndex(assessment.id, 0);
+    } else {
+      const resumeIdx = findResumeIndex(assessment, getAnswers(assessment.id));
+      setCurrentIndex(assessment.id, resumeIdx);
+    }
     setPhase("quiz");
   };
 
@@ -83,7 +136,6 @@ export function QuizClient({ assessment, type }: QuizClientProps) {
     if (!question || advancingRef.current) return;
     setAnswer(assessment.id, question.id, optionId);
 
-    // 点选后自动进入下一题；最后一题进入结果页
     advancingRef.current = true;
     window.setTimeout(() => {
       if (isLast) {
@@ -118,6 +170,22 @@ export function QuizClient({ assessment, type }: QuizClientProps) {
         onStartFresh={handleStartFresh}
         onResume={handleResume}
         onViewResult={goResult}
+      />
+    );
+  }
+
+  if (phase === "profile") {
+    const existing = getDemographics(assessment.id);
+    const initial: Partial<QuizDemographics> = {
+      name: existing?.name || authUser?.realName || authUser?.nickname || "",
+      gender: normalizeGender(existing?.gender || authUser?.gender),
+      age: existing?.age,
+    };
+    return (
+      <QuizDemographicsForm
+        initial={initial}
+        onSubmit={handleDemographicsSubmit}
+        onBack={() => setPhase("intro")}
       />
     );
   }
