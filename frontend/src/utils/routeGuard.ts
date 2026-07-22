@@ -1,4 +1,4 @@
-import { getToken } from './auth'
+import { getStoredToken, getStoredRole, migrateLegacySession } from './session'
 
 const ROLE_ROUTE_MAP: Record<string, string[]> = {
   '/pages/counselor/': ['Counselor'],
@@ -16,13 +16,9 @@ function getRequiredRoles(url: string): string[] | null {
 
 function getUserRoles(): string[] {
   try {
-    const raw = uni.getStorageSync('user_roles')
-    if (raw) {
-      const parsed = JSON.parse(raw)
-      if (Array.isArray(parsed) && parsed.length) return parsed
-    }
-    const active = uni.getStorageSync('active_role')
-    return active ? [active] : []
+    migrateLegacySession()
+    const role = getStoredRole()
+    return role ? [role] : []
   } catch {
     return []
   }
@@ -34,7 +30,7 @@ export function setupRouteGuard() {
     const requiredRoles = getRequiredRoles(url)
     if (!requiredRoles) return true
 
-    if (!getToken()) {
+    if (!getStoredToken()) {
       uni.navigateTo({ url: `/pages/auth/login?redirect=${encodeURIComponent(url)}` })
       return false
     }

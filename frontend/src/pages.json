@@ -264,7 +264,7 @@
                 {
                     "path": "refund-exemption/apply",
                     "style": {
-                        "navigationBarTitleText": "申请豁免",
+                        "navigationBarTitleText": "申请退款",
                         "navigationBarBackgroundColor": "#ffffff",
                         "navigationBarTextStyle": "black"
                     }

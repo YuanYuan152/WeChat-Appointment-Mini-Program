@@ -82,6 +82,15 @@ class LoginRequest(BaseModel):
 class LoginResponse(BaseModel):
     token: str
     is_new_user: bool
+    openId: Optional[str] = None
+    activeRole: Optional[str] = None
+    roles: list[str] = []
+    nickname: Optional[str] = None
+    avatarUrl: Optional[str] = None
+    id: Optional[int] = None
+    mobile: Optional[str] = None
+    # True = 后端走了 mock openid（未配置真实微信凭证）
+    isMockAuth: bool = False
 
 class BindMobileRequest(BaseModel):
     # 微信获取手机号的 code（微信基础库 >= 2.21.2 的新版方式）
@@ -286,7 +295,35 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
     db.add(session)
     db.commit()
 
-    return LoginResponse(token=token, is_new_user=is_new_user)
+    consolidate_account_role_bindings(db, account.Id)
+    role = get_account_role(db, account.Id)
+    if getattr(account, "ActiveRole", None) != role:
+        account.ActiveRole = role
+        account.UpdatedAt = datetime.utcnow()
+        db.commit()
+        db.refresh(account)
+
+    return LoginResponse(
+        token=token,
+        is_new_user=is_new_user,
+        openId=account.OpenId or openid,
+        activeRole=role,
+        roles=[role],
+        nickname=account.Nickname,
+        avatarUrl=account.AvatarUrl,
+        id=account.Id,
+        mobile=account.Mobile,
+        isMockAuth=use_mock_login,
+    )
+
+
+@router.get("/wechat-status", summary="微信凭证是否已配置（前端据此切换正式/联调流程）")
+def wechat_status():
+    return {
+        "configured": _is_wechat_configured(),
+        "appIdConfigured": bool((settings.WECHAT_APPID or "").strip())
+        and (settings.WECHAT_APPID or "").strip() not in _WECHAT_PLACEHOLDER_APPIDS,
+    }
 
 
 @router.post("/bind-mobile", summary="绑定微信手机号")
@@ -299,18 +336,26 @@ def bind_mobile(
     使用微信 getPhoneNumber 返回的 code 换取真实手机号并绑定到当前账号。
     未配置真实凭证时返回 mock 手机号方便本地测试。
     """
-    if settings.WECHAT_APPID and settings.WECHAT_SECRET:
+    if _is_wechat_configured():
         try:
             from wechatpy import WeChatClient
             client = WeChatClient(settings.WECHAT_APPID, settings.WECHAT_SECRET)
             phone_info = client.wxa.get_phone_number(request.phoneCode)
             mobile = phone_info.get("phone_info", {}).get("phoneNumber")
             if not mobile:
-                raise HTTPException(status_code=400, detail="无法获取手机号")
+                raise HTTPException(status_code=400, detail="无法获取手机号，请确认小程序已开通手机号能力")
+        except HTTPException:
+            raise
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"获取手机号失败: {str(e)}")
+            err = str(e)
+            raise HTTPException(
+                status_code=400,
+                detail=f"获取手机号失败: {err}",
+            )
     else:
-        mobile = f"138{request.phoneCode[-8:].zfill(8)}"
+        # 本地未配置真实微信时：用 phoneCode 生成可区分的 mock 手机号，便于联调
+        tail = "".join(ch for ch in request.phoneCode if ch.isalnum())[-8:].zfill(8)
+        mobile = f"138{tail}"
 
     # 检查手机号是否已被其他账号绑定
     existing = db.query(AppAccount).filter(
@@ -324,7 +369,11 @@ def bind_mobile(
     current_account.UpdatedAt = datetime.utcnow()
     db.commit()
 
-    return {"message": "手机号绑定成功", "mobile": mobile}
+    return {
+        "message": "手机号绑定成功",
+        "mobile": mobile,
+        "isMockAuth": not _is_wechat_configured(),
+    }
 
 
 @router.get("/me", response_model=UserInfo, summary="获取当前用户信息及角色")

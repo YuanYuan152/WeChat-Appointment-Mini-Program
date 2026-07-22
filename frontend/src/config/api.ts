@@ -69,6 +69,7 @@ export const API_ENDPOINTS = {
   auth: {
     login: '/api/mini/auth/login',
     bindMobile: '/api/mini/auth/bind-mobile',
+    wechatStatus: '/api/mini/auth/wechat-status',
     me: '/api/mini/auth/me',
     updateMe: '/api/mini/auth/me',
     switchRole: '/api/mini/auth/switch-role',

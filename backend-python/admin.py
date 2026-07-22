@@ -753,7 +753,7 @@ def _build_exemption_admin_out(
 @router.get(
     "/refund-exemptions",
     response_model=List[RefundExemptionAdminOut],
-    summary="退款豁免申请列表（管理工作台审核）",
+    summary="退款申请列表（管理工作台审核）",
 )
 def list_refund_exemptions(
     status: Optional[str] = Query(None, description="PENDING / APPROVED / REJECTED / ALL"),
@@ -776,7 +776,7 @@ def list_refund_exemptions(
 
 @router.post(
     "/refund-exemptions/{exemption_id}/approve",
-    summary="同意退款豁免申请",
+    summary="同意退款申请",
 )
 def approve_refund_exemption_request(
     exemption_id: int,
@@ -796,7 +796,7 @@ def approve_refund_exemption_request(
 
 @router.post(
     "/refund-exemptions/{exemption_id}/reject",
-    summary="拒绝退款豁免申请",
+    summary="拒绝退款申请",
 )
 def reject_refund_exemption_request(
     exemption_id: int,

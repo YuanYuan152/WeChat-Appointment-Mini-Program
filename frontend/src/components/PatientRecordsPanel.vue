@@ -79,16 +79,16 @@
         <view v-if="r.note && !isCenterNote(r.note)" class="note">{{ r.note }}</view>
 
         <view v-if="r.exemptionStatus === 'PENDING'" class="exemption-banner pending">
-          <text class="exemption-title">退款豁免审核中</text>
+          <text class="exemption-title">退款申请审核中</text>
           <text class="exemption-desc">管理员审核通过后将取消预约并退款；审核前预约与订单维持不变</text>
         </view>
         <view v-else-if="r.exemptionStatus === 'REJECTED'" class="exemption-banner rejected">
-          <text class="exemption-title">退款豁免未通过</text>
+          <text class="exemption-title">退款申请未通过</text>
           <text v-if="r.exemptionRejectReason" class="exemption-desc">拒绝理由：{{ r.exemptionRejectReason }}</text>
           <text class="exemption-desc">预约与订单维持不变，您仍可按原订单前来咨询或自行取消（不退款）</text>
         </view>
         <view v-else-if="r.exemptionStatus === 'APPROVED'" class="exemption-banner approved">
-          <text class="exemption-title">退款豁免已通过</text>
+          <text class="exemption-title">退款申请已通过</text>
           <text class="exemption-desc">预约已取消，款项将原路退回</text>
         </view>
 
@@ -228,7 +228,7 @@
 
             <button class="cancel-action-btn exempt" :disabled="cancelTarget?.exemptionStatus === 'PENDING'" @tap="goExemption">
 
-              {{ cancelTarget?.exemptionStatus === 'PENDING' ? '审核中' : '申请豁免' }}
+              {{ cancelTarget?.exemptionStatus === 'PENDING' ? '审核中' : '申请退款' }}
 
             </button>
 
@@ -606,11 +606,11 @@ const goExemption = () => {
   const r = cancelTarget.value
   if (!r) return
   if (r.exemptionStatus === 'PENDING') {
-    uni.showToast({ title: '已有待审核的豁免申请', icon: 'none' })
+    uni.showToast({ title: '已有待审核的退款申请', icon: 'none' })
     return
   }
   if (r.refundEligible) {
-    uni.showToast({ title: '超过24小时可直接取消退款，无需申请豁免', icon: 'none' })
+    uni.showToast({ title: '超过24小时可直接取消并退款，无需另行申请', icon: 'none' })
     return
   }
   const slotText = formatSlotRange(r.startTime, r.endTime)
@@ -622,7 +622,7 @@ const goExemption = () => {
   uni.navigateTo({
     url,
     fail: () => {
-      uni.showToast({ title: '无法打开申请豁免页，请重新编译小程序', icon: 'none' })
+      uni.showToast({ title: '无法打开申请退款页，请重新编译小程序', icon: 'none' })
     },
   })
 }

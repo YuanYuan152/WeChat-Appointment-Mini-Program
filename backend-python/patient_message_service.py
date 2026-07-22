@@ -1,4 +1,4 @@
-"""来访者站内消息：活动、预约成功、开始前提醒、咨询师请假、豁免结果。"""
+"""来访者站内消息：活动、预约成功、开始前提醒、咨询师请假、退款结果。"""
 import json
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
@@ -351,8 +351,8 @@ def notify_patient_refund_exemption_pending(
     consultation: AppConsultation,
 ) -> None:
     amount_yuan = f"{exemption.Amount / 100:.2f}"
-    title = "豁免申请待审核"
-    summary = f"您的退款豁免申请已提交，金额 ¥{amount_yuan}，请等待审核"
+    title = "退款申请待审核"
+    summary = f"您的退款申请已提交，金额 ¥{amount_yuan}，请等待审核"
     detail = {
         "status": "PENDING",
         "amountYuan": amount_yuan,
@@ -360,7 +360,7 @@ def notify_patient_refund_exemption_pending(
         "exemptionId": exemption.Id,
         "consultationId": exemption.ConsultationId,
         "counselorName": _counselor_display_name(db, consultation.CounselorId),
-        "resultText": "您的退款豁免申请正在审核中，审核结果将在此通知。",
+        "resultText": "您的退款申请正在审核中，审核结果将在此通知。",
     }
     _notify_patient(
         db,
@@ -381,24 +381,24 @@ def notify_patient_refund_exemption_result(
     reject_reason: Optional[str] = None,
 ) -> None:
     if approved:
-        title = "豁免申请已通过"
+        title = "退款申请已通过"
         summary = f"退款 {exemption.Amount / 100:.2f} 元将原路退回"
         detail = {
             "status": "APPROVED",
             "approved": True,
-            "resultText": "您的退款豁免申请已审核通过，预约已取消。",
+            "resultText": "您的退款申请已审核通过，预约已取消。",
             "amountYuan": f"{exemption.Amount / 100:.2f}",
             "exemptionId": exemption.Id,
             "consultationId": exemption.ConsultationId,
         }
     else:
         reason_text = (reject_reason or "").strip() or "未说明具体原因"
-        title = "豁免申请未通过"
+        title = "退款申请未通过"
         summary = f"拒绝理由：{reason_text}"
         detail = {
             "status": "REJECTED",
             "approved": False,
-            "resultText": "您的退款豁免申请未通过审核，预约与订单维持不变。",
+            "resultText": "您的退款申请未通过审核，预约与订单维持不变。",
             "rejectReason": reason_text,
             "exemptionId": exemption.Id,
             "consultationId": exemption.ConsultationId,

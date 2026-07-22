@@ -2,6 +2,8 @@
  * 认证相关工具函数
  */
 
+import { clearSession, getStoredToken, saveSession } from '@/utils/session'
+
 /** 开发联调角色（与 backend-python/auth.py DEV_MOCK_CODE_OPENIDS 对齐） */
 export type DevLoginRole =
   | 'patient'
@@ -18,6 +20,7 @@ export type DevLoginRole =
   | 'admin'
 
 export const DEV_LOGIN_ROLE_STORAGE_KEY = 'dev_login_role'
+export const DEV_ENTRANCE_OPEN_KEY = 'dev_entrance_open'
 
 const isLocalV2Backend = (): boolean => {
   const base = String(import.meta.env.VITE_API_V2_BASE_URL || '').trim()
@@ -35,11 +38,22 @@ export const isWechatDevtools = (): boolean => {
 }
 
 /**
+ * 开发模式开关（isDevMode）：
+ * - VITE_DEV_MODE=true / VITE_ENABLE_MOCK_LOGIN=true
+ * - 或 Vite DEV 构建
+ * 生产包默认 false，登录页只显示微信一键登录。
+ */
+export const isDevMode = (): boolean =>
+  import.meta.env.VITE_DEV_MODE === 'true'
+  || import.meta.env.VITE_ENABLE_MOCK_LOGIN === 'true'
+  || import.meta.env.DEV
+
+/**
  * 真机调试时若 V2 仍指向 127.0.0.1/localhost，手机访问不到开发机后端，
  * Mock 角色切换与登录都会失败。启动时提示一次。
  */
 export const warnIfDeviceCannotReachLocalApi = (): void => {
-  if (!isMockLoginEnabled() || !isLocalV2Backend() || isWechatDevtools()) return
+  if (!isDevMode() || !isLocalV2Backend() || isWechatDevtools()) return
   const tip =
     '真机无法访问本机 127.0.0.1。请将 VITE_API_V2_BASE_URL 改为电脑局域网 IP（如 http://192.168.x.x:8000），并确保手机与电脑同网、后端已启动。'
   console.warn('[MockLogin]', tip)
@@ -50,11 +64,17 @@ export const warnIfDeviceCannotReachLocalApi = (): void => {
   })
 }
 
-/** 测试/开发联调：登录页可选角色，wx.login 走 dev_* mock code */
-export const isMockLoginEnabled = (): boolean =>
-  import.meta.env.DEV
-  || import.meta.env.VITE_ENABLE_MOCK_LOGIN === 'true'
-  || isLocalV2Backend()
+/** 测试/开发联调：登录页「开发者入口」展开后可用模拟登录 */
+export const isMockLoginEnabled = (): boolean => isDevMode()
+
+export const isDevEntranceOpen = (): boolean => {
+  if (!isDevMode()) return false
+  return uni.getStorageSync(DEV_ENTRANCE_OPEN_KEY) === '1'
+}
+
+export const setDevEntranceOpen = (open: boolean): void => {
+  uni.setStorageSync(DEV_ENTRANCE_OPEN_KEY, open ? '1' : '0')
+}
 
 export const DEV_LOGIN_ROLE_GROUPS: {
   title: string
@@ -151,10 +171,10 @@ export const getDevLoginRoleLabel = (): string => {
 
 /**
  * 获取微信登录 code。
- * 测试/开发联调返回 dev_* mock code，与 seed 演示账号对齐；正式版走 uni.login。
+ * 开发者入口展开时返回 dev_* mock code；否则走 uni.login 真机 code。
  */
 export const resolveWxLoginCode = async (): Promise<string> => {
-  if (isMockLoginEnabled()) {
+  if (isDevMode() && isDevEntranceOpen()) {
     const code = getDevLoginCode()
     console.info('[MockLogin] 使用演示 code:', code, '角色:', getDevLoginRole())
     return code
@@ -173,29 +193,28 @@ export const resolveWxLoginCode = async (): Promise<string> => {
  * 检查用户是否已登录
  */
 export const isLoggedIn = (): boolean => {
-  const token = uni.getStorageSync('token')
-  return !!token
+  return !!getStoredToken()
 }
 
 /**
  * 获取用户token
  */
 export const getToken = (): string | null => {
-  return uni.getStorageSync('token')
+  return getStoredToken() || null
 }
 
 /**
- * 设置用户token
+ * 设置用户token（写入 userInfo 并同步旧字段）
  */
 export const setToken = (token: string): void => {
-  uni.setStorageSync('token', token)
+  saveSession({ token })
 }
 
 /**
- * 清除用户token
+ * 清除用户token 与登录态
  */
 export const clearToken = (): void => {
-  uni.removeStorageSync('token')
+  clearSession()
 }
 
 /**

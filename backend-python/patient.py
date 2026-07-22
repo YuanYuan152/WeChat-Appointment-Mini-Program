@@ -643,7 +643,7 @@ def cancel_my_consultation(
 @router.post(
     "/consultations/{consultation_id}/refund-exemption",
     response_model=RefundExemptionOut,
-    summary="提交退款豁免申请",
+    summary="提交退款申请",
 )
 def submit_refund_exemption(
     consultation_id: int,

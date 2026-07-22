@@ -70,7 +70,7 @@ CATEGORY_KEYWORDS: dict[str, list[str]] = {
     "appointment_cancel": ["预约已取消", "预约取消"],
     "counselor_leave": ["咨询师请假"],
     "leave_submitted": ["请假申请已提交", "请假已成功", "请假已提交"],
-    "exemption": ["豁免", "退款豁免", "待审核"],
+    "exemption": ["退款", "退款申请", "豁免", "待审核"],
     "case_record_amendment": ["咨询记录修改", "记录修改", "待审核"],
     "case_record_crisis": ["个案风险需上报", "风险需上报", "需上报"],
     "activity": ["有新活动", "新活动"],
@@ -156,7 +156,7 @@ def apply_admin_ops_inbox_scope(
     db: Optional[Session] = None,
     account_id: Optional[int] = None,
 ) -> Query:
-    """管理员/Ops 我的消息展示管理工作台相关类型（含预约、豁免、请假、记录、风险、定价、代理预约等）。"""
+    """管理员/Ops 我的消息展示管理工作台相关类型（含预约、退款、请假、记录、风险、定价、代理预约等）。"""
     use_scope = is_admin_ops_inbox_role(active_role)
     if not use_scope and db is not None and account_id is not None:
         use_scope = account_has_admin_ops_inbox(db, account_id, active_role)

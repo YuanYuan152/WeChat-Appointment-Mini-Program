@@ -405,7 +405,7 @@
             <view class="pay-rules-list">
               <text class="pay-rule-item">· 距咨询开始超过24小时可免费取消；</text>
               <text class="pay-rule-item">· 距咨询开始24小时内取消或爽约，不予退款；</text>
-              <text class="pay-rule-item">· 特殊情况可致电咨询，申请人工豁免；</text>
+              <text class="pay-rule-item">· 特殊情况可致电咨询，申请人工退款；</text>
               <text class="pay-rule-item">· 迟到15分钟以上视为爽约。</text>
             </view>
           </view>
