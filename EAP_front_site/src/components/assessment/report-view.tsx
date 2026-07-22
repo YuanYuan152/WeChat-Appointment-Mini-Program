@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { useBeginAssessment } from "@/components/assessment/start-assessment-button";
 import { downloadAssessmentReportPdf } from "@/lib/assessment/download-report-pdf";
 import {
-  DimensionBar,
+  DimensionAxisHorizontal,
   DimensionRadar,
   ScoreRing,
   getRangeMax,
@@ -176,7 +176,9 @@ export function ReportView({ assessment, result, type, showActions = true }: Rep
 
             {result.summary && (
               <div className="rounded-[var(--radius)] border border-border bg-card p-6 text-center shadow-sm">
-                <p className="text-sm leading-relaxed text-muted-foreground">{result.summary}</p>
+                <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
+                  {result.summary}
+                </p>
               </div>
             )}
 
@@ -184,6 +186,12 @@ export function ReportView({ assessment, result, type, showActions = true }: Rep
               dimensions={result.dimensions}
               getMax={(id) =>
                 getRangeMax(assessment.dimensions?.find((d) => d.id === id)?.scoreRanges)
+              }
+              getMin={(id) =>
+                getRangeMin(assessment.dimensions?.find((d) => d.id === id)?.scoreRanges)
+              }
+              getRanges={(id) =>
+                assessment.dimensions?.find((d) => d.id === id)?.scoreRanges
               }
             />
 
@@ -194,9 +202,10 @@ export function ReportView({ assessment, result, type, showActions = true }: Rep
               return (
                 <div
                   key={dim.id}
-                  className="rounded-[var(--radius)] border border-border bg-card p-6 shadow-sm"
+                  id={`dimension-${dim.id}`}
+                  className="scroll-mt-24 rounded-[var(--radius)] border border-border bg-card p-6 shadow-sm"
                 >
-                  <DimensionBar
+                  <DimensionAxisHorizontal
                     dim={dim}
                     max={max}
                     min={min}
