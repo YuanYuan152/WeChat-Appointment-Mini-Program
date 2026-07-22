@@ -77,7 +77,9 @@ const SCALE = 3;
 const PAGE_W = 794;
 const PAGE_H = 1123;
 const MARGIN = 42;
-const FOOTER_RESERVE = 40;
+/** 为页脚 + 右下角二维码预留空间 */
+const FOOTER_RESERVE = 96;
+const ASSISTANT_QR_CAPTION = "如需获取完整详细报告和专业指导请扫码联系助理";
 
 function createPage(): PageCtx {
   const canvas = document.createElement("canvas");
@@ -111,6 +113,71 @@ function drawPageFooter(ctx: CanvasRenderingContext2D, pageNo: number, pageTotal
   ctx.font = `400 10px "Microsoft YaHei","PingFang SC",sans-serif`;
   ctx.fillStyle = "#9ca3af";
   ctx.fillText(`${pageNo} / ${pageTotal}`, PAGE_W - MARGIN - 20, PAGE_H - MARGIN - 8);
+}
+
+/** 模拟二维码点阵（与报告页示意二维码一致） */
+function drawMockQrCode(ctx: CanvasRenderingContext2D, left: number, top: number, size: number) {
+  const cells = 29;
+  const cell = size / cells;
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(left, top, size, size);
+  ctx.strokeStyle = "#e5e7eb";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(left + 0.5, top + 0.5, size - 1, size - 1);
+
+  const fillCell = (cx: number, cy: number, w = 1, h = 1, color = "#2c2c2c") => {
+    ctx.fillStyle = color;
+    ctx.fillRect(left + cx * cell, top + cy * cell, w * cell, h * cell);
+  };
+
+  const drawFinder = (ox: number, oy: number) => {
+    fillCell(ox, oy, 7, 7);
+    fillCell(ox + 1, oy + 1, 5, 5, "#ffffff");
+    fillCell(ox + 2, oy + 2, 3, 3);
+  };
+  drawFinder(0, 0);
+  drawFinder(22, 0);
+  drawFinder(0, 22);
+
+  const dots: Array<[number, number]> = [
+    [9, 1], [11, 1], [13, 2], [10, 3], [14, 3], [16, 4], [12, 5], [15, 5],
+    [9, 7], [11, 7], [13, 7], [17, 7], [19, 8], [10, 9], [14, 9], [16, 9],
+    [18, 10], [12, 11], [15, 11], [20, 11], [9, 12], [13, 13], [17, 13],
+    [11, 14], [19, 14], [10, 15], [14, 15], [16, 16], [12, 17], [18, 17],
+    [9, 18], [13, 18], [15, 19], [17, 19], [11, 20], [19, 20],
+    [8, 22], [10, 23], [12, 22], [14, 24], [16, 23], [18, 24], [20, 22],
+    [22, 9], [24, 10], [23, 12], [25, 14], [22, 15], [24, 17], [23, 19],
+    [8, 9], [1, 9], [3, 10], [2, 12], [4, 14], [1, 15], [3, 17], [2, 19],
+  ];
+  for (const [dx, dy] of dots) {
+    fillCell(dx, dy, 1.2, 1.2);
+  }
+}
+
+/** 报告右下角：二维码 + 浅色说明（画在页脚线上方） */
+function drawAssistantQrCorner(ctx: CanvasRenderingContext2D) {
+  const blockRight = PAGE_W - MARGIN;
+  const blockW = 100;
+  const footerLineY = PAGE_H - MARGIN - 22;
+  const captionLineH = 11;
+  const captionLines = 2;
+  const gap = 4;
+  const qrSize = 52;
+  const blockH = qrSize + gap + captionLineH * captionLines;
+  const qrLeft = blockRight - qrSize;
+  const blockTop = footerLineY - 8 - blockH;
+
+  drawMockQrCode(ctx, qrLeft, blockTop, qrSize);
+
+  ctx.font = `400 8px "Microsoft YaHei","PingFang SC",sans-serif`;
+  ctx.fillStyle = "rgba(107,101,96,0.72)";
+  ctx.textAlign = "right";
+  ctx.textBaseline = "top";
+  const captionY = blockTop + qrSize + gap;
+  const wrapped = wrapText(ctx, ASSISTANT_QR_CAPTION, blockW);
+  wrapped.slice(0, captionLines).forEach((line, i) => {
+    ctx.fillText(line, blockRight, captionY + i * captionLineH);
+  });
 }
 
 function drawContinuationHeader(
@@ -307,9 +374,20 @@ function drawDimensionRadar(
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   dimensions.forEach((d, i) => {
-    const label = pointAt(i, 1.28);
-    const name = d.title.length > 5 ? `${d.title.slice(0, 4)}…` : d.title;
-    ctx.fillText(`${name} ${d.score}`, label.x, label.y);
+    const label = pointAt(i, 1.38);
+    const name =
+      d.title.replace(/^维度[一二三四五六七八九十\d]+[：:]\s*/, "").trim() || d.title;
+    const maxChars = 6;
+    const lines: string[] = [];
+    for (let j = 0; j < name.length; j += maxChars) {
+      lines.push(name.slice(j, j + maxChars));
+    }
+    if (lines.length === 0) lines.push(name);
+    const lineH = 12;
+    const startY = label.y - ((lines.length - 1) * lineH) / 2;
+    lines.forEach((line, li) => {
+      ctx.fillText(line, label.x, startY + li * lineH);
+    });
   });
 
   return 28 + size + 28;
@@ -566,9 +644,14 @@ export async function downloadAssessmentReportPdf(options: {
     }
   }
 
-  // 页脚 + 导出
+  // 页脚 + 末页右下角二维码 + 导出
   const total = pages.length;
-  pages.forEach((p, i) => drawPageFooter(p.ctx, i + 1, total));
+  pages.forEach((p, i) => {
+    drawPageFooter(p.ctx, i + 1, total);
+    if (i === total - 1) {
+      drawAssistantQrCorner(p.ctx);
+    }
+  });
 
   const { jsPDF } = await import("jspdf");
   const pdf = new jsPDF({ orientation: "p", unit: "mm", format: "a4" });

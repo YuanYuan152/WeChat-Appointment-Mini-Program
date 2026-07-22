@@ -176,7 +176,9 @@ export function ReportView({ assessment, result, type, showActions = true }: Rep
 
             {result.summary && (
               <div className="rounded-[var(--radius)] border border-border bg-card p-6 text-center shadow-sm">
-                <p className="text-sm leading-relaxed text-muted-foreground">{result.summary}</p>
+                <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
+                  {result.summary}
+                </p>
               </div>
             )}
 

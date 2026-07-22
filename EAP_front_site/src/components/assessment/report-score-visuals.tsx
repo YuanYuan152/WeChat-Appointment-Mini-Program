@@ -549,6 +549,21 @@ interface DimensionRadarProps {
   onSelectDimension?: (id: string) => void;
 }
 
+/** 雷达轴标签：去掉「维度一：」等序号前缀，保留完整维度名 */
+function radarAxisLabel(title: string): string {
+  return title.replace(/^维度[一二三四五六七八九十\d]+[：:]\s*/, "").trim() || title;
+}
+
+/** 按字数折行，保证完整展示长维度名 */
+function wrapRadarLabel(text: string, maxChars = 6): string[] {
+  if (text.length <= maxChars) return [text];
+  const lines: string[] = [];
+  for (let i = 0; i < text.length; i += maxChars) {
+    lines.push(text.slice(i, i + maxChars));
+  }
+  return lines;
+}
+
 /** 极简平面雷达：排除 total 维度；可点选旁显纵向位置 */
 export function DimensionRadar({
   dimensions,
@@ -561,10 +576,10 @@ export function DimensionRadar({
   const primaryDimensions = dimensions.filter((dimension) => !dimension.id.endsWith("-total"));
   const radarDimensions = primaryDimensions.length >= 3 ? primaryDimensions : dimensions;
 
-  const size = 520;
+  const size = 400;
   const cx = size / 2;
   const cy = size / 2;
-  const radius = 162;
+  const radius = 112;
   const n = radarDimensions.length;
 
   const [hoverId, setHoverId] = useState<string | null>(null);
@@ -585,8 +600,8 @@ export function DimensionRadar({
         y: cy + Math.sin(angle) * radius * Math.max(0.04, ratio),
       };
       const label = {
-        x: cx + Math.cos(angle) * radius * 1.32,
-        y: cy + Math.sin(angle) * radius * 1.32,
+        x: cx + Math.cos(angle) * radius * 1.42,
+        y: cy + Math.sin(angle) * radius * 1.42,
       };
       return { d, i, max, ratio, tone, tip, value, label };
     });
@@ -619,19 +634,19 @@ export function DimensionRadar({
   };
 
   return (
-    <div className="rounded-[var(--radius)] border border-border bg-card p-6">
-      <div className="mb-6">
+    <div className="relative w-full rounded-[var(--radius)] border border-border bg-card p-5">
+      <div className="mb-3">
         <h3 className="font-serif text-sm font-semibold tracking-wide">维度总览</h3>
-        <p className="mt-1 text-[11px] text-muted-foreground">点击维度查看所处位置</p>
+        <p className="mt-0.5 text-[11px] text-muted-foreground">点击维度查看所处位置</p>
       </div>
 
-      <div className="flex flex-col items-center gap-8 lg:flex-row lg:items-center lg:justify-center lg:gap-10">
-        <div className="flex w-full max-w-[520px] justify-center lg:flex-1">
+      <div className="flex w-full flex-col items-stretch gap-4 sm:flex-row sm:justify-between sm:gap-4">
+        <div className="flex min-w-0 flex-1 justify-center">
           <svg
             width={size}
             height={size}
             viewBox={`0 0 ${size} ${size}`}
-            className="mx-auto h-auto w-full max-w-[520px]"
+            className="mx-auto h-auto w-full max-w-[400px]"
             role="img"
             aria-label="维度雷达总览"
           >
@@ -671,25 +686,18 @@ export function DimensionRadar({
 
             {items.map((it) => {
               const isFocus = focusId === it.d.id;
-              const [prefix, name] = it.d.title.includes("：")
-                ? it.d.title.split(/：(.*)/)
-                : ["", it.d.title];
-              const displayName = name || it.d.title;
-              const short =
-                !prefix && displayName.length > 6
-                  ? `${displayName.slice(0, 5)}…`
-                  : displayName.length > 8
-                    ? `${displayName.slice(0, 7)}…`
-                    : displayName;
+              const lines = wrapRadarLabel(radarAxisLabel(it.d.title), 6);
               const textAnchor =
-                it.label.x < cx - 20 ? "start" : it.label.x > cx + 20 ? "end" : "middle";
+                it.label.x < cx - 20 ? "end" : it.label.x > cx + 20 ? "start" : "middle";
+              const lineH = 15;
+              const startDy = -((lines.length - 1) * lineH) / 2;
 
               return (
                 <g key={it.d.id}>
                   <circle
                     cx={it.value.x}
                     cy={it.value.y}
-                    r={14}
+                    r={12}
                     fill="transparent"
                     className="cursor-pointer"
                     onMouseEnter={() => setHoverId(it.d.id)}
@@ -708,7 +716,7 @@ export function DimensionRadar({
                     y={it.label.y}
                     textAnchor={textAnchor}
                     dominantBaseline="middle"
-                    fontSize={17}
+                    fontSize={13}
                     className={cn(
                       "cursor-pointer select-none",
                       isFocus ? "fill-foreground font-medium" : "fill-muted-foreground"
@@ -717,18 +725,15 @@ export function DimensionRadar({
                     onMouseLeave={() => setHoverId(null)}
                     onClick={() => selectDimension(it.d.id)}
                   >
-                    {prefix ? (
-                      <>
-                        <tspan x={it.label.x} dy="-0.65em">
-                          {prefix}：
-                        </tspan>
-                        <tspan x={it.label.x} dy="1.4em">
-                          {short}
-                        </tspan>
-                      </>
-                    ) : (
-                      short
-                    )}
+                    {lines.map((line, li) => (
+                      <tspan
+                        key={`${it.d.id}-l${li}`}
+                        x={it.label.x}
+                        dy={li === 0 ? startDy : lineH}
+                      >
+                        {line}
+                      </tspan>
+                    ))}
                   </text>
                 </g>
               );
@@ -736,41 +741,81 @@ export function DimensionRadar({
           </svg>
         </div>
 
-        <div className="flex w-full max-w-[160px] shrink-0 flex-col items-center justify-center border-t border-border/60 pt-5 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
-          <AnimatePresence mode="wait">
-            {selected ? (
-              <motion.div
-                key={selected.d.id}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                className="w-full"
-              >
-                <DimensionQuadrant
-                  dim={selected.d}
-                  max={selected.max}
-                  min={getMin(selected.d.id)}
-                  ranges={getRanges?.(selected.d.id)}
-                  compact
-                  hideRanges
-                  hideLegend
-                />
-              </motion.div>
-            ) : (
-              <motion.div
-                key="placeholder"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="flex min-h-[140px] items-center justify-center"
-              >
-                <p className="text-center text-[12px] tracking-wide text-muted-foreground">
-                  {focused ? focused.d.title : "选择维度"}
-                </p>
-              </motion.div>
-            )}
-          </AnimatePresence>
+        <div className="flex w-full shrink-0 flex-col items-center border-t border-border/60 pt-3 sm:w-[132px] sm:self-stretch sm:border-l sm:border-t-0 sm:pl-4 sm:pt-0">
+          <div className="flex w-full flex-1 flex-col items-center justify-start">
+            <AnimatePresence mode="wait">
+              {selected ? (
+                <motion.div
+                  key={selected.d.id}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="w-full"
+                >
+                  <DimensionQuadrant
+                    dim={selected.d}
+                    max={selected.max}
+                    min={getMin(selected.d.id)}
+                    ranges={getRanges?.(selected.d.id)}
+                    compact
+                    hideRanges
+                    hideLegend
+                  />
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="placeholder"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="flex w-full items-start justify-center pt-6"
+                >
+                  <p className="text-center text-[12px] tracking-wide text-muted-foreground">
+                    {focused ? focused.d.title : "选择维度"}
+                  </p>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          <div className="mt-auto flex w-full flex-col items-center gap-1 pb-1 pt-3">
+            <div
+              className="flex h-12 w-12 items-center justify-center rounded border border-border bg-white p-0.5"
+              aria-hidden
+            >
+              <svg viewBox="0 0 29 29" className="h-full w-full text-foreground" role="img">
+                <title>联系助理二维码（示意）</title>
+                <rect width="29" height="29" fill="#fff" />
+                {[
+                  [0, 0],
+                  [22, 0],
+                  [0, 22],
+                ].map(([ox, oy], i) => (
+                  <g key={i}>
+                    <rect x={ox} y={oy} width="7" height="7" fill="currentColor" />
+                    <rect x={ox + 1} y={oy + 1} width="5" height="5" fill="#fff" />
+                    <rect x={ox + 2} y={oy + 2} width="3" height="3" fill="currentColor" />
+                  </g>
+                ))}
+                {[
+                  [9, 1], [11, 1], [13, 2], [10, 3], [14, 3], [16, 4], [12, 5], [15, 5],
+                  [9, 7], [11, 7], [13, 7], [17, 7], [19, 8], [10, 9], [14, 9], [16, 9],
+                  [18, 10], [12, 11], [15, 11], [20, 11], [9, 12], [13, 13], [17, 13],
+                  [11, 14], [19, 14], [10, 15], [14, 15], [16, 16], [12, 17], [18, 17],
+                  [9, 18], [13, 18], [15, 19], [17, 19], [11, 20], [19, 20],
+                  [8, 22], [10, 23], [12, 22], [14, 24], [16, 23], [18, 24], [20, 22],
+                  [22, 9], [24, 10], [23, 12], [25, 14], [22, 15], [24, 17], [23, 19],
+                  [8, 9], [1, 9], [3, 10], [2, 12], [4, 14], [1, 15], [3, 17], [2, 19],
+                ].map(([x, y], i) => (
+                  <rect key={`c-${i}`} x={x} y={y} width="1.2" height="1.2" fill="currentColor" />
+                ))}
+              </svg>
+            </div>
+            <p className="max-w-[120px] text-center text-[9px] leading-snug text-muted-foreground/65">
+              如需获取完整详细报告和专业指导请扫码联系助理
+            </p>
+          </div>
         </div>
       </div>
     </div>
