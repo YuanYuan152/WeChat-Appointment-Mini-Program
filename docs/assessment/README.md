@@ -7,6 +7,7 @@
 - `assessment-schema-v1.json`：单份量表定义的 JSON Schema。
 - `assessment-api.md`：EAP、管理后台、分享统计的 HTTP API 协议。
 - `assessment-permissions.md`：角色权限、敏感数据和审计要求。
+- `assessment-db-design.md`：报告、扫码统计和审计日志的待审批数据库设计。
 - `validate_examples.py`：不依赖第三方包的示例结构与引用校验。
 - `examples/professional-dimension.json`：专业多维度量表示例。
 - `examples/fun-match.json`：趣味匹配型量表示例。
