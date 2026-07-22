@@ -7,7 +7,7 @@
 - `assessment-schema-v1.json`：单份量表定义的 JSON Schema。
 - `assessment-api.md`：EAP、管理后台、分享统计的 HTTP API 协议。
 - `assessment-permissions.md`：角色权限、敏感数据和审计要求。
-- `assessment-db-design.md`：报告、扫码统计和审计日志的待审批数据库设计。
+- `assessment-db-design.md`：报告、扫码统计和审计日志的已批准数据库设计及受控迁移说明。
 - `validate_examples.py`：不依赖第三方包的示例结构与引用校验。
 - `examples/professional-dimension.json`：专业多维度量表示例。
 - `examples/fun-match.json`：趣味匹配型量表示例。
@@ -46,7 +46,8 @@ JSON Schema 负责结构校验；服务端还必须执行以下语义校验：
 - 首次启动会把旧 EAP 数组 JSON 转换为六份 v1 定义；原 JSON 不会被改写。
 - EAP 量表列表和详情已使用独立 HTTP 客户端读取已发布定义，站内其他模块仍使用原数据源。
 - 专业指导语、功能说明和 PBI/CBCL/黑暗人格报告文案已进入运行时定义。
-- 报告持久化、管理后台页面和分享扫码统计仍属后续阶段，本阶段没有数据库变更。
+- 报告、分享扫码和审计表的 ORM 与受控迁移已实现，但尚未对任何数据库执行 SQL。
+- 报告读写 API、管理后台页面和分享扫码业务仍属后续阶段。
 
 ## 运行时目录
 

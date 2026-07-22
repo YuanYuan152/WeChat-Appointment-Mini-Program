@@ -1,6 +1,6 @@
 # EAP 量表数据库变更设计 v1
 
-状态：待审批，尚未修改模型、尚未执行 SQL。
+状态：设计已批准；ORM 模型和受控迁移已实现，尚未连接或执行任何数据库 SQL。
 
 ## 1. 设计结论
 
@@ -139,13 +139,32 @@ as1.<assessmentId-base64url>.<hmac-signature>
 
 ## 8. 迁移、验证和回滚
 
-### 8.1 批准后的实施顺序
+### 8.1 实施顺序
 
-1. 在 SQLAlchemy 中增加三个模型和约束。
-2. 增加独立、幂等的 SQL Server 迁移脚本；脚本只创建不存在的表/索引。
-3. 在测试数据库执行前先输出库名、现有表和待执行 DDL，不在本地/生产共用库上盲执行。
+1. 已在 SQLAlchemy 中增加三个模型和约束。
+2. 已增加独立、幂等的 SQL Server 迁移脚本；脚本只创建不存在的表/索引。
+3. 待确认测试数据库后，先输出库名、现有表和待执行 DDL，不在本地/生产共用库上盲执行。
 4. 执行后校验三张表的字段、唯一约束和索引，不写入演示数据。
 5. 先部署后端兼容读取，再切换 EAP 提交与报告列表。
+
+受控迁移命令：
+
+```bash
+# 默认离线预览，不连接数据库
+python migrate_assessment_tables.py
+
+# 只读检查当前配置指向的数据库
+python migrate_assessment_tables.py --preflight
+
+# 只有确认 DB_NAME() 后才能执行
+python migrate_assessment_tables.py --apply --confirm-database <测试数据库名>
+```
+
+迁移文件为
+`backend-python/migrations/20260722_create_assessment_tables.sql`。应用模式会在事务内执行，
+并在提交前复核表、列、默认值、命名约束和索引；已有目标表缺列或缺约束时会拒绝自动修复。
+FastAPI 启动和通用 `init_db.py` 已明确排除这三张表，避免在未确认目标库时由
+`Base.metadata.create_all()` 静默执行 DDL。
 
 ### 8.2 回滚原则
 

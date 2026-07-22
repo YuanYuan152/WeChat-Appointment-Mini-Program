@@ -83,8 +83,27 @@ APP_COUNSELOR_PATIENT_PRICING_COLUMNS = {
 }
 
 
+# 这些表只能通过 migrate_assessment_tables.py 的目标库确认流程创建，不能在
+# FastAPI 启动或通用 init_db 中静默落库。
+CONTROLLED_MIGRATION_TABLES = frozenset(
+    {
+        "AppAssessmentReport",
+        "AppAssessmentShareScan",
+        "AppAssessmentAuditLog",
+    }
+)
+
+
+def automatically_created_tables():
+    return [
+        table
+        for table in Base.metadata.sorted_tables
+        if table.name not in CONTROLLED_MIGRATION_TABLES
+    ]
+
+
 def ensure_tables():
-    Base.metadata.create_all(bind=engine)
+    Base.metadata.create_all(bind=engine, tables=automatically_created_tables())
 
 
 def ensure_app_account_columns():

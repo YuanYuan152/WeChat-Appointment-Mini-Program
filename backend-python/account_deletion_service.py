@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session
 
 from models import (
     AppAccount,
+    AppAssessmentAuditLog,
+    AppAssessmentReport,
     AppCaseRecord,
     AppCaseRecordAmendmentRequest,
     AppConsultation,
@@ -174,6 +176,19 @@ def hard_delete_account(db: Session, account_id: int) -> None:
     )
     db.query(AppPsychScaleResult).filter(AppPsychScaleResult.AccountId == account_id).delete(
         synchronize_session=False
+    )
+    db.query(AppAssessmentReport).filter(AppAssessmentReport.AccountId == account_id).delete(
+        synchronize_session=False
+    )
+    # 审计事实需要保留，但账号被物理删除后不能继续保留操作者标识。
+    db.query(AppAssessmentAuditLog).filter(
+        AppAssessmentAuditLog.ActorAccountId == account_id
+    ).update(
+        {
+            AppAssessmentAuditLog.ActorAccountId: None,
+            AppAssessmentAuditLog.ActorRole: None,
+        },
+        synchronize_session=False,
     )
     db.query(AppFeedback).filter(AppFeedback.AccountId == account_id).delete(
         synchronize_session=False
