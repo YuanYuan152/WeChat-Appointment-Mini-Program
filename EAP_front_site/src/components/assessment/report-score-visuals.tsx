@@ -741,7 +741,7 @@ export function DimensionRadar({
           </svg>
         </div>
 
-        <div className="flex w-full shrink-0 flex-col items-center border-t border-border/60 pt-3 sm:w-[132px] sm:self-stretch sm:border-l sm:border-t-0 sm:pl-4 sm:pt-0">
+        <div className="flex w-full shrink-0 flex-col items-center border-t border-border/60 pt-3 sm:w-[132px] sm:self-stretch sm:border-t-0 sm:pl-4 sm:pt-0">
           <div className="flex w-full flex-1 flex-col items-center justify-start">
             <AnimatePresence mode="wait">
               {selected ? (
@@ -771,9 +771,11 @@ export function DimensionRadar({
                   exit={{ opacity: 0 }}
                   className="flex w-full items-start justify-center pt-6"
                 >
-                  <p className="text-center text-[12px] tracking-wide text-muted-foreground">
-                    {focused ? focused.d.title : "选择维度"}
-                  </p>
+                  {focused ? (
+                    <p className="text-center text-[12px] tracking-wide text-muted-foreground">
+                      {focused.d.title}
+                    </p>
+                  ) : null}
                 </motion.div>
               )}
             </AnimatePresence>
