@@ -36,6 +36,12 @@ class Settings(BaseSettings):
 
     # Server base URL (used for building absolute file URLs)
     BASE_URL: str = "http://localhost:8000"
+
+    # EAP 量表运行时 JSON。留空时使用 backend-python/runtime/assessment-data；
+    # 测试/生产环境应通过环境变量指向独立持久化目录。
+    ASSESSMENT_DATA_DIR: str = ""
+    # 首次初始化时读取的旧 EAP JSON 目录。留空时自动定位仓库内 EAP_front_site/src/data。
+    ASSESSMENT_SEED_DATA_DIR: str = ""
     
     # JWT configuration
     JWT_SECRET: str = "your-super-secret-key-change-it-in-production"

@@ -54,6 +54,8 @@ export interface AssessmentOption {
 export interface AssessmentQuestion {
   id: string;
   text: string;
+  helpText?: string;
+  required?: boolean;
   options: AssessmentOption[];
 }
 
@@ -93,8 +95,35 @@ export type AssessmentScoringType =
   | "cbcl"
   | "dark-light";
 
-export interface Assessment {
+export interface AssessmentReportProfile {
   id: string;
+  title: string;
+  description: string;
+  suggestions: string[];
+  image?: string;
+  shareText?: string;
+}
+
+export interface AssessmentSummary {
+  id: string;
+  version: number;
+  category: "professional" | "fun";
+  title: string;
+  subtitle: string;
+  description: string;
+  cover: string;
+  questionCount: number;
+  duration: number;
+  scoringType: AssessmentScoringType;
+  sortOrder?: number;
+}
+
+export interface Assessment {
+  schemaVersion?: 1;
+  id: string;
+  version?: number;
+  status?: "draft" | "published" | "archived";
+  category?: "professional" | "fun";
   title: string;
   subtitle: string;
   description: string;
@@ -106,6 +135,8 @@ export interface Assessment {
   questionCount: number;
   duration: number;
   scoringType: AssessmentScoringType;
+  scoringPreset?: string;
+  sortOrder?: number;
   questions: AssessmentQuestion[];
   scoreRanges?: ScoreRange[];
   matchResults?: MatchResult[];
@@ -113,7 +144,12 @@ export interface Assessment {
   reverseQuestionIds?: string[];
   /** 报告页引导/功能说明 */
   reportIntro?: string;
+  /** 固定计分模板的可编辑报告文案 */
+  reportProfiles?: AssessmentReportProfile[];
   disclaimer: string;
+  createdAt?: string;
+  updatedAt?: string;
+  publishedAt?: string | null;
 }
 
 export interface BookingPayload {

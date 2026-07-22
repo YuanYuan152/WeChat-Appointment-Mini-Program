@@ -39,9 +39,29 @@ JSON Schema 负责结构校验；服务端还必须执行以下语义校验：
 - 固定计分模板必须满足其规定的题目 ID、数量和选项分值。
 - 已发布量表的 `id` 不可修改。
 
-## 当前兼容边界
+## 当前实现边界
 
-现有 EAP JSON、硬编码指导语和特殊计分文案需要在后续迁移步骤中转换成此协议。协议固化本身不修改数据库、现有接口或线上量表行为。
+- 已实现文件存储的草稿、发布版本、备份、归档和版本恢复。
+- 首次启动会把旧 EAP 数组 JSON 转换为六份 v1 定义；原 JSON 不会被改写。
+- EAP 量表列表和详情已使用独立 HTTP 客户端读取已发布定义，站内其他模块仍使用原数据源。
+- 专业指导语、功能说明和 PBI/CBCL/黑暗人格报告文案已进入运行时定义。
+- 报告持久化、管理后台页面和分享扫码统计仍属后续阶段，本阶段没有数据库变更。
+
+## 运行时目录
+
+通过 `ASSESSMENT_DATA_DIR` 指定持久化目录。未配置时使用
+`backend-python/runtime/assessment-data`（仅适合本地开发，已加入 `.gitignore`）。
+
+```text
+assessment-data/
+├── index.json
+├── drafts/{assessmentId}.json
+├── published/{assessmentId}/v{version}.json
+└── backups/{assessmentId}/{timestamp}-{revision}.json
+```
+
+生产部署必须把该目录指向可持久化、可备份的绝对路径。已发布版本不可原地修改；
+回滚操作只会生成新草稿。也可通过 `ASSESSMENT_SEED_DATA_DIR` 覆盖首次初始化的旧 EAP JSON 目录。
 
 ## 本地校验
 

@@ -6,10 +6,10 @@ import { Clock, FileText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { StartAssessmentButton } from "@/components/assessment/start-assessment-button";
 import { StartProfessionalAssessmentButton } from "@/components/assessment/professional-assessment-privacy";
-import type { Assessment } from "@/lib/api/types";
+import type { AssessmentSummary } from "@/lib/api/types";
 
 interface AssessmentCardProps {
-  assessment: Assessment;
+  assessment: AssessmentSummary;
   type: "professional" | "fun";
   index?: number;
 }

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { api } from "@/lib/api";
+import { getAssessment } from "@/lib/assessment/api";
 import { QuizClient } from "@/components/assessment/quiz-client";
 import { AssessmentAuthGate } from "@/components/assessment/assessment-auth-gate";
 import { ProfessionalAssessmentPrivacyGate } from "@/components/assessment/professional-assessment-privacy";
@@ -12,7 +12,7 @@ interface QuizPageProps {
 
 export default async function ProfessionalQuizPage({ params }: QuizPageProps) {
   const { id } = await params;
-  const assessment = await api.getAssessmentById(id, "professional");
+  const assessment = await getAssessment(id, "professional");
 
   if (!assessment) notFound();
 

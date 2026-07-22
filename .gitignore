@@ -82,6 +82,7 @@ admin-web/.env.local
 EAP_front_site/node_modules/
 EAP_front_site/.env
 EAP_front_site/.env.local
+backend-python/runtime/
 
 # Visual Studio 2015/2017 cache/options directory
 .vs/

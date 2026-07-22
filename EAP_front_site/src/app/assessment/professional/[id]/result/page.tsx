@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { api } from "@/lib/api";
+import { getAssessment } from "@/lib/assessment/api";
 import { ResultClient } from "@/components/assessment/result-client";
 import { AssessmentAuthGate } from "@/components/assessment/assessment-auth-gate";
 
@@ -11,7 +11,7 @@ interface ResultPageProps {
 
 export default async function ProfessionalResultPage({ params }: ResultPageProps) {
   const { id } = await params;
-  const assessment = await api.getAssessmentById(id, "professional");
+  const assessment = await getAssessment(id, "professional");
 
   if (!assessment) notFound();
 

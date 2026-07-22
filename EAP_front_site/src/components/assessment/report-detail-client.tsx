@@ -8,7 +8,7 @@ import { useAuthStore } from "@/lib/stores/auth-store";
 import { useAssessmentReports } from "@/lib/stores/assessment-reports";
 import { formatReportTime } from "@/lib/assessment/report-summary";
 import { enrichAssessmentGuidance } from "@/lib/assessment/scale-guidance";
-import { api } from "@/lib/api";
+import { getAssessment } from "@/lib/assessment/api";
 import type { Assessment } from "@/lib/api/types";
 import { ReportView } from "./report-view";
 
@@ -33,10 +33,10 @@ function ReportDetailContent({ reportId }: ReportDetailClientProps) {
     if (!report) return;
     let cancelled = false;
     (async () => {
-      const full = await api.getAssessmentById(report.assessmentId, report.type);
+      const full = await getAssessment(report.assessmentId, report.type).catch(() => null);
       if (cancelled) return;
       if (full) {
-        setAssessment(enrichAssessmentGuidance(full) as Assessment);
+        setAssessment(full);
       } else {
         setAssessment(
           enrichAssessmentGuidance({

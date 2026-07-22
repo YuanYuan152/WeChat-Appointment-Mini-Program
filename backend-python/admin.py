@@ -133,6 +133,16 @@ def require_ops_or_admin(
     return require_staff_workbench(current_account, db)
 
 
+def require_assessment_editor(
+    current_account: AppAccount = Depends(get_current_account),
+    db: Session = Depends(get_db),
+) -> AppAccount:
+    """量表定义涉及发布版本，仅运营和管理员可编辑。"""
+    if get_account_role(db, current_account.Id) not in {"Ops", "Admin"}:
+        raise HTTPException(status_code=403, detail="无量表配置权限")
+    return current_account
+
+
 class BindRoleRequest(BaseModel):
     role: str
     target_id: Optional[int] = None
@@ -2772,7 +2782,13 @@ def update_pricing_counselor_patient(
 
 
 from proxy_booking_routes import router as proxy_booking_router
+from assessment_routes import register_assessment_admin_routes
 from system_settings_routes import register_system_settings_routes
+
+register_assessment_admin_routes(
+    router,
+    require_assessment_editor=require_assessment_editor,
+)
 
 register_system_settings_routes(
     router,

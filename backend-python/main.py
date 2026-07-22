@@ -23,6 +23,10 @@ from admin import router as admin_router
 from feedback import router as feedback_router
 from web_admin import router as web_admin_router
 from web_auth import router as web_auth_router
+from assessment_routes import (
+    ensure_assessment_definitions,
+    public_router as assessment_public_router,
+)
 
 app = FastAPI(title="LXXL API", version="2.0")
 
@@ -61,6 +65,19 @@ def _ensure_db_schema():
         import logging
         logging.getLogger("uvicorn.error").warning("ensure_schema skipped: %s", exc)
 
+
+@app.on_event("startup")
+def _ensure_assessment_definition_files():
+    """首次启动时把旧 EAP JSON 初始化为可版本化的运行时定义。"""
+    try:
+        ensure_assessment_definitions()
+    except Exception as exc:
+        import logging
+
+        logging.getLogger("uvicorn.error").warning(
+            "assessment definitions initialization skipped: %s", exc
+        )
+
 # Enable CORS for frontend
 app.add_middleware(
     CORSMiddleware,
@@ -89,6 +106,7 @@ app.include_router(admin_router)
 app.include_router(feedback_router)
 app.include_router(web_admin_router)
 app.include_router(web_auth_router)
+app.include_router(assessment_public_router)
 
 @app.get("/")
 def read_root():

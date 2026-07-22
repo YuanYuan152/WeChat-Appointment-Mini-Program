@@ -52,6 +52,32 @@ function findRange(score: number, ranges?: ScoreRange[]) {
   return ranges?.find((r) => score >= r.min && score <= r.max);
 }
 
+function renderReportTemplate(
+  template: string,
+  variables: Record<string, string | number>
+): string {
+  return template.replace(/\{\{([A-Za-z][A-Za-z0-9]*)\}\}/g, (placeholder, key) =>
+    Object.prototype.hasOwnProperty.call(variables, key)
+      ? String(variables[key])
+      : placeholder
+  );
+}
+
+function reportProfile(
+  assessment: Assessment,
+  profileId: string,
+  variables: Record<string, string | number> = {}
+) {
+  const profile = assessment.reportProfiles?.find((item) => item.id === profileId);
+  if (!profile) return null;
+  return {
+    ...profile,
+    title: renderReportTemplate(profile.title, variables),
+    description: renderReportTemplate(profile.description, variables),
+    suggestions: profile.suggestions.map((item) => renderReportTemplate(item, variables)),
+  };
+}
+
 function calculateSumScore(
   assessment: Assessment,
   answers: Record<string, string>
@@ -243,6 +269,13 @@ const PBI_STYLE_DESC: Record<string, string> = {
     "低关爱、低控制：您获得很多自由，但可能缺乏必要的指导与支持，有时感到迷茫或缺乏安全感。",
 };
 
+const PBI_STYLE_PROFILE: Record<string, string> = {
+  权威型: "pbi-style-authoritative",
+  专制型: "pbi-style-authoritarian",
+  民主型: "pbi-style-democratic",
+  放任型: "pbi-style-permissive",
+};
+
 function calculatePbiScore(
   assessment: Assessment,
   answers: Record<string, string>
@@ -285,18 +318,52 @@ function calculatePbiScore(
 
   const motherStyle = pbiStyle(motherCare, motherControl, true);
   const fatherStyle = pbiStyle(fatherCare, fatherControl, false);
+  const motherStyleProfile = reportProfile(
+    assessment,
+    PBI_STYLE_PROFILE[motherStyle]
+  );
+  const fatherStyleProfile = reportProfile(
+    assessment,
+    PBI_STYLE_PROFILE[fatherStyle]
+  );
+  const motherAutonomyProfile = reportProfile(
+    assessment,
+    motherAutonomy >= 12 ? "pbi-autonomy-high" : "pbi-autonomy-normal",
+    { parent: "母亲" }
+  );
+  const motherControlProfile = reportProfile(
+    assessment,
+    motherControl > 8.64 ? "pbi-control-high" : "pbi-control-normal",
+    { parent: "母亲" }
+  );
+  const fatherAutonomyProfile = reportProfile(
+    assessment,
+    fatherAutonomy >= 12 ? "pbi-autonomy-high" : "pbi-autonomy-normal",
+    { parent: "父亲" }
+  );
+  const fatherControlProfile = reportProfile(
+    assessment,
+    fatherControl > 7.62 ? "pbi-control-high" : "pbi-control-normal",
+    { parent: "父亲" }
+  );
+  const summaryProfile = reportProfile(assessment, "pbi-summary", {
+    motherStyle,
+    fatherStyle,
+  });
 
   return {
     type: "dimension",
-    summary: `母亲教养方式：${motherStyle}；父亲教养方式：${fatherStyle}`,
+    summary:
+      summaryProfile?.description ??
+      `母亲教养方式：${motherStyle}；父亲教养方式：${fatherStyle}`,
     dimensions: [
       {
         id: "mother-care",
         title: "母亲关爱",
         score: motherCare,
         level: motherStyle,
-        description: PBI_STYLE_DESC[motherStyle],
-        suggestions: ["理解过往经历对现在的影响", "必要时寻求心理咨询支持"],
+        description: motherStyleProfile?.description ?? PBI_STYLE_DESC[motherStyle],
+        suggestions: motherStyleProfile?.suggestions ?? ["理解过往经历对现在的影响", "必要时寻求心理咨询支持"],
       },
       {
         id: "mother-autonomy",
@@ -304,10 +371,11 @@ function calculatePbiScore(
         score: motherAutonomy,
         level: motherAutonomy >= 12 ? "较高" : "一般",
         description:
-          motherAutonomy >= 12
+          motherAutonomyProfile?.description ??
+          (motherAutonomy >= 12
             ? "母亲较支持您独立探索和做决定，有助于培养自主性。"
-            : "母亲对您自主性的支持相对有限，可能影响独立决策能力的发展。",
-        suggestions: ["练习独立做决定", "在安全范围内尝试新的自主体验"],
+            : "母亲对您自主性的支持相对有限，可能影响独立决策能力的发展。"),
+        suggestions: motherAutonomyProfile?.suggestions ?? ["练习独立做决定", "在安全范围内尝试新的自主体验"],
       },
       {
         id: "mother-control",
@@ -315,18 +383,19 @@ function calculatePbiScore(
         score: motherControl,
         level: motherControl > 8.64 ? "较高" : "一般",
         description:
-          motherControl > 8.64
+          motherControlProfile?.description ??
+          (motherControl > 8.64
             ? "母亲可能对您的生活干涉较多，您可能感到缺乏自我决定的空间。"
-            : "母亲给予您较多自由与选择权，有助于自我管理能力的发展。",
-        suggestions: ["觉察控制模式对当前关系的影响", "学习设定健康边界"],
+            : "母亲给予您较多自由与选择权，有助于自我管理能力的发展。"),
+        suggestions: motherControlProfile?.suggestions ?? ["觉察控制模式对当前关系的影响", "学习设定健康边界"],
       },
       {
         id: "father-care",
         title: "父亲关爱",
         score: fatherCare,
         level: fatherStyle,
-        description: PBI_STYLE_DESC[fatherStyle],
-        suggestions: ["理解过往经历对现在的影响", "必要时寻求心理咨询支持"],
+        description: fatherStyleProfile?.description ?? PBI_STYLE_DESC[fatherStyle],
+        suggestions: fatherStyleProfile?.suggestions ?? ["理解过往经历对现在的影响", "必要时寻求心理咨询支持"],
       },
       {
         id: "father-autonomy",
@@ -334,10 +403,11 @@ function calculatePbiScore(
         score: fatherAutonomy,
         level: fatherAutonomy >= 12 ? "较高" : "一般",
         description:
-          fatherAutonomy >= 12
+          fatherAutonomyProfile?.description ??
+          (fatherAutonomy >= 12
             ? "父亲较支持您独立探索和做决定。"
-            : "父亲对您自主性的支持相对有限。",
-        suggestions: ["练习独立做决定", "在安全范围内尝试新的自主体验"],
+            : "父亲对您自主性的支持相对有限。"),
+        suggestions: fatherAutonomyProfile?.suggestions ?? ["练习独立做决定", "在安全范围内尝试新的自主体验"],
       },
       {
         id: "father-control",
@@ -345,10 +415,11 @@ function calculatePbiScore(
         score: fatherControl,
         level: fatherControl > 7.62 ? "较高" : "一般",
         description:
-          fatherControl > 7.62
+          fatherControlProfile?.description ??
+          (fatherControl > 7.62
             ? "父亲可能对您的生活干涉较多。"
-            : "父亲给予您较多自由与选择权。",
-        suggestions: ["觉察控制模式对当前关系的影响", "学习设定健康边界"],
+            : "父亲给予您较多自由与选择权。"),
+        suggestions: fatherControlProfile?.suggestions ?? ["觉察控制模式对当前关系的影响", "学习设定健康边界"],
       },
     ],
   };
@@ -393,15 +464,18 @@ function calculateCbclScore(
   const dimensions = CBCL_DIMS.map((dim) => {
     const score = dim.items.reduce((acc, n) => acc + itemScore(n), 0);
     const above = score > dim.cutoff;
+    const profile = reportProfile(assessment, above ? "cbcl-concern" : "cbcl-normal");
     return {
       id: dim.id,
       title: dim.title,
       score,
       level: above ? "需关注" : "正常",
-      description: above ? CBCL_ABOVE : CBCL_BELOW,
-      suggestions: above
-        ? ["加强与孩子沟通", "必要时咨询儿童心理专业人士", "与学校老师保持联系"]
-        : ["继续保持良好的亲子互动"],
+      description: profile?.description ?? (above ? CBCL_ABOVE : CBCL_BELOW),
+      suggestions:
+        profile?.suggestions ??
+        (above
+          ? ["加强与孩子沟通", "必要时咨询儿童心理专业人士", "与学校老师保持联系"]
+          : ["继续保持良好的亲子互动"]),
     };
   });
 
@@ -410,10 +484,19 @@ function calculateCbclScore(
     0
   );
   const totalAbove = behaviorTotal > 37;
+  const totalProfile = reportProfile(
+    assessment,
+    totalAbove ? "cbcl-total-concern" : "cbcl-total-normal"
+  );
+  const summaryProfile = reportProfile(assessment, "cbcl-summary", {
+    total: behaviorTotal,
+  });
 
   return {
     type: "dimension",
-    summary: `行为问题总分：${behaviorTotal}（参考界值 37）`,
+    summary:
+      summaryProfile?.description ??
+      `行为问题总分：${behaviorTotal}（参考界值 37）`,
     dimensions: [
       ...dimensions,
       {
@@ -421,10 +504,12 @@ function calculateCbclScore(
         title: "行为问题总分",
         score: behaviorTotal,
         level: totalAbove ? "需关注" : "正常",
-        description: totalAbove ? CBCL_ABOVE : CBCL_BELOW,
-        suggestions: totalAbove
-          ? ["加强沟通交流", "必要时向专业人士寻求帮助"]
-          : ["继续关注孩子的日常表现"],
+        description: totalProfile?.description ?? (totalAbove ? CBCL_ABOVE : CBCL_BELOW),
+        suggestions:
+          totalProfile?.suggestions ??
+          (totalAbove
+            ? ["加强沟通交流", "必要时向专业人士寻求帮助"]
+            : ["继续关注孩子的日常表现"]),
       },
     ],
   };
@@ -500,35 +585,55 @@ function calculateDarkLightScore(
         : level === "中"
           ? g.descriptions.middle
           : g.descriptions.high;
+    const profileLevel = level === "低" ? "low" : level === "中" ? "middle" : "high";
+    const profile = reportProfile(
+      assessment,
+      `dark-${g.id}-${profileLevel}`,
+      { score }
+    );
     return {
       id: g.id,
       title: g.title,
       score,
       level,
-      description: `${g.intro}\n\n您的得分是 ${score} 分。\n\n${conclusion}`,
-      suggestions: [],
+      description:
+        profile?.description ??
+        `${g.intro}\n\n您的得分是 ${score} 分。\n\n${conclusion}`,
+      suggestions: profile?.suggestions ?? [],
     };
   });
 
   const darkTotal = darkDims.reduce((acc, d) => acc + d.score, 0);
+  const totalLevel = darkLightLevel(darkTotal, 36, 60);
+  const totalProfile = reportProfile(
+    assessment,
+    `dark-total-${totalLevel === "低" ? "low" : totalLevel === "中" ? "middle" : "high"}`,
+    { total: darkTotal }
+  );
+  const summaryProfile = reportProfile(assessment, "dark-summary", {
+    total: darkTotal,
+  });
 
   return {
     type: "dimension",
-    summary: `三个维度的总分是 ${darkTotal} 分。将三个维度得分相加（总分范围 3–84 分），可对个体的黑暗人格倾向有整体了解。`,
+    summary:
+      summaryProfile?.description ??
+      `三个维度的总分是 ${darkTotal} 分。将三个维度得分相加（总分范围 3–84 分），可对个体的黑暗人格倾向有整体了解。`,
     dimensions: [
       ...darkDims,
       {
         id: "dark-total",
         title: "综合暗黑等级判断",
         score: darkTotal,
-        level: darkLightLevel(darkTotal, 36, 60),
+        level: totalLevel,
         description:
-          darkTotal <= 36
+          totalProfile?.description ??
+          (darkTotal <= 36
             ? `您的总分是 ${darkTotal} 分。\n\n您在三个维度上的倾向均不显著，行为模式较为符合常规社交期待，互动中通常表现出诚意与可靠性。`
             : darkTotal <= 60
               ? `您的总分是 ${darkTotal} 分。\n\n您在某一个或若干维度上表现出一定倾向，可能在部分情境中采取策略性、低情感参与或自我聚焦的行为方式。与他人交往时需要保持好彼此的界限。`
-              : `您的总分是 ${darkTotal} 分。\n\n您在多个维度上均有较高得分，行为中可能综合表现出高度策略性、情感疏离与自我中心倾向。在互动中尤其需要注意维护双方的情绪与利益边界。`,
-        suggestions: [],
+              : `您的总分是 ${darkTotal} 分。\n\n您在多个维度上均有较高得分，行为中可能综合表现出高度策略性、情感疏离与自我中心倾向。在互动中尤其需要注意维护双方的情绪与利益边界。`),
+        suggestions: totalProfile?.suggestions ?? [],
       },
     ],
   };

@@ -1,6 +1,6 @@
 # EAP 量表 API 协议 v1
 
-状态：协议基线，尚未实现。
+状态：量表定义、文件版本及第 2/4 节接口已实现；报告、分享与统计接口待后续阶段实现。
 
 本协议只定义 EAP 新量表体系。现有小程序 `/api/mini/patient/scales`、PHQ-9/GAD-7 响应字段和 `AppPsychScaleResult` 保持不变。
 
