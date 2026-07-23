@@ -4,12 +4,20 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 from pathlib import Path
 from typing import Any
 
 
 ROOT = Path(__file__).resolve().parent
 EXAMPLES = ROOT / "examples"
+BACKEND = ROOT.parent.parent / "backend-python"
+sys.path.insert(0, str(BACKEND))
+
+from assessment_definition_service import validate_definition as validate_runtime_definition
+from assessment_scoring_service import calculate_assessment_result
+
+
 ID_PATTERN = re.compile(r"^[A-Za-z0-9]+(?:[-_.][A-Za-z0-9]+)*$")
 ASSESSMENT_ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
@@ -167,7 +175,29 @@ def main() -> None:
 
     for definition in (professional, fun):
         validate_definition(definition, schema)
+        validate_runtime_definition(definition, allow_fixed_scoring=False)
     validate_report_submit(report_submit, professional)
+
+    professional_result = calculate_assessment_result(
+        professional,
+        report_submit["answers"],
+    )
+    if professional_result.get("type") != "dimension" or any(
+        item.get("level") == "未知"
+        for item in professional_result.get("dimensions", [])
+    ):
+        raise AssertionError("professional scoring example did not resolve a report")
+
+    fun_answers = {
+        question["id"]: question["options"][0]["id"]
+        for question in fun["questions"]
+    }
+    fun_result = calculate_assessment_result(fun, fun_answers)
+    if (
+        fun_result.get("type") != "match"
+        or fun_result.get("resultId") != "quiet"
+    ):
+        raise AssertionError("fun scoring example did not resolve the expected result")
 
     print("assessment protocol examples: OK")
 

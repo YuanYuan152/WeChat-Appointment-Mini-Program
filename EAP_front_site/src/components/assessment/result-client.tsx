@@ -11,6 +11,7 @@ import {
   ASSESSMENT_PRIVACY_VERSION,
   isProfessionalAssessmentPrivacyAccepted,
 } from "@/lib/assessment/privacy-content";
+import { areRequiredAssessmentQuestionsAnswered } from "@/lib/assessment/assessment-progress";
 import { submitAssessmentReport } from "@/lib/assessment/api";
 import { ReportView } from "./report-view";
 import type {
@@ -162,21 +163,35 @@ function DemographicField({
 
 export function ResultClient({ assessment, type }: ResultClientProps) {
   const router = useRouter();
-  const { getAnswers, getAttemptId, getShareCode } = useQuizSession();
+  const {
+    getAnswers,
+    getAttemptId,
+    getShareCode,
+    ensureAccount,
+    isReadyToSubmit,
+  } = useQuizSession();
+  const version = assessment.version ?? 1;
   const token = useAuthStore((state) => state.token);
   const userId = useAuthStore((state) => state.user?.id);
+  const [hydrated, setHydrated] = useState(false);
   const [demographicAnswers, setDemographicAnswers] = useState<Record<string, unknown>>({});
   const [report, setReport] = useState<AssessmentReportDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const submissionStarted = useRef(false);
-  const answers = getAnswers(assessment.id);
+  const answers = useMemo(
+    () => (hydrated ? getAnswers(assessment.id, version) : {}),
+    [assessment.id, getAnswers, hydrated, version],
+  );
+  const validSession =
+    hydrated && isReadyToSubmit(assessment.id, version);
   const demographicQuestions = useMemo(
     () => assessment.demographicQuestions ?? [],
     [assessment.demographicQuestions]
   );
 
-  const allAnswered = assessment.questions.every((question) => answers[question.id]);
+  const requiredQuestionsAnswered =
+    areRequiredAssessmentQuestionsAnswered(assessment.questions, answers);
   const demographicsComplete = demographicQuestions.every(
     (question) => !question.required || !isEmptyDemographicValue(demographicAnswers[question.id])
   );
@@ -186,14 +201,36 @@ export function ResultClient({ assessment, type }: ResultClientProps) {
   }, []);
 
   useEffect(() => {
-    if (!allAnswered) {
+    const sync = () => {
+      if (userId == null) {
+        return;
+      }
+      ensureAccount(userId);
+      setHydrated(true);
+    };
+    if (useQuizSession.persist.hasHydrated()) {
+      sync();
+    }
+    return useQuizSession.persist.onFinishHydration(sync);
+  }, [ensureAccount, userId]);
+
+  useEffect(() => {
+    if (hydrated && (!validSession || !requiredQuestionsAnswered)) {
       router.replace(`/assessment/${type}/${assessment.id}`);
     }
-  }, [allAnswered, assessment.id, type, router]);
+  }, [
+    assessment.id,
+    hydrated,
+    requiredQuestionsAnswered,
+    router,
+    type,
+    validSession,
+  ]);
 
   const saveReport = useCallback(async () => {
     if (
-      !allAnswered ||
+      !validSession ||
+      !requiredQuestionsAnswered ||
       !demographicsComplete ||
       !token ||
       userId == null ||
@@ -201,7 +238,10 @@ export function ResultClient({ assessment, type }: ResultClientProps) {
     ) {
       return;
     }
-    if (type === "professional" && !isProfessionalAssessmentPrivacyAccepted()) {
+    if (
+      type === "professional" &&
+      !isProfessionalAssessmentPrivacyAccepted(userId)
+    ) {
       setError("隐私保护协议已更新，请返回量表页阅读并同意后重新提交。");
       return;
     }
@@ -211,7 +251,8 @@ export function ResultClient({ assessment, type }: ResultClientProps) {
     setError(null);
     try {
       const clientSubmissionId =
-        getAttemptId(assessment.id) ?? fallbackSubmissionId(userId, assessment);
+        getAttemptId(assessment.id, version) ??
+        fallbackSubmissionId(userId, assessment);
       const shareCode = getShareCode(assessment.id) ?? null;
       const saved = await submitAssessmentReport(token, {
         clientSubmissionId,
@@ -232,7 +273,8 @@ export function ResultClient({ assessment, type }: ResultClientProps) {
       setSubmitting(false);
     }
   }, [
-    allAnswered,
+    requiredQuestionsAnswered,
+    validSession,
     demographicsComplete,
     token,
     userId,
@@ -240,6 +282,7 @@ export function ResultClient({ assessment, type }: ResultClientProps) {
     getAttemptId,
     getShareCode,
     assessment,
+    version,
     demographicAnswers,
     answers,
   ]);
@@ -251,7 +294,15 @@ export function ResultClient({ assessment, type }: ResultClientProps) {
     }
   }, [demographicQuestions.length, saveReport]);
 
-  if (!allAnswered) return null;
+  if (!hydrated) {
+    return (
+      <div className="flex min-h-[160px] items-center justify-center text-sm text-muted-foreground">
+        加载中...
+      </div>
+    );
+  }
+
+  if (!validSession || !requiredQuestionsAnswered) return null;
 
   if (report) {
     const snapshotAssessment = report.reportSnapshot.assessment;

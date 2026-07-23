@@ -4,27 +4,33 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 
 interface QuizSessionState {
+  ownerAccountId: number | null;
   answers: Record<string, Record<string, string>>;
   currentIndex: Record<string, number>;
   attemptIds: Record<string, string>;
   shareCodes: Record<string, string>;
+  assessmentVersions: Record<string, number>;
   /** 用户是否已确认进入答题（看过指导语） */
   started: Record<string, boolean>;
+  /** 用户已完成当前作答流程，可进入报告页。 */
+  readyToSubmit: Record<string, boolean>;
   setAnswer: (assessmentId: string, questionId: string, optionId: string) => void;
   setCurrentIndex: (assessmentId: string, index: number) => void;
   markStarted: (assessmentId: string) => void;
-  getAnswers: (assessmentId: string) => Record<string, string>;
-  getCurrentIndex: (assessmentId: string) => number;
-  getAttemptId: (assessmentId: string) => string | undefined;
+  markReadyToSubmit: (assessmentId: string, version: number) => void;
+  ensureAccount: (accountId: number) => void;
+  ensureVersion: (assessmentId: string, version: number) => void;
+  isAccountSessionOwner: (accountId: number) => boolean;
+  getAnswers: (assessmentId: string, version?: number) => Record<string, string>;
+  getCurrentIndex: (assessmentId: string, version?: number) => number;
+  getAttemptId: (assessmentId: string, version?: number) => string | undefined;
   setShareCode: (assessmentId: string, shareCode: string | null) => void;
   getShareCode: (assessmentId: string) => string | undefined;
-  hasStarted: (assessmentId: string) => boolean;
-  /** 是否有未完成的作答进度 */
-  hasInProgress: (assessmentId: string, questionCount: number) => boolean;
-  getAnsweredCount: (assessmentId: string) => number;
-  /** 是否已答完全部题目 */
-  isComplete: (assessmentId: string, questionCount: number) => boolean;
-  clearSession: (assessmentId: string) => void;
+  hasStarted: (assessmentId: string, version?: number) => boolean;
+  isReadyToSubmit: (assessmentId: string, version: number) => boolean;
+  getAnsweredCount: (assessmentId: string, version?: number) => number;
+  clearSession: (assessmentId: string, version?: number) => void;
+  clearAllSessions: () => void;
 }
 
 function createAttemptId(): string {
@@ -41,11 +47,14 @@ function createAttemptId(): string {
 export const useQuizSession = create<QuizSessionState>()(
   persist(
     (set, get) => ({
+      ownerAccountId: null,
       answers: {},
       currentIndex: {},
       attemptIds: {},
       shareCodes: {},
+      assessmentVersions: {},
       started: {},
+      readyToSubmit: {},
 
       setAnswer: (assessmentId, questionId, optionId) =>
         set((state) => ({
@@ -68,11 +77,96 @@ export const useQuizSession = create<QuizSessionState>()(
           started: { ...state.started, [assessmentId]: true },
         })),
 
-      getAnswers: (assessmentId) => get().answers[assessmentId] ?? {},
+      markReadyToSubmit: (assessmentId, version) =>
+        set((state) => {
+          if (
+            state.assessmentVersions[assessmentId] !== version ||
+            !state.started[assessmentId]
+          ) {
+            return state;
+          }
+          return {
+            readyToSubmit: {
+              ...state.readyToSubmit,
+              [assessmentId]: true,
+            },
+          };
+        }),
 
-      getCurrentIndex: (assessmentId) => get().currentIndex[assessmentId] ?? 0,
+      ensureAccount: (accountId) =>
+        set((state) => {
+          if (state.ownerAccountId === accountId) {
+            return state;
+          }
+          return {
+            ownerAccountId: accountId,
+            answers: {},
+            currentIndex: {},
+            attemptIds: {},
+            assessmentVersions: {},
+            started: {},
+            readyToSubmit: {},
+          };
+        }),
 
-      getAttemptId: (assessmentId) => get().attemptIds[assessmentId],
+      ensureVersion: (assessmentId, version) =>
+        set((state) => {
+          if (state.assessmentVersions[assessmentId] === version) {
+            return state;
+          }
+          const answers = { ...state.answers };
+          const currentIndex = { ...state.currentIndex };
+          const started = { ...state.started };
+          const readyToSubmit = { ...state.readyToSubmit };
+          delete answers[assessmentId];
+          delete currentIndex[assessmentId];
+          delete started[assessmentId];
+          delete readyToSubmit[assessmentId];
+          return {
+            answers,
+            currentIndex,
+            started,
+            readyToSubmit,
+            assessmentVersions: {
+              ...state.assessmentVersions,
+              [assessmentId]: version,
+            },
+            attemptIds: {
+              ...state.attemptIds,
+              [assessmentId]: createAttemptId(),
+            },
+          };
+        }),
+
+      getAnswers: (assessmentId, version) => {
+        if (
+          version !== undefined &&
+          get().assessmentVersions[assessmentId] !== version
+        ) {
+          return {};
+        }
+        return get().answers[assessmentId] ?? {};
+      },
+
+      getCurrentIndex: (assessmentId, version) => {
+        if (
+          version !== undefined &&
+          get().assessmentVersions[assessmentId] !== version
+        ) {
+          return 0;
+        }
+        return get().currentIndex[assessmentId] ?? 0;
+      },
+
+      getAttemptId: (assessmentId, version) => {
+        if (
+          version !== undefined &&
+          get().assessmentVersions[assessmentId] !== version
+        ) {
+          return undefined;
+        }
+        return get().attemptIds[assessmentId];
+      },
 
       setShareCode: (assessmentId, shareCode) =>
         set((state) => {
@@ -87,39 +181,67 @@ export const useQuizSession = create<QuizSessionState>()(
 
       getShareCode: (assessmentId) => get().shareCodes[assessmentId],
 
-      hasStarted: (assessmentId) => Boolean(get().started[assessmentId]),
+      isAccountSessionOwner: (accountId) =>
+        get().ownerAccountId === accountId,
 
-      getAnsweredCount: (assessmentId) =>
-        Object.keys(get().answers[assessmentId] ?? {}).length,
+      hasStarted: (assessmentId, version) =>
+        (version === undefined ||
+          get().assessmentVersions[assessmentId] === version) &&
+        Boolean(get().started[assessmentId]),
 
-      hasInProgress: (assessmentId, questionCount) => {
-        const answers = get().answers[assessmentId] ?? {};
-        const count = Object.keys(answers).length;
-        return count > 0 && count < questionCount;
+      isReadyToSubmit: (assessmentId, version) =>
+        get().assessmentVersions[assessmentId] === version &&
+        Boolean(get().started[assessmentId]) &&
+        Boolean(get().readyToSubmit[assessmentId]),
+
+      getAnsweredCount: (assessmentId, version) => {
+        if (
+          version !== undefined &&
+          get().assessmentVersions[assessmentId] !== version
+        ) {
+          return 0;
+        }
+        return Object.keys(get().answers[assessmentId] ?? {}).length;
       },
 
-      isComplete: (assessmentId, questionCount) => {
-        if (questionCount <= 0) return false;
-        return Object.keys(get().answers[assessmentId] ?? {}).length >= questionCount;
-      },
-
-      clearSession: (assessmentId) =>
+      clearSession: (assessmentId, version) =>
         set((state) => {
           const answers = { ...state.answers };
           const currentIndex = { ...state.currentIndex };
           const started = { ...state.started };
+          const readyToSubmit = { ...state.readyToSubmit };
+          const assessmentVersions = { ...state.assessmentVersions };
           delete answers[assessmentId];
           delete currentIndex[assessmentId];
           delete started[assessmentId];
+          delete readyToSubmit[assessmentId];
+          if (version === undefined) {
+            delete assessmentVersions[assessmentId];
+          } else {
+            assessmentVersions[assessmentId] = version;
+          }
           return {
             answers,
             currentIndex,
             started,
+            readyToSubmit,
+            assessmentVersions,
             attemptIds: {
               ...state.attemptIds,
               [assessmentId]: createAttemptId(),
             },
           };
+        }),
+
+      clearAllSessions: () =>
+        set({
+          ownerAccountId: null,
+          answers: {},
+          currentIndex: {},
+          attemptIds: {},
+          assessmentVersions: {},
+          started: {},
+          readyToSubmit: {},
         }),
     }),
     {

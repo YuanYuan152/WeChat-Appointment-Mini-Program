@@ -7,6 +7,7 @@ import { buttonVariants, Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { PrivacyAgreementDialog } from "./privacy-agreement-dialog";
 import { useQuizSession } from "@/lib/stores/quiz-session";
+import { useAuthStore } from "@/lib/stores/auth-store";
 import { useRequireAssessmentLogin } from "@/components/assessment/assessment-auth-gate";
 import {
   acceptProfessionalAssessmentPrivacy,
@@ -47,40 +48,68 @@ export function ProfessionalAssessmentEntry() {
 
 interface StartProfessionalAssessmentButtonProps {
   assessmentId: string;
-  questionCount?: number;
+  assessmentVersion: number;
 }
 
 export function StartProfessionalAssessmentButton({
   assessmentId,
-  questionCount = 0,
+  assessmentVersion,
 }: StartProfessionalAssessmentButtonProps) {
   const router = useRouter();
   const clearSession = useQuizSession((s) => s.clearSession);
   const getAnsweredCount = useQuizSession((s) => s.getAnsweredCount);
+  const hasStarted = useQuizSession((s) => s.hasStarted);
+  const isReadyToSubmit = useQuizSession((s) => s.isReadyToSubmit);
+  const isAccountSessionOwner = useQuizSession(
+    (s) => s.isAccountSessionOwner,
+  );
+  const userId = useAuthStore((state) => state.user?.id);
   const requireLogin = useRequireAssessmentLogin();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     const done = () => setHydrated(true);
-    done();
+    if (useQuizSession.persist.hasHydrated()) {
+      done();
+    }
     return useQuizSession.persist.onFinishHydration(done);
   }, []);
 
   const targetPath = `/assessment/professional/${assessmentId}`;
-  const answeredCount = hydrated ? getAnsweredCount(assessmentId) : 0;
-  const completed = questionCount > 0 && answeredCount >= questionCount;
-  const inProgress = answeredCount > 0 && !completed;
+  const sessionOwned =
+    hydrated &&
+    userId != null &&
+    isAccountSessionOwner(userId);
+  const answeredCount = sessionOwned
+    ? getAnsweredCount(assessmentId, assessmentVersion)
+    : 0;
+  const completed =
+    sessionOwned && isReadyToSubmit(assessmentId, assessmentVersion);
+  const inProgress =
+    sessionOwned &&
+    !completed &&
+    (hasStarted(assessmentId, assessmentVersion) || answeredCount > 0);
   const label = completed ? "再次测评" : inProgress ? "继续测评" : "开始测评";
 
   const navigate = useCallback(() => {
-    if (completed) clearSession(assessmentId);
+    if (completed) clearSession(assessmentId, assessmentVersion);
     router.push(targetPath);
-  }, [assessmentId, clearSession, completed, router, targetPath]);
+  }, [
+    assessmentId,
+    assessmentVersion,
+    clearSession,
+    completed,
+    router,
+    targetPath,
+  ]);
 
   const handleStart = () => {
     requireLogin(targetPath, () => {
-      if (isProfessionalAssessmentPrivacyAccepted(assessmentId)) {
+      const accountId = useAuthStore.getState().user?.id;
+      if (accountId == null) {
+        router.push(targetPath);
+      } else if (isProfessionalAssessmentPrivacyAccepted(accountId)) {
         navigate();
       } else {
         setDialogOpen(true);
@@ -89,9 +118,16 @@ export function StartProfessionalAssessmentButton({
   };
 
   const handleAccept = () => {
-    acceptProfessionalAssessmentPrivacy(assessmentId);
+    const accountId = useAuthStore.getState().user?.id;
     setDialogOpen(false);
-    navigate();
+    if (
+      accountId != null &&
+      acceptProfessionalAssessmentPrivacy(accountId)
+    ) {
+      navigate();
+    } else {
+      router.push(targetPath);
+    }
   };
 
   return (
@@ -111,33 +147,36 @@ export function StartProfessionalAssessmentButton({
 
 interface ProfessionalAssessmentPrivacyGateProps {
   children: React.ReactNode;
-  assessmentId: string;
   /** 进入页面时若未同意则自动弹出 */
   autoPrompt?: boolean;
 }
 
 export function ProfessionalAssessmentPrivacyGate({
   children,
-  assessmentId,
   autoPrompt = true,
 }: ProfessionalAssessmentPrivacyGateProps) {
+  const userId = useAuthStore((state) => state.user?.id);
   const [accepted, setAccepted] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    const ok = isProfessionalAssessmentPrivacyAccepted(assessmentId);
+    const ok = isProfessionalAssessmentPrivacyAccepted(userId);
+    // localStorage is only available after hydration; this effect synchronizes
+    // the persisted consent state with the client-only gate.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setAccepted(ok);
     if (!ok && autoPrompt) {
       setDialogOpen(true);
     }
     setHydrated(true);
-  }, [assessmentId, autoPrompt]);
+  }, [autoPrompt, userId]);
 
   const handleAccept = () => {
-    acceptProfessionalAssessmentPrivacy(assessmentId);
-    setAccepted(true);
-    setDialogOpen(false);
+    if (acceptProfessionalAssessmentPrivacy(userId)) {
+      setAccepted(true);
+      setDialogOpen(false);
+    }
   };
 
   if (!hydrated) {

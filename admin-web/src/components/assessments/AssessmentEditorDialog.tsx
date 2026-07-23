@@ -9,8 +9,10 @@ import {
   createDefaultAssessmentDefinition,
   createStableId,
   formatLines,
+  getAssessmentScoreCoverageSummaries,
   isFixedScoringType,
   parseLines,
+  type AssessmentScoreCoverageSummary,
   validateAssessmentDefinition,
 } from "@/lib/assessmentEditor";
 import { formatFullDateTime } from "@/lib/format";
@@ -78,7 +80,14 @@ export function AssessmentEditorDialog({
 
   const serializedDefinition = useMemo(() => serializeDefinition(definition), [definition]);
   const dirty = serializedDefinition !== baseline;
-  const issues = useMemo(() => validateAssessmentDefinition(definition), [definition]);
+  const coverageSummaries = useMemo(
+    () => getAssessmentScoreCoverageSummaries(definition),
+    [definition],
+  );
+  const issues = useMemo(
+    () => validateAssessmentDefinition(definition, coverageSummaries),
+    [coverageSummaries, definition],
+  );
   const blockingIssues = issues.filter((issue) => issue.severity === "error");
   const fixedScoring = isFixedScoringType(definition.scoringType);
   const archived = currentDetail?.lifecycleStatus === "archived";
@@ -344,6 +353,7 @@ export function AssessmentEditorDialog({
               )}
               {activeTab === "results" && (
                 <ResultFields
+                  coverageSummaries={coverageSummaries}
                   definition={definition}
                   disabled={archived || actionLoading}
                   fixedStructure={fixedScoring}
@@ -1228,11 +1238,13 @@ function QuestionFields({
 }
 
 function ResultFields({
+  coverageSummaries,
   definition,
   disabled,
   fixedStructure,
   onChange,
 }: {
+  coverageSummaries: AssessmentScoreCoverageSummary[];
   definition: AssessmentDefinition;
   disabled: boolean;
   fixedStructure: boolean;
@@ -1242,15 +1254,45 @@ function ResultFields({
   const hasDimensions = definition.scoringType === "dimension";
   const hasMatchResults = definition.scoringType === "match" || definition.scoringType === "aas";
   const profiles = definition.reportProfiles || [];
+  const legacySumPreset =
+    definition.scoringType === "sum" &&
+    definition.scoringPreset === "generic-sum-v1";
 
   return (
     <div className="space-y-5">
+      {coverageSummaries.length > 0 && (
+        <ScoreCoveragePanel summaries={coverageSummaries} />
+      )}
+
       {hasScoreRanges && (
         <EditorSection
-          description="每个分数只能落入一个区间；上下限包含边界值。"
+          description="每个可达分值必须且只能落入一个区间；上下限包含边界值。"
           title="总分报告区间"
         >
-          {definition.scoringType === "sum" && (
+          {legacySumPreset && (
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#E4D7B5] bg-[#FFF9EA] p-4">
+              <div>
+                <div className="text-sm font-medium text-[#6F5A24]">
+                  旧版总分计分模板
+                </div>
+                <p className="mt-1 text-xs leading-5 text-[#806C39]">
+                  generic-sum-v1 保持历史口径，不应用反向题且不统一小数精度。升级后才可配置反向题，并按两位小数匹配报告区间。
+                </p>
+              </div>
+              <SmallButton
+                disabled={disabled}
+                onClick={() =>
+                  onChange({
+                    ...definition,
+                    scoringPreset: "generic-sum-v2",
+                  })
+                }
+              >
+                升级计分模板
+              </SmallButton>
+            </div>
+          )}
+          {definition.scoringType === "sum" && !legacySumPreset && (
             <ReverseQuestionSelector
               definition={definition}
               disabled={disabled}
@@ -1296,6 +1338,75 @@ function ResultFields({
       )}
     </div>
   );
+}
+
+function ScoreCoveragePanel({
+  summaries,
+}: {
+  summaries: AssessmentScoreCoverageSummary[];
+}) {
+  return (
+    <EditorSection
+      description="系统会精确枚举当前题目能够产生的分值；非必答题未填写按 0 分计算，平均分按运行时规则保留两位小数。所有可达分值都必须命中一个报告区间。"
+      title="计分覆盖校验"
+    >
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+        {summaries.map((summary) => {
+          const valid =
+            !summary.validationError &&
+            summary.uncoveredScores.length === 0;
+          return (
+            <div
+              className={`rounded-xl border px-4 py-3 ${
+                valid
+                  ? "border-[#CFE1D6] bg-[#F2F7F4]"
+                  : "border-[#E8B7B2] bg-[#FFF5F4]"
+              }`}
+              key={summary.path}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="text-sm font-medium">{summary.label}</div>
+                <Badge tone={valid ? "green" : "red"}>
+                  {valid ? "覆盖完整" : "需要调整"}
+                </Badge>
+              </div>
+              {summary.validationError ? (
+                <p className="mt-2 text-xs leading-5 text-[#A13F37]">
+                  {summary.validationError}
+                </p>
+              ) : (
+                <>
+                  <p className="mt-2 text-xs leading-5 text-[var(--lxxl-muted)]">
+                    可达范围 {formatCoverageScore(summary.minimum)}–
+                    {formatCoverageScore(summary.maximum)}，共{" "}
+                    {summary.reachableCount.toLocaleString("zh-CN")} 个可达分值。
+                  </p>
+                  {summary.uncoveredScores.length > 0 && (
+                    <p className="mt-1 text-xs leading-5 text-[#A13F37]">
+                      未覆盖：
+                      {summary.uncoveredScores
+                        .slice(0, 12)
+                        .map(formatCoverageScore)
+                        .join("、")}
+                      {summary.uncoveredScores.length > 12
+                        ? ` 等 ${summary.uncoveredScores.length.toLocaleString("zh-CN")} 个`
+                        : ""}
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </EditorSection>
+  );
+}
+
+function formatCoverageScore(value: number): string {
+  return Number.isInteger(value)
+    ? value.toLocaleString("zh-CN")
+    : value.toLocaleString("zh-CN", { maximumFractionDigits: 12 });
 }
 
 function ReverseQuestionSelector({
@@ -1789,7 +1900,9 @@ function ScoreRangeEditor({
       <div className="flex items-center justify-between gap-3">
         <div>
           <div className="text-sm font-medium">分数区间</div>
-          <div className="mt-1 text-xs text-[var(--lxxl-muted)]">区间不可重叠，建议按分数从低到高排列。</div>
+          <div className="mt-1 text-xs text-[var(--lxxl-muted)]">
+            区间不可重叠，并需覆盖上方列出的全部可达分值；建议按分数从低到高排列。
+          </div>
         </div>
         <SmallButton
           disabled={disabled}

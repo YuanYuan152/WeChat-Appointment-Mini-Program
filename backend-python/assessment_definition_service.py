@@ -9,6 +9,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import math
 import os
 import re
 import threading
@@ -24,7 +25,7 @@ STABLE_ID_PATTERN = re.compile(r"^[A-Za-z0-9]+(?:[-_.][A-Za-z0-9]+)*$")
 PRESET_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*-v[1-9][0-9]*$")
 
 GENERIC_SCORING_PRESETS = {
-    "sum": "generic-sum-v1",
+    "sum": "generic-sum-v2",
     "dimension": "generic-dimension-v1",
     "match": "generic-match-v1",
 }
@@ -36,6 +37,12 @@ FIXED_SCORING_PRESETS = {
     "dark-light": "dark-light-v1",
 }
 ALL_SCORING_PRESETS = {**GENERIC_SCORING_PRESETS, **FIXED_SCORING_PRESETS}
+ALLOWED_SCORING_PRESETS = {
+    scoring_type: {preset}
+    for scoring_type, preset in ALL_SCORING_PRESETS.items()
+}
+ALLOWED_SCORING_PRESETS["sum"].add("generic-sum-v1")
+MAX_REACHABLE_SCORE_STATES = 100_000
 
 FIXED_QUESTION_IDS = {
     "aas": {f"q{index}" for index in range(1, 19)},
@@ -52,6 +59,20 @@ FIXED_OPTION_VALUES = {
     "pbi": {0.0, 1.0, 2.0, 3.0},
     "cbcl": {0.0, 1.0, 2.0},
     "dark-light": {1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0},
+}
+FIXED_OPTION_SUFFIX_VALUES = {
+    "aas": dict(zip("abcde", range(1, 6))),
+    "psqi": dict(zip("abcd", range(4))),
+    "pbi": dict(zip("abcd", range(4))),
+    "cbcl": dict(zip("abc", range(3))),
+    "dark-light": dict(zip("abcdefg", range(1, 8))),
+}
+FIXED_REVERSE_QUESTION_IDS = {
+    "aas": {"q2", "q7", "q8", "q13", "q16", "q17", "q18"},
+    "psqi": set(),
+    "pbi": set(),
+    "cbcl": set(),
+    "dark-light": set(),
 }
 FIXED_REPORT_PROFILE_IDS = {
     "pbi": {
@@ -187,7 +208,11 @@ def _assert_string(value: Any, label: str, *, allow_empty: bool = False) -> str:
 
 
 def _assert_number(value: Any, label: str) -> float:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(float(value))
+    ):
         raise AssessmentValidationError(f"{label}必须是数字")
     return float(value)
 
@@ -255,10 +280,96 @@ def _validate_ranges(ranges: Any, label: str) -> None:
             raise AssessmentValidationError(f"{label}存在重叠区间")
 
 
+def _question_score_values(
+    question: dict[str, Any],
+    *,
+    reverse: bool,
+) -> set[float]:
+    values = {float(option["value"]) for option in question["options"]}
+    if reverse:
+        minimum = min(values)
+        maximum = max(values)
+        values = {maximum + minimum - value for value in values}
+    if not question.get("required", True):
+        values.add(0.0)
+    return values
+
+
+def _reachable_scores(
+    questions: list[dict[str, Any]],
+    question_ids: list[str],
+    reverse_ids: set[str],
+    *,
+    aggregate: str,
+    label: str,
+    round_final_score: bool = False,
+) -> set[float]:
+    questions_by_id = {str(question["id"]): question for question in questions}
+    scores = {0.0}
+    for question_id in question_ids:
+        question = questions_by_id[question_id]
+        values = _question_score_values(
+            question,
+            reverse=question_id in reverse_ids,
+        )
+        next_scores: set[float] = set()
+        for current in scores:
+            for value in values:
+                next_scores.add(current + value)
+                if len(next_scores) > MAX_REACHABLE_SCORE_STATES:
+                    raise AssessmentValidationError(
+                        f"{label}可达分值超过 {MAX_REACHABLE_SCORE_STATES} 个，"
+                        "无法完成精确校验，请简化选项分值"
+                    )
+        scores = next_scores
+
+    if aggregate == "average":
+        divisor = len(question_ids)
+        scores = {
+            math.floor((score / divisor) * 100 + 0.5) / 100
+            for score in scores
+        }
+    elif round_final_score:
+        scores = {
+            math.floor(score * 100 + 0.5) / 100
+            for score in scores
+        }
+    return scores
+
+
+def _format_score(value: float) -> str:
+    if value.is_integer():
+        return str(int(value))
+    return format(value, ".12g")
+
+
+def _validate_range_coverage(
+    ranges: list[dict[str, Any]],
+    reachable_scores: set[float],
+    label: str,
+) -> None:
+    uncovered = sorted(
+        score
+        for score in reachable_scores
+        if not any(
+            float(item["min"]) <= score <= float(item["max"])
+            for item in ranges
+        )
+    )
+    if not uncovered:
+        return
+    preview = "、".join(_format_score(score) for score in uncovered[:8])
+    suffix = f" 等 {len(uncovered)} 个" if len(uncovered) > 8 else ""
+    raise AssessmentValidationError(
+        f"{label}未覆盖可达分值：{preview}{suffix}"
+    )
+
+
 def validate_definition(
     definition: dict[str, Any],
     *,
     allow_fixed_scoring: bool,
+    strict_scoring: bool = True,
 ) -> None:
     """Validate the v1 contract and semantic references.
 
@@ -310,10 +421,14 @@ def validate_definition(
 
     scoring_type = definition.get("scoringType")
     expected_preset = ALL_SCORING_PRESETS.get(str(scoring_type))
-    if not expected_preset:
+    allowed_presets = ALLOWED_SCORING_PRESETS.get(str(scoring_type))
+    if not expected_preset or not allowed_presets:
         raise AssessmentValidationError("scoringType 不合法")
     scoring_preset = _assert_string(definition.get("scoringPreset"), "scoringPreset")
-    if not PRESET_PATTERN.fullmatch(scoring_preset) or scoring_preset != expected_preset:
+    if (
+        not PRESET_PATTERN.fullmatch(scoring_preset)
+        or scoring_preset not in allowed_presets
+    ):
         raise AssessmentValidationError(
             f"scoringPreset 与 scoringType 不匹配，应为 {expected_preset}"
         )
@@ -447,7 +562,23 @@ def validate_definition(
         raise AssessmentValidationError("reverseQuestionIds 包含不存在的题目")
 
     if scoring_type in {"sum", "psqi"}:
-        _validate_ranges(definition.get("scoreRanges"), "scoreRanges")
+        score_ranges = definition.get("scoreRanges")
+        _validate_ranges(score_ranges, "scoreRanges")
+        if strict_scoring and scoring_type == "sum":
+            is_sum_v2 = scoring_preset == "generic-sum-v2"
+            reachable_scores = _reachable_scores(
+                questions,
+                [str(question["id"]) for question in questions],
+                reverse_ids if is_sum_v2 else set(),
+                aggregate="sum",
+                label="scoreRanges",
+                round_final_score=is_sum_v2,
+            )
+            _validate_range_coverage(score_ranges, reachable_scores, "scoreRanges")
+        elif strict_scoring:
+            # PSQI 固定计分程序的六个成分均可达 0..3，总分可达 0..18。
+            reachable_scores = {float(score) for score in range(19)}
+            _validate_range_coverage(score_ranges, reachable_scores, "scoreRanges")
     if scoring_type == "dimension":
         dimensions = definition.get("dimensions")
         _assert_unique_ids(dimensions, "dimensions")
@@ -483,7 +614,23 @@ def validate_definition(
                 )
             if dimension.get("aggregate") not in {"sum", "average"}:
                 raise AssessmentValidationError(f"dimensions[{index}].aggregate 不合法")
-            _validate_ranges(dimension.get("scoreRanges"), f"dimensions[{index}].scoreRanges")
+            range_label = f"dimensions[{index}].scoreRanges"
+            score_ranges = dimension.get("scoreRanges")
+            _validate_ranges(score_ranges, range_label)
+            if strict_scoring:
+                reachable_scores = _reachable_scores(
+                    questions,
+                    list(dimension.get("questionIds", [])),
+                    dimension_reverse,
+                    aggregate=str(dimension.get("aggregate")),
+                    label=range_label,
+                    round_final_score=True,
+                )
+                _validate_range_coverage(
+                    score_ranges,
+                    reachable_scores,
+                    range_label,
+                )
     if scoring_type in {"match", "aas"}:
         match_results = definition.get("matchResults")
         result_ids = _assert_unique_ids(match_results, "matchResults")
@@ -515,6 +662,24 @@ def validate_definition(
         }
         if not tag_ids <= result_ids:
             raise AssessmentValidationError("matchTags 包含没有对应结果的 ID")
+        if strict_scoring and scoring_type == "match":
+            if not any(question.get("required") is True for question in questions):
+                raise AssessmentValidationError(
+                    "匹配型量表至少需要一道必答题"
+                )
+            for question_index, question in enumerate(questions):
+                for option_index, option in enumerate(question["options"]):
+                    if not option.get("matchTags"):
+                        raise AssessmentValidationError(
+                            "匹配型量表的每个选项至少需要一个结果权重："
+                            f"questions[{question_index}].options[{option_index}]"
+                        )
+            unreferenced_results = sorted(result_ids - tag_ids)
+            if unreferenced_results:
+                raise AssessmentValidationError(
+                    "matchResults 未被任何选项引用："
+                    f"{unreferenced_results}"
+                )
 
     report_profiles = definition.get("reportProfiles", [])
     report_profile_ids: set[str] = set()
@@ -548,11 +713,40 @@ def validate_definition(
             )
         expected_values = FIXED_OPTION_VALUES[scoring_type]
         for question in questions:
+            if strict_scoring and question.get("required") is not True:
+                raise AssessmentValidationError(
+                    f"{scoring_type} 固定计分题目 {question['id']} 必须为必答"
+                )
             values = {float(option["value"]) for option in question["options"]}
             if values != expected_values:
                 raise AssessmentValidationError(
                     f"{scoring_type} 固定计分题目 {question['id']} 的选项分值不匹配"
                 )
+            if strict_scoring:
+                expected_option_values = {
+                    f"{question['id']}-{suffix}": float(value)
+                    for suffix, value in FIXED_OPTION_SUFFIX_VALUES[
+                        scoring_type
+                    ].items()
+                }
+                actual_option_values = {
+                    str(option["id"]): float(option["value"])
+                    for option in question["options"]
+                }
+                if actual_option_values != expected_option_values:
+                    raise AssessmentValidationError(
+                        f"{scoring_type} 固定计分题目 {question['id']} "
+                        "的选项 ID 与分值映射不匹配"
+                    )
+        expected_reverse_ids = FIXED_REVERSE_QUESTION_IDS.get(scoring_type)
+        if (
+            strict_scoring
+            and expected_reverse_ids is not None
+            and reverse_ids != expected_reverse_ids
+        ):
+            raise AssessmentValidationError(
+                f"{scoring_type} 固定计分反向题 ID 不匹配"
+            )
         required_profile_ids = FIXED_REPORT_PROFILE_IDS.get(scoring_type, set())
         if not required_profile_ids <= report_profile_ids:
             raise AssessmentValidationError(
@@ -563,6 +757,14 @@ def validate_definition(
             expected_result_ids = {"secure", "preoccupied", "dismissive", "fearful"}
             if result_ids != expected_result_ids:
                 raise AssessmentValidationError("aas 固定计分结果 ID 不匹配")
+
+    if strict_scoring:
+        try:
+            from assessment_scoring_service import validate_generated_scoring_examples
+
+            validate_generated_scoring_examples(definition)
+        except ValueError as exc:
+            raise AssessmentValidationError(f"计分样例校验失败：{exc}") from exc
 
 
 class AssessmentDefinitionStore:
@@ -874,6 +1076,7 @@ class AssessmentDefinitionStore:
         validate_definition(
             definition,
             allow_fixed_scoring=definition.get("scoringType") in FIXED_SCORING_PRESETS,
+            strict_scoring=False,
         )
         return copy.deepcopy(definition)
 
@@ -1101,6 +1304,19 @@ class AssessmentDefinitionStore:
             if not entry or not source_path.exists():
                 raise AssessmentNotFound("量表历史版本不存在")
             source = _load_json(source_path)
+            if (
+                source.get("id") != assessment_id
+                or source.get("version") != version
+                or source.get("status") != "published"
+            ):
+                raise AssessmentDefinitionError("量表历史版本文件不完整")
+            validate_definition(
+                source,
+                allow_fixed_scoring=(
+                    source.get("scoringType") in FIXED_SCORING_PRESETS
+                ),
+                strict_scoring=False,
+            )
             next_version = max(
                 [item["version"] for item in self.list_versions(assessment_id)]
                 + [int(entry.get("publishedVersion") or 0)]

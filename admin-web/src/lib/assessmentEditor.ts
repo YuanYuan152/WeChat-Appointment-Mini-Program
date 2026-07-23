@@ -9,9 +9,10 @@ import type {
 
 const STABLE_ID_PATTERN = /^[A-Za-z0-9]+(?:[-_.][A-Za-z0-9]+)*$/;
 const ASSESSMENT_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const MAX_REACHABLE_SCORE_STATES = 100_000;
 
 const GENERIC_SCORING_PRESETS = {
-  sum: "generic-sum-v1",
+  sum: "generic-sum-v2",
   dimension: "generic-dimension-v1",
   match: "generic-match-v1",
 } as const satisfies Record<
@@ -29,6 +30,20 @@ const ALL_SCORING_PRESETS: Record<
   pbi: "pbi-v1",
   cbcl: "cbcl-v1",
   "dark-light": "dark-light-v1",
+};
+
+const ALLOWED_SCORING_PRESETS: Record<
+  AssessmentScoringType,
+  ReadonlySet<AssessmentScoringPreset>
+> = {
+  sum: new Set(["generic-sum-v1", "generic-sum-v2"]),
+  dimension: new Set(["generic-dimension-v1"]),
+  match: new Set(["generic-match-v1"]),
+  aas: new Set(["aas-v1"]),
+  psqi: new Set(["psqi-v1"]),
+  pbi: new Set(["pbi-v1"]),
+  cbcl: new Set(["cbcl-v1"]),
+  "dark-light": new Set(["dark-light-v1"]),
 };
 
 const FIXED_SCORING_TYPES = new Set<AssessmentScoringType>([
@@ -237,12 +252,11 @@ export function changeAssessmentScoringType(
   }
 
   const next = cloneDefinition(definition);
-  next.scoringType = type;
-  next.scoringPreset = GENERIC_SCORING_PRESETS[type];
-
   if (definition.scoringType === type) {
     return next;
   }
+  next.scoringType = type;
+  next.scoringPreset = GENERIC_SCORING_PRESETS[type];
 
   delete next.scoreRanges;
   delete next.dimensions;
@@ -362,6 +376,219 @@ export function parseLines(text: string): string[] {
     .filter(Boolean);
 }
 
+export interface AssessmentScoreCoverageSummary {
+  path: string;
+  label: string;
+  minimum: number;
+  maximum: number;
+  reachableCount: number;
+  uncoveredScores: number[];
+  validationError?: string;
+}
+
+class ReachabilityLimitError extends Error {}
+
+function questionScoreValues(
+  question: AssessmentQuestion,
+  reverse: boolean,
+): number[] | undefined {
+  if (!Array.isArray(question.options)) {
+    return undefined;
+  }
+  const values = question.options.map((option) => option.value);
+  if (values.length === 0 || values.some((value) => !Number.isFinite(value))) {
+    return undefined;
+  }
+  const minimum = Math.min(...values);
+  const maximum = Math.max(...values);
+  const scoreValues = reverse
+    ? values.map((value) => maximum + minimum - value)
+    : values;
+  if (!question.required) {
+    scoreValues.push(0);
+  }
+  return [...new Set(scoreValues)];
+}
+
+function enumerateReachableScores(
+  definition: AssessmentDefinition,
+  questionIds: string[],
+  reverseQuestionIds: string[],
+  aggregate: "sum" | "average",
+  label: string,
+  roundFinalScore = false,
+): number[] | undefined {
+  if (questionIds.length === 0) {
+    return undefined;
+  }
+  const questions = new Map(
+    definition.questions.map((question) => [question.id, question]),
+  );
+  const reverseIds = new Set(reverseQuestionIds);
+  let scores = new Set([0]);
+
+  for (const questionId of questionIds) {
+    const question = questions.get(questionId);
+    if (!question) {
+      return undefined;
+    }
+    const values = questionScoreValues(question, reverseIds.has(questionId));
+    if (!values) {
+      return undefined;
+    }
+    const nextScores = new Set<number>();
+    for (const current of scores) {
+      for (const value of values) {
+        nextScores.add(current + value);
+        if (nextScores.size > MAX_REACHABLE_SCORE_STATES) {
+          throw new ReachabilityLimitError(
+            `${label}可达分值超过 ${MAX_REACHABLE_SCORE_STATES.toLocaleString("zh-CN")} 个，无法完成精确校验，请简化选项分值`,
+          );
+        }
+      }
+    }
+    scores = nextScores;
+  }
+
+  if (aggregate === "average") {
+    const divisor = questionIds.length;
+    scores = new Set(
+      [...scores].map(
+        (score) => Math.round((score / divisor) * 100) / 100,
+      ),
+    );
+  } else if (roundFinalScore) {
+    scores = new Set(
+      [...scores].map((score) => Math.round(score * 100) / 100),
+    );
+  }
+  return [...scores].sort((left, right) => left - right);
+}
+
+function buildCoverageSummary(
+  path: string,
+  label: string,
+  reachableScores: number[],
+  ranges: AssessmentScoreRange[] | undefined,
+): AssessmentScoreCoverageSummary {
+  const uncoveredScores = reachableScores.filter(
+    (score) =>
+      !ranges?.some(
+        (range) =>
+          Number.isFinite(range.min) &&
+          Number.isFinite(range.max) &&
+          range.min <= score &&
+          score <= range.max,
+      ),
+  );
+  return {
+    path,
+    label,
+    minimum: reachableScores[0] ?? 0,
+    maximum: reachableScores.at(-1) ?? 0,
+    reachableCount: reachableScores.length,
+    uncoveredScores,
+  };
+}
+
+function formatScore(value: number): string {
+  return Number.isInteger(value)
+    ? value.toLocaleString("zh-CN")
+    : value.toLocaleString("zh-CN", { maximumFractionDigits: 12 });
+}
+
+export function getAssessmentScoreCoverageSummaries(
+  definition: AssessmentDefinition,
+): AssessmentScoreCoverageSummary[] {
+  try {
+    if (definition.scoringType === "sum") {
+      if (!Array.isArray(definition.questions) || definition.questions.length === 0) {
+        return [];
+      }
+      const isV2 = definition.scoringPreset === "generic-sum-v2";
+      const reachableScores = enumerateReachableScores(
+        definition,
+        definition.questions.map((question) => question.id),
+        isV2 ? definition.reverseQuestionIds ?? [] : [],
+        "sum",
+        "总分",
+        isV2,
+      );
+      return reachableScores
+        ? [
+            buildCoverageSummary(
+              "scoreRanges",
+              "总分",
+              reachableScores,
+              definition.scoreRanges,
+            ),
+          ]
+        : [];
+    }
+
+    if (definition.scoringType === "psqi") {
+      return [
+        buildCoverageSummary(
+          "scoreRanges",
+          "PSQI 总分",
+          Array.from({ length: 19 }, (_, score) => score),
+          definition.scoreRanges,
+        ),
+      ];
+    }
+
+    if (definition.scoringType === "dimension") {
+      if (
+        !Array.isArray(definition.questions) ||
+        !Array.isArray(definition.dimensions)
+      ) {
+        return [];
+      }
+      return definition.dimensions.flatMap((dimension, index) => {
+        if (!Array.isArray(dimension.questionIds)) {
+          return [];
+        }
+        const reachableScores = enumerateReachableScores(
+          definition,
+          dimension.questionIds,
+          Array.isArray(dimension.reverseQuestionIds)
+            ? dimension.reverseQuestionIds
+            : [],
+          dimension.aggregate,
+          `维度“${dimension.title || dimension.id || index + 1}”`,
+          true,
+        );
+        return reachableScores
+          ? [
+              buildCoverageSummary(
+                `dimensions[${index}].scoreRanges`,
+                `维度“${dimension.title || dimension.id || index + 1}”`,
+                reachableScores,
+                dimension.scoreRanges,
+              ),
+            ]
+          : [];
+      });
+    }
+  } catch (error) {
+    if (error instanceof ReachabilityLimitError) {
+      return [
+        {
+          path: "scoring",
+          label: "计分",
+          minimum: 0,
+          maximum: 0,
+          reachableCount: 0,
+          uncoveredScores: [],
+          validationError: error.message,
+        },
+      ];
+    }
+    throw error;
+  }
+  return [];
+}
+
 function validateRanges(
   ranges: AssessmentScoreRange[] | undefined,
   path: string,
@@ -458,6 +685,7 @@ function addDuplicateIssues(
 
 export function validateAssessmentDefinition(
   definition: AssessmentDefinition,
+  coverageSummaries = getAssessmentScoreCoverageSummaries(definition),
 ): AssessmentValidationIssue[] {
   const issues: AssessmentValidationIssue[] = [];
   const addRequired = (path: string, label: string, value: unknown) => {
@@ -524,7 +752,11 @@ export function validateAssessmentDefinition(
     });
   }
 
-  if (definition.scoringPreset !== ALL_SCORING_PRESETS[definition.scoringType]) {
+  if (
+    !ALLOWED_SCORING_PRESETS[definition.scoringType]?.has(
+      definition.scoringPreset,
+    )
+  ) {
     issues.push({
       path: "scoringPreset",
       message: `计分模板应为 ${ALL_SCORING_PRESETS[definition.scoringType]}`,
@@ -777,6 +1009,7 @@ export function validateAssessmentDefinition(
       });
     }
     const resultIds = new Set(results.map((result) => result.id));
+    const referencedResultIds = new Set<string>();
     addDuplicateIssues(
       results.map((result, index) => ({
         id: result.id,
@@ -833,6 +1066,7 @@ export function validateAssessmentDefinition(
         for (const [resultId, weight] of Object.entries(
           option.matchTags ?? {},
         )) {
+          referencedResultIds.add(resultId);
           const path = `questions[${questionIndex}].options[${optionIndex}].matchTags.${resultId}`;
           if (!resultIds.has(resultId)) {
             issues.push({
@@ -851,6 +1085,24 @@ export function validateAssessmentDefinition(
         }
       });
     });
+    if (definition.scoringType === "match") {
+      if (!definition.questions.some((question) => question.required)) {
+        issues.push({
+          path: "questions",
+          message: "匹配型量表至少需要一道必答题",
+          severity: "error",
+        });
+      }
+      results.forEach((result, index) => {
+        if (!referencedResultIds.has(result.id)) {
+          issues.push({
+            path: `matchResults[${index}].id`,
+            message: `匹配结果未被任何选项引用：${result.id}`,
+            severity: "error",
+          });
+        }
+      });
+    }
   }
 
   const reportProfiles = definition.reportProfiles ?? [];
@@ -883,6 +1135,32 @@ export function validateAssessmentDefinition(
       issues.push({
         path: `${path}.suggestions`,
         message: "报告文案建议格式不合法",
+        severity: "error",
+      });
+    }
+  });
+
+  coverageSummaries.forEach((summary) => {
+    if (summary.validationError) {
+      issues.push({
+        path: summary.path,
+        message: summary.validationError,
+        severity: "error",
+      });
+      return;
+    }
+    if (summary.uncoveredScores.length > 0) {
+      const preview = summary.uncoveredScores
+        .slice(0, 8)
+        .map(formatScore)
+        .join("、");
+      const suffix =
+        summary.uncoveredScores.length > 8
+          ? ` 等 ${summary.uncoveredScores.length.toLocaleString("zh-CN")} 个`
+          : "";
+      issues.push({
+        path: summary.path,
+        message: `${summary.label}未覆盖可达分值：${preview}${suffix}`,
         severity: "error",
       });
     }

@@ -103,7 +103,7 @@
     "scoringPreset": {
       "type": "string",
       "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*-v[1-9][0-9]*$",
-      "description": "服务端白名单计分模板，例如 generic-dimension-v1。"
+      "description": "服务端白名单计分模板，例如 generic-sum-v2 或 generic-dimension-v1。"
     },
     "questions": {
       "type": "array",

@@ -61,13 +61,13 @@ export function AssessmentCard({ assessment, type, index = 0 }: AssessmentCardPr
             {type === "professional" ? (
               <StartProfessionalAssessmentButton
                 assessmentId={assessment.id}
-                questionCount={assessment.questionCount}
+                assessmentVersion={assessment.version}
               />
             ) : (
               <StartAssessmentButton
                 assessmentId={assessment.id}
+                assessmentVersion={assessment.version}
                 type="fun"
-                questionCount={assessment.questionCount}
               />
             )}
           </div>

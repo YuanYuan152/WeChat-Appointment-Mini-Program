@@ -61,7 +61,7 @@ export function QuizIntro({
       {isComplete ? (
         <div className="space-y-3 border-t border-border pt-5">
           <p className="text-sm text-muted-foreground">
-            您已完成本次测评的全部题目，可查看报告或重新作答。
+            您已完成本次测评的必答题，可查看报告或重新作答。
           </p>
           <div className="flex flex-wrap gap-3">
             {onViewResult ? <Button onClick={onViewResult}>查看结果</Button> : null}

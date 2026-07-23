@@ -39,7 +39,7 @@ export default async function ProfessionalQuizPage({ params, searchParams }: Qui
           />
         </div>
         <AssessmentAuthGate requireUser>
-          <ProfessionalAssessmentPrivacyGate assessmentId={id}>
+          <ProfessionalAssessmentPrivacyGate>
             <QuizClient assessment={assessment} type="professional" />
           </ProfessionalAssessmentPrivacyGate>
         </AssessmentAuthGate>

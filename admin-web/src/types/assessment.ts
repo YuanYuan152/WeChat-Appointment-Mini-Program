@@ -16,6 +16,7 @@ export type AssessmentScoringType =
 
 export type AssessmentScoringPreset =
   | "generic-sum-v1"
+  | "generic-sum-v2"
   | "generic-dimension-v1"
   | "generic-match-v1"
   | "aas-v1"

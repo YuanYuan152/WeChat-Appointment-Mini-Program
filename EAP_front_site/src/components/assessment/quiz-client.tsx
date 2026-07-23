@@ -3,29 +3,21 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuizSession } from "@/lib/stores/quiz-session";
+import { useAuthStore } from "@/lib/stores/auth-store";
 import { QuizProgress } from "./quiz-progress";
 import { QuestionCard } from "./question-card";
 import { QuizIntro } from "./quiz-intro";
 import { Button } from "@/components/ui/button";
+import {
+  areRequiredAssessmentQuestionsAnswered,
+  findAssessmentResumeQuestionIndex,
+  isRequiredAssessmentQuestion,
+} from "@/lib/assessment/assessment-progress";
 import type { Assessment } from "@/lib/api/types";
 
 interface QuizClientProps {
   assessment: Assessment;
   type: "professional" | "fun";
-}
-
-function isAssessmentComplete(assessment: Assessment, answers: Record<string, string>) {
-  return (
-    assessment.questions.length > 0 &&
-    assessment.questions.every((q) => answers[q.id])
-  );
-}
-
-/** 找到第一个未作答的题号；若全部已答则返回最后一题 */
-function findResumeIndex(assessment: Assessment, answers: Record<string, string>) {
-  const idx = assessment.questions.findIndex((q) => !answers[q.id]);
-  if (idx === -1) return Math.max(0, assessment.questions.length - 1);
-  return idx;
 }
 
 export function QuizClient({ assessment, type }: QuizClientProps) {
@@ -36,44 +28,65 @@ export function QuizClient({ assessment, type }: QuizClientProps) {
     setAnswer,
     setCurrentIndex,
     clearSession,
+    ensureAccount,
+    ensureVersion,
     markStarted,
-    hasInProgress,
+    markReadyToSubmit,
+    hasStarted,
     getAnsweredCount,
+    isReadyToSubmit,
   } = useQuizSession();
+  const userId = useAuthStore((state) => state.user?.id);
+  const version = assessment.version ?? 1;
 
   const [hydrated, setHydrated] = useState(false);
   const [phase, setPhase] = useState<"intro" | "quiz">("intro");
   const advancingRef = useRef(false);
 
   useEffect(() => {
-    const sync = () => setHydrated(true);
-    sync();
+    const sync = () => {
+      if (userId == null) {
+        return;
+      }
+      ensureAccount(userId);
+      ensureVersion(assessment.id, version);
+      setHydrated(true);
+    };
+    if (useQuizSession.persist.hasHydrated()) {
+      sync();
+    }
     return useQuizSession.persist.onFinishHydration(sync);
-  }, []);
+  }, [assessment.id, ensureAccount, ensureVersion, userId, version]);
 
-  const answers = getAnswers(assessment.id);
-  const currentIndex = getCurrentIndex(assessment.id);
+  const answers = getAnswers(assessment.id, version);
+  const currentIndex = getCurrentIndex(assessment.id, version);
   const question = assessment.questions[currentIndex];
   const selectedOption = question ? answers[question.id] : undefined;
   const isFirst = currentIndex === 0;
   const isLast = currentIndex === assessment.questions.length - 1;
-  const canResume = hasInProgress(assessment.id, assessment.questionCount);
-  const isComplete = isAssessmentComplete(assessment, answers);
-  const answeredCount = getAnsweredCount(assessment.id);
+  const canResume =
+    hasStarted(assessment.id, version) &&
+    !isReadyToSubmit(assessment.id, version);
+  const isComplete = isReadyToSubmit(assessment.id, version);
+  const answeredCount = getAnsweredCount(assessment.id, version);
 
   const goResult = () => {
     router.push(`/assessment/${type}/${assessment.id}/result`);
   };
 
   const handleStartFresh = () => {
-    clearSession(assessment.id);
+    clearSession(assessment.id, version);
     markStarted(assessment.id);
     setCurrentIndex(assessment.id, 0);
     setPhase("quiz");
   };
 
   const handleResume = () => {
-    const resumeIdx = findResumeIndex(assessment, getAnswers(assessment.id));
+    const resumeIdx = findAssessmentResumeQuestionIndex(
+      assessment.questions,
+      getAnswers(assessment.id, version),
+      getCurrentIndex(assessment.id, version),
+    );
     markStarted(assessment.id);
     setCurrentIndex(assessment.id, resumeIdx);
     setPhase("quiz");
@@ -87,7 +100,28 @@ export function QuizClient({ assessment, type }: QuizClientProps) {
     advancingRef.current = true;
     window.setTimeout(() => {
       if (isLast) {
-        goResult();
+        const nextAnswers = {
+          ...answers,
+          [question.id]: optionId,
+        };
+        if (
+          areRequiredAssessmentQuestionsAnswered(
+            assessment.questions,
+            nextAnswers,
+          )
+        ) {
+          markReadyToSubmit(assessment.id, version);
+          goResult();
+        } else {
+          setCurrentIndex(
+            assessment.id,
+            findAssessmentResumeQuestionIndex(
+              assessment.questions,
+              nextAnswers,
+              currentIndex,
+            ),
+          );
+        }
       } else {
         setCurrentIndex(assessment.id, currentIndex + 1);
       }
@@ -98,6 +132,29 @@ export function QuizClient({ assessment, type }: QuizClientProps) {
   const handlePrev = () => {
     if (isFirst || advancingRef.current) return;
     setCurrentIndex(assessment.id, currentIndex - 1);
+  };
+
+  const handleSkip = () => {
+    if (
+      !question ||
+      isRequiredAssessmentQuestion(question) ||
+      advancingRef.current
+    ) {
+      return;
+    }
+    if (isLast) {
+      if (
+        areRequiredAssessmentQuestionsAnswered(
+          assessment.questions,
+          answers,
+        )
+      ) {
+        markReadyToSubmit(assessment.id, version);
+        goResult();
+      }
+    } else {
+      setCurrentIndex(assessment.id, currentIndex + 1);
+    }
   };
 
   if (!hydrated) {
@@ -146,9 +203,31 @@ export function QuizClient({ assessment, type }: QuizClientProps) {
         <Button variant="outline" onClick={handlePrev} disabled={isFirst}>
           上一题
         </Button>
-        <p className="text-xs text-muted-foreground">点选选项后自动进入下一题</p>
-        {isLast && selectedOption ? (
-          <Button onClick={goResult}>查看结果</Button>
+        <p className="text-center text-xs text-muted-foreground">
+          {isRequiredAssessmentQuestion(question)
+            ? "点选选项后自动进入下一题"
+            : "本题为选答，可选择答案或直接跳过"}
+        </p>
+        {!isRequiredAssessmentQuestion(question) && !selectedOption ? (
+          <Button variant="outline" onClick={handleSkip}>
+            {isLast ? "跳过并查看结果" : "跳过此题"}
+          </Button>
+        ) : isLast && selectedOption ? (
+          <Button
+            onClick={() => {
+              if (
+                areRequiredAssessmentQuestionsAnswered(
+                  assessment.questions,
+                  answers,
+                )
+              ) {
+                markReadyToSubmit(assessment.id, version);
+                goResult();
+              }
+            }}
+          >
+            查看结果
+          </Button>
         ) : (
           <span className="w-[88px]" />
         )}

@@ -7,7 +7,7 @@ import re
 from datetime import date
 from typing import Any
 
-from assessment_definition_service import ALL_SCORING_PRESETS
+from assessment_definition_service import ALLOWED_SCORING_PRESETS
 
 
 class AssessmentAnswerError(ValueError):
@@ -221,10 +221,23 @@ def _report_profile(
 
 
 def _sum_result(definition: dict[str, Any], answers: dict[str, str]):
+    is_v2 = definition.get("scoringPreset") == "generic-sum-v2"
+    reverse_ids = (
+        set(definition.get("reverseQuestionIds", []))
+        if is_v2
+        else set()
+    )
     total = sum(
-        _option_value(definition, answers, str(question["id"]))
+        _option_value(
+            definition,
+            answers,
+            str(question["id"]),
+            reverse_ids,
+        )
         for question in definition.get("questions", [])
     )
+    if is_v2:
+        total = _js_round_2(float(total))
     range_item = _find_range(total, definition.get("scoreRanges"))
     return {
         "type": "sum",
@@ -626,7 +639,9 @@ def calculate_assessment_result(
     definition: dict[str, Any], answers: dict[str, str]
 ) -> dict[str, Any]:
     scoring_type = str(definition.get("scoringType"))
-    if definition.get("scoringPreset") != ALL_SCORING_PRESETS.get(scoring_type):
+    if definition.get("scoringPreset") not in ALLOWED_SCORING_PRESETS.get(
+        scoring_type, set()
+    ):
         raise AssessmentAnswerError("量表计分模板不在服务端白名单中")
     calculators = {
         "sum": _sum_result,
@@ -642,6 +657,64 @@ def calculate_assessment_result(
     if not calculator:
         raise AssessmentAnswerError("量表计分类型不受支持")
     return calculator(definition, answers)
+
+
+def validate_generated_scoring_examples(definition: dict[str, Any]) -> None:
+    """Run deterministic first/last-option smoke examples through the real scorer.
+
+    The examples are generated at validation time and are deliberately not part
+    of the public assessment JSON or report snapshot.
+    """
+
+    questions = definition.get("questions", [])
+    samples: list[tuple[str, dict[str, str]]] = []
+    for label, option_index in (("首选项", 0), ("末选项", -1)):
+        answers = {
+            str(question["id"]): str(question["options"][option_index]["id"])
+            for question in questions
+        }
+        if not samples or answers != samples[-1][1]:
+            samples.append((label, answers))
+
+    for label, answers in samples:
+        result = calculate_assessment_result(definition, answers)
+        result_type = result.get("type")
+        if result_type == "sum":
+            score = result.get("totalScore")
+            if (
+                isinstance(score, bool)
+                or not isinstance(score, (int, float))
+                or not math.isfinite(float(score))
+                or result.get("level") == "未知"
+            ):
+                raise AssessmentAnswerError(f"{label}总分样例没有命中有效报告结果")
+            continue
+        if result_type == "dimension":
+            dimensions = result.get("dimensions")
+            if not isinstance(dimensions, list) or not dimensions:
+                raise AssessmentAnswerError(f"{label}维度样例没有生成维度结果")
+            for dimension in dimensions:
+                score = dimension.get("score")
+                if (
+                    isinstance(score, bool)
+                    or not isinstance(score, (int, float))
+                    or not math.isfinite(float(score))
+                    or dimension.get("level") == "未知"
+                ):
+                    raise AssessmentAnswerError(
+                        f"{label}维度样例没有命中有效报告结果"
+                    )
+            continue
+        if result_type == "match":
+            result_id = str(result.get("resultId") or "")
+            expected_ids = {
+                str(item.get("id"))
+                for item in definition.get("matchResults", [])
+            }
+            if not result_id or result_id not in expected_ids:
+                raise AssessmentAnswerError(f"{label}匹配样例没有命中有效报告结果")
+            continue
+        raise AssessmentAnswerError(f"{label}样例返回了不支持的结果类型")
 
 
 def assessment_result_summary(result: dict[str, Any]) -> str:

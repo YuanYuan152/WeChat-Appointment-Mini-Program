@@ -4,12 +4,13 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { useQuizSession } from "@/lib/stores/quiz-session";
+import { useAuthStore } from "@/lib/stores/auth-store";
 import { useRequireAssessmentLogin } from "@/components/assessment/assessment-auth-gate";
 
 interface StartAssessmentButtonProps {
   assessmentId: string;
+  assessmentVersion: number;
   type: "professional" | "fun";
-  questionCount?: number;
   size?: "default" | "sm" | "lg" | "icon";
   variant?: "default" | "outline" | "ghost" | "secondary";
   children?: React.ReactNode;
@@ -20,20 +21,21 @@ interface StartAssessmentButtonProps {
 
 function resolveLabel(
   answeredCount: number,
-  questionCount: number,
+  started: boolean,
+  readyToSubmit: boolean,
   reset: boolean,
   children: React.ReactNode
 ) {
   if (children !== "开始测评" || reset) return children;
-  if (questionCount > 0 && answeredCount >= questionCount) return "再次测评";
-  if (answeredCount > 0) return "继续测评";
+  if (readyToSubmit) return "再次测评";
+  if (started || answeredCount > 0) return "继续测评";
   return "开始测评";
 }
 
 export function StartAssessmentButton({
   assessmentId,
+  assessmentVersion,
   type,
-  questionCount = 0,
   size = "sm",
   variant = "default",
   children = "开始测评",
@@ -43,24 +45,49 @@ export function StartAssessmentButton({
   const router = useRouter();
   const clearSession = useQuizSession((s) => s.clearSession);
   const getAnsweredCount = useQuizSession((s) => s.getAnsweredCount);
+  const hasStarted = useQuizSession((s) => s.hasStarted);
+  const isReadyToSubmit = useQuizSession((s) => s.isReadyToSubmit);
+  const isAccountSessionOwner = useQuizSession(
+    (s) => s.isAccountSessionOwner,
+  );
+  const userId = useAuthStore((state) => state.user?.id);
   const requireLogin = useRequireAssessmentLogin();
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     const done = () => setHydrated(true);
-    done();
+    if (useQuizSession.persist.hasHydrated()) {
+      done();
+    }
     return useQuizSession.persist.onFinishHydration(done);
   }, []);
 
   const targetPath = `/assessment/${type}/${assessmentId}`;
-  const answeredCount = hydrated ? getAnsweredCount(assessmentId) : 0;
-  const completed = questionCount > 0 && answeredCount >= questionCount;
-  const label = resolveLabel(answeredCount, questionCount, reset, children);
+  const sessionOwned =
+    hydrated &&
+    userId != null &&
+    isAccountSessionOwner(userId);
+  const answeredCount = sessionOwned
+    ? getAnsweredCount(assessmentId, assessmentVersion)
+    : 0;
+  const started =
+    sessionOwned && hasStarted(assessmentId, assessmentVersion);
+  const completed =
+    sessionOwned && isReadyToSubmit(assessmentId, assessmentVersion);
+  const label = resolveLabel(
+    answeredCount,
+    started,
+    completed,
+    reset,
+    children,
+  );
 
   const handleStart = () => {
     requireLogin(targetPath, () => {
       // 再次测评 / 显式 reset：清空后重开
-      if (reset || completed) clearSession(assessmentId);
+      if (reset || completed) {
+        clearSession(assessmentId, assessmentVersion);
+      }
       router.push(targetPath);
     });
   };

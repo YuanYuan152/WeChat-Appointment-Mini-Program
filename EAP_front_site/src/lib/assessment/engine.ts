@@ -82,15 +82,24 @@ function calculateSumScore(
   assessment: Assessment,
   answers: Record<string, string>
 ): AssessmentScoreResult {
-  let totalScore = 0;
-
-  for (const question of assessment.questions) {
-    const selectedOptionId = answers[question.id];
-    const option = question.options.find((o) => o.id === selectedOptionId);
-    if (option) {
-      totalScore += option.value;
-    }
-  }
+  const isV2 = assessment.scoringPreset === "generic-sum-v2";
+  const reverseQuestionIds = isV2
+    ? assessment.reverseQuestionIds ?? []
+    : [];
+  const rawTotalScore = assessment.questions.reduce(
+    (total, question) =>
+      total +
+      getOptionValue(
+        assessment,
+        answers,
+        question.id,
+        reverseQuestionIds
+    ),
+    0
+  );
+  const totalScore = isV2
+    ? Math.round(rawTotalScore * 100) / 100
+    : rawTotalScore;
 
   const range = findRange(totalScore, assessment.scoreRanges);
 

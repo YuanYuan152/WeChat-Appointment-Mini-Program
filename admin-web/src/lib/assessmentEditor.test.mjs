@@ -27,7 +27,7 @@ function completeRequiredFields(definition) {
 
 test("creates defaults for all generic scoring types", () => {
   const sum = editor.createDefaultAssessmentDefinition("sum");
-  assert.equal(sum.scoringPreset, "generic-sum-v1");
+  assert.equal(sum.scoringPreset, "generic-sum-v2");
   assert.equal(sum.scoreRanges.length, 1);
   assert.equal(sum.dimensions, undefined);
 
@@ -72,6 +72,14 @@ test("switches generic scoring types and removes incompatible fields", () => {
   assert.equal(switchedBack.matchResults, undefined);
   assert.equal(switchedBack.questions[0].options[0].matchTags, undefined);
   assert.equal(switchedBack.scoreRanges.length, 1);
+});
+
+test("does not implicitly upgrade a legacy sum when the type is unchanged", () => {
+  const legacy = editor.createDefaultAssessmentDefinition("sum");
+  legacy.scoringPreset = "generic-sum-v1";
+
+  const unchanged = editor.changeAssessmentScoringType(legacy, "sum");
+  assert.equal(unchanged.scoringPreset, "generic-sum-v1");
 });
 
 test("does not allow fixed scoring structures to be converted", () => {
@@ -130,6 +138,15 @@ test("validates a complete default definition", () => {
   const definition = completeRequiredFields(
     editor.createDefaultAssessmentDefinition("sum"),
   );
+  assert.deepEqual(editor.validateAssessmentDefinition(definition), []);
+});
+
+test("keeps generic sum v1 definitions valid for legacy editing", () => {
+  const definition = completeRequiredFields(
+    editor.createDefaultAssessmentDefinition("sum"),
+  );
+  definition.scoringPreset = "generic-sum-v1";
+
   assert.deepEqual(editor.validateAssessmentDefinition(definition), []);
 });
 
@@ -202,5 +219,325 @@ test("requires every generic match option to carry a result weight", () => {
     editor
       .validateAssessmentDefinition(match)
       .some((issue) => issue.message.includes("至少需要一个结果权重")),
+  );
+});
+
+test("requires every generic match result to be referenced", () => {
+  const match = completeRequiredFields(
+    editor.createDefaultAssessmentDefinition("match"),
+  );
+  match.matchResults.push({
+    id: "unused",
+    title: "未引用结果",
+    description: "不应发布",
+    suggestions: [],
+    image: "",
+    shareText: "",
+  });
+
+  assert.ok(
+    editor
+      .validateAssessmentDefinition(match)
+      .some((issue) => issue.message.includes("未被任何选项引用：unused")),
+  );
+});
+
+test("requires a generic match definition to have a required question", () => {
+  const match = completeRequiredFields(
+    editor.createDefaultAssessmentDefinition("match"),
+  );
+  match.questions.forEach((question) => {
+    question.required = false;
+  });
+
+  assert.ok(
+    editor
+      .validateAssessmentDefinition(match)
+      .some((issue) => issue.message.includes("至少需要一道必答题")),
+  );
+});
+
+test("rejects reachable sum scores that have no report range", () => {
+  const definition = completeRequiredFields(
+    editor.createDefaultAssessmentDefinition("sum"),
+  );
+  definition.scoreRanges = [
+    {
+      min: 0,
+      max: 0,
+      level: "零分",
+      description: "零分结果",
+      suggestions: [],
+    },
+  ];
+
+  assert.ok(
+    editor
+      .validateAssessmentDefinition(definition)
+      .some(
+        (issue) =>
+          issue.path === "scoreRanges" &&
+          issue.message.includes("未覆盖可达分值：1"),
+      ),
+  );
+});
+
+test("allows gaps that contain no reachable score", () => {
+  const definition = completeRequiredFields(
+    editor.createDefaultAssessmentDefinition("sum"),
+  );
+  definition.questions[0].options[1].value = 2;
+  definition.scoreRanges = [
+    {
+      min: 0,
+      max: 0,
+      level: "零分",
+      description: "零分结果",
+      suggestions: [],
+    },
+    {
+      min: 2,
+      max: 2,
+      level: "两分",
+      description: "两分结果",
+      suggestions: [],
+    },
+  ];
+
+  assert.deepEqual(editor.validateAssessmentDefinition(definition), []);
+});
+
+test("includes an unanswered optional question as a reachable zero", () => {
+  const definition = completeRequiredFields(
+    editor.createDefaultAssessmentDefinition("sum"),
+  );
+  definition.questions[0].required = false;
+  definition.questions[0].options = [
+    { id: "q1-a", text: "一分", value: 1 },
+    { id: "q1-b", text: "两分", value: 2 },
+  ];
+  definition.scoreRanges = [
+    {
+      min: 1,
+      max: 2,
+      level: "已作答",
+      description: "已作答结果",
+      suggestions: [],
+    },
+  ];
+
+  assert.ok(
+    editor
+      .validateAssessmentDefinition(definition)
+      .some((issue) => issue.message.includes("未覆盖可达分值：0")),
+  );
+});
+
+test("normalizes generic sum v2 decimal reachability to two places", () => {
+  const definition = completeRequiredFields(
+    editor.createDefaultAssessmentDefinition("sum"),
+  );
+  definition.questions = [
+    {
+      id: "q1",
+      text: "题目 1",
+      required: true,
+      options: [
+        { id: "q1-a", text: "0.1", value: 0.1 },
+        { id: "q1-b", text: "0.2", value: 0.2 },
+      ],
+    },
+    {
+      id: "q2",
+      text: "题目 2",
+      required: true,
+      options: [
+        { id: "q2-a", text: "0.2", value: 0.2 },
+        { id: "q2-b", text: "0.3", value: 0.3 },
+      ],
+    },
+  ];
+  definition.scoreRanges = [
+    {
+      min: 0.3,
+      max: 0.3,
+      level: "命中",
+      description: "精确命中",
+      suggestions: [],
+    },
+    {
+      min: 0.4,
+      max: 0.5,
+      level: "其他",
+      description: "其他分值",
+      suggestions: [],
+    },
+  ];
+
+  assert.deepEqual(editor.validateAssessmentDefinition(definition), []);
+});
+
+test("enumerates rounded average dimension scores", () => {
+  const definition = completeRequiredFields(
+    editor.createDefaultAssessmentDefinition("dimension"),
+  );
+  definition.questions = [1, 2, 3].map((number) => ({
+    id: `q${number}`,
+    text: `题目 ${number}`,
+    required: true,
+    options: [
+      { id: `q${number}-a`, text: "否", value: 0 },
+      { id: `q${number}-b`, text: "是", value: 1 },
+    ],
+  }));
+  definition.dimensions[0] = {
+    ...definition.dimensions[0],
+    title: "平均维度",
+    questionIds: ["q1", "q2", "q3"],
+    reverseQuestionIds: ["q1"],
+    aggregate: "average",
+    scoreRanges: [
+      {
+        min: 0,
+        max: 0.33,
+        level: "低",
+        description: "低分",
+        suggestions: [],
+      },
+      {
+        min: 0.67,
+        max: 1,
+        level: "高",
+        description: "高分",
+        suggestions: [],
+      },
+    ],
+  };
+
+  const [summary] =
+    editor.getAssessmentScoreCoverageSummaries(definition);
+  assert.deepEqual(
+    {
+      minimum: summary.minimum,
+      maximum: summary.maximum,
+      reachableCount: summary.reachableCount,
+      uncoveredScores: summary.uncoveredScores,
+    },
+    {
+      minimum: 0,
+      maximum: 1,
+      reachableCount: 4,
+      uncoveredScores: [],
+    },
+  );
+});
+
+test("normalizes dimension sum decimal reachability to two places", () => {
+  const definition = completeRequiredFields(
+    editor.createDefaultAssessmentDefinition("dimension"),
+  );
+  definition.questions = [
+    {
+      id: "q1",
+      text: "题目 1",
+      required: true,
+      options: [
+        { id: "q1-a", text: "0.1", value: 0.1 },
+        { id: "q1-b", text: "0.2", value: 0.2 },
+      ],
+    },
+    {
+      id: "q2",
+      text: "题目 2",
+      required: true,
+      options: [
+        { id: "q2-a", text: "0.2", value: 0.2 },
+        { id: "q2-b", text: "0.3", value: 0.3 },
+      ],
+    },
+  ];
+  definition.dimensions = [
+    {
+      id: "sum",
+      title: "小数求和",
+      questionIds: ["q1", "q2"],
+      reverseQuestionIds: [],
+      aggregate: "sum",
+      scoreRanges: [
+        {
+          min: 0.3,
+          max: 0.3,
+          level: "命中",
+          description: "精确命中",
+          suggestions: [],
+        },
+        {
+          min: 0.4,
+          max: 0.5,
+          level: "其他",
+          description: "其他分值",
+          suggestions: [],
+        },
+      ],
+    },
+  ];
+
+  assert.deepEqual(editor.validateAssessmentDefinition(definition), []);
+});
+
+test("uses the fixed PSQI output domain for range coverage", () => {
+  const definition = completeRequiredFields(
+    editor.createDefaultAssessmentDefinition("sum"),
+  );
+  definition.scoringType = "psqi";
+  definition.scoringPreset = "psqi-v1";
+  definition.scoreRanges = [
+    {
+      min: 0,
+      max: 17,
+      level: "已覆盖",
+      description: "已覆盖结果",
+      suggestions: [],
+    },
+  ];
+
+  const [summary] =
+    editor.getAssessmentScoreCoverageSummaries(definition);
+  assert.equal(summary.minimum, 0);
+  assert.equal(summary.maximum, 18);
+  assert.deepEqual(summary.uncoveredScores, [18]);
+});
+
+test("fails closed when exact score reachability exceeds the safety limit", () => {
+  const definition = completeRequiredFields(
+    editor.createDefaultAssessmentDefinition("sum"),
+  );
+  definition.questions = Array.from({ length: 17 }, (_, index) => ({
+    id: `q${index + 1}`,
+    text: `题目 ${index + 1}`,
+    required: true,
+    options: [
+      { id: `q${index + 1}-a`, text: "零分", value: 0 },
+      {
+        id: `q${index + 1}-b`,
+        text: "幂次分值",
+        value: 2 ** index,
+      },
+    ],
+  }));
+  definition.scoreRanges = [
+    {
+      min: 0,
+      max: 2 ** 17 - 1,
+      level: "完整",
+      description: "完整区间",
+      suggestions: [],
+    },
+  ];
+
+  assert.ok(
+    editor
+      .validateAssessmentDefinition(definition)
+      .some((issue) => issue.message.includes("无法完成精确校验")),
   );
 });
