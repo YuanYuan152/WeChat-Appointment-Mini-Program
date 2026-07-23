@@ -42,6 +42,7 @@ export function AssessmentsPanel({
   onPageSizeChange,
   onOpenCreate,
   onOpenReports,
+  onOpenShareStats,
   onOpenDetail,
   onCloseEditor,
   onSaveDefinition,
@@ -67,6 +68,7 @@ export function AssessmentsPanel({
   onPageSizeChange: (pageSize: number) => void;
   onOpenCreate: () => void;
   onOpenReports: (assessmentId?: string) => void;
+  onOpenShareStats: (assessmentId: string) => void;
   onOpenDetail: (assessmentId: string, mode?: Exclude<AssessmentEditorMode, "create" | null>) => void;
   onCloseEditor: () => void;
   onSaveDefinition: (definition: AssessmentDefinition) => Promise<AssessmentAdminDetail | undefined>;
@@ -235,14 +237,14 @@ export function AssessmentsPanel({
                           </td>
                           <td className="whitespace-nowrap px-5 py-4">
                             <div>
-                              完成报告{" "}
+                              全部完成报告{" "}
                               <span className="font-medium">
                                 {item.completedCount.toLocaleString("zh-CN")}
                               </span>{" "}
                               份
                             </div>
                             <div className="mt-1 text-xs text-[var(--lxxl-muted)]">
-                              扫码访问 {item.scanCount.toLocaleString("zh-CN")} 次
+                              二维码扫码 {item.scanCount.toLocaleString("zh-CN")} 次
                             </div>
                           </td>
                           <td className="px-5 py-4">
@@ -260,6 +262,11 @@ export function AssessmentsPanel({
                                 onClick={() => onOpenReports(item.id)}
                               >
                                 查看报告
+                              </TableActionButton>
+                              <TableActionButton
+                                onClick={() => onOpenShareStats(item.id)}
+                              >
+                                分享统计
                               </TableActionButton>
                               <TableActionButton
                                 disabled={archived}

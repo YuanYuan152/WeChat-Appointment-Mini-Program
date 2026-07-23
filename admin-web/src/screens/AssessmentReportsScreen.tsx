@@ -1,22 +1,30 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { AppRoute, useAppRoute } from "@/components/AppRoute";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
 import { toAssessmentReportDateBoundary } from "@/lib/assessmentReport";
+import { AssessmentShareStatsPanel } from "@/panels/AssessmentShareStatsPanel";
 import { AssessmentReportsPanel } from "@/panels/AssessmentReportsPanel";
 import {
   fetchAssessmentReportDetail,
   fetchAssessmentReports,
   fetchPatientAssessmentReports,
 } from "@/services/assessmentReports";
+import { fetchAssessmentShareStats } from "@/services/assessmentShareStats";
 import type {
   AssessmentReportDetail,
   AssessmentReportListFilters,
   AssessmentReportListItem,
 } from "@/types/assessmentReport";
+import type {
+  AssessmentShareStats,
+  AssessmentShareStatsFilters,
+} from "@/types/assessmentShareStats";
+
+type AssessmentDataView = "reports" | "share-stats";
 
 function getInitialFilters(assessmentId: string): AssessmentReportListFilters {
   return {
@@ -74,16 +82,266 @@ export function AssessmentReportsScreen() {
 }
 
 function AssessmentReportsRouteContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const initialAssessmentId = searchParams.get("assessmentId")?.trim() || "";
   const accountId = positiveInteger(searchParams.get("accountId"));
-  const scopeKey = `${accountId || "all"}:${initialAssessmentId}`;
+  const activeView: AssessmentDataView =
+    !accountId && searchParams.get("view") === "share-stats"
+      ? "share-stats"
+      : "reports";
+  const scopeKey = `${accountId || "all"}:${initialAssessmentId}:${activeView}`;
+
+  const changeView = useCallback(
+    (view: AssessmentDataView) => {
+      const nextParams = new URLSearchParams(searchParams.toString());
+      if (view === "share-stats") {
+        nextParams.set("view", "share-stats");
+      } else {
+        nextParams.delete("view");
+      }
+      const query = nextParams.toString();
+      router.replace(`/assessment-reports${query ? `?${query}` : ""}`, {
+        scroll: false,
+      });
+    },
+    [router, searchParams],
+  );
 
   return (
-    <AssessmentReportsScreenContent
-      accountId={accountId}
-      initialAssessmentId={initialAssessmentId}
-      key={scopeKey}
+    <>
+      {!accountId && (
+        <AssessmentDataViewTabs
+          activeView={activeView}
+          onChange={changeView}
+        />
+      )}
+      {activeView === "share-stats" ? (
+        <AssessmentShareStatsScreenContent
+          initialAssessmentId={initialAssessmentId}
+          key={scopeKey}
+        />
+      ) : (
+        <AssessmentReportsScreenContent
+          accountId={accountId}
+          initialAssessmentId={initialAssessmentId}
+          key={scopeKey}
+        />
+      )}
+    </>
+  );
+}
+
+function AssessmentDataViewTabs({
+  activeView,
+  onChange,
+}: {
+  activeView: AssessmentDataView;
+  onChange: (view: AssessmentDataView) => void;
+}) {
+  const tabs: Array<{ id: AssessmentDataView; label: string }> = [
+    { id: "reports", label: "填写记录" },
+    { id: "share-stats", label: "分享统计" },
+  ];
+
+  return (
+    <nav
+      aria-label="量表数据视图"
+      className="mb-4 flex flex-wrap gap-2 rounded-xl border border-[var(--lxxl-border)] bg-white p-2"
+    >
+      {tabs.map((tab) => {
+        const active = activeView === tab.id;
+        return (
+          <button
+            aria-current={active ? "page" : undefined}
+            className={`rounded-lg px-5 py-2.5 text-sm font-medium transition ${
+              active
+                ? "bg-[var(--lxxl-green)] text-white"
+                : "text-[var(--lxxl-muted)] hover:bg-[#FAF8F4] hover:text-[var(--lxxl-green-dark)]"
+            }`}
+            key={tab.id}
+            type="button"
+            onClick={() => onChange(tab.id)}
+          >
+            {tab.label}
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
+function getInitialShareStatsFilters(
+  assessmentId: string,
+): AssessmentShareStatsFilters {
+  return {
+    assessmentId,
+    startAt: "",
+    endAt: "",
+  };
+}
+
+function normalizeShareStatsFilters(
+  filters: AssessmentShareStatsFilters,
+): AssessmentShareStatsFilters {
+  return {
+    ...filters,
+    assessmentId: filters.assessmentId?.trim() || "",
+  };
+}
+
+function isSameShareStatsQuery(
+  first: AssessmentShareStatsFilters,
+  second: AssessmentShareStatsFilters,
+) {
+  return (
+    (first.assessmentId || "") === (second.assessmentId || "") &&
+    (first.startAt || "") === (second.startAt || "") &&
+    (first.endAt || "") === (second.endAt || "")
+  );
+}
+
+function shareStatsQueryKey(filters: AssessmentShareStatsFilters) {
+  return JSON.stringify([
+    filters.assessmentId?.trim() || "",
+    filters.startAt || "",
+    filters.endAt || "",
+  ]);
+}
+
+function AssessmentShareStatsScreenContent({
+  initialAssessmentId,
+}: {
+  initialAssessmentId: string;
+}) {
+  const { clearNotice, refreshKey, showNotice } = useAppRoute();
+  const [draftFilters, setDraftFilters] =
+    useState<AssessmentShareStatsFilters>(() =>
+      getInitialShareStatsFilters(initialAssessmentId),
+    );
+  const [queryFilters, setQueryFilters] =
+    useState<AssessmentShareStatsFilters>(() =>
+      getInitialShareStatsFilters(initialAssessmentId),
+    );
+  const [stats, setStats] = useState<AssessmentShareStats>();
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string>();
+  const requestSequence = useRef(0);
+  const loadedQueryKey = useRef<string | undefined>(undefined);
+  const inFlightQuery = useRef<
+    { key: string; sequence: number } | undefined
+  >(undefined);
+
+  const loadStats = useCallback(async () => {
+    const currentQueryKey = shareStatsQueryKey(queryFilters);
+    if (
+      inFlightQuery.current?.key === currentQueryKey &&
+      inFlightQuery.current.sequence === requestSequence.current
+    ) {
+      return false;
+    }
+    const currentSequence = ++requestSequence.current;
+    inFlightQuery.current = {
+      key: currentQueryKey,
+      sequence: currentSequence,
+    };
+    if (loadedQueryKey.current !== currentQueryKey) {
+      setStats(undefined);
+    }
+    setLoading(true);
+    setLoadError(undefined);
+    clearNotice();
+    try {
+      const result = await fetchAssessmentShareStats({
+        ...queryFilters,
+        startAt: toAssessmentReportDateBoundary(
+          queryFilters.startAt,
+          "start",
+        ),
+        endAt: toAssessmentReportDateBoundary(queryFilters.endAt, "end"),
+      });
+      if (requestSequence.current !== currentSequence) {
+        return false;
+      }
+      setStats(result);
+      loadedQueryKey.current = currentQueryKey;
+      return true;
+    } catch (error) {
+      if (requestSequence.current === currentSequence) {
+        const baseMessage =
+          error instanceof Error ? error.message : "分享统计加载失败";
+        const message =
+          loadedQueryKey.current === currentQueryKey
+            ? `${baseMessage}，当前展示上次成功结果。`
+            : baseMessage;
+        setLoadError(message);
+        showNotice(
+          "error",
+          message,
+        );
+      }
+      return false;
+    } finally {
+      if (
+        inFlightQuery.current?.key === currentQueryKey &&
+        inFlightQuery.current.sequence === currentSequence
+      ) {
+        inFlightQuery.current = undefined;
+      }
+      if (requestSequence.current === currentSequence) {
+        setLoading(false);
+      }
+    }
+  }, [clearNotice, queryFilters, showNotice]);
+
+  useEffect(() => {
+    void loadStats();
+  }, [loadStats, refreshKey]);
+
+  useEffect(
+    () => () => {
+      requestSequence.current += 1;
+    },
+    [],
+  );
+
+  const search = useCallback(() => {
+    const nextFilters = normalizeShareStatsFilters(draftFilters);
+    if (
+      nextFilters.startAt &&
+      nextFilters.endAt &&
+      nextFilters.startAt > nextFilters.endAt
+    ) {
+      showNotice("error", "开始日期不能晚于结束日期");
+      return;
+    }
+    setDraftFilters(nextFilters);
+    if (isSameShareStatsQuery(nextFilters, queryFilters)) {
+      void loadStats();
+      return;
+    }
+    setQueryFilters(nextFilters);
+  }, [draftFilters, loadStats, queryFilters, showNotice]);
+
+  const reset = useCallback(() => {
+    const nextFilters = getInitialShareStatsFilters(initialAssessmentId);
+    setDraftFilters(nextFilters);
+    if (isSameShareStatsQuery(nextFilters, queryFilters)) {
+      void loadStats();
+      return;
+    }
+    setQueryFilters(nextFilters);
+  }, [initialAssessmentId, loadStats, queryFilters]);
+
+  return (
+    <AssessmentShareStatsPanel
+      draftFilters={draftFilters}
+      error={loadError}
+      loading={loading}
+      setDraftFilters={setDraftFilters}
+      stats={stats}
+      onReset={reset}
+      onSearch={search}
     />
   );
 }

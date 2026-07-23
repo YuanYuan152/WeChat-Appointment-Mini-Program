@@ -51,6 +51,7 @@ export interface AssessmentsPanelPropsContract {
   onPageSizeChange: (pageSize: number) => void;
   onOpenCreate: () => void;
   onOpenReports: (assessmentId?: string) => void;
+  onOpenShareStats: (assessmentId: string) => void;
   onOpenDetail: (
     assessmentId: string,
     mode?: Exclude<AssessmentEditorMode, "create" | null>,
@@ -222,6 +223,17 @@ function AssessmentsScreenContent() {
       }
       const query = params.toString();
       router.push(`/assessment-reports${query ? `?${query}` : ""}`);
+    },
+    [router],
+  );
+
+  const openShareStats = useCallback(
+    (assessmentId: string) => {
+      const params = new URLSearchParams({
+        view: "share-stats",
+        assessmentId,
+      });
+      router.push(`/assessment-reports?${params.toString()}`);
     },
     [router],
   );
@@ -439,6 +451,7 @@ function AssessmentsScreenContent() {
       onPageSizeChange={changePageSize}
       onOpenCreate={openCreate}
       onOpenReports={openReports}
+      onOpenShareStats={openShareStats}
       onOpenDetail={openDetail}
       onCloseEditor={closeEditor}
       onSaveDefinition={saveDefinition}
