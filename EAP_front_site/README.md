@@ -47,7 +47,7 @@ src/
 | 我们的故事 | `/our-stories` | 来访故事 + 学员故事 + 咨询师手记 |
 | 心理音画 | `/audio` | 播客列表 + 光碟旋转播放 |
 | 电话咨询 | `/consultation` | 咨询师列表 + 预约表单 |
-| 专业测评 | `/assessment/professional` | PHQ-9、GAD-7 量表 |
+| 专业测评 | `/assessment/professional` | BSI-18、AAS、PSQI、PBI、CBCL 等量表 |
 | 心理测评 | `/assessment` | 专业量表 + 趣味测评 |
 | 登录 / 注册 | `/login` `/register` | 手机号 + 验证码或密码，与小程序共用账号 |
 
@@ -55,27 +55,46 @@ src/
 
 官网登录注册**不单独部署后端**，与微信小程序共用：
 
-`D:\Code\VScode_File\Syapp\WeChat-Appointment-Mini-Program\backend-python`
+仓库内的 `backend-python` 服务。
 
 用户数据存储在同一张 `AppAccount` 表中，小程序微信登录与官网手机号登录可识别为同一用户（手机号一致时）。
 
 ### 启动后端
 
 ```bash
-cd ../WeChat-Appointment-Mini-Program/backend-python
+cd ../backend-python
 pip install -r requirements.txt
-python ensure_schema.py   # 首次或升级后执行，创建 PasswordHash 列与 AppSmsVerification 表
+python ensure_schema.py
+# 使用报告、扫码和后台统计前，对当前目标库只读预检：
+python migrate_assessment_tables.py --preflight
+# 确认输出并取得该环境数据库变更批准后，再单独执行：
+# python migrate_assessment_tables.py --apply --confirm-database <当前数据库名>
 uvicorn main:app --reload --port 8000
 ```
 
 开发环境默认 `SMS_MOCK=true`，验证码会打印在后端控制台，并在接口响应中返回 `mockCode`。
+`ensure_schema.py` 不会创建三张受控量表表，不能替代上述量表迁移。
+
+部署环境还必须配置：
+
+- `ASSESSMENT_DATA_DIR`：发布目录之外、按测试/生产隔离且服务用户可写的持久化目录。
+- `ASSESSMENT_SHARE_SECRET`：至少 32 个随机字符；留空时浏览仍可用，但分享入口会禁用。
+- `ASSESSMENT_FRONTEND_BASE_URL`：扫码后进入 EAP 的公网 HTTPS 根地址。
+
+完整迁移、目录权限和备份顺序见仓库根目录的
+[`测试与生产环境要求.md`](../测试与生产环境要求.md)。
 
 ### 前端配置
 
 ```bash
-cp .env.local.example .env.local
-# NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+cp .env.example .env.local
+# NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
+# API_INTERNAL_BASE_URL=http://127.0.0.1:8000
+# NEXT_PUBLIC_DATA_SOURCE=mock
 ```
+
+浏览器使用 `NEXT_PUBLIC_API_BASE_URL`，SSR 使用 `API_INTERNAL_BASE_URL`。生产构建必须把
+公开地址设置为用户可访问的 HTTPS API，不能保留 `localhost` 或 `127.0.0.1`。
 
 ### Web Auth API
 
@@ -87,25 +106,32 @@ cp .env.local.example .env.local
 | `GET /api/web/auth/me` | 当前用户（Bearer Token） |
 
 
-新增内容只需编辑 `src/data/` 下的 JSON 文件：
+通用展示内容仍可编辑 `src/data/` 下的 JSON 文件：
 
 - `stories.json` — 心理图文
 - `qa.json` — 心理问答
 - `our-stories.json` — 我们的故事（来访/学员）
 - `audio-episodes.json` — 音频节目
 - `consultants.json` — 咨询师
-- `assessments-professional.json` — 专业量表
-- `assessments-fun.json` — 趣味测评
 
 字段结构参见 `src/lib/api/types.ts`。
 
+`assessments-professional.json` 和 `assessments-fun.json` 仅用于空运行目录的首次初始化。
+量表初始化后应在 admin-web 的“量表管理”新增、编辑和发布；直接改这两个 seed 文件不会覆盖
+已经发布的运行时版本。
+
 ## 切换数据源
 
-默认使用 Mock 数据。对接真实 API 时：
+通用图文、问答、音频等内容当前默认使用 Mock 数据。量表、登录和预约模块已经通过各自的
+HTTP 客户端连接真实后端，不受该开关影响。
 
-1. 复制 `.env.local.example` 为 `.env.local`
-2. 设置 `NEXT_PUBLIC_DATA_SOURCE=http`
-3. 在 `src/lib/api/adapters/http.ts` 中实现接口
+在 `src/lib/api/adapters/http.ts` 完成全部通用内容接口之前，必须保持：
+
+```bash
+NEXT_PUBLIC_DATA_SOURCE=mock
+```
+
+当前若设置为 `http`，通用内容页面会主动抛出 `HTTP adapter not implemented`，不能用于部署。
 
 ## 构建部署
 
