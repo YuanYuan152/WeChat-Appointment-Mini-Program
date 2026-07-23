@@ -41,6 +41,13 @@ export const sections: NavigationSection[] = [
     path: "/assessments",
     allowedRoles: ["Admin", "Ops"],
   },
+  {
+    id: "assessmentReports",
+    label: "量表结果",
+    desc: "查看来访者量表填写报告",
+    path: "/assessment-reports",
+    allowedRoles: ["Admin", "Ops", "Assistant"],
+  },
   { id: "schedules", label: "排期情况", desc: "咨询师排期总览", path: "/schedules", allowedRoles: ["Admin", "Ops", "Assistant"] },
   { id: "rooms", label: "咨询室情况", desc: "咨询室状态与占用", path: "/rooms", allowedRoles: ["Admin", "Ops", "Assistant"] },
   { id: "pricing", label: "调价管理", desc: "基础价与个体调价", path: "/pricing", allowedRoles: ["Admin", "Ops", "Assistant"] },
@@ -109,7 +116,14 @@ export const navigationGroups: NavigationGroup[] = [
   {
     id: "operation",
     label: "运营配置",
-    sectionIds: ["content", "assessments", "schedules", "rooms", "pricing"],
+    sectionIds: [
+      "content",
+      "assessments",
+      "assessmentReports",
+      "schedules",
+      "rooms",
+      "pricing",
+    ],
   },
   { id: "boards", label: "用户管理", sectionIds: ["userBoard", "counselorBoard"] },
   {

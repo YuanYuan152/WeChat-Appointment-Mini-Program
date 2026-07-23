@@ -41,6 +41,7 @@ export function AssessmentsPanel({
   onPageChange,
   onPageSizeChange,
   onOpenCreate,
+  onOpenReports,
   onOpenDetail,
   onCloseEditor,
   onSaveDefinition,
@@ -65,6 +66,7 @@ export function AssessmentsPanel({
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
   onOpenCreate: () => void;
+  onOpenReports: (assessmentId?: string) => void;
   onOpenDetail: (assessmentId: string, mode?: Exclude<AssessmentEditorMode, "create" | null>) => void;
   onCloseEditor: () => void;
   onSaveDefinition: (definition: AssessmentDefinition) => Promise<AssessmentAdminDetail | undefined>;
@@ -93,13 +95,22 @@ export function AssessmentsPanel({
                 管理 EAP 专业量表和趣味量表的草稿、发布版本及报告内容。发布后历史版本保持不变。
               </p>
             </div>
-            <button
-              className="h-10 rounded-xl bg-[var(--lxxl-green)] px-4 text-sm font-medium text-white transition hover:bg-[var(--lxxl-green-dark)]"
-              type="button"
-              onClick={onOpenCreate}
-            >
-              新增量表
-            </button>
+            <div className="flex flex-wrap gap-3">
+              <button
+                className="h-10 rounded-xl border border-[var(--lxxl-border)] bg-white px-4 text-sm font-medium text-[var(--lxxl-green)] transition hover:border-[var(--lxxl-green)]"
+                type="button"
+                onClick={() => onOpenReports()}
+              >
+                填写结果
+              </button>
+              <button
+                className="h-10 rounded-xl bg-[var(--lxxl-green)] px-4 text-sm font-medium text-white transition hover:bg-[var(--lxxl-green-dark)]"
+                type="button"
+                onClick={onOpenCreate}
+              >
+                新增量表
+              </button>
+            </div>
           </div>
 
           <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -232,6 +243,11 @@ export function AssessmentsPanel({
                           </td>
                           <td className="px-5 py-4 text-right">
                             <div className="flex flex-wrap justify-end gap-x-4 gap-y-2">
+                              <TableActionButton
+                                onClick={() => onOpenReports(item.id)}
+                              >
+                                报告
+                              </TableActionButton>
                               <TableActionButton
                                 disabled={archived}
                                 title={archived ? "归档状态暂不支持编辑" : undefined}

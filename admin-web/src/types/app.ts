@@ -42,6 +42,7 @@ export type SectionId =
   | "feedback"
   | "content"
   | "assessments"
+  | "assessmentReports"
   | "schedules"
   | "rooms"
   | "pricing"

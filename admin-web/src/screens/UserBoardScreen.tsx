@@ -167,6 +167,14 @@ function UserBoardScreenContent() {
     [router],
   );
 
+  const openAssessmentReports = useCallback(
+    (accountId: number) => {
+      closeDetail();
+      router.push(`/assessment-reports?accountId=${accountId}`);
+    },
+    [closeDetail, router],
+  );
+
   const searchCounselors = useCallback(async (keyword: string): Promise<ProxyPersonOption[]> => {
     const result = await searchProxyCounselors(keyword);
     return result.items || [];
@@ -284,6 +292,7 @@ function UserBoardScreenContent() {
       onOpen={openUserDetail}
       onCloseDetail={closeDetail}
       onProxyBooking={openProxyBooking}
+      onOpenAssessmentReports={openAssessmentReports}
       onSearchCounselors={searchCounselors}
       onBindCounselor={bindCounselor}
       remarkSaving={remarkSavingAccountId === selectedUserBoard?.profile.id}

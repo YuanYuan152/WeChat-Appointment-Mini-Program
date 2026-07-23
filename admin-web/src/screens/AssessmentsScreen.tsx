@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
+import { useRouter } from "next/navigation";
 
 import { AppRoute, useAppRoute } from "@/components/AppRoute";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
@@ -49,6 +50,7 @@ export interface AssessmentsPanelPropsContract {
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
   onOpenCreate: () => void;
+  onOpenReports: (assessmentId?: string) => void;
   onOpenDetail: (
     assessmentId: string,
     mode?: Exclude<AssessmentEditorMode, "create" | null>,
@@ -113,6 +115,7 @@ export function AssessmentsScreen() {
 }
 
 function AssessmentsScreenContent() {
+  const router = useRouter();
   const { clearNotice, refreshKey, showNotice } = useAppRoute();
   const [draftFilters, setDraftFilters] = useState<AssessmentListFilters>(
     getInitialFilters,
@@ -210,6 +213,18 @@ function AssessmentsScreenContent() {
     setDetailLoading(false);
     setEditorMode("create");
   }, [clearNotice]);
+
+  const openReports = useCallback(
+    (assessmentId?: string) => {
+      const params = new URLSearchParams();
+      if (assessmentId) {
+        params.set("assessmentId", assessmentId);
+      }
+      const query = params.toString();
+      router.push(`/assessment-reports${query ? `?${query}` : ""}`);
+    },
+    [router],
+  );
 
   const openDetail = useCallback(
     async (
@@ -423,6 +438,7 @@ function AssessmentsScreenContent() {
       onPageChange={changePage}
       onPageSizeChange={changePageSize}
       onOpenCreate={openCreate}
+      onOpenReports={openReports}
       onOpenDetail={openDetail}
       onCloseEditor={closeEditor}
       onSaveDefinition={saveDefinition}
