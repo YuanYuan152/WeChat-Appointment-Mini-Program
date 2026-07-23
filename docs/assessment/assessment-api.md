@@ -259,6 +259,8 @@
 - 新建量表仅允许 `sum`、`dimension`、`match` 三种通用计分方式。
 - 新建 `sum` 默认使用 `generic-sum-v2`：支持反向题，并在匹配报告区间前把最终总分保留两位小数。
   `generic-sum-v1` 只用于兼容历史定义，保持原始求和且忽略顶层反向题，不会自动升级。
+- `cover`、`matchResults[].image`、`reportProfiles[].image` 必须使用第 7 节规定的
+  受控站内图片路径，不能保存任意外链、base64、查询参数或带路径穿越的值。
 
 ### 4.4 保存草稿
 
@@ -390,9 +392,61 @@ EAP 报告直接返回提交时的 `reportSnapshot`。管理后台不得重新�
 
 ## 7. 媒体上传
 
-当前量表编辑器只提供图片地址输入框，尚未接入上传控件；服务端目前只校验该字段为字符串，
-尚未实现 URL scheme、站内路径白名单或 base64 拦截。上线录入时只能填写可信站内图片 URL；
-上传接入和服务端 URL 安全校验仍是待办，不能把任意外部内容地址作为已受控上传处理。
+### 7.1 上传受控量表图片
+
+`POST /api/mini/admin/assessments/assets`
+
+使用管理后台 Bearer Token，权限与量表编辑一致，仅 `Ops`、`Admin` 可调用。请求类型为
+`multipart/form-data`，文件字段名固定为 `file`。
+
+支持 JPEG、PNG、WebP，单文件不超过 5 MB；服务端按文件内容而不是客户端文件名或
+`Content-Type` 判断格式，同时限制图片边长不超过 6000 像素、总像素不超过 2400 万。
+图片使用内容 SHA-256 和服务端识别出的扩展名保存；相同内容重复上传会复用同一不可变文件。
+
+成功数据：
+
+```json
+{
+  "path": "/static/assessment-assets/0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef.png",
+  "url": "https://api.example.com/static/assessment-assets/0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef.png",
+  "filename": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef.png",
+  "contentType": "image/png",
+  "size": 12345,
+  "width": 1200,
+  "height": 800
+}
+```
+
+接口仍由统一中间件包装为 `{code,msg,data}`。量表定义必须保存 `path`，不能保存环境相关的
+绝对 `url`。不支持的内容返回 `415`，文件大小或图片尺寸超限返回 `413`，无权限返回 `403`。
+
+### 7.2 图片路径白名单
+
+新建、保存和发布时，三个图片字段使用同一白名单：
+
+- `cover`：必填。
+- `matchResults[].image`：字段必需，但可为空字符串。
+- `reportProfiles[].image`：字段可省略或为空字符串。
+
+非空值只允许：
+
+- `/images/...`：随 EAP 发布的内置图片，扩展名为 JPG/JPEG/PNG/WebP/GIF。
+- `/static/assessments/...`：协议示例或受控部署静态图片，扩展名同上。
+- `/static/assessment-assets/{64位小写sha256}.jpg|png|webp`：由上传接口产生。
+
+所有路径最长 500 字符，只允许 ASCII 字母、数字、点、下划线、连字符和路径分隔符；
+不得包含百分号编码、查询参数、URL 片段、反斜杠、重复斜杠、控制字符或 `.`/`..` 路径段。
+服务端拒绝绝对外链、协议相对地址、`data:`、`blob:` 和 `javascript:`。
+
+历史已发布版本读取及恢复来源使用兼容模式，旧绝对图片地址不会导致历史报告或恢复操作失败；
+但恢复得到的草稿仍须把旧地址替换为上述受控路径后才能重新发布。客户端展示历史图片时也应
+执行相同来源限制并对无效地址显示占位内容。
+
+### 7.3 存储与生命周期
+
+量表图片写入 `ASSESSMENT_ASSET_DIR`，通过 `/static/assessment-assets/*` 只读公开访问。
+测试、生产必须使用发布目录外、环境隔离且可备份的绝对目录。图片可能被不可变发布版本和
+报告快照长期引用，因此第一版不提供覆盖或删除接口。
 
 ## 8. 兼容性要求
 

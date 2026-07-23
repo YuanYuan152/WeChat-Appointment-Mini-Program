@@ -10,6 +10,7 @@ from api_response import (
     api_unhandled_exception_handler,
     api_validation_exception_handler,
 )
+from assessment_asset_service import ASSESSMENT_ASSET_DIR, UPLOAD_DIR
 from auth import router as auth_router
 from payment import router as payment_router
 from upload import router as upload_router
@@ -90,7 +91,32 @@ app.add_middleware(
 )
 app.add_middleware(ApiResponseEnvelopeMiddleware)
 
-# Serve uploaded static files
+
+@app.middleware("http")
+async def add_static_upload_security_headers(request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith(
+        ("/static/uploads/", "/static/assessment-assets/")
+    ):
+        response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+# 上传目录必须独立持久化，并在通用 /static 之前挂载。
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+ASSESSMENT_ASSET_DIR.mkdir(parents=True, exist_ok=True)
+app.mount(
+    "/static/uploads",
+    StaticFiles(directory=str(UPLOAD_DIR)),
+    name="uploads",
+)
+app.mount(
+    "/static/assessment-assets",
+    StaticFiles(directory=str(ASSESSMENT_ASSET_DIR)),
+    name="assessment-assets",
+)
+
+# Serve bundled static files.
 static_dir = Path(__file__).parent / "static"
 static_dir.mkdir(exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")

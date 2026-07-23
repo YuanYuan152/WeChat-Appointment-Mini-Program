@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { AlertCircle, ChevronRight, ClipboardList, Loader2, Trash2 } from "lucide-react";
+import { AssessmentImage } from "@/components/assessment/assessment-image";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AssessmentAuthGate } from "@/components/assessment/assessment-auth-gate";
@@ -156,10 +156,9 @@ function AssessmentReportsListContent() {
               href={`/assessment/reports/${report.publicId}`}
               className="relative aspect-[2/1] w-full shrink-0 sm:aspect-auto sm:h-auto sm:w-48"
             >
-              <Image
-                src={report.cover}
+              <AssessmentImage
+                source={report.cover}
                 alt={report.assessmentTitle}
-                fill
                 className="object-cover"
                 sizes="192px"
               />

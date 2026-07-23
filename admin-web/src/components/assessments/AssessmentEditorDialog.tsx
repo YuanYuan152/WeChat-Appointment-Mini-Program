@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
+import { AssessmentImageField } from "@/components/assessments/AssessmentImageField";
 import { Badge, QueryField, queryControlClass } from "@/components/ui";
 import {
   changeAssessmentScoringType,
@@ -74,6 +75,7 @@ export function AssessmentEditorDialog({
   );
   const [jsonDraft, setJsonDraft] = useState(() => serializeDefinition(initialDefinition));
   const [localError, setLocalError] = useState("");
+  const [activeUploads, setActiveUploads] = useState(0);
   const closeRef = useRef<() => void>(() => undefined);
   const dialogRef = useRef<HTMLElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -91,6 +93,12 @@ export function AssessmentEditorDialog({
   const blockingIssues = issues.filter((issue) => issue.severity === "error");
   const fixedScoring = isFixedScoringType(definition.scoringType);
   const archived = currentDetail?.lifecycleStatus === "archived";
+  const uploading = activeUploads > 0;
+  const editorDisabled = Boolean(archived || actionLoading || uploading);
+
+  const handleUploadStateChange = useCallback((delta: number) => {
+    setActiveUploads((count) => Math.max(0, count + delta));
+  }, []);
 
   useEffect(() => {
     if (!detail || detail.revision === currentDetail?.revision) {
@@ -105,14 +113,14 @@ export function AssessmentEditorDialog({
   }, [currentDetail?.revision, detail]);
 
   const attemptClose = useCallback(() => {
-    if (actionLoading) {
+    if (actionLoading || uploading) {
       return;
     }
     if (dirty && !window.confirm("当前量表还有未保存的修改，确定关闭吗？")) {
       return;
     }
     onClose();
-  }, [actionLoading, dirty, onClose]);
+  }, [actionLoading, dirty, onClose, uploading]);
 
   useEffect(() => {
     closeRef.current = attemptClose;
@@ -178,6 +186,10 @@ export function AssessmentEditorDialog({
   }
 
   async function save() {
+    if (uploading) {
+      setLocalError("图片仍在上传，请等待上传完成后再保存。");
+      return;
+    }
     if (blockingIssues.length > 0) {
       setLocalError(`请先处理 ${blockingIssues.length} 项校验问题，再保存草稿。`);
       return;
@@ -189,7 +201,7 @@ export function AssessmentEditorDialog({
   }
 
   async function publish() {
-    if (!currentDetail || dirty || !currentDetail.draftVersion) {
+    if (uploading || !currentDetail || dirty || !currentDetail.draftVersion) {
       return;
     }
     if (!window.confirm(`确定发布 ${definition.title || definition.id} 的 v${currentDetail.draftVersion} 草稿吗？`)) {
@@ -202,7 +214,7 @@ export function AssessmentEditorDialog({
   }
 
   async function archive() {
-    if (!currentDetail || archived) {
+    if (uploading || !currentDetail || archived) {
       return;
     }
     if (!window.confirm("归档后 EAP 用户将无法继续打开该量表，确定归档吗？")) {
@@ -216,7 +228,7 @@ export function AssessmentEditorDialog({
   }
 
   async function restoreVersion(version: number) {
-    if (!currentDetail) {
+    if (uploading || !currentDetail) {
       return;
     }
     const restoreImpact = currentDetail.draftVersion
@@ -235,6 +247,9 @@ export function AssessmentEditorDialog({
   }
 
   function switchTab(tab: EditorTab) {
+    if (uploading) {
+      return;
+    }
     if (tab === "advanced") {
       setJsonDraft(serializedDefinition);
     }
@@ -285,7 +300,7 @@ export function AssessmentEditorDialog({
             ref={closeButtonRef}
             aria-label="关闭"
             className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-2xl leading-none text-[var(--lxxl-muted)] transition hover:bg-[#FAF8F4] hover:text-[var(--lxxl-text)] disabled:opacity-40"
-            disabled={actionLoading}
+            disabled={actionLoading || uploading}
             title="关闭"
             type="button"
             onClick={attemptClose}
@@ -303,6 +318,7 @@ export function AssessmentEditorDialog({
                   ? "border border-b-white border-[var(--lxxl-border)] bg-white text-[var(--lxxl-green)]"
                   : "text-[var(--lxxl-muted)] hover:text-[var(--lxxl-text)]"
               }`}
+              disabled={uploading}
               type="button"
               onClick={() => switchTab(tab.id)}
             >
@@ -329,16 +345,17 @@ export function AssessmentEditorDialog({
               {activeTab === "basic" && (
                 <BasicFields
                   definition={definition}
-                  disabled={archived || actionLoading}
+                  disabled={editorDisabled}
                   fixedScoring={fixedScoring}
                   isCreate={isCreate}
                   onChange={updateDefinition}
+                  onUploadStateChange={handleUploadStateChange}
                 />
               )}
               {activeTab === "demographics" && (
                 <DemographicFields
                   definition={definition}
-                  disabled={archived || actionLoading}
+                  disabled={editorDisabled}
                   fixedStructure={false}
                   onChange={updateDefinition}
                 />
@@ -346,7 +363,7 @@ export function AssessmentEditorDialog({
               {activeTab === "questions" && (
                 <QuestionFields
                   definition={definition}
-                  disabled={archived || actionLoading}
+                  disabled={editorDisabled}
                   fixedStructure={fixedScoring}
                   onChange={updateDefinition}
                 />
@@ -355,9 +372,10 @@ export function AssessmentEditorDialog({
                 <ResultFields
                   coverageSummaries={coverageSummaries}
                   definition={definition}
-                  disabled={archived || actionLoading}
+                  disabled={editorDisabled}
                   fixedStructure={fixedScoring}
                   onChange={updateDefinition}
+                  onUploadStateChange={handleUploadStateChange}
                 />
               )}
               {activeTab === "advanced" && (
@@ -370,7 +388,7 @@ export function AssessmentEditorDialog({
                 <VersionsPanel
                   archived={archived}
                   detail={currentDetail}
-                  loading={detailLoading || actionLoading}
+                  loading={detailLoading || actionLoading || uploading}
                   onRestore={restoreVersion}
                 />
               )}
@@ -379,6 +397,14 @@ export function AssessmentEditorDialog({
         </div>
 
         <footer className="shrink-0 border-t border-[var(--lxxl-border)] bg-white px-5 py-4 sm:px-6">
+          {uploading && (
+            <div
+              aria-live="polite"
+              className="mb-3 rounded-xl border border-[#CFE1D6] bg-[#F2F7F4] px-4 py-3 text-sm text-[var(--lxxl-green)]"
+            >
+              图片上传中，请等待上传完成后再保存、发布或关闭窗口。
+            </div>
+          )}
           {(localError || blockingIssues.length > 0) && (
             <div className="mb-3 rounded-xl bg-[#FFF5F4] px-4 py-3 text-sm text-[#A13F37]">
               {localError || `当前有 ${blockingIssues.length} 项内容需要完善。`}
@@ -406,7 +432,7 @@ export function AssessmentEditorDialog({
             <div className="flex flex-wrap justify-end gap-3">
               <button
                 className="h-10 rounded-xl border border-[var(--lxxl-border)] px-4 text-sm font-medium text-[var(--lxxl-muted)] transition hover:border-[var(--lxxl-green)] hover:text-[var(--lxxl-green)] disabled:opacity-40"
-                disabled={actionLoading}
+                disabled={actionLoading || uploading}
                 type="button"
                 onClick={attemptClose}
               >
@@ -415,7 +441,7 @@ export function AssessmentEditorDialog({
               {currentDetail && !archived && (
                 <button
                   className="h-10 rounded-xl border border-[#E8B7B2] px-4 text-sm font-medium text-[#A13F37] transition hover:bg-[#FFF5F4] disabled:opacity-40"
-                  disabled={actionLoading}
+                  disabled={actionLoading || uploading}
                   type="button"
                   onClick={() => void archive()}
                 >
@@ -425,7 +451,7 @@ export function AssessmentEditorDialog({
               {!archived && (
                 <button
                   className="h-10 rounded-xl border border-[var(--lxxl-green)] px-4 text-sm font-medium text-[var(--lxxl-green)] transition hover:bg-[#F2F7F4] disabled:cursor-not-allowed disabled:opacity-40"
-                  disabled={actionLoading || !currentDetail?.draftVersion || dirty}
+                  disabled={actionLoading || uploading || !currentDetail?.draftVersion || dirty}
                   title={
                     dirty
                       ? "请先保存当前修改"
@@ -442,7 +468,12 @@ export function AssessmentEditorDialog({
               {!archived && activeTab !== "versions" && (
                 <button
                   className="h-10 rounded-xl bg-[var(--lxxl-green)] px-5 text-sm font-medium text-white transition hover:bg-[var(--lxxl-green-dark)] disabled:cursor-not-allowed disabled:opacity-40"
-                  disabled={actionLoading || blockingIssues.length > 0 || (!dirty && Boolean(currentDetail))}
+                  disabled={
+                    actionLoading ||
+                    uploading ||
+                    blockingIssues.length > 0 ||
+                    (!dirty && Boolean(currentDetail))
+                  }
                   type="button"
                   onClick={() => void save()}
                 >
@@ -472,12 +503,14 @@ function BasicFields({
   fixedScoring,
   disabled,
   onChange,
+  onUploadStateChange,
 }: {
   definition: AssessmentDefinition;
   isCreate: boolean;
   fixedScoring: boolean;
   disabled: boolean;
   onChange: (definition: AssessmentDefinition) => void;
+  onUploadStateChange: (delta: number) => void;
 }) {
   function patch(values: Partial<AssessmentDefinition>) {
     onChange({ ...definition, ...values });
@@ -579,15 +612,20 @@ function BasicFields({
               onChange={(event) => patch({ description: event.target.value })}
             />
           </QueryField>
-          <QueryField label="封面图片地址" required>
-            <input
-              className={queryControlClass}
+          <div className="block min-w-0 md:col-span-2">
+            <span className="mb-2 block text-xs font-medium text-[var(--lxxl-muted)]">
+              封面图片<span className="ml-1 text-[#B34B43]">*</span>
+            </span>
+            <AssessmentImageField
+              aspect="cover"
               disabled={disabled}
-              placeholder="/static/assessments/example.jpg"
+              inputLabel="封面图片地址"
+              required
               value={definition.cover}
-              onChange={(event) => patch({ cover: event.target.value })}
+              onChange={(cover) => patch({ cover })}
+              onUploadStateChange={onUploadStateChange}
             />
-          </QueryField>
+          </div>
           <QueryField label="预计时长（分钟）" required>
             <input
               className={queryControlClass}
@@ -1243,12 +1281,14 @@ function ResultFields({
   disabled,
   fixedStructure,
   onChange,
+  onUploadStateChange,
 }: {
   coverageSummaries: AssessmentScoreCoverageSummary[];
   definition: AssessmentDefinition;
   disabled: boolean;
   fixedStructure: boolean;
   onChange: (definition: AssessmentDefinition) => void;
+  onUploadStateChange: (delta: number) => void;
 }) {
   const hasScoreRanges = definition.scoringType === "sum" || definition.scoringType === "psqi";
   const hasDimensions = definition.scoringType === "dimension";
@@ -1321,6 +1361,7 @@ function ResultFields({
           disabled={disabled}
           fixedStructure={fixedStructure}
           onChange={onChange}
+          onUploadStateChange={onUploadStateChange}
         />
       )}
 
@@ -1330,6 +1371,7 @@ function ResultFields({
           disabled={disabled}
           fixedStructure={fixedStructure}
           onChange={onChange}
+          onUploadStateChange={onUploadStateChange}
         />
       )}
 
@@ -1668,11 +1710,13 @@ function MatchResultEditor({
   disabled,
   fixedStructure,
   onChange,
+  onUploadStateChange,
 }: {
   definition: AssessmentDefinition;
   disabled: boolean;
   fixedStructure: boolean;
   onChange: (definition: AssessmentDefinition) => void;
+  onUploadStateChange: (delta: number) => void;
 }) {
   const results = definition.matchResults || [];
 
@@ -1756,10 +1800,12 @@ function MatchResultEditor({
             key={resultIndex}
             disabled={disabled}
             fixedStructure={fixedStructure}
+            imageHelpText="支持 JPEG、PNG、WebP，单张不超过 5MB；留空时 EAP 使用占位内容。"
             index={resultIndex}
             item={result}
             onChange={(next) => changeResult(resultIndex, next)}
             onRemove={() => removeResult(resultIndex)}
+            onUploadStateChange={onUploadStateChange}
             removeDisabled={disabled || fixedStructure || results.length <= 1}
           />
         ))}
@@ -1773,11 +1819,13 @@ function ReportProfileEditor({
   disabled,
   fixedStructure,
   onChange,
+  onUploadStateChange,
 }: {
   definition: AssessmentDefinition;
   disabled: boolean;
   fixedStructure: boolean;
   onChange: (definition: AssessmentDefinition) => void;
+  onUploadStateChange: (delta: number) => void;
 }) {
   const profiles = definition.reportProfiles || [];
 
@@ -1796,10 +1844,12 @@ function ReportProfileEditor({
             key={profileIndex}
             disabled={disabled}
             fixedStructure={fixedStructure}
+            imageHelpText="当前固定量表报告暂不展示此图片；保留字段用于协议兼容。"
             index={profileIndex}
             item={profile}
             onChange={(next) => setProfiles(replaceAt(profiles, profileIndex, next))}
             onRemove={() => setProfiles(profiles.filter((_, index) => index !== profileIndex))}
+            onUploadStateChange={onUploadStateChange}
             removeDisabled={disabled || fixedStructure}
           />
         ))}
@@ -1810,20 +1860,24 @@ function ReportProfileEditor({
 
 function ReportContentCard<T extends AssessmentMatchResult | AssessmentReportProfile>({
   item,
+  imageHelpText,
   index,
   disabled,
   fixedStructure,
   removeDisabled,
   onChange,
   onRemove,
+  onUploadStateChange,
 }: {
   item: T;
+  imageHelpText: string;
   index: number;
   disabled: boolean;
   fixedStructure: boolean;
   removeDisabled: boolean;
   onChange: (item: T) => void;
   onRemove: () => void;
+  onUploadStateChange: (delta: number) => void;
 }) {
   return (
     <div className="rounded-xl border border-[var(--lxxl-border)] bg-[#FCFBF8] p-4">
@@ -1865,14 +1919,21 @@ function ReportContentCard<T extends AssessmentMatchResult | AssessmentReportPro
             onChange={(value) => onChange({ ...item, suggestions: parseLines(value) })}
           />
         </CompactField>
-        <CompactField label="结果图片">
-          <input
-            className={compactInputClass}
+        <div className="block min-w-0 md:col-span-2">
+          <span className="mb-1.5 block text-xs font-medium text-[var(--lxxl-muted)]">
+            结果图片
+          </span>
+          <AssessmentImageField
+            aspect="result"
+            compact
             disabled={disabled}
+            helpText={imageHelpText}
+            inputLabel={`${item.title || item.id || `第 ${index + 1} 项`}结果图片地址`}
             value={item.image || ""}
-            onChange={(event) => onChange({ ...item, image: event.target.value })}
+            onChange={(image) => onChange({ ...item, image })}
+            onUploadStateChange={onUploadStateChange}
           />
-        </CompactField>
+        </div>
         <CompactField label="分享文案">
           <input
             className={compactInputClass}

@@ -150,6 +150,25 @@ class AssessmentDefinitionStoreTests(unittest.TestCase):
         ):
             self.store.restore_version("psqi", 1)
 
+    def test_legacy_external_asset_remains_readable_but_cannot_be_republished(self) -> None:
+        assessment_id = "dark-light-personality"
+        source_path = self.store._published_path(assessment_id, 1)
+        with source_path.open(encoding="utf-8") as handle:
+            source = json.load(handle)
+        source["cover"] = "https://legacy-assets.example/cover.jpg"
+        self.store._atomic_write(source_path, source)
+
+        loaded = self.store.get_published_version(assessment_id, 1)
+        self.assertEqual(source["cover"], loaded["cover"])
+
+        restored = self.store.restore_version(assessment_id, 1)
+        self.assertEqual(source["cover"], restored["definition"]["cover"])
+        with self.assertRaisesRegex(AssessmentValidationError, "cover仅支持"):
+            self.store.publish(
+                assessment_id,
+                expected_revision=restored["revision"],
+            )
+
     def test_admin_pagination_keyword_and_status_filters(self) -> None:
         result = self.store.list_admin(
             page=1,
@@ -481,6 +500,64 @@ class AssessmentDefinitionStoreTests(unittest.TestCase):
         match["questions"][0]["options"][0]["matchTags"] = {}
         with self.assertRaisesRegex(AssessmentValidationError, "至少需要一个结果权重"):
             validate_definition(match, allow_fixed_scoring=False)
+
+    def test_image_references_are_limited_to_controlled_paths(self) -> None:
+        definition = self.example_definition()
+        definition["id"] = "unsafe-cover"
+        definition["cover"] = "data:image/png;base64,AAAA"
+        with self.assertRaisesRegex(
+            AssessmentValidationError,
+            "cover仅支持",
+        ):
+            validate_definition(definition, allow_fixed_scoring=False)
+
+        match = self.example_definition("fun-match.json")
+        match["id"] = "unsafe-result-image"
+        match["matchResults"][0]["image"] = "https://tracker.example/pixel.png"
+        with self.assertRaisesRegex(
+            AssessmentValidationError,
+            r"matchResults\[0\]\.image仅支持",
+        ):
+            validate_definition(match, allow_fixed_scoring=False)
+
+        definition = self.example_definition()
+        definition["id"] = "unsafe-profile-image"
+        definition["reportProfiles"] = [
+            {
+                "id": "demo",
+                "title": "演示",
+                "description": "演示报告",
+                "suggestions": [],
+                "image": "/images/../secret.png",
+            }
+        ]
+        with self.assertRaisesRegex(
+            AssessmentValidationError,
+            r"reportProfiles\[0\]\.image仅支持",
+        ):
+            validate_definition(definition, allow_fixed_scoring=False)
+
+        validate_definition(
+            definition,
+            allow_fixed_scoring=False,
+            strict_assets=False,
+        )
+
+    def test_controlled_uploaded_image_reference_is_valid_in_all_modes(self) -> None:
+        definition = self.example_definition()
+        definition["id"] = "controlled-cover"
+        definition["cover"] = (
+            "/static/assessment-assets/"
+            + ("a" * 64)
+            + ".webp"
+        )
+
+        validate_definition(definition, allow_fixed_scoring=False)
+        validate_definition(
+            definition,
+            allow_fixed_scoring=False,
+            strict_scoring=False,
+        )
 
     def test_strict_match_validation_rejects_unreferenced_result(self) -> None:
         match = self.example_definition("fun-match.json")

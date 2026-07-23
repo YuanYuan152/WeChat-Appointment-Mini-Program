@@ -15,6 +15,10 @@ BACKEND = ROOT.parent.parent / "backend-python"
 sys.path.insert(0, str(BACKEND))
 
 from assessment_definition_service import validate_definition as validate_runtime_definition
+from assessment_asset_service import (
+    AssessmentAssetReferenceError,
+    validate_assessment_asset_reference,
+)
 from assessment_scoring_service import calculate_assessment_result
 
 
@@ -52,6 +56,17 @@ def assert_ranges(ranges: list[dict[str, Any]], label: str) -> None:
         previous_max = high
 
 
+def assert_image_reference(value: Any, label: str, *, allow_empty: bool) -> None:
+    try:
+        validate_assessment_asset_reference(
+            value,
+            label,
+            allow_empty=allow_empty,
+        )
+    except AssessmentAssetReferenceError as exc:
+        raise AssertionError(str(exc)) from exc
+
+
 def validate_definition(definition: dict[str, Any], schema: dict[str, Any]) -> None:
     required = set(schema["required"])
     missing = sorted(required - definition.keys())
@@ -71,6 +86,7 @@ def validate_definition(definition: dict[str, Any], schema: dict[str, Any]) -> N
         raise AssertionError(f"{definition['id']}: invalid status")
     if definition["category"] not in {"professional", "fun"}:
         raise AssertionError(f"{definition['id']}: invalid category")
+    assert_image_reference(definition["cover"], f"{definition['id']} cover", allow_empty=False)
 
     demographic_questions = definition.get("demographicQuestions", [])
     assert_unique_ids(demographic_questions, f"{definition['id']} demographics")
@@ -125,6 +141,20 @@ def validate_definition(definition: dict[str, Any], schema: dict[str, Any]) -> N
         }
         if not tag_ids <= result_ids:
             raise AssertionError(f"{definition['id']}: match tag has no result")
+        for result in match_results:
+            assert_image_reference(
+                result["image"],
+                f"{definition['id']}:{result['id']} image",
+                allow_empty=True,
+            )
+
+    for profile in definition.get("reportProfiles", []):
+        if "image" in profile:
+            assert_image_reference(
+                profile["image"],
+                f"{definition['id']}:{profile['id']} image",
+                allow_empty=True,
+            )
 
 
 def validate_report_submit(

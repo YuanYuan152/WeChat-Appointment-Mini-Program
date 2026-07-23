@@ -141,6 +141,76 @@ test("validates a complete default definition", () => {
   assert.deepEqual(editor.validateAssessmentDefinition(definition), []);
 });
 
+test("accepts only controlled assessment image references", () => {
+  const digest = "a".repeat(64);
+  const allowed = [
+    "/images/content/assess/cover.jpg",
+    "/static/assessments/legacy-cover.jpeg",
+    "/static/assessments/results/result.gif",
+    `/static/assessment-assets/${digest}.png`,
+  ];
+  for (const value of allowed) {
+    assert.equal(editor.isSafeAssessmentAssetReference(value), true, value);
+    assert.equal(editor.getAssessmentAssetReferenceError(value), null, value);
+  }
+  assert.equal(
+    editor.getAssessmentAssetReferenceError("", { allowEmpty: true }),
+    null,
+  );
+
+  const rejected = [
+    "https://cdn.example.com/cover.jpg",
+    "http://127.0.0.1/static/assessments/cover.jpg",
+    "data:image/png;base64,abc",
+    "blob:https://example.com/id",
+    "javascript:alert(1)",
+    "//cdn.example.com/cover.jpg",
+    "/static/uploads/uncontrolled.png",
+    "/images/content/cover.jpg?token=secret",
+    "/images/content/cover.jpg#fragment",
+    "/images/../private/cover.jpg",
+    "/images/%2e%2e/private/cover.jpg",
+    "/images/content/cover.svg",
+    "/images/content/cover image.jpg",
+    '/images/content/cover");evil=".jpg',
+    `/${"a".repeat(501)}.jpg`,
+  ];
+  for (const value of rejected) {
+    assert.equal(editor.isSafeAssessmentAssetReference(value), false, value);
+    assert.match(
+      editor.getAssessmentAssetReferenceError(value),
+      /仅支持/,
+      value,
+    );
+  }
+});
+
+test("rejects unsafe cover and report image references before saving", () => {
+  const definition = completeRequiredFields(
+    editor.createDefaultAssessmentDefinition("match"),
+  );
+  definition.cover = "https://cdn.example.com/cover.jpg";
+  definition.matchResults[0].image = "data:image/png;base64,abc";
+  definition.reportProfiles = [
+    {
+      id: "profile-1",
+      title: "报告",
+      description: "报告说明",
+      suggestions: [],
+      image: "/static/uploads/uncontrolled.png",
+    },
+  ];
+
+  const imageIssues = editor
+    .validateAssessmentDefinition(definition)
+    .filter((issue) => issue.path === "cover" || issue.path.endsWith(".image"));
+  assert.deepEqual(
+    imageIssues.map((issue) => issue.path),
+    ["cover", "matchResults[0].image", "reportProfiles[0].image"],
+  );
+  assert.ok(imageIssues.every((issue) => issue.message.includes("受控图片")));
+});
+
 test("keeps generic sum v1 definitions valid for legacy editing", () => {
   const definition = completeRequiredFields(
     editor.createDefaultAssessmentDefinition("sum"),

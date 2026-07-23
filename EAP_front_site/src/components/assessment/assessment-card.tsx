@@ -1,8 +1,8 @@
 "use client";
 
-import Image from "next/image";
 import { motion } from "framer-motion";
 import { Clock, FileText } from "lucide-react";
+import { AssessmentImage } from "@/components/assessment/assessment-image";
 import { Badge } from "@/components/ui/badge";
 import { StartAssessmentButton } from "@/components/assessment/start-assessment-button";
 import { StartProfessionalAssessmentButton } from "@/components/assessment/professional-assessment-privacy";
@@ -23,10 +23,9 @@ export function AssessmentCard({ assessment, type, index = 0 }: AssessmentCardPr
     >
       <article className="overflow-hidden rounded-[var(--radius)] border border-border bg-card shadow-sm transition-all hover:shadow-lg">
         <div className="relative aspect-[2/1] overflow-hidden">
-          <Image
-            src={assessment.cover}
+          <AssessmentImage
+            source={assessment.cover}
             alt={assessment.title}
-            fill
             priority={index === 0}
             className="object-cover"
             sizes="(max-width: 768px) 100vw, 50vw"

@@ -49,6 +49,11 @@ export interface AssessmentAssetUrlOptions {
    */
   eapBaseUrl?: string | null;
   /**
+   * API origin used for `/static/assessments/` and managed
+   * `/static/assessment-assets/` uploads.
+   */
+  apiBaseUrl?: string | null;
+  /**
    * A browser origin supplied by the caller when EAP should use the same host.
    * For example: `location.origin`.
    */
@@ -59,6 +64,18 @@ const DATE_ONLY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 const DEFAULT_SCORE_BOUNDS: ScoreRangeBounds = { min: 0, max: 100 };
 const EMPTY_ANSWER_TEXT = "未作答";
 const EMPTY_DEMOGRAPHIC_TEXT = "未填写";
+const MAX_ASSESSMENT_ASSET_REFERENCE_LENGTH = 500;
+const ASSESSMENT_ASSET_CONTROL_PATTERN = /[\u0000-\u001f\u007f]/;
+const ASSESSMENT_UPLOAD_PATH_PATTERN =
+  /^\/static\/assessment-assets\/[0-9a-f]{64}\.(?:jpg|png|webp)$/;
+const SAFE_ASSESSMENT_ASSET_PATH_PATTERN = /^\/[A-Za-z0-9._/-]+$/;
+const LEGACY_ASSESSMENT_IMAGE_EXTENSIONS = new Set([
+  ".jpg",
+  ".jpeg",
+  ".png",
+  ".webp",
+  ".gif",
+]);
 
 function parseDateOnly(value: string): {
   year: number;
@@ -335,13 +352,102 @@ export function mapDemographicAnswers(
   }));
 }
 
-function isAbsoluteAssetUrl(value: string): boolean {
-  return (
-    /^https?:\/\//i.test(value) ||
-    /^data:/i.test(value) ||
-    /^blob:/i.test(value) ||
-    value.startsWith("//")
-  );
+function classifySafeLegacyAssessmentAssetPath(
+  path: string,
+): "api" | "eap" | null {
+  if (
+    path.includes("\\") ||
+    path.includes("//") ||
+    !SAFE_ASSESSMENT_ASSET_PATH_PATTERN.test(path) ||
+    [...path].some(
+      (character) =>
+        ASSESSMENT_ASSET_CONTROL_PATTERN.test(character) || /\s/u.test(character),
+    )
+  ) {
+    return null;
+  }
+  if (path.split("/").some((segment) => segment === "." || segment === "..")) {
+    return null;
+  }
+  const filename = path.slice(path.lastIndexOf("/") + 1);
+  const extensionIndex = filename.lastIndexOf(".");
+  const extension =
+    extensionIndex >= 0 ? filename.slice(extensionIndex).toLowerCase() : "";
+  if (!LEGACY_ASSESSMENT_IMAGE_EXTENSIONS.has(extension)) {
+    return null;
+  }
+  if (path.startsWith("/images/")) {
+    return "eap";
+  }
+  return path.startsWith("/static/assessments/") ? "api" : null;
+}
+
+function classifySafeAssessmentAssetPath(
+  value: string,
+): "api" | "eap" | null {
+  if (
+    !value ||
+    ASSESSMENT_ASSET_CONTROL_PATTERN.test(value) ||
+    !value.startsWith("/") ||
+    value.startsWith("//") ||
+    value.includes("%") ||
+    value.includes("?") ||
+    value.includes("#")
+  ) {
+    return null;
+  }
+  let decodedPath: string;
+  try {
+    decodedPath = decodeURIComponent(value);
+  } catch {
+    return null;
+  }
+  if (ASSESSMENT_UPLOAD_PATH_PATTERN.test(decodedPath)) {
+    return "api";
+  }
+  return classifySafeLegacyAssessmentAssetPath(decodedPath);
+}
+
+function parseAssessmentAssetReference(
+  value: string | null | undefined,
+):
+  | {
+      kind: "api" | "eap";
+      absoluteUrl?: URL;
+    }
+  | undefined {
+  if (
+    typeof value !== "string" ||
+    !value ||
+    value !== value.trim() ||
+    value.length > MAX_ASSESSMENT_ASSET_REFERENCE_LENGTH ||
+    ASSESSMENT_ASSET_CONTROL_PATTERN.test(value)
+  ) {
+    return undefined;
+  }
+
+  if (value.startsWith("/")) {
+    const kind = classifySafeAssessmentAssetPath(value);
+    return kind ? { kind } : undefined;
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return undefined;
+  }
+  if (
+    !["http:", "https:"].includes(parsed.protocol) ||
+    parsed.username ||
+    parsed.password ||
+    parsed.search ||
+    parsed.hash
+  ) {
+    return undefined;
+  }
+  const kind = classifySafeAssessmentAssetPath(parsed.pathname);
+  return kind ? { kind, absoluteUrl: parsed } : undefined;
 }
 
 function normalizeAbsoluteBaseUrl(
@@ -354,7 +460,11 @@ function normalizeAbsoluteBaseUrl(
 
   try {
     const parsed = new URL(normalized);
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    if (
+      (parsed.protocol !== "http:" && parsed.protocol !== "https:") ||
+      parsed.username ||
+      parsed.password
+    ) {
       return undefined;
     }
     if (!parsed.pathname.endsWith("/")) {
@@ -367,59 +477,98 @@ function normalizeAbsoluteBaseUrl(
 }
 
 function resolveAssetBaseUrl(
-  options: AssessmentAssetUrlOptions,
+  configuredBaseUrl: string | null | undefined,
+  sameOriginBaseUrl: string | null | undefined,
 ): string | undefined {
-  const absoluteEapBase = normalizeAbsoluteBaseUrl(options.eapBaseUrl);
-  if (absoluteEapBase) {
-    return absoluteEapBase;
+  const absoluteConfiguredBase = normalizeAbsoluteBaseUrl(configuredBaseUrl);
+  if (absoluteConfiguredBase) {
+    return absoluteConfiguredBase;
   }
 
-  const sameOriginBase = normalizeAbsoluteBaseUrl(options.sameOriginBaseUrl);
+  const sameOriginBase = normalizeAbsoluteBaseUrl(sameOriginBaseUrl);
   if (!sameOriginBase) {
     return undefined;
   }
 
-  const relativeEapBase = options.eapBaseUrl?.trim();
-  if (!relativeEapBase) {
+  const relativeConfiguredBase = configuredBaseUrl?.trim();
+  if (!relativeConfiguredBase) {
     return sameOriginBase;
   }
 
   try {
-    return new URL(relativeEapBase, sameOriginBase).toString();
+    return new URL(relativeConfiguredBase, sameOriginBase).toString();
   } catch {
     return sameOriginBase;
   }
+}
+
+function collectAllowedAssetOrigins(
+  configuredBaseUrl: string | null | undefined,
+  sameOriginBaseUrl: string | null | undefined,
+): Set<string> {
+  const origins = new Set<string>();
+  const configuredBase = resolveAssetBaseUrl(
+    configuredBaseUrl,
+    sameOriginBaseUrl,
+  );
+  const sameOriginBase = normalizeAbsoluteBaseUrl(sameOriginBaseUrl);
+  for (const base of [configuredBase, sameOriginBase]) {
+    if (!base) {
+      continue;
+    }
+    try {
+      origins.add(new URL(base).origin);
+    } catch {
+      // Ignore invalid environment values and fail closed below.
+    }
+  }
+  return origins;
 }
 
 /**
  * Resolve an assessment image without touching browser globals.
  *
  * Callers can pass `process.env.NEXT_PUBLIC_EAP_BASE_URL` and, in a client
- * component, an optional same-origin base. Without either base, relative URLs
- * remain relative so the browser naturally resolves them against the current
- * origin.
+ * component, an optional same-origin base. Controlled relative paths remain
+ * relative without a base. Historical absolute URLs are accepted only when
+ * their origin exactly matches the configured base for that asset family.
  */
 export function resolveAssessmentAssetUrl(
   value: string | null | undefined,
   optionsOrEapBaseUrl: AssessmentAssetUrlOptions | string | null = {},
 ): string {
-  const normalized = value?.trim() ?? "";
-  if (!normalized || isAbsoluteAssetUrl(normalized)) {
-    return normalized;
+  const asset = parseAssessmentAssetReference(value);
+  if (!asset || !value) {
+    return "";
   }
 
   const options =
     typeof optionsOrEapBaseUrl === "string" || optionsOrEapBaseUrl === null
       ? { eapBaseUrl: optionsOrEapBaseUrl }
       : optionsOrEapBaseUrl;
-  const baseUrl = resolveAssetBaseUrl(options);
+  const configuredBaseUrl =
+    asset.kind === "api" ? options.apiBaseUrl : options.eapBaseUrl;
+  if (asset.absoluteUrl) {
+    const allowedOrigins = collectAllowedAssetOrigins(
+      configuredBaseUrl,
+      options.sameOriginBaseUrl,
+    );
+    return allowedOrigins.has(asset.absoluteUrl.origin)
+      ? asset.absoluteUrl.toString()
+      : "";
+  }
+
+  const baseUrl = resolveAssetBaseUrl(
+    configuredBaseUrl,
+    options.sameOriginBaseUrl,
+  );
   if (!baseUrl) {
-    return normalized;
+    return value;
   }
 
   try {
-    return new URL(normalized, baseUrl).toString();
+    return new URL(value, baseUrl).toString();
   } catch {
-    return normalized;
+    return "";
   }
 }

@@ -10,6 +10,18 @@ import type {
 const STABLE_ID_PATTERN = /^[A-Za-z0-9]+(?:[-_.][A-Za-z0-9]+)*$/;
 const ASSESSMENT_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const MAX_REACHABLE_SCORE_STATES = 100_000;
+const MAX_ASSESSMENT_ASSET_REFERENCE_LENGTH = 500;
+const ASSESSMENT_ASSET_CONTROL_PATTERN = /[\u0000-\u001f\u007f]/;
+const ASSESSMENT_UPLOAD_PATH_PATTERN =
+  /^\/static\/assessment-assets\/[0-9a-f]{64}\.(?:jpg|png|webp)$/;
+const SAFE_ASSESSMENT_ASSET_PATH_PATTERN = /^\/[A-Za-z0-9._/-]+$/;
+const LEGACY_ASSESSMENT_IMAGE_EXTENSIONS = new Set([
+  ".jpg",
+  ".jpeg",
+  ".png",
+  ".webp",
+  ".gif",
+]);
 
 const GENERIC_SCORING_PRESETS = {
   sum: "generic-sum-v2",
@@ -55,6 +67,81 @@ const FIXED_SCORING_TYPES = new Set<AssessmentScoringType>([
 ]);
 
 type GenericScoringType = keyof typeof GENERIC_SCORING_PRESETS;
+
+function isSafeLegacyAssessmentAssetPath(path: string): boolean {
+  if (
+    path.includes("\\") ||
+    path.includes("//") ||
+    !SAFE_ASSESSMENT_ASSET_PATH_PATTERN.test(path) ||
+    [...path].some(
+      (character) =>
+        ASSESSMENT_ASSET_CONTROL_PATTERN.test(character) || /\s/u.test(character),
+    )
+  ) {
+    return false;
+  }
+  if (path.split("/").some((segment) => segment === "." || segment === "..")) {
+    return false;
+  }
+  const filename = path.slice(path.lastIndexOf("/") + 1);
+  const extensionIndex = filename.lastIndexOf(".");
+  const extension =
+    extensionIndex >= 0 ? filename.slice(extensionIndex).toLowerCase() : "";
+  if (!LEGACY_ASSESSMENT_IMAGE_EXTENSIONS.has(extension)) {
+    return false;
+  }
+  return path.startsWith("/images/") || path.startsWith("/static/assessments/");
+}
+
+export function isSafeAssessmentAssetReference(value: unknown): value is string {
+  if (
+    typeof value !== "string" ||
+    !value ||
+    value !== value.trim() ||
+    value.length > MAX_ASSESSMENT_ASSET_REFERENCE_LENGTH ||
+    ASSESSMENT_ASSET_CONTROL_PATTERN.test(value) ||
+    !value.startsWith("/") ||
+    value.startsWith("//") ||
+    value.includes("%") ||
+    value.includes("?") ||
+    value.includes("#")
+  ) {
+    return false;
+  }
+
+  let decodedPath: string;
+  try {
+    decodedPath = decodeURIComponent(value);
+  } catch {
+    return false;
+  }
+  return (
+    ASSESSMENT_UPLOAD_PATH_PATTERN.test(decodedPath) ||
+    isSafeLegacyAssessmentAssetPath(decodedPath)
+  );
+}
+
+export function getAssessmentAssetReferenceError(
+  value: unknown,
+  { allowEmpty = false }: { allowEmpty?: boolean } = {},
+): string | null {
+  if (typeof value !== "string") {
+    return "图片地址必须是字符串";
+  }
+  if (allowEmpty && value === "") {
+    return null;
+  }
+  if (!value) {
+    return "图片地址不能为空";
+  }
+  if (!isSafeAssessmentAssetReference(value)) {
+    return (
+      "仅支持 /images/、/static/assessments/ 或 " +
+      "/static/assessment-assets/ 下的受控图片，且不能包含查询参数或路径穿越"
+    );
+  }
+  return null;
+}
 
 function cloneDefinition(
   definition: AssessmentDefinition,
@@ -721,6 +808,16 @@ export function validateAssessmentDefinition(
   }
   addRequired("title", "量表名称", definition.title);
   addRequired("cover", "封面地址", definition.cover);
+  if (typeof definition.cover === "string" && definition.cover.trim()) {
+    const coverError = getAssessmentAssetReferenceError(definition.cover);
+    if (coverError) {
+      issues.push({
+        path: "cover",
+        message: coverError,
+        severity: "error",
+      });
+    }
+  }
   addRequired("disclaimer", "免责声明", definition.disclaimer);
 
   if (!Number.isInteger(definition.version) || definition.version < 1) {
@@ -1030,10 +1127,28 @@ export function validateAssessmentDefinition(
           severity: "error",
         });
       }
-      if (typeof result.image !== "string" || typeof result.shareText !== "string") {
+      if (typeof result.image !== "string") {
         issues.push({
-          path,
-          message: "匹配结果图片和分享文案必须是字符串",
+          path: `${path}.image`,
+          message: "匹配结果图片必须是字符串",
+          severity: "error",
+        });
+      } else {
+        const imageError = getAssessmentAssetReferenceError(result.image, {
+          allowEmpty: true,
+        });
+        if (imageError) {
+          issues.push({
+            path: `${path}.image`,
+            message: imageError,
+            severity: "error",
+          });
+        }
+      }
+      if (typeof result.shareText !== "string") {
+        issues.push({
+          path: `${path}.shareText`,
+          message: "匹配结果分享文案必须是字符串",
           severity: "error",
         });
       }
@@ -1135,6 +1250,25 @@ export function validateAssessmentDefinition(
       issues.push({
         path: `${path}.suggestions`,
         message: "报告文案建议格式不合法",
+        severity: "error",
+      });
+    }
+    if (profile.image !== undefined) {
+      const imageError = getAssessmentAssetReferenceError(profile.image, {
+        allowEmpty: true,
+      });
+      if (imageError) {
+        issues.push({
+          path: `${path}.image`,
+          message: imageError,
+          severity: "error",
+        });
+      }
+    }
+    if (profile.shareText !== undefined && typeof profile.shareText !== "string") {
+      issues.push({
+        path: `${path}.shareText`,
+        message: "报告文案分享文案必须是字符串",
         severity: "error",
       });
     }

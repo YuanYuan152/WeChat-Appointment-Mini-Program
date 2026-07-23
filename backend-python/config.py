@@ -36,6 +36,9 @@ class Settings(BaseSettings):
 
     # Server base URL (used for building absolute file URLs)
     BASE_URL: str = "http://localhost:8000"
+    # 通用上传与量表图片使用独立的可持久化目录；留空时使用仓库内开发目录。
+    UPLOAD_DIR: str = ""
+    ASSESSMENT_ASSET_DIR: str = ""
 
     # EAP 量表运行时 JSON。留空时使用 backend-python/runtime/assessment-data；
     # 测试/生产环境应通过环境变量指向独立持久化目录。

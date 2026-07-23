@@ -243,53 +243,116 @@ test("maps demographic option values and free-form values from snapshot", () => 
   );
 });
 
-test("resolves assessment assets without relying on browser globals", () => {
-  const unchanged = [
+test("resolves only controlled assessment assets without browser globals", () => {
+  const rejected = [
     "https://cdn.example.com/cover.jpg",
     "http://cdn.example.com/cover.jpg",
     "data:image/png;base64,abc",
     "blob:https://example.com/id",
     "//cdn.example.com/cover.jpg",
+    "javascript:alert(1)",
+    "/static/uploads/uncontrolled.png",
+    "/images/content/cover.jpg?token=secret",
+    "/images/%2e%2e/private/cover.jpg",
+    "/images/content/cover.svg",
+    '/images/content/cover");evil=".jpg',
   ];
-  for (const value of unchanged) {
-    assert.equal(report.resolveAssessmentAssetUrl(value), value);
+  for (const value of rejected) {
+    assert.equal(report.resolveAssessmentAssetUrl(value), "", value);
   }
 
   assert.equal(
-    report.resolveAssessmentAssetUrl("/static/cover.jpg", {
+    report.resolveAssessmentAssetUrl("/images/content/cover.jpg", {
       eapBaseUrl: "https://eap.example.com/assessment",
     }),
-    "https://eap.example.com/static/cover.jpg",
+    "https://eap.example.com/images/content/cover.jpg",
   );
   assert.equal(
-    report.resolveAssessmentAssetUrl(
-      "images/cover.jpg",
-      "https://eap.example.com/assessment",
-    ),
-    "https://eap.example.com/assessment/images/cover.jpg",
-  );
-  assert.equal(
-    report.resolveAssessmentAssetUrl("images/cover.jpg", {
+    report.resolveAssessmentAssetUrl("/static/assessments/cover.jpg", {
+      apiBaseUrl: "https://api.example.com/api/",
       eapBaseUrl: "https://eap.example.com/assessment",
     }),
-    "https://eap.example.com/assessment/images/cover.jpg",
+    "https://api.example.com/static/assessments/cover.jpg",
   );
   assert.equal(
-    report.resolveAssessmentAssetUrl("images/cover.jpg", {
+    report.resolveAssessmentAssetUrl("/images/content/cover.jpg", {
       eapBaseUrl: "/assessment/",
       sameOriginBaseUrl: "https://admin.example.com/",
     }),
-    "https://admin.example.com/assessment/images/cover.jpg",
+    "https://admin.example.com/images/content/cover.jpg",
+  );
+
+  const managedPath =
+    `/static/assessment-assets/${"a".repeat(64)}.webp`;
+  assert.equal(
+    report.resolveAssessmentAssetUrl(managedPath, {
+      apiBaseUrl: "https://api.example.com/api/",
+      eapBaseUrl: "https://eap.example.com/",
+    }),
+    `https://api.example.com${managedPath}`,
   );
   assert.equal(
-    report.resolveAssessmentAssetUrl("/static/cover.jpg", {
+    report.resolveAssessmentAssetUrl(managedPath, {
       sameOriginBaseUrl: "https://admin.example.com/admin/",
     }),
-    "https://admin.example.com/static/cover.jpg",
+    `https://admin.example.com${managedPath}`,
+  );
+
+  const trustedEapAbsolute =
+    "https://eap.example.com/images/content/cover.jpg";
+  const trustedApiLegacyAbsolute =
+    "https://api.example.com/static/assessments/cover.jpg";
+  const trustedApiManagedAbsolute = `https://api.example.com${managedPath}`;
+  const configuredBases = {
+    apiBaseUrl: "https://api.example.com/api/",
+    eapBaseUrl: "https://eap.example.com/assessment/",
+    sameOriginBaseUrl: "https://admin.example.com/admin/",
+  };
+  assert.equal(
+    report.resolveAssessmentAssetUrl(trustedEapAbsolute, configuredBases),
+    trustedEapAbsolute,
   );
   assert.equal(
-    report.resolveAssessmentAssetUrl("/static/cover.jpg"),
-    "/static/cover.jpg",
+    report.resolveAssessmentAssetUrl(
+      trustedApiLegacyAbsolute,
+      configuredBases,
+    ),
+    trustedApiLegacyAbsolute,
+  );
+  assert.equal(
+    report.resolveAssessmentAssetUrl(trustedApiManagedAbsolute, configuredBases),
+    trustedApiManagedAbsolute,
+  );
+  assert.equal(
+    report.resolveAssessmentAssetUrl(
+      "https://admin.example.com/images/content/cover.jpg",
+      configuredBases,
+    ),
+    "https://admin.example.com/images/content/cover.jpg",
+  );
+
+  const untrustedAbsolute = [
+    "https://api.example.com/images/content/cover.jpg",
+    "https://eap.example.com/static/assessments/cover.jpg",
+    `https://eap.example.com${managedPath}`,
+    "https://eap.example.com.evil.test/images/content/cover.jpg",
+    "https://api.example.com.evil.test/static/assessments/cover.jpg",
+    "https://external.example.com/images/content/cover.jpg",
+  ];
+  for (const value of untrustedAbsolute) {
+    assert.equal(
+      report.resolveAssessmentAssetUrl(value, {
+        apiBaseUrl: configuredBases.apiBaseUrl,
+        eapBaseUrl: configuredBases.eapBaseUrl,
+      }),
+      "",
+      value,
+    );
+  }
+
+  assert.equal(
+    report.resolveAssessmentAssetUrl("/images/content/cover.jpg"),
+    "/images/content/cover.jpg",
   );
   assert.equal(report.resolveAssessmentAssetUrl(undefined), "");
 });

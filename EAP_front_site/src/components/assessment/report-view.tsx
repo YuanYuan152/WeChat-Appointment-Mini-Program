@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Share2, RotateCcw, AlertCircle, Download, Loader2 } from "lucide-react";
+import { AssessmentImage } from "@/components/assessment/assessment-image";
 import { Button } from "@/components/ui/button";
 import { useBeginAssessment } from "@/components/assessment/start-assessment-button";
 import { downloadAssessmentReportPdf } from "@/lib/assessment/download-report-pdf";
@@ -238,10 +238,9 @@ export function ReportView({ assessment, result, type, showActions = true }: Rep
               </div>
             )}
             <div className="relative aspect-[16/9]">
-              <Image
-                src={result.image}
+              <AssessmentImage
+                source={result.image}
                 alt={result.title}
-                fill
                 className="object-cover"
                 sizes="600px"
               />

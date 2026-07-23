@@ -18,6 +18,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator, Optional
 
+from assessment_asset_service import (
+    AssessmentAssetReferenceError,
+    validate_assessment_asset_reference,
+)
+
 
 ASSESSMENT_ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 ASSESSMENT_ID_MAX_LENGTH = 54
@@ -222,6 +227,22 @@ def _assert_optional_string(value: Any, label: str) -> None:
         raise AssessmentValidationError(f"{label}必须是字符串")
 
 
+def _validate_asset_reference(
+    value: Any,
+    label: str,
+    *,
+    allow_empty: bool,
+) -> None:
+    try:
+        validate_assessment_asset_reference(
+            value,
+            label,
+            allow_empty=allow_empty,
+        )
+    except AssessmentAssetReferenceError as exc:
+        raise AssessmentValidationError(str(exc)) from exc
+
+
 def _validate_id_list(value: Any, label: str, *, allow_empty: bool = True) -> set[str]:
     if not isinstance(value, list) or (not allow_empty and not value):
         suffix = "且不能为空" if not allow_empty else ""
@@ -370,6 +391,7 @@ def validate_definition(
     *,
     allow_fixed_scoring: bool,
     strict_scoring: bool = True,
+    strict_assets: bool = True,
 ) -> None:
     """Validate the v1 contract and semantic references.
 
@@ -405,6 +427,12 @@ def validate_definition(
     _assert_string(definition.get("subtitle"), "subtitle", allow_empty=True)
     _assert_string(definition.get("description"), "description", allow_empty=True)
     _assert_string(definition.get("cover"), "cover")
+    if strict_assets:
+        _validate_asset_reference(
+            definition.get("cover"),
+            "cover",
+            allow_empty=False,
+        )
     _assert_string(definition.get("disclaimer"), "disclaimer")
     for field in ("instructions", "features", "reportIntro"):
         _assert_optional_string(definition.get(field), field)
@@ -649,6 +677,12 @@ def validate_definition(
                     f"matchResults[{index}].{field}",
                     allow_empty=True,
                 )
+            if strict_assets:
+                _validate_asset_reference(
+                    result.get("image"),
+                    f"matchResults[{index}].image",
+                    allow_empty=True,
+                )
             suggestions = result.get("suggestions", [])
             if not isinstance(suggestions, list) or any(
                 not isinstance(value, str) or not value.strip() for value in suggestions
@@ -701,6 +735,12 @@ def validate_definition(
             for field in ("image", "shareText"):
                 _assert_optional_string(
                     profile.get(field), f"reportProfiles[{index}].{field}"
+                )
+            if strict_assets and "image" in profile:
+                _validate_asset_reference(
+                    profile.get("image"),
+                    f"reportProfiles[{index}].image",
+                    allow_empty=True,
                 )
 
     if scoring_type in FIXED_SCORING_PRESETS:
@@ -1077,6 +1117,7 @@ class AssessmentDefinitionStore:
             definition,
             allow_fixed_scoring=definition.get("scoringType") in FIXED_SCORING_PRESETS,
             strict_scoring=False,
+            strict_assets=False,
         )
         return copy.deepcopy(definition)
 
@@ -1316,6 +1357,7 @@ class AssessmentDefinitionStore:
                     source.get("scoringType") in FIXED_SCORING_PRESETS
                 ),
                 strict_scoring=False,
+                strict_assets=False,
             )
             next_version = max(
                 [item["version"] for item in self.list_versions(assessment_id)]

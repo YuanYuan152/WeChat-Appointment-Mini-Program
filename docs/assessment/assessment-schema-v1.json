@@ -66,9 +66,7 @@
       "maxLength": 10000
     },
     "cover": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 500
+      "$ref": "#/$defs/assessmentImageReference"
     },
     "duration": {
       "type": "integer",
@@ -219,6 +217,31 @@
       "pattern": "^[A-Za-z0-9]+(?:[-_.][A-Za-z0-9]+)*$",
       "minLength": 1,
       "maxLength": 100
+    },
+    "assessmentImageReference": {
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "pattern": "^/(?:images|static/assessments)/(?!\\.{1,2}(?:/|$))(?!.*(?:/\\.{1,2})(?:/|$))(?!.*//)[A-Za-z0-9._/-]+\\.(?:[Jj][Pp][Ee]?[Gg]|[Pp][Nn][Gg]|[Ww][Ee][Bb][Pp]|[Gg][Ii][Ff])$"
+        },
+        {
+          "type": "string",
+          "pattern": "^/static/assessment-assets/[0-9a-f]{64}\\.(?:jpg|png|webp)$"
+        }
+      ],
+      "description": "仅允许 EAP 内置图片、受控静态示例或量表上传接口返回的不可变站内路径；不允许外链、base64、查询参数和片段。"
+    },
+    "optionalAssessmentImageReference": {
+      "oneOf": [
+        {
+          "const": ""
+        },
+        {
+          "$ref": "#/$defs/assessmentImageReference"
+        }
+      ]
     },
     "demographicOption": {
       "type": "object",
@@ -469,8 +492,7 @@
           }
         },
         "image": {
-          "type": "string",
-          "maxLength": 500
+          "$ref": "#/$defs/optionalAssessmentImageReference"
         },
         "shareText": {
           "type": "string",
@@ -505,8 +527,7 @@
           }
         },
         "image": {
-          "type": "string",
-          "maxLength": 500
+          "$ref": "#/$defs/optionalAssessmentImageReference"
         },
         "shareText": {
           "type": "string",

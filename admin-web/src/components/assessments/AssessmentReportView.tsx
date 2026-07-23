@@ -6,6 +6,7 @@ import {
   mapDemographicAnswers,
   resolveAssessmentAssetUrl,
 } from "@/lib/assessmentReport";
+import { API_BASE_URL } from "@/lib/api";
 import { formatUtcFullDateTime } from "@/lib/format";
 import type {
   AssessmentReportDetail,
@@ -182,7 +183,10 @@ function ScoreResult({
     case "match": {
       const imageUrl = resolveAssessmentAssetUrl(
         result.image,
-        process.env.NEXT_PUBLIC_EAP_BASE_URL,
+        {
+          apiBaseUrl: API_BASE_URL,
+          eapBaseUrl: process.env.NEXT_PUBLIC_EAP_BASE_URL,
+        },
       );
       return (
         <section className="overflow-hidden rounded-2xl border border-[var(--lxxl-border)] bg-white">

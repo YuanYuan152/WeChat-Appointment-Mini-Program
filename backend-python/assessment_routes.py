@@ -6,11 +6,12 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from assessment_audit_service import begin_assessment_audit, finish_assessment_audit
+from assessment_asset_service import ImageUploadError, store_assessment_image_upload
 from assessment_definition_service import (
     AssessmentConflict,
     AssessmentDefinitionError,
@@ -173,6 +174,19 @@ def register_assessment_admin_routes(
     require_assessment_editor: Callable[..., Any],
 ) -> None:
     """Register admin routes without importing admin.py from this module."""
+
+    @router.post("/assessments/assets", summary="上传 EAP 量表受控图片")
+    async def upload_admin_assessment_asset(
+        file: UploadFile = File(...),
+        _actor: Any = Depends(require_assessment_editor),
+    ):
+        try:
+            return await store_assessment_image_upload(file)
+        except ImageUploadError as exc:
+            raise HTTPException(
+                status_code=exc.status_code,
+                detail=str(exc),
+            ) from exc
 
     @router.get("/assessments", summary="EAP 量表管理列表")
     def list_admin_assessments(
