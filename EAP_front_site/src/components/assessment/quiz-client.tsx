@@ -12,6 +12,7 @@ import {
   areRequiredAssessmentQuestionsAnswered,
   findAssessmentResumeQuestionIndex,
   isRequiredAssessmentQuestion,
+  shouldCreateFreshAssessmentAttempt,
 } from "@/lib/assessment/assessment-progress";
 import type { Assessment } from "@/lib/api/types";
 
@@ -75,7 +76,15 @@ export function QuizClient({ assessment, type }: QuizClientProps) {
   };
 
   const handleStartFresh = () => {
-    clearSession(assessment.id, version);
+    if (
+      shouldCreateFreshAssessmentAttempt({
+        started: hasStarted(assessment.id, version),
+        answeredCount,
+        completed: isComplete,
+      })
+    ) {
+      clearSession(assessment.id, version);
+    }
     markStarted(assessment.id);
     setCurrentIndex(assessment.id, 0);
     setPhase("quiz");

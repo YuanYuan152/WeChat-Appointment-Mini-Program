@@ -253,7 +253,8 @@ export function ResultClient({ assessment, type }: ResultClientProps) {
       const clientSubmissionId =
         getAttemptId(assessment.id, version) ??
         fallbackSubmissionId(userId, assessment);
-      const shareCode = getShareCode(assessment.id) ?? null;
+      const shareCode =
+        getShareCode(assessment.id, version, clientSubmissionId) ?? null;
       const saved = await submitAssessmentReport(token, {
         clientSubmissionId,
         assessmentId: assessment.id,
@@ -313,6 +314,7 @@ export function ResultClient({ assessment, type }: ResultClientProps) {
     return (
       <ReportView
         assessment={renderAssessment}
+        inviteAssessment={assessment}
         result={report.reportSnapshot.result}
         type={report.category}
       />

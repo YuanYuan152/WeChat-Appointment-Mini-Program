@@ -154,6 +154,10 @@
 | `shareCode` | 从分享二维码进入时携带，用于转化归因 |
 | `consentVersion` | 用户同意的隐私协议版本 |
 
+EAP 客户端只把经当前量表详情校验的 `shareCode` 绑定到当前账号、量表版本和
+`clientSubmissionId` 对应的作答 attempt。续做同一 attempt 时保留归因；切换账号、切换版本、
+重新测试或显式清理会话时清除归因。旧版未绑定 attempt 的本地分享码不得继续沿用。
+
 服务端必须：
 
 1. 校验量表版本仍存在且曾发布。
@@ -217,7 +221,7 @@
 通过详情的 `versions` 或 4.7 的独立接口读取。
 
 - `completedCount`：该量表所有版本下尚未删除的 EAP 完成报告数，不限进入来源。
-- `scanCount`：静态分享二维码的有效扫码事件总数；重复扫码仍按事件计数。
+- `scanCount`：静态分享二维码的有效扫码事件总数；同一匿名访客在 30 秒窗口外再次扫码会产生新事件。
 
 列表只聚合当前分页中的量表，未产生记录的量表返回 `0`。
 
@@ -349,17 +353,21 @@ EAP 报告直接返回提交时的 `reportSnapshot`。管理后台不得重新�
 
 `GET /api/web/assessment-shares/{shareCode}/scan`
 
-行为：记录访问后返回 `302`，跳转到对应量表介绍页。该接口不是 JSON，因此不套 `{code,msg,data}`。
+行为：尝试记录访问后返回 `302`，跳转到对应量表介绍页。该接口不是 JSON，因此不套
+`{code,msg,data}`。统计存储临时失败时会回滚并记录服务端错误日志，但不阻断有效分享码的跳转。
 
 记录内容遵循最小化原则：仅保存量表、时间和匿名访客哈希。不保存明文 IP、完整 User-Agent、手机号或微信标识。
 无有效匿名 cookie 时服务端生成随机 token，并设置 180 天 HttpOnly、SameSite=Lax cookie；
 `VisitorHash` 由该 token 和独立密钥做 HMAC 得到，不使用 IP/User-Agent 请求指纹，因此独立扫码数是近似值。
+同一 `shareCode + VisitorHash` 在 30 秒内重复访问时仍正常跳转，但只记录一次扫码事件。
+这是不修改数据库结构的应用层近似防刷新保护；完全并发的首次请求仍可能分别落库。
 
 ### 6.2 获取分享统计
 
 `GET /api/mini/admin/assessment-share-stats`
 
-查询参数：`assessment_id`、`start_at`、`end_at`。
+查询参数：`assessment_id`、`start_at`、`end_at`。带时区的 ISO datetime 按精确时刻过滤；
+裸 `YYYY-MM-DD` 按 `Asia/Shanghai` 自然日处理，开始时间包含、结束日期使用次日零点排除边界。
 
 返回：
 
@@ -386,6 +394,7 @@ EAP 报告直接返回提交时的 `reportSnapshot`。管理后台不得重新�
 可能把同一浏览器重复计数。`completedReportCount` 只统计携带有效 `shareCode` 归因的完成报告，
 不同于量表管理列表中包含所有进入来源的 `completedCount`。
 `conversionRate` 统一使用 `completedReportCount / scanCount`，时间筛选分别作用于扫码时间和报告完成时间。
+管理端将它展示为“同周期扫码完成比”；它不是按同一批扫码访客追踪的严格漏斗转化率。
 
 管理端“量表结果”页面提供“填写记录 / 分享统计”两个页签；量表管理列表可按量表 ID
 直接进入分享统计页。统计页每次查询只发起一次聚合请求，不按量表逐行请求。

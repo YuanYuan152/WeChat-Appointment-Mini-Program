@@ -3,12 +3,18 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 
+interface QuizShareAttribution {
+  shareCode: string;
+  assessmentVersion: number;
+  attemptId: string;
+}
+
 interface QuizSessionState {
   ownerAccountId: number | null;
   answers: Record<string, Record<string, string>>;
   currentIndex: Record<string, number>;
   attemptIds: Record<string, string>;
-  shareCodes: Record<string, string>;
+  shareAttributions: Record<string, QuizShareAttribution>;
   assessmentVersions: Record<string, number>;
   /** 用户是否已确认进入答题（看过指导语） */
   started: Record<string, boolean>;
@@ -24,8 +30,17 @@ interface QuizSessionState {
   getAnswers: (assessmentId: string, version?: number) => Record<string, string>;
   getCurrentIndex: (assessmentId: string, version?: number) => number;
   getAttemptId: (assessmentId: string, version?: number) => string | undefined;
-  setShareCode: (assessmentId: string, shareCode: string | null) => void;
-  getShareCode: (assessmentId: string) => string | undefined;
+  setShareCode: (
+    assessmentId: string,
+    version: number,
+    attemptId: string,
+    shareCode: string
+  ) => void;
+  getShareCode: (
+    assessmentId: string,
+    version: number,
+    attemptId: string
+  ) => string | undefined;
   hasStarted: (assessmentId: string, version?: number) => boolean;
   isReadyToSubmit: (assessmentId: string, version: number) => boolean;
   getAnsweredCount: (assessmentId: string, version?: number) => number;
@@ -44,6 +59,25 @@ function createAttemptId(): string {
   });
 }
 
+function migrateQuizSessionState(persistedState: unknown) {
+  if (!persistedState || typeof persistedState !== "object") {
+    return { shareAttributions: {} };
+  }
+  const compatibleState = {
+    ...(persistedState as Record<string, unknown>),
+  };
+  // Legacy shareCodes had no account/version/attempt binding. Keeping those
+  // values would allow an unrelated later attempt to inherit attribution.
+  delete compatibleState.shareCodes;
+  delete compatibleState.shareAttributions;
+  return {
+    ...compatibleState,
+    // Old persisted attribution must fail closed. Only records written by the
+    // current bound format can be trusted after this migration.
+    shareAttributions: {},
+  };
+}
+
 export const useQuizSession = create<QuizSessionState>()(
   persist(
     (set, get) => ({
@@ -51,7 +85,7 @@ export const useQuizSession = create<QuizSessionState>()(
       answers: {},
       currentIndex: {},
       attemptIds: {},
-      shareCodes: {},
+      shareAttributions: {},
       assessmentVersions: {},
       started: {},
       readyToSubmit: {},
@@ -103,6 +137,7 @@ export const useQuizSession = create<QuizSessionState>()(
             answers: {},
             currentIndex: {},
             attemptIds: {},
+            shareAttributions: {},
             assessmentVersions: {},
             started: {},
             readyToSubmit: {},
@@ -118,15 +153,18 @@ export const useQuizSession = create<QuizSessionState>()(
           const currentIndex = { ...state.currentIndex };
           const started = { ...state.started };
           const readyToSubmit = { ...state.readyToSubmit };
+          const shareAttributions = { ...state.shareAttributions };
           delete answers[assessmentId];
           delete currentIndex[assessmentId];
           delete started[assessmentId];
           delete readyToSubmit[assessmentId];
+          delete shareAttributions[assessmentId];
           return {
             answers,
             currentIndex,
             started,
             readyToSubmit,
+            shareAttributions,
             assessmentVersions: {
               ...state.assessmentVersions,
               [assessmentId]: version,
@@ -168,18 +206,41 @@ export const useQuizSession = create<QuizSessionState>()(
         return get().attemptIds[assessmentId];
       },
 
-      setShareCode: (assessmentId, shareCode) =>
+      setShareCode: (assessmentId, version, attemptId, shareCode) =>
         set((state) => {
-          const shareCodes = { ...state.shareCodes };
-          if (shareCode) {
-            shareCodes[assessmentId] = shareCode;
-          } else {
-            delete shareCodes[assessmentId];
+          const normalizedShareCode = shareCode.trim();
+          if (
+            !normalizedShareCode ||
+            state.assessmentVersions[assessmentId] !== version ||
+            state.attemptIds[assessmentId] !== attemptId
+          ) {
+            return state;
           }
-          return { shareCodes };
+          return {
+            shareAttributions: {
+              ...state.shareAttributions,
+              [assessmentId]: {
+                shareCode: normalizedShareCode,
+                assessmentVersion: version,
+                attemptId,
+              },
+            },
+          };
         }),
 
-      getShareCode: (assessmentId) => get().shareCodes[assessmentId],
+      getShareCode: (assessmentId, version, attemptId) => {
+        const state = get();
+        const attribution = state.shareAttributions[assessmentId];
+        if (
+          state.assessmentVersions[assessmentId] !== version ||
+          state.attemptIds[assessmentId] !== attemptId ||
+          attribution?.assessmentVersion !== version ||
+          attribution.attemptId !== attemptId
+        ) {
+          return undefined;
+        }
+        return attribution.shareCode;
+      },
 
       isAccountSessionOwner: (accountId) =>
         get().ownerAccountId === accountId,
@@ -211,10 +272,12 @@ export const useQuizSession = create<QuizSessionState>()(
           const started = { ...state.started };
           const readyToSubmit = { ...state.readyToSubmit };
           const assessmentVersions = { ...state.assessmentVersions };
+          const shareAttributions = { ...state.shareAttributions };
           delete answers[assessmentId];
           delete currentIndex[assessmentId];
           delete started[assessmentId];
           delete readyToSubmit[assessmentId];
+          delete shareAttributions[assessmentId];
           if (version === undefined) {
             delete assessmentVersions[assessmentId];
           } else {
@@ -225,6 +288,7 @@ export const useQuizSession = create<QuizSessionState>()(
             currentIndex,
             started,
             readyToSubmit,
+            shareAttributions,
             assessmentVersions,
             attemptIds: {
               ...state.attemptIds,
@@ -239,6 +303,7 @@ export const useQuizSession = create<QuizSessionState>()(
           answers: {},
           currentIndex: {},
           attemptIds: {},
+          shareAttributions: {},
           assessmentVersions: {},
           started: {},
           readyToSubmit: {},
@@ -246,6 +311,8 @@ export const useQuizSession = create<QuizSessionState>()(
     }),
     {
       name: "quiz-session-v2",
+      version: 1,
+      migrate: migrateQuizSessionState,
       // 使用 localStorage，关闭标签后仍可续做
       storage: createJSONStorage(() => localStorage),
     }

@@ -7,7 +7,7 @@ import hashlib
 import hmac
 import re
 import secrets
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Optional
 from urllib.parse import quote
 
@@ -22,6 +22,7 @@ SHARE_CODE_VERSION = "as1"
 SHARE_CODE_MAX_LENGTH = 120
 VISITOR_COOKIE_NAME = "eap_assessment_visitor"
 VISITOR_COOKIE_MAX_AGE = 180 * 24 * 60 * 60
+SCAN_DEDUP_WINDOW = timedelta(seconds=30)
 _ASSESSMENT_ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _VISITOR_TOKEN_PATTERN = re.compile(r"^[A-Za-z0-9_-]{24,128}$")
 _BASE64URL_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
@@ -151,12 +152,54 @@ def visitor_hash(visitor_token: str, *, secret: Optional[str] = None) -> str:
     ).hexdigest()
 
 
+def add_scan_if_not_recent(
+    db: Session,
+    *,
+    share_code: str,
+    assessment_id: str,
+    visitor_hash_value: str,
+    scanned_at: datetime,
+) -> bool:
+    """Add one counted scan unless the same anonymous visitor just scanned it.
+
+    This is deliberately an application-level, approximate anti-refresh guard.
+    Without a database uniqueness constraint, two concurrent first requests can
+    both pass the read-before-write check. That boundary is accepted for the
+    first-version analytics contract so the existing schema stays unchanged.
+    """
+    recent = (
+        db.query(AppAssessmentShareScan.Id)
+        .filter(
+            AppAssessmentShareScan.ShareCode == share_code,
+            AppAssessmentShareScan.VisitorHash == visitor_hash_value,
+            # Half-open window: a scan exactly 30 seconds later starts a new
+            # countable visit, while anything newer is treated as a refresh.
+            AppAssessmentShareScan.ScannedAt > scanned_at - SCAN_DEDUP_WINDOW,
+            AppAssessmentShareScan.ScannedAt <= scanned_at,
+        )
+        .first()
+    )
+    if recent:
+        return False
+
+    db.add(
+        AppAssessmentShareScan(
+            ShareCode=share_code,
+            AssessmentId=assessment_id,
+            VisitorHash=visitor_hash_value,
+            ScannedAt=scanned_at,
+        )
+    )
+    return True
+
+
 def assessment_share_stats(
     db: Session,
     *,
     assessment_id: Optional[str],
     start_at: Optional[datetime],
     end_at: Optional[datetime],
+    end_at_exclusive: bool = False,
     assessment_titles: Optional[dict[str, str]] = None,
 ) -> dict[str, Any]:
     """按同一时间窗口统计扫码、近似独立扫码和完成报告数。"""
@@ -177,8 +220,12 @@ def assessment_share_stats(
         scan_query = scan_query.filter(AppAssessmentShareScan.ScannedAt >= start_at)
         report_query = report_query.filter(AppAssessmentReport.CompletedAt >= start_at)
     if end_at:
-        scan_query = scan_query.filter(AppAssessmentShareScan.ScannedAt <= end_at)
-        report_query = report_query.filter(AppAssessmentReport.CompletedAt <= end_at)
+        if end_at_exclusive:
+            scan_query = scan_query.filter(AppAssessmentShareScan.ScannedAt < end_at)
+            report_query = report_query.filter(AppAssessmentReport.CompletedAt < end_at)
+        else:
+            scan_query = scan_query.filter(AppAssessmentShareScan.ScannedAt <= end_at)
+            report_query = report_query.filter(AppAssessmentReport.CompletedAt <= end_at)
 
     scan_count = int(scan_query.count())
     unique_scan_count = int(

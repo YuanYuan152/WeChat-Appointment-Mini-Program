@@ -22,6 +22,44 @@ const questions = [
   { id: "required-2", required: true },
 ];
 
+test("first start keeps the untouched attempt that may already carry QR attribution", () => {
+  assert.equal(
+    progress.shouldCreateFreshAssessmentAttempt({
+      started: false,
+      answeredCount: 0,
+      completed: false,
+    }),
+    false,
+  );
+});
+
+test("restart creates a new attempt after start, progress or completion", () => {
+  assert.equal(
+    progress.shouldCreateFreshAssessmentAttempt({
+      started: true,
+      answeredCount: 0,
+      completed: false,
+    }),
+    true,
+  );
+  assert.equal(
+    progress.shouldCreateFreshAssessmentAttempt({
+      started: false,
+      answeredCount: 1,
+      completed: false,
+    }),
+    true,
+  );
+  assert.equal(
+    progress.shouldCreateFreshAssessmentAttempt({
+      started: false,
+      answeredCount: 0,
+      completed: true,
+    }),
+    true,
+  );
+});
+
 test("allows completion when only optional questions are unanswered", () => {
   assert.equal(
     progress.areRequiredAssessmentQuestionsAnswered(questions, {

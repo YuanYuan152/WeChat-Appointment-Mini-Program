@@ -45,7 +45,7 @@ export function AssessmentShareStatsPanel({
         <div>
           <h2 className="text-xl font-semibold tracking-normal">量表分享统计</h2>
           <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">
-            查看二维码扫码、近似独立访问和分享归因完成情况。转化率按分享归因完成报告数除以扫码事件数计算。
+            查看二维码扫码、近似独立访问和分享归因完成情况。同周期扫码完成比按所选时间内的归因完成报告数除以扫码事件数计算。
           </p>
         </div>
 
@@ -141,13 +141,13 @@ export function AssessmentShareStatsPanel({
                 value={`${formatCount(stats.completedReportCount)} 份`}
               />
               <MiniStat
-                label="扫码转化率"
+                label="同周期扫码完成比"
                 value={formatAssessmentConversionRate(stats.conversionRate)}
               />
             </div>
 
             <p className="mt-4 text-xs leading-5 text-[var(--lxxl-muted)]">
-              近似独立扫码根据匿名 cookie 计算，不等同于真实自然人数；重复扫码计入二维码扫码次数。
+              近似独立扫码根据匿名 cookie 计算，不等同于真实自然人数；同一浏览器 30 秒内重复打开同一量表不会重复计数。同周期扫码完成比不是同一批访客的严格漏斗转化率。
             </p>
 
             {stats.items.length === 0 ? (
@@ -163,7 +163,9 @@ export function AssessmentShareStatsPanel({
                       <th className="px-5 py-3 font-medium">二维码扫码</th>
                       <th className="px-5 py-3 font-medium">近似独立扫码</th>
                       <th className="px-5 py-3 font-medium">分享归因完成</th>
-                      <th className="px-5 py-3 font-medium">扫码转化率</th>
+                      <th className="px-5 py-3 font-medium">
+                        同周期扫码完成比
+                      </th>
                     </tr>
                   </thead>
                   <tbody>

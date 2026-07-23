@@ -71,6 +71,8 @@
 首次扫码时服务端创建随机匿名 token 并写入 HttpOnly cookie；每次扫码都使用该 token 与独立
 服务端密钥做 HMAC 得到 `VisitorHash`。当前没有 IP/User-Agent 请求指纹回退；禁用或清除
 cookie 会被近似统计为新的访客。
+应用层会忽略同一 `ShareCode + VisitorHash` 在 30 秒内的重复记录，但仍正常完成跳转；
+该保护不新增数据库唯一约束，完全并发的首次请求仍可能分别写入。
 
 ### 3.2 索引
 

@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import logging
+import re
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Any, Callable, Optional
 from urllib.parse import quote, urlencode
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
@@ -18,6 +21,7 @@ from assessment_share_service import (
     VISITOR_COOKIE_NAME,
     AssessmentShareCodeError,
     AssessmentShareConfigurationError,
+    add_scan_if_not_recent,
     assessment_share_stats,
     decode_share_code,
     new_visitor_token,
@@ -26,19 +30,60 @@ from assessment_share_service import (
 )
 from config import settings
 from database import get_db
-from models import AppAccount, AppAssessmentShareScan
+from models import AppAccount
 
 
 router = APIRouter(
     prefix="/api/web/assessment-shares",
     tags=["Web Assessment Shares"],
 )
+logger = logging.getLogger("uvicorn.error")
+_CHINA_TIMEZONE = ZoneInfo("Asia/Shanghai")
+_DATE_ONLY_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def _utc_naive(value: Optional[datetime]) -> Optional[datetime]:
     if value is None or value.tzinfo is None:
         return value
     return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def _date_only_boundary(
+    raw_value: Optional[str],
+    *,
+    is_end: bool,
+) -> Optional[datetime]:
+    """Convert a bare China calendar date to an exclusive UTC range boundary."""
+    normalized = (raw_value or "").strip()
+    if not _DATE_ONLY_PATTERN.fullmatch(normalized):
+        return None
+    try:
+        local_date = date.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if is_end:
+        local_date += timedelta(days=1)
+    local_boundary = datetime.combine(local_date, time.min, tzinfo=_CHINA_TIMEZONE)
+    return local_boundary.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def _normalize_stats_bound(
+    parsed_value: Optional[datetime],
+    raw_value: Optional[str],
+    *,
+    is_end: bool,
+) -> tuple[Optional[datetime], bool]:
+    """Preserve precise datetimes while accepting a bare China natural date."""
+    if parsed_value is None:
+        return None, False
+    date_boundary = _date_only_boundary(raw_value, is_end=is_end)
+    if date_boundary is not None:
+        return date_boundary, is_end
+    return _utc_naive(parsed_value), False
 
 
 def _raise_share_http_error(exc: Exception) -> None:
@@ -60,7 +105,11 @@ def scan_assessment_share(
     try:
         assessment_id = decode_share_code(normalized_share_code)
         published = get_assessment_store().get_published(assessment_id)
-    except (AssessmentShareCodeError, AssessmentShareConfigurationError, AssessmentDefinitionError) as exc:
+    except (
+        AssessmentShareCodeError,
+        AssessmentShareConfigurationError,
+        AssessmentDefinitionError,
+    ) as exc:
         _raise_share_http_error(exc)
 
     frontend_base = settings.ASSESSMENT_FRONTEND_BASE_URL.strip().rstrip("/")
@@ -70,14 +119,32 @@ def scan_assessment_share(
     visitor_token = normalize_visitor_token(
         request.cookies.get(VISITOR_COOKIE_NAME)
     ) or new_visitor_token()
-    row = AppAssessmentShareScan(
-        ShareCode=normalized_share_code,
-        AssessmentId=assessment_id,
-        VisitorHash=visitor_hash(visitor_token),
-        ScannedAt=datetime.now(timezone.utc).replace(tzinfo=None),
-    )
-    db.add(row)
-    db.commit()
+    visitor_hash_value = visitor_hash(visitor_token)
+    try:
+        if add_scan_if_not_recent(
+            db,
+            share_code=normalized_share_code,
+            assessment_id=assessment_id,
+            visitor_hash_value=visitor_hash_value,
+            scanned_at=_utc_now(),
+        ):
+            db.commit()
+    except Exception as exc:
+        # Tracking is ancillary: a transient database error must not make a
+        # valid static QR code unusable. Roll back this session and still
+        # return the normal redirect below.
+        try:
+            db.rollback()
+        except Exception:
+            logger.exception(
+                "assessment share scan rollback failed for assessment %s",
+                assessment_id,
+            )
+        logger.error(
+            "assessment share scan tracking failed for assessment %s",
+            assessment_id,
+            exc_info=(type(exc), exc, exc.__traceback__),
+        )
 
     definition = published["definition"]
     query = urlencode({"shareCode": normalized_share_code})
@@ -121,9 +188,25 @@ def register_assessment_share_admin_routes(
         db: Session = Depends(get_db),
     ):
         normalized_assessment_id = (assessment_id or "").strip() or None
-        normalized_start = _utc_naive(start_at)
-        normalized_end = _utc_naive(end_at)
-        if normalized_start and normalized_end and normalized_start > normalized_end:
+        normalized_start, _ = _normalize_stats_bound(
+            start_at,
+            request.query_params.get("start_at"),
+            is_end=False,
+        )
+        normalized_end, end_at_exclusive = _normalize_stats_bound(
+            end_at,
+            request.query_params.get("end_at"),
+            is_end=True,
+        )
+        if (
+            normalized_start
+            and normalized_end
+            and (
+                normalized_start >= normalized_end
+                if end_at_exclusive
+                else normalized_start > normalized_end
+            )
+        ):
             raise HTTPException(status_code=422, detail="开始时间不能晚于结束时间")
 
         try:
@@ -138,6 +221,7 @@ def register_assessment_share_admin_routes(
             assessment_id=normalized_assessment_id,
             start_at=normalized_start,
             end_at=normalized_end,
+            end_at_exclusive=end_at_exclusive,
             assessment_titles=titles,
         )
         begin_assessment_audit(
@@ -150,6 +234,7 @@ def register_assessment_share_admin_routes(
             metadata={
                 "startAt": normalized_start.isoformat() if normalized_start else None,
                 "endAt": normalized_end.isoformat() if normalized_end else None,
+                "endAtExclusive": end_at_exclusive,
                 "scanCount": result["scanCount"],
                 "uniqueScanCount": result["uniqueScanCount"],
                 "completedReportCount": result["completedReportCount"],

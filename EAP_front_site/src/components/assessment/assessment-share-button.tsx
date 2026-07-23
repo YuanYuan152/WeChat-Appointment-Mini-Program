@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import Image from "next/image";
 import QRCode from "qrcode";
-import { Copy, Download, Loader2, Share2 } from "lucide-react";
+import { Copy, Download, Loader2, RefreshCw, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -12,12 +12,18 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useQuizSession } from "@/lib/stores/quiz-session";
+import {
+  assessmentPosterReducer,
+  assessmentShareSourceKey,
+  createAssessmentPosterState,
+  safeAssessmentShareFileName,
+} from "@/lib/assessment/assessment-share-state";
 import type { Assessment } from "@/lib/api/types";
 
 interface AssessmentShareButtonProps {
   assessment: Assessment;
-  incomingShareCode?: string | null;
+  triggerLabel?: string;
+  triggerSize?: "default" | "sm";
 }
 
 const POSTER_WIDTH = 900;
@@ -84,10 +90,15 @@ function drawWrappedText(
   return startY + lines.length * lineHeight;
 }
 
+interface GeneratedAssessmentPoster {
+  blob: Blob;
+  previewDataUrl: string;
+}
+
 async function createAssessmentPoster(
   assessment: Assessment,
   shareUrl: string
-): Promise<Blob> {
+): Promise<GeneratedAssessmentPoster> {
   const canvas = document.createElement("canvas");
   canvas.width = POSTER_WIDTH;
   canvas.height = POSTER_HEIGHT;
@@ -149,69 +160,129 @@ async function createAssessmentPoster(
   context.font = "400 20px system-ui, sans-serif";
   context.fillText("测评结果仅供参考，不能替代专业诊断", 450, 1090);
 
-  return new Promise((resolve, reject) => {
+  const previewDataUrl = canvas.toDataURL("image/png");
+  const blob = await new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(
       (blob) => (blob ? resolve(blob) : reject(new Error("分享图片生成失败"))),
       "image/png",
       0.95
     );
   });
-}
-
-function safeFileName(title: string): string {
-  const normalized = title.replace(/[\\/:*?"<>|]/g, "-").trim();
-  return `${normalized || "心理测评"}-分享海报.png`;
+  return { blob, previewDataUrl };
 }
 
 export function AssessmentShareButton({
   assessment,
-  incomingShareCode = null,
+  triggerLabel = "分享量表",
+  triggerSize = "sm",
 }: AssessmentShareButtonProps) {
-  const setShareCode = useQuizSession((state) => state.setShareCode);
-  const [open, setOpen] = useState(false);
-  const [posterBlob, setPosterBlob] = useState<Blob | null>(null);
-  const [posterUrl, setPosterUrl] = useState<string | null>(null);
-  const [generating, setGenerating] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const shareUrl = assessment.shareUrl ?? null;
+  const shareUrl = assessment.shareUrl?.trim() || null;
+  const sourceKey = assessmentShareSourceKey(assessment.id, shareUrl);
+  const contentKey = JSON.stringify([
+    sourceKey,
+    assessment.version ?? 0,
+    assessment.title,
+    assessment.subtitle ?? "",
+    assessment.questionCount,
+    assessment.duration,
+  ]);
 
-  useEffect(() => {
-    const verifiedIncomingCode =
-      incomingShareCode && incomingShareCode === assessment.shareCode
-        ? incomingShareCode
-        : null;
-    const syncAttribution = () => {
-      setShareCode(assessment.id, verifiedIncomingCode);
-    };
-    if (useQuizSession.persist.hasHydrated()) {
-      syncAttribution();
-      return;
-    }
-    return useQuizSession.persist.onFinishHydration(syncAttribution);
-  }, [assessment.id, assessment.shareCode, incomingShareCode, setShareCode]);
+  return (
+    <AssessmentShareButtonContent
+      assessment={assessment}
+      key={contentKey}
+      shareUrl={shareUrl}
+      sourceKey={contentKey}
+      triggerLabel={triggerLabel}
+      triggerSize={triggerSize}
+    />
+  );
+}
+
+function AssessmentShareButtonContent({
+  assessment,
+  shareUrl,
+  sourceKey,
+  triggerLabel,
+  triggerSize,
+}: {
+  assessment: Assessment;
+  shareUrl: string | null;
+  sourceKey: string;
+  triggerLabel: string;
+  triggerSize: "default" | "sm";
+}) {
+  const [open, setOpen] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const generationSequence = useRef(0);
+  const allocatedObjectUrls = useRef(new Set<string>());
+  const [posterState, dispatchPoster] = useReducer(
+    assessmentPosterReducer<Blob>,
+    createAssessmentPosterState<Blob>(sourceKey)
+  );
+  const poster = posterState.poster;
+  const posterObjectUrl = poster?.objectUrl ?? null;
+  const generating = posterState.status === "generating";
 
   useEffect(
     () => () => {
-      if (posterUrl) URL.revokeObjectURL(posterUrl);
+      if (posterObjectUrl) {
+        URL.revokeObjectURL(posterObjectUrl);
+        allocatedObjectUrls.current.delete(posterObjectUrl);
+      }
     },
-    [posterUrl]
+    [posterObjectUrl]
+  );
+
+  useEffect(
+    () => () => {
+      generationSequence.current += 1;
+      allocatedObjectUrls.current.forEach((objectUrl) => {
+        URL.revokeObjectURL(objectUrl);
+      });
+      allocatedObjectUrls.current.clear();
+    },
+    []
   );
 
   const preparePoster = useCallback(async () => {
-    if (!shareUrl || posterBlob || generating) return;
-    setGenerating(true);
+    if (!shareUrl || posterState.status === "ready" || generating) return;
+    const generation = ++generationSequence.current;
+    dispatchPoster({
+      type: "generation-started",
+      sourceKey,
+      generation,
+    });
     setMessage(null);
     try {
-      const blob = await createAssessmentPoster(assessment, shareUrl);
-      const url = URL.createObjectURL(blob);
-      setPosterBlob(blob);
-      setPosterUrl(url);
+      const generated = await createAssessmentPoster(assessment, shareUrl);
+      if (generation !== generationSequence.current) return;
+      const objectUrl = URL.createObjectURL(generated.blob);
+      allocatedObjectUrls.current.add(objectUrl);
+      if (generation !== generationSequence.current) {
+        URL.revokeObjectURL(objectUrl);
+        allocatedObjectUrls.current.delete(objectUrl);
+        return;
+      }
+      dispatchPoster({
+        type: "generation-succeeded",
+        sourceKey,
+        generation,
+        poster: {
+          ...generated,
+          objectUrl,
+        },
+      });
     } catch (reason) {
-      setMessage(reason instanceof Error ? reason.message : "分享图片生成失败");
-    } finally {
-      setGenerating(false);
+      if (generation !== generationSequence.current) return;
+      dispatchPoster({
+        type: "generation-failed",
+        sourceKey,
+        generation,
+        error: reason instanceof Error ? reason.message : "分享图片生成失败",
+      });
     }
-  }, [assessment, generating, posterBlob, shareUrl]);
+  }, [assessment, generating, posterState.status, shareUrl, sourceKey]);
 
   const openDialog = () => {
     setOpen(true);
@@ -219,41 +290,80 @@ export function AssessmentShareButton({
   };
 
   const downloadPoster = () => {
-    if (!posterBlob) return;
-    const url = URL.createObjectURL(posterBlob);
+    if (!poster) return;
     const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = safeFileName(assessment.title);
+    anchor.href = poster.objectUrl;
+    anchor.download = safeAssessmentShareFileName(assessment.title);
+    anchor.style.display = "none";
+    document.body.appendChild(anchor);
     anchor.click();
-    URL.revokeObjectURL(url);
-    setMessage("分享图片已保存");
+    anchor.remove();
+    setMessage("已触发保存，请确认浏览器下载");
   };
 
   const sharePoster = async () => {
-    if (!posterBlob || !shareUrl) return;
-    const file = new File([posterBlob], safeFileName(assessment.title), {
+    if (!poster || !shareUrl) return;
+    const file = new File([poster.blob], safeAssessmentShareFileName(assessment.title), {
       type: "image/png",
     });
-    try {
-      if (
-        navigator.share &&
-        (!navigator.canShare || navigator.canShare({ files: [file] }))
-      ) {
-        await navigator.share({
-          title: assessment.title,
-          text: `邀请你完成「${assessment.title}」心理测评`,
-          url: shareUrl,
-          files: [file],
-        });
+    const fullPayload: ShareData = {
+      title: assessment.title,
+      text: `邀请你完成「${assessment.title}」心理测评`,
+      url: shareUrl,
+      files: [file],
+    };
+    const filesOnlyPayload: ShareData = { files: [file] };
+    const shareCandidates: ShareData[] = [];
+    const nativeShare =
+      typeof navigator.share === "function"
+        ? navigator.share.bind(navigator)
+        : null;
+    const canShare =
+      typeof navigator.canShare === "function"
+        ? navigator.canShare.bind(navigator)
+        : null;
+
+    if (nativeShare) {
+      if (!canShare) {
+        shareCandidates.push(fullPayload, filesOnlyPayload);
+      } else {
+        try {
+          if (canShare(fullPayload)) {
+            shareCandidates.push(fullPayload);
+          }
+        } catch {
+          // An implementation may expose canShare but reject newer fields.
+          // The visible preview remains the reliable fallback.
+        }
+        try {
+          if (canShare(filesOnlyPayload)) {
+            shareCandidates.push(filesOnlyPayload);
+          }
+        } catch {
+          // Keep the long-press preview fallback below.
+        }
+      }
+    }
+
+    if (!nativeShare) {
+      setMessage("当前浏览器无法直接分享图片，请长按上方海报保存后从微信发送");
+      return;
+    }
+
+    for (const payload of shareCandidates) {
+      try {
+        await nativeShare(payload);
         setMessage("已打开系统分享面板");
         return;
+      } catch (reason) {
+        if (reason instanceof DOMException && reason.name === "AbortError") {
+          return;
+        }
+        // Some browsers accept the combined payload in canShare but reject
+        // it at invocation time. Continue with the files-only candidate.
       }
-      downloadPoster();
-      setMessage("当前浏览器不支持直接分享，已保存图片");
-    } catch (reason) {
-      if (reason instanceof DOMException && reason.name === "AbortError") return;
-      setMessage("分享未完成，可保存图片后从微信发送");
     }
+    setMessage("当前浏览器无法直接分享图片，请长按上方海报保存后从微信发送");
   };
 
   const copyLink = async () => {
@@ -271,13 +381,13 @@ export function AssessmentShareButton({
       <Button
         type="button"
         variant="outline"
-        size="sm"
+        size={triggerSize}
         onClick={openDialog}
         disabled={!shareUrl}
         title={shareUrl ? "生成量表邀请海报" : "当前环境尚未配置量表分享"}
       >
         <Share2 className="mr-2 h-4 w-4" />
-        分享量表
+        {triggerLabel}
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -293,24 +403,39 @@ export function AssessmentShareButton({
           </DialogHeader>
 
           <div className="mt-5 overflow-hidden rounded-2xl border border-border bg-muted/40">
-            {posterUrl ? (
+            {poster ? (
               <Image
-                src={posterUrl}
+                src={poster.previewDataUrl}
                 alt={`${assessment.title}分享海报`}
                 width={POSTER_WIDTH}
                 height={POSTER_HEIGHT}
                 unoptimized
+                draggable={false}
                 className="h-auto w-full"
+                style={{ WebkitTouchCallout: "default" }}
               />
             ) : (
-              <div className="flex aspect-[3/4] items-center justify-center text-sm text-muted-foreground">
+              <div className="flex aspect-[3/4] flex-col items-center justify-center gap-4 px-6 text-center text-sm text-muted-foreground">
                 {generating ? (
                   <>
                     <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                     正在生成分享图片…
                   </>
                 ) : (
-                  message ?? "分享图片尚未生成"
+                  <>
+                    <span>{posterState.error ?? "分享图片尚未生成"}</span>
+                    {posterState.status === "error" ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => void preparePoster()}
+                      >
+                        <RefreshCw className="mr-2 h-4 w-4" />
+                        重新生成
+                      </Button>
+                    ) : null}
+                  </>
                 )}
               </div>
             )}
@@ -319,15 +444,15 @@ export function AssessmentShareButton({
           <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
             微信内可长按上方图片保存，再发送给好友或分享到朋友圈；支持系统分享的浏览器可直接点击“分享图片”。
           </p>
-          {message && posterUrl ? (
+          {message && poster ? (
             <p className="mt-2 text-sm text-primary">{message}</p>
           ) : null}
           <div className="mt-5 flex flex-wrap gap-2">
-            <Button onClick={() => void sharePoster()} disabled={!posterBlob}>
+            <Button onClick={() => void sharePoster()} disabled={!poster}>
               <Share2 className="mr-2 h-4 w-4" />
               分享图片
             </Button>
-            <Button variant="outline" onClick={downloadPoster} disabled={!posterBlob}>
+            <Button variant="outline" onClick={downloadPoster} disabled={!poster}>
               <Download className="mr-2 h-4 w-4" />
               保存图片
             </Button>

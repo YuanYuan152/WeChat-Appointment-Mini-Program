@@ -2,6 +2,18 @@ import type { AssessmentQuestion } from "@/lib/api/types";
 
 type ProgressQuestion = Pick<AssessmentQuestion, "id" | "required">;
 
+export function shouldCreateFreshAssessmentAttempt({
+  started,
+  answeredCount,
+  completed,
+}: {
+  started: boolean;
+  answeredCount: number;
+  completed: boolean;
+}): boolean {
+  return started || answeredCount > 0 || completed;
+}
+
 export function isRequiredAssessmentQuestion(
   question: ProgressQuestion,
 ): boolean {
