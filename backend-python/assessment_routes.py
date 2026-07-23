@@ -6,9 +6,11 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 
+from assessment_audit_service import begin_assessment_audit, finish_assessment_audit
 from assessment_definition_service import (
     AssessmentConflict,
     AssessmentDefinitionError,
@@ -17,6 +19,7 @@ from assessment_definition_service import (
     AssessmentValidationError,
 )
 from config import settings
+from database import get_db
 
 
 public_router = APIRouter(prefix="/api/web/assessments", tags=["Web Assessments"])
@@ -73,6 +76,64 @@ def _raise_http_error(exc: AssessmentDefinitionError) -> None:
     if isinstance(exc, AssessmentValidationError):
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     raise HTTPException(status_code=500, detail="量表定义存储异常") from exc
+
+
+def _run_audited_definition_mutation(
+    db: Session,
+    *,
+    actor: Any,
+    request: Request,
+    action: str,
+    assessment_id: Optional[str],
+    assessment_version: Optional[int],
+    metadata: Optional[dict[str, Any]],
+    operation: Callable[[], dict[str, Any]],
+) -> dict[str, Any]:
+    """先持久化 PENDING，再执行文件写入并记录最终结果。"""
+    audit = begin_assessment_audit(
+        db,
+        actor=actor,
+        action=action,
+        target_type="ASSESSMENT",
+        request_id=request.headers.get("x-request-id"),
+        assessment_id=assessment_id,
+        assessment_version=assessment_version,
+        metadata=metadata,
+        outcome="PENDING",
+    )
+    db.commit()
+    try:
+        result = operation()
+    except Exception as exc:
+        finish_assessment_audit(
+            audit,
+            outcome="FAILED",
+            metadata={
+                **(metadata or {}),
+                "errorType": type(exc).__name__,
+            },
+        )
+        db.commit()
+        raise
+
+    definition = result.get("definition") if isinstance(result, dict) else None
+    finish_assessment_audit(
+        audit,
+        outcome="SUCCEEDED",
+        metadata={
+            **(metadata or {}),
+            **(
+                {
+                    "resultVersion": definition.get("version"),
+                    "resultStatus": definition.get("status"),
+                }
+                if isinstance(definition, dict)
+                else {}
+            ),
+        },
+    )
+    db.commit()
+    return result
 
 
 @public_router.get("", summary="已发布 EAP 量表列表")
@@ -136,10 +197,22 @@ def register_assessment_admin_routes(
     @router.post("/assessments", summary="新建 EAP 量表草稿")
     def create_admin_assessment(
         body: AssessmentDefinitionPayload,
-        _actor: Any = Depends(require_assessment_editor),
+        request: Request,
+        actor: Any = Depends(require_assessment_editor),
+        db: Session = Depends(get_db),
     ):
         try:
-            return get_assessment_store().create_draft(body.definition)
+            assessment_id = body.definition.get("id")
+            return _run_audited_definition_mutation(
+                db,
+                actor=actor,
+                request=request,
+                action="DEFINITION_CREATE",
+                assessment_id=assessment_id if isinstance(assessment_id, str) else None,
+                assessment_version=None,
+                metadata=None,
+                operation=lambda: get_assessment_store().create_draft(body.definition),
+            )
         except AssessmentDefinitionError as exc:
             _raise_http_error(exc)
 
@@ -147,13 +220,24 @@ def register_assessment_admin_routes(
     def update_admin_assessment_draft(
         assessment_id: str,
         body: AssessmentDraftPayload,
-        _actor: Any = Depends(require_assessment_editor),
+        request: Request,
+        actor: Any = Depends(require_assessment_editor),
+        db: Session = Depends(get_db),
     ):
         try:
-            return get_assessment_store().update_draft(
-                assessment_id,
-                body.definition,
-                expected_revision=body.expectedRevision,
+            return _run_audited_definition_mutation(
+                db,
+                actor=actor,
+                request=request,
+                action="DEFINITION_UPDATE",
+                assessment_id=assessment_id,
+                assessment_version=None,
+                metadata=None,
+                operation=lambda: get_assessment_store().update_draft(
+                    assessment_id,
+                    body.definition,
+                    expected_revision=body.expectedRevision,
+                ),
             )
         except AssessmentDefinitionError as exc:
             _raise_http_error(exc)
@@ -162,12 +246,23 @@ def register_assessment_admin_routes(
     def publish_admin_assessment(
         assessment_id: str,
         body: AssessmentPublishPayload,
-        _actor: Any = Depends(require_assessment_editor),
+        request: Request,
+        actor: Any = Depends(require_assessment_editor),
+        db: Session = Depends(get_db),
     ):
         try:
-            return get_assessment_store().publish(
-                assessment_id,
-                expected_revision=body.expectedRevision,
+            return _run_audited_definition_mutation(
+                db,
+                actor=actor,
+                request=request,
+                action="DEFINITION_PUBLISH",
+                assessment_id=assessment_id,
+                assessment_version=None,
+                metadata=None,
+                operation=lambda: get_assessment_store().publish(
+                    assessment_id,
+                    expected_revision=body.expectedRevision,
+                ),
             )
         except AssessmentDefinitionError as exc:
             _raise_http_error(exc)
@@ -175,10 +270,21 @@ def register_assessment_admin_routes(
     @router.post("/assessments/{assessment_id}/archive", summary="归档 EAP 量表")
     def archive_admin_assessment(
         assessment_id: str,
-        _actor: Any = Depends(require_assessment_editor),
+        request: Request,
+        actor: Any = Depends(require_assessment_editor),
+        db: Session = Depends(get_db),
     ):
         try:
-            return get_assessment_store().archive(assessment_id)
+            return _run_audited_definition_mutation(
+                db,
+                actor=actor,
+                request=request,
+                action="DEFINITION_ARCHIVE",
+                assessment_id=assessment_id,
+                assessment_version=None,
+                metadata=None,
+                operation=lambda: get_assessment_store().archive(assessment_id),
+            )
         except AssessmentDefinitionError as exc:
             _raise_http_error(exc)
 
@@ -201,9 +307,22 @@ def register_assessment_admin_routes(
     def restore_admin_assessment_version(
         assessment_id: str,
         version: int,
-        _actor: Any = Depends(require_assessment_editor),
+        request: Request,
+        actor: Any = Depends(require_assessment_editor),
+        db: Session = Depends(get_db),
     ):
         try:
-            return get_assessment_store().restore_version(assessment_id, version)
+            return _run_audited_definition_mutation(
+                db,
+                actor=actor,
+                request=request,
+                action="DEFINITION_RESTORE",
+                assessment_id=assessment_id,
+                assessment_version=version,
+                metadata={"restoredVersion": version},
+                operation=lambda: get_assessment_store().restore_version(
+                    assessment_id, version
+                ),
+            )
         except AssessmentDefinitionError as exc:
             _raise_http_error(exc)

@@ -1,4 +1,5 @@
 const PROFESSIONAL_PRIVACY_KEY = "assessment-professional-privacy-accepted";
+export const ASSESSMENT_PRIVACY_VERSION = "2026-01";
 
 export const privacyAgreementSections = [
   {
@@ -19,7 +20,7 @@ export const privacyAgreementSections = [
   {
     title: "四、数据存储与访问",
     content:
-      "测评过程中产生的答题进度会保存在您的浏览器本地（localStorage），以便关闭页面后仍可继续作答。我们不会将测评数据共享给无关第三方。",
+      "测评过程中的未完成答题进度会保存在您的浏览器本地，以便关闭页面后继续作答；提交后的正式答案、人口学信息和报告会同步到您的平台账号。经授权的咨询助理、运营人员和管理员可按工作职责查看报告，其中原始答案和人口学信息仅限运营及管理员访问。我们不会将测评数据共享给无关第三方。",
   },
   {
     title: "五、您的权利",
@@ -45,12 +46,30 @@ export const privacyAgreementIntro =
 export function isProfessionalAssessmentPrivacyAccepted(
   _assessmentId?: string
 ): boolean {
+  void _assessmentId;
   if (typeof window === "undefined") return false;
-  return localStorage.getItem(PROFESSIONAL_PRIVACY_KEY) === "true";
+  try {
+    const raw = localStorage.getItem(PROFESSIONAL_PRIVACY_KEY);
+    if (!raw) return false;
+    const accepted = JSON.parse(raw) as { version?: string; acceptedAt?: string };
+    return (
+      accepted.version === ASSESSMENT_PRIVACY_VERSION &&
+      typeof accepted.acceptedAt === "string"
+    );
+  } catch {
+    return false;
+  }
 }
 
 export function acceptProfessionalAssessmentPrivacy(
   _assessmentId?: string
 ): void {
-  localStorage.setItem(PROFESSIONAL_PRIVACY_KEY, "true");
+  void _assessmentId;
+  localStorage.setItem(
+    PROFESSIONAL_PRIVACY_KEY,
+    JSON.stringify({
+      version: ASSESSMENT_PRIVACY_VERSION,
+      acceptedAt: new Date().toISOString(),
+    })
+  );
 }

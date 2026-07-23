@@ -1,4 +1,9 @@
-import type { Assessment, AssessmentSummary } from "@/lib/api/types";
+import type {
+  Assessment,
+  AssessmentReportDetail,
+  AssessmentReportPage,
+  AssessmentSummary,
+} from "@/lib/api/types";
 
 type AssessmentCategory = "professional" | "fun";
 
@@ -16,7 +21,7 @@ interface AssessmentDetailResponse {
   shareUrl: string | null;
 }
 
-class AssessmentApiError extends Error {
+export class AssessmentApiError extends Error {
   constructor(
     message: string,
     readonly status: number
@@ -42,10 +47,16 @@ function errorMessage(payload: ApiEnvelope<unknown> | null, status: number): str
   return `量表请求失败（${status}）`;
 }
 
-async function request<T>(path: string): Promise<T> {
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const headers = new Headers(init.headers);
+  headers.set("Accept", "application/json");
+  if (init.body && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
   const response = await fetch(`${apiBaseUrl()}${path}`, {
+    ...init,
     cache: "no-store",
-    headers: { Accept: "application/json" },
+    headers,
   });
   const payload = (await response.json().catch(() => null)) as ApiEnvelope<T> | T | null;
   if (!response.ok) {
@@ -62,6 +73,10 @@ async function request<T>(path: string): Promise<T> {
     return envelope.data as T;
   }
   return payload as T;
+}
+
+function bearer(token: string): HeadersInit {
+  return { Authorization: `Bearer ${token}` };
 }
 
 export async function listAssessments(
@@ -91,4 +106,69 @@ export async function getAssessment(
     }
     throw error;
   }
+}
+
+export interface SubmitAssessmentReportInput {
+  clientSubmissionId: string;
+  assessmentId: string;
+  assessmentVersion: number;
+  demographicAnswers: Record<string, unknown>;
+  answers: Record<string, string>;
+  entrySource: "web" | "mini-webview" | "qr" | "direct";
+  shareCode: string | null;
+  consentVersion: string;
+}
+
+export function submitAssessmentReport(
+  token: string,
+  input: SubmitAssessmentReportInput
+): Promise<AssessmentReportDetail> {
+  return request<AssessmentReportDetail>("/api/web/assessment-reports", {
+    method: "POST",
+    headers: bearer(token),
+    body: JSON.stringify(input),
+  });
+}
+
+export interface ListAssessmentReportsOptions {
+  page?: number;
+  pageSize?: number;
+  category?: AssessmentCategory;
+  assessmentId?: string;
+}
+
+export function listAssessmentReports(
+  token: string,
+  options: ListAssessmentReportsOptions = {}
+): Promise<AssessmentReportPage> {
+  const params = new URLSearchParams({
+    page: String(options.page ?? 1),
+    page_size: String(options.pageSize ?? 20),
+  });
+  if (options.category) params.set("category", options.category);
+  if (options.assessmentId) params.set("assessment_id", options.assessmentId);
+  return request<AssessmentReportPage>(
+    `/api/web/assessment-reports?${params.toString()}`,
+    { headers: bearer(token) }
+  );
+}
+
+export function getAssessmentReport(
+  token: string,
+  publicId: string
+): Promise<AssessmentReportDetail> {
+  return request<AssessmentReportDetail>(
+    `/api/web/assessment-reports/${encodeURIComponent(publicId)}`,
+    { headers: bearer(token) }
+  );
+}
+
+export function deleteAssessmentReport(
+  token: string,
+  publicId: string
+): Promise<{ deleted: boolean; publicId: string }> {
+  return request<{ deleted: boolean; publicId: string }>(
+    `/api/web/assessment-reports/${encodeURIComponent(publicId)}`,
+    { method: "DELETE", headers: bearer(token) }
+  );
 }

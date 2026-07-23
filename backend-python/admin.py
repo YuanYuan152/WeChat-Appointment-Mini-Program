@@ -2783,11 +2783,18 @@ def update_pricing_counselor_patient(
 
 from proxy_booking_routes import router as proxy_booking_router
 from assessment_routes import register_assessment_admin_routes
+from assessment_report_routes import register_assessment_report_admin_routes
 from system_settings_routes import register_system_settings_routes
 
 register_assessment_admin_routes(
     router,
     require_assessment_editor=require_assessment_editor,
+)
+
+register_assessment_report_admin_routes(
+    router,
+    require_assessment_viewer=require_staff_workbench,
+    visitor_patient_ids=_admin_visitor_patient_ids,
 )
 
 register_system_settings_routes(

@@ -59,6 +59,32 @@ export interface AssessmentQuestion {
   options: AssessmentOption[];
 }
 
+export type DemographicValue = string | number | boolean;
+
+export interface DemographicOption {
+  id: string;
+  text: string;
+  value: DemographicValue;
+}
+
+export interface DemographicValidation {
+  min?: number;
+  max?: number;
+  minLength?: number;
+  maxLength?: number;
+  pattern?: string;
+}
+
+export interface DemographicQuestion {
+  id: string;
+  text: string;
+  helpText?: string;
+  inputType: "single" | "multiple" | "text" | "number" | "date";
+  required: boolean;
+  options?: DemographicOption[];
+  validation?: DemographicValidation;
+}
+
 export interface ScoreRange {
   min: number;
   max: number;
@@ -137,6 +163,7 @@ export interface Assessment {
   scoringType: AssessmentScoringType;
   scoringPreset?: string;
   sortOrder?: number;
+  demographicQuestions?: DemographicQuestion[];
   questions: AssessmentQuestion[];
   scoreRanges?: ScoreRange[];
   matchResults?: MatchResult[];
@@ -204,19 +231,50 @@ export type AssessmentScoreResult =
   | MatchScoreResult
   | DimensionScoreResult;
 
-export interface AssessmentReportRecord {
-  id: string;
-  userId: number;
+export interface AssessmentReportListItem {
+  publicId: string;
   assessmentId: string;
-  type: "professional" | "fun";
+  assessmentVersion: number;
+  category: "professional" | "fun";
   assessmentTitle: string;
   assessmentSubtitle: string;
   cover: string;
-  disclaimer: string;
   scoringType: AssessmentScoringType;
   completedAt: string;
   resultSummary: string;
+}
+
+export type AssessmentSnapshot = Omit<Assessment, "questionCount"> & {
+  questionCount?: number;
+};
+
+export interface AssessmentReportSnapshot {
+  schemaVersion: 1;
+  assessment: AssessmentSnapshot;
   result: AssessmentScoreResult;
+  reportContent: {
+    title: string;
+    subtitle: string;
+    cover: string;
+    disclaimer: string;
+    reportIntro: string;
+    features: string;
+  };
+  completedAt: string;
+}
+
+export interface AssessmentReportDetail extends AssessmentReportListItem {
+  result: AssessmentScoreResult;
+  reportSnapshot: AssessmentReportSnapshot;
+  demographicAnswers?: Record<string, unknown>;
+  answers?: Record<string, string>;
+}
+
+export interface AssessmentReportPage {
+  items: AssessmentReportListItem[];
+  page: number;
+  pageSize: number;
+  total: number;
 }
 
 export interface QaItem {

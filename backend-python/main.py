@@ -27,6 +27,7 @@ from assessment_routes import (
     ensure_assessment_definitions,
     public_router as assessment_public_router,
 )
+from assessment_report_routes import web_report_router as assessment_report_router
 
 app = FastAPI(title="LXXL API", version="2.0")
 
@@ -107,6 +108,7 @@ app.include_router(feedback_router)
 app.include_router(web_admin_router)
 app.include_router(web_auth_router)
 app.include_router(assessment_public_router)
+app.include_router(assessment_report_router)
 
 @app.get("/")
 def read_root():

@@ -843,6 +843,35 @@ class AssessmentDefinitionStore:
             "questionCount": len(definition["questions"]),
         }
 
+    def get_published_version(
+        self,
+        assessment_id: str,
+        version: int,
+    ) -> dict[str, Any]:
+        """读取曾经发布的指定版本，供历史提交重新计分和生成快照。"""
+        self.ensure_seeded()
+        if not isinstance(assessment_id, str) or not ASSESSMENT_ID_PATTERN.fullmatch(
+            assessment_id
+        ):
+            raise AssessmentValidationError("量表 ID 不合法")
+        if isinstance(version, bool) or not isinstance(version, int) or version < 1:
+            raise AssessmentValidationError("量表版本不合法")
+        path = self._published_path(assessment_id, version)
+        if not path.exists():
+            raise AssessmentNotFound("量表版本不存在或从未发布")
+        definition = _load_json(path)
+        if (
+            definition.get("id") != assessment_id
+            or definition.get("version") != version
+            or definition.get("status") != "published"
+        ):
+            raise AssessmentDefinitionError("已发布量表版本文件不完整")
+        validate_definition(
+            definition,
+            allow_fixed_scoring=definition.get("scoringType") in FIXED_SCORING_PRESETS,
+        )
+        return copy.deepcopy(definition)
+
     def list_admin(
         self,
         *,

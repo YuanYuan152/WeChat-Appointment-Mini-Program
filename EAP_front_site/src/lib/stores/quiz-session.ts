@@ -6,6 +6,7 @@ import { persist, createJSONStorage } from "zustand/middleware";
 interface QuizSessionState {
   answers: Record<string, Record<string, string>>;
   currentIndex: Record<string, number>;
+  attemptIds: Record<string, string>;
   /** 用户是否已确认进入答题（看过指导语） */
   started: Record<string, boolean>;
   setAnswer: (assessmentId: string, questionId: string, optionId: string) => void;
@@ -13,6 +14,7 @@ interface QuizSessionState {
   markStarted: (assessmentId: string) => void;
   getAnswers: (assessmentId: string) => Record<string, string>;
   getCurrentIndex: (assessmentId: string) => number;
+  getAttemptId: (assessmentId: string) => string | undefined;
   hasStarted: (assessmentId: string) => boolean;
   /** 是否有未完成的作答进度 */
   hasInProgress: (assessmentId: string, questionCount: number) => boolean;
@@ -22,11 +24,23 @@ interface QuizSessionState {
   clearSession: (assessmentId: string) => void;
 }
 
+function createAttemptId(): string {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (char) => {
+    const random = Math.floor(Math.random() * 16);
+    const value = char === "x" ? random : (random & 0x3) | 0x8;
+    return value.toString(16);
+  });
+}
+
 export const useQuizSession = create<QuizSessionState>()(
   persist(
     (set, get) => ({
       answers: {},
       currentIndex: {},
+      attemptIds: {},
       started: {},
 
       setAnswer: (assessmentId, questionId, optionId) =>
@@ -54,6 +68,8 @@ export const useQuizSession = create<QuizSessionState>()(
 
       getCurrentIndex: (assessmentId) => get().currentIndex[assessmentId] ?? 0,
 
+      getAttemptId: (assessmentId) => get().attemptIds[assessmentId],
+
       hasStarted: (assessmentId) => Boolean(get().started[assessmentId]),
 
       getAnsweredCount: (assessmentId) =>
@@ -72,10 +88,21 @@ export const useQuizSession = create<QuizSessionState>()(
 
       clearSession: (assessmentId) =>
         set((state) => {
-          const { [assessmentId]: _a, ...answers } = state.answers;
-          const { [assessmentId]: _i, ...currentIndex } = state.currentIndex;
-          const { [assessmentId]: _s, ...started } = state.started;
-          return { answers, currentIndex, started };
+          const answers = { ...state.answers };
+          const currentIndex = { ...state.currentIndex };
+          const started = { ...state.started };
+          delete answers[assessmentId];
+          delete currentIndex[assessmentId];
+          delete started[assessmentId];
+          return {
+            answers,
+            currentIndex,
+            started,
+            attemptIds: {
+              ...state.attemptIds,
+              [assessmentId]: createAttemptId(),
+            },
+          };
         }),
     }),
     {

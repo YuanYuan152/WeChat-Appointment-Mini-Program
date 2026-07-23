@@ -42,6 +42,8 @@ class Settings(BaseSettings):
     ASSESSMENT_DATA_DIR: str = ""
     # 首次初始化时读取的旧 EAP JSON 目录。留空时自动定位仓库内 EAP_front_site/src/data。
     ASSESSMENT_SEED_DATA_DIR: str = ""
+    # 专业量表提交时必须声明当前隐私协议版本；协议实质变更时同步提升。
+    ASSESSMENT_CONSENT_VERSION: str = "2026-01"
     
     # JWT configuration
     JWT_SECRET: str = "your-super-secret-key-change-it-in-production"

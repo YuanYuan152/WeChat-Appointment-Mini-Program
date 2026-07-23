@@ -8,7 +8,7 @@ SQLAlchemy ORM 模型。
   避免出现 "???" 乱码。
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import (
     CHAR,
@@ -33,6 +33,12 @@ from database import Base
 
 # SQL Server 上量表域统一落 DATETIME2(0)；SQLite 单元测试仍使用通用 DateTime。
 ASSESSMENT_DATETIME = DateTime().with_variant(DATETIME2(precision=0), "mssql")
+# SQLite 只有精确的 INTEGER PRIMARY KEY 才支持自增；生产 SQL Server 仍使用 BIGINT。
+ASSESSMENT_BIGINT = BigInteger().with_variant(Integer, "sqlite")
+
+
+def assessment_utc_now() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class AppAccount(Base):
@@ -545,7 +551,7 @@ class AppAssessmentReport(Base):
         ),
     )
 
-    Id = Column(BigInteger, primary_key=True, autoincrement=True)
+    Id = Column(ASSESSMENT_BIGINT, primary_key=True, autoincrement=True)
     PublicId = Column(String(40), nullable=False)
     AccountId = Column(Integer, nullable=False)
     ClientSubmissionId = Column(String(64), nullable=False)
@@ -568,7 +574,7 @@ class AppAssessmentReport(Base):
     DeletedAt = Column(ASSESSMENT_DATETIME, nullable=True)
     CreatedAt = Column(
         ASSESSMENT_DATETIME,
-        default=datetime.utcnow,
+        default=assessment_utc_now,
         server_default=text("SYSUTCDATETIME()"),
         nullable=False,
     )
@@ -589,13 +595,13 @@ class AppAssessmentShareScan(Base):
         Index("IX_AppAssessmentShareScan_Visitor_Time", "VisitorHash", "ScannedAt"),
     )
 
-    Id = Column(BigInteger, primary_key=True, autoincrement=True)
+    Id = Column(ASSESSMENT_BIGINT, primary_key=True, autoincrement=True)
     ShareCode = Column(String(120), nullable=False)
     AssessmentId = Column(String(80), nullable=False)
     VisitorHash = Column(CHAR(64), nullable=False)
     ScannedAt = Column(
         ASSESSMENT_DATETIME,
-        default=datetime.utcnow,
+        default=assessment_utc_now,
         server_default=text("SYSUTCDATETIME()"),
         nullable=False,
     )
@@ -637,7 +643,7 @@ class AppAssessmentAuditLog(Base):
         ),
     )
 
-    Id = Column(BigInteger, primary_key=True, autoincrement=True)
+    Id = Column(ASSESSMENT_BIGINT, primary_key=True, autoincrement=True)
     RequestId = Column(String(64), nullable=True)
     ActorAccountId = Column(Integer, nullable=True)
     ActorRole = Column(String(20), nullable=True)
@@ -650,7 +656,7 @@ class AppAssessmentAuditLog(Base):
     MetadataJson = Column(Unicode(2000), nullable=True)
     CreatedAt = Column(
         ASSESSMENT_DATETIME,
-        default=datetime.utcnow,
+        default=assessment_utc_now,
         server_default=text("SYSUTCDATETIME()"),
         nullable=False,
     )
