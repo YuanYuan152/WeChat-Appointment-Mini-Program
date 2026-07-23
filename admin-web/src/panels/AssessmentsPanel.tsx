@@ -101,7 +101,7 @@ export function AssessmentsPanel({
                 type="button"
                 onClick={() => onOpenReports()}
               >
-                填写结果
+                量表报告
               </button>
               <button
                 className="h-10 rounded-xl bg-[var(--lxxl-green)] px-4 text-sm font-medium text-white transition hover:bg-[var(--lxxl-green-dark)]"
@@ -176,13 +176,14 @@ export function AssessmentsPanel({
           ) : (
             <>
               <div className="overflow-x-auto">
-                <table className="min-w-[980px] w-full border-collapse text-sm">
+                <table className="w-full min-w-[1120px] border-collapse text-sm">
                   <thead className="bg-[#FAF8F4] text-left text-[var(--lxxl-muted)]">
                     <tr>
                       <th className="px-5 py-3 font-medium">量表</th>
                       <th className="px-5 py-3 font-medium">类型</th>
                       <th className="px-5 py-3 font-medium">状态</th>
                       <th className="px-5 py-3 font-medium">内容</th>
+                      <th className="px-5 py-3 font-medium">使用数据</th>
                       <th className="px-5 py-3 font-medium">版本</th>
                       <th className="px-5 py-3 font-medium">更新时间</th>
                       <th className="px-5 py-3 text-right font-medium">操作</th>
@@ -232,6 +233,18 @@ export function AssessmentsPanel({
                               约 {item.duration} 分钟 · {scoringTypeLabel(item.scoringType)}
                             </div>
                           </td>
+                          <td className="whitespace-nowrap px-5 py-4">
+                            <div>
+                              完成报告{" "}
+                              <span className="font-medium">
+                                {item.completedCount.toLocaleString("zh-CN")}
+                              </span>{" "}
+                              份
+                            </div>
+                            <div className="mt-1 text-xs text-[var(--lxxl-muted)]">
+                              扫码访问 {item.scanCount.toLocaleString("zh-CN")} 次
+                            </div>
+                          </td>
                           <td className="px-5 py-4">
                             <div>发布：{item.publishedVersion ? `v${item.publishedVersion}` : "-"}</div>
                             <div className="mt-1 text-xs text-[var(--lxxl-muted)]">
@@ -246,7 +259,7 @@ export function AssessmentsPanel({
                               <TableActionButton
                                 onClick={() => onOpenReports(item.id)}
                               >
-                                报告
+                                查看报告
                               </TableActionButton>
                               <TableActionButton
                                 disabled={archived}

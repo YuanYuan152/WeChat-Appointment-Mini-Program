@@ -21,6 +21,7 @@ from assessment_share_service import (
     VISITOR_COOKIE_NAME,
     AssessmentShareCodeError,
     AssessmentShareConfigurationError,
+    assessment_admin_list_stats,
     assessment_share_stats,
     build_share_code,
     decode_share_code,
@@ -209,6 +210,39 @@ class AssessmentShareTests(unittest.TestCase):
                     CompletedAt=completed_at,
                     CreatedAt=completed_at,
                 ),
+                AppAssessmentReport(
+                    PublicId="rpt_direct_test",
+                    AccountId=999,
+                    ClientSubmissionId="direct-stats-submission",
+                    AssessmentId="dark-light-personality",
+                    AssessmentVersion=1,
+                    Category="fun",
+                    AssessmentTitle="黑暗与光明人格测试",
+                    ScoringType="dark-light",
+                    EntrySource="direct",
+                    ShareCode=None,
+                    ConsentVersion="not-required",
+                    ConsentAcceptedAt=completed_at,
+                    CompletedAt=completed_at,
+                    CreatedAt=completed_at,
+                ),
+                AppAssessmentReport(
+                    PublicId="rpt_deleted_test",
+                    AccountId=999,
+                    ClientSubmissionId="deleted-stats-submission",
+                    AssessmentId="dark-light-personality",
+                    AssessmentVersion=1,
+                    Category="fun",
+                    AssessmentTitle="黑暗与光明人格测试",
+                    ScoringType="dark-light",
+                    EntrySource="qr",
+                    ShareCode=share_code,
+                    ConsentVersion="not-required",
+                    ConsentAcceptedAt=completed_at,
+                    CompletedAt=completed_at,
+                    DeletedAt=completed_at,
+                    CreatedAt=completed_at,
+                ),
             ]
         )
         self.db.commit()
@@ -225,6 +259,18 @@ class AssessmentShareTests(unittest.TestCase):
         self.assertEqual(1, result["completedReportCount"])
         self.assertEqual(0.3333, result["conversionRate"])
         self.assertEqual("黑暗与光明人格测试", result["items"][0]["assessmentTitle"])
+        list_stats = assessment_admin_list_stats(
+            self.db,
+            ["dark-light-personality", "aas"],
+        )
+        self.assertEqual(
+            {"completedCount": 2, "scanCount": 3},
+            list_stats["dark-light-personality"],
+        )
+        self.assertEqual(
+            {"completedCount": 0, "scanCount": 0},
+            list_stats["aas"],
+        )
 
         admin_router = APIRouter(prefix="/api/mini/admin")
         register_assessment_share_admin_routes(

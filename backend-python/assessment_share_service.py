@@ -246,3 +246,56 @@ def assessment_share_stats(
         else 0.0,
         "items": items,
     }
+
+
+def assessment_admin_list_stats(
+    db: Session,
+    assessment_ids: list[str],
+) -> dict[str, dict[str, int]]:
+    """聚合量表管理列表当前页的累计完成报告数和扫码事件数。
+
+    完成报告包含所有入口产生且尚未删除的 EAP 报告；扫码次数保留事件总数
+    口径，不与分享分析中的近似独立访客数混用。
+    """
+    normalized_ids = sorted(
+        {
+            assessment_id.strip()
+            for assessment_id in assessment_ids
+            if isinstance(assessment_id, str) and assessment_id.strip()
+        }
+    )
+    if not normalized_ids:
+        return {}
+
+    result = {
+        assessment_id: {"completedCount": 0, "scanCount": 0}
+        for assessment_id in normalized_ids
+    }
+    report_rows = (
+        db.query(
+            AppAssessmentReport.AssessmentId.label("assessment_id"),
+            func.count(AppAssessmentReport.Id).label("completed_count"),
+        )
+        .filter(
+            AppAssessmentReport.AssessmentId.in_(normalized_ids),
+            AppAssessmentReport.DeletedAt.is_(None),
+        )
+        .group_by(AppAssessmentReport.AssessmentId)
+        .all()
+    )
+    for row in report_rows:
+        result[row.assessment_id]["completedCount"] = int(row.completed_count)
+
+    scan_rows = (
+        db.query(
+            AppAssessmentShareScan.AssessmentId.label("assessment_id"),
+            func.count(AppAssessmentShareScan.Id).label("scan_count"),
+        )
+        .filter(AppAssessmentShareScan.AssessmentId.in_(normalized_ids))
+        .group_by(AppAssessmentShareScan.AssessmentId)
+        .all()
+    )
+    for row in scan_rows:
+        result[row.assessment_id]["scanCount"] = int(row.scan_count)
+
+    return result

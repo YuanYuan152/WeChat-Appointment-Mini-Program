@@ -86,16 +86,62 @@ class AssessmentRouteTests(unittest.TestCase):
             for item in self.admin_router.routes
             if item.path == "/api/mini/admin/assessments" and "GET" in item.methods
         )
-        payload = route.endpoint(
-            page=1,
-            page_size=3,
-            category=None,
-            status="published",
-            keyword=None,
-            _actor=object(),
-        )
+        with patch.object(
+            assessment_routes,
+            "assessment_admin_list_stats",
+            return_value={},
+        ):
+            payload = route.endpoint(
+                page=1,
+                page_size=3,
+                category=None,
+                status="published",
+                keyword=None,
+                _actor=object(),
+                db=object(),
+            )
         self.assertEqual(6, payload["total"])
         self.assertEqual(3, len(payload["items"]))
+
+    def test_admin_list_enriches_current_page_with_real_stats(self) -> None:
+        route = next(
+            item
+            for item in self.admin_router.routes
+            if item.path == "/api/mini/admin/assessments" and "GET" in item.methods
+        )
+        captured_ids: list[str] = []
+
+        def fake_stats(_db, assessment_ids):
+            captured_ids.extend(assessment_ids)
+            return {
+                assessment_ids[0]: {"completedCount": 7, "scanCount": 11},
+            }
+
+        with patch.object(
+            assessment_routes,
+            "assessment_admin_list_stats",
+            side_effect=fake_stats,
+        ) as stats:
+            payload = route.endpoint(
+                page=1,
+                page_size=2,
+                category=None,
+                status=None,
+                keyword=None,
+                _actor=object(),
+                db=object(),
+            )
+
+        self.assertGreater(payload["total"], len(payload["items"]))
+        self.assertEqual(2, len(payload["items"]))
+        self.assertEqual(2, len(captured_ids))
+        first_item = payload["items"][0]
+        self.assertEqual(captured_ids[0], first_item["id"])
+        self.assertEqual(7, first_item["completedCount"])
+        self.assertEqual(11, first_item["scanCount"])
+        self.assertEqual(0, payload["items"][1]["completedCount"])
+        self.assertEqual(0, payload["items"][1]["scanCount"])
+        stats.assert_called_once()
 
 
 if __name__ == "__main__":

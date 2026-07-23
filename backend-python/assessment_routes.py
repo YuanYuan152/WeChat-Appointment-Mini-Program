@@ -21,6 +21,7 @@ from assessment_definition_service import (
 from assessment_share_service import (
     AssessmentShareCodeError,
     AssessmentShareConfigurationError,
+    assessment_admin_list_stats,
     public_share_info,
 )
 from config import settings
@@ -181,15 +182,28 @@ def register_assessment_admin_routes(
         status: Optional[str] = Query(None),
         keyword: Optional[str] = Query(None),
         _actor: Any = Depends(require_assessment_editor),
+        db: Session = Depends(get_db),
     ):
         try:
-            return get_assessment_store().list_admin(
+            result = get_assessment_store().list_admin(
                 page=page,
                 page_size=page_size,
                 category=category,
                 status=status,
                 keyword=keyword,
             )
+            stats = assessment_admin_list_stats(
+                db,
+                [item["id"] for item in result["items"]],
+            )
+            for item in result["items"]:
+                item.update(
+                    stats.get(
+                        item["id"],
+                        {"completedCount": 0, "scanCount": 0},
+                    )
+                )
+            return result
         except AssessmentDefinitionError as exc:
             _raise_http_error(exc)
 
