@@ -20,6 +20,11 @@ from assessment_scoring_service import (
     calculate_assessment_result,
     validate_submission_answers,
 )
+from assessment_share_service import (
+    AssessmentShareCodeError,
+    AssessmentShareConfigurationError,
+    decode_share_code,
+)
 from config import settings
 from models import AppAccount, AppAssessmentReport
 
@@ -38,6 +43,10 @@ class AssessmentReportNotFound(AssessmentReportError):
 
 class AssessmentReportConflict(AssessmentReportError):
     status_code = 409
+
+
+class AssessmentReportUnavailable(AssessmentReportError):
+    status_code = 503
 
 
 def _canonical_json(value: Any) -> str:
@@ -199,9 +208,21 @@ def submit_report(
     # 先限制未经信任的原始载荷，再进入人口学正则等语义校验。
     _assert_payload_size("人口学答案", demographic_answers, 64 * 1024)
     _assert_payload_size("量表答案", answers, 256 * 1024)
-    if (share_code or "").strip():
-        # 分享归因将在分享码校验和扫码统计阶段开启，不能接受任意客户端字符串。
-        raise AssessmentReportValidationError("分享码尚未启用，请从量表页面直接提交")
+    normalized_share_code = (share_code or "").strip() or None
+    if normalized_share_code:
+        try:
+            decode_share_code(
+                normalized_share_code,
+                expected_assessment_id=assessment_id,
+            )
+        except AssessmentShareConfigurationError as exc:
+            raise AssessmentReportUnavailable("量表分享服务暂不可用") from exc
+        except AssessmentShareCodeError as exc:
+            raise AssessmentReportValidationError(str(exc)) from exc
+        # 来源由已验证分享码决定，不信任客户端单独声明的 entrySource。
+        entry_source = "qr"
+    elif entry_source == "qr":
+        raise AssessmentReportValidationError("扫码来源缺少有效分享码")
 
     try:
         demographics, normalized_answers = validate_submission_answers(
@@ -232,7 +253,7 @@ def submit_report(
         AssessmentTitle=str(definition["title"]),
         ScoringType=str(definition["scoringType"]),
         EntrySource=entry_source,
-        ShareCode=(share_code or "").strip() or None,
+        ShareCode=normalized_share_code,
         ConsentVersion=consent_version,
         ConsentAcceptedAt=completed_at,
         DemographicAnswers=_canonical_json(demographics),

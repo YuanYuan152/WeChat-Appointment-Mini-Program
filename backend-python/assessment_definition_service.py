@@ -19,6 +19,7 @@ from typing import Any, Iterator, Optional
 
 
 ASSESSMENT_ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+ASSESSMENT_ID_MAX_LENGTH = 54
 STABLE_ID_PATTERN = re.compile(r"^[A-Za-z0-9]+(?:[-_.][A-Za-z0-9]+)*$")
 PRESET_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*-v[1-9][0-9]*$")
 
@@ -278,6 +279,10 @@ def validate_definition(
     assessment_id = _assert_string(definition.get("id"), "id")
     if not ASSESSMENT_ID_PATTERN.fullmatch(assessment_id):
         raise AssessmentValidationError("id 只能使用小写字母、数字和连字符")
+    if len(assessment_id) > ASSESSMENT_ID_MAX_LENGTH:
+        raise AssessmentValidationError(
+            f"id 不能超过 {ASSESSMENT_ID_MAX_LENGTH} 个字符"
+        )
     version = definition.get("version")
     if isinstance(version, bool) or not isinstance(version, int) or version < 1:
         raise AssessmentValidationError("version 必须是大于等于 1 的整数")

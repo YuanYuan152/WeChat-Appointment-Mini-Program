@@ -7,6 +7,7 @@ interface QuizSessionState {
   answers: Record<string, Record<string, string>>;
   currentIndex: Record<string, number>;
   attemptIds: Record<string, string>;
+  shareCodes: Record<string, string>;
   /** 用户是否已确认进入答题（看过指导语） */
   started: Record<string, boolean>;
   setAnswer: (assessmentId: string, questionId: string, optionId: string) => void;
@@ -15,6 +16,8 @@ interface QuizSessionState {
   getAnswers: (assessmentId: string) => Record<string, string>;
   getCurrentIndex: (assessmentId: string) => number;
   getAttemptId: (assessmentId: string) => string | undefined;
+  setShareCode: (assessmentId: string, shareCode: string | null) => void;
+  getShareCode: (assessmentId: string) => string | undefined;
   hasStarted: (assessmentId: string) => boolean;
   /** 是否有未完成的作答进度 */
   hasInProgress: (assessmentId: string, questionCount: number) => boolean;
@@ -41,6 +44,7 @@ export const useQuizSession = create<QuizSessionState>()(
       answers: {},
       currentIndex: {},
       attemptIds: {},
+      shareCodes: {},
       started: {},
 
       setAnswer: (assessmentId, questionId, optionId) =>
@@ -69,6 +73,19 @@ export const useQuizSession = create<QuizSessionState>()(
       getCurrentIndex: (assessmentId) => get().currentIndex[assessmentId] ?? 0,
 
       getAttemptId: (assessmentId) => get().attemptIds[assessmentId],
+
+      setShareCode: (assessmentId, shareCode) =>
+        set((state) => {
+          const shareCodes = { ...state.shareCodes };
+          if (shareCode) {
+            shareCodes[assessmentId] = shareCode;
+          } else {
+            delete shareCodes[assessmentId];
+          }
+          return { shareCodes };
+        }),
+
+      getShareCode: (assessmentId) => get().shareCodes[assessmentId],
 
       hasStarted: (assessmentId) => Boolean(get().started[assessmentId]),
 

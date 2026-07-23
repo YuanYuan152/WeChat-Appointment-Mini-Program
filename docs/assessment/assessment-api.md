@@ -104,12 +104,14 @@
 {
   "definition": {},
   "questionCount": 18,
-  "shareCode": "bsi18-public",
-  "shareUrl": "https://example.com/api/web/assessment-shares/bsi18-public/scan"
+  "shareCode": "as1.YnNpLTE4.iH2jZAyrrpsLCnnE66nMKWCLL-j-DApViPMrKFklqo4",
+  "shareUrl": "https://example.com/api/web/assessment-shares/as1.YnNpLTE4.iH2jZAyrrpsLCnnE66nMKWCLL-j-DApViPMrKFklqo4/scan"
 }
 ```
 
 未发布、已归档或不存在的量表统一返回 `404`。
+环境未配置 `ASSESSMENT_SHARE_SECRET` 时，量表浏览仍可用，但 `shareCode`、`shareUrl` 返回 `null`，前端禁用分享入口。
+量表稳定 ID 最长 54 个 ASCII 字符，以保证完整 SHA-256 HMAC 分享码可以写入既有 `VARCHAR(120)` 字段；数据库结构不需要调整。
 
 ## 3. EAP 用户报告
 
@@ -334,7 +336,8 @@ EAP 报告直接返回提交时的 `reportSnapshot`。管理后台不得重新�
 
 行为：记录访问后返回 `302`，跳转到对应量表介绍页。该接口不是 JSON，因此不套 `{code,msg,data}`。
 
-记录内容遵循最小化原则：量表、时间、匿名访客哈希、User-Agent 摘要、登录账号（若有）。不保存明文 IP。
+记录内容遵循最小化原则：仅保存量表、时间和匿名访客哈希。不保存明文 IP、完整 User-Agent、手机号或微信标识。
+匿名访客哈希优先由 HttpOnly 随机 cookie 与服务端密钥生成，因此独立扫码数是近似值。
 
 ### 6.2 获取分享统计
 
@@ -350,11 +353,21 @@ EAP 报告直接返回提交时的 `reportSnapshot`。管理后台不得重新�
   "uniqueScanCount": 86,
   "completedReportCount": 24,
   "conversionRate": 0.2,
-  "items": []
+  "items": [
+    {
+      "assessmentId": "bsi-18",
+      "assessmentTitle": "BSI-18 简版症状量表",
+      "scanCount": 120,
+      "uniqueScanCount": 86,
+      "completedReportCount": 24,
+      "conversionRate": 0.2
+    }
+  ]
 }
 ```
 
 `uniqueScanCount` 是匿名标识下的近似独立访问量，不声明为真实自然人数。
+`conversionRate` 统一使用 `completedReportCount / scanCount`，时间筛选分别作用于扫码时间和报告完成时间。
 
 ## 7. 媒体上传
 

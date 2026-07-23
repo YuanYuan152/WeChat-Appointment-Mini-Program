@@ -5,13 +5,16 @@ import { getAssessment } from "@/lib/assessment/api";
 import { QuizClient } from "@/components/assessment/quiz-client";
 import { AssessmentAuthGate } from "@/components/assessment/assessment-auth-gate";
 import { ProfessionalAssessmentPrivacyGate } from "@/components/assessment/professional-assessment-privacy";
+import { AssessmentShareButton } from "@/components/assessment/assessment-share-button";
 
 interface QuizPageProps {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ shareCode?: string | string[] }>;
 }
 
-export default async function ProfessionalQuizPage({ params }: QuizPageProps) {
+export default async function ProfessionalQuizPage({ params, searchParams }: QuizPageProps) {
   const { id } = await params;
+  const query = await searchParams;
   const assessment = await getAssessment(id, "professional");
 
   if (!assessment) notFound();
@@ -26,7 +29,15 @@ export default async function ProfessionalQuizPage({ params }: QuizPageProps) {
           <ArrowLeft className="h-4 w-4" />
           返回列表
         </Link>
-        <h1 className="mb-8 font-serif text-2xl font-bold">{assessment.title}</h1>
+        <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
+          <h1 className="font-serif text-2xl font-bold">{assessment.title}</h1>
+          <AssessmentShareButton
+            assessment={assessment}
+            incomingShareCode={
+              typeof query.shareCode === "string" ? query.shareCode : null
+            }
+          />
+        </div>
         <AssessmentAuthGate requireUser>
           <ProfessionalAssessmentPrivacyGate assessmentId={id}>
             <QuizClient assessment={assessment} type="professional" />

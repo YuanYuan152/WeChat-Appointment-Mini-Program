@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException
 import assessment_routes
 from api_response import success_payload
 from assessment_definition_service import AssessmentDefinitionStore
+from config import settings
 
 
 BACKEND_DIR = Path(__file__).resolve().parent
@@ -58,11 +59,21 @@ class AssessmentRouteTests(unittest.TestCase):
         self.assertEqual(0, payload["code"])
         self.assertEqual("dark-light-personality", payload["data"][0]["id"])
 
-        detail = assessment_routes.get_published_assessment(
-            "dark-light-personality"
-        )
+        with (
+            patch.object(
+                settings,
+                "ASSESSMENT_SHARE_SECRET",
+                "assessment-share-test-secret-32-characters",
+            ),
+            patch.object(settings, "BASE_URL", "https://assessment.test"),
+        ):
+            detail = assessment_routes.get_published_assessment(
+                "dark-light-personality"
+            )
         self.assertEqual(12, detail["questionCount"])
         self.assertEqual("published", detail["definition"]["status"])
+        self.assertTrue(detail["shareCode"].startswith("as1."))
+        self.assertTrue(detail["shareUrl"].startswith("https://assessment.test/"))
 
     def test_public_missing_definition_returns_wrapped_404(self) -> None:
         with self.assertRaises(HTTPException) as raised:

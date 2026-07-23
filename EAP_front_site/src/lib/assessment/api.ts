@@ -99,6 +99,8 @@ export async function getAssessment(
     return {
       ...result.definition,
       questionCount: result.questionCount,
+      shareCode: result.shareCode,
+      shareUrl: result.shareUrl,
     } as Assessment;
   } catch (error) {
     if (error instanceof AssessmentApiError && error.status === 404) {

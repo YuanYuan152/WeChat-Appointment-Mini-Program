@@ -177,6 +177,9 @@ export interface Assessment {
   createdAt?: string;
   updatedAt?: string;
   publishedAt?: string | null;
+  /** 当前发布量表的静态分享入口；历史报告快照中不会写入。 */
+  shareCode?: string | null;
+  shareUrl?: string | null;
 }
 
 export interface BookingPayload {

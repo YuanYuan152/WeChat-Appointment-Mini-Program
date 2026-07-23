@@ -5,6 +5,7 @@ import unittest
 import uuid
 from datetime import datetime
 from pathlib import Path
+from unittest.mock import patch
 
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import create_engine
@@ -29,6 +30,7 @@ from assessment_report_service import (
     submit_report,
 )
 from assessment_routes import _run_audited_definition_mutation
+from assessment_share_service import build_share_code
 from assessment_scoring_service import (
     assessment_result_summary,
     calculate_assessment_result,
@@ -223,7 +225,7 @@ class AssessmentReportPersistenceTests(unittest.TestCase):
         with self.assertRaises(AssessmentReportConflict):
             self._submit(assessment_id="aas", submission_id=submission_id)
 
-    def test_invalid_answer_and_unverified_share_code_are_rejected(self) -> None:
+    def test_invalid_answer_and_share_code_validation(self) -> None:
         answers = self._answers("dark-light-personality")
         answers["d1"] = "not-an-option"
         with self.assertRaises(AssessmentReportValidationError):
@@ -240,8 +242,25 @@ class AssessmentReportPersistenceTests(unittest.TestCase):
                 share_code=None,
                 consent_version=settings.ASSESSMENT_CONSENT_VERSION,
             )
-        with self.assertRaises(AssessmentReportValidationError):
-            submit_report(
+        share_secret = "assessment-share-test-secret-32-characters"
+        with patch.object(settings, "ASSESSMENT_SHARE_SECRET", share_secret):
+            with self.assertRaises(AssessmentReportValidationError):
+                submit_report(
+                    self.db,
+                    account=self.patient,
+                    store=self.store,
+                    client_submission_id=str(uuid.uuid4()),
+                    assessment_id="dark-light-personality",
+                    assessment_version=1,
+                    demographic_answers={},
+                    answers=self._answers("dark-light-personality"),
+                    entry_source="qr",
+                    share_code="unverified-code",
+                    consent_version=settings.ASSESSMENT_CONSENT_VERSION,
+                )
+
+            share_code = build_share_code("dark-light-personality")
+            saved = submit_report(
                 self.db,
                 account=self.patient,
                 store=self.store,
@@ -250,10 +269,15 @@ class AssessmentReportPersistenceTests(unittest.TestCase):
                 assessment_version=1,
                 demographic_answers={},
                 answers=self._answers("dark-light-personality"),
-                entry_source="qr",
-                share_code="unverified-code",
+                entry_source="web",
+                share_code=share_code,
                 consent_version=settings.ASSESSMENT_CONSENT_VERSION,
             )
+        row = self.db.query(AppAssessmentReport).filter(
+            AppAssessmentReport.PublicId == saved["publicId"]
+        ).one()
+        self.assertEqual(share_code, row.ShareCode)
+        self.assertEqual("qr", row.EntrySource)
 
     def test_delete_redacts_content_and_writes_content_free_audit(self) -> None:
         saved = self._submit()

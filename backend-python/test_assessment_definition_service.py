@@ -155,6 +155,12 @@ class AssessmentDefinitionStoreTests(unittest.TestCase):
         with self.assertRaises(AssessmentValidationError):
             self.store.create_draft(definition)
 
+    def test_assessment_id_must_fit_static_share_code(self) -> None:
+        definition = self.example_definition()
+        definition["id"] = "a" * 55
+        with self.assertRaisesRegex(AssessmentValidationError, "54"):
+            self.store.create_draft(definition)
+
     def test_new_definition_cannot_select_fixed_scoring_preset(self) -> None:
         definition = self.example_definition()
         definition["id"] = "fixed-preset-not-allowed"

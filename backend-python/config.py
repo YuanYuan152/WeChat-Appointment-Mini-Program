@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     ASSESSMENT_SEED_DATA_DIR: str = ""
     # 专业量表提交时必须声明当前隐私协议版本；协议实质变更时同步提升。
     ASSESSMENT_CONSENT_VERSION: str = "2026-01"
+    # EAP 静态分享码独立签名密钥。测试/生产必须配置至少 32 个字符，禁止复用 JWT 密钥。
+    ASSESSMENT_SHARE_SECRET: str = ""
+    # 扫码成功后跳转到 EAP 量表页；各环境显式配置为对应 EAP 站点根地址。
+    ASSESSMENT_FRONTEND_BASE_URL: str = "http://localhost:3000"
     
     # JWT configuration
     JWT_SECRET: str = "your-super-secret-key-change-it-in-production"

@@ -162,7 +162,7 @@ function DemographicField({
 
 export function ResultClient({ assessment, type }: ResultClientProps) {
   const router = useRouter();
-  const { getAnswers, getAttemptId } = useQuizSession();
+  const { getAnswers, getAttemptId, getShareCode } = useQuizSession();
   const token = useAuthStore((state) => state.token);
   const userId = useAuthStore((state) => state.user?.id);
   const [demographicAnswers, setDemographicAnswers] = useState<Record<string, unknown>>({});
@@ -212,14 +212,15 @@ export function ResultClient({ assessment, type }: ResultClientProps) {
     try {
       const clientSubmissionId =
         getAttemptId(assessment.id) ?? fallbackSubmissionId(userId, assessment);
+      const shareCode = getShareCode(assessment.id) ?? null;
       const saved = await submitAssessmentReport(token, {
         clientSubmissionId,
         assessmentId: assessment.id,
         assessmentVersion: assessment.version ?? 1,
         demographicAnswers,
         answers,
-        entrySource: "web",
-        shareCode: null,
+        entrySource: shareCode ? "qr" : "web",
+        shareCode,
         consentVersion:
           type === "professional" ? ASSESSMENT_PRIVACY_VERSION : "not-required",
       });
@@ -237,6 +238,7 @@ export function ResultClient({ assessment, type }: ResultClientProps) {
     userId,
     type,
     getAttemptId,
+    getShareCode,
     assessment,
     demographicAnswers,
     answers,

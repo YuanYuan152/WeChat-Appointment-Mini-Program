@@ -18,6 +18,11 @@ from assessment_definition_service import (
     AssessmentNotFound,
     AssessmentValidationError,
 )
+from assessment_share_service import (
+    AssessmentShareCodeError,
+    AssessmentShareConfigurationError,
+    public_share_info,
+)
 from config import settings
 from database import get_db
 
@@ -151,7 +156,11 @@ def list_published_assessments(
 def get_published_assessment(assessment_id: str):
     try:
         result = get_assessment_store().get_published(assessment_id)
-        result.update({"shareCode": None, "shareUrl": None})
+        try:
+            result.update(public_share_info(assessment_id))
+        except (AssessmentShareCodeError, AssessmentShareConfigurationError):
+            # 量表浏览不能被分享配置阻断；未配置环境明确返回不可分享。
+            result.update({"shareCode": None, "shareUrl": None})
         return result
     except AssessmentDefinitionError as exc:
         _raise_http_error(exc)
