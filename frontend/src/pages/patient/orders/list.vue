@@ -109,10 +109,14 @@ const tryOpenPendingPay = () => {
   }
 }
 
-const loadOrders = async () => {
-  loading.value = true
+const loadOrders = async (opts?: { silent?: boolean }) => {
+  if (!opts?.silent) loading.value = true
   try {
-    const res = await httpV2.get<PatientOrder[]>(API_ENDPOINTS.patient.orders)
+    const res = await httpV2.get<PatientOrder[]>(
+      API_ENDPOINTS.patient.orders,
+      undefined,
+      { showLoading: false, showError: false },
+    )
     if (res.code === 0 && Array.isArray(res.data)) {
       orders.value = res.data
       tryOpenPendingPay()
@@ -128,11 +132,19 @@ onLoad((opts) => {
   pendingPayOrderId.value = Number(opts?.payOrderId || 0)
 })
 
-onShow(loadOrders)
+onShow(() => {
+  // 已有列表时静默刷新，避免整页白屏闪烁
+  loadOrders({ silent: orders.value.length > 0 })
+})
 </script>
 
 <style scoped>
-.page-orders { padding: 32rpx; }
+.page-orders {
+  min-height: 100vh;
+  padding: 32rpx;
+  background: #f7f5f2;
+  box-sizing: border-box;
+}
 .page-header { margin-bottom: 32rpx; }
 .page-title { font-size: 40rpx; font-weight: 700; color: #1F2937; }
 .empty-state { text-align: center; padding: 120rpx 0; }

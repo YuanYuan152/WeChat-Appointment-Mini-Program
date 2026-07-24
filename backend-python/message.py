@@ -46,6 +46,12 @@ class SubscribeRequest(BaseModel):
     payload: Optional[dict] = None
 
 
+class SubscribePreferenceRequest(BaseModel):
+    accepted: bool = False
+    results: Optional[dict] = None
+    event_keys: Optional[List[str]] = None
+
+
 class CreateMessageRequest(BaseModel):
     account_id: int
     type: str = "SYSTEM"
@@ -208,6 +214,94 @@ def list_subscribe_templates(
     }
 
 
+@router.get("/subscribe-hint", summary="当前账号是否需要弹出订阅引导")
+def subscribe_hint(
+    current_account: AppAccount = Depends(get_current_account),
+    db: Session = Depends(get_db),
+):
+    from role_active import get_account_role
+    from wechat_subscribe_service import (
+        event_keys_for_role,
+        resolve_subscribe_prompt_flags,
+    )
+
+    role = get_account_role(db, current_account.Id)
+    flags = resolve_subscribe_prompt_flags(current_account, role)
+    return {
+        **flags,
+        "role": role,
+        "eventKeys": event_keys_for_role(role),
+    }
+
+
+@router.post("/subscribe-ack", summary="用户跳过订阅引导")
+def subscribe_ack(
+    current_account: AppAccount = Depends(get_current_account),
+    db: Session = Depends(get_db),
+):
+    from wechat_subscribe_service import clear_subscribe_prompt_trigger
+
+    clear_subscribe_prompt_trigger(current_account)
+    current_account.UpdatedAt = datetime.utcnow()
+    db.commit()
+    return {"message": "ok"}
+
+
+EVENT_LABELS = {
+    "APPOINTMENT_OK": "预约成功通知",
+    "APPOINTMENT_REMIND": "咨询前提醒",
+    "ORDER_STATUS": "订单状态通知",
+    "PAY_SUCCESS": "支付成功通知",
+    "COUNSELOR_APPOINTMENT_NEW": "新预约提醒",
+    "COUNSELOR_APPOINTMENT_CANCEL": "预约取消提醒",
+    "STAFF_APPROVAL_PENDING": "待审批提醒",
+}
+
+
+@router.get("/subscribe-status", summary="当前角色订阅授权列表")
+def subscribe_status(
+    current_account: AppAccount = Depends(get_current_account),
+    db: Session = Depends(get_db),
+):
+    from role_active import get_account_role
+    from wechat_subscribe_service import (
+        event_keys_for_role,
+        get_template,
+        user_accepted,
+        _is_mock_template,
+    )
+
+    role = get_account_role(db, current_account.Id)
+    keys = event_keys_for_role(role)
+    items = []
+    mock_count = 0
+    for key in keys:
+        tpl = get_template(db, key)
+        tid = tpl.TemplateId if tpl else f"mock_{key}"
+        is_mock = _is_mock_template(tid)
+        if is_mock:
+            mock_count += 1
+        enabled = False
+        try:
+            enabled = user_accepted(db, current_account.Id, key)
+        except Exception:
+            enabled = False
+        items.append(
+            {
+                "eventKey": key,
+                "label": (tpl.Description if tpl and tpl.Description else None)
+                or EVENT_LABELS.get(key, key),
+                "enabled": enabled,
+                "isMock": is_mock,
+                "templateId": tid,
+            }
+        )
+    hint = ""
+    if mock_count:
+        hint = "部分模板仍为 MOCK，真机无法弹出微信授权；请在公众平台申请模板并写入 AppSubscribeTemplate。"
+    return {"items": items, "hint": hint, "role": role}
+
+
 @router.get("/{message_id}", response_model=MessageOut, summary="站内消息详情")
 def get_message(
     message_id: int,
@@ -240,6 +334,160 @@ def subscribe_message(
     db.commit()
     db.refresh(log)
     return {"message": "已记录订阅消息事件", "logId": log.Id, "status": log.Status}
+
+
+class SubscribePushRequest(BaseModel):
+    event_key: str = "APPOINTMENT_OK"
+    order_id: Optional[int] = None
+
+
+@router.post("/subscribe-push", summary="授权后补发服务通知（如支付成功后点接收提醒）")
+def subscribe_push(
+    body: SubscribePushRequest,
+    current_account: AppAccount = Depends(get_current_account),
+    db: Session = Depends(get_db),
+):
+    """
+    支付成功页等场景：用户刚完成 requestSubscribeMessage 后，
+    对已支付订单补发「预约成功」等到微信服务通知。
+    """
+    from models import AppConsultation, AppOrder
+    from wechat_subscribe_service import send_subscribe_message
+
+    event_key = (body.event_key or "APPOINTMENT_OK").strip()
+    payload: dict = {"name": current_account.Nickname or "来访者", "slot": "-", "location": "-"}
+
+    if body.order_id:
+        order = (
+            db.query(AppOrder)
+            .filter(AppOrder.Id == body.order_id, AppOrder.AccountId == current_account.Id)
+            .first()
+        )
+        if not order:
+            raise HTTPException(status_code=404, detail="订单不存在")
+        consultation = (
+            db.query(AppConsultation).filter(AppConsultation.OrderId == order.Id).first()
+        )
+        if consultation:
+            from patient_message_service import (
+                _appointment_center_name,
+                _consultation_context,
+                _format_datetime,
+            )
+
+            ctx = _consultation_context(db, consultation)
+            schedule = None
+            if consultation.ScheduleId:
+                from models import AppSchedule
+
+                schedule = db.query(AppSchedule).filter(AppSchedule.Id == consultation.ScheduleId).first()
+            note = consultation.Note or (schedule.Note if schedule else None)
+            payload = {
+                "name": current_account.Nickname or current_account.RealName or "来访者",
+                "slot": _format_datetime(ctx.get("startTime")),
+                "location": _appointment_center_name(note),
+            }
+
+    result = send_subscribe_message(db, current_account.Id, event_key, payload)
+    return {
+        "message": "已尝试推送服务通知",
+        "ok": bool(result.get("ok")),
+        "reason": result.get("reason"),
+        "detail": result.get("detail"),
+    }
+
+
+@router.post("/subscribe-preference", summary="保存服务通知授权偏好")
+def save_subscribe_preference(
+    body: SubscribePreferenceRequest,
+    current_account: AppAccount = Depends(get_current_account),
+    db: Session = Depends(get_db),
+):
+    """引导页 / 业务页调用：记录微信授权结果；无模板时也可落库。"""
+    from role_active import get_account_role
+    from wechat_subscribe_service import save_subscribe_auth_results, clear_subscribe_prompt_trigger
+
+    role = get_account_role(db, current_account.Id)
+    try:
+        result = save_subscribe_auth_results(
+            db,
+            current_account,
+            results=body.results or {},
+            event_keys=body.event_keys or [],
+            role=role,
+        )
+        if not body.accepted and not (body.results or {}):
+            # 用户点「暂不」：仍标记已提示，避免反复打扰
+            current_account.SubscribeOptInAt = datetime.utcnow()
+            clear_subscribe_prompt_trigger(current_account)
+            current_account.UpdatedAt = datetime.utcnow()
+            db.commit()
+        return {
+            "message": "已保存服务通知偏好",
+            "subscribeOptIn": True,
+            "accepted": body.accepted,
+            **(result or {}),
+        }
+    except Exception:
+        # 回退：仅写日志，保证旧库也能用
+        current_account.SubscribeOptInAt = datetime.utcnow()
+        current_account.UpdatedAt = datetime.utcnow()
+        log_subscribe_event(
+            db,
+            account_id=current_account.Id,
+            event_key="SUBSCRIBE_AUTH",
+            payload={
+                "accepted": body.accepted,
+                "event_keys": body.event_keys or [],
+                "results": body.results or {},
+            },
+        )
+        db.commit()
+        return {
+            "message": "已保存服务通知偏好",
+            "subscribeOptIn": True,
+            "accepted": body.accepted,
+        }
+
+
+class SubscribeToggleRequest(BaseModel):
+    event_key: str
+    enabled: bool = False
+
+
+@router.post("/subscribe-toggle", summary="开关某事件本端推送")
+def subscribe_toggle(
+    body: SubscribeToggleRequest,
+    current_account: AppAccount = Depends(get_current_account),
+    db: Session = Depends(get_db),
+):
+    from models import AppUserSubscribeAuth
+    from role_active import get_account_role
+    from wechat_subscribe_service import get_template
+
+    role = get_account_role(db, current_account.Id)
+    now = datetime.utcnow()
+    row = (
+        db.query(AppUserSubscribeAuth)
+        .filter(
+            AppUserSubscribeAuth.AccountId == current_account.Id,
+            AppUserSubscribeAuth.EventKey == body.event_key,
+        )
+        .first()
+    )
+    if not row:
+        tpl = get_template(db, body.event_key)
+        row = AppUserSubscribeAuth(
+            AccountId=current_account.Id,
+            EventKey=body.event_key,
+            TemplateId=tpl.TemplateId if tpl else f"mock_{body.event_key}",
+        )
+        db.add(row)
+    row.Status = "accept" if body.enabled else "reject"
+    row.RoleAtAuth = role
+    row.UpdatedAt = now
+    db.commit()
+    return {"message": "ok", "eventKey": body.event_key, "enabled": body.enabled}
 
 
 @router.post("/system", response_model=MessageOut, summary="创建系统消息（内部/运营调试）")
@@ -367,6 +615,32 @@ def process_due_reminders(db: Session = Depends(get_db)):
                     "relatedId": task.RelatedId,
                 },
             )
+            # 到期提醒同步推到微信「服务通知」（需用户曾授权对应订阅模板）
+            if task.EventKey in (
+                "PATIENT_APPOINTMENT_REMIND",
+                "COUNSELOR_APPOINTMENT_REMIND",
+            ):
+                from wechat_subscribe_service import try_send
+
+                detail: dict = {}
+                try:
+                    raw = json.loads(task.Content or "{}")
+                    if isinstance(raw, dict):
+                        detail = raw.get("detail") if isinstance(raw.get("detail"), dict) else raw
+                except Exception:
+                    detail = {}
+                try_send(
+                    db,
+                    task.AccountId,
+                    "APPOINTMENT_REMIND",
+                    {
+                        "time": detail.get("startTime") or task.Title or "-",
+                        "patient": detail.get("patientName")
+                        or detail.get("patient")
+                        or ("您" if task.EventKey.startswith("PATIENT") else "-"),
+                        "counselor": detail.get("counselorName") or detail.get("counselor") or "-",
+                    },
+                )
             task.Status = "DONE"
             task.ProcessedAt = datetime.utcnow()
             processed += 1

@@ -241,6 +241,7 @@ import { SCHEDULE_DISPLAY_META, type ScheduleDisplayStatus } from '@/constants/s
 import { formatDateLocal, ROLLING_WINDOW_DAYS, addDays } from '@/constants/scheduleSlots'
 import { formatPatientInline } from '@/utils/patientContract'
 import { fetchSystemSettings, formatProxyOrderPushHint } from '@/utils/systemSettings'
+import { maybePromptRoleSubscribe } from '@/utils/subscribePrompt'
 import {
   TONGXIN_AGREEMENT_TITLE,
   YANGFAN_AGREEMENT_TITLE,
@@ -692,6 +693,7 @@ const submitProxyOrder = async () => {
     showAdd.value = false
     await loadSchedules()
     if (viewMode.value === 'calendar') await loadMonthSlots()
+    setTimeout(() => { void maybePromptRoleSubscribe('workbench') }, 500)
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : '推送失败'
     uni.showToast({ title: msg, icon: 'none' })

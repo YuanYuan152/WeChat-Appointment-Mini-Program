@@ -428,6 +428,7 @@ import { formatDateLocal, ROLLING_WINDOW_DAYS, PAST_WINDOW_DAYS, LIST_WINDOW_DAY
 import { openCounselorCaseRecord } from '@/utils/case-record'
 import { formatPatientInline } from '@/utils/patientContract'
 import { fetchSystemSettings, formatProxyOrderPushHint } from '@/utils/systemSettings'
+import { maybePromptRoleSubscribe } from '@/utils/subscribePrompt'
 
 const proxyOrderTtlMinutes = ref(120)
 const proxyOrderPayHint = computed(() => formatProxyOrderPushHint(proxyOrderTtlMinutes.value))
@@ -1351,6 +1352,9 @@ const submitSlot = async () => {
       uni.showToast({ title: '排期成功', icon: 'success' })
       await refresh()
       await loadSlotOptions()
+      setTimeout(() => {
+        void maybePromptRoleSubscribe('schedule')
+      }, 500)
     } else {
       uni.showToast({ title: res.msg || '排期失败', icon: 'none' })
     }

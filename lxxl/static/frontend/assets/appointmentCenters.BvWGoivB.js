@@ -1,0 +1,1 @@
+const a="video",i=i=>(i||"").trim()===a,e=[{id:"yangpu",name:"杨浦预约中心"},{id:"pudong",name:"浦东预约中心"},{id:a,name:"视频咨询",virtual:!0}],n=Object.fromEntries(e.map(a=>[a.id,a.name]));export{e as A,n as a,i};

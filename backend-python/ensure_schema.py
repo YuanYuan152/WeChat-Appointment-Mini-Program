@@ -21,6 +21,10 @@ APP_ACCOUNT_COLUMNS = {
     "DeletedAt": "DATETIME NULL",
     "PasswordHash": "VARCHAR(255) NULL",
     "PreferenceTagsCompletedAt": "DATETIME NULL",
+    "ProfileCompletedAt": "DATETIME NULL",
+    "SubscribeOptInAt": "DATETIME NULL",
+    "SubscribeRoleVersion": "NVARCHAR(20) NULL",
+    "SubscribePromptTrigger": "NVARCHAR(20) NULL",
     "CharityPricingNegotiatedAt": "DATETIME NULL",
     "IsContractSigned": "BIT NOT NULL CONSTRAINT DF_AppAccount_IsContractSigned DEFAULT 0",
     "BoundCounselorId": "INT NULL",
@@ -91,6 +95,19 @@ def ensure_app_account_columns():
         for name, ddl in missing:
             conn.execute(text(f"ALTER TABLE [dbo].[AppAccount] ADD [{name}] {ddl}"))
             print(f"[OK] Added AppAccount.{name}")
+
+
+def ensure_subscribe_template_columns():
+    inspector = inspect(engine)
+    if not inspector.has_table("AppSubscribeTemplate"):
+        return
+    existing = {column["name"] for column in inspector.get_columns("AppSubscribeTemplate")}
+    if "RoleScope" not in existing:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE [dbo].[AppSubscribeTemplate] ADD [RoleScope] NVARCHAR(20) NULL"))
+            print("[OK] Added AppSubscribeTemplate.RoleScope")
+    else:
+        print("[OK] AppSubscribeTemplate columns already complete")
 
 
 def ensure_app_order_columns():
@@ -237,6 +254,7 @@ def main():
 
     ensure_tables()
     ensure_app_account_columns()
+    ensure_subscribe_template_columns()
     ensure_app_order_columns()
     ensure_case_record_columns()
     ensure_refund_exemption_columns()

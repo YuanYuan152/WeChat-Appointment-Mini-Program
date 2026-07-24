@@ -22,14 +22,14 @@
             <text class="dev-entrance-toggle">{{ showMockPanel ? '收起模拟登录' : '展开模拟登录' }}</text>
           </view>
           <text class="dev-entrance-hint">
-            {{ showMockPanel ? '当前为模拟登录：先选角色再点下方按钮' : '正式流程：微信登录 + 手机号绑定注册' }}
+            {{ showMockPanel ? '当前为模拟登录：先选角色再点下方按钮' : '正式流程：勾选协议后微信登录注册' }}
           </text>
         </view>
 
         <view v-if="!showMockPanel && !wechatReady" class="config-warn">
           <text class="config-warn-title">尚未配置真实微信凭证</text>
           <text class="config-warn-text">
-            请在 backend-python/.env 填写 WECHAT_APPID / WECHAT_SECRET，并将小程序 AppID 改为同一值后重启后端，才能获得真实 openid 与手机号。
+            请在 backend-python/.env 填写 WECHAT_APPID / WECHAT_SECRET，并将小程序 AppID 改为同一值后重启后端。
           </text>
         </view>
 
@@ -39,26 +39,51 @@
           {{
             showMockPanel
               ? '测试版请先选择上方角色，再点击下方按钮登录对应演示账号。'
-              : '微信授权登录并绑定手机号后完成注册，我们严格保护您的隐私。'
+              : '请先勾选协议，再使用微信一键登录完成注册/登录。'
           }}
         </text>
 
-        <!-- 正式：手机号快速验证组件；模拟：普通点击 -->
+        <!-- 必须勾选协议 -->
+        <view class="agree-block">
+          <view class="agree-row" @tap="toggleAgreeService">
+            <view class="checkbox" :class="{ checked: agreeService }">
+              <text v-if="agreeService" class="check-mark">✓</text>
+            </view>
+            <text class="agree-text">
+              我已阅读并同意
+              <text class="footer-link" @click.stop="openLegal('agreement')">《用户服务协议》</text>
+            </text>
+          </view>
+          <view class="agree-row" @tap="toggleAgreePrivacy">
+            <view class="checkbox" :class="{ checked: agreePrivacy }">
+              <text v-if="agreePrivacy" class="check-mark">✓</text>
+            </view>
+            <text class="agree-text">
+              我已阅读并同意
+              <text class="footer-link" @click.stop="openLegal('privacy')">《隐私政策》</text>
+            </text>
+          </view>
+        </view>
+
+        <!-- 正式：手机号快速验证 + wx.login；未勾选协议时禁用 -->
         <button
           v-if="!showMockPanel"
           class="wx-login-btn"
+          :class="{ disabled: !agreementsOk }"
           :loading="loading"
-          :disabled="loading"
+          :disabled="loading || !agreementsOk"
           open-type="getPhoneNumber"
           @getphonenumber="handlePhoneRegister"
+          @click="guardAgreements"
         >
           <text class="wx-btn-text">微信一键登录</text>
         </button>
         <button
           v-else
           class="wx-login-btn"
+          :class="{ disabled: !agreementsOk }"
           :loading="loading"
-          :disabled="loading"
+          :disabled="loading || !agreementsOk"
           @click="handleMockLogin"
         >
           <text class="wx-btn-text">{{ loginBtnText }}</text>
@@ -72,15 +97,6 @@
           }}
         </text>
       </view>
-
-      <view class="footer-section">
-        <text class="footer-text">
-          登录即代表同意
-          <text class="footer-link" @click.stop="openLegal('agreement')">《用户协议》</text>
-          和
-          <text class="footer-link" @click.stop="openLegal('privacy')">《隐私政策》</text>
-        </text>
-      </view>
     </view>
 
     <view class="back-btn" @click="goBack">
@@ -91,7 +107,7 @@
 
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
-import { AuthApi } from '@/apis/auth'
+import { AuthApi, type WxLoginResponse } from '@/apis/auth'
 import DevRolePicker from '@/components/DevRolePicker.vue'
 import { applyRoleAfterLogin, navigateToRoleHome } from '@/utils/roleLogin'
 import {
@@ -108,6 +124,10 @@ import {
 
 const loading = ref(false)
 const wechatReady = ref(false)
+const agreeService = ref(false)
+const agreePrivacy = ref(false)
+const agreementsOk = computed(() => agreeService.value && agreePrivacy.value)
+
 const devMode = isDevMode()
 const showMockPanel = ref(devMode && isDevEntranceOpen())
 const loginRoleLabel = ref(
@@ -125,6 +145,19 @@ const toggleDevEntrance = () => {
 const onDevRoleChange = (role: DevLoginRole) => {
   const item = DEV_LOGIN_ROLES.find(r => r.role === role)
   loginRoleLabel.value = item?.label || '来访·小美'
+}
+
+const toggleAgreeService = () => {
+  agreeService.value = !agreeService.value
+}
+const toggleAgreePrivacy = () => {
+  agreePrivacy.value = !agreePrivacy.value
+}
+
+const guardAgreements = () => {
+  if (!agreementsOk.value) {
+    uni.showToast({ title: '请先勾选服务协议与隐私政策', icon: 'none' })
+  }
 }
 
 const doWxLogin = async () => {
@@ -145,12 +178,17 @@ const explainPhoneError = (detail: any) => {
 }
 
 /**
- * 正式注册/登录（与生产一致）：
- * 1) getPhoneNumber 拿到 phoneCode
- * 2) uni.login 换 openid + JWT token
- * 3) bind-mobile 绑定真实手机号
+ * 正式注册/登录：
+ * 1) 勾选协议
+ * 2) getPhoneNumber + wx.login → openid + JWT
+ * 3) bind-mobile
+ * 4) 新用户 → 完善资料 → 消息引导；老用户 → 首页
  */
 const handlePhoneRegister = async (e: any) => {
+  if (!agreementsOk.value) {
+    guardAgreements()
+    return
+  }
   if (loading.value) return
   const detail = e?.detail || {}
   const phoneCode: string | undefined = detail.code
@@ -172,7 +210,7 @@ const handlePhoneRegister = async (e: any) => {
       uni.showModal({
         title: '仍在 Mock 登录',
         content:
-          '后端未配置真实 WECHAT_APPID / WECHAT_SECRET，当前 openid 为本地模拟值，无法用于正式服务通知。请先配置 .env 后重启后端再测。',
+          '后端未配置真实 WECHAT_APPID / WECHAT_SECRET，当前 openid 为本地模拟值。请先配置 .env 后重启后端再测。',
         showCancel: false,
       })
     }
@@ -195,8 +233,11 @@ const handlePhoneRegister = async (e: any) => {
   }
 }
 
-/** 开发者入口：模拟角色登录（不取真实手机号） */
 const handleMockLogin = async () => {
+  if (!agreementsOk.value) {
+    guardAgreements()
+    return
+  }
   if (loading.value) return
   loading.value = true
   try {
@@ -210,16 +251,30 @@ const handleMockLogin = async () => {
   }
 }
 
-const afterLoginSuccess = async (loginResult?: { activeRole?: string; roles?: string[] }) => {
+const afterLoginSuccess = async (loginResult: WxLoginResponse) => {
   try {
-    let activeRole = loginResult?.activeRole || loginResult?.roles?.[0]
     const me = await AuthApi.getMe().catch(() => null)
     if (me) {
-      activeRole = await applyRoleAfterLogin(me)
+      await applyRoleAfterLogin(me)
     }
-    const redirectUrl = uni.getStorageSync('redirectAfterLogin') as string | undefined
+
+    const needProfile =
+      loginResult.needProfileSetup ||
+      loginResult.is_new_user ||
+      me?.needProfileSetup ||
+      (!me?.nickname && !me?.profileCompleted)
+
     setTimeout(() => {
-      navigateToRoleHome(activeRole || 'Patient', redirectUrl || undefined)
+      // 新用户先完善昵称；保存按钮手势内会直接调起微信官方订阅授权（不再进自定义引导页）
+      if (needProfile) {
+        uni.redirectTo({ url: '/pages/auth/profile-setup' })
+        return
+      }
+      const redirectUrl = uni.getStorageSync('redirectAfterLogin') as string | undefined
+      navigateToRoleHome(
+        loginResult.activeRole || me?.activeRole || me?.roles?.[0] || 'Patient',
+        redirectUrl || undefined,
+      )
     }, 600)
   } catch (err: any) {
     uni.showToast({ title: err?.message || '登录后获取账号信息失败', icon: 'none' })
@@ -232,7 +287,7 @@ const goBack = () => {
   if (pages.length > 1) {
     uni.navigateBack()
   } else {
-    uni.switchTab({ url: '/pages/user/profile' })
+    uni.switchTab({ url: '/pages/index/index' })
   }
 }
 
@@ -305,15 +360,8 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
 }
-.dev-entrance-title {
-  font-size: 28rpx;
-  font-weight: 600;
-  color: #374151;
-}
-.dev-entrance-toggle {
-  font-size: 24rpx;
-  color: #4F46E5;
-}
+.dev-entrance-title { font-size: 28rpx; font-weight: 600; color: #374151; }
+.dev-entrance-toggle { font-size: 24rpx; color: #4F46E5; }
 .dev-entrance-hint {
   display: block;
   margin-top: 12rpx;
@@ -347,7 +395,7 @@ onMounted(async () => {
   font-size: 28rpx;
   color: #6B7280;
   text-align: center;
-  margin-bottom: 48rpx;
+  margin-bottom: 32rpx;
   line-height: 1.6;
 }
 .form-tip {
@@ -356,6 +404,49 @@ onMounted(async () => {
   color: #9CA3AF;
   text-align: center;
   margin-top: 24rpx;
+}
+
+.agree-block {
+  margin-bottom: 36rpx;
+  padding: 8rpx 4rpx;
+}
+.agree-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 16rpx;
+  margin-bottom: 20rpx;
+}
+.checkbox {
+  width: 36rpx;
+  height: 36rpx;
+  border-radius: 8rpx;
+  border: 2rpx solid #c4c4c4;
+  flex-shrink: 0;
+  margin-top: 4rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+}
+.checkbox.checked {
+  background: #07C160;
+  border-color: #07C160;
+}
+.check-mark {
+  color: #fff;
+  font-size: 22rpx;
+  font-weight: 700;
+  line-height: 1;
+}
+.agree-text {
+  flex: 1;
+  font-size: 24rpx;
+  color: #6B7280;
+  line-height: 1.6;
+}
+.footer-link {
+  color: #0D9488;
+  text-decoration: underline;
 }
 
 .wx-login-btn {
@@ -370,11 +461,11 @@ onMounted(async () => {
   font-weight: 700;
   box-shadow: 0 16rpx 40rpx rgba(7,193,96,0.35);
 }
+.wx-login-btn.disabled {
+  opacity: 0.45;
+  box-shadow: none;
+}
 .wx-btn-text { color: white; }
-
-.footer-section { text-align: center; }
-.footer-text { font-size: 24rpx; color: rgba(255,255,255,0.7); line-height: 1.6; }
-.footer-link { color: #ffffff; text-decoration: underline; }
 
 .back-btn {
   position: fixed;

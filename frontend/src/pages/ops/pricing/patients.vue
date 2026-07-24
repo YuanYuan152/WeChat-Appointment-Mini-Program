@@ -205,6 +205,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
+import { maybePromptRoleSubscribe } from '@/utils/subscribePrompt'
 
 interface CounselorInfo {
   counselorId: number
@@ -521,6 +522,7 @@ const saveEdit = async () => {
       uni.showToast({ title: '已保存', icon: 'success' })
       closeEdit()
       await reload(true)
+      setTimeout(() => { void maybePromptRoleSubscribe('workbench') }, 500)
     } else {
       uni.showToast({ title: res.msg || '保存失败', icon: 'none' })
     }

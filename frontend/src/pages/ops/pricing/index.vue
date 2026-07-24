@@ -129,6 +129,7 @@ import { computed, reactive, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
+import { maybePromptRoleSubscribe } from '@/utils/subscribePrompt'
 
 const DEFAULT_SHARE_PERCENT = 50
 
@@ -286,6 +287,7 @@ const saveBase = async () => {
       uni.showToast({ title: '已保存', icon: 'success' })
       closeEdit()
       await reload()
+      setTimeout(() => { void maybePromptRoleSubscribe('workbench') }, 500)
     } else {
       uni.showToast({ title: res.msg || '保存失败', icon: 'none' })
     }
@@ -335,6 +337,7 @@ const saveShare = async () => {
       uni.showToast({ title: '默认抽成已更新', icon: 'success' })
       closeShareEdit()
       await reload()
+      setTimeout(() => { void maybePromptRoleSubscribe('workbench') }, 500)
     } else {
       uni.showToast({ title: res.msg || '保存失败', icon: 'none' })
     }

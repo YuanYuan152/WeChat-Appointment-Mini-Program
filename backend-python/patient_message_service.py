@@ -208,6 +208,25 @@ def notify_patient_appointment_success(
         related_type="PATIENT_APPOINTMENT_SUCCESS",
         related_id=consultation.Id,
     )
+    # 微信服务通知（用户曾授权 APPOINTMENT_OK 订阅模板后才会真正下发）
+    from wechat_subscribe_service import try_send
+
+    patient_acc = db.query(AppAccount).filter(AppAccount.Id == consultation.PatientId).first()
+    patient_name = (
+        (patient_acc.Nickname if patient_acc else None)
+        or (patient_acc.RealName if patient_acc else None)
+        or "来访者"
+    )
+    try_send(
+        db,
+        consultation.PatientId,
+        "APPOINTMENT_OK",
+        {
+            "name": patient_name,
+            "slot": time_text,
+            "location": center_name,
+        },
+    )
 
 
 def notify_patient_appointment_cancelled(

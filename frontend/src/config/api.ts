@@ -74,6 +74,7 @@ export const API_ENDPOINTS = {
     updateMe: '/api/mini/auth/me',
     switchRole: '/api/mini/auth/switch-role',
     deleteAccount: '/api/mini/auth/account',
+    deactivateAccount: '/api/mini/auth/account/deactivate',
   },
 
   // 支付
@@ -127,7 +128,13 @@ export const API_ENDPOINTS = {
     unreadCount: '/api/mini/message/unread-count',
     markRead: (id: number | string) => `/api/mini/message/${id}/read`,
     subscribe: '/api/mini/message/subscribe',
+    subscribePreference: '/api/mini/message/subscribe-preference',
+    subscribeHint: '/api/mini/message/subscribe-hint',
+    subscribeAck: '/api/mini/message/subscribe-ack',
+    subscribeStatus: '/api/mini/message/subscribe-status',
+    subscribeToggle: '/api/mini/message/subscribe-toggle',
     templates: '/api/mini/message/templates',
+    subscribePush: '/api/mini/message/subscribe-push',
   },
 
   // 咨询师工作台

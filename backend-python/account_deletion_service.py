@@ -1,7 +1,13 @@
-"""管理员物理删除用户账号及其附属数据。"""
+"""账号注销：
+
+- soft_delete_account：用户自主注销（微信合规）。清空可识别身份字段，但保留
+  AppAccount 主键及咨询/订单/个案等业务行，供合规追溯。
+- hard_delete_account：仅管理员在无核心业务数据时物理删除。
+"""
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import or_
@@ -35,6 +41,111 @@ from models import (
     AppSmsVerification,
     AppUserPreferenceTag,
 )
+
+
+def soft_delete_account(
+    db: Session,
+    account: AppAccount,
+    *,
+    ip: Optional[str] = None,
+    user_agent: Optional[str] = None,
+) -> dict:
+    """
+    软注销（用户侧）：
+
+    保留（合规追溯，绝不删除）：
+      - AppAccount 行本身（Id / CreatedAt 不变）
+      - AppConsultation / AppOrder / AppCaseRecord / AppRefundExemption 等业务表
+        （仍通过 PatientId / AccountId 关联到该 Id）
+
+    清除 / 失效：
+      - OpenId / UnionId / Mobile / 昵称头像姓名等可识别字段
+      - 登录会话、角色绑定（无法再登录、无法再以原角色操作）
+      - 站内消息、收藏、提醒任务等非追溯必需的附属数据
+    """
+    if getattr(account, "IsActive", True) is False or getattr(account, "DeletedAt", None):
+        return {
+            "message": "账号已处于注销状态",
+            "accountId": account.Id,
+            "alreadyDeleted": True,
+        }
+
+    account_id = account.Id
+    now = datetime.utcnow()
+    # 换掉 openid，避免同一微信再次登录命中已注销行；业务表仍挂原 Id
+    new_openid = f"deleted_{account_id}_{int(now.timestamp())}"
+
+    db.query(AppLoginSession).filter(AppLoginSession.AccountId == account_id).delete(
+        synchronize_session=False
+    )
+    db.query(AppRoleBinding).filter(AppRoleBinding.AccountId == account_id).delete(
+        synchronize_session=False
+    )
+    db.query(AppMessage).filter(AppMessage.AccountId == account_id).delete(
+        synchronize_session=False
+    )
+    db.query(AppRemindTask).filter(AppRemindTask.AccountId == account_id).delete(
+        synchronize_session=False
+    )
+    db.query(AppCounselorFavorite).filter(AppCounselorFavorite.AccountId == account_id).delete(
+        synchronize_session=False
+    )
+    db.query(AppUserPreferenceTag).filter(AppUserPreferenceTag.AccountId == account_id).delete(
+        synchronize_session=False
+    )
+
+    db.add(
+        AppRoleSwitchLog(
+            AccountId=account_id,
+            FromRole=getattr(account, "ActiveRole", None),
+            ToRole="DELETED",
+            Ip=(ip or None),
+            UserAgent=(user_agent or "")[:200] if user_agent else None,
+        )
+    )
+
+    update_fields = {
+        AppAccount.OpenId: new_openid,
+        AppAccount.UnionId: None,
+        AppAccount.Mobile: None,
+        AppAccount.Nickname: "已注销用户",
+        AppAccount.AvatarUrl: None,
+        AppAccount.RealName: None,
+        AppAccount.Gender: None,
+        AppAccount.Birthday: None,
+        AppAccount.EmergencyContact: None,
+        AppAccount.EmergencyRelation: None,
+        AppAccount.EmergencyPhone: None,
+        AppAccount.ActiveRole: None,
+        AppAccount.PasswordHash: None,
+        AppAccount.IntakeSignatureUrl: None,
+        AppAccount.IsActive: False,
+        AppAccount.DeletedAt: now,
+        AppAccount.UpdatedAt: now,
+    }
+    if hasattr(AppAccount, "AccessRevokedAt"):
+        update_fields[AppAccount.AccessRevokedAt] = now
+    if hasattr(AppAccount, "ProfileCompletedAt"):
+        update_fields[AppAccount.ProfileCompletedAt] = None
+    if hasattr(AppAccount, "SubscribeOptInAt"):
+        update_fields[AppAccount.SubscribeOptInAt] = None
+
+    db.query(AppAccount).filter(AppAccount.Id == account_id).update(
+        update_fields,
+        synchronize_session=False,
+    )
+    db.commit()
+
+    return {
+        "message": "账号已注销。预约与订单等业务记录已保留供合规追溯，登录凭证已失效。",
+        "accountId": account_id,
+        "alreadyDeleted": False,
+        "retained": {
+            "consultations": True,
+            "orders": True,
+            "caseRecords": True,
+        },
+    }
 
 
 def hard_delete_blocking_reason(db: Session, account_id: int) -> Optional[str]:

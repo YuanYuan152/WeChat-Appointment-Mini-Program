@@ -236,6 +236,8 @@ import { httpV2 } from '@/utils/http'
 
 import { API_ENDPOINTS } from '@/config/api'
 
+import { maybePromptRoleSubscribe } from '@/utils/subscribePrompt'
+
 import { ROLE_OPTIONS, roleLabel, resolveAccountRole, assignableRolesForActor, canActorManageUser, canActorAssignRole } from '@/constants/roles'
 import {
   COUNSELOR_TYPE_OPTIONS,
@@ -591,6 +593,7 @@ const submitAddUser = async () => {
         keyword.value = res.data.mobile
 
       }
+      setTimeout(() => { void maybePromptRoleSubscribe('workbench') }, 500)
 
     } else {
 
@@ -675,6 +678,7 @@ const changeRole = async (uid: number) => {
     delete selected[uid]
     await load(true)
     uni.showToast({ title: (res.data as { message?: string })?.message || res.msg || '已更换', icon: 'success' })
+    setTimeout(() => { void maybePromptRoleSubscribe('workbench') }, 500)
   } else {
     uni.showToast({ title: res.msg || res.data?.message || '更换失败', icon: 'none' })
   }

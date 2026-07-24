@@ -34,6 +34,10 @@ class AppAccount(Base):
     IntakeSignatureUrl = Column(String(500), nullable=True)
     PasswordHash = Column(String(255), nullable=True)
     PreferenceTagsCompletedAt = Column(DateTime, nullable=True)
+    ProfileCompletedAt = Column(DateTime, nullable=True)
+    SubscribeOptInAt = Column(DateTime, nullable=True)
+    SubscribeRoleVersion = Column(String(20), nullable=True)
+    SubscribePromptTrigger = Column(String(20), nullable=True)
     PatientSource = Column(String(50), nullable=True)
     CharityPricingNegotiatedAt = Column(DateTime, nullable=True)
     IsContractSigned = Column(Boolean, nullable=False, default=False, server_default="0")
@@ -281,7 +285,22 @@ class AppSubscribeTemplate(Base):
     EventKey = Column(String(80), nullable=False)
     TemplateId = Column(String(120), nullable=False)
     Description = Column(Unicode(200), nullable=True)
+    RoleScope = Column(String(20), nullable=True)  # Patient / Counselor / Staff / All
     IsActive = Column(Boolean, nullable=False, default=True)
+    CreatedAt = Column(DateTime, default=func.now(), nullable=False)
+    UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
+
+
+class AppUserSubscribeAuth(Base):
+    """用户对各订阅消息事件的授权状态（accept/reject/ban）。"""
+    __tablename__ = "AppUserSubscribeAuth"
+
+    Id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    AccountId = Column(Integer, nullable=False, index=True)
+    EventKey = Column(String(80), nullable=False)
+    TemplateId = Column(String(120), nullable=True)
+    Status = Column(String(20), nullable=False, default="reject")
+    RoleAtAuth = Column(String(20), nullable=True)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
     UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
 

@@ -24,6 +24,8 @@ export interface WxLoginResponse {
   id?: number
   mobile?: string
   isMockAuth?: boolean
+  needProfileSetup?: boolean
+  needSubscribeGuide?: boolean
 }
 
 export interface BindMobileRequest {
@@ -38,6 +40,10 @@ export interface UserInfo {
   avatarUrl?: string
   roles: string[]
   activeRole?: string
+  profileCompleted?: boolean
+  subscribeOptIn?: boolean
+  needProfileSetup?: boolean
+  needSubscribeGuide?: boolean
 }
 
 export interface WechatStatus {
@@ -127,6 +133,34 @@ export class AuthApi {
     throw new Error(res.msg || '获取用户信息失败')
   }
 
+  /** 更新头像 / 昵称等基本资料 */
+  static async updateMe(payload: {
+    nickname?: string
+    avatarUrl?: string
+    realName?: string
+    gender?: string
+    markProfileCompleted?: boolean
+  }): Promise<UserInfo> {
+    const res = await httpV2.put<UserInfo>(API_ENDPOINTS.auth.updateMe, payload)
+    if (res.code === 0 && res.data) {
+      const role = resolveAccountRole(res.data.roles, res.data.activeRole)
+      const token = uni.getStorageSync('token') || ''
+      if (token) {
+        saveSession({
+          token: String(token),
+          openid: res.data.openId,
+          role,
+          nickname: res.data.nickname,
+          avatar: res.data.avatarUrl,
+          id: res.data.id,
+          mobile: res.data.mobile,
+        })
+      }
+      return res.data
+    }
+    throw new Error(res.msg || '保存资料失败')
+  }
+
   /**
    * 切换当前活跃角色
    */
@@ -137,15 +171,28 @@ export class AuthApi {
   }
 
   /**
-   * 注销当前账号（软删除，符合微信小程序合规要求）
-   * 成功后调用方应负责清空本地 token 并跳转。
+   * 注销当前账号（软删除：清空身份字段，保留预约/订单等业务数据）
+   * 优先 POST deactivate（兼容性更好），失败再试 DELETE。
    */
-  static async deleteAccount(): Promise<{ message: string }> {
-    const res = await httpV2.delete(API_ENDPOINTS.auth.deleteAccount)
+  static async deleteAccount(): Promise<{ message: string; accountId?: number }> {
+    const tryDeactivate = await httpV2.post(
+      API_ENDPOINTS.auth.deactivateAccount,
+      {},
+      { showLoading: false, showError: false },
+    )
+    if (tryDeactivate.code === 0 && tryDeactivate.data) {
+      clearSession()
+      return tryDeactivate.data
+    }
+
+    const res = await httpV2.delete(API_ENDPOINTS.auth.deleteAccount, {
+      showLoading: false,
+      showError: false,
+    })
     if (res.code === 0 && res.data) {
       clearSession()
       return res.data
     }
-    throw new Error(res.msg || '注销失败')
+    throw new Error(tryDeactivate.msg || res.msg || '注销失败')
   }
 }

@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <view class="page-schedule">
     <!-- 新增排班按钮 -->
     <view class="toolbar">
@@ -107,6 +107,7 @@ import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
 import { APPOINTMENT_CENTERS, APPOINTMENT_CENTER_MAP } from '@/constants/appointmentCenters'
 import { getRoomName, getRoomsByCenter } from '@/constants/consultationRooms'
+import { maybePromptRoleSubscribe } from '@/utils/subscribePrompt'
 
 interface Schedule {
   Id: number
@@ -244,6 +245,9 @@ const submitSchedule = async () => {
       }
       await loadSchedules()
       uni.showToast({ title: '排期成功', icon: 'success' })
+      setTimeout(() => {
+        void maybePromptRoleSubscribe('schedule')
+      }, 500)
     } else {
       uni.showToast({ title: res.msg || '添加失败', icon: 'none' })
     }

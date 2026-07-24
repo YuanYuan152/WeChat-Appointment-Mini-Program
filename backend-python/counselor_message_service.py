@@ -350,6 +350,19 @@ def notify_counselor_new_appointment(
         related_type="COUNSELOR_APPOINTMENT_NEW",
         related_id=consultation.Id,
     )
+    from wechat_subscribe_service import try_send
+
+    try_send(
+        db,
+        consultation.CounselorId,
+        "COUNSELOR_APPOINTMENT_NEW",
+        {
+            "title": "新预约",
+            "time": time_text,
+            "patient": patient_label,
+            "tip": "请准时赴约",
+        },
+    )
 
 
 def schedule_counselor_consultation_reminder(
@@ -513,6 +526,19 @@ def notify_counselor_appointment_cancelled(
         content=_message_payload(summary, detail),
         related_type="COUNSELOR_APPOINTMENT_CANCEL",
         related_id=consultation.Id,
+    )
+    from wechat_subscribe_service import try_send
+
+    try_send(
+        db,
+        consultation.CounselorId,
+        "COUNSELOR_APPOINTMENT_CANCEL",
+        {
+            "title": "预约已取消",
+            "time": time_text,
+            "tip": f"{patient_label} 已取消预约",
+            "patient": patient_label,
+        },
     )
 
 

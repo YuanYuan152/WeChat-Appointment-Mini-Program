@@ -25,10 +25,12 @@ def _ensure_db_schema():
         from ensure_schema import (
             ensure_app_order_columns,
             ensure_app_account_columns,
+            ensure_subscribe_template_columns,
             ensure_tables,
         )
         ensure_tables()
         ensure_app_account_columns()
+        ensure_subscribe_template_columns()
         ensure_app_order_columns()
         from database import SessionLocal
         from charity_milestone_service import backfill_charity_negotiation_state
