@@ -25,6 +25,7 @@ logger = logging.getLogger("uvicorn.error")
 ROLE_EVENT_KEYS: Dict[str, List[str]] = {
     # 注册保存昵称时一次授权：咨询提醒 + 预约成功（支付页可再拉一次用完后的额度）
     "Patient": ["APPOINTMENT_REMIND", "APPOINTMENT_OK"],
+    "Tester": ["APPOINTMENT_REMIND", "APPOINTMENT_OK"],
     "Counselor": ["APPOINTMENT_REMIND"],
     "Assistant": ["STAFF_APPROVAL_PENDING"],
     "Ops": ["STAFF_APPROVAL_PENDING"],
@@ -229,26 +230,23 @@ def invalidate_subscribe_for_role_change(db: Session, account: AppAccount, new_r
 
 def apply_subscribe_prompt_trigger(account: AppAccount, new_role: str) -> None:
     """
-    订阅弹窗时机：
+    订阅弹窗时机（须在用户点击手势内调官方 requestSubscribeMessage）：
     - Patient：不弹角色订阅
-    - 后台预授（admin_invite_*）：咨询师→排期成功后；助理/主任/管理员→工作台首次操作成功后
-    - 已注册用户中途被改角色：下次重新登录时弹
+    - Counselor：排期提交时弹（真机与预授账号一致）
+    - Assistant/Ops/Admin：工作台操作时弹
     """
     if not hasattr(account, "SubscribePromptTrigger"):
         return
     if new_role == "Patient":
         account.SubscribePromptTrigger = None
         return
-    if is_preassigned_openid(getattr(account, "OpenId", None)):
-        if new_role == "Counselor":
-            account.SubscribePromptTrigger = "schedule"
-        elif new_role in STAFF_WORKBENCH_ROLES:
-            account.SubscribePromptTrigger = "workbench"
-        else:
-            account.SubscribePromptTrigger = None
+    if new_role == "Counselor":
+        account.SubscribePromptTrigger = "schedule"
         return
-    # 已有真实微信身份：等下次登录
-    account.SubscribePromptTrigger = "login"
+    if new_role in STAFF_WORKBENCH_ROLES:
+        account.SubscribePromptTrigger = "workbench"
+        return
+    account.SubscribePromptTrigger = None
 
 
 def need_role_subscribe_guide(account: AppAccount, role: Optional[str] = None) -> bool:
@@ -271,18 +269,13 @@ def resolve_subscribe_prompt_flags(account: AppAccount, role: Optional[str] = No
     show_schedule = False
     show_workbench = False
     if needs and role != "Patient":
-        if trigger == "login":
-            show_login = True
-        elif trigger == "schedule" and role == "Counselor":
-            show_schedule = True
-        elif trigger == "workbench" and role in STAFF_WORKBENCH_ROLES:
-            show_workbench = True
-        elif not trigger:
-            # 历史数据兜底：咨询师走排期，员工走工作台
-            if role == "Counselor":
-                show_schedule = True
-            elif role in STAFF_WORKBENCH_ROLES:
-                show_workbench = True
+        # 咨询师：排期场景；历史 trigger=login 的真机数据也允许在排期时弹
+        if role == "Counselor":
+            show_schedule = trigger in (None, "schedule", "login")
+            show_login = trigger == "login"
+        elif role in STAFF_WORKBENCH_ROLES:
+            show_workbench = trigger in (None, "workbench", "login")
+            show_login = trigger == "login"
     return {
         "trigger": trigger,
         "showLoginSubscribe": show_login,

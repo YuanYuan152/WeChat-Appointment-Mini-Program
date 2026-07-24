@@ -29,6 +29,29 @@ from staff_roles import staff_workbench_account_ids
 from refund_exemption_service import latest_exemptions_by_consultation
 
 
+def push_staff_approval_subscribe(
+    db: Session,
+    *,
+    account_ids: Optional[List[int]] = None,
+    applicant: str,
+    biz_type: str,
+    apply_time: Optional[datetime] = None,
+) -> None:
+    """向管理工作台账号推送微信「待审核提醒」（需曾授权 STAFF_APPROVAL_PENDING）。"""
+    from app_time import china_now
+    from wechat_subscribe_service import try_send
+
+    ids = account_ids if account_ids is not None else staff_workbench_account_ids(db)
+    time_text = (apply_time or china_now()).strftime("%Y-%m-%d %H:%M")
+    payload = {
+        "applyTime": time_text,
+        "applicant": (applicant or "申请人")[:20],
+        "bizType": (biz_type or "待审核")[:20],
+    }
+    for account_id in ids:
+        try_send(db, account_id, "STAFF_APPROVAL_PENDING", payload)
+
+
 def _assistant_account_ids(db: Session) -> List[int]:
     rows = (
         db.query(AppRoleBinding.AccountId)
@@ -324,6 +347,12 @@ def notify_staff_counselor_leave(
         related_type="COUNSELOR_LEAVE",
         related_id=leave_request_id or schedule.Id,
         account_ids=staff_workbench_account_ids(db),
+    )
+    push_staff_approval_subscribe(
+        db,
+        applicant=counselor_name,
+        biz_type="咨询师请假",
+        apply_time=leave_row.CreatedAt if leave_row else None,
     )
 
 

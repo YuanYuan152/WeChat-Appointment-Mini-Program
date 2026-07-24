@@ -115,6 +115,14 @@ def notify_admins_new_exemption(
         related_type="REFUND_EXEMPTION_PENDING",
         related_id=exemption.Id,
     )
+    from staff_message_service import push_staff_approval_subscribe
+
+    push_staff_approval_subscribe(
+        db,
+        applicant=patient_name,
+        biz_type="退款申请",
+        apply_time=getattr(exemption, "CreatedAt", None),
+    )
 
 
 def notify_patient_exemption_result(

@@ -17,7 +17,7 @@ export type PublicRole = 'visitor' | 'counselor' | 'assistant' | 'director' | 'a
 export interface StoredUserInfo {
   token: string
   openid?: string
-  /** 后端角色：Patient | Counselor | Assistant | Ops | Admin */
+  /** 后端角色：Patient | Tester | Counselor | Assistant | Ops | Admin */
   role: BackendRole
   /** 对外别名：visitor | counselor | assistant | director | admin */
   roleKey?: PublicRole
@@ -37,6 +37,7 @@ const PUBLIC_TO_BACKEND: Record<PublicRole, BackendRole> = {
 
 const BACKEND_TO_PUBLIC: Record<string, PublicRole> = {
   Patient: 'visitor',
+  Tester: 'visitor',
   Counselor: 'counselor',
   Assistant: 'assistant',
   Ops: 'director',

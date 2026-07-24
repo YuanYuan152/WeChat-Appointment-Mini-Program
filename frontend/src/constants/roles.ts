@@ -1,6 +1,7 @@
 /** 系统角色中文名（与角色管理、登录选择一致） */
 export const ROLE_LABELS: Record<string, string> = {
   Patient: '来访',
+  Tester: '测试员',
   Counselor: '咨询师',
   Assistant: '咨询助理',
   Ops: '咨询主任',
@@ -56,17 +57,22 @@ export const ROLE_OPTIONS = [
   { value: 'Assistant', label: '咨询助理' },
   { value: 'Ops', label: '咨询主任' },
   { value: 'Patient', label: '来访' },
+  { value: 'Tester', label: '测试员' },
   { value: 'Admin', label: '管理员' },
 ] as const
 
 /** @deprecated 单账号单角色，请使用 resolveAccountRole */
 export const ROLE_PRIORITY_LOW_TO_HIGH = [
   'Patient',
+  'Tester',
   'Counselor',
   'Assistant',
   'Ops',
   'Admin',
 ] as const
+
+/** 测试员：可被管理员强制物理删除（含咨询/订单等业务数据） */
+export const TESTER_ROLE = 'Tester'
 
 /** 单账号唯一角色：优先 activeRole，否则取 roles[0] */
 export function resolveAccountRole(roles?: string[], activeRole?: string | null): string {

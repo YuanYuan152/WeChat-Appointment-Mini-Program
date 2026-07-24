@@ -6,7 +6,7 @@
 
       <text class="title">角色&权限绑定</text>
 
-      <text class="subtitle">每个账号仅拥有一个角色。管理员 &gt; 咨询主任 &gt; 咨询助理，高级别可赋权/管理低级别，同级不可互相操作</text>
+      <text class="subtitle">每个账号仅一个角色。管理员 &gt; 咨询主任 &gt; 咨询助理；测试员可强制彻底删除（含咨询/订单）。高级别可赋权/管理低级别，同级不可互相操作</text>
 
     </view>
 
@@ -236,9 +236,9 @@ import { httpV2 } from '@/utils/http'
 
 import { API_ENDPOINTS } from '@/config/api'
 
-import { maybePromptRoleSubscribe } from '@/utils/subscribePrompt'
+import { refreshSubscribeHint, tryOfficialRoleSubscribeInGesture } from '@/utils/subscribePrompt'
 
-import { ROLE_OPTIONS, roleLabel, resolveAccountRole, assignableRolesForActor, canActorManageUser, canActorAssignRole } from '@/constants/roles'
+import { ROLE_OPTIONS, roleLabel, resolveAccountRole, assignableRolesForActor, canActorManageUser, canActorAssignRole, TESTER_ROLE } from '@/constants/roles'
 import {
   COUNSELOR_TYPE_OPTIONS,
   PATIENT_SOURCE_OPTIONS,
@@ -516,16 +516,11 @@ const openAddModal = () => {
 
 
 
-const submitAddUser = async () => {
-
+const submitAddUser = () => {
   const mobile = addForm.mobile.trim().replace(/\D/g, '')
-
   if (!/^1\d{10}$/.test(mobile)) {
-
     uni.showToast({ title: '请输入有效的11位手机号', icon: 'none' })
-
     return
-
   }
 
   const role = assignableRoleValues.value[addForm.roleIndex]
@@ -550,67 +545,48 @@ const submitAddUser = async () => {
     }
   }
 
+  const subscribeDone = tryOfficialRoleSubscribeInGesture('workbench')
   adding.value = true
-  try {
-    const payload: {
-      mobile: string
-      role: string
-      nickname?: string
-      patient_source?: string
-      counselor_type?: string
-    } = { mobile, role }
+  void (async () => {
+    try {
+      const payload: {
+        mobile: string
+        role: string
+        nickname?: string
+        patient_source?: string
+        counselor_type?: string
+      } = { mobile, role }
 
-    if (nickname) payload.nickname = nickname
-
-    if (role === 'Patient') {
-      payload.patient_source = PATIENT_SOURCE_OPTIONS[addForm.patientSourceIndex]!.value
-    } else if (role === 'Counselor') {
-      payload.counselor_type = COUNSELOR_TYPE_OPTIONS[addForm.counselorTypeIndex]!.value
-    }
-
-
-
-    const res = await httpV2.post<AdminUser & { message?: string; created?: boolean }>(
-
-      API_ENDPOINTS.admin.createUserByMobile,
-
-      payload,
-
-    )
-
-    if (res.code === 0) {
-
-      showAddModal.value = false
-
-      await load(true)
-
-      const msg = res.data?.message || (res.data?.created ? '用户已添加' : '已绑定角色')
-
-      uni.showToast({ title: msg, icon: 'success' })
-
-      if (res.data?.mobile) {
-
-        keyword.value = res.data.mobile
-
+      if (nickname) payload.nickname = nickname
+      if (role === 'Patient') {
+        payload.patient_source = PATIENT_SOURCE_OPTIONS[addForm.patientSourceIndex]!.value
+      } else if (role === 'Counselor') {
+        payload.counselor_type = COUNSELOR_TYPE_OPTIONS[addForm.counselorTypeIndex]!.value
       }
-      setTimeout(() => { void maybePromptRoleSubscribe('workbench') }, 500)
 
-    } else {
+      const res = await httpV2.post<AdminUser & { message?: string; created?: boolean }>(
+        API_ENDPOINTS.admin.createUserByMobile,
+        payload,
+      )
+      await subscribeDone
 
-      uni.showToast({ title: res.msg || '添加失败', icon: 'none' })
-
+      if (res.code === 0) {
+        showAddModal.value = false
+        await load(true)
+        const msg = res.data?.message || (res.data?.created ? '用户已添加' : '已绑定角色')
+        uni.showToast({ title: msg, icon: 'success' })
+        if (res.data?.mobile) {
+          keyword.value = res.data.mobile
+        }
+      } else {
+        uni.showToast({ title: res.msg || '添加失败', icon: 'none' })
+      }
+    } catch {
+      uni.showToast({ title: '添加失败', icon: 'none' })
+    } finally {
+      adding.value = false
     }
-
-  } catch {
-
-    uni.showToast({ title: '添加失败', icon: 'none' })
-
-  } finally {
-
-    adding.value = false
-
-  }
-
+  })()
 }
 
 
@@ -626,6 +602,9 @@ const selectRole = (uid: number, idx: number) => {
 const ROLES_WITH_TYPE = new Set(['Patient', 'Counselor'])
 
 const changeRole = async (uid: number) => {
+  // 手势内先官方订阅（待审核模板）；后续确认框不再承载订阅
+  const subscribeDone = tryOfficialRoleSubscribeInGesture('workbench')
+
   const role = selected[uid]
   if (!role) {
     uni.showToast({ title: '请选择角色', icon: 'none' })
@@ -673,12 +652,12 @@ const changeRole = async (uid: number) => {
   }
 
   const res = await httpV2.post(API_ENDPOINTS.admin.bindRole(uid), payload)
+  await subscribeDone
 
   if (res.code === 0) {
     delete selected[uid]
     await load(true)
     uni.showToast({ title: (res.data as { message?: string })?.message || res.msg || '已更换', icon: 'success' })
-    setTimeout(() => { void maybePromptRoleSubscribe('workbench') }, 500)
   } else {
     uni.showToast({ title: res.msg || res.data?.message || '更换失败', icon: 'none' })
   }
@@ -686,9 +665,12 @@ const changeRole = async (uid: number) => {
 
 const deleteUser = (user: AdminUser) => {
   const name = user.nickname || user.mobile || `用户 ${user.id}`
+  const isTester = resolveAccountRole(user.roles, user.activeRole) === TESTER_ROLE
   uni.showModal({
-    title: '确认删除用户',
-    content: `确定永久删除「${name}」吗？\n\n该操作不可恢复，账号及角色绑定将从系统中彻底移除。若该用户存在咨询记录或已支付订单，将无法删除。`,
+    title: isTester ? '确认强制删除测试员' : '确认删除用户',
+    content: isTester
+      ? `确定永久删除测试员「${name}」吗？\n\n将级联删除其咨询、订单、个案等全部业务数据及账号本身，且不可恢复。删除后该用户将不再出现在用户管理与角色绑定列表中。`
+      : `确定永久删除「${name}」吗？\n\n该操作不可恢复，账号及角色绑定将从系统中彻底移除。若该用户存在咨询记录或已支付订单，将无法删除。`,
     confirmText: '删除',
     confirmColor: '#B91C1C',
     success: async (res) => {
@@ -705,9 +687,15 @@ const deleteUser = (user: AdminUser) => {
   })
 }
 
-onMounted(() => load(true))
+onMounted(() => {
+  void load(true)
+  void refreshSubscribeHint()
+})
 
-onShow(() => load(true))
+onShow(() => {
+  void load(true)
+  void refreshSubscribeHint()
+})
 
 </script>
 

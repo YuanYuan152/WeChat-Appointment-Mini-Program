@@ -1,77 +1,95 @@
 /**
- * 按角色场景弹出服务通知订阅：
- * - schedule：咨询师排期成功后
- * - workbench：助理/主任/管理员工作台首次操作成功后
- * - login：中途改角色后下次登录（由登录页跳转订阅设置页处理）
+ * 咨询师 / 管理工作台订阅授权：
+ * 必须弹出微信官方 requestSubscribeMessage（与完善资料页相同形式），
+ * 禁止 uni.showModal「开启服务通知」等自定义中间层。
  *
- * 微信要求 requestSubscribeMessage 必须由用户点击触发，故用 Modal 确认按钮承接。
+ * 用法：在业务按钮 @tap 回调开头同步调用 tryOfficialRoleSubscribeInGesture，
+ * 页面 onMounted/onShow 里 refreshSubscribeHint 预取（排期场景即使 hint 未就绪也会强制弹）。
  */
 
-import { MessageApi } from '@/apis/message'
-import { requestAndSaveSubscribe, ROLE_EVENT_KEYS } from '@/utils/subscribeMessage'
+import { MessageApi, type SubscribeHint } from '@/apis/message'
+import {
+  requestOfficialSubscribeInGesture,
+  ROLE_EVENT_KEYS,
+} from '@/utils/subscribeMessage'
+import { getStoredRole } from '@/utils/session'
 
 export type SubscribePromptKind = 'schedule' | 'workbench'
 
+let cachedHint: SubscribeHint | null = null
 let prompting = false
 
-function promptCopy(kind: SubscribePromptKind): { title: string; content: string } {
+export async function refreshSubscribeHint(): Promise<SubscribeHint> {
+  cachedHint = await MessageApi.getSubscribeHint()
+  return cachedHint
+}
+
+export function shouldPromptSubscribe(kind: SubscribePromptKind): boolean {
+  if (!cachedHint) return false
   if (kind === 'schedule') {
-    return {
-      title: '开启服务通知',
-      content: '排期已保存。开启后可及时收到新预约、取消预约等服务通知。',
-    }
+    return !!(
+      cachedHint.showScheduleSubscribe ||
+      cachedHint.needRoleSubscribeGuide ||
+      cachedHint.showLoginSubscribe
+    )
   }
-  return {
-    title: '开启服务通知',
-    content: '操作已成功。开启后可及时收到待审批等服务通知。',
+  return !!(
+    cachedHint.showWorkbenchSubscribe ||
+    cachedHint.needRoleSubscribeGuide ||
+    cachedHint.showLoginSubscribe
+  )
+}
+
+function eventKeysForKind(kind: SubscribePromptKind): string[] {
+  const role = cachedHint?.role || getStoredRole() || 'Patient'
+  if (kind === 'schedule') {
+    return ROLE_EVENT_KEYS.Counselor || ['APPOINTMENT_REMIND']
   }
+  if (kind === 'workbench') {
+    const staffKeys = ROLE_EVENT_KEYS[role]
+    if (staffKeys?.length) return staffKeys
+    return ROLE_EVENT_KEYS.Assistant
+  }
+  const fromRole = ROLE_EVENT_KEYS[role]
+  if (fromRole?.length) return fromRole
+  if (cachedHint?.eventKeys?.length) return cachedHint.eventKeys
+  return ROLE_EVENT_KEYS.Patient
 }
 
 /**
- * 业务成功后调用：若后端标记需要本场景订阅，则弹出确认框再拉起微信订阅。
+ * 必须在用户点击手势内同步调用（不可先 await 网络）。
+ *
+ * 排期（schedule）：始终调起官方框（与来访支付续额度一致），
+ * 避免真机 trigger=login、hint 未返回时漏弹。
+ * 工作台（workbench）：hint 需要时再弹。
  */
-export async function maybePromptRoleSubscribe(kind: SubscribePromptKind): Promise<void> {
-  if (prompting) return
-  prompting = true
-  try {
-    const hint = await MessageApi.getSubscribeHint()
-    const shouldShow =
-      kind === 'schedule' ? hint.showScheduleSubscribe : hint.showWorkbenchSubscribe
-    if (!shouldShow) return
+export function tryOfficialRoleSubscribeInGesture(kind: SubscribePromptKind): Promise<void> {
+  if (prompting) return Promise.resolve()
 
-    const { title, content } = promptCopy(kind)
-    await new Promise<void>((resolve) => {
-      uni.showModal({
-        title,
-        content,
-        confirmText: '去开启',
-        cancelText: '暂不',
-        success: async (res) => {
-          try {
-            if (res.confirm) {
-              const role = hint.role || 'Patient'
-              const keys = ROLE_EVENT_KEYS[role] || hint.eventKeys
-              await requestAndSaveSubscribe(keys)
-            } else {
-              await MessageApi.ackSubscribePrompt()
-            }
-          } catch (e) {
-            console.warn('[subscribePrompt]', e)
-            try {
-              await MessageApi.ackSubscribePrompt()
-            } catch {
-              /* ignore */
-            }
-          } finally {
-            resolve()
-          }
-        },
-        fail: () => resolve(),
-      })
-    })
-  } catch (e) {
-    console.warn('[subscribePrompt] hint fail', e)
-  } finally {
-    prompting = false
+  const forceSchedule = kind === 'schedule'
+  if (!forceSchedule && !shouldPromptSubscribe(kind)) {
+    return Promise.resolve()
   }
+
+  prompting = true
+  const keys = eventKeysForKind(kind)
+
+  return requestOfficialSubscribeInGesture(keys)
+    .then(async () => {
+      try {
+        await refreshSubscribeHint()
+      } catch {
+        /* ignore */
+      }
+    })
+    .finally(() => {
+      prompting = false
+    })
+}
+
+/**
+ * @deprecated 业务成功后异步弹自定义 Modal 已废弃。
+ */
+export async function maybePromptRoleSubscribe(_kind: SubscribePromptKind): Promise<void> {
+  return
 }

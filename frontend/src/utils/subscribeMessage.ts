@@ -9,6 +9,7 @@ import { MessageApi } from '@/apis/message'
 export const ROLE_EVENT_KEYS: Record<string, string[]> = {
   // 注册保存昵称时一次授权：咨询提醒 + 预约成功（最多 3 个）
   Patient: ['APPOINTMENT_REMIND', 'APPOINTMENT_OK'],
+  Tester: ['APPOINTMENT_REMIND', 'APPOINTMENT_OK'],
   Counselor: ['APPOINTMENT_REMIND'],
   Assistant: ['STAFF_APPROVAL_PENDING'],
   Ops: ['STAFF_APPROVAL_PENDING'],

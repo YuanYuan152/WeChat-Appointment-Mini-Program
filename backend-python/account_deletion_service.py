@@ -2,7 +2,8 @@
 
 - soft_delete_account：用户自主注销（微信合规）。清空可识别身份字段，但保留
   AppAccount 主键及咨询/订单/个案等业务行，供合规追溯。
-- hard_delete_account：仅管理员在无核心业务数据时物理删除。
+- hard_delete_account：仅管理员物理删除；普通角色需无核心业务数据，
+  Tester（purge_business=True）可级联删除全部关联业务数据后再删账号。
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from models import (
     AppAccount,
     AppCaseRecord,
     AppCaseRecordAmendmentRequest,
+    AppCaseRecordRevision,
     AppConsultation,
     AppConsultationFeedback,
     AppContactRecord,
@@ -39,7 +41,10 @@ from models import (
     AppSchedule,
     AppScheduleCancelLog,
     AppSmsVerification,
+    AppStaffAccountRemark,
+    AppTask,
     AppUserPreferenceTag,
+    AppUserSubscribeAuth,
 )
 
 
@@ -182,11 +187,95 @@ def hard_delete_blocking_reason(db: Session, account_id: int) -> Optional[str]:
     return None
 
 
-def hard_delete_account(db: Session, account_id: int) -> None:
-    """物理删除账号及可安全移除的附属数据（无咨询/已支付订单等核心记录）。"""
-    reason = hard_delete_blocking_reason(db, account_id)
-    if reason:
-        raise ValueError(reason)
+def _purge_business_data_for_account(db: Session, account_id: int) -> None:
+    """Tester 强制删除：清掉咨询/个案/订单等核心业务行（及依赖行）。"""
+    consultations = (
+        db.query(AppConsultation)
+        .filter(
+            or_(
+                AppConsultation.PatientId == account_id,
+                AppConsultation.CounselorId == account_id,
+            )
+        )
+        .all()
+    )
+    cons_ids = [c.Id for c in consultations]
+    order_ids = {c.OrderId for c in consultations if c.OrderId}
+
+    if cons_ids:
+        case_ids = [
+            row.Id
+            for row in db.query(AppCaseRecord.Id)
+            .filter(AppCaseRecord.ConsultationId.in_(cons_ids))
+            .all()
+        ]
+        if case_ids:
+            db.query(AppCaseRecordRevision).filter(
+                AppCaseRecordRevision.CaseRecordId.in_(case_ids)
+            ).delete(synchronize_session=False)
+            db.query(AppCaseRecordAmendmentRequest).filter(
+                AppCaseRecordAmendmentRequest.CaseRecordId.in_(case_ids)
+            ).delete(synchronize_session=False)
+            db.query(AppCaseRecord).filter(AppCaseRecord.Id.in_(case_ids)).delete(
+                synchronize_session=False
+            )
+
+        db.query(AppConsultationFeedback).filter(
+            AppConsultationFeedback.ConsultationId.in_(cons_ids)
+        ).delete(synchronize_session=False)
+        db.query(AppRefundExemption).filter(
+            AppRefundExemption.ConsultationId.in_(cons_ids)
+        ).delete(synchronize_session=False)
+        db.query(AppScheduleCancelLog).filter(
+            AppScheduleCancelLog.ConsultationId.in_(cons_ids)
+        ).delete(synchronize_session=False)
+        db.query(AppRemindTask).filter(AppRemindTask.RelatedId.in_(cons_ids)).delete(
+            synchronize_session=False
+        )
+        db.query(AppMessage).filter(AppMessage.RelatedId.in_(cons_ids)).delete(
+            synchronize_session=False
+        )
+        db.query(AppTask).filter(AppTask.RelatedId.in_(cons_ids)).delete(
+            synchronize_session=False
+        )
+        db.query(AppConsultation).filter(AppConsultation.Id.in_(cons_ids)).delete(
+            synchronize_session=False
+        )
+
+    # 账号名下订单（含咨询未挂上的）
+    for row in db.query(AppOrder.Id).filter(AppOrder.AccountId == account_id).all():
+        order_ids.add(row.Id)
+    if order_ids:
+        db.query(AppMessage).filter(AppMessage.RelatedId.in_(list(order_ids))).delete(
+            synchronize_session=False
+        )
+        db.query(AppOrder).filter(AppOrder.Id.in_(list(order_ids))).delete(
+            synchronize_session=False
+        )
+
+    # 其它账号指向本测试账号的绑定
+    db.query(AppAccount).filter(AppAccount.BoundCounselorId == account_id).update(
+        {AppAccount.BoundCounselorId: None},
+        synchronize_session=False,
+    )
+
+
+def hard_delete_account(
+    db: Session,
+    account_id: int,
+    *,
+    purge_business: bool = False,
+) -> None:
+    """物理删除账号及可安全移除的附属数据。
+
+    purge_business=True（Tester）：先级联删除咨询/订单/个案等，再删账号。
+    """
+    if not purge_business:
+        reason = hard_delete_blocking_reason(db, account_id)
+        if reason:
+            raise ValueError(reason)
+    else:
+        _purge_business_data_for_account(db, account_id)
 
     account = db.query(AppAccount).filter(AppAccount.Id == account_id).first()
     if not account:
@@ -232,6 +321,13 @@ def hard_delete_account(db: Session, account_id: int) -> None:
     db.query(AppUserPreferenceTag).filter(AppUserPreferenceTag.AccountId == account_id).delete(
         synchronize_session=False
     )
+    db.query(AppUserSubscribeAuth).filter(AppUserSubscribeAuth.AccountId == account_id).delete(
+        synchronize_session=False
+    )
+    db.query(AppStaffAccountRemark).filter(AppStaffAccountRemark.AccountId == account_id).delete(
+        synchronize_session=False
+    )
+    db.query(AppTask).filter(AppTask.AssistantId == account_id).delete(synchronize_session=False)
     db.query(AppCounselorFavorite).filter(
         or_(
             AppCounselorFavorite.AccountId == account_id,

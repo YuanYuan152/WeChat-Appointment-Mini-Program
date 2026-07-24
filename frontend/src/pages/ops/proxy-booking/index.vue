@@ -241,7 +241,7 @@ import { SCHEDULE_DISPLAY_META, type ScheduleDisplayStatus } from '@/constants/s
 import { formatDateLocal, ROLLING_WINDOW_DAYS, addDays } from '@/constants/scheduleSlots'
 import { formatPatientInline } from '@/utils/patientContract'
 import { fetchSystemSettings, formatProxyOrderPushHint } from '@/utils/systemSettings'
-import { maybePromptRoleSubscribe } from '@/utils/subscribePrompt'
+import { refreshSubscribeHint, tryOfficialRoleSubscribeInGesture } from '@/utils/subscribePrompt'
 import {
   TONGXIN_AGREEMENT_TITLE,
   YANGFAN_AGREEMENT_TITLE,
@@ -260,6 +260,7 @@ const loadSystemSettings = async () => {
 
 onShow(() => {
   loadSystemSettings()
+  void refreshSubscribeHint()
 })
 
 const defaultCenterId = 'yangpu'
@@ -656,7 +657,7 @@ const selectRoom = (room: RoomOption) => {
   form.value.roomId = room.roomId
 }
 
-const submitProxyOrder = async () => {
+const submitProxyOrder = () => {
   if (!selectedPatient.value || !selectedCounselor.value) return
   if (!form.value.slotKey) {
     uni.showToast({ title: '请选择时间槽', icon: 'none' })
@@ -670,36 +671,39 @@ const submitProxyOrder = async () => {
     uni.showToast({ title: '请选择签署协议类型', icon: 'none' })
     return
   }
+  const subscribeDone = tryOfficialRoleSubscribeInGesture('workbench')
   submitting.value = true
-  try {
-    const payload: Record<string, unknown> = {
-      patient_id: selectedPatient.value.id,
-      counselor_id: selectedCounselor.value.id,
-      center_id: form.value.centerId,
-      start_time: form.value.startTime,
-      end_time: form.value.endTime,
-      room_id: isVideoCenterSelected.value ? null : form.value.roomId,
-      schedule_id: form.value.scheduleId,
+  void (async () => {
+    try {
+      const payload: Record<string, unknown> = {
+        patient_id: selectedPatient.value!.id,
+        counselor_id: selectedCounselor.value!.id,
+        center_id: form.value.centerId,
+        start_time: form.value.startTime,
+        end_time: form.value.endTime,
+        room_id: isVideoCenterSelected.value ? null : form.value.roomId,
+        schedule_id: form.value.scheduleId,
+      }
+      if (!patientContractSigned.value) {
+        payload.agreement_is_adult = form.value.agreementIsAdult
+      }
+      const res = await httpV2.post(API_ENDPOINTS.admin.proxyBookingPushOrder, payload)
+      await subscribeDone
+      if (res.code !== 0) {
+        uni.showToast({ title: res.msg || '推送失败', icon: 'none' })
+        return
+      }
+      uni.showToast({ title: '订单已推送', icon: 'success' })
+      showAdd.value = false
+      await loadSchedules()
+      if (viewMode.value === 'calendar') await loadMonthSlots()
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : '推送失败'
+      uni.showToast({ title: msg, icon: 'none' })
+    } finally {
+      submitting.value = false
     }
-    if (!patientContractSigned.value) {
-      payload.agreement_is_adult = form.value.agreementIsAdult
-    }
-    const res = await httpV2.post(API_ENDPOINTS.admin.proxyBookingPushOrder, payload)
-    if (res.code !== 0) {
-      uni.showToast({ title: res.msg || '推送失败', icon: 'none' })
-      return
-    }
-    uni.showToast({ title: '订单已推送', icon: 'success' })
-    showAdd.value = false
-    await loadSchedules()
-    if (viewMode.value === 'calendar') await loadMonthSlots()
-    setTimeout(() => { void maybePromptRoleSubscribe('workbench') }, 500)
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : '推送失败'
-    uni.showToast({ title: msg, icon: 'none' })
-  } finally {
-    submitting.value = false
-  }
+  })()
 }
 
 watch(canShowSchedule, (ok) => {
