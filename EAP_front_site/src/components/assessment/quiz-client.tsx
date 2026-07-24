@@ -7,41 +7,18 @@ import { useAuthStore } from "@/lib/stores/auth-store";
 import { QuizProgress } from "./quiz-progress";
 import { QuestionCard } from "./question-card";
 import { QuizIntro } from "./quiz-intro";
-import {
-  QuizDemographicsForm,
-  type QuizDemographics,
-} from "./quiz-demographics-form";
 import { Button } from "@/components/ui/button";
+import {
+  areRequiredAssessmentQuestionsAnswered,
+  findAssessmentResumeQuestionIndex,
+  isRequiredAssessmentQuestion,
+  shouldCreateFreshAssessmentAttempt,
+} from "@/lib/assessment/assessment-progress";
 import type { Assessment } from "@/lib/api/types";
 
 interface QuizClientProps {
   assessment: Assessment;
   type: "professional" | "fun";
-}
-
-type QuizPhase = "intro" | "profile" | "quiz";
-type PendingAction = "fresh" | "resume";
-
-function isAssessmentComplete(assessment: Assessment, answers: Record<string, string>) {
-  return (
-    assessment.questions.length > 0 &&
-    assessment.questions.every((q) => answers[q.id])
-  );
-}
-
-/** 找到第一个未作答的题号；若全部已答则返回最后一题 */
-function findResumeIndex(assessment: Assessment, answers: Record<string, string>) {
-  const idx = assessment.questions.findIndex((q) => !answers[q.id]);
-  if (idx === -1) return Math.max(0, assessment.questions.length - 1);
-  return idx;
-}
-
-function normalizeGender(value?: string | null): QuizDemographics["gender"] | undefined {
-  if (!value) return undefined;
-  if (value === "男" || value === "女") return value;
-  if (/male|^m$|男/i.test(value)) return "男";
-  if (/female|^f$|女/i.test(value)) return "女";
-  return undefined;
 }
 
 export function QuizClient({ assessment, type }: QuizClientProps) {
@@ -52,83 +29,75 @@ export function QuizClient({ assessment, type }: QuizClientProps) {
     setAnswer,
     setCurrentIndex,
     clearSession,
+    ensureAccount,
+    ensureVersion,
     markStarted,
-    hasInProgress,
+    markReadyToSubmit,
+    hasStarted,
     getAnsweredCount,
-    setDemographics,
-    getDemographics,
+    isReadyToSubmit,
   } = useQuizSession();
-  const authUser = useAuthStore((s) => s.user);
+  const userId = useAuthStore((state) => state.user?.id);
+  const version = assessment.version ?? 1;
 
   const [hydrated, setHydrated] = useState(false);
-  const [phase, setPhase] = useState<QuizPhase>("intro");
-  const [pendingAction, setPendingAction] = useState<PendingAction>("fresh");
+  const [phase, setPhase] = useState<"intro" | "quiz">("intro");
   const advancingRef = useRef(false);
 
   useEffect(() => {
-    const sync = () => setHydrated(true);
-    sync();
+    const sync = () => {
+      if (userId == null) {
+        return;
+      }
+      ensureAccount(userId);
+      ensureVersion(assessment.id, version);
+      setHydrated(true);
+    };
+    if (useQuizSession.persist.hasHydrated()) {
+      sync();
+    }
     return useQuizSession.persist.onFinishHydration(sync);
-  }, []);
+  }, [assessment.id, ensureAccount, ensureVersion, userId, version]);
 
-  const answers = getAnswers(assessment.id);
-  const currentIndex = getCurrentIndex(assessment.id);
+  const answers = getAnswers(assessment.id, version);
+  const currentIndex = getCurrentIndex(assessment.id, version);
   const question = assessment.questions[currentIndex];
   const selectedOption = question ? answers[question.id] : undefined;
   const isFirst = currentIndex === 0;
   const isLast = currentIndex === assessment.questions.length - 1;
-  const canResume = hasInProgress(assessment.id, assessment.questionCount);
-  const isComplete = isAssessmentComplete(assessment, answers);
-  const answeredCount = getAnsweredCount(assessment.id);
-  const needsDemographics = type === "professional";
+  const canResume =
+    hasStarted(assessment.id, version) &&
+    !isReadyToSubmit(assessment.id, version);
+  const isComplete = isReadyToSubmit(assessment.id, version);
+  const answeredCount = getAnsweredCount(assessment.id, version);
 
   const goResult = () => {
     router.push(`/assessment/${type}/${assessment.id}/result`);
   };
 
-  const beginQuiz = (action: PendingAction) => {
-    if (action === "fresh") {
-      clearSession(assessment.id);
-      markStarted(assessment.id);
-      setCurrentIndex(assessment.id, 0);
-    } else {
-      const resumeIdx = findResumeIndex(assessment, getAnswers(assessment.id));
-      markStarted(assessment.id);
-      setCurrentIndex(assessment.id, resumeIdx);
+  const handleStartFresh = () => {
+    if (
+      shouldCreateFreshAssessmentAttempt({
+        started: hasStarted(assessment.id, version),
+        answeredCount,
+        completed: isComplete,
+      })
+    ) {
+      clearSession(assessment.id, version);
     }
+    markStarted(assessment.id);
+    setCurrentIndex(assessment.id, 0);
     setPhase("quiz");
   };
 
-  const requestStart = (action: PendingAction) => {
-    if (!needsDemographics) {
-      beginQuiz(action);
-      return;
-    }
-    // 续答且已有基本信息：直接继续
-    if (action === "resume" && getDemographics(assessment.id)) {
-      beginQuiz(action);
-      return;
-    }
-    setPendingAction(action);
-    setPhase("profile");
-  };
-
-  const handleStartFresh = () => requestStart("fresh");
-  const handleResume = () => requestStart("resume");
-
-  const handleDemographicsSubmit = (data: QuizDemographics) => {
-    // 重新开始时先清会话，再写入基本信息
-    if (pendingAction === "fresh") {
-      clearSession(assessment.id);
-    }
-    setDemographics(assessment.id, data);
+  const handleResume = () => {
+    const resumeIdx = findAssessmentResumeQuestionIndex(
+      assessment.questions,
+      getAnswers(assessment.id, version),
+      getCurrentIndex(assessment.id, version),
+    );
     markStarted(assessment.id);
-    if (pendingAction === "fresh") {
-      setCurrentIndex(assessment.id, 0);
-    } else {
-      const resumeIdx = findResumeIndex(assessment, getAnswers(assessment.id));
-      setCurrentIndex(assessment.id, resumeIdx);
-    }
+    setCurrentIndex(assessment.id, resumeIdx);
     setPhase("quiz");
   };
 
@@ -136,10 +105,32 @@ export function QuizClient({ assessment, type }: QuizClientProps) {
     if (!question || advancingRef.current) return;
     setAnswer(assessment.id, question.id, optionId);
 
+    // 点选后自动进入下一题；最后一题进入结果页
     advancingRef.current = true;
     window.setTimeout(() => {
       if (isLast) {
-        goResult();
+        const nextAnswers = {
+          ...answers,
+          [question.id]: optionId,
+        };
+        if (
+          areRequiredAssessmentQuestionsAnswered(
+            assessment.questions,
+            nextAnswers,
+          )
+        ) {
+          markReadyToSubmit(assessment.id, version);
+          goResult();
+        } else {
+          setCurrentIndex(
+            assessment.id,
+            findAssessmentResumeQuestionIndex(
+              assessment.questions,
+              nextAnswers,
+              currentIndex,
+            ),
+          );
+        }
       } else {
         setCurrentIndex(assessment.id, currentIndex + 1);
       }
@@ -150,6 +141,29 @@ export function QuizClient({ assessment, type }: QuizClientProps) {
   const handlePrev = () => {
     if (isFirst || advancingRef.current) return;
     setCurrentIndex(assessment.id, currentIndex - 1);
+  };
+
+  const handleSkip = () => {
+    if (
+      !question ||
+      isRequiredAssessmentQuestion(question) ||
+      advancingRef.current
+    ) {
+      return;
+    }
+    if (isLast) {
+      if (
+        areRequiredAssessmentQuestionsAnswered(
+          assessment.questions,
+          answers,
+        )
+      ) {
+        markReadyToSubmit(assessment.id, version);
+        goResult();
+      }
+    } else {
+      setCurrentIndex(assessment.id, currentIndex + 1);
+    }
   };
 
   if (!hydrated) {
@@ -170,22 +184,6 @@ export function QuizClient({ assessment, type }: QuizClientProps) {
         onStartFresh={handleStartFresh}
         onResume={handleResume}
         onViewResult={goResult}
-      />
-    );
-  }
-
-  if (phase === "profile") {
-    const existing = getDemographics(assessment.id);
-    const initial: Partial<QuizDemographics> = {
-      name: existing?.name || authUser?.realName || authUser?.nickname || "",
-      gender: normalizeGender(existing?.gender || authUser?.gender),
-      age: existing?.age,
-    };
-    return (
-      <QuizDemographicsForm
-        initial={initial}
-        onSubmit={handleDemographicsSubmit}
-        onBack={() => setPhase("intro")}
       />
     );
   }
@@ -214,9 +212,31 @@ export function QuizClient({ assessment, type }: QuizClientProps) {
         <Button variant="outline" onClick={handlePrev} disabled={isFirst}>
           上一题
         </Button>
-        <p className="text-xs text-muted-foreground">点选选项后自动进入下一题</p>
-        {isLast && selectedOption ? (
-          <Button onClick={goResult}>查看结果</Button>
+        <p className="text-center text-xs text-muted-foreground">
+          {isRequiredAssessmentQuestion(question)
+            ? "点选选项后自动进入下一题"
+            : "本题为选答，可选择答案或直接跳过"}
+        </p>
+        {!isRequiredAssessmentQuestion(question) && !selectedOption ? (
+          <Button variant="outline" onClick={handleSkip}>
+            {isLast ? "跳过并查看结果" : "跳过此题"}
+          </Button>
+        ) : isLast && selectedOption ? (
+          <Button
+            onClick={() => {
+              if (
+                areRequiredAssessmentQuestionsAnswered(
+                  assessment.questions,
+                  answers,
+                )
+              ) {
+                markReadyToSubmit(assessment.id, version);
+                goResult();
+              }
+            }}
+          >
+            查看结果
+          </Button>
         ) : (
           <span className="w-[88px]" />
         )}

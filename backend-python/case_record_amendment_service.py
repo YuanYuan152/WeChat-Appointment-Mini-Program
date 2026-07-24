@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import List, Optional
 
 from fastapi import HTTPException
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app_time import china_now
@@ -12,6 +13,7 @@ from case_record_risk_config import RISK_ASSESSMENT_ITEMS, apply_calculated_cris
 from case_record_service import (
     apply_case_record_fields,
     case_record_has_content,
+    case_record_risk_assessment,
     decode_photo_urls,
     encode_risk_assessment,
     decode_risk_assessment,
@@ -22,6 +24,7 @@ from case_record_service import (
     get_crisis_level_choice,
     notify_admins_crisis_report_if_needed,
 )
+from model_compat import optional_model_value
 from message import create_message
 from models import (
     AppAccount,
@@ -47,8 +50,8 @@ def _counselor_display_name(db: Session, counselor_id: int) -> str:
         return prof.Name
     acc = db.query(AppAccount).filter(AppAccount.Id == counselor_id).first()
     if acc:
-        return acc.Nickname or acc.RealName or f"咨询师#{counselor_id}"
-    return f"咨询师#{counselor_id}"
+        return acc.Nickname or acc.RealName or acc.Mobile or "未留姓名咨询师"
+    return "未留姓名咨询师"
 
 
 def _staff_display_name(db: Session, account_id: Optional[int]) -> Optional[str]:
@@ -255,26 +258,34 @@ def latest_amendment_for_record(
     db: Session,
     case_record_id: int,
 ) -> Optional[AppCaseRecordAmendmentRequest]:
-    return (
-        db.query(AppCaseRecordAmendmentRequest)
-        .filter(AppCaseRecordAmendmentRequest.CaseRecordId == case_record_id)
-        .order_by(AppCaseRecordAmendmentRequest.CreatedAt.desc())
-        .first()
-    )
+    try:
+        return (
+            db.query(AppCaseRecordAmendmentRequest)
+            .filter(AppCaseRecordAmendmentRequest.CaseRecordId == case_record_id)
+            .order_by(AppCaseRecordAmendmentRequest.CreatedAt.desc())
+            .first()
+        )
+    except SQLAlchemyError:
+        db.rollback()
+        return None
 
 
 def pending_amendment_for_record(
     db: Session,
     case_record_id: int,
 ) -> Optional[AppCaseRecordAmendmentRequest]:
-    return (
-        db.query(AppCaseRecordAmendmentRequest)
-        .filter(
-            AppCaseRecordAmendmentRequest.CaseRecordId == case_record_id,
-            AppCaseRecordAmendmentRequest.Status == "PENDING",
+    try:
+        return (
+            db.query(AppCaseRecordAmendmentRequest)
+            .filter(
+                AppCaseRecordAmendmentRequest.CaseRecordId == case_record_id,
+                AppCaseRecordAmendmentRequest.Status == "PENDING",
+            )
+            .first()
         )
-        .first()
-    )
+    except SQLAlchemyError:
+        db.rollback()
+        return None
 
 
 def submit_amendment_request(
@@ -528,11 +539,11 @@ def approve_amendment(
         objective=amendment.Objective,
         assessment=amendment.Assessment,
         plan=amendment.Plan,
-        risk_assessment=decode_risk_assessment(amendment.RiskAssessment),
+        risk_assessment=decode_risk_assessment(optional_model_value(amendment, "RiskAssessment")),
         risk_assessment_set=True,
-        header_info=decode_header_info(amendment.HeaderInfo),
+        header_info=decode_header_info(optional_model_value(amendment, "HeaderInfo")),
         header_info_set=True,
-        photo_urls=decode_photo_urls(amendment.PhotoUrls),
+        photo_urls=decode_photo_urls(optional_model_value(amendment, "PhotoUrls")),
         photo_urls_set=True,
     )
     record.UpdatedAt = china_now()

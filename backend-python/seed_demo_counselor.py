@@ -7,7 +7,7 @@
 
 写入：
   - 来访者林小美（demo-openid-patient-xiaomei）
-  - 咨询师李心怡（demo-counselor-lixinyi）+ 档案 + 排班（含 BOOKED+room）+ 咨询单 + 个案
+  - 咨询师李心怡（demo-counselor-lixinyi）+ 档案 + 排期（含 BOOKED+room）+ 咨询单 + 个案
 """
 
 from seed_base import bind_role, clear_all_tables, create_account, days_from_now, utc_now

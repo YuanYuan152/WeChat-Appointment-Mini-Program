@@ -1,4 +1,4 @@
-﻿"""预约中心、咨询室与排班 Note 字段解析（与前端 appointmentCenters / consultationRooms 对齐）。"""
+﻿"""预约中心、咨询室与排期 Note 字段解析（与前端 appointmentCenters / consultationRooms 对齐）。"""
 from typing import List, Optional, TypedDict
 
 from sqlalchemy.orm import Session
@@ -35,9 +35,10 @@ CONSULTATION_ROOMS: dict[str, List[dict[str, str]]] = {
 
 
 def get_consultation_rooms(db: Optional[Session], center_id: str) -> List[dict[str, str]]:
-    """优先读数据库，无记录时回退静态配置。视频咨询不占咨询室，返回空列表。"""
+    """合并静态默认咨询室与数据库配置；数据库记录可覆盖同编号默认房间。"""
     if is_video_center(center_id):
         return []
+    defaults = [{**room, "status": "AVAILABLE"} for room in CONSULTATION_ROOMS.get(center_id, [])]
     if db is not None:
         try:
             from models import AppConsultationRoom
@@ -48,14 +49,21 @@ def get_consultation_rooms(db: Optional[Session], center_id: str) -> List[dict[s
                 .order_by(AppConsultationRoom.SortOrder.asc(), AppConsultationRoom.Id.asc())
                 .all()
             )
-            if rows:
-                return [
-                    {"id": r.RoomCode, "name": r.Name, "status": r.Status, "dbId": r.Id}
-                    for r in rows
-                ]
+            merged: dict[str, dict] = {room["id"]: room for room in defaults}
+            ordered_codes = [room["id"] for room in defaults]
+            for r in rows:
+                if r.RoomCode not in ordered_codes:
+                    ordered_codes.append(r.RoomCode)
+                merged[r.RoomCode] = {
+                    "id": r.RoomCode,
+                    "name": r.Name,
+                    "status": r.Status,
+                    "dbId": r.Id,
+                }
+            return [merged[code] for code in ordered_codes if code in merged]
         except Exception:
             pass
-    return [{**room, "status": "AVAILABLE"} for room in CONSULTATION_ROOMS.get(center_id, [])]
+    return defaults
 
 
 def get_all_consultation_rooms(db: Optional[Session]) -> List[dict]:
@@ -136,7 +144,7 @@ def schedule_note(
     *,
     pref_room_id: Optional[str] = None,
 ) -> str:
-    """构建排班 Note。room_id 为付款后实际咨询室；pref_room_id 为排期偏好。"""
+    """构建排期 Note。room_id 为付款后实际咨询室；pref_room_id 为排期偏好。"""
     parts = [f"center:{center_id}"]
     if pref_room_id:
         parts.append(f"pref:{pref_room_id}")

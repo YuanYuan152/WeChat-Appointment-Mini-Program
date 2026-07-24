@@ -71,8 +71,8 @@ def _admin_account_ids(db: Session) -> List[int]:
 def _patient_display_name(db: Session, account_id: int) -> str:
     acc = db.query(AppAccount).filter(AppAccount.Id == account_id).first()
     if not acc:
-        return f"用户#{account_id}"
-    return acc.RealName or acc.Nickname or acc.Mobile or f"用户#{account_id}"
+        return "未留姓名用户"
+    return acc.RealName or acc.Nickname or acc.Mobile or "未留姓名用户"
 
 
 def _counselor_display_name(db: Session, counselor_id: int) -> str:
@@ -81,8 +81,8 @@ def _counselor_display_name(db: Session, counselor_id: int) -> str:
         return prof.Name
     acc = db.query(AppAccount).filter(AppAccount.Id == counselor_id).first()
     if acc:
-        return acc.Nickname or acc.RealName or f"咨询师#{counselor_id}"
-    return f"咨询师#{counselor_id}"
+        return acc.Nickname or acc.RealName or acc.Mobile or "未留姓名咨询师"
+    return "未留姓名咨询师"
 
 
 def notify_admins_new_exemption(
@@ -91,12 +91,18 @@ def notify_admins_new_exemption(
     consultation: AppConsultation,
 ) -> None:
     patient_name = _patient_display_name(db, exemption.AccountId)
+    patient = db.query(AppAccount).filter(AppAccount.Id == exemption.AccountId).first()
+    from patient_contract_service import patient_contract_extras
+
+    patient_tag = patient_contract_extras(db, patient).get("contractTag")
+    patient_label = f"{patient_name} {patient_tag}" if patient_tag else patient_name
     counselor_name = _counselor_display_name(db, consultation.CounselorId)
     amount_yuan = f"{exemption.Amount / 100:.2f}"
     title = "新的退款豁免申请待审核"
-    summary = f"{patient_name} · {counselor_name} · ¥{amount_yuan}"
+    summary = f"{patient_label} · {counselor_name} · ¥{amount_yuan}"
     detail = {
         "patientName": patient_name,
+        "patientContractTag": patient_tag,
         "counselorName": counselor_name,
         "amountYuan": amount_yuan,
         "reason": exemption.Reason,

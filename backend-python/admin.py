@@ -6,7 +6,8 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import exists, not_, or_
+from sqlalchemy import exists, not_, or_, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from auth import get_current_account, AppAccount
@@ -48,10 +49,19 @@ from leave_request_service import (
     build_leave_request_out,
     reject_leave_request,
 )
-from case_record_service import decode_photo_urls, case_record_has_content, decode_risk_assessment, decode_header_info
+from case_record_service import (
+    case_record_has_content,
+    case_record_header_info,
+    case_record_photo_urls,
+    case_record_risk_assessment,
+    decode_header_info,
+    decode_photo_urls,
+    decode_risk_assessment,
+)
+from model_compat import optional_model_value
 from refund_exemption_service import approve_refund_exemption, reject_refund_exemption
 from case_record_amendment_service import approve_amendment, reject_amendment
-from case_record_service import decode_photo_urls, snapshot_case_record
+from case_record_service import snapshot_case_record
 from user_role_meta import (
     counselor_type_label,
     is_charity_patient_source,
@@ -88,6 +98,7 @@ from patient_contract_service import (
     batch_patient_contract_extras,
     bind_patient_counselor,
     patient_contract_extras,
+    retire_counselor_booking_relationships,
 )
 from patient_registration import DEFAULT_PATIENT_SOURCE
 
@@ -98,7 +109,7 @@ def require_staff_workbench(
     current_account: AppAccount = Depends(get_current_account),
     db: Session = Depends(get_db),
 ) -> AppAccount:
-    """咨询助理、咨询主任、管理员共用管理工作台。"""
+    """咨询助理、运营、管理员共用管理工作台。"""
     if not account_has_staff_workbench(
         db, current_account.Id, getattr(current_account, "ActiveRole", None)
     ):
@@ -120,6 +131,16 @@ def require_ops_or_admin(
     db: Session = Depends(get_db),
 ) -> AppAccount:
     return require_staff_workbench(current_account, db)
+
+
+def require_assessment_editor(
+    current_account: AppAccount = Depends(get_current_account),
+    db: Session = Depends(get_db),
+) -> AppAccount:
+    """量表定义涉及发布版本，仅运营和管理员可编辑。"""
+    if get_account_role(db, current_account.Id) not in {"Ops", "Admin"}:
+        raise HTTPException(status_code=403, detail="无量表配置权限")
+    return current_account
 
 
 class BindRoleRequest(BaseModel):
@@ -278,6 +299,8 @@ def _user_admin_out(db: Session, account: AppAccount, *, staff_remark: str = "")
     }
     if active_role in ("Counselor", "Patient"):
         out["staffRemark"] = staff_remark
+    if active_role == "Patient":
+        out["contractTag"] = patient_contract_extras(db, account).get("contractTag")
     if access_revoked_at or _is_staff_revoked(db, account):
         out.update(_last_revoke_meta(db, account.Id, access_revoked_at))
     return out
@@ -390,6 +413,7 @@ class RefundExemptionAdminOut(BaseModel):
     accountId: int
     patientName: str
     patientMobile: Optional[str] = None
+    patientContractTag: Optional[str] = None
     counselorId: int
     counselorName: str
     amount: int
@@ -638,7 +662,12 @@ def bind_user_role(
         return {"message": "角色未变更"}
 
     if previous_role == "Counselor" and new_role != "Counselor":
-        _set_counselor_profile_active(db, user_id, False)
+        try:
+            retire_counselor_booking_relationships(db, user_id)
+            _set_counselor_profile_active(db, user_id, False)
+        except ValueError as exc:
+            db.rollback()
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     set_account_role(db, user_id, new_role, body.target_id)
     _restore_account_on_role_bind(db, user, new_role)
@@ -662,7 +691,7 @@ def bind_user_role(
 def unbind_user_role(
     user_id: int,
     role: str,
-    _admin: AppAccount = Depends(require_staff_workbench),
+    admin: AppAccount = Depends(require_staff_workbench),
     db: Session = Depends(get_db),
 ):
     raise HTTPException(
@@ -723,12 +752,15 @@ def _build_exemption_admin_out(
     counselor_name = (
         (prof.Name if prof and prof.Name else None)
         or (counselor_acc.Nickname if counselor_acc else None)
-        or f"咨询师#{counselor_id}"
+        or (counselor_acc.RealName if counselor_acc else None)
+        or (counselor_acc.Mobile if counselor_acc else None)
+        or "未留姓名咨询师"
     )
     patient_name = (
         (patient.RealName if patient and patient.RealName else None)
         or (patient.Nickname if patient else None)
-        or f"用户#{row.AccountId}"
+        or (patient.Mobile if patient else None)
+        or "未留姓名用户"
     )
     return RefundExemptionAdminOut(
         id=row.Id,
@@ -736,13 +768,14 @@ def _build_exemption_admin_out(
         accountId=row.AccountId,
         patientName=patient_name,
         patientMobile=patient.Mobile if patient else None,
+        patientContractTag=patient_contract_extras(db, patient).get("contractTag"),
         counselorId=counselor_id,
         counselorName=counselor_name,
         amount=row.Amount,
         reason=row.Reason,
         screenshotUrl=row.ScreenshotUrl,
         status=row.Status,
-        rejectReason=row.RejectReason,
+        rejectReason=optional_model_value(row, "RejectReason"),
         consultationStartTime=consultation.StartTime if consultation else None,
         consultationStatus=consultation.Status if consultation else None,
         createdAt=row.CreatedAt,
@@ -757,13 +790,30 @@ def _build_exemption_admin_out(
 )
 def list_refund_exemptions(
     status: Optional[str] = Query(None, description="PENDING / APPROVED / REJECTED / ALL"),
+    keyword: Optional[str] = Query(None, max_length=100, description="按来访者姓名或手机号筛选"),
+    offset: int = Query(0, ge=0, description="Web 管理端分批加载偏移量；不传时保持原列表行为"),
+    limit: int = Query(100, ge=1, le=500, description="Web 管理端分批加载数量；不传时仍返回前 100 条"),
     _staff: AppAccount = Depends(require_staff_workbench),
     db: Session = Depends(get_db),
 ):
-    q = db.query(AppRefundExemption).order_by(AppRefundExemption.CreatedAt.desc())
+    q = db.query(AppRefundExemption).order_by(
+        AppRefundExemption.CreatedAt.desc(),
+        AppRefundExemption.Id.desc(),
+    )
     if status and status.upper() != "ALL":
         q = q.filter(AppRefundExemption.Status == status.upper())
-    rows = q.limit(100).all()
+    normalized_keyword = (keyword or "").strip()
+    if normalized_keyword:
+        like = f"%{normalized_keyword}%"
+        matching_patient_ids = select(AppAccount.Id).where(
+            or_(
+                AppAccount.RealName.like(like),
+                AppAccount.Nickname.like(like),
+                AppAccount.Mobile.like(like),
+            )
+        )
+        q = q.filter(AppRefundExemption.AccountId.in_(matching_patient_ids))
+    rows = q.offset(offset).limit(limit).all()
     consultation_ids = [r.ConsultationId for r in rows]
     consultations = {
         c.Id: c
@@ -842,7 +892,9 @@ def _build_amendment_admin_out(
     counselor_name = (
         (prof.Name if prof and prof.Name else None)
         or (acc.Nickname if acc else None)
-        or f"咨询师#{row.CounselorId}"
+        or (acc.RealName if acc else None)
+        or (acc.Mobile if acc else None)
+        or "未留姓名咨询师"
     )
     current = _snapshot_to_out(snapshot_case_record(record)) if record else CaseRecordSnapshotOut()
     proposed = CaseRecordSnapshotOut(
@@ -850,9 +902,9 @@ def _build_amendment_admin_out(
         objective=row.Objective,
         assessment=row.Assessment,
         plan=row.Plan,
-        riskAssessment=decode_risk_assessment(row.RiskAssessment),
-        headerInfo=decode_header_info(row.HeaderInfo),
-        photoUrls=decode_photo_urls(row.PhotoUrls),
+        riskAssessment=decode_risk_assessment(optional_model_value(row, "RiskAssessment")),
+        headerInfo=decode_header_info(optional_model_value(row, "HeaderInfo")),
+        photoUrls=decode_photo_urls(optional_model_value(row, "PhotoUrls")),
     )
     return CaseRecordAmendmentAdminOut(
         id=row.Id,
@@ -862,7 +914,7 @@ def _build_amendment_admin_out(
         counselorName=counselor_name,
         reason=row.Reason,
         status=row.Status,
-        rejectReason=row.RejectReason,
+        rejectReason=optional_model_value(row, "RejectReason"),
         consultationStartTime=consultation.StartTime if consultation else None,
         createdAt=row.CreatedAt,
         reviewedAt=row.ReviewedAt,
@@ -886,7 +938,11 @@ def list_case_record_amendments(
     )
     if status and status.upper() != "ALL":
         q = q.filter(AppCaseRecordAmendmentRequest.Status == status.upper())
-    rows = q.limit(100).all()
+    try:
+        rows = q.limit(100).all()
+    except SQLAlchemyError:
+        db.rollback()
+        return []
     record_ids = [r.CaseRecordId for r in rows]
     consultation_ids = [r.ConsultationId for r in rows]
     records = {
@@ -969,8 +1025,8 @@ def _admin_counselor_name(db: Session, counselor_id: int) -> str:
         return prof.Name
     acc = db.query(AppAccount).filter(AppAccount.Id == counselor_id).first()
     if not acc:
-        return f"咨询师#{counselor_id}"
-    return acc.RealName or acc.Nickname or acc.Mobile or f"咨询师#{counselor_id}"
+        return "未留姓名咨询师"
+    return acc.RealName or acc.Nickname or acc.Mobile or "未留姓名咨询师"
 
 
 # 来访管理仅展示纯来访者，排除工作人员账号
@@ -1271,6 +1327,7 @@ class AdminCaseRecordViewOut(BaseModel):
     CounselorId: int
     CounselorName: str
     PatientName: str
+    PatientContractTag: Optional[str] = None
     StartTime: Optional[datetime] = None
     EndTime: Optional[datetime] = None
     Subjective: Optional[str] = None
@@ -1311,6 +1368,7 @@ class AdminConsultationRecordOut(BaseModel):
     consultationId: int
     patientId: int
     patientName: str
+    patientContractTag: Optional[str] = None
     startTime: Optional[datetime] = None
     endTime: Optional[datetime] = None
     caseRecordId: Optional[int] = None
@@ -1381,7 +1439,7 @@ def list_counselor_record_summaries(
             record = records_by_consultation.get(c.Id)
             if not record:
                 continue
-            photo_count = len(decode_photo_urls(record.PhotoUrls))
+            photo_count = len(case_record_photo_urls(record))
             if (
                 (record.Subjective or "").strip()
                 or (record.Objective or "").strip()
@@ -1396,7 +1454,8 @@ def list_counselor_record_summaries(
             (profile.Name if profile else None)
             or (account.Nickname if account else None)
             or (account.RealName if account else None)
-            or f"咨询师#{cid}"
+            or (account.Mobile if account else None)
+            or "未留姓名咨询师"
         )
         completed = len(cons)
         result.append(
@@ -1449,6 +1508,7 @@ def list_counselor_consultation_records(
         a.Id: a
         for a in db.query(AppAccount).filter(AppAccount.Id.in_(patient_ids)).all()
     }
+    contract_map = batch_patient_contract_extras(db, list(patients.values()))
     consultation_ids = [c.Id for c in consultations]
     records = {
         r.ConsultationId: r
@@ -1460,7 +1520,7 @@ def list_counselor_consultation_records(
     items: List[AdminConsultationRecordOut] = []
     for c in consultations:
         record = records.get(c.Id)
-        photo_count = len(decode_photo_urls(record.PhotoUrls)) if record else 0
+        photo_count = len(case_record_photo_urls(record)) if record else 0
         subjective = (record.Subjective or "").strip() if record else ""
         has_record = bool(
             record
@@ -1478,6 +1538,7 @@ def list_counselor_consultation_records(
                 consultationId=c.Id,
                 patientId=c.PatientId,
                 patientName=_admin_patient_name(patients.get(c.PatientId)),
+                patientContractTag=contract_map.get(c.PatientId, {}).get("contractTag"),
                 startTime=c.StartTime,
                 endTime=c.EndTime,
                 caseRecordId=record.Id if record else None,
@@ -1519,15 +1580,16 @@ def get_admin_case_record(
         CounselorId=record.CounselorId,
         CounselorName=_admin_counselor_name(db, record.CounselorId),
         PatientName=_admin_patient_name(patient),
+        PatientContractTag=patient_contract_extras(db, patient).get("contractTag"),
         StartTime=consultation.StartTime if consultation else None,
         EndTime=consultation.EndTime if consultation else None,
         Subjective=record.Subjective,
         Objective=record.Objective,
         Assessment=record.Assessment,
         Plan=record.Plan,
-        RiskAssessment=decode_risk_assessment(record.RiskAssessment),
-        HeaderInfo=decode_header_info(record.HeaderInfo),
-        PhotoUrls=decode_photo_urls(record.PhotoUrls),
+        RiskAssessment=case_record_risk_assessment(record),
+        HeaderInfo=case_record_header_info(record),
+        PhotoUrls=case_record_photo_urls(record),
         CreatedAt=record.CreatedAt,
         UpdatedAt=record.UpdatedAt,
     )
@@ -1561,9 +1623,9 @@ def list_admin_case_record_revisions(
             Objective=r.Objective,
             Assessment=r.Assessment,
             Plan=r.Plan,
-            RiskAssessment=decode_risk_assessment(r.RiskAssessment),
-            HeaderInfo=decode_header_info(r.HeaderInfo),
-            PhotoUrls=decode_photo_urls(r.PhotoUrls),
+            RiskAssessment=decode_risk_assessment(optional_model_value(r, "RiskAssessment")),
+            HeaderInfo=decode_header_info(optional_model_value(r, "HeaderInfo")),
+            PhotoUrls=decode_photo_urls(optional_model_value(r, "PhotoUrls")),
             RevisedAt=r.RevisedAt,
             RevisedBy=r.RevisedBy,
         )
@@ -1824,14 +1886,14 @@ def list_consultation_feedbacks(
 def _admin_record_is_filled(record: Optional[AppCaseRecord]) -> bool:
     if not record:
         return False
-    photo_count = len(decode_photo_urls(record.PhotoUrls))
+    photo_count = len(case_record_photo_urls(record))
     return bool(
         (record.Subjective or "").strip()
         or (record.Objective or "").strip()
         or (record.Assessment or "").strip()
         or (record.Plan or "").strip()
-        or (record.RiskAssessment or "").strip()
-        or (record.HeaderInfo or "").strip()
+        or bool(case_record_risk_assessment(record))
+        or bool(case_record_header_info(record))
         or photo_count > 0
     )
 
@@ -2117,7 +2179,8 @@ def list_admin_counselors(
             (prof.Name if prof else None)
             or (acc.Nickname if acc else None)
             or (acc.RealName if acc else None)
-            or f"咨询师#{cid}"
+            or (acc.Mobile if acc else None)
+            or "未留姓名咨询师"
         )
         cons = cons_by_counselor.get(cid, [])
         scheds = schedules_by_counselor.get(cid, [])
@@ -2307,6 +2370,13 @@ def update_admin_counselor(
         )
         db.add(profile)
 
+    if body.isActive is False:
+        try:
+            retire_counselor_booking_relationships(db, counselor_id)
+        except ValueError as exc:
+            db.rollback()
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     mapping = {
         "name": "Name",
         "avatarUrl": "AvatarUrl",
@@ -2339,13 +2409,39 @@ def update_admin_counselor(
 @router.get("/leave-requests", summary="咨询师请假列表（管理工作台审批）")
 def list_leave_requests(
     status: str = Query("ALL", description="PENDING|APPROVED|REJECTED|ALL"),
+    keyword: Optional[str] = Query(None, max_length=100, description="按咨询师姓名或手机号筛选"),
+    offset: int = Query(0, ge=0, description="Web 管理端分批加载偏移量；不传时保持原列表行为"),
+    limit: int = Query(100, ge=1, le=500, description="Web 管理端分批加载数量；不传时仍返回前 100 条"),
     _staff: AppAccount = Depends(require_staff_workbench),
     db: Session = Depends(get_db),
 ):
-    q = db.query(AppLeaveRequest).order_by(AppLeaveRequest.CreatedAt.desc())
-    if status and status != "ALL":
-        q = q.filter(AppLeaveRequest.Status == status)
-    rows = q.limit(100).all()
+    q = db.query(AppLeaveRequest).order_by(
+        AppLeaveRequest.CreatedAt.desc(),
+        AppLeaveRequest.Id.desc(),
+    )
+    normalized_status = (status or "ALL").upper()
+    if normalized_status != "ALL":
+        q = q.filter(AppLeaveRequest.Status == normalized_status)
+    normalized_keyword = (keyword or "").strip()
+    if normalized_keyword:
+        like = f"%{normalized_keyword}%"
+        matching_account_ids = select(AppAccount.Id).where(
+            or_(
+                AppAccount.RealName.like(like),
+                AppAccount.Nickname.like(like),
+                AppAccount.Mobile.like(like),
+            )
+        )
+        matching_profile_ids = select(AppCounselorProfile.AccountId).where(
+            AppCounselorProfile.Name.like(like)
+        )
+        q = q.filter(
+            or_(
+                AppLeaveRequest.CounselorId.in_(matching_account_ids),
+                AppLeaveRequest.CounselorId.in_(matching_profile_ids),
+            )
+        )
+    rows = q.offset(offset).limit(limit).all()
     return [build_leave_request_out(db, row) for row in rows]
 
 
@@ -2378,9 +2474,14 @@ def approve_leave_request_api(
     return {"message": message, "status": status}
 
 
+class LeaveRequestRejectPayload(BaseModel):
+    rejectReason: Optional[str] = Field(None, max_length=500)
+
+
 @router.post("/leave-requests/{leave_id}/reject", summary="拒绝咨询师请假")
 def reject_leave_request_api(
     leave_id: int,
+    body: Optional[LeaveRequestRejectPayload] = None,
     admin: AppAccount = Depends(require_staff_workbench),
     db: Session = Depends(get_db),
 ):
@@ -2388,7 +2489,12 @@ def reject_leave_request_api(
     if not row:
         raise HTTPException(status_code=404, detail="请假记录不存在")
     try:
-        reject_leave_request(db, row, admin.Id)
+        reject_leave_request(
+            db,
+            row,
+            admin.Id,
+            reject_reason=body.rejectReason if body else None,
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     db.commit()
@@ -2402,7 +2508,7 @@ def reject_leave_request_api(
 
 class AdminPricingUpdatePayload(BaseModel):
     adjustmentYuan: int = Field(..., ge=-99999, le=99999, description="手动调价（元，可正可负）")
-    shareMode: Optional[str] = Field(None, description="AMOUNT | PERCENT，空则默认基础价的 50% 分成")
+    shareMode: Optional[str] = Field(None, description="AMOUNT | PERCENT，空则使用咨询师默认分成")
     revenueShareYuan: Optional[int] = Field(None, ge=0, le=99999)
     revenueSharePercent: Optional[int] = Field(None, ge=0, le=100)
 
@@ -2424,6 +2530,8 @@ class AdminCounselorBatchDefaultSharePayload(BaseModel):
 
 class AdminCounselorBasePricePayload(BaseModel):
     basePriceYuan: int = Field(..., ge=0, le=99999, description="咨询师统一基础价（元）")
+    defaultRevenueShareYuan: Optional[int] = Field(None, ge=0, le=99999, description="咨询师默认分成金额（元）")
+    defaultRevenueSharePercent: Optional[int] = Field(None, ge=0, le=100, description="咨询师默认分成比例（百分比）")
 
 
 @router.get("/pricing/counselors", summary="定价管理：咨询师列表（含统一基础价）")
@@ -2511,6 +2619,7 @@ def update_pricing_counselor_base(
         get_counselor_profile,
         resolve_counselor_base_price_cents,
         update_counselor_base_price_cents,
+        update_counselor_base_pricing_cents,
     )
     from pricing_notify_service import notify_counselor_base_pricing_updated
 
@@ -2518,11 +2627,28 @@ def update_pricing_counselor_base(
     before_profile = get_counselor_profile(db, counselor_id)
     before_share = _counselor_default_share_snapshot(before_profile)
     try:
-        update_counselor_base_price_cents(db, counselor_id, body.basePriceYuan * 100)
+        if body.defaultRevenueShareYuan is not None and body.defaultRevenueSharePercent is not None:
+            raise ValueError("默认分成金额与比例不能同时设置")
+        if body.defaultRevenueShareYuan is None and body.defaultRevenueSharePercent is None:
+            update_counselor_base_price_cents(db, counselor_id, body.basePriceYuan * 100)
+        else:
+            update_counselor_base_pricing_cents(
+                db,
+                counselor_id,
+                base_price_cents=body.basePriceYuan * 100,
+                default_share_cents=(
+                    body.defaultRevenueShareYuan * 100
+                    if body.defaultRevenueShareYuan is not None
+                    else None
+                ),
+                default_share_percent=body.defaultRevenueSharePercent,
+            )
     except ValueError as e:
+        db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
-    if old_yuan != body.basePriceYuan:
-        after_profile = get_counselor_profile(db, counselor_id)
+    after_profile = get_counselor_profile(db, counselor_id)
+    after_share = _counselor_default_share_snapshot(after_profile)
+    if old_yuan != body.basePriceYuan or before_share != after_share:
         notify_counselor_base_pricing_updated(
             db,
             actor_id=actor.Id,
@@ -2530,7 +2656,7 @@ def update_pricing_counselor_base(
             old_base_yuan=old_yuan,
             new_base_yuan=body.basePriceYuan,
             before_share=before_share,
-            after_share=_counselor_default_share_snapshot(after_profile),
+            after_share=after_share,
         )
     db.commit()
     return counselor_pricing_summary(db, counselor_id)
@@ -2656,7 +2782,26 @@ def update_pricing_counselor_patient(
 
 
 from proxy_booking_routes import router as proxy_booking_router
+from assessment_routes import register_assessment_admin_routes
+from assessment_report_routes import register_assessment_report_admin_routes
+from assessment_share_routes import register_assessment_share_admin_routes
 from system_settings_routes import register_system_settings_routes
+
+register_assessment_admin_routes(
+    router,
+    require_assessment_editor=require_assessment_editor,
+)
+
+register_assessment_report_admin_routes(
+    router,
+    require_assessment_viewer=require_staff_workbench,
+    visitor_patient_ids=_admin_visitor_patient_ids,
+)
+
+register_assessment_share_admin_routes(
+    router,
+    require_assessment_viewer=require_staff_workbench,
+)
 
 register_system_settings_routes(
     router,

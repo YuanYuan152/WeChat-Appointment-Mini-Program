@@ -68,6 +68,48 @@ test("apiRequest turns non-JSON error responses into ApiError", async () => {
   );
 });
 
+test("apiRequest unwraps a successful business envelope", async () => {
+  installWindow();
+  const stats = {
+    scanCount: 3,
+    uniqueScanCount: 2,
+    completedReportCount: 1,
+    conversionRate: 0.3333,
+    items: [],
+  };
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ code: 0, msg: "ok", data: stats }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+
+  assert.deepEqual(await api.apiRequest("/assessment-share-stats"), stats);
+});
+
+test("apiRequest rejects a non-zero business envelope on HTTP 200", async () => {
+  installWindow();
+  globalThis.fetch = async () =>
+    new Response(
+      JSON.stringify({
+        code: 40901,
+        msg: "统计暂不可用",
+        data: null,
+      }),
+      {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      },
+    );
+
+  await assert.rejects(
+    () => api.apiRequest("/assessment-share-stats"),
+    (error) =>
+      error instanceof api.ApiError &&
+      error.status === 200 &&
+      error.message === "统计暂不可用",
+  );
+});
+
 test("401 clears the stored token and emits the unauthorized event", async () => {
   const target = installWindow();
   let eventCount = 0;

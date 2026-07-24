@@ -24,6 +24,7 @@ APP_ACCOUNT_COLUMNS = {
     "CharityPricingNegotiatedAt": "DATETIME NULL",
     "IsContractSigned": "BIT NOT NULL CONSTRAINT DF_AppAccount_IsContractSigned DEFAULT 0",
     "BoundCounselorId": "INT NULL",
+    "BoundCounselorChangedAt": "DATETIME2 NULL",
 }
 
 APP_ORDER_COLUMNS = {
@@ -38,6 +39,16 @@ APP_REFUND_EXEMPTION_COLUMNS = {
     "RejectReason": "NVARCHAR(MAX) NULL",
     "ReviewedBy": "INT NULL",
     "ReviewedAt": "DATETIME NULL",
+}
+
+APP_LEAVE_REQUEST_COLUMNS = {
+    "RejectReason": "NVARCHAR(MAX) NULL",
+    "ReviewedBy": "INT NULL",
+    "ReviewedAt": "DATETIME NULL",
+}
+
+APP_SCHEDULE_CANCEL_LOG_COLUMNS = {
+    "LeaveRequestId": "INT NULL",
 }
 
 APP_CASE_RECORD_COLUMNS = {
@@ -72,8 +83,27 @@ APP_COUNSELOR_PATIENT_PRICING_COLUMNS = {
 }
 
 
+# 这些表只能通过 migrate_assessment_tables.py 的目标库确认流程创建，不能在
+# FastAPI 启动或通用 init_db 中静默落库。
+CONTROLLED_MIGRATION_TABLES = frozenset(
+    {
+        "AppAssessmentReport",
+        "AppAssessmentShareScan",
+        "AppAssessmentAuditLog",
+    }
+)
+
+
+def automatically_created_tables():
+    return [
+        table
+        for table in Base.metadata.sorted_tables
+        if table.name not in CONTROLLED_MIGRATION_TABLES
+    ]
+
+
 def ensure_tables():
-    Base.metadata.create_all(bind=engine)
+    Base.metadata.create_all(bind=engine, tables=automatically_created_tables())
 
 
 def ensure_app_account_columns():
@@ -83,14 +113,27 @@ def ensure_app_account_columns():
 
     existing = {column["name"] for column in inspector.get_columns("AppAccount")}
     missing = [(name, ddl) for name, ddl in APP_ACCOUNT_COLUMNS.items() if name not in existing]
-    if not missing:
-        print("[OK] AppAccount columns already complete")
-        return
-
     with engine.begin() as conn:
-        for name, ddl in missing:
-            conn.execute(text(f"ALTER TABLE [dbo].[AppAccount] ADD [{name}] {ddl}"))
-            print(f"[OK] Added AppAccount.{name}")
+        if not missing:
+            print("[OK] AppAccount columns already complete")
+        else:
+            for name, ddl in missing:
+                conn.execute(text(f"ALTER TABLE [dbo].[AppAccount] ADD [{name}] {ddl}"))
+                print(f"[OK] Added AppAccount.{name}")
+
+        # Preserve the current signed/unsigned state for existing accounts, but
+        # establish a boundary so paid orders from before this deployment can
+        # never re-sign an account after its counselor binding changes.
+        initialized = conn.execute(
+            text(
+                "UPDATE [dbo].[AppAccount] "
+                "SET [BoundCounselorChangedAt] = SYSUTCDATETIME() "
+                "WHERE [BoundCounselorId] IS NOT NULL "
+                "AND [BoundCounselorChangedAt] IS NULL"
+            )
+        ).rowcount
+        if initialized:
+            print(f"[OK] Initialized binding timestamps for {initialized} AppAccount rows")
 
 
 def ensure_app_order_columns():
@@ -183,6 +226,46 @@ def ensure_refund_exemption_columns():
             print(f"[OK] Added AppRefundExemption.{name}")
 
 
+def ensure_leave_request_columns():
+    inspector = inspect(engine)
+    if not inspector.has_table("AppLeaveRequest"):
+        return
+
+    existing = {column["name"] for column in inspector.get_columns("AppLeaveRequest")}
+    missing = [
+        (name, ddl) for name, ddl in APP_LEAVE_REQUEST_COLUMNS.items() if name not in existing
+    ]
+    if not missing:
+        print("[OK] AppLeaveRequest columns already complete")
+        return
+
+    with engine.begin() as conn:
+        for name, ddl in missing:
+            conn.execute(text(f"ALTER TABLE [dbo].[AppLeaveRequest] ADD [{name}] {ddl}"))
+            print(f"[OK] Added AppLeaveRequest.{name}")
+
+
+def ensure_schedule_cancel_log_columns():
+    inspector = inspect(engine)
+    if not inspector.has_table("AppScheduleCancelLog"):
+        return
+
+    existing = {column["name"] for column in inspector.get_columns("AppScheduleCancelLog")}
+    missing = [
+        (name, ddl)
+        for name, ddl in APP_SCHEDULE_CANCEL_LOG_COLUMNS.items()
+        if name not in existing
+    ]
+    if not missing:
+        print("[OK] AppScheduleCancelLog columns already complete")
+        return
+
+    with engine.begin() as conn:
+        for name, ddl in missing:
+            conn.execute(text(f"ALTER TABLE [dbo].[AppScheduleCancelLog] ADD [{name}] {ddl}"))
+            print(f"[OK] Added AppScheduleCancelLog.{name}")
+
+
 def ensure_counselor_profile_columns():
     inspector = inspect(engine)
     if not inspector.has_table("AppCounselorProfile"):
@@ -240,11 +323,12 @@ def main():
     ensure_app_order_columns()
     ensure_case_record_columns()
     ensure_refund_exemption_columns()
+    ensure_leave_request_columns()
+    ensure_schedule_cancel_log_columns()
     ensure_counselor_profile_columns()
     ensure_counselor_patient_pricing_columns()
     from database import SessionLocal
     from charity_milestone_service import backfill_charity_negotiation_state
-
     db = SessionLocal()
     try:
         n = backfill_charity_negotiation_state(db)

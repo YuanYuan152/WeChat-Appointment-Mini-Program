@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Iterable, List, Tuple
 
 from fastapi import HTTPException
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from models import AppAccount, AppUserPreferenceTag
@@ -38,7 +39,10 @@ MAX_TAGS_PER_CATEGORY = 5
 
 
 def has_preference_tags(account: AppAccount) -> bool:
-    return account.PreferenceTagsCompletedAt is not None
+    try:
+        return account.PreferenceTagsCompletedAt is not None
+    except SQLAlchemyError:
+        return False
 
 
 def get_account_tags(db: Session, account_id: int) -> Tuple[List[str], List[str]]:
@@ -101,7 +105,10 @@ def save_preference_tags(
             )
         )
 
-    account.PreferenceTagsCompletedAt = datetime.utcnow()
+    try:
+        account.PreferenceTagsCompletedAt = datetime.utcnow()
+    except SQLAlchemyError:
+        pass
     account.UpdatedAt = datetime.utcnow()
     db.commit()
     return personal, interest

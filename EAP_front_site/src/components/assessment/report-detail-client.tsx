@@ -2,14 +2,12 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { AlertCircle, ArrowLeft, Loader2 } from "lucide-react";
 import { AssessmentAuthGate } from "@/components/assessment/assessment-auth-gate";
 import { useAuthStore } from "@/lib/stores/auth-store";
-import { useAssessmentReports } from "@/lib/stores/assessment-reports";
+import { getAssessmentReport } from "@/lib/assessment/api";
 import { formatReportTime } from "@/lib/assessment/report-summary";
-import { enrichAssessmentGuidance } from "@/lib/assessment/scale-guidance";
-import { api } from "@/lib/api";
-import type { Assessment } from "@/lib/api/types";
+import type { Assessment, AssessmentReportDetail } from "@/lib/api/types";
 import { ReportView } from "./report-view";
 
 interface ReportDetailClientProps {
@@ -25,44 +23,51 @@ export function ReportDetailClient({ reportId }: ReportDetailClientProps) {
 }
 
 function ReportDetailContent({ reportId }: ReportDetailClientProps) {
-  const userId = useAuthStore((s) => s.user!.id);
-  const report = useAssessmentReports((s) => s.getReport(userId, reportId));
-  const [assessment, setAssessment] = useState<Assessment | null>(null);
+  const token = useAuthStore((state) => state.token!);
+  const [report, setReport] = useState<AssessmentReportDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!report) return;
     let cancelled = false;
-    (async () => {
-      const full = await api.getAssessmentById(report.assessmentId, report.type);
-      if (cancelled) return;
-      if (full) {
-        setAssessment(enrichAssessmentGuidance(full) as Assessment);
-      } else {
-        setAssessment(
-          enrichAssessmentGuidance({
-            id: report.assessmentId,
-            title: report.assessmentTitle,
-            subtitle: report.assessmentSubtitle,
-            description: "",
-            cover: report.cover,
-            questionCount: 0,
-            duration: 0,
-            scoringType: report.scoringType,
-            questions: [],
-            disclaimer: report.disclaimer,
-          }) as Assessment
-        );
-      }
-    })();
+    localStorage.removeItem("assessment-reports");
+    getAssessmentReport(token, reportId)
+      .then((value) => {
+        if (!cancelled) setReport(value);
+      })
+      .catch((reason) => {
+        if (!cancelled) {
+          setError(
+            reason instanceof Error
+              ? reason.message
+              : "未找到该测评报告，可能已被删除。"
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
     return () => {
       cancelled = true;
     };
-  }, [report]);
+  }, [reportId, token]);
 
-  if (!report) {
+  if (loading) {
+    return (
+      <div className="flex min-h-[320px] items-center justify-center text-sm text-muted-foreground">
+        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+        正在读取报告快照…
+      </div>
+    );
+  }
+
+  if (!report || error) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-16 text-center sm:px-6">
-        <p className="text-muted-foreground">未找到该测评报告，可能已被删除。</p>
+        <AlertCircle className="mx-auto h-8 w-8 text-muted-foreground" />
+        <p className="mt-3 text-muted-foreground">
+          {error ?? "未找到该测评报告，可能已被删除。"}
+        </p>
         <Link
           href="/assessment/reports"
           className="mt-6 inline-flex items-center gap-1 text-sm text-primary hover:underline"
@@ -73,6 +78,12 @@ function ReportDetailContent({ reportId }: ReportDetailClientProps) {
       </div>
     );
   }
+
+  const snapshotAssessment = report.reportSnapshot.assessment;
+  const assessment: Assessment = {
+    ...snapshotAssessment,
+    questionCount: snapshotAssessment.questions.length,
+  };
 
   return (
     <section className="px-4 pb-16 pt-24 sm:px-6">
@@ -90,16 +101,12 @@ function ReportDetailContent({ reportId }: ReportDetailClientProps) {
         <h1 className="mb-8 text-center font-serif text-2xl font-bold">
           {report.assessmentTitle} · 测评报告
         </h1>
-        {assessment ? (
-          <ReportView
-            assessment={assessment}
-            result={report.result}
-            type={report.type}
-            showActions={false}
-          />
-        ) : (
-          <div className="py-12 text-center text-sm text-muted-foreground">加载报告中…</div>
-        )}
+        <ReportView
+          assessment={assessment}
+          result={report.reportSnapshot.result}
+          type={report.category}
+          showActions={false}
+        />
       </div>
     </section>
   );

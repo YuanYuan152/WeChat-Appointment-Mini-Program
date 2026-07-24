@@ -6,12 +6,14 @@ import { LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useLogoutConfirmStore } from "@/lib/stores/logout-confirm-store";
 import { useAuthStore } from "@/lib/stores/auth-store";
+import { useQuizSession } from "@/lib/stores/quiz-session";
 
 export function LogoutConfirmDialog() {
   const open = useLogoutConfirmStore((s) => s.open);
   const onConfirm = useLogoutConfirmStore((s) => s.onConfirm);
   const closeLogoutConfirm = useLogoutConfirmStore((s) => s.closeLogoutConfirm);
   const logout = useAuthStore((s) => s.logout);
+  const clearAllQuizSessions = useQuizSession((s) => s.clearAllSessions);
 
   useEffect(() => {
     if (!open) return;
@@ -31,6 +33,7 @@ export function LogoutConfirmDialog() {
 
   const handleConfirm = () => {
     closeLogoutConfirm();
+    clearAllQuizSessions();
     logout();
     onConfirm?.();
   };

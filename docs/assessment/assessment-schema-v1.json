@@ -1,0 +1,539 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:lxxl:assessment:schema:v1",
+  "title": "LXXL EAP Assessment Definition v1",
+  "description": "EAP 专业量表和趣味量表的单份声明式定义。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "id",
+    "version",
+    "status",
+    "category",
+    "title",
+    "subtitle",
+    "description",
+    "cover",
+    "duration",
+    "scoringType",
+    "scoringPreset",
+    "questions",
+    "disclaimer"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "description": "量表 JSON 结构版本。"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "minLength": 2,
+      "maxLength": 54,
+      "description": "量表稳定标识；首次发布后不可修改。"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "同一量表内容版本。"
+    },
+    "status": {
+      "enum": ["draft", "published", "archived"]
+    },
+    "category": {
+      "enum": ["professional", "fun"]
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "subtitle": {
+      "type": "string",
+      "maxLength": 200
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 4000
+    },
+    "instructions": {
+      "type": "string",
+      "maxLength": 20000
+    },
+    "features": {
+      "type": "string",
+      "maxLength": 10000
+    },
+    "cover": {
+      "$ref": "#/$defs/assessmentImageReference"
+    },
+    "duration": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 240,
+      "description": "预计完成分钟数。"
+    },
+    "sortOrder": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0
+    },
+    "demographicQuestions": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/demographicQuestion"
+      }
+    },
+    "scoringType": {
+      "enum": [
+        "sum",
+        "dimension",
+        "match",
+        "aas",
+        "psqi",
+        "pbi",
+        "cbcl",
+        "dark-light"
+      ]
+    },
+    "scoringPreset": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*-v[1-9][0-9]*$",
+      "description": "服务端白名单计分模板，例如 generic-sum-v2 或 generic-dimension-v1。"
+    },
+    "questions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/assessmentQuestion"
+      }
+    },
+    "scoreRanges": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/scoreRange"
+      }
+    },
+    "dimensions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/dimension"
+      }
+    },
+    "reverseQuestionIds": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/stableId"
+      }
+    },
+    "matchResults": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/matchResult"
+      }
+    },
+    "reportIntro": {
+      "type": "string",
+      "maxLength": 20000
+    },
+    "reportProfiles": {
+      "type": "array",
+      "description": "固定计分模板输出 key 对应的可编辑报告内容。",
+      "items": {
+        "$ref": "#/$defs/reportProfile"
+      }
+    },
+    "disclaimer": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time",
+      "readOnly": true
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time",
+      "readOnly": true
+    },
+    "publishedAt": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "readOnly": true
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "scoringType": {
+            "enum": ["sum", "psqi"]
+          }
+        },
+        "required": ["scoringType"]
+      },
+      "then": {
+        "required": ["scoreRanges"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "scoringType": {
+            "const": "dimension"
+          }
+        },
+        "required": ["scoringType"]
+      },
+      "then": {
+        "required": ["dimensions"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "scoringType": {
+            "enum": ["match", "aas"]
+          }
+        },
+        "required": ["scoringType"]
+      },
+      "then": {
+        "required": ["matchResults"]
+      }
+    }
+  ],
+  "$defs": {
+    "stableId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9]+(?:[-_.][A-Za-z0-9]+)*$",
+      "minLength": 1,
+      "maxLength": 100
+    },
+    "assessmentImageReference": {
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "pattern": "^/(?:images|static/assessments)/(?!\\.{1,2}(?:/|$))(?!.*(?:/\\.{1,2})(?:/|$))(?!.*//)[A-Za-z0-9._/-]+\\.(?:[Jj][Pp][Ee]?[Gg]|[Pp][Nn][Gg]|[Ww][Ee][Bb][Pp]|[Gg][Ii][Ff])$"
+        },
+        {
+          "type": "string",
+          "pattern": "^/static/assessment-assets/[0-9a-f]{64}\\.(?:jpg|png|webp)$"
+        }
+      ],
+      "description": "仅允许 EAP 内置图片、受控静态示例或量表上传接口返回的不可变站内路径；不允许外链、base64、查询参数和片段。"
+    },
+    "optionalAssessmentImageReference": {
+      "oneOf": [
+        {
+          "const": ""
+        },
+        {
+          "$ref": "#/$defs/assessmentImageReference"
+        }
+      ]
+    },
+    "demographicOption": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "text", "value"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "value": {
+          "type": ["string", "number", "boolean"]
+        }
+      }
+    },
+    "demographicValidation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "min": {
+          "type": "number"
+        },
+        "max": {
+          "type": "number"
+        },
+        "minLength": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxLength": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "pattern": {
+          "type": "string"
+        }
+      }
+    },
+    "demographicQuestion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "text", "inputType", "required"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "helpText": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "inputType": {
+          "enum": ["single", "multiple", "text", "number", "date"]
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "options": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/demographicOption"
+          }
+        },
+        "validation": {
+          "$ref": "#/$defs/demographicValidation"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "inputType": {
+                "enum": ["single", "multiple"]
+              }
+            },
+            "required": ["inputType"]
+          },
+          "then": {
+            "required": ["options"]
+          }
+        }
+      ]
+    },
+    "assessmentOption": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "text", "value"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "value": {
+          "type": "number"
+        },
+        "matchTags": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/stableId"
+          },
+          "additionalProperties": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "assessmentQuestion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "text", "required", "options"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 5000
+        },
+        "helpText": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "options": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "$ref": "#/$defs/assessmentOption"
+          }
+        }
+      }
+    },
+    "scoreRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["min", "max", "level", "description", "suggestions"],
+      "properties": {
+        "min": {
+          "type": "number"
+        },
+        "max": {
+          "type": "number"
+        },
+        "level": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 10000
+        },
+        "suggestions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          }
+        }
+      }
+    },
+    "dimension": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "questionIds", "aggregate", "scoreRanges"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "intro": {
+          "type": "string",
+          "maxLength": 10000
+        },
+        "questionIds": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/stableId"
+          }
+        },
+        "reverseQuestionIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/stableId"
+          }
+        },
+        "aggregate": {
+          "enum": ["sum", "average"]
+        },
+        "scoreRanges": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/scoreRange"
+          }
+        }
+      }
+    },
+    "matchResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "description", "image", "shareText"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 10000
+        },
+        "suggestions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          }
+        },
+        "image": {
+          "$ref": "#/$defs/optionalAssessmentImageReference"
+        },
+        "shareText": {
+          "type": "string",
+          "maxLength": 1000
+        }
+      }
+    },
+    "reportProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "description", "suggestions"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 10000
+        },
+        "suggestions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          }
+        },
+        "image": {
+          "$ref": "#/$defs/optionalAssessmentImageReference"
+        },
+        "shareText": {
+          "type": "string",
+          "maxLength": 1000
+        }
+      }
+    }
+  }
+}

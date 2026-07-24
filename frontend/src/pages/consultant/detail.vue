@@ -40,7 +40,9 @@
             <view class="hero-name-row">
               <text class="hero-name">{{ doctor.name }}</text>
               <text class="hero-price">
-                <template v-if="doctor.priceNegotiation">议价<text class="hero-price-unit">/次</text></template>
+                <template v-if="doctor.priceNegotiation || doctor.needsNegotiation">
+                  {{ doctor.billingLabel || doctor.priceLabel || '议价' }}<text class="hero-price-unit">/次</text>
+                </template>
                 <template v-else>￥{{ doctor.price }}<text class="hero-price-unit">/次</text></template>
               </text>
             </view>
@@ -373,8 +375,8 @@
         </view>
         <view class="modal-body">
           <view class="pay-amount-box">
-            <template v-if="doctor.priceNegotiation">
-              <text class="pay-amount">议价</text>
+            <template v-if="doctor.priceNegotiation || doctor.needsNegotiation">
+              <text class="pay-amount">{{ doctor.billingLabel || doctor.priceLabel || '议价' }}</text>
             </template>
             <template v-else>
               <text class="pay-currency">￥</text>
@@ -488,7 +490,10 @@ interface Doctor {
   specialty: string
   experience: number
   price: number
+  needsNegotiation: boolean
+  priceLabel?: string
   priceNegotiation?: boolean
+  billingLabel?: string
   charityBookingBlocked?: boolean
   avatar: string
   description: string
@@ -520,6 +525,11 @@ const doctor = ref<Doctor>({
   specialty: '',
   experience: 0,
   price: 0,
+  needsNegotiation: false,
+  priceLabel: undefined,
+  priceNegotiation: false,
+  billingLabel: undefined,
+  charityBookingBlocked: false,
   avatar: '',
   description: '',
   profile: '',
@@ -594,6 +604,7 @@ const canProceedBooking = computed(() =>
   Boolean(
     !doctor.value.charityBookingBlocked &&
     !doctor.value.priceNegotiation &&
+    !doctor.value.needsNegotiation &&
     selectedCenterId.value &&
     selectedSlotId.value !== -1 &&
     selectedSlot.value &&
@@ -603,12 +614,19 @@ const canProceedBooking = computed(() =>
 )
 
 const slotPriceLabel = (slot: BookingTimeSlot) => {
+  if (slot.needsNegotiation || slot.status === 'NEGOTIATION') return slot.priceLabel || '需议价'
   if (slot.priceNegotiation || slot.priceLabel === '议价') return '议价'
   return `￥${slot.Price ?? 0}`
 }
 
 const bookingButtonLabel = computed(() => {
-  if (doctor.value.charityBookingBlocked || doctor.value.priceNegotiation) {
+  if (
+    doctor.value.charityBookingBlocked ||
+    doctor.value.priceNegotiation ||
+    doctor.value.needsNegotiation ||
+    selectedSlot.value?.needsNegotiation ||
+    selectedSlot.value?.priceNegotiation
+  ) {
     return '议价后方可预约'
   }
   if (canProceedBooking.value) {
@@ -624,11 +642,19 @@ const applyBookingData = (data: {
   hasAvailableTime?: boolean
   charityBookingBlocked?: boolean
   priceNegotiation?: boolean
+  needsNegotiation?: boolean
+  priceLabel?: string
   canSelfBook?: boolean
 }) => {
   timeSlots.value = normalizeBookingTimeSlots(data.timeSlots || [])
   if (data.priceNegotiation != null) {
     doctor.value.priceNegotiation = !!data.priceNegotiation
+  }
+  if (data.needsNegotiation != null) {
+    doctor.value.needsNegotiation = !!data.needsNegotiation
+  }
+  if (data.priceLabel != null) {
+    doctor.value.priceLabel = data.priceLabel
   }
   if (data.charityBookingBlocked != null) {
     doctor.value.charityBookingBlocked = !!data.charityBookingBlocked
@@ -696,27 +722,34 @@ const getRouteParams = () => {
   return (currentPage as any).options || {}
 }
 
-const mapDoctorDetail = (item: any): Doctor => ({
-  id: Number(item.id || 0),
-  name: item.name || '咨询师',
-  specialty: item.specialty || item.field || '心理咨询',
-  experience: Number(item.workYears || 0),
-  price: Math.round(Number(item.billing || 0) / 100) || item.price || 500,
-  priceNegotiation: !!(item.priceNegotiation || item.billingLabel === '议价'),
-  charityBookingBlocked: !!(item.charityBookingBlocked || item.priceNegotiation || item.billingLabel === '议价'),
-  avatar: item.avatarUrl || item.avatar || '',
-  description: item.introduce || item.description || '暂无介绍',
-  profile: item.profile || item.introduce || '暂无简介',
-  career: item.career || '',
-  joiner: item.joiner || '',
-  trainingCount: Number(item.trainingCount ?? item.trainingSegments ?? 0) || 0,
-  qualification: item.qualification || '暂无资质信息',
-  field: item.field || item.specialty || '',
-  targetGroup: item.targetGroup || '成人,青少年,亲子家庭',
-  consultHours: Number(item.consultHours || 0),
-  workYears: Number(item.workYears || 0),
-  mode: item.mode || '线上/线下'
-})
+const mapDoctorDetail = (item: any): Doctor => {
+  const needsNegotiation = Boolean(item.needsNegotiation ?? item.needs_negotiation)
+  const priceNegotiation = !!(item.priceNegotiation || item.billingLabel === '议价')
+  return {
+    id: Number(item.id || 0),
+    name: item.name || '咨询师',
+    specialty: item.specialty || item.field || '心理咨询',
+    experience: Number(item.workYears || 0),
+    price: Math.round(Number(item.billing || 0) / 100) || item.price || 500,
+    needsNegotiation,
+    priceLabel: item.priceLabel || item.price_label || (needsNegotiation ? '需议价' : undefined),
+    priceNegotiation,
+    billingLabel: item.billingLabel || (priceNegotiation ? '议价' : undefined),
+    charityBookingBlocked: !!(item.charityBookingBlocked || priceNegotiation),
+    avatar: item.avatarUrl || item.avatar || '',
+    description: item.introduce || item.description || '暂无介绍',
+    profile: item.profile || item.introduce || '暂无简介',
+    career: item.career || '',
+    joiner: item.joiner || '',
+    trainingCount: Number(item.trainingCount ?? item.trainingSegments ?? 0) || 0,
+    qualification: item.qualification || '暂无资质信息',
+    field: item.field || item.specialty || '',
+    targetGroup: item.targetGroup || '成人,青少年,亲子家庭',
+    consultHours: Number(item.consultHours || 0),
+    workYears: Number(item.workYears || 0),
+    mode: item.mode || '线上/线下'
+  }
+}
 
 const loadFavoriteStatus = async () => {
   if (!doctor.value.id || !isLoggedIn()) {
@@ -905,6 +938,10 @@ const onScroll = (e: any) => {
 // 选择时间段（需已选预约中心且时段属于该中心）
 const selectTimeSlot = (slot: BookingTimeSlot) => {
   if (isTimeModuleDisabled.value) return
+  if (slot.needsNegotiation || slot.priceNegotiation || slot.status === 'NEGOTIATION') {
+    uni.showToast({ title: '该时段需议价，请联系助理', icon: 'none' })
+    return
+  }
   if (!isSlotBookable(slot)) {
     uni.showToast({ title: '该时段已被预约', icon: 'none' })
     return
@@ -1013,6 +1050,10 @@ const makeAppointment = async () => {
   }
   if (selectedSlotId.value === -1) {
     uni.showToast({ title: '请选择可约时间', icon: 'none' })
+    return
+  }
+  if (selectedSlot.value?.needsNegotiation || doctor.value.needsNegotiation) {
+    uni.showToast({ title: '请先联系助理确认价格', icon: 'none' })
     return
   }
 
@@ -1312,6 +1353,10 @@ const confirmPayment = async () => {
 
   if (selectedSlotId.value <= 0) {
     uni.showToast({ title: '请先选择可约时间', icon: 'none' })
+    return
+  }
+  if (selectedSlot.value?.needsNegotiation || doctor.value.needsNegotiation) {
+    uni.showToast({ title: '请先联系助理确认价格', icon: 'none' })
     return
   }
 
@@ -1625,6 +1670,10 @@ onMounted(() => {
   font-weight: 800;
   color: #F59E0B;
   flex-shrink: 0;
+}
+
+.hero-price--negotiation {
+  color: #B45309;
 }
 
 .hero-price-unit {

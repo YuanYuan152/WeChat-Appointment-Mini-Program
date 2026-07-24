@@ -7,19 +7,19 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from case_record_risk_config import (
-    RISK_ITEM_IDS,
     RISK_ITEM_BY_ID,
     EDITABLE_RISK_ITEM_IDS,
-    VALID_CHOICES,
     apply_calculated_crisis_level,
     get_crisis_level_choice,
     crisis_level_text_only,
     risk_item_allowed_choices,
     risk_item_note_required,
     normalize_risk_choice,
+    normalize_risk_assessment_with_calculated_level,
     should_notify_crisis_report,
 )
 from message import create_message
+from model_compat import optional_model_value
 from case_record_header_config import (
     empty_header_info,
     header_info_is_complete,
@@ -33,7 +33,6 @@ from models import (
     AppCaseRecord,
     AppCaseRecordRevision,
     AppConsultation,
-    AppCounselorProfile,
     AppOrder,
     AppRoleBinding,
     AppSchedule,
@@ -63,7 +62,7 @@ def decode_photo_urls(raw: Optional[str]) -> List[str]:
 def encode_risk_assessment(data: Optional[Dict[str, Any]]) -> Optional[str]:
     if not data:
         return None
-    return json.dumps(data, ensure_ascii=False)
+    return json.dumps(normalize_case_record_risk_assessment(data), ensure_ascii=False)
 
 
 def decode_risk_assessment(raw: Optional[str]) -> Optional[Dict[str, Any]]:
@@ -113,6 +112,10 @@ def validate_risk_assessment(data: Optional[Dict[str, Any]]) -> None:
             raise HTTPException(status_code=400, detail=f"请填写：{cfg['label']}说明")
     if not risk_assessment_is_complete(data):
         raise HTTPException(status_code=400, detail="请完成个案风险评估表")
+
+
+def normalize_case_record_risk_assessment(data: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    return normalize_risk_assessment_with_calculated_level(data)
 
 
 def encode_header_info(data: Optional[Dict[str, Any]]) -> Optional[str]:
@@ -225,14 +228,17 @@ def build_default_header_info(
 
 
 def snapshot_case_record(record: AppCaseRecord) -> Dict[str, Any]:
+    risk_assessment = case_record_risk_assessment(record)
+    header_info = case_record_header_info(record)
+    photo_urls = case_record_photo_urls(record)
     return {
         "subjective": record.Subjective,
         "objective": record.Objective,
         "assessment": record.Assessment,
         "plan": record.Plan,
-        "risk_assessment": decode_risk_assessment(record.RiskAssessment),
-        "header_info": decode_header_info(record.HeaderInfo),
-        "photo_urls": decode_photo_urls(record.PhotoUrls),
+        "risk_assessment": risk_assessment,
+        "header_info": header_info,
+        "photo_urls": photo_urls,
     }
 
 
@@ -242,6 +248,9 @@ def save_case_record_revision(
     *,
     revised_by: int,
 ) -> None:
+    risk_assessment = optional_model_value(record, "RiskAssessment")
+    header_info = optional_model_value(record, "HeaderInfo")
+    photo_urls = optional_model_value(record, "PhotoUrls")
     db.add(
         AppCaseRecordRevision(
             CaseRecordId=record.Id,
@@ -251,9 +260,9 @@ def save_case_record_revision(
             Objective=record.Objective,
             Assessment=record.Assessment,
             Plan=record.Plan,
-            RiskAssessment=record.RiskAssessment,
-            HeaderInfo=record.HeaderInfo,
-            PhotoUrls=record.PhotoUrls,
+            RiskAssessment=risk_assessment,
+            HeaderInfo=header_info,
+            PhotoUrls=photo_urls,
             RevisedAt=datetime.utcnow(),
             RevisedBy=revised_by,
         )
@@ -299,16 +308,34 @@ def reject_if_case_record_locked(record: Optional[AppCaseRecord]) -> None:
 def case_record_has_content(record: Optional[AppCaseRecord]) -> bool:
     if not record:
         return False
-    photo_count = len(decode_photo_urls(record.PhotoUrls))
+    subjective = (record.Subjective or "").strip()
+    objective = (record.Objective or "").strip()
+    assessment = (record.Assessment or "").strip()
+    plan = (record.Plan or "").strip()
+    risk_assessment = case_record_risk_assessment(record)
+    header_info = case_record_header_info(record)
+    photo_count = len(case_record_photo_urls(record))
     return bool(
-        (record.Subjective or "").strip()
-        or (record.Objective or "").strip()
-        or (record.Assessment or "").strip()
-        or (record.Plan or "").strip()
-        or risk_assessment_is_complete(decode_risk_assessment(record.RiskAssessment))
-        or header_info_is_complete(decode_header_info(record.HeaderInfo))
+        subjective
+        or objective
+        or assessment
+        or plan
+        or risk_assessment_is_complete(risk_assessment)
+        or header_info_is_complete(header_info)
         or photo_count > 0
     )
+
+
+def case_record_photo_urls(record: Optional[AppCaseRecord]) -> List[str]:
+    return decode_photo_urls(optional_model_value(record, "PhotoUrls"))
+
+
+def case_record_risk_assessment(record: Optional[AppCaseRecord]) -> Optional[Dict[str, Any]]:
+    return decode_risk_assessment(optional_model_value(record, "RiskAssessment"))
+
+
+def case_record_header_info(record: Optional[AppCaseRecord]) -> Optional[Dict[str, str]]:
+    return decode_header_info(optional_model_value(record, "HeaderInfo"))
 
 
 def apply_case_record_fields(
@@ -368,15 +395,15 @@ def _counselor_display_name(db: Session, counselor_id: int) -> str:
         return prof.Name
     acc = db.query(AppAccount).filter(AppAccount.Id == counselor_id).first()
     if acc:
-        return acc.Nickname or acc.RealName or f"咨询师#{counselor_id}"
-    return f"咨询师#{counselor_id}"
+        return acc.Nickname or acc.RealName or acc.Mobile or "未留姓名咨询师"
+    return "未留姓名咨询师"
 
 
 def _patient_display_name(db: Session, patient_id: int) -> str:
     acc = db.query(AppAccount).filter(AppAccount.Id == patient_id).first()
     if not acc:
-        return f"来访者#{patient_id}"
-    return acc.RealName or acc.Nickname or acc.Mobile or f"来访者#{patient_id}"
+        return "未留姓名来访者"
+    return acc.RealName or acc.Nickname or acc.Mobile or "未留姓名来访者"
 
 
 def _account_phone(db: Session, account_id: int) -> str:
@@ -392,7 +419,7 @@ def notify_admins_crisis_report_if_needed(
     old_crisis_choice: str = "",
 ) -> None:
     """个案风险评估第10题选 A/B/C 时，通知管理员/Ops 需上报。"""
-    risk = decode_risk_assessment(record.RiskAssessment)
+    risk = case_record_risk_assessment(record)
     new_choice = get_crisis_level_choice(risk)
     if not should_notify_crisis_report(old_crisis_choice, new_choice):
         return
@@ -408,6 +435,13 @@ def notify_admins_crisis_report_if_needed(
         if consultation
         else "来访者"
     )
+    patient_tag = None
+    if consultation:
+        from patient_contract_service import patient_contract_extras
+
+        patient = db.query(AppAccount).filter(AppAccount.Id == consultation.PatientId).first()
+        patient_tag = patient_contract_extras(db, patient).get("contractTag")
+    patient_label = f"{patient_name} {patient_tag}" if patient_tag else patient_name
     patient_phone = (
         _account_phone(db, consultation.PatientId) if consultation else ""
     )
@@ -420,7 +454,7 @@ def notify_admins_crisis_report_if_needed(
     level_label = crisis_level_text_only(new_choice)
     title = "个案风险需上报"
     summary = (
-        f"{counselor_name} · {patient_name} · {level_label}"
+        f"{counselor_name} · {patient_label} · {level_label}"
         f" · 来访 {patient_phone or '未填写'}"
         f" · 咨询师 {counselor_phone or '未填写'}"
     )
@@ -430,6 +464,7 @@ def notify_admins_crisis_report_if_needed(
         "counselorName": counselor_name,
         "counselorPhone": counselor_phone or None,
         "patientName": patient_name,
+        "patientContractTag": patient_tag,
         "patientPhone": patient_phone or None,
         "caseRecordId": record.Id,
         "consultationId": record.ConsultationId,

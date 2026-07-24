@@ -8,11 +8,11 @@ OTHER_OPTION_LABEL = "其他"
 RISK_LEVEL_GUIDE = """一、一级风险/危机：转介/不适合咨询；向来访者说明其困扰已经超出了心理咨询可提供的专业范围，必须尽快就医或寻求其他专业帮助。
 
 判定标准：满足任一条件即可归为一级（优先级最高）：
-1、项目1（诊断/就医）：选 D（重度：一年内有复发史、住院史）且无医生「配合心理咨询」建议；未选选项，但初始访谈发现明显精神疾病症状（如幻觉、妄想）或严重躯体疾病且自评影响极大（项目8选 B 且说明为严重疾病，参考癌症、重型糖尿病、甲亢、严重的免疫系统疾病、带有耻辱感的性病、难以忍受的慢性疼痛等）。
+1、项目1（诊断/就医）：选 D（重度：一年内有复发史、住院史）且无医生「配合心理咨询」建议；未选选项，但初始访谈发现明显精神疾病症状（如幻觉、妄想）或严重躯体疾病且自评影响极大（项目8选 C 且说明为严重疾病，参考癌症、重型糖尿病、甲亢、严重的免疫系统疾病、带有耻辱感的性病、难以忍受的慢性疼痛等）。
 2、项目3（自我伤害）：选 D（重度：反复自伤/自杀未遂）且处于发作期。
 3、项目4（伤害他人）：选 D（重度：有详细计划并准备实施）。
-4、项目6（重大/应激事件）：选 B 且说明正在经历性虐待、暴力关系。
-5、咨询期间发现心理疾病复发（项目1选 D+近期复发）或严重躯体症状（项目8选 B+症状急性发作）。
+4、项目6（重大/应激事件）：选 C 且说明正在经历性虐待、暴力关系。
+5、咨询期间发现心理疾病复发（项目1选 D+近期复发）或严重躯体症状（项目8选 C+症状急性发作）。
 
 二、二级风险/危机：不适合网络咨询；需要上报同心理咨询中心，且需要突破保密设置、以及做安全计划。
 
@@ -29,7 +29,8 @@ RISK_LEVEL_GUIDE = """一、一级风险/危机：转介/不适合咨询；向�
 2、项目3（自我伤害）：选 B（轻度：有念头无计划/行为）。
 3、项目4（伤害他人）：选 B（轻度：有念头无计划/行为，可自控）。
 4、项目5（自我照顾）：选 B（轻度：偶尔不能自我照顾）。
-5、项目6（重大/应激事件）：选 B 近期经历负性生活事件且自评受影响较大，咨询师评估可能升级为二级风险（参考：①丧失性挫折：包括亲人去逝、失业、失恋、事业受挫、股票、赌博导致损失大量金钱；②人际关系冲突、夫妻关系冲突、婚外恋、离婚等）。
+5、项目6（重大/应激事件）：选 C（有并归类为危机）。
+6、项目7/8/9（家族史、疾病史、创伤史）：选 C（有并归类为危机）。
 
 四、无危机：一般咨询
 
@@ -192,8 +193,31 @@ RISK_ASSESSMENT_ITEMS: List[Dict[str, Any]] = [
 ]
 
 RISK_ITEM_IDS: List[str] = [item["id"] for item in RISK_ASSESSMENT_ITEMS]
+RISK_SCALE_ITEM_IDS: List[str] = [item["id"] for item in RISK_ASSESSMENT_ITEMS if item["id"] != "crisis_level"]
 
 RISK_ITEM_BY_ID: Dict[str, Dict[str, Any]] = {item["id"]: item for item in RISK_ASSESSMENT_ITEMS}
+
+
+def _risk_item_value(risk_assessment: Optional[Dict[str, Any]], item_id: str) -> Dict[str, Any]:
+    if not risk_assessment or not isinstance(risk_assessment.get("items"), dict):
+        return {}
+    val = risk_assessment["items"].get(item_id) or {}
+    return val if isinstance(val, dict) else {}
+
+
+def _risk_choice(risk_assessment: Optional[Dict[str, Any]], item_id: str) -> str:
+    val = _risk_item_value(risk_assessment, item_id)
+    return normalize_risk_choice(str(val.get("choice") or "").strip(), item_id)
+
+
+def _risk_note(risk_assessment: Optional[Dict[str, Any]], item_id: str) -> str:
+    val = _risk_item_value(risk_assessment, item_id)
+    return str(val.get("note") or "").strip()
+
+
+def _note_has_any(note: str, keywords: Tuple[str, ...]) -> bool:
+    lowered = note.lower()
+    return any(keyword.lower() in lowered for keyword in keywords)
 
 
 def normalize_risk_choice(choice: str, item_id: Optional[str] = None) -> str:
@@ -234,6 +258,39 @@ def risk_choice_label(item_id: str, choice: str) -> str:
     return f"{choice}. {text}"
 
 
+def calculate_crisis_level_choice(risk_assessment: Optional[Dict[str, Any]]) -> str:
+    """根据风险评估表 1-9 项自动计算第 10 项风险/危机等级。"""
+    items = risk_assessment.get("items") if isinstance(risk_assessment, dict) else {}
+    if not isinstance(items, dict):
+        items = {}
+    return calculate_crisis_level(items)
+
+
+def normalize_risk_assessment_with_calculated_level(
+    risk_assessment: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """规范化风险评估表，并强制用 1-9 项计算第 10 项。"""
+    raw_items = risk_assessment.get("items") if isinstance(risk_assessment, dict) else {}
+    if not isinstance(raw_items, dict):
+        raw_items = {}
+
+    normalized: Dict[str, Any] = {"items": {}}
+    for item_id in RISK_SCALE_ITEM_IDS:
+        val = raw_items.get(item_id) or {}
+        if not isinstance(val, dict):
+            val = {}
+        normalized["items"][item_id] = {
+            "choice": normalize_risk_choice(str(val.get("choice") or "").strip(), item_id),
+            "note": str(val.get("note") or "").strip(),
+        }
+
+    normalized["items"]["crisis_level"] = {
+        "choice": calculate_crisis_level(normalized["items"]),
+        "note": "",
+    }
+    return normalized
+
+
 CRISIS_REPORT_CHOICES: Tuple[str, ...] = ("A", "B", "C")
 
 EDITABLE_RISK_ITEM_IDS: Tuple[str, ...] = tuple(
@@ -243,7 +300,7 @@ EDITABLE_RISK_ITEM_IDS: Tuple[str, ...] = tuple(
 RISK_ITEM_GUIDE_HINTS: Dict[str, str] = {
     "diagnosis": (
         "【一级】选 D（重度）且无医生「配合心理咨询」建议；或访谈发现明显精神病性症状；"
-        "或项目8选 B 且为严重躯体疾病。\n"
+        "或项目8选 C 且为严重躯体疾病。\n"
         "【二级】如项目1选 C 且项目3选 B 等组合，评估可能升级为一级风险。"
     ),
     "support_system": "【三级】选 B（一般）。\n【二级】选 D（没有）且项目3选 C 等组合时，评估可能升级。",
@@ -329,8 +386,6 @@ def calculate_crisis_level(items: Dict[str, Any]) -> str:
         return "B"
     if diagnosis == "C" and self_harm == "B":
         return "B"
-    if support == "D" and self_harm == "C":
-        return "B"
     if diagnosis == "D" and self_harm == "B":
         return "B"
 
@@ -364,12 +419,10 @@ def apply_calculated_crisis_level(data: Optional[Dict[str, Any]]) -> Optional[Di
 
 
 def get_crisis_level_choice(risk_assessment: Optional[Dict[str, Any]]) -> str:
-    if not risk_assessment or not isinstance(risk_assessment.get("items"), dict):
-        return ""
-    val = risk_assessment["items"].get("crisis_level") or {}
-    if not isinstance(val, dict):
-        return ""
-    return normalize_risk_choice(str(val.get("choice") or "").strip(), "crisis_level")
+    items = risk_assessment.get("items") if isinstance(risk_assessment, dict) else {}
+    if not isinstance(items, dict):
+        items = {}
+    return calculate_crisis_level(items)
 
 
 def crisis_level_label(choice: str) -> str:

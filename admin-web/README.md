@@ -42,11 +42,16 @@ pnpm install
 pnpm dev -p 3001 -H 127.0.0.1
 ```
 
-默认后端地址是 `http://127.0.0.1:8000`。如需修改，复制 [.env.example](./.env.example) 并设置：
+默认后端地址是 `http://127.0.0.1:8000`。复制 [.env.example](./.env.example)
+为 `.env.local`，并同时配置后端和 EAP 地址：
 
 ```bash
 NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
+NEXT_PUBLIC_EAP_BASE_URL=http://127.0.0.1:3000
 ```
+
+`NEXT_PUBLIC_EAP_BASE_URL` 用于解析历史报告快照中的 EAP 相对图片路径。生产构建必须写入
+对应环境的公网 HTTPS 地址；`NEXT_PUBLIC_*` 会进入浏览器包，修改后需要重新构建。
 
 开发登录入口：
 
@@ -60,4 +65,7 @@ NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
 - 后端继续复用 `backend-python`。
 - 小程序继续保留在 `frontend`。
 - Web 端可以新增后端接口，但不要破坏小程序原接口。
-- 当前迁移不改数据库表；来访/咨询师看板已并入 `/api/mini/admin/boards/patients|counselors`，与小程序管理端同一前缀。操作记录、数据导入若仍走 `/api/web/admin/*`，需单独落地实现。
+- EAP 量表报告、扫码和审计使用三张独立表，必须按
+  [量表数据库设计](../docs/assessment/assessment-db-design.md) 对每个目标库执行受控迁移；
+  普通后端启动不会创建这三张表。
+- 来访/咨询师看板已并入 `/api/mini/admin/boards/patients|counselors`，与小程序管理端同一前缀。操作记录、数据导入若仍走 `/api/web/admin/*`，需单独落地实现。

@@ -6,7 +6,7 @@ PUT  /api/mini/assistant/tasks/{id}          更新任务状态
 GET  /api/mini/assistant/risk-alerts         风险提醒列表
 POST /api/mini/assistant/risk-alerts         新建风险提醒
 PUT  /api/mini/assistant/risk-alerts/{id}    处理风险提醒
-GET  /api/mini/assistant/schedule-overview   排期总览（各咨询师近期排班概览）
+GET  /api/mini/assistant/schedule-overview   排期总览（各咨询师近期排期概览）
 """
 
 from datetime import datetime
@@ -242,7 +242,7 @@ def handle_risk_alert(
 
 
 # ---------------------------------------------------------------------------
-# 排期总览（简单聚合所有咨询师的近期排班）
+# 排期总览（简单聚合所有咨询师的近期排期）
 # ---------------------------------------------------------------------------
 
 @router.get("/schedule-overview", summary="排期总览")

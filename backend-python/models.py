@@ -8,9 +8,37 @@ SQLAlchemy ORM 模型。
   避免出现 "???" 乱码。
 """
 
-from sqlalchemy import Column, Integer, String, DateTime, BigInteger, Boolean, Unicode, UnicodeText, UniqueConstraint
+from datetime import datetime, timezone
+
+from sqlalchemy import (
+    CHAR,
+    BigInteger,
+    Boolean,
+    CheckConstraint,
+    Column,
+    DateTime,
+    Index,
+    Integer,
+    PrimaryKeyConstraint,
+    String,
+    Unicode,
+    UnicodeText,
+    UniqueConstraint,
+    text,
+)
+from sqlalchemy.dialects.mssql import DATETIME2
 from sqlalchemy.sql import func
 from database import Base
+
+
+# SQL Server 上量表域统一落 DATETIME2(0)；SQLite 单元测试仍使用通用 DateTime。
+ASSESSMENT_DATETIME = DateTime().with_variant(DATETIME2(precision=0), "mssql")
+# SQLite 只有精确的 INTEGER PRIMARY KEY 才支持自增；生产 SQL Server 仍使用 BIGINT。
+ASSESSMENT_BIGINT = BigInteger().with_variant(Integer, "sqlite")
+
+
+def assessment_utc_now() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class AppAccount(Base):
@@ -38,6 +66,7 @@ class AppAccount(Base):
     CharityPricingNegotiatedAt = Column(DateTime, nullable=True)
     IsContractSigned = Column(Boolean, nullable=False, default=False, server_default="0")
     BoundCounselorId = Column(Integer, nullable=True)
+    BoundCounselorChangedAt = Column(DateTime, nullable=True)
     AccessRevokedAt = Column(DateTime, nullable=True)
     IsActive = Column(Boolean, nullable=False, default=True, server_default="1")
     DeletedAt = Column(DateTime, nullable=True)
@@ -418,6 +447,9 @@ class AppLeaveRequest(Base):
     CounselorId = Column(Integer, nullable=False)
     Reason = Column(UnicodeText, nullable=False)
     Status = Column(String(20), nullable=False, default="PENDING")
+    RejectReason = Column(UnicodeText, nullable=True)
+    ReviewedBy = Column(Integer, nullable=True)
+    ReviewedAt = Column(DateTime, nullable=True)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
     UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
 
@@ -430,6 +462,7 @@ class AppScheduleCancelLog(Base):
     ScheduleId = Column(Integer, nullable=False)
     CounselorId = Column(Integer, nullable=False)
     ConsultationId = Column(Integer, nullable=True)
+    LeaveRequestId = Column(Integer, nullable=True)
     ScreenshotUrl = Column(Unicode(500), nullable=False)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
 
@@ -472,6 +505,161 @@ class AppPsychScaleResult(Base):
     Answers = Column(UnicodeText, nullable=False)
     Total = Column(Integer, nullable=False)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
+
+
+class AppAssessmentReport(Base):
+    """EAP 用户量表报告及提交时的不可变报告快照。"""
+
+    __tablename__ = "AppAssessmentReport"
+    __table_args__ = (
+        PrimaryKeyConstraint("Id", name="PK_AppAssessmentReport"),
+        UniqueConstraint("PublicId", name="UQ_AppAssessmentReport_PublicId"),
+        UniqueConstraint(
+            "AccountId",
+            "ClientSubmissionId",
+            name="UQ_AppAssessmentReport_Account_Submission",
+        ),
+        CheckConstraint(
+            "[Category] IN ('professional', 'fun')",
+            name="CK_AppAssessmentReport_Category",
+        ),
+        CheckConstraint(
+            "[EntrySource] IN ('web', 'mini-webview', 'qr', 'direct')",
+            name="CK_AppAssessmentReport_EntrySource",
+        ),
+        CheckConstraint(
+            "[AssessmentVersion] >= 1",
+            name="CK_AppAssessmentReport_AssessmentVersion",
+        ),
+        Index(
+            "IX_AppAssessmentReport_Account_Completed",
+            "AccountId",
+            "DeletedAt",
+            "CompletedAt",
+        ),
+        Index(
+            "IX_AppAssessmentReport_Assessment_Completed",
+            "AssessmentId",
+            "AssessmentVersion",
+            "DeletedAt",
+            "CompletedAt",
+        ),
+        Index(
+            "IX_AppAssessmentReport_Share_Completed",
+            "ShareCode",
+            "CompletedAt",
+        ),
+    )
+
+    Id = Column(ASSESSMENT_BIGINT, primary_key=True, autoincrement=True)
+    PublicId = Column(String(40), nullable=False)
+    AccountId = Column(Integer, nullable=False)
+    ClientSubmissionId = Column(String(64), nullable=False)
+    AssessmentId = Column(String(80), nullable=False)
+    AssessmentVersion = Column(Integer, nullable=False)
+    Category = Column(String(20), nullable=False)
+    AssessmentTitle = Column(Unicode(120), nullable=False)
+    ScoringType = Column(String(20), nullable=False)
+    EntrySource = Column(String(20), nullable=False)
+    ShareCode = Column(String(120), nullable=True)
+    ConsentVersion = Column(String(50), nullable=False)
+    ConsentAcceptedAt = Column(ASSESSMENT_DATETIME, nullable=False)
+    DemographicAnswers = Column(Unicode(), nullable=True)
+    Answers = Column(Unicode(), nullable=True)
+    ResultJson = Column(Unicode(), nullable=True)
+    ResultSummary = Column(Unicode(), nullable=True)
+    ReportSnapshot = Column(Unicode(), nullable=True)
+    SnapshotSha256 = Column(CHAR(64), nullable=True)
+    CompletedAt = Column(ASSESSMENT_DATETIME, nullable=False)
+    DeletedAt = Column(ASSESSMENT_DATETIME, nullable=True)
+    CreatedAt = Column(
+        ASSESSMENT_DATETIME,
+        default=assessment_utc_now,
+        server_default=text("SYSUTCDATETIME()"),
+        nullable=False,
+    )
+
+
+class AppAssessmentShareScan(Base):
+    """EAP 静态分享二维码的匿名扫码事件。"""
+
+    __tablename__ = "AppAssessmentShareScan"
+    __table_args__ = (
+        PrimaryKeyConstraint("Id", name="PK_AppAssessmentShareScan"),
+        Index("IX_AppAssessmentShareScan_Share_Time", "ShareCode", "ScannedAt"),
+        Index(
+            "IX_AppAssessmentShareScan_Assessment_Time",
+            "AssessmentId",
+            "ScannedAt",
+        ),
+        Index("IX_AppAssessmentShareScan_Visitor_Time", "VisitorHash", "ScannedAt"),
+    )
+
+    Id = Column(ASSESSMENT_BIGINT, primary_key=True, autoincrement=True)
+    ShareCode = Column(String(120), nullable=False)
+    AssessmentId = Column(String(80), nullable=False)
+    VisitorHash = Column(CHAR(64), nullable=False)
+    ScannedAt = Column(
+        ASSESSMENT_DATETIME,
+        default=assessment_utc_now,
+        server_default=text("SYSUTCDATETIME()"),
+        nullable=False,
+    )
+
+
+class AppAssessmentAuditLog(Base):
+    """EAP 报告访问、删除及量表定义变更的内容无关审计日志。"""
+
+    __tablename__ = "AppAssessmentAuditLog"
+    __table_args__ = (
+        PrimaryKeyConstraint("Id", name="PK_AppAssessmentAuditLog"),
+        CheckConstraint(
+            "[TargetType] IN ('REPORT', 'ASSESSMENT')",
+            name="CK_AppAssessmentAuditLog_TargetType",
+        ),
+        CheckConstraint(
+            "[Outcome] IN ('PENDING', 'SUCCEEDED', 'FAILED')",
+            name="CK_AppAssessmentAuditLog_Outcome",
+        ),
+        CheckConstraint(
+            "[AssessmentVersion] IS NULL OR [AssessmentVersion] >= 1",
+            name="CK_AppAssessmentAuditLog_AssessmentVersion",
+        ),
+        Index(
+            "IX_AppAssessmentAuditLog_Actor_Time",
+            "ActorAccountId",
+            "CreatedAt",
+        ),
+        Index(
+            "IX_AppAssessmentAuditLog_Target_Time",
+            "TargetType",
+            "TargetPublicId",
+            "CreatedAt",
+        ),
+        Index(
+            "IX_AppAssessmentAuditLog_Assessment_Time",
+            "AssessmentId",
+            "CreatedAt",
+        ),
+    )
+
+    Id = Column(ASSESSMENT_BIGINT, primary_key=True, autoincrement=True)
+    RequestId = Column(String(64), nullable=True)
+    ActorAccountId = Column(Integer, nullable=True)
+    ActorRole = Column(String(20), nullable=True)
+    Action = Column(String(50), nullable=False)
+    TargetType = Column(String(30), nullable=False)
+    TargetPublicId = Column(String(40), nullable=True)
+    AssessmentId = Column(String(80), nullable=True)
+    AssessmentVersion = Column(Integer, nullable=True)
+    Outcome = Column(String(20), nullable=False)
+    MetadataJson = Column(Unicode(2000), nullable=True)
+    CreatedAt = Column(
+        ASSESSMENT_DATETIME,
+        default=assessment_utc_now,
+        server_default=text("SYSUTCDATETIME()"),
+        nullable=False,
+    )
 
 
 class AppFeedback(Base):

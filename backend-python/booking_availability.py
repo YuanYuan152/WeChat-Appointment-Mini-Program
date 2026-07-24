@@ -52,7 +52,7 @@ def query_counselor_schedules_for_booking(
     db: Session,
     counselor_id: int,
 ) -> List[AppSchedule]:
-    """查询滚动窗口内对外展示的排班（排除已取消）。"""
+    """查询滚动窗口内对外展示的排期（排除已取消）。"""
     start_bound, end_bound = rolling_window_datetime_bounds()
     return (
         db.query(AppSchedule)
@@ -72,13 +72,16 @@ def schedules_to_booking_time_slots(
     schedules: List[AppSchedule],
     *,
     billing_cents: int = 0,
+    needs_negotiation: bool = False,
+    price_label: str | None = None,
     price_negotiation: bool = False,
 ) -> Tuple[List[dict], Set[str]]:
     """
     将 AppSchedule 转为预约页 timeSlots。
     必须使用与工作台相同的 resolve_schedule_display 判定状态。
     """
-    price = None if price_negotiation else float(billing_cents or 0) / 100
+    negotiation = bool(needs_negotiation or price_negotiation)
+    price = None if negotiation else float(billing_cents or 0) / 100
     schedule_ids = [s.Id for s in schedules]
     cons_map = _consultations_by_schedule(db, schedule_ids)
     pending_map = pending_proxy_orders_for_schedules(db, schedule_ids)
@@ -100,8 +103,8 @@ def schedules_to_booking_time_slots(
 
         center_ids.add(center_id)
         if display == DISPLAY_OPEN:
-            slot_status = "AVAILABLE"
-            is_bookable = not price_negotiation
+            slot_status = "NEGOTIATION" if needs_negotiation else "AVAILABLE"
+            is_bookable = not negotiation
         elif display == DISPLAY_PENDING_PAYMENT:
             slot_status = "PENDING_PAYMENT"
             is_bookable = False
@@ -120,8 +123,9 @@ def schedules_to_booking_time_slots(
             "endHH": s.EndTime.strftime("%H:%M"),
             "week": f"周{'一二三四五六日'[s.StartTime.weekday()]}",
             "Price": price,
+            "priceLabel": price_label or ("议价" if negotiation else f"￥{price:g}"),
+            "needsNegotiation": needs_negotiation,
             "priceNegotiation": price_negotiation,
-            "priceLabel": "议价" if price_negotiation else None,
             "maxSign": 1,
             "numSign": 0 if is_bookable else 1,
             "status": slot_status,
@@ -139,6 +143,8 @@ def counselor_booking_time_slots(
     counselor_id: int,
     *,
     billing_cents: int = 0,
+    needs_negotiation: bool = False,
+    price_label: str | None = None,
     price_negotiation: bool = False,
 ) -> Tuple[List[dict], Set[str]]:
     """咨询师可预约时段：读 AppSchedule，规则与工作台排期展示一致。"""
@@ -147,5 +153,7 @@ def counselor_booking_time_slots(
         db,
         schedules,
         billing_cents=billing_cents,
+        needs_negotiation=needs_negotiation,
+        price_label=price_label,
         price_negotiation=price_negotiation,
     )

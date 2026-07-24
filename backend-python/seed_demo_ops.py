@@ -8,7 +8,7 @@
 写入:
   - 运营账号 demo-openid-ops（13800000005，与 auth.py 对齐）
   - 示例用户（13800000020+，避免与来访者/咨询师手机号冲突）
-  - Banner / 活动 / 文章等内容运营数据
+  - Banner / 活动 / 文章等运营管理数据
 """
 
 from datetime import timedelta

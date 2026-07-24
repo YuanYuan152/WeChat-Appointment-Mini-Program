@@ -1,0 +1,173 @@
+{
+  "schemaVersion": 1,
+  "id": "wellbeing-demo",
+  "version": 1,
+  "status": "draft",
+  "category": "professional",
+  "title": "心理状态多维度示例量表",
+  "subtitle": "用于演示人口学问题、维度计分和报告区间",
+  "description": "该文件仅用于协议校验和开发联调，不是正式心理测评工具。",
+  "instructions": "请根据最近一周的实际感受选择最符合的选项。",
+  "features": "示例量表分别计算情绪状态和精力状态。",
+  "cover": "/static/assessments/wellbeing-demo.jpg",
+  "duration": 3,
+  "sortOrder": 100,
+  "demographicQuestions": [
+    {
+      "id": "gender",
+      "text": "您的性别",
+      "inputType": "single",
+      "required": true,
+      "options": [
+        {
+          "id": "female",
+          "text": "女",
+          "value": "female"
+        },
+        {
+          "id": "male",
+          "text": "男",
+          "value": "male"
+        },
+        {
+          "id": "undisclosed",
+          "text": "不便透露",
+          "value": "undisclosed"
+        }
+      ]
+    },
+    {
+      "id": "age",
+      "text": "您的年龄",
+      "helpText": "请输入周岁",
+      "inputType": "number",
+      "required": true,
+      "validation": {
+        "min": 18,
+        "max": 120
+      }
+    }
+  ],
+  "scoringType": "dimension",
+  "scoringPreset": "generic-dimension-v1",
+  "questions": [
+    {
+      "id": "q1",
+      "text": "我能够保持稳定的情绪",
+      "required": true,
+      "options": [
+        {
+          "id": "q1-a",
+          "text": "不符合",
+          "value": 0
+        },
+        {
+          "id": "q1-b",
+          "text": "有时符合",
+          "value": 1
+        },
+        {
+          "id": "q1-c",
+          "text": "非常符合",
+          "value": 2
+        }
+      ]
+    },
+    {
+      "id": "q2",
+      "text": "遇到压力时我能够逐渐恢复",
+      "required": true,
+      "options": [
+        {
+          "id": "q2-a",
+          "text": "不符合",
+          "value": 0
+        },
+        {
+          "id": "q2-b",
+          "text": "有时符合",
+          "value": 1
+        },
+        {
+          "id": "q2-c",
+          "text": "非常符合",
+          "value": 2
+        }
+      ]
+    },
+    {
+      "id": "q3",
+      "text": "我有足够精力完成日常事务",
+      "required": true,
+      "options": [
+        {
+          "id": "q3-a",
+          "text": "不符合",
+          "value": 0
+        },
+        {
+          "id": "q3-b",
+          "text": "有时符合",
+          "value": 1
+        },
+        {
+          "id": "q3-c",
+          "text": "非常符合",
+          "value": 2
+        }
+      ]
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "emotion",
+      "title": "情绪状态",
+      "intro": "反映近期情绪稳定和压力恢复情况。",
+      "questionIds": ["q1", "q2"],
+      "reverseQuestionIds": [],
+      "aggregate": "sum",
+      "scoreRanges": [
+        {
+          "min": 0,
+          "max": 1,
+          "level": "需要关注",
+          "description": "近期情绪状态可能受到一定影响。",
+          "suggestions": ["保持规律作息", "必要时寻求专业支持"]
+        },
+        {
+          "min": 2,
+          "max": 4,
+          "level": "状态平稳",
+          "description": "近期情绪状态整体较为平稳。",
+          "suggestions": ["继续保持当前的生活节奏"]
+        }
+      ]
+    },
+    {
+      "id": "energy",
+      "title": "精力状态",
+      "intro": "反映近期完成日常事务的精力感受。",
+      "questionIds": ["q3"],
+      "reverseQuestionIds": [],
+      "aggregate": "sum",
+      "scoreRanges": [
+        {
+          "min": 0,
+          "max": 0,
+          "level": "需要休息",
+          "description": "近期精力可能不足。",
+          "suggestions": ["优先保证休息和睡眠"]
+        },
+        {
+          "min": 1,
+          "max": 2,
+          "level": "精力尚可",
+          "description": "近期精力基本能够支持日常事务。",
+          "suggestions": ["保持适度运动和规律睡眠"]
+        }
+      ]
+    }
+  ],
+  "reportIntro": "以下结果仅反映您填写时的主观感受。",
+  "disclaimer": "本示例结果仅供协议演示，不能替代专业诊断。"
+}

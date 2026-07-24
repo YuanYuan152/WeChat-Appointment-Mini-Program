@@ -1,7 +1,8 @@
 """咨询师请假：管理员列表、详情与审核。"""
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional, Tuple
 
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from consultation_cancel import refund_order_for_counselor_leave
@@ -24,11 +25,30 @@ from schedule_meta import (
 )
 
 
+def acquire_leave_schedule_lock(db: Session, schedule_id: int) -> None:
+    """串行化同一排期的请假提交和审核，避免重复申请或重复退款。"""
+    bind = db.get_bind()
+    if not bind or bind.dialect.name != "mssql":
+        return
+    result = db.execute(
+        text(
+            "SET NOCOUNT ON; DECLARE @result int; "
+            "EXEC @result = sys.sp_getapplock "
+            "@Resource=:resource, @LockMode='Exclusive', "
+            "@LockOwner='Transaction', @LockTimeout=10000; "
+            "SELECT @result"
+        ),
+        {"resource": f"leave:schedule:{int(schedule_id)}"},
+    ).scalar()
+    if result is None or int(result) < 0:
+        raise ValueError("该时段的请假申请正在处理，请稍后重试")
+
+
 def _account_name(db: Session, account_id: int) -> str:
     acc = db.query(AppAccount).filter(AppAccount.Id == account_id).first()
     if not acc:
-        return f"用户#{account_id}"
-    return acc.RealName or acc.Nickname or acc.Mobile or f"用户#{account_id}"
+        return "未留姓名用户"
+    return acc.RealName or acc.Nickname or acc.Mobile or "未留姓名用户"
 
 
 def _counselor_name(db: Session, counselor_id: int) -> str:
@@ -60,34 +80,57 @@ def _affected_patients(
     db: Session,
     schedule: Optional[AppSchedule],
     consultation: Optional[AppConsultation],
+    leave_status: Optional[str] = None,
 ) -> List[dict]:
     if not consultation:
         return []
     patient = db.query(AppAccount).filter(AppAccount.Id == consultation.PatientId).first()
+    from patient_contract_service import patient_contract_extras
+
+    patient_contract_tag = patient_contract_extras(db, patient).get("contractTag") if patient else None
     note = consultation.Note or (schedule.Note if schedule else None)
     loc = _location(db, note, status=schedule.Status if schedule else "BOOKED")
     refunded = False
     if consultation.OrderId:
         order = db.query(AppOrder).filter(AppOrder.Id == consultation.OrderId).first()
         refunded = bool(order and order.Status == "REFUNDED")
+    if refunded:
+        refund_text = "款项已原路全额退回"
+    elif leave_status == "REJECTED":
+        refund_text = "审核未通过，款项不作变更"
+    elif leave_status == "APPROVED":
+        refund_text = "审核已通过，款项将原路全额退回"
+    else:
+        refund_text = "审核通过后款项将原路全额退回"
     return [{
         "consultationId": consultation.Id,
         "patientName": _account_name(db, consultation.PatientId),
+        "patientContractTag": patient_contract_tag,
         "patientPhone": patient.Mobile if patient else None,
         "emergencyContact": patient.EmergencyContact if patient else None,
         "emergencyPhone": patient.EmergencyPhone if patient else None,
         "startTime": consultation.StartTime or (schedule.StartTime if schedule else None),
         "endTime": consultation.EndTime or (schedule.EndTime if schedule else None),
         "location": loc,
-        "refundText": "款项将原路退回" if refunded else "按规定不予退款",
+        "refundText": refund_text,
     }]
 
 
 def build_leave_request_out(db: Session, leave: AppLeaveRequest) -> dict:
-    schedule = db.query(AppSchedule).filter(AppSchedule.Id == leave.ScheduleId).first()
+    schedule = (
+        db.query(AppSchedule)
+        .filter(
+            AppSchedule.Id == leave.ScheduleId,
+            AppSchedule.CounselorId == leave.CounselorId,
+        )
+        .first()
+    )
     consultation = (
         db.query(AppConsultation)
-        .filter(AppConsultation.ScheduleId == leave.ScheduleId)
+        .filter(
+            AppConsultation.ScheduleId == leave.ScheduleId,
+            AppConsultation.CounselorId == leave.CounselorId,
+        )
         .order_by(AppConsultation.CreatedAt.desc())
         .first()
     )
@@ -96,10 +139,26 @@ def build_leave_request_out(db: Session, leave: AppLeaveRequest) -> dict:
         .filter(
             AppScheduleCancelLog.ScheduleId == leave.ScheduleId,
             AppScheduleCancelLog.CounselorId == leave.CounselorId,
+            AppScheduleCancelLog.LeaveRequestId == leave.Id,
         )
         .order_by(AppScheduleCancelLog.CreatedAt.desc())
         .first()
     )
+    if not cancel_log and leave.CreatedAt:
+        # 兼容存量记录：旧表没有 LeaveRequestId，仅在申请创建时间附近匹配凭证，
+        # 避免同一排期驳回后再次提交时串到其他申请的截图。
+        cancel_log = (
+            db.query(AppScheduleCancelLog)
+            .filter(
+                AppScheduleCancelLog.ScheduleId == leave.ScheduleId,
+                AppScheduleCancelLog.CounselorId == leave.CounselorId,
+                AppScheduleCancelLog.LeaveRequestId.is_(None),
+                AppScheduleCancelLog.CreatedAt >= leave.CreatedAt - timedelta(minutes=10),
+                AppScheduleCancelLog.CreatedAt <= leave.CreatedAt + timedelta(minutes=10),
+            )
+            .order_by(AppScheduleCancelLog.CreatedAt.desc())
+            .first()
+        )
     note = schedule.Note if schedule else None
     return {
         "id": leave.Id,
@@ -108,13 +167,16 @@ def build_leave_request_out(db: Session, leave: AppLeaveRequest) -> dict:
         "counselorName": _counselor_name(db, leave.CounselorId),
         "reason": leave.Reason,
         "status": leave.Status,
+        "rejectReason": getattr(leave, "RejectReason", None),
         "startTime": schedule.StartTime if schedule else None,
         "endTime": schedule.EndTime if schedule else None,
         "location": _location(db, note, status=schedule.Status if schedule else "BOOKED"),
         "screenshotUrl": cancel_log.ScreenshotUrl if cancel_log else None,
-        "affectedPatients": _affected_patients(db, schedule, consultation),
+        "affectedPatients": _affected_patients(db, schedule, consultation, leave.Status),
         "createdAt": leave.CreatedAt,
-        "reviewedAt": leave.UpdatedAt if leave.Status in ("APPROVED", "REJECTED") else None,
+        "reviewedBy": getattr(leave, "ReviewedBy", None),
+        "reviewedAt": getattr(leave, "ReviewedAt", None)
+        or (leave.UpdatedAt if leave.Status in ("APPROVED", "REJECTED") else None),
     }
 
 
@@ -123,12 +185,23 @@ def approve_leave_request(
     leave: AppLeaveRequest,
     admin_id: int,
 ) -> Tuple[str, str]:
+    acquire_leave_schedule_lock(db, leave.ScheduleId)
+    db.refresh(leave)
     if leave.Status != "PENDING":
         raise ValueError("该请假申请已处理，无法重复审核")
 
-    schedule = db.query(AppSchedule).filter(AppSchedule.Id == leave.ScheduleId).first()
+    schedule = (
+        db.query(AppSchedule)
+        .filter(
+            AppSchedule.Id == leave.ScheduleId,
+            AppSchedule.CounselorId == leave.CounselorId,
+        )
+        .first()
+    )
     if not schedule:
-        raise ValueError("关联排班不存在")
+        raise ValueError("关联排期不存在或不属于该咨询师")
+    if schedule.Status != "BOOKED":
+        raise ValueError("关联预约状态已变化，无法通过该请假申请")
 
     consultation = (
         db.query(AppConsultation)
@@ -170,7 +243,27 @@ def approve_leave_request(
 
     now = datetime.utcnow()
     leave.Status = "APPROVED"
+    leave.RejectReason = None
+    leave.ReviewedBy = admin_id
+    leave.ReviewedAt = now
     leave.UpdatedAt = now
+
+    sibling_requests = (
+        db.query(AppLeaveRequest)
+        .filter(
+            AppLeaveRequest.ScheduleId == leave.ScheduleId,
+            AppLeaveRequest.CounselorId == leave.CounselorId,
+            AppLeaveRequest.Id != leave.Id,
+            AppLeaveRequest.Status == "PENDING",
+        )
+        .all()
+    )
+    for sibling in sibling_requests:
+        sibling.Status = "REJECTED"
+        sibling.RejectReason = "同一时段的请假申请已处理"
+        sibling.ReviewedBy = admin_id
+        sibling.ReviewedAt = now
+        sibling.UpdatedAt = now
 
     from counselor_message_service import notify_counselor_leave_success
 
@@ -185,9 +278,49 @@ def approve_leave_request(
     return "APPROVED", "请假已通过，相关预约已取消"
 
 
-def reject_leave_request(db: Session, leave: AppLeaveRequest, admin_id: int) -> None:
+def reject_leave_request(
+    db: Session,
+    leave: AppLeaveRequest,
+    admin_id: int,
+    reject_reason: Optional[str] = None,
+) -> None:
+    acquire_leave_schedule_lock(db, leave.ScheduleId)
+    db.refresh(leave)
     if leave.Status != "PENDING":
         raise ValueError("该请假申请已处理，无法重复审核")
     now = datetime.utcnow()
     leave.Status = "REJECTED"
+    leave.RejectReason = (reject_reason or "请假申请未通过审核").strip()
+    leave.ReviewedBy = admin_id
+    leave.ReviewedAt = now
     leave.UpdatedAt = now
+
+    schedule = (
+        db.query(AppSchedule)
+        .filter(
+            AppSchedule.Id == leave.ScheduleId,
+            AppSchedule.CounselorId == leave.CounselorId,
+        )
+        .first()
+    )
+    if schedule:
+        consultation = (
+            db.query(AppConsultation)
+            .filter(
+                AppConsultation.ScheduleId == leave.ScheduleId,
+                AppConsultation.CounselorId == leave.CounselorId,
+            )
+            .order_by(AppConsultation.CreatedAt.desc())
+            .first()
+        )
+        from counselor_message_service import notify_counselor_leave_rejected
+
+        notify_counselor_leave_rejected(
+            db,
+            counselor_id=leave.CounselorId,
+            schedule=schedule,
+            leave_reason=leave.Reason,
+            leave_request_id=leave.Id,
+            reject_reason=leave.RejectReason,
+            consultation=consultation,
+        )

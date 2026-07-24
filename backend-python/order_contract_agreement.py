@@ -58,7 +58,7 @@ def is_signed_with_counselor(
     account: AppAccount,
     counselor_id: int,
 ) -> bool:
-    """来访与指定咨询师是否已签约（仅看绑定 + IsContractSigned，换绑后须重新签约）。"""
+    """来访是否已与当前绑定咨询师完成签约。"""
     bound_id = getattr(account, "BoundCounselorId", None)
     if not bound_id or int(bound_id) != int(counselor_id):
         return False
@@ -97,7 +97,12 @@ def attach_contract_agreement_to_order(
     if order_has_contract_agreement(order):
         return
     preset = getattr(order, "ProxyAgreementIsAdult", None)
-    effective_adult = is_adult if is_adult is not None else preset
+    if preset is not None:
+        if is_adult is not None and bool(is_adult) != bool(preset):
+            raise ValueError("协议类型与助理推送的订单不一致，请刷新订单后重试")
+        effective_adult = bool(preset)
+    else:
+        effective_adult = is_adult
     url = (signature_url or "").strip()
     if effective_adult is None or not url:
         raise ValueError("请先签署心理咨询协议")

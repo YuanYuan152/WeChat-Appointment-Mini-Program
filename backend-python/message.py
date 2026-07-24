@@ -1,18 +1,22 @@
 """站内消息与微信订阅消息（mock 可上线前替换真实模板）。"""
 
+import hmac
 import json
+import os
 from datetime import datetime
 from typing import List, Optional
 
 from app_time import china_now
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from message_enrich import enrich_message
 from message_filters import apply_message_category, apply_message_search, apply_admin_ops_inbox_scope
-from auth import get_current_account
+from auth import get_current_account, get_optional_account
+from config import settings
 from database import get_db
+from staff_roles import account_has_staff_workbench
 from models import (
     AppAccount,
     AppMessage,
@@ -22,6 +26,33 @@ from models import (
 )
 
 router = APIRouter(prefix="/api/mini/message", tags=["Message"])
+
+
+def _configured_message_internal_token() -> str:
+    """定时任务专用密钥；未配置时绝不退化为匿名放行。"""
+    return (
+        os.getenv("MESSAGE_INTERNAL_TOKEN")
+        or os.getenv("LXXL_MESSAGE_INTERNAL_TOKEN")
+        or settings.MESSAGE_INTERNAL_TOKEN
+        or ""
+    ).strip()
+
+
+def require_message_internal_or_staff(
+    x_internal_token: Optional[str] = Header(None, alias="X-Internal-Token"),
+    current_account: Optional[AppAccount] = Depends(get_optional_account),
+    db: Session = Depends(get_db),
+) -> Optional[AppAccount]:
+    """允许后台工作人员，或携带已配置密钥的真实定时任务调用。"""
+    configured = _configured_message_internal_token()
+    supplied = (x_internal_token or "").strip()
+    if configured and supplied and hmac.compare_digest(configured, supplied):
+        return None
+    if current_account and account_has_staff_workbench(db, current_account.Id):
+        return current_account
+    if current_account:
+        raise HTTPException(status_code=403, detail="无管理工作台权限")
+    raise HTTPException(status_code=401, detail="未提供有效的内部调用凭证")
 
 
 class MessageOut(BaseModel):
@@ -245,6 +276,7 @@ def subscribe_message(
 @router.post("/system", response_model=MessageOut, summary="创建系统消息（内部/运营调试）")
 def create_system_message(
     body: CreateMessageRequest,
+    _caller: Optional[AppAccount] = Depends(require_message_internal_or_staff),
     db: Session = Depends(get_db),
 ):
     msg = create_message(
@@ -262,7 +294,11 @@ def create_system_message(
 
 
 @router.post("/remind-tasks", summary="创建预约提醒任务")
-def create_remind_task(body: CreateRemindTaskRequest, db: Session = Depends(get_db)):
+def create_remind_task(
+    body: CreateRemindTaskRequest,
+    _caller: Optional[AppAccount] = Depends(require_message_internal_or_staff),
+    db: Session = Depends(get_db),
+):
     task = AppRemindTask(
         AccountId=body.account_id,
         EventKey=body.event_key,
@@ -279,7 +315,10 @@ def create_remind_task(body: CreateRemindTaskRequest, db: Session = Depends(get_
 
 
 @router.post("/remind-tasks/process", summary="处理到期提醒任务（可由定时任务调用）")
-def process_due_reminders(db: Session = Depends(get_db)):
+def process_due_reminders(
+    _caller: Optional[AppAccount] = Depends(require_message_internal_or_staff),
+    db: Session = Depends(get_db),
+):
     from consultation_status_service import (
         AUTO_DONE_EVENT,
         expire_due_consultations,

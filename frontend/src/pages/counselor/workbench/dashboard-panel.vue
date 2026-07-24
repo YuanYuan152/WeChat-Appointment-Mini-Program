@@ -20,7 +20,7 @@
       <view class="intro-card">
         <text class="intro-title">咨询师介绍</text>
         <text class="intro-notice">对外展示资料由平台统一维护</text>
-        <text class="intro-text">{{ profileHeader.introduce || '暂无介绍，如需更新请联系运营人员' }}</text>
+        <text class="intro-text">{{ profileHeader.introduce || '暂无介绍，如需更新请联系运营' }}</text>
       </view>
       <view class="section-head">
         <text class="section-title">个人看板</text>

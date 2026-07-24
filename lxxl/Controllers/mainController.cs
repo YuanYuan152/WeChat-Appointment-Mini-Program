@@ -135,7 +135,7 @@ namespace lxxl.Controllers
                     o.Name,
                     time = o.CreateTime.ToString("yyyy-MM-dd HH:mm:ss"),
                     o.Tel,
-                    type = o.Type == 1 ? "超级管理员" : o.Type == 2 ? "咨询师" : o.Type == 3 ? "咨询助理" : o.Type == 4 ? "市场运营" : "其他"
+                    type = o.Type == 1 ? "超级管理员" : o.Type == 2 ? "咨询师" : o.Type == 3 ? "咨询助理" : o.Type == 4 ? "运营" : "其他"
                 }).ToList();
                 return Json(new { code = 0, data = listdb, msg = "获取成功", count = count }, JsonRequestBehavior.AllowGet);
             }

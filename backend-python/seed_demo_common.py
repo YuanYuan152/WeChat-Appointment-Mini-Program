@@ -1,5 +1,5 @@
 """
-seed_demo_*.py 公共常量与排班 Note 规则（与 auth.py / schedule_meta.py 对齐）。
+seed_demo_*.py 公共常量与排期 Note 规则（与 auth.py / schedule_meta.py 对齐）。
 
 主入口：python seed_demo_data.py（增量写入，不清表）
 单角色脚本：seed_demo_counselor.py 等（会 clear_all_tables，仅用于隔离测试）
@@ -782,7 +782,7 @@ def demo_schedule_note(
     room: Optional[str] = None,
 ) -> str:
     """
-    构建排班/咨询单 Note：
+    构建排期/咨询单 Note：
     - AVAILABLE：center + 可选 pref（视频咨询无 pref）
     - BOOKED：center + room（视频咨询无 room，模拟付款后占用咨询室）
     """
@@ -804,7 +804,7 @@ def _slot_start_from_offset(now: datetime, offset: timedelta) -> datetime:
 
 
 # ---------------------------------------------------------------------------
-# 账号与排班写入（seed_demo_data 与各单角色脚本共用）
+# 账号与排期写入（seed_demo_data 与各单角色脚本共用）
 # ---------------------------------------------------------------------------
 
 def get_or_create_demo_patient(db: Session, data: dict) -> AppAccount:
