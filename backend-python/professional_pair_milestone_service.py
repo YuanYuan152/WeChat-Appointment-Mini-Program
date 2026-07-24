@@ -99,12 +99,13 @@ def maybe_notify_professional_pair_30th_booking(
 
     title = "正价咨询第30次预约"
     summary = (
-        f"{counselor_name}咨询师和{patient_name}来访即将开始第三十次预约，"
+        f"{counselor_name}咨询师和{patient_label}来访即将开始第三十次预约，"
         f"请提示咨询师是否要调整抽成比例"
     )
     detail: Dict[str, Any] = {
         "patientId": patient_id,
         "patientName": patient_name,
+        "patientContractTag": patient_tag,
         "patientPhone": (patient.Mobile or "") if patient else "",
         "counselorId": counselor_id,
         "counselorName": counselor_name,

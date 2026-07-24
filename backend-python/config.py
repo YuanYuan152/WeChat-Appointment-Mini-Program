@@ -36,11 +36,29 @@ class Settings(BaseSettings):
 
     # Server base URL (used for building absolute file URLs)
     BASE_URL: str = "http://localhost:8000"
+    # 通用上传与量表图片使用独立的可持久化目录；留空时使用仓库内开发目录。
+    UPLOAD_DIR: str = ""
+    ASSESSMENT_ASSET_DIR: str = ""
+
+    # EAP 量表运行时 JSON。留空时使用 backend-python/runtime/assessment-data；
+    # 测试/生产环境应通过环境变量指向独立持久化目录。
+    ASSESSMENT_DATA_DIR: str = ""
+    # 首次初始化时读取的旧 EAP JSON 目录。留空时自动定位仓库内 EAP_front_site/src/data。
+    ASSESSMENT_SEED_DATA_DIR: str = ""
+    # 专业量表提交时必须声明当前隐私协议版本；协议实质变更时同步提升。
+    ASSESSMENT_CONSENT_VERSION: str = "2026-01"
+    # EAP 静态分享码独立签名密钥。测试/生产必须配置至少 32 个字符，禁止复用 JWT 密钥。
+    ASSESSMENT_SHARE_SECRET: str = ""
+    # 扫码成功后跳转到 EAP 量表页；各环境显式配置为对应 EAP 站点根地址。
+    ASSESSMENT_FRONTEND_BASE_URL: str = "http://localhost:3000"
     
     # JWT configuration
     JWT_SECRET: str = "your-super-secret-key-change-it-in-production"
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRATION_HOURS: int = 24 * 7
+
+    # 内部消息/提醒定时任务调用密钥；空值表示仅允许已登录后台工作人员。
+    MESSAGE_INTERNAL_TOKEN: str = ""
 
     # Web SMS (官网注册登录)
     SMS_MOCK: bool = True

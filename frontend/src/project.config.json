@@ -2,7 +2,7 @@
   "description": "微信小程序项目配置（uni-app 编译时会合并到 dist/dev|build/mp-weixin）",
   "compileType": "miniprogram",
   "projectname": "连心心理",
-  "appid": "wx9026409e86a6e43c",
+  "appid": "touristappid",
   "libVersion": "3.5.7",
   "setting": {
     "urlCheck": false,

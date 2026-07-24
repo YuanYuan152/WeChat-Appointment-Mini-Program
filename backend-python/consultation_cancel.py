@@ -1,4 +1,4 @@
-"""来访者取消咨询：24 小时规则与排班释放。"""
+"""来访者取消咨询：24 小时规则与排期释放。"""
 from datetime import datetime
 from typing import Optional, Tuple
 

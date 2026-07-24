@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "id": "weekend-style-demo",
+  "version": 1,
+  "status": "draft",
+  "category": "fun",
+  "title": "周末风格趣味测试",
+  "subtitle": "看看你偏好的周末节奏",
+  "description": "该文件仅用于匹配型量表协议演示。",
+  "instructions": "请选择最接近你真实想法的选项。",
+  "cover": "/static/assessments/weekend-style-demo.jpg",
+  "duration": 2,
+  "sortOrder": 200,
+  "demographicQuestions": [],
+  "scoringType": "match",
+  "scoringPreset": "generic-match-v1",
+  "questions": [
+    {
+      "id": "q1",
+      "text": "理想的周六上午，你更想做什么？",
+      "required": true,
+      "options": [
+        {
+          "id": "q1-a",
+          "text": "在家安静阅读",
+          "value": 0,
+          "matchTags": {
+            "quiet": 2
+          }
+        },
+        {
+          "id": "q1-b",
+          "text": "约朋友外出活动",
+          "value": 0,
+          "matchTags": {
+            "social": 2
+          }
+        }
+      ]
+    },
+    {
+      "id": "q2",
+      "text": "临时出现一个聚会邀请，你通常会？",
+      "required": true,
+      "options": [
+        {
+          "id": "q2-a",
+          "text": "更倾向按原计划独处",
+          "value": 0,
+          "matchTags": {
+            "quiet": 1
+          }
+        },
+        {
+          "id": "q2-b",
+          "text": "很愿意加入聚会",
+          "value": 0,
+          "matchTags": {
+            "social": 1
+          }
+        }
+      ]
+    }
+  ],
+  "matchResults": [
+    {
+      "id": "quiet",
+      "title": "安静充电型",
+      "description": "你更喜欢通过安静、可控的节奏恢复精力。",
+      "suggestions": ["给自己保留不被打扰的时间"],
+      "image": "/static/assessments/results/quiet.png",
+      "shareText": "我的周末风格是安静充电型"
+    },
+    {
+      "id": "social",
+      "title": "社交活力型",
+      "description": "你更喜欢在交流和共同活动中获得能量。",
+      "suggestions": ["在社交和休息之间保持适合自己的平衡"],
+      "image": "/static/assessments/results/social.png",
+      "shareText": "我的周末风格是社交活力型"
+    }
+  ],
+  "reportIntro": "趣味结果只用于自我探索。",
+  "disclaimer": "本测试仅供娱乐和自我探索，不构成心理诊断。"
+}

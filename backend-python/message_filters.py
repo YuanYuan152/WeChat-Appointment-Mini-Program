@@ -41,7 +41,11 @@ CATEGORY_RELATED_TYPES: dict[str, list[str]] = {
     "appointment_new": ["APPOINTMENT_NEW", "COUNSELOR_APPOINTMENT_NEW"],
     "appointment_cancel": ["APPOINTMENT_CANCEL", "COUNSELOR_APPOINTMENT_CANCEL", "PATIENT_APPOINTMENT_CANCEL"],
     "counselor_leave": ["COUNSELOR_LEAVE"],
-    "leave_submitted": ["COUNSELOR_LEAVE_SUBMITTED", "COUNSELOR_LEAVE_SUCCESS"],
+    "leave_submitted": [
+        "COUNSELOR_LEAVE_SUBMITTED",
+        "COUNSELOR_LEAVE_SUCCESS",
+        "COUNSELOR_LEAVE_REJECTED",
+    ],
     "exemption": ["REFUND_EXEMPTION", "REFUND_EXEMPTION_PENDING"],
     "case_record_amendment": ["CASE_RECORD_AMENDMENT", "CASE_RECORD_AMENDMENT_PENDING", "CASE_RECORD_AMENDMENT_SUBMITTED"],
     "case_record_crisis": ["CASE_RECORD_CRISIS_REPORT"],

@@ -1,4 +1,9 @@
 const PROFESSIONAL_PRIVACY_KEY = "assessment-professional-privacy-accepted";
+export const ASSESSMENT_PRIVACY_VERSION = "2026-01";
+
+function professionalPrivacyKey(accountId: number): string {
+  return `${PROFESSIONAL_PRIVACY_KEY}:${accountId}`;
+}
 
 export const privacyAgreementSections = [
   {
@@ -19,7 +24,7 @@ export const privacyAgreementSections = [
   {
     title: "四、数据存储与访问",
     content:
-      "测评过程中产生的答题进度会保存在您的浏览器本地（localStorage），以便关闭页面后仍可继续作答。我们不会将测评数据共享给无关第三方。",
+      "测评过程中的未完成答题进度会保存在您的浏览器本地，以便关闭页面后继续作答；提交后的正式答案、人口学信息和报告会同步到您的平台账号。经授权的咨询助理、运营人员和管理员可按工作职责查看报告，其中原始答案和人口学信息仅限运营及管理员访问。我们不会将测评数据共享给无关第三方。",
   },
   {
     title: "五、您的权利",
@@ -41,16 +46,56 @@ export const privacyAgreementSections = [
 export const privacyAgreementIntro =
   "欢迎使用连心心理专业测评服务。在您开始专业量表测评前，请仔细阅读以下《隐私保护协议》。我们重视您的隐私，并提醒您测评结果仅供参考。";
 
-/** 专业测评隐私协议：全站只需同意一次（localStorage 持久化） */
+/** 专业测评隐私协议：同一账号只需同意一次（localStorage 持久化） */
 export function isProfessionalAssessmentPrivacyAccepted(
-  _assessmentId?: string
+  accountId?: number | null
 ): boolean {
-  if (typeof window === "undefined") return false;
-  return localStorage.getItem(PROFESSIONAL_PRIVACY_KEY) === "true";
+  if (
+    typeof window === "undefined" ||
+    accountId == null ||
+    !Number.isInteger(accountId)
+  ) {
+    return false;
+  }
+  try {
+    const raw = localStorage.getItem(professionalPrivacyKey(accountId));
+    if (!raw) return false;
+    const accepted = JSON.parse(raw) as {
+      accountId?: number;
+      version?: string;
+      acceptedAt?: string;
+    };
+    return (
+      accepted.accountId === accountId &&
+      accepted.version === ASSESSMENT_PRIVACY_VERSION &&
+      typeof accepted.acceptedAt === "string"
+    );
+  } catch {
+    return false;
+  }
 }
 
 export function acceptProfessionalAssessmentPrivacy(
-  _assessmentId?: string
-): void {
-  localStorage.setItem(PROFESSIONAL_PRIVACY_KEY, "true");
+  accountId?: number | null
+): boolean {
+  if (
+    typeof window === "undefined" ||
+    accountId == null ||
+    !Number.isInteger(accountId)
+  ) {
+    return false;
+  }
+  try {
+    localStorage.setItem(
+      professionalPrivacyKey(accountId),
+      JSON.stringify({
+        accountId,
+        version: ASSESSMENT_PRIVACY_VERSION,
+        acceptedAt: new Date().toISOString(),
+      })
+    );
+    return true;
+  } catch {
+    return false;
+  }
 }

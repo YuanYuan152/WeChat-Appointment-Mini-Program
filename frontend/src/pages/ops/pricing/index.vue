@@ -9,8 +9,10 @@
 
     <view class="rule-card">
       <text class="rule-title">默认基础价</text>
-      <text class="rule-line">· 公益咨询师：¥100（基础价仍为 ¥100 时，来访完成 2 次 ¥100 订单后系统自动 +¥400 调价）</text>
+      <text class="rule-line">· 公益咨询师：前 30 次完成咨询默认 ¥100，第 31 次起显示需议价</text>
       <text class="rule-line">· 专业咨询师：¥600</text>
+      <text class="rule-line">· 默认分成比例：基础价格的 50%</text>
+      <text class="rule-line">· 需议价阶段可为单个来访设置个体调价，设置后该来访按调价后价格预约</text>
       <text class="rule-line">· 默认抽成：基础价格的 50%；可点击「默认抽成」按固定金额或比例调整，保存后对该咨询师全部来访生效</text>
       <text class="rule-line">· 可在下方直接修改各咨询师基础价，修改后对该咨询师全部来访生效</text>
     </view>
@@ -37,6 +39,10 @@
             <text class="type-tag">{{ row.counselorTypeLabel }}</text>
           </view>
           <text class="meta">ID {{ row.counselorId }} · 已咨询来访 {{ row.patientCount }} 人</text>
+          <text v-if="row.counselorType === 'CHARITY'" class="meta">
+            公益完成 {{ row.completedConsultationCount || 0 }}/{{ row.charityNegotiationThreshold || 30 }}
+            <text v-if="row.needsNegotiation" class="negotiation-inline"> · 未个体调价显示需议价</text>
+          </text>
           <view class="base-row">
             <text class="base-label">统一基础价</text>
             <text class="base-value">¥{{ row.basePriceYuan }}</text>
@@ -69,6 +75,7 @@
           />
           <text class="form-hint">修改前：¥{{ editing.basePriceYuan }}</text>
           <text class="form-hint">类型默认：¥{{ editing.defaultBasePriceYuan }}</text>
+          <text class="form-hint">保存后会按当前分成比例同步换算默认分成金额</text>
         </view>
         <view class="modal-btns">
           <button class="modal-btn cancel" @tap="closeEdit">取消</button>
@@ -145,6 +152,10 @@ interface CounselorPricingRow {
   defaultRevenueSharePercent?: number | null
   defaultShareYuan?: number
   patientCount: number
+  completedConsultationCount?: number
+  charityNegotiationThreshold?: number
+  needsNegotiation?: boolean
+  priceLabel?: string
 }
 
 const items = ref<CounselorPricingRow[]>([])
@@ -399,6 +410,11 @@ onShow(reload)
   font-size: 22rpx;
   color: #6B9080;
   line-height: 1.6;
+}
+
+.negotiation-inline {
+  color: #B45309;
+  font-weight: 600;
 }
 
 .toolbar { margin-bottom: 24rpx; }

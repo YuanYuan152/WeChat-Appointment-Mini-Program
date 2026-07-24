@@ -14,7 +14,9 @@ def notify_proxy_order_created(
     patient: AppAccount,
     counselor_id: int,
     staff_account_id: int,
+    notify_target_counselor: bool = True,
 ) -> None:
+    from counselor_message_service import notify_counselor_proxy_order_pending
     from patient_message_service import notify_patient_proxy_order_pending
     from staff_message_service import notify_staff_proxy_order_pushed
 
@@ -36,3 +38,11 @@ def notify_proxy_order_created(
         patient=patient,
         counselor_id=counselor_id,
     )
+    if notify_target_counselor:
+        notify_counselor_proxy_order_pending(
+            db,
+            counselor_id=counselor_id,
+            schedule=schedule,
+            patient_id=patient.Id,
+            order=order,
+        )

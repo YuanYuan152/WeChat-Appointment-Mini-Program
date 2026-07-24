@@ -6,7 +6,7 @@ conn = pyodbc.connect(conn_str)
 cursor = conn.cursor()
 
 ddl_list = [
-    # 排班表
+    # 排期表
     """
     IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[AppSchedule]') AND type = 'U')
     BEGIN

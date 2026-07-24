@@ -1,0 +1,1346 @@
+{
+  "id": "pbi",
+  "title": "父母教养方式问卷（PBI）",
+  "subtitle": "回顾16岁前的父母养育方式",
+  "description": "PBI 评估个体对儿童时期（16岁以前）父母养育方式的认知，分为关爱、鼓励自主和控制三个因子，并据此判断教养类型。",
+  "cover": "/images/content/assess/assess-pbi.jpg",
+  "duration": 15,
+  "scoringType": "pbi",
+  "disclaimer": "本测评结果仅供参考，不能替代专业心理评估。",
+  "questions": [
+    {
+      "id": "m1",
+      "text": "在我16岁前，我的母亲：用温和友好的语气与我说话",
+      "options": [
+        {
+          "id": "m1-a",
+          "text": "非常不符合",
+          "value": 0
+        },
+        {
+          "id": "m1-b",
+          "text": "比较不符合",
+          "value": 1
+        },
+        {
+          "id": "m1-c",
+          "text": "比较符合",
+          "value": 2
+        },
+        {
+          "id": "m1-d",
+          "text": "非常符合",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "m2",
+      "text": "在我16岁前，我的母亲：没有给我足够的帮助",
+      "options": [
+        {
+          "id": "m2-a",
+          "text": "非常不符合",
+          "value": 0
+        },
+        {
+          "id": "m2-b",
+          "text": "比较不符合",
+          "value": 1
+        },
+        {
+          "id": "m2-c",
+          "text": "比较符合",
+          "value": 2
+        },
+        {
+          "id": "m2-d",
+          "text": "非常符合",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "m3",
+      "text": "在我16岁前，我的母亲：允许我做自己喜欢的事情",
+      "options": [
+        {
+          "id": "m3-a",
+          "text": "非常不符合",
+          "value": 0
+        },
+        {
+          "id": "m3-b",
+          "text": "比较不符合",
+          "value": 1
+        },
+        {
+          "id": "m3-c",
+          "text": "比较符合",
+          "value": 2
+        },
+        {
+          "id": "m3-d",
+          "text": "非常符合",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "m4",
+      "text": "在我16岁前，我的母亲：情感上显得对我冷淡",
+      "options": [
+        {
+          "id": "m4-a",
+          "text": "非常不符合",
+          "value": 0
+        },
+        {
+          "id": "m4-b",
+          "text": "比较不符合",
+          "value": 1
+        },
+        {
+          "id": "m4-c",
+          "text": "比较符合",
+          "value": 2
+        },
+        {
+          "id": "m4-d",
+          "text": "非常符合",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "m5",
+      "text": "在我16岁前，我的母亲：了解我的问题与担忧",
+      "options": [
+        {
+          "id": "m5-a",
+          "text": "非常不符合",
+          "value": 0
+        },
+        {
+          "id": "m5-b",
+          "text": "比较不符合",
+          "value": 1
+        },
+        {
+          "id": "m5-c",
+          "text": "比较符合",
+          "value": 2
+        },
+        {
+          "id": "m5-d",
+          "text": "非常符合",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "m6",
+      "text": "在我16岁前，我的母亲：对我很疼爱",
+      "options": [
+        {
+          "id": "m6-a",
+          "text": "非常不符合",
+          "value": 0
+        },
+        {
+          "id": "m6-b",
+          "text": "比较不符合",
+          "value": 1
+        },
+        {
+          "id": "m6-c",
+          "text": "比较符合",
+          "value": 2
+        },
+        {
+          "id": "m6-d",
+          "text": "非常符合",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "m7",
+      "text": "在我16岁前，我的母亲：喜欢让我自己拿主意",
+      "options": [
+        {
+          "id": "m7-a",
+          "text": "非常不符合",
+          "value": 0
+        },
+        {
+          "id": "m7-b",
+          "text": "比较不符合",
+          "value": 1
+        },
+        {
+          "id": "m7-c",
+          "text": "比较符合",
+          "value": 2
+        },
+        {
+          "id": "m7-d",
+          "text": "非常符合",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "m8",
+      "text": "在我16岁前，我的母亲：不想我长大",
+      "options": [
+        {
+          "id": "m8-a",
+          "text": "非常不符合",
+          "value": 0
+        },
+        {
+          "id": "m8-b",
+          "text": "比较不符合",
+          "value": 1
+        },
+        {
+          "id": "m8-c",
+          "text": "比较符合",
+          "value": 2
+        },
+        {
+          "id": "m8-d",
+          "text": "非常符合",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "m9",
+      "text": "在我16岁前，我的母亲：试图控制我做的每一件事",
+      "options": [
+        {
+          "id": "m9-a",
+          "text": "非常不符合",
+          "value": 0
+        },
+        {
+          "id": "m9-b",
+          "text": "比较不符合",
+          "value": 1
+        },
+        {
+          "id": "m9-c",
+          "text": "比较符合",
+          "value": 2
+        },
+        {
+          "id": "m9-d",
+          "text": "非常符合",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "m10",
+      "text": "在我16岁前，我的母亲：侵犯我的隐私",
+      "options": [
+        {
+          "id": "m10-a",
+          "text": "非常不符合",
+          "value": 0
+        },
+        {
+          "id": "m10-b",
+          "text": "比较不符合",
+          "value": 1
+        },
+        {
+          "id": "m10-c",
+          "text": "比较符合",
+          "value": 2
+        },
+        {
+          "id": "m10-d",
+          "text": "非常符合",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "m11",
+      "text": "在我16岁前，我的母亲：经常对我微笑",
+      "options": [
+        {
+          "id": "m11-a",
+          "text": "非常不符合",
+          "value": 0
+        },
+        {
+          "id": "m11-b",
+          "text": "比较不符合",
+          "value": 1
+        },
+        {
+          "id": "m11-c",
+          "text": "比较符合",
+          "value": 2
+        },
+        {
+          "id": "m11-d",
+          "text": "非常符合",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "m12",
+      "text": "在我16岁前，我的母亲：似乎不明白我需要什么和想要什么",
+      "options": [
+        {
+          "id": "m12-a",
+          "text": "非常不符合",
+          "value": 0
+        },
+        {
+          "id": "m12-b",
+          "text": "比较不符合",
+          "value": 1
+        },
+        {
+          "id": "m12-c",
+          "text": "比较符合",
+          "value": 2
+        },
+        {
+          "id": "m12-d",
+          "text": "非常符合",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "m13",
+      "text": "在我16岁前，我的母亲：让我决定自己的事情",
+      "options": [
+        {
+          "id": "m13-a",
+          "text": "非常不符合",
+          "value": 0
+        },
+        {
+          "id": "m13-b",
+          "text": "比较不符合",
+          "value": 1
+        },
+        {
+          "id": "m13-c",
+          "text": "比较符合",
+          "value": 2
+        },
+        {
+          "id": "m13-d",
+          "text": "非常符合",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "m14",
+      "text": "在我16岁前，我的母亲：让我觉得自己是可有可无的",
+      "options": [
+        {
+          "id": "m14-a",
+          "text": "非常不符合",
+          "value": 0
+        },
+        {
+          "id": "m14-b",
+          "text": "比较不符合",
+          "value": 1
+        },
+        {
+          "id": "m14-c",
+          "text": "比较符合",
+          "value": 2
+        },
+        {
+          "id": "m14-d",
+          "text": "非常符合",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "m15",
+      "text": "在我16岁前，我的母亲：在我心烦意乱的时候可以让我心情好起来",
+      "options": [
+        {
+          "id": "m15-a",
+          "text": "非常不符合",
+          "value": 0
+        },
+        {
+          "id": "m15-b",
+          "text": "比较不符合",
+          "value": 1
+        },
+        {
+          "id": "m15-c",
+          "text": "比较符合",
+          "value": 2
+        },
+        {
+          "id": "m15-d",
+          "text": "非常符合",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "m16",
+      "text": "在我16岁前，我的母亲：不经常与我交谈",
+      "options": [
+        {
+          "id": "m16-a",
+          "text": "非常不符合",
+          "value": 0
+        },
+        {
+          "id": "m16-b",
+          "text": "比较不符合",
+          "value": 1
+        },
+        {
+          "id": "m16-c",
+          "text": "比较符合",
+          "value": 2
+        },
+        {
+          "id": "m16-d",
+          "text": "非常符合",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "m17",
+      "text": "在我16岁前，我的母亲：试图让我觉得我离不开她",
+      "options": [
+        {
+          "id": "m17-a",
+          "text": "非常不符合",
+          "value": 0
+        },
+        {
+          "id": "m17-b",
+          "text": "比较不符合",
+          "value": 1
+        },
+        {
+          "id": "m17-c",
+          "text": "比较符合",
+          "value": 2
+        },
+        {
+          "id": "m17-d",
+          "text": "非常符合",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "m18",
+      "text": "在我16岁前，我的母亲：觉得没有她在身边我就不能照顾好自己",
+      "options": [
+        {
+          "id": "m18-a",
+          "text": "非常不符合",
+          "value": 0
+        },
+        {
+          "id": "m18-b",
+          "text": "比较不符合",
+          "value": 1
+        },
+        {
+          "id": "m18-c",
+          "text": "比较符合",
+          "value": 2
+        },
+        {
+          "id": "m18-d",
+          "text": "非常符合",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "m19",
+      "text": "在我16岁前，我的母亲：给我足够自由",
+      "options": [
+        {
+          "id": "m19-a",
+          "text": "非常不符合",
+          "value": 0
+        },
+        {
+          "id": "m19-b",
+          "text": "比较不符合",
+          "value": 1
+        },
+        {
+          "id": "m19-c",
+          "text": "比较符合",
+          "value": 2
+        },
+        {
+          "id": "m19-d",
+          "text": "非常符合",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "m20",
+      "text": "在我16岁前，我的母亲：允许我自由外出",
+      "options": [
+        {
+          "id": "m20-a",
+          "text": "非常不符合",
+          "value": 0
+        },
+        {
+          "id": "m20-b",
+          "text": "比较不符合",
+          "value": 1
+        },
+        {
+          "id": "m20-c",
+          "text": "比较符合",
+          "value": 2
+        },
+        {
+          "id": "m20-d",
+          "text": "非常符合",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "m21",
+      "text": "在我16岁前，我的母亲：对我保护过度",
+      "options": [
+        {
+          "id": "m21-a",
+          "text": "非常不符合",
+          "value": 0
+        },
+        {
+          "id": "m21-b",
+          "text": "比较不符合",
+          "value": 1
+        },
+        {
+          "id": "m21-c",
+          "text": "比较符合",
+          "value": 2
+        },
+        {
+          "id": "m21-d",
+          "text": "非常符合",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "m22",
+      "text": "在我16岁前，我的母亲：从不夸奖我",
+      "options": [
+        {
+          "id": "m22-a",
+          "text": "非常不符合",
+          "value": 0
+        },
+        {
+          "id": "m22-b",
+          "text": "比较不符合",
+          "value": 1
+        },
+        {
+          "id": "m22-c",
+          "text": "比较符合",
+          "value": 2
+        },
+        {
+          "id": "m22-d",
+          "text": "非常符合",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "m23",
+      "text": "在我16岁前，我的母亲：允许我随心所欲地选择穿着",
+      "options": [
+        {
+          "id": "m23-a",
+          "text": "非常不符合",
+          "value": 0
+        },
+        {
+          "id": "m23-b",
+          "text": "比较不符合",
+          "value": 1
+        },
+        {
+          "id": "m23-c",
+          "text": "比较符合",
+          "value": 2
+        },
+        {
+          "id": "m23-d",
+          "text": "非常符合",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "f1",
+      "text": "在我16岁前，我的父亲：用温和友好的语气与我说话",
+      "options": [
+        {
+          "id": "f1-a",
+          "text": "非常不符合",
+          "value": 0
+        },
+        {
+          "id": "f1-b",
+          "text": "比较不符合",
+          "value": 1
+        },
+        {
+          "id": "f1-c",
+          "text": "比较符合",
+          "value": 2
+        },
+        {
+          "id": "f1-d",
+          "text": "非常符合",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "f2",
+      "text": "在我16岁前，我的父亲：没有给我足够的帮助",
+      "options": [
+        {
+          "id": "f2-a",
+          "text": "非常不符合",
+          "value": 0
+        },
+        {
+          "id": "f2-b",
+          "text": "比较不符合",
+          "value": 1
+        },
+        {
+          "id": "f2-c",
+          "text": "比较符合",
+          "value": 2
+        },
+        {
+          "id": "f2-d",
+          "text": "非常符合",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "f3",
+      "text": "在我16岁前，我的父亲：允许我做自己喜欢的事情",
+      "options": [
+        {
+          "id": "f3-a",
+          "text": "非常不符合",
+          "value": 0
+        },
+        {
+          "id": "f3-b",
+          "text": "比较不符合",
+          "value": 1
+        },
+        {
+          "id": "f3-c",
+          "text": "比较符合",
+          "value": 2
+        },
+        {
+          "id": "f3-d",
+          "text": "非常符合",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "f4",
+      "text": "在我16岁前，我的父亲：情感上显得对我冷淡",
+      "options": [
+        {
+          "id": "f4-a",
+          "text": "非常不符合",
+          "value": 0
+        },
+        {
+          "id": "f4-b",
+          "text": "比较不符合",
+          "value": 1
+        },
+        {
+          "id": "f4-c",
+          "text": "比较符合",
+          "value": 2
+        },
+        {
+          "id": "f4-d",
+          "text": "非常符合",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "f5",
+      "text": "在我16岁前，我的父亲：了解我的问题与担忧",
+      "options": [
+        {
+          "id": "f5-a",
+          "text": "非常不符合",
+          "value": 0
+        },
+        {
+          "id": "f5-b",
+          "text": "比较不符合",
+          "value": 1
+        },
+        {
+          "id": "f5-c",
+          "text": "比较符合",
+          "value": 2
+        },
+        {
+          "id": "f5-d",
+          "text": "非常符合",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "f6",
+      "text": "在我16岁前，我的父亲：对我很疼爱",
+      "options": [
+        {
+          "id": "f6-a",
+          "text": "非常不符合",
+          "value": 0
+        },
+        {
+          "id": "f6-b",
+          "text": "比较不符合",
+          "value": 1
+        },
+        {
+          "id": "f6-c",
+          "text": "比较符合",
+          "value": 2
+        },
+        {
+          "id": "f6-d",
+          "text": "非常符合",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "f7",
+      "text": "在我16岁前，我的父亲：喜欢让我自己拿主意",
+      "options": [
+        {
+          "id": "f7-a",
+          "text": "非常不符合",
+          "value": 0
+        },
+        {
+          "id": "f7-b",
+          "text": "比较不符合",
+          "value": 1
+        },
+        {
+          "id": "f7-c",
+          "text": "比较符合",
+          "value": 2
+        },
+        {
+          "id": "f7-d",
+          "text": "非常符合",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "f8",
+      "text": "在我16岁前，我的父亲：不想我长大",
+      "options": [
+        {
+          "id": "f8-a",
+          "text": "非常不符合",
+          "value": 0
+        },
+        {
+          "id": "f8-b",
+          "text": "比较不符合",
+          "value": 1
+        },
+        {
+          "id": "f8-c",
+          "text": "比较符合",
+          "value": 2
+        },
+        {
+          "id": "f8-d",
+          "text": "非常符合",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "f9",
+      "text": "在我16岁前，我的父亲：试图控制我做的每一件事",
+      "options": [
+        {
+          "id": "f9-a",
+          "text": "非常不符合",
+          "value": 0
+        },
+        {
+          "id": "f9-b",
+          "text": "比较不符合",
+          "value": 1
+        },
+        {
+          "id": "f9-c",
+          "text": "比较符合",
+          "value": 2
+        },
+        {
+          "id": "f9-d",
+          "text": "非常符合",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "f10",
+      "text": "在我16岁前，我的父亲：侵犯我的隐私",
+      "options": [
+        {
+          "id": "f10-a",
+          "text": "非常不符合",
+          "value": 0
+        },
+        {
+          "id": "f10-b",
+          "text": "比较不符合",
+          "value": 1
+        },
+        {
+          "id": "f10-c",
+          "text": "比较符合",
+          "value": 2
+        },
+        {
+          "id": "f10-d",
+          "text": "非常符合",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "f11",
+      "text": "在我16岁前，我的父亲：喜欢与我商量事情",
+      "options": [
+        {
+          "id": "f11-a",
+          "text": "非常不符合",
+          "value": 0
+        },
+        {
+          "id": "f11-b",
+          "text": "比较不符合",
+          "value": 1
+        },
+        {
+          "id": "f11-c",
+          "text": "比较符合",
+          "value": 2
+        },
+        {
+          "id": "f11-d",
+          "text": "非常符合",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "f12",
+      "text": "在我16岁前，我的父亲：经常对我微笑",
+      "options": [
+        {
+          "id": "f12-a",
+          "text": "非常不符合",
+          "value": 0
+        },
+        {
+          "id": "f12-b",
+          "text": "比较不符合",
+          "value": 1
+        },
+        {
+          "id": "f12-c",
+          "text": "比较符合",
+          "value": 2
+        },
+        {
+          "id": "f12-d",
+          "text": "非常符合",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "f13",
+      "text": "在我16岁前，我的父亲：似乎不明白我需要什么和想要什么",
+      "options": [
+        {
+          "id": "f13-a",
+          "text": "非常不符合",
+          "value": 0
+        },
+        {
+          "id": "f13-b",
+          "text": "比较不符合",
+          "value": 1
+        },
+        {
+          "id": "f13-c",
+          "text": "比较符合",
+          "value": 2
+        },
+        {
+          "id": "f13-d",
+          "text": "非常符合",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "f14",
+      "text": "在我16岁前，我的父亲：让我决定自己的事情",
+      "options": [
+        {
+          "id": "f14-a",
+          "text": "非常不符合",
+          "value": 0
+        },
+        {
+          "id": "f14-b",
+          "text": "比较不符合",
+          "value": 1
+        },
+        {
+          "id": "f14-c",
+          "text": "比较符合",
+          "value": 2
+        },
+        {
+          "id": "f14-d",
+          "text": "非常符合",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "f15",
+      "text": "在我16岁前，我的父亲：在我心烦意乱的时候可以让我心情好起来",
+      "options": [
+        {
+          "id": "f15-a",
+          "text": "非常不符合",
+          "value": 0
+        },
+        {
+          "id": "f15-b",
+          "text": "比较不符合",
+          "value": 1
+        },
+        {
+          "id": "f15-c",
+          "text": "比较符合",
+          "value": 2
+        },
+        {
+          "id": "f15-d",
+          "text": "非常符合",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "f16",
+      "text": "在我16岁前，我的父亲：不经常与我交谈",
+      "options": [
+        {
+          "id": "f16-a",
+          "text": "非常不符合",
+          "value": 0
+        },
+        {
+          "id": "f16-b",
+          "text": "比较不符合",
+          "value": 1
+        },
+        {
+          "id": "f16-c",
+          "text": "比较符合",
+          "value": 2
+        },
+        {
+          "id": "f16-d",
+          "text": "非常符合",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "f17",
+      "text": "在我16岁前，我的父亲：试图让我觉得我离不开他",
+      "options": [
+        {
+          "id": "f17-a",
+          "text": "非常不符合",
+          "value": 0
+        },
+        {
+          "id": "f17-b",
+          "text": "比较不符合",
+          "value": 1
+        },
+        {
+          "id": "f17-c",
+          "text": "比较符合",
+          "value": 2
+        },
+        {
+          "id": "f17-d",
+          "text": "非常符合",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "f18",
+      "text": "在我16岁前，我的父亲：觉得没有他在身边我就不能照顾好自己",
+      "options": [
+        {
+          "id": "f18-a",
+          "text": "非常不符合",
+          "value": 0
+        },
+        {
+          "id": "f18-b",
+          "text": "比较不符合",
+          "value": 1
+        },
+        {
+          "id": "f18-c",
+          "text": "比较符合",
+          "value": 2
+        },
+        {
+          "id": "f18-d",
+          "text": "非常符合",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "f19",
+      "text": "在我16岁前，我的父亲：给我足够自由",
+      "options": [
+        {
+          "id": "f19-a",
+          "text": "非常不符合",
+          "value": 0
+        },
+        {
+          "id": "f19-b",
+          "text": "比较不符合",
+          "value": 1
+        },
+        {
+          "id": "f19-c",
+          "text": "比较符合",
+          "value": 2
+        },
+        {
+          "id": "f19-d",
+          "text": "非常符合",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "f20",
+      "text": "在我16岁前，我的父亲：允许我自由外出",
+      "options": [
+        {
+          "id": "f20-a",
+          "text": "非常不符合",
+          "value": 0
+        },
+        {
+          "id": "f20-b",
+          "text": "比较不符合",
+          "value": 1
+        },
+        {
+          "id": "f20-c",
+          "text": "比较符合",
+          "value": 2
+        },
+        {
+          "id": "f20-d",
+          "text": "非常符合",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "f21",
+      "text": "在我16岁前，我的父亲：对我保护过度",
+      "options": [
+        {
+          "id": "f21-a",
+          "text": "非常不符合",
+          "value": 0
+        },
+        {
+          "id": "f21-b",
+          "text": "比较不符合",
+          "value": 1
+        },
+        {
+          "id": "f21-c",
+          "text": "比较符合",
+          "value": 2
+        },
+        {
+          "id": "f21-d",
+          "text": "非常符合",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "f22",
+      "text": "在我16岁前，我的父亲：从不夸奖我",
+      "options": [
+        {
+          "id": "f22-a",
+          "text": "非常不符合",
+          "value": 0
+        },
+        {
+          "id": "f22-b",
+          "text": "比较不符合",
+          "value": 1
+        },
+        {
+          "id": "f22-c",
+          "text": "比较符合",
+          "value": 2
+        },
+        {
+          "id": "f22-d",
+          "text": "非常符合",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "f23",
+      "text": "在我16岁前，我的父亲：允许我随心所欲地选择穿着",
+      "options": [
+        {
+          "id": "f23-a",
+          "text": "非常不符合",
+          "value": 0
+        },
+        {
+          "id": "f23-b",
+          "text": "比较不符合",
+          "value": 1
+        },
+        {
+          "id": "f23-c",
+          "text": "比较符合",
+          "value": 2
+        },
+        {
+          "id": "f23-d",
+          "text": "非常符合",
+          "value": 3
+        }
+      ],
+      "required": true
+    }
+  ],
+  "schemaVersion": 1,
+  "version": 1,
+  "status": "published",
+  "category": "professional",
+  "scoringPreset": "pbi-v1",
+  "instructions": "一、概述\n父母教养方式是指父母在抚养、教育子女的活动中相对稳定的行为风格，是对父母各种养育行为的特征概括。依恋理论认为，父母关爱即喜爱、温和、亲近和低控制是儿童安全依恋关系和正常发展的需要，而父母控制即干涉、要求服从、过度保护和低关爱是儿童不安全依恋模式和以后心理功能紊乱的一个来源。为了定义和评估父母教养行为的有效构成，Parker于1979年根据依恋理论编制了父母教养方式问卷（Parental Bonding Instrument，PBI）。众多的研究表明，PBI具有良好的信度，不存在性别差异，并且得分较少受到被试抑郁水平和生活重大事件的影响；PBI常用于临床病人所受的教养方式对其心理障碍影响的研究，特别是抑郁和焦虑的某些症状表现，其效度也在成人群体、青少年群体、抑郁症患者、精神分裂症患者群体中得到广泛的验证。现在PBI已成为在美国、西班牙、日本、中国台湾等国家和地区广泛使用的回顾性自陈量表。国内周世杰、楚艳民、杨红君、刘利、刘琴等人对此量表做了修订和心理测量学指标的检验。\n\n二、量表的内容及实施方法\n父母教养方式问卷是评估个体对儿童时期(16岁以前)父母养育方式的认知的自陈量表，分为母亲版（PBI-M）和父亲版(PBI-F)，各有23个条目，分为关爱、鼓励自主和控制三个因子。采用李可特4点计分形式，“0”代表“非常不符合”，“1”代表“比较不符合”，“2”代表“比较符合”，“3”代表“非常符合”。",
+  "features": "本测评将从关爱、鼓励自主和控制三个因子评估父母教养方式，并据此判断教养类型（权威型、专制型、开明型、放任型）。结果仅供参考，不作为诊断工具。",
+  "reportIntro": "本测评将从关爱、鼓励自主和控制三个因子评估父母教养方式，并据此判断教养类型（权威型、专制型、开明型、放任型）。结果仅供参考，不作为诊断工具。",
+  "reportProfiles": [
+    {
+      "id": "pbi-summary",
+      "title": "父母教养方式总结",
+      "description": "母亲教养方式：{{motherStyle}}；父亲教养方式：{{fatherStyle}}",
+      "suggestions": []
+    },
+    {
+      "id": "pbi-style-authoritative",
+      "title": "权威型",
+      "description": "高关爱、高控制：您在有明确规则和期望的环境中成长，既感受到情感支持，也明白界限与责任。",
+      "suggestions": [
+        "理解过往经历对现在的影响",
+        "必要时寻求心理咨询支持"
+      ]
+    },
+    {
+      "id": "pbi-style-authoritarian",
+      "title": "专制型",
+      "description": "低关爱、高控制：您可能感受到较多限制和较少的情感交流，需求与感受未得到充分理解。",
+      "suggestions": [
+        "理解过往经历对现在的影响",
+        "必要时寻求心理咨询支持"
+      ]
+    },
+    {
+      "id": "pbi-style-democratic",
+      "title": "民主型",
+      "description": "高关爱、低控制：您在充满爱与自由的环境中成长，被鼓励表达想法并自主做决定。",
+      "suggestions": [
+        "理解过往经历对现在的影响",
+        "必要时寻求心理咨询支持"
+      ]
+    },
+    {
+      "id": "pbi-style-permissive",
+      "title": "放任型",
+      "description": "低关爱、低控制：您获得很多自由，但可能缺乏必要的指导与支持，有时感到迷茫或缺乏安全感。",
+      "suggestions": [
+        "理解过往经历对现在的影响",
+        "必要时寻求心理咨询支持"
+      ]
+    },
+    {
+      "id": "pbi-autonomy-high",
+      "title": "鼓励自主较高",
+      "description": "{{parent}}较支持您独立探索和做决定，有助于培养自主性。",
+      "suggestions": [
+        "练习独立做决定",
+        "在安全范围内尝试新的自主体验"
+      ]
+    },
+    {
+      "id": "pbi-autonomy-normal",
+      "title": "鼓励自主一般",
+      "description": "{{parent}}对您自主性的支持相对有限，可能影响独立决策能力的发展。",
+      "suggestions": [
+        "练习独立做决定",
+        "在安全范围内尝试新的自主体验"
+      ]
+    },
+    {
+      "id": "pbi-control-high",
+      "title": "控制较高",
+      "description": "{{parent}}可能对您的生活干涉较多，您可能感到缺乏自我决定的空间。",
+      "suggestions": [
+        "觉察控制模式对当前关系的影响",
+        "学习设定健康边界"
+      ]
+    },
+    {
+      "id": "pbi-control-normal",
+      "title": "控制一般",
+      "description": "{{parent}}给予您较多自由与选择权，有助于自我管理能力的发展。",
+      "suggestions": [
+        "觉察控制模式对当前关系的影响",
+        "学习设定健康边界"
+      ]
+    }
+  ],
+  "sortOrder": 3,
+  "createdAt": "2026-07-24T08:38:49+00:00",
+  "updatedAt": "2026-07-24T08:38:49+00:00",
+  "publishedAt": "2026-07-24T08:38:49+00:00"
+}

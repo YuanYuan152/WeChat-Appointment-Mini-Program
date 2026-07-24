@@ -1,11 +1,11 @@
-import { api } from "@/lib/api";
+import { listAssessments } from "@/lib/assessment/api";
 import { PageHero } from "@/components/layout/page-hero";
 import { AssessmentCard } from "@/components/assessment/assessment-card";
 import { AssessmentReportsLink } from "@/components/assessment/assessment-reports-link";
 import { AssessmentLoginNotice } from "@/components/assessment/assessment-login-notice";
 
 export default async function ProfessionalAssessmentPage() {
-  const assessments = await api.getProfessionalAssessments();
+  const assessments = await listAssessments("professional");
 
   return (
     <>

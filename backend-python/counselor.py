@@ -1,8 +1,8 @@
 """
 3.1 咨询师工作台接口
-GET  /api/mini/counselor/schedules          今日及近期排班
-POST /api/mini/counselor/schedules          新增排班
-PUT  /api/mini/counselor/schedules/{id}     修改排班（取消/备注）
+GET  /api/mini/counselor/schedules          今日及近期排期
+POST /api/mini/counselor/schedules          新增排期
+PUT  /api/mini/counselor/schedules/{id}     修改排期（取消/备注）
 GET  /api/mini/counselor/consultations      咨询单列表（按状态筛选）
 PUT  /api/mini/counselor/consultations/{id} 更新咨询单状态（确认/完成/取消）
 GET  /api/mini/counselor/consultations/completed 已完成咨询（含个案记录摘要）
@@ -21,6 +21,9 @@ from sqlalchemy.exc import ProgrammingError, OperationalError
 from case_record_service import (
     apply_case_record_fields,
     case_record_has_content,
+    case_record_header_info,
+    case_record_photo_urls,
+    case_record_risk_assessment,
     decode_photo_urls,
     decode_risk_assessment,
     decode_header_info,
@@ -31,6 +34,7 @@ from case_record_service import (
     get_crisis_level_choice,
     notify_admins_crisis_report_if_needed,
 )
+from model_compat import optional_model_value
 from consultation_status_service import mark_consultation_done
 from case_record_amendment_service import (
     latest_amendment_for_record,
@@ -79,6 +83,9 @@ from schedule_slots import (
     rolling_window_datetime_bounds,
     validate_slot_in_rolling_window,
 )
+from pricing_service import resolve_revenue_share_cents
+from patient_contract_service import batch_patient_contract_extras
+from leave_request_service import acquire_leave_schedule_lock
 
 router = APIRouter(prefix="/api/mini/counselor", tags=["Counselor"])
 
@@ -261,6 +268,9 @@ class CaseRecordOut(BaseModel):
         record: AppCaseRecord,
         amendment: Optional[AppCaseRecordAmendmentRequest] = None,
     ) -> "CaseRecordOut":
+        risk_assessment = case_record_risk_assessment(record)
+        header_info = case_record_header_info(record)
+        photo_urls = case_record_photo_urls(record)
         out = cls(
             Id=record.Id,
             ConsultationId=record.ConsultationId,
@@ -269,9 +279,9 @@ class CaseRecordOut(BaseModel):
             Objective=record.Objective,
             Assessment=record.Assessment,
             Plan=record.Plan,
-            RiskAssessment=decode_risk_assessment(record.RiskAssessment),
-            HeaderInfo=decode_header_info(record.HeaderInfo),
-            PhotoUrls=decode_photo_urls(record.PhotoUrls),
+            RiskAssessment=risk_assessment,
+            HeaderInfo=header_info,
+            PhotoUrls=photo_urls,
             CreatedAt=record.CreatedAt,
             UpdatedAt=record.UpdatedAt,
         )
@@ -279,7 +289,7 @@ class CaseRecordOut(BaseModel):
             out.AmendmentStatus = amendment.Status
             out.AmendmentId = amendment.Id
             if amendment.Status == "REJECTED":
-                out.AmendmentRejectReason = amendment.RejectReason
+                out.AmendmentRejectReason = optional_model_value(amendment, "RejectReason")
         return out
 
 
@@ -315,6 +325,9 @@ class CaseRecordRevisionOut(BaseModel):
 
     @classmethod
     def from_revision(cls, row: AppCaseRecordRevision) -> "CaseRecordRevisionOut":
+        risk_assessment = decode_risk_assessment(optional_model_value(row, "RiskAssessment"))
+        header_info = decode_header_info(optional_model_value(row, "HeaderInfo"))
+        photo_urls = decode_photo_urls(optional_model_value(row, "PhotoUrls"))
         return cls(
             Id=row.Id,
             CaseRecordId=row.CaseRecordId,
@@ -323,9 +336,9 @@ class CaseRecordRevisionOut(BaseModel):
             Objective=row.Objective,
             Assessment=row.Assessment,
             Plan=row.Plan,
-            RiskAssessment=decode_risk_assessment(row.RiskAssessment),
-            HeaderInfo=decode_header_info(row.HeaderInfo),
-            PhotoUrls=decode_photo_urls(row.PhotoUrls),
+            RiskAssessment=risk_assessment,
+            HeaderInfo=header_info,
+            PhotoUrls=photo_urls,
             RevisedAt=row.RevisedAt,
             RevisedBy=row.RevisedBy,
         )
@@ -335,6 +348,7 @@ class CompletedConsultationOut(BaseModel):
     Id: int
     PatientId: int
     PatientName: str
+    PatientContractTag: Optional[str] = None
     StartTime: Optional[datetime] = None
     EndTime: Optional[datetime] = None
     Note: Optional[str] = None
@@ -371,8 +385,14 @@ class DashboardDetailItem(BaseModel):
     subtitle: Optional[str] = None
     extra: Optional[str] = None
     amount: Optional[int] = None
+    personalIncome: Optional[int] = None
+    patientId: Optional[int] = None
+    patientMobile: Optional[str] = None
+    patientContractTag: Optional[str] = None
+    orderId: Optional[int] = None
     consultationId: Optional[int] = None
     caseRecordId: Optional[int] = None
+    caseRecordStatus: Optional[str] = None
     status: Optional[str] = None
 
 
@@ -455,14 +475,19 @@ def _compute_dashboard_stats(
 
     completed_order_count = 0
     completed_order_revenue = 0
+    personal_income = 0
     for c in done_in_range:
         order = orders_by_id.get(c.OrderId) if c.OrderId else None
         if order and order.Status == "PAID":
             completed_order_count += 1
-            completed_order_revenue += order.TotalFee or 0
+            amount = order.TotalFee or 0
+            completed_order_revenue += amount
+            personal_income += resolve_revenue_share_cents(db, c.PatientId, counselor.Id, amount)
         elif not order:
             completed_order_count += 1
-            completed_order_revenue += billing or 0
+            amount = billing or 0
+            completed_order_revenue += amount
+            personal_income += resolve_revenue_share_cents(db, c.PatientId, counselor.Id, amount)
 
     case_records = (
         db.query(AppCaseRecord)
@@ -503,6 +528,7 @@ def _compute_dashboard_stats(
     return {
         "completedOrderCount": completed_order_count,
         "completedOrderRevenue": completed_order_revenue,
+        "personalIncome": personal_income,
         "caseRecordCount": case_record_count,
         "totalAppointments": total_appointments,
         "leaveCount": leave_count,
@@ -510,7 +536,7 @@ def _compute_dashboard_stats(
 
 
 # ---------------------------------------------------------------------------
-# 排班接口
+# 排期接口
 # ---------------------------------------------------------------------------
 
 def _build_schedule_note(body: ScheduleCreate) -> Optional[str]:
@@ -581,16 +607,21 @@ def _cancel_permissions(schedule: AppSchedule, consultation: Optional[AppConsult
             return (
                 True,
                 True,
-                "取消前请与来访者提前沟通并上传沟通截图。提交后须等待管理员审核通过，审核通过后将通知来访者并协助改约。",
+                "取消前请与来访者提前沟通并上传沟通截图。提交后须等待管理工作台审核通过，审核通过后将通知来访者并协助改约。",
             )
         return (
             True,
             True,
-            "取消前请与来访者提前沟通并上传沟通截图。提交后须等待管理员审核通过；审核通过后来访者将全额退款，请协助改约。",
+            "取消前请与来访者提前沟通并上传沟通截图。提交后须等待管理工作台审核通过；审核通过后来访者将全额退款，请协助改约。",
         )
 
-    # 已标 BOOKED 但无有效咨询单（数据异常），仍允许直接取消
-    return True, False, "确认取消该排期？"
+    # 即使历史数据缺失有效咨询单，BOOKED 也代表该时段已经对来访生效。
+    # 统一走请假审核，避免通过数据异常绕过管理工作台。
+    return (
+        True,
+        True,
+        "该时段已预约。请与来访者沟通并上传截图，提交后等待管理工作台审核。",
+    )
 
 
 def _counselor_cancel_booked(
@@ -675,6 +706,7 @@ def _counselor_cancel_booked(
             ScheduleId=schedule.Id,
             CounselorId=counselor_id,
             ConsultationId=consultation.Id if consultation else None,
+            LeaveRequestId=leave_row.Id if leave_row else None,
             ScreenshotUrl=screenshot,
         )
     )
@@ -756,6 +788,11 @@ def _calendar_items_for_schedules(
         }
 
     patient_ids = {c.PatientId for c in all_consultations}
+    patient_ids.update(
+        order.AccountId
+        for order in pending_proxy_map.values()
+        if order.AccountId
+    )
     patients = {
         a.Id: a
         for a in db.query(AppAccount).filter(AppAccount.Id.in_(patient_ids)).all()
@@ -764,17 +801,32 @@ def _calendar_items_for_schedules(
     items: List[ScheduleCalendarItem] = []
     for s in schedules:
         c = active_by_schedule.get(s.Id)
+        pending_proxy_order = pending_proxy_map.get(s.Id)
         leave_row = leave_by_schedule.get(s.Id)
-        display_cons = c or any_by_schedule.get(s.Id)
+        # 待支付代理预约尚未创建咨询单。此时应显示订单对应的来访，不能回退到
+        # 同一排期可能残留的历史已取消咨询单。
+        display_cons = c or (None if pending_proxy_order else any_by_schedule.get(s.Id))
         center_id = parse_center_id(s.Note)
         room_id, room_name = _resolve_calendar_room(s, c, center_id, db)
-        patient = patients.get(display_cons.PatientId) if display_cons else None
+        display_patient_id = (
+            display_cons.PatientId
+            if display_cons
+            else pending_proxy_order.AccountId
+            if pending_proxy_order
+            else None
+        )
+        patient = patients.get(display_patient_id) if display_patient_id else None
         patient_name = None
         patient_contract_tag = None
         if patient:
             from patient_contract_service import patient_contract_extras
 
-            patient_name = patient.RealName or patient.Nickname or f"来访者#{patient.Id}"
+            patient_name = (
+                patient.RealName
+                or patient.Nickname
+                or patient.Mobile
+                or f"来访者#{patient.Id}"
+            )
             patient_contract_tag = patient_contract_extras(db, patient).get("contractTag")
 
         if leave_row:
@@ -785,7 +837,7 @@ def _calendar_items_for_schedules(
                 else DISPLAY_LABELS.get("ON_LEAVE", "已请假")
             )
             can_cancel, requires_leave, cancel_hint = False, False, None
-        elif pending_proxy_map.get(s.Id):
+        elif pending_proxy_order:
             display = "PENDING_PAYMENT"
             display_label = DISPLAY_LABELS.get("PENDING_PAYMENT", "待支付")
             can_cancel, requires_leave, cancel_hint = False, False, None
@@ -832,7 +884,7 @@ def _calendar_items_for_schedules(
     return items
 
 
-@router.get("/schedules", response_model=List[ScheduleOut], summary="获取排班列表")
+@router.get("/schedules", response_model=List[ScheduleOut], summary="获取排期列表")
 def list_schedules(
     counselor: AppAccount = Depends(require_counselor),
     db: Session = Depends(get_db),
@@ -885,7 +937,10 @@ def schedule_slot_options(
         paid_occupied = paid_occupied_rooms_at_center(db, center_id, start_dt) if rooms else set()
         for room in rooms:
             slot_status = resolve_slot_manual_status(
-                db, room.get("dbId"), start_dt, "AVAILABLE",
+                db,
+                room.get("dbId"),
+                start_dt,
+                room.get("status", "AVAILABLE"),
             )
             room_ok = is_slot_operational(slot_status)
             if room_ok:
@@ -903,10 +958,9 @@ def schedule_slot_options(
                 )
             )
         all_rooms_full = False if is_video_center(center_id) else (
-            self_row is not None or (
-                bool(usable_room_ids)
-                and not has_available_room_at_center(db, center_id, start_dt, usable_room_ids)
-            )
+            self_row is not None
+            or not usable_room_ids
+            or not has_available_room_at_center(db, center_id, start_dt, usable_room_ids)
         )
         options.append(
             TimeSlotOption(
@@ -1063,7 +1117,10 @@ def create_schedule(
         usable_room_ids = []
         for r in rooms:
             slot_status = resolve_slot_manual_status(
-                db, r.get("dbId"), body.start_time, "AVAILABLE",
+                db,
+                r.get("dbId"),
+                body.start_time,
+                r.get("status", "AVAILABLE"),
             )
             if is_slot_operational(slot_status):
                 usable_room_ids.append(r["id"])
@@ -1078,8 +1135,8 @@ def create_schedule(
             )
 
         pref = (body.room_id or "").strip() or None
-        if pref and pref not in {r["id"] for r in rooms}:
-            raise HTTPException(status_code=400, detail="无效的咨询室偏好")
+        if pref and pref not in usable_room_ids:
+            raise HTTPException(status_code=400, detail="咨询室偏好在该时段不可用")
 
     schedule = AppSchedule(
         CounselorId=counselor.Id,
@@ -1094,7 +1151,7 @@ def create_schedule(
     return schedule
 
 
-@router.put("/schedules/{schedule_id}", response_model=ScheduleOut, summary="更新/取消排班")
+@router.put("/schedules/{schedule_id}", response_model=ScheduleOut, summary="更新/取消排期")
 def update_schedule(
     schedule_id: int,
     body: ScheduleUpdate,
@@ -1106,7 +1163,7 @@ def update_schedule(
         AppSchedule.CounselorId == counselor.Id,
     ).first()
     if not schedule:
-        raise HTTPException(status_code=404, detail="排班不存在")
+        raise HTTPException(status_code=404, detail="排期不存在")
 
     if body.status == "CANCELLED":
         consultation = (
@@ -1121,14 +1178,10 @@ def update_schedule(
         if has_appointment_started(schedule.StartTime):
             raise HTTPException(status_code=400, detail="咨询已开始或已过开始时间，不可取消")
         if _has_active_booking(schedule, consultation):
-            if _active_consultation(consultation):
-                raise HTTPException(
-                    status_code=400,
-                    detail="已预约时段请提交请假申请，待管理员审核通过后方可取消",
-                )
-            else:
-                schedule.Status = "CANCELLED"
-                schedule.Note = release_assigned_room(schedule.Note)
+            raise HTTPException(
+                status_code=400,
+                detail="已预约时段请提交请假申请，待管理工作台审核通过后方可取消",
+            )
         elif schedule.Status == "AVAILABLE":
             schedule.Status = "CANCELLED"
         else:
@@ -1137,8 +1190,17 @@ def update_schedule(
         pref = (body.room_id or "").strip() or None
         if pref:
             rooms = get_consultation_rooms(db, body.center_id)
-            if pref not in {r["id"] for r in rooms}:
+            selected_room = next((room for room in rooms if room["id"] == pref), None)
+            if not selected_room:
                 raise HTTPException(status_code=400, detail="无效的咨询室偏好")
+            slot_status = resolve_slot_manual_status(
+                db,
+                selected_room.get("dbId"),
+                schedule.StartTime,
+                selected_room.get("status", "AVAILABLE"),
+            )
+            if not is_slot_operational(slot_status):
+                raise HTTPException(status_code=400, detail="咨询室偏好在该时段不可用")
         schedule.Note = schedule_pref_note(body.center_id, pref)
     elif body.note is not None:
         schedule.Note = body.note
@@ -1156,12 +1218,16 @@ def submit_leave_request(
     counselor: AppAccount = Depends(require_counselor),
     db: Session = Depends(get_db),
 ):
+    try:
+        acquire_leave_schedule_lock(db, schedule_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     schedule = db.query(AppSchedule).filter(
         AppSchedule.Id == schedule_id,
         AppSchedule.CounselorId == counselor.Id,
     ).first()
     if not schedule:
-        raise HTTPException(status_code=404, detail="排班不存在")
+        raise HTTPException(status_code=404, detail="排期不存在")
     consultation = (
         db.query(AppConsultation)
         .filter(
@@ -1207,6 +1273,7 @@ def submit_leave_request(
             ScheduleId=schedule_id,
             CounselorId=counselor.Id,
             ConsultationId=consultation.Id if consultation else None,
+            LeaveRequestId=row.Id,
             ScreenshotUrl=screenshot,
         )
     )
@@ -1261,7 +1328,12 @@ def update_consultation(
     counselor: AppAccount = Depends(require_counselor),
     db: Session = Depends(get_db),
 ):
-    allowed = {"CONFIRMED", "ONGOING", "DONE", "CANCELLED"}
+    if body.status == "CANCELLED":
+        raise HTTPException(
+            status_code=400,
+            detail="已预约咨询不可直接取消，请在对应排期提交请假申请并等待审核",
+        )
+    allowed = {"CONFIRMED", "ONGOING", "DONE"}
     if body.status not in allowed:
         raise HTTPException(status_code=400, detail=f"无效状态，可选值：{allowed}")
 
@@ -1290,15 +1362,6 @@ def update_consultation(
         cancel_consultation_auto_done_tasks(db, consultation.Id)
         mark_consultation_done(db, consultation, schedule)
         notify_counselor_consultation_done(db, consultation)
-    elif body.status == "CANCELLED":
-        if schedule and schedule.Status == "BOOKED":
-            schedule.Note = release_assigned_room(schedule.Note)
-            schedule.Status = "AVAILABLE"
-            schedule.UpdatedAt = datetime.utcnow()
-        from consultation_status_service import cancel_consultation_auto_done_tasks
-
-        cancel_consultation_auto_done_tasks(db, consultation.Id)
-        consultation.Status = body.status
     else:
         consultation.Status = body.status
 
@@ -1381,6 +1444,7 @@ def list_completed_consultations(
         a.Id: a
         for a in db.query(AppAccount).filter(AppAccount.Id.in_(patient_ids)).all()
     }
+    patient_contracts = batch_patient_contract_extras(db, list(patients.values()))
     records = {
         r.ConsultationId: r
         for r in db.query(AppCaseRecord)
@@ -1394,13 +1458,14 @@ def list_completed_consultations(
     result: List[CompletedConsultationOut] = []
     for c in consultations:
         record = records.get(c.Id)
-        photo_count = len(decode_photo_urls(record.PhotoUrls)) if record else 0
+        photo_count = len(case_record_photo_urls(record)) if record else 0
         has_content = case_record_has_content(record)
         result.append(
             CompletedConsultationOut(
                 Id=c.Id,
                 PatientId=c.PatientId,
                 PatientName=_patient_display_name(patients.get(c.PatientId)),
+                PatientContractTag=patient_contracts.get(c.PatientId, {}).get("contractTag"),
                 StartTime=c.StartTime,
                 EndTime=c.EndTime,
                 Note=c.Note,
@@ -1515,7 +1580,7 @@ def create_case_record(
     ).first()
     if existing:
         reject_if_case_record_locked(existing)
-        old_crisis_choice = get_crisis_level_choice(decode_risk_assessment(existing.RiskAssessment))
+        old_crisis_choice = get_crisis_level_choice(case_record_risk_assessment(existing))
         apply_case_record_fields(
             existing,
             subjective=body.subjective,
@@ -1672,7 +1737,7 @@ def sign_authenticity_commitment(
     counselor: AppAccount = Depends(require_counselor),
     db: Session = Depends(get_db),
 ):
-    raise HTTPException(status_code=403, detail="咨询师资料由平台统一维护，请联系运营人员更新")
+    raise HTTPException(status_code=403, detail="咨询师资料由平台统一维护，请联系运营更新")
 
 
 @router.put("/profile", summary="更新咨询师个人资料")
@@ -1681,7 +1746,7 @@ def update_profile(
     counselor: AppAccount = Depends(require_counselor),
     db: Session = Depends(get_db),
 ):
-    raise HTTPException(status_code=403, detail="咨询师资料由平台统一维护，请联系运营人员更新")
+    raise HTTPException(status_code=403, detail="咨询师资料由平台统一维护，请联系运营更新")
 
 
 @router.get("/stats", summary="咨询师统计看板")
@@ -1762,11 +1827,18 @@ def counselor_stats_details(
             a.Id: a
             for a in db.query(AppAccount).filter(AppAccount.Id.in_(patient_ids)).all()
         } if patient_ids else {}
+        patient_contracts = batch_patient_contract_extras(db, list(patients.values()))
         order_ids = {c.OrderId for c in consultations if c.OrderId}
         orders_by_id = {
             o.Id: o
             for o in db.query(AppOrder).filter(AppOrder.Id.in_(order_ids)).all()
         } if order_ids else {}
+        case_records = (
+            db.query(AppCaseRecord)
+            .filter(AppCaseRecord.ConsultationId.in_([c.Id for c in consultations]))
+            .all()
+        ) if consultations else []
+        case_records_by_consultation = {row.ConsultationId: row for row in case_records}
         profile = db.query(AppCounselorProfile).filter(
             AppCounselorProfile.AccountId == counselor.Id
         ).first()
@@ -1778,15 +1850,25 @@ def counselor_stats_details(
             if order and order.Status != "PAID":
                 continue
             amount = (order.TotalFee if order else billing) or 0
+            patient = patients.get(c.PatientId)
+            case_record = case_records_by_consultation.get(c.Id)
+            has_record = bool(case_record and case_record_has_content(case_record))
             if order or not c.OrderId:
                 items.append(
                     DashboardDetailItem(
                         id=c.Id,
-                        title=_patient_display_name(patients.get(c.PatientId)),
+                        title=_patient_display_name(patient),
                         subtitle=_format_dt_short(_consultation_time(c)),
                         extra=f"咨询单 #{c.Id}",
                         amount=amount,
+                        personalIncome=resolve_revenue_share_cents(db, c.PatientId, counselor.Id, amount),
+                        patientId=c.PatientId,
+                        patientMobile=patient.Mobile if patient else None,
+                        patientContractTag=patient_contracts.get(c.PatientId, {}).get("contractTag"),
+                        orderId=order.Id if order else None,
                         consultationId=c.Id,
+                        caseRecordId=case_record.Id if case_record else None,
+                        caseRecordStatus="FILLED" if has_record else "PENDING",
                         status=c.Status,
                     )
                 )
@@ -1811,6 +1893,7 @@ def counselor_stats_details(
             a.Id: a
             for a in db.query(AppAccount).filter(AppAccount.Id.in_(patient_ids)).all()
         } if patient_ids else {}
+        patient_contracts = batch_patient_contract_extras(db, list(patients.values()))
 
         items = []
         for record in records:
@@ -1828,7 +1911,13 @@ def counselor_stats_details(
                     id=record.Id,
                     title=patient_name,
                     subtitle=_format_dt_short(ref),
-                    extra=f"照片 {len(decode_photo_urls(record.PhotoUrls))} 张",
+                    extra=f"照片 {len(case_record_photo_urls(record))} 张",
+                    patientId=cons.PatientId if cons else None,
+                    patientMobile=(patients.get(cons.PatientId).Mobile if cons and patients.get(cons.PatientId) else None),
+                    patientContractTag=(
+                        patient_contracts.get(cons.PatientId, {}).get("contractTag")
+                        if cons else None
+                    ),
                     consultationId=record.ConsultationId,
                     caseRecordId=record.Id,
                     status="FILLED",
@@ -1852,6 +1941,7 @@ def counselor_stats_details(
             a.Id: a
             for a in db.query(AppAccount).filter(AppAccount.Id.in_(patient_ids)).all()
         } if patient_ids else {}
+        patient_contracts = batch_patient_contract_extras(db, list(patients.values()))
         status_labels = {
             "PENDING": "待确认",
             "CONFIRMED": "已确认",
@@ -1864,6 +1954,9 @@ def counselor_stats_details(
                 title=_patient_display_name(patients.get(c.PatientId)),
                 subtitle=_format_dt_short(_consultation_time(c)),
                 extra=status_labels.get(c.Status, c.Status),
+                patientId=c.PatientId,
+                patientMobile=(patients.get(c.PatientId).Mobile if patients.get(c.PatientId) else None),
+                patientContractTag=patient_contracts.get(c.PatientId, {}).get("contractTag"),
                 consultationId=c.Id,
                 status=c.Status,
             )
@@ -1901,7 +1994,7 @@ def counselor_stats_details(
             items.append(
                 DashboardDetailItem(
                     id=row.Id,
-                    title=slot_text or f"排期 #{row.ScheduleId}",
+                    title=slot_text or "排期记录",
                     subtitle=_format_dt_short(row.CreatedAt),
                     extra=status_labels.get(row.Status, row.Status),
                     status=row.Status,
@@ -1987,6 +2080,7 @@ def counselor_proxy_push_order(
             room_id=body.room_id,
             existing_schedule_id=body.schedule_id,
             agreement_is_adult=None,
+            notify_target_counselor=False,
         )
         db.commit()
         return result

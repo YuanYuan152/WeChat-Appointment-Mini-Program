@@ -23,6 +23,8 @@ from pricing_service import (
     get_counselor_profile,
     resolve_default_display_price_cents,
     resolve_display_price_cents,
+    resolve_price_label,
+    resolve_price_negotiation_required,
 )
 from user_role_meta import counselor_visible_to_viewer
 from counselor_identity_service import (
@@ -234,6 +236,8 @@ def _counselor_profile_dict(
     r: AppCounselorProfile,
     billing_cents: Optional[int] = None,
     *,
+    needs_negotiation: bool = False,
+    price_label: Optional[str] = None,
     price_negotiation: bool = False,
 ) -> Dict[str, Any]:
     billing = float(billing_cents if billing_cents is not None else (r.Billing or 0))
@@ -246,6 +250,8 @@ def _counselor_profile_dict(
         "field": r.Field,
         "introduce": r.Introduce,
         "billing": billing,
+        "needsNegotiation": needs_negotiation,
+        "priceLabel": price_label,
         "consultHours": int(r.ConsultHours or 0),
         "workYears": int(r.WorkYears or 0),
         "province": "线下/线上",
@@ -266,6 +272,21 @@ def _resolve_counselor_billing_cents(
     if patient_account:
         return resolve_display_price_cents(db, patient_account.Id, counselor_id)
     return resolve_default_display_price_cents(db, counselor_id)
+
+
+def _resolve_counselor_pricing_context(
+    db: Session,
+    counselor_id: int,
+    patient_account: Optional[AppAccount],
+) -> Dict[str, Any]:
+    patient_id = patient_account.Id if patient_account else None
+    billing_cents = _resolve_counselor_billing_cents(db, counselor_id, patient_account)
+    needs_negotiation = resolve_price_negotiation_required(db, patient_id, counselor_id)
+    return {
+        "billingCents": billing_cents,
+        "needsNegotiation": needs_negotiation,
+        "priceLabel": resolve_price_label(db, patient_id, counselor_id),
+    }
 
 
 def _patient_source_for_visibility(patient_account: Optional[AppAccount]) -> Optional[str]:
@@ -452,6 +473,8 @@ def common_counselor_detail(
         "field": profile.Field or new_rows[0].get("Field"),
         "introduce": profile.Introduce or new_rows[0].get("Introduce"),
         "billing": float(billing_cents),
+        "needsNegotiation": False,
+        "priceLabel": None,
         "priceNegotiation": False,
         "billingLabel": None,
         "charityBookingBlocked": False,
@@ -497,6 +520,8 @@ def common_counselor_time_slots(
     return {
         "counselorId": cid,
         "canSelfBook": can_self_book,
+        "needsNegotiation": False,
+        "priceLabel": None,
         "priceNegotiation": False,
         "billingLabel": None,
         "charityBookingBlocked": False,

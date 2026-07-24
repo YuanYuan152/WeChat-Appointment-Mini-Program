@@ -43,8 +43,9 @@
             <text class="stats-line">
               累计完成 {{ row.totalCompletedConsultations }} 次咨询 · 与本咨询师 {{ row.counselorCompletedConsultations }} 次
             </text>
-            <text v-if="row.autoAdjustmentYuan" class="auto-hint">
-              系统调价 +¥{{ row.autoAdjustmentYuan }}（已完成 {{ row.lowPriceOrderCount }} 次 ¥100 订单）
+            <text v-if="row.counselorType === 'CHARITY'" class="auto-hint">
+              公益完成 {{ row.completedCharityConsultationCount ?? row.lowPriceOrderCount }}/{{ row.charityNegotiationThreshold || 30 }}
+              <text v-if="row.needsNegotiation"> · {{ row.priceLabel || '需议价' }}，调价后可预约</text>
             </text>
           </view>
           <view class="edit-btn" @tap="openEdit(row)">编辑</view>
@@ -59,7 +60,8 @@
           </view>
           <view class="price-cell highlight">
             <text class="cell-label">显示价格</text>
-            <text class="cell-value strong">¥{{ row.displayPriceYuan }}</text>
+            <text v-if="row.needsNegotiation" class="cell-value strong negotiation-price">{{ row.priceLabel || '需议价' }}</text>
+            <text v-else class="cell-value strong">¥{{ row.displayPriceYuan }}</text>
           </view>
           <view class="price-cell">
             <text class="cell-label">分成收入</text>
@@ -81,9 +83,9 @@
           <text class="preview-label">基础价格（所有来访生效）</text>
           <text class="preview-value">¥{{ editing.basePriceYuan }}</text>
         </view>
-        <view v-if="editing.autoAdjustmentYuan" class="preview-row">
-          <text class="preview-label">系统调价</text>
-          <text class="preview-value">+¥{{ editing.autoAdjustmentYuan }}</text>
+        <view class="preview-row">
+          <text class="preview-label">系统状态</text>
+          <text class="preview-value">{{ editing.needsNegotiation ? (editing.priceLabel || '需议价') : '无系统调价' }}</text>
         </view>
 
         <view class="preview-row">
@@ -222,6 +224,7 @@ interface PatientPricingRow {
   patientId: number
   patientName: string
   patientMobile?: string
+  counselorType?: string | null
   basePriceYuan: number
   manualAdjustmentYuan: number
   autoAdjustmentYuan: number
@@ -229,6 +232,10 @@ interface PatientPricingRow {
   displayPriceYuan: number
   revenueShareYuan: number
   lowPriceOrderCount: number
+  completedCharityConsultationCount?: number
+  charityNegotiationThreshold?: number
+  needsNegotiation?: boolean
+  priceLabel?: string | null
   totalCompletedConsultations: number
   counselorCompletedConsultations: number
   shareMode?: string | null
@@ -697,6 +704,10 @@ onShow(() => reload(true))
 .stats-line { color: #6B7280; }
 
 .auto-hint { color: #6B9080; font-size: 22rpx; }
+
+.negotiation-price {
+  color: #B45309;
+}
 
 .load-more {
   text-align: center;

@@ -32,7 +32,8 @@ export function AssessmentAuthGate({
   useEffect(() => {
     if (!hydrated) return;
     if (!token) {
-      router.replace(`/login?redirect=${encodeURIComponent(pathname)}`);
+      const returnPath = `${pathname}${window.location.search}`;
+      router.replace(`/login?redirect=${encodeURIComponent(returnPath)}`);
       return;
     }
     if (requireUser && !user) {

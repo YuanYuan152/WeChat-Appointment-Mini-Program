@@ -199,7 +199,7 @@
         {
             "path": "pages/about/index",
             "style": {
-                "navigationBarTitleText": "关于我们",
+                "navigationBarTitleText": "联系我们",
                 "navigationBarBackgroundColor": "#ffffff",
                 "navigationBarTextStyle": "black",
                 "backgroundColor": "#F7F5F2"

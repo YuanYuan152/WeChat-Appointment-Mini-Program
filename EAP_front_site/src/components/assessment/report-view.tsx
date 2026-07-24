@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Share2, RotateCcw, AlertCircle, Download, Loader2 } from "lucide-react";
+import { AssessmentImage } from "@/components/assessment/assessment-image";
+import { AssessmentShareButton } from "@/components/assessment/assessment-share-button";
 import { Button } from "@/components/ui/button";
 import { useBeginAssessment } from "@/components/assessment/start-assessment-button";
 import { downloadAssessmentReportPdf } from "@/lib/assessment/download-report-pdf";
@@ -22,9 +23,16 @@ interface ReportViewProps {
   result: AssessmentScoreResult;
   type: "professional" | "fun";
   showActions?: boolean;
+  inviteAssessment?: Assessment;
 }
 
-export function ReportView({ assessment, result, type, showActions = true }: ReportViewProps) {
+export function ReportView({
+  assessment,
+  result,
+  type,
+  showActions = true,
+  inviteAssessment,
+}: ReportViewProps) {
   const beginAssessment = useBeginAssessment();
   const [downloading, setDownloading] = useState(false);
 
@@ -247,10 +255,9 @@ export function ReportView({ assessment, result, type, showActions = true }: Rep
               </div>
             )}
             <div className="relative aspect-[16/9]">
-              <Image
-                src={result.image}
+              <AssessmentImage
+                source={result.image}
                 alt={result.title}
-                fill
                 className="object-cover"
                 sizes="600px"
               />
@@ -277,6 +284,13 @@ export function ReportView({ assessment, result, type, showActions = true }: Rep
 
       {showActions && (
         <div className="mt-6 flex flex-wrap gap-3 no-print">
+          {inviteAssessment?.shareUrl ? (
+            <AssessmentShareButton
+              assessment={inviteAssessment}
+              triggerLabel="邀请好友测评"
+              triggerSize="default"
+            />
+          ) : null}
           {result.type === "match" && (
             <Button variant="outline" onClick={handleShare}>
               <Share2 className="mr-2 h-4 w-4" />

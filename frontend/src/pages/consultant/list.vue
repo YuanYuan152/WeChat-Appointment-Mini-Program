@@ -199,8 +199,8 @@
           
           <view class="doc-card-bottom">
             <view class="doc-price-box">
-              <template v-if="doctor.priceNegotiation">
-                <text class="price-num">议价</text>
+              <template v-if="doctor.priceNegotiation || doctor.needsNegotiation">
+                <text class="price-num">{{ doctor.billingLabel || doctor.priceLabel || '议价' }}</text>
                 <text class="price-unit">/50分钟</text>
               </template>
               <template v-else>
@@ -213,10 +213,10 @@
               <button class="assistant-btn" @click.stop="openAssistantContact">联系助理</button>
               <button
                 class="book-btn"
-                :class="{ disabled: doctor.priceNegotiation }"
+                :class="{ disabled: doctor.priceNegotiation || doctor.needsNegotiation }"
                 @click.stop="goToDetail(doctor.id)"
               >
-                {{ doctor.priceNegotiation ? '议价后方可预约' : '立即预约' }}
+                {{ doctor.priceNegotiation || doctor.needsNegotiation ? '议价后方可预约' : '立即预约' }}
               </button>
             </view>
           </view>
@@ -266,7 +266,10 @@ interface Consultant extends Omit<Doctor, 'province'> {
   consultationType?: string
   province?: string
   description?: string
+  status?: string
   price?: number
+  needsNegotiation?: boolean
+  priceLabel?: string
   priceNegotiation?: boolean
   billingLabel?: string
   _source?: string
@@ -386,6 +389,11 @@ function parseWorkYears(item: { workYears?: number; experience?: string }) {
 }
 
 function normalizeConsultant(item: Consultant): Consultant {
+  const raw = item as Consultant & {
+    needs_negotiation?: boolean
+    price_label?: string
+  }
+  const needsNegotiation = Boolean(raw.needsNegotiation ?? raw.needs_negotiation)
   const priceNegotiation = !!(item.priceNegotiation || item.billingLabel === '议价')
   return {
     ...item,
@@ -396,7 +404,10 @@ function normalizeConsultant(item: Consultant): Consultant {
     province: item.province || '线下/线上',
     description: item.description || '暂无介绍',
     price: item.price || 500,
+    needsNegotiation,
+    priceLabel: raw.priceLabel || raw.price_label || (needsNegotiation ? '需议价' : undefined),
     priceNegotiation,
+    billingLabel: item.billingLabel || (priceNegotiation ? '议价' : undefined),
   }
 }
 
@@ -947,6 +958,12 @@ onPullDownRefresh(async () => {
   font-size: 22rpx;
   color: #9CA3AF;
   margin-left: 4rpx;
+}
+
+.price-negotiate {
+  font-size: 30rpx;
+  color: #F59E0B;
+  font-weight: 800;
 }
 
 .assistant-btn {

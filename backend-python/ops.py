@@ -20,6 +20,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
+from sqlalchemy import func
 from sqlalchemy.exc import ProgrammingError, OperationalError
 from sqlalchemy.orm import Session
 
@@ -294,7 +295,7 @@ def list_activities_public(
 ):
     now = datetime.utcnow()
     q = db.query(AppActivity).filter(AppActivity.IsActive == True)
-    if type:
+    if type and type.upper() != "ALL":
         q = q.filter(AppActivity.Type == type)
     rows = q.order_by(AppActivity.SortOrder.asc(), AppActivity.CreatedAt.desc()).all()
     return [
@@ -481,12 +482,12 @@ def ops_dashboard(
     _ops: AppAccount = Depends(require_ops_or_admin_dashboard),
     db: Session = Depends(get_db),
 ):
-    user_count = db.query(AccountModel).count()
-    order_count = db.query(AppOrder).count()
-    paid_orders = db.query(AppOrder).filter(AppOrder.Status == "PAID").count()
+    user_count = db.query(func.count(AccountModel.Id)).scalar() or 0
+    order_count = db.query(func.count(AppOrder.Id)).scalar() or 0
+    paid_orders = db.query(func.count(AppOrder.Id)).filter(AppOrder.Status == "PAID").scalar() or 0
     total_fee = sum((o.TotalFee or 0) for o in db.query(AppOrder).filter(AppOrder.Status == "PAID").all())
-    article_count = db.query(AppArticle).count()
-    activity_count = db.query(AppActivity).count()
+    article_count = db.query(func.count(AppArticle.Id)).scalar() or 0
+    activity_count = db.query(func.count(AppActivity.Id)).scalar() or 0
     return {
         "userCount": user_count,
         "orderCount": order_count,
@@ -547,7 +548,9 @@ def _counselor_name(db: Session, counselor_id: int) -> str:
     if profile and profile.Name:
         return profile.Name
     acc = db.query(AccountModel).filter(AccountModel.Id == counselor_id).first()
-    return acc.Nickname if acc and acc.Nickname else f"咨询师#{counselor_id}"
+    if acc:
+        return acc.Nickname or acc.RealName or acc.Mobile or "未留姓名咨询师"
+    return "未留姓名咨询师"
 
 
 def _account_mobile(db: Session, account_id: int) -> Optional[str]:
@@ -591,9 +594,9 @@ def _room_occupancy_at(
     room_db_id: Optional[int] = None,
 ) -> dict:
     status_slot_start = standard_slot_start_for_status(at_time)
-    # 未单独设置的时段默认「可用」，不再回退咨询室全局 Status
+    # 单时段配置优先；未配置时沿用咨询室全局状态，避免停用房间仍显示可用。
     manual_status = resolve_slot_manual_status(
-        db, room_db_id, status_slot_start, "AVAILABLE",
+        db, room_db_id, status_slot_start, room_default_status or "AVAILABLE",
     )
     if manual_status == "DISABLED":
         return {
@@ -894,7 +897,7 @@ def get_room_detail(
         db,
         row.Id,
         [st for _, st, _ in all_bounds],
-        "AVAILABLE",
+        row.Status or "AVAILABLE",
     )
 
     by_date: dict[str, list] = {}
@@ -902,7 +905,7 @@ def get_room_detail(
         occ = _room_occupancy_at(
             db, row.CenterId, row.RoomCode, start_dt, row.Status, room_db_id=row.Id,
         )
-        manual_status = status_by_start.get(start_dt, "AVAILABLE")
+        manual_status = status_by_start.get(start_dt, row.Status or "AVAILABLE")
         occupancy = occ.get("occupancy")
         past = start_dt <= now
         editable = (not past) and occupancy != "IN_SESSION"
@@ -1012,7 +1015,7 @@ def _available_rooms_for_schedule(
     *,
     exclude_current: bool = False,
 ) -> List[dict]:
-    """返回该排班时段同中心可更换的咨询室列表。"""
+    """返回该排期时段同中心可更换的咨询室列表。"""
     center_id = parse_center_id(schedule.Note)
     if not center_id:
         return []
@@ -1026,7 +1029,10 @@ def _available_rooms_for_schedule(
         if exclude_current and room_code == current_room:
             continue
         slot_status = resolve_slot_manual_status(
-            db, room.get("dbId"), schedule.StartTime, "AVAILABLE",
+            db,
+            room.get("dbId"),
+            schedule.StartTime,
+            room.get("status", "AVAILABLE"),
         )
         if not is_slot_operational(slot_status):
             continue
@@ -1053,7 +1059,7 @@ def schedule_room_options(
 ):
     schedule = db.query(AppSchedule).filter(AppSchedule.Id == schedule_id).first()
     if not schedule:
-        raise HTTPException(status_code=404, detail="排班不存在")
+        raise HTTPException(status_code=404, detail="排期不存在")
     if schedule.Status != "BOOKED" or not parse_room_id(schedule.Note):
         raise HTTPException(status_code=400, detail="该时段未预约或尚未分配咨询室")
 
@@ -1081,13 +1087,13 @@ def change_schedule_room(
 ):
     schedule = db.query(AppSchedule).filter(AppSchedule.Id == schedule_id).first()
     if not schedule:
-        raise HTTPException(status_code=404, detail="排班不存在")
+        raise HTTPException(status_code=404, detail="排期不存在")
     if schedule.Status != "BOOKED" or not parse_room_id(schedule.Note):
         raise HTTPException(status_code=400, detail="该时段未预约或尚未分配咨询室")
 
     center_id = parse_center_id(schedule.Note)
     if not center_id:
-        raise HTTPException(status_code=400, detail="排班未指定预约中心")
+        raise HTTPException(status_code=400, detail="排期未指定预约中心")
 
     current_room = parse_room_id(schedule.Note)
     new_room = body.room_code.strip()

@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import jwt
 
 from fastapi import Request
+from sqlalchemy.exc import SQLAlchemyError
 
 from database import get_db
 from models import AppAccount, AppLoginSession, AppRoleBinding, AppRoleSwitchLog
@@ -131,6 +132,14 @@ def decode_token(token: str) -> dict:
         raise HTTPException(status_code=401, detail="Token 无效")
 
 
+def _account_is_active(account: AppAccount) -> bool:
+    try:
+        value = getattr(account, "IsActive", None)
+    except SQLAlchemyError:
+        return True
+    return value is not False
+
+
 def get_current_account(
     authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db),
@@ -148,7 +157,7 @@ def get_current_account(
     if not account:
         raise HTTPException(status_code=401, detail="用户不存在")
     # 注销后的账号即使持有未过期 JWT 也应被拒绝（升级方案 §6 合规要求）
-    if getattr(account, "IsActive", True) is False:
+    if not _account_is_active(account):
         raise HTTPException(status_code=401, detail="账号已注销")
     return account
 
@@ -264,7 +273,7 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
         db.refresh(account)
 
     if use_mock_login:
-        if getattr(account, "IsActive", True) is False:
+        if not _account_is_active(account):
             raise HTTPException(
                 status_code=403,
                 detail="演示账号已注销，请在 backend-python 目录重新运行 python seed_demo_data.py",

@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-07-24T08:38:49+00:00",
+  "assessments": {
+    "bsi-18": {
+      "id": "bsi-18",
+      "category": "professional",
+      "title": "简明症状量表（BSI-18）",
+      "status": "published",
+      "sortOrder": 0,
+      "publishedVersion": 1,
+      "draftVersion": null,
+      "draftRevision": null,
+      "updatedAt": "2026-07-24T08:38:49+00:00",
+      "archivedAt": null
+    },
+    "aas": {
+      "id": "aas",
+      "category": "professional",
+      "title": "成人依恋量表（AAS）",
+      "status": "published",
+      "sortOrder": 1,
+      "publishedVersion": 1,
+      "draftVersion": null,
+      "draftRevision": null,
+      "updatedAt": "2026-07-24T08:38:49+00:00",
+      "archivedAt": null
+    },
+    "psqi": {
+      "id": "psqi",
+      "category": "professional",
+      "title": "匹兹堡睡眠质量指数（PSQI）",
+      "status": "published",
+      "sortOrder": 2,
+      "publishedVersion": 1,
+      "draftVersion": null,
+      "draftRevision": null,
+      "updatedAt": "2026-07-24T08:38:49+00:00",
+      "archivedAt": null
+    },
+    "pbi": {
+      "id": "pbi",
+      "category": "professional",
+      "title": "父母教养方式问卷（PBI）",
+      "status": "published",
+      "sortOrder": 3,
+      "publishedVersion": 1,
+      "draftVersion": null,
+      "draftRevision": null,
+      "updatedAt": "2026-07-24T08:38:49+00:00",
+      "archivedAt": null
+    },
+    "cbcl": {
+      "id": "cbcl",
+      "category": "professional",
+      "title": "儿童行为量表（CBCL）",
+      "status": "published",
+      "sortOrder": 4,
+      "publishedVersion": 1,
+      "draftVersion": null,
+      "draftRevision": null,
+      "updatedAt": "2026-07-24T08:38:49+00:00",
+      "archivedAt": null
+    },
+    "dark-light-personality": {
+      "id": "dark-light-personality",
+      "category": "fun",
+      "title": "黑暗人格测试",
+      "status": "published",
+      "sortOrder": 5,
+      "publishedVersion": 1,
+      "draftVersion": null,
+      "draftRevision": null,
+      "updatedAt": "2026-07-24T08:38:49+00:00",
+      "archivedAt": null
+    }
+  }
+}

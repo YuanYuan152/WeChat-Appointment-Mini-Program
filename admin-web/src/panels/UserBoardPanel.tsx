@@ -42,6 +42,7 @@ export function UserBoardPanel({
   onOpen,
   onCloseDetail,
   onProxyBooking,
+  onOpenAssessmentReports,
   onSearchCounselors,
   onBindCounselor,
   remarkSaving,
@@ -60,6 +61,7 @@ export function UserBoardPanel({
   onOpen: (accountId: number) => void;
   onCloseDetail: () => void;
   onProxyBooking?: (target: UserProxyBookingTarget) => void;
+  onOpenAssessmentReports?: (accountId: number) => void;
   onSearchCounselors?: (keyword: string) => Promise<ProxyPersonOption[]>;
   onBindCounselor?: (patientId: number, counselorId: number | null) => Promise<void>;
   remarkSaving: boolean;
@@ -87,6 +89,7 @@ export function UserBoardPanel({
               detail={selected}
               onBindCounselor={onBindCounselor}
               onProxyBooking={onProxyBooking}
+              onOpenAssessmentReports={onOpenAssessmentReports}
               onSearchCounselors={onSearchCounselors}
               remarkSaving={remarkSaving}
               onSaveRemark={onSaveRemark}
@@ -235,6 +238,7 @@ const UserBoardListSection = memo(function UserBoardListSection({
 function UserDetailPanel({
   detail,
   onProxyBooking,
+  onOpenAssessmentReports,
   onSearchCounselors,
   onBindCounselor,
   remarkSaving,
@@ -242,6 +246,7 @@ function UserDetailPanel({
 }: {
   detail: UserBoardDetail;
   onProxyBooking?: (target: UserProxyBookingTarget) => void;
+  onOpenAssessmentReports?: (accountId: number) => void;
   onSearchCounselors?: (keyword: string) => Promise<ProxyPersonOption[]>;
   onBindCounselor?: (patientId: number, counselorId: number | null) => Promise<void>;
   remarkSaving: boolean;
@@ -397,6 +402,16 @@ function UserDetailPanel({
               {detail.profile.boundCounselorId ? "更换绑定咨询师" : "绑定咨询师"}
             </QueryResetButton>
           )}
+        </div>
+      )}
+      {canProxyBooking && onOpenAssessmentReports && (
+        <div className="mt-3">
+          <QueryResetButton
+            className="w-32"
+            onClick={() => onOpenAssessmentReports(detail.profile.id)}
+          >
+            量表报告
+          </QueryResetButton>
         </div>
       )}
       <div className="mt-5 grid grid-cols-2 gap-3 text-sm">

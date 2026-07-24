@@ -29,6 +29,13 @@ def _patient_name(db: Session, patient_id: int) -> str:
     return acc.RealName or acc.Nickname or acc.Mobile or "来访者"
 
 
+def _patient_contract_tag(db: Session, patient_id: int) -> Optional[str]:
+    from patient_contract_service import patient_contract_extras
+
+    acc = db.query(AppAccount).filter(AppAccount.Id == patient_id).first()
+    return patient_contract_extras(db, acc).get("contractTag")
+
+
 def _actor_label(db: Session, actor_id: int) -> str:
     role = get_account_role(db, actor_id) or ""
     name = _account_display_name(db, actor_id)
@@ -234,15 +241,17 @@ def notify_patient_price_adjustment_updated(
 ) -> None:
     counselor_name = _counselor_name(db, counselor_id)
     patient_name = _patient_name(db, patient_id)
+    patient_tag = _patient_contract_tag(db, patient_id)
+    patient_label = f"{patient_name} {patient_tag}" if patient_tag else patient_name
     actor = _actor_label(db, actor_id)
     display_yuan = int(breakdown.get("displayPriceYuan") or 0)
     adjustment_yuan = int(breakdown.get("adjustmentYuan") or 0)
 
     staff_summary = (
-        f"{actor}为{counselor_name}咨询师的{patient_name}来访改价成功，"
+        f"{actor}为{counselor_name}咨询师的{patient_label}来访改价成功，"
         f"现展示价 ¥{display_yuan}（调价 ¥{adjustment_yuan}）"
     )
-    counselor_summary = f"针对来访{patient_name}已调价成功"
+    counselor_summary = f"针对来访{patient_label}已调价成功"
     detail: Dict[str, Any] = {
         "actorId": actor_id,
         "actorLabel": actor,
@@ -250,6 +259,7 @@ def notify_patient_price_adjustment_updated(
         "counselorName": counselor_name,
         "patientId": patient_id,
         "patientName": patient_name,
+        "patientContractTag": patient_tag,
         "displayPriceYuan": display_yuan,
         "adjustmentYuan": adjustment_yuan,
         "basePriceYuan": breakdown.get("basePriceYuan"),
@@ -287,14 +297,16 @@ def notify_patient_share_updated(
 ) -> None:
     counselor_name = _counselor_name(db, counselor_id)
     patient_name = _patient_name(db, patient_id)
+    patient_tag = _patient_contract_tag(db, patient_id)
+    patient_label = f"{patient_name} {patient_tag}" if patient_tag else patient_name
     actor = _actor_label(db, actor_id)
     display_yuan = int(breakdown.get("displayPriceYuan") or 0)
     share_text = _format_share_text(share_after, display_yuan=display_yuan)
 
     staff_summary = (
-        f"{actor}已将{counselor_name}咨询师针对来访{patient_name}的{share_text}调整成功"
+        f"{actor}已将{counselor_name}咨询师针对来访{patient_label}的{share_text}调整成功"
     )
-    counselor_summary = f"针对来访{patient_name}{share_text}已调整"
+    counselor_summary = f"针对来访{patient_label}{share_text}已调整"
     detail: Dict[str, Any] = {
         "actorId": actor_id,
         "actorLabel": actor,
@@ -302,6 +314,7 @@ def notify_patient_share_updated(
         "counselorName": counselor_name,
         "patientId": patient_id,
         "patientName": patient_name,
+        "patientContractTag": patient_tag,
         "displayPriceYuan": display_yuan,
         "revenueShareYuan": breakdown.get("revenueShareYuan"),
         "shareMode": share_after.get("shareMode"),

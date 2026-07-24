@@ -1,0 +1,501 @@
+{
+  "id": "psqi",
+  "title": "匹兹堡睡眠质量指数（PSQI）",
+  "subtitle": "评估近1个月的睡眠质量",
+  "description": "PSQI 是广泛使用的睡眠质量评估工具，由 7 个成分构成，总分 0-21 分，得分越高表示睡眠质量越差。",
+  "cover": "/images/content/assess/assess-psqi.jpg",
+  "duration": 8,
+  "scoringType": "psqi",
+  "disclaimer": "本测评结果仅供参考，不能替代专业医学诊断。如睡眠问题持续，请咨询医生或睡眠专家。",
+  "scoreRanges": [
+    {
+      "min": 0,
+      "max": 5,
+      "level": "睡眠质量很好",
+      "description": "您的睡眠质量很好，暂时没有明显的睡眠问题。入睡与醒来时间较规律，睡眠过程顺畅。",
+      "suggestions": [
+        "继续保持良好的睡眠习惯",
+        "维持规律作息"
+      ]
+    },
+    {
+      "min": 6,
+      "max": 10,
+      "level": "睡眠质量较好",
+      "description": "您的睡眠质量总体良好，但可能存在一些可以改进的小问题。",
+      "suggestions": [
+        "避免睡前使用电子设备",
+        "制定固定的睡眠时间表",
+        "注意睡前饮食"
+      ]
+    },
+    {
+      "min": 11,
+      "max": 15,
+      "level": "睡眠质量一般",
+      "description": "您的睡眠质量一般，有时可能遇到入睡困难或夜间多次醒来。",
+      "suggestions": [
+        "限制晚间咖啡因和酒精",
+        "确保卧室环境安静、黑暗",
+        "尝试放松技巧如深呼吸"
+      ]
+    },
+    {
+      "min": 16,
+      "max": 21,
+      "level": "睡眠质量差",
+      "description": "您的睡眠质量较差，可能经常遭受睡眠障碍，建议尽快咨询医生或睡眠专家。",
+      "suggestions": [
+        "主动排解压力",
+        "向专业人士求助",
+        "与医生讨论可能的解决方案"
+      ]
+    }
+  ],
+  "questions": [
+    {
+      "id": "q2",
+      "text": "近1个月，从上床到入睡通常需要多长时间？",
+      "options": [
+        {
+          "id": "q2-a",
+          "text": "≤15分钟",
+          "value": 0
+        },
+        {
+          "id": "q2-b",
+          "text": "16-30分钟",
+          "value": 1
+        },
+        {
+          "id": "q2-c",
+          "text": "31-60分钟",
+          "value": 2
+        },
+        {
+          "id": "q2-d",
+          "text": ">60分钟",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "q4",
+      "text": "近1个月，每夜通常实际睡眠多少小时（不等于卧床时间）？",
+      "options": [
+        {
+          "id": "q4-a",
+          "text": ">7小时",
+          "value": 0
+        },
+        {
+          "id": "q4-b",
+          "text": "6-7小时",
+          "value": 1
+        },
+        {
+          "id": "q4-c",
+          "text": "5-6小时",
+          "value": 2
+        },
+        {
+          "id": "q4-d",
+          "text": "<5小时",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "q5a",
+      "text": "近1个月，因下列情况影响睡眠而烦恼：入睡困难（30分钟内不能入睡）",
+      "options": [
+        {
+          "id": "q5a-a",
+          "text": "无",
+          "value": 0
+        },
+        {
+          "id": "q5a-b",
+          "text": "<1次/周",
+          "value": 1
+        },
+        {
+          "id": "q5a-c",
+          "text": "1-2次/周",
+          "value": 2
+        },
+        {
+          "id": "q5a-d",
+          "text": "≥3次/周",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "q5b",
+      "text": "近1个月，因下列情况影响睡眠而烦恼：夜间易醒或早醒",
+      "options": [
+        {
+          "id": "q5b-a",
+          "text": "无",
+          "value": 0
+        },
+        {
+          "id": "q5b-b",
+          "text": "<1次/周",
+          "value": 1
+        },
+        {
+          "id": "q5b-c",
+          "text": "1-2次/周",
+          "value": 2
+        },
+        {
+          "id": "q5b-d",
+          "text": "≥3次/周",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "q5c",
+      "text": "近1个月，因下列情况影响睡眠而烦恼：夜间去厕所",
+      "options": [
+        {
+          "id": "q5c-a",
+          "text": "无",
+          "value": 0
+        },
+        {
+          "id": "q5c-b",
+          "text": "<1次/周",
+          "value": 1
+        },
+        {
+          "id": "q5c-c",
+          "text": "1-2次/周",
+          "value": 2
+        },
+        {
+          "id": "q5c-d",
+          "text": "≥3次/周",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "q5d",
+      "text": "近1个月，因下列情况影响睡眠而烦恼：呼吸不畅",
+      "options": [
+        {
+          "id": "q5d-a",
+          "text": "无",
+          "value": 0
+        },
+        {
+          "id": "q5d-b",
+          "text": "<1次/周",
+          "value": 1
+        },
+        {
+          "id": "q5d-c",
+          "text": "1-2次/周",
+          "value": 2
+        },
+        {
+          "id": "q5d-d",
+          "text": "≥3次/周",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "q5e",
+      "text": "近1个月，因下列情况影响睡眠而烦恼：咳嗽或鼾声高",
+      "options": [
+        {
+          "id": "q5e-a",
+          "text": "无",
+          "value": 0
+        },
+        {
+          "id": "q5e-b",
+          "text": "<1次/周",
+          "value": 1
+        },
+        {
+          "id": "q5e-c",
+          "text": "1-2次/周",
+          "value": 2
+        },
+        {
+          "id": "q5e-d",
+          "text": "≥3次/周",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "q5f",
+      "text": "近1个月，因下列情况影响睡眠而烦恼：感觉冷",
+      "options": [
+        {
+          "id": "q5f-a",
+          "text": "无",
+          "value": 0
+        },
+        {
+          "id": "q5f-b",
+          "text": "<1次/周",
+          "value": 1
+        },
+        {
+          "id": "q5f-c",
+          "text": "1-2次/周",
+          "value": 2
+        },
+        {
+          "id": "q5f-d",
+          "text": "≥3次/周",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "q5g",
+      "text": "近1个月，因下列情况影响睡眠而烦恼：感觉热",
+      "options": [
+        {
+          "id": "q5g-a",
+          "text": "无",
+          "value": 0
+        },
+        {
+          "id": "q5g-b",
+          "text": "<1次/周",
+          "value": 1
+        },
+        {
+          "id": "q5g-c",
+          "text": "1-2次/周",
+          "value": 2
+        },
+        {
+          "id": "q5g-d",
+          "text": "≥3次/周",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "q5h",
+      "text": "近1个月，因下列情况影响睡眠而烦恼：做恶梦",
+      "options": [
+        {
+          "id": "q5h-a",
+          "text": "无",
+          "value": 0
+        },
+        {
+          "id": "q5h-b",
+          "text": "<1次/周",
+          "value": 1
+        },
+        {
+          "id": "q5h-c",
+          "text": "1-2次/周",
+          "value": 2
+        },
+        {
+          "id": "q5h-d",
+          "text": "≥3次/周",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "q5i",
+      "text": "近1个月，因下列情况影响睡眠而烦恼：疼痛不适",
+      "options": [
+        {
+          "id": "q5i-a",
+          "text": "无",
+          "value": 0
+        },
+        {
+          "id": "q5i-b",
+          "text": "<1次/周",
+          "value": 1
+        },
+        {
+          "id": "q5i-c",
+          "text": "1-2次/周",
+          "value": 2
+        },
+        {
+          "id": "q5i-d",
+          "text": "≥3次/周",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "q5j",
+      "text": "近1个月，因下列情况影响睡眠而烦恼：其他影响睡眠的事情",
+      "options": [
+        {
+          "id": "q5j-a",
+          "text": "无",
+          "value": 0
+        },
+        {
+          "id": "q5j-b",
+          "text": "<1次/周",
+          "value": 1
+        },
+        {
+          "id": "q5j-c",
+          "text": "1-2次/周",
+          "value": 2
+        },
+        {
+          "id": "q5j-d",
+          "text": "≥3次/周",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "q6",
+      "text": "近1个月，总的来说，您认为自己的睡眠质量",
+      "options": [
+        {
+          "id": "q6-a",
+          "text": "很好",
+          "value": 0
+        },
+        {
+          "id": "q6-b",
+          "text": "较好",
+          "value": 1
+        },
+        {
+          "id": "q6-c",
+          "text": "较差",
+          "value": 2
+        },
+        {
+          "id": "q6-d",
+          "text": "很差",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "q7",
+      "text": "近1个月，您用药物催眠的情况",
+      "options": [
+        {
+          "id": "q7-a",
+          "text": "无",
+          "value": 0
+        },
+        {
+          "id": "q7-b",
+          "text": "<1次/周",
+          "value": 1
+        },
+        {
+          "id": "q7-c",
+          "text": "1-2次/周",
+          "value": 2
+        },
+        {
+          "id": "q7-d",
+          "text": "≥3次/周",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "q8",
+      "text": "近1个月，您常感到困倦吗",
+      "options": [
+        {
+          "id": "q8-a",
+          "text": "无",
+          "value": 0
+        },
+        {
+          "id": "q8-b",
+          "text": "<1次/周",
+          "value": 1
+        },
+        {
+          "id": "q8-c",
+          "text": "1-2次/周",
+          "value": 2
+        },
+        {
+          "id": "q8-d",
+          "text": "≥3次/周",
+          "value": 3
+        }
+      ],
+      "required": true
+    },
+    {
+      "id": "q9",
+      "text": "近1个月，您做事情的精力不足吗",
+      "options": [
+        {
+          "id": "q9-a",
+          "text": "没有",
+          "value": 0
+        },
+        {
+          "id": "q9-b",
+          "text": "偶尔有",
+          "value": 1
+        },
+        {
+          "id": "q9-c",
+          "text": "有时有",
+          "value": 2
+        },
+        {
+          "id": "q9-d",
+          "text": "经常有",
+          "value": 3
+        }
+      ],
+      "required": true
+    }
+  ],
+  "schemaVersion": 1,
+  "version": 1,
+  "status": "published",
+  "category": "professional",
+  "scoringPreset": "psqi-v1",
+  "instructions": "下面一些问题是关于您最近1个月的睡眠状况，请选择或填写最符合您近1个月实际情况的答案。请回答下列问题！",
+  "features": "PSQI用于评定被试最近1个月的睡眠质量，由19个自评和5个他评条目构成，其中第19个自评条目和5个他评条目不参与计分，在此仅介绍参与计分的18个自评条目（详见附问卷）。18个条目组成7个成份，每个成份按0-3等级计分，累积各成份得分为PSQI总分，总分范围为0-21，得分越高，表示睡眠质量越差。被试者完成该问卷需要5-10分钟。",
+  "reportIntro": "PSQI用于评定被试最近1个月的睡眠质量，由19个自评和5个他评条目构成，其中第19个自评条目和5个他评条目不参与计分，在此仅介绍参与计分的18个自评条目（详见附问卷）。18个条目组成7个成份，每个成份按0-3等级计分，累积各成份得分为PSQI总分，总分范围为0-21，得分越高，表示睡眠质量越差。被试者完成该问卷需要5-10分钟。",
+  "sortOrder": 2,
+  "createdAt": "2026-07-24T08:38:49+00:00",
+  "updatedAt": "2026-07-24T08:38:49+00:00",
+  "publishedAt": "2026-07-24T08:38:49+00:00"
+}

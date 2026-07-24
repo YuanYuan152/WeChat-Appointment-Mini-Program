@@ -8,6 +8,7 @@ PUT /api/mini/patient/registration  → 保存完整版登记表
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 from datetime import datetime
@@ -21,6 +22,7 @@ from consultation_cancel import (
     refund_ineligible_reason,
 )
 from database import get_db
+from model_compat import optional_model_value
 from models import (
     AppOrder,
     AppRegistrationForm,
@@ -408,26 +410,33 @@ def get_my_consultations(
 
     feedback_map: dict[int, AppConsultationFeedback] = {}
     if consultation_ids:
-        for fb in db.query(AppConsultationFeedback).filter(
-            AppConsultationFeedback.ConsultationId.in_(consultation_ids),
-            AppConsultationFeedback.AccountId == current_account.Id,
-        ).all():
-            feedback_map[fb.ConsultationId] = fb
+        try:
+            for fb in db.query(AppConsultationFeedback).filter(
+                AppConsultationFeedback.ConsultationId.in_(consultation_ids),
+                AppConsultationFeedback.AccountId == current_account.Id,
+            ).all():
+                feedback_map[fb.ConsultationId] = fb
+        except SQLAlchemyError:
+            db.rollback()
 
     result: List[ConsultationOut] = []
     for r in rows:
         prof = counselor_map.get(r.CounselorId)
         acc = accounts.get(r.CounselorId)
-        name = (prof.Name if prof and prof.Name else None) or (acc.Nickname if acc else None) or f"咨询师#{r.CounselorId}"
+        name = (
+            (prof.Name if prof and prof.Name else None)
+            or (acc.Nickname if acc else None)
+            or (acc.RealName if acc else None)
+            or (acc.Mobile if acc else None)
+            or "未留姓名咨询师"
+        )
         avatar = (prof.AvatarUrl if prof and prof.AvatarUrl else None) or (acc.AvatarUrl if acc else None)
 
         sched = schedule_map.get(r.ScheduleId) if r.ScheduleId else None
         start_time = r.StartTime or (sched.StartTime if sched else None)
         end_time = r.EndTime or (sched.EndTime if sched else None)
 
-        center_note_text = sched.Note if sched else None
-        if not center_note_text and r.Note:
-            center_note_text = r.Note
+        center_note_text = r.Note or (sched.Note if sched else None)
         center_id = parse_center_id(center_note_text)
         center_name = center_display_name(center_id)
         cancelable = can_visitor_cancel(r.Status)
@@ -467,7 +476,11 @@ def get_my_consultations(
             orderAmount=order_amount,
             refundReason=None if refund_ok else refund_ineligible_reason(start_time),
             exemptionStatus=exemption.Status if exemption else None,
-            exemptionRejectReason=exemption.RejectReason if exemption and exemption.Status == "REJECTED" else None,
+            exemptionRejectReason=(
+                optional_model_value(exemption, "RejectReason")
+                if exemption and exemption.Status == "REJECTED"
+                else None
+            ),
             exemptionId=exemption.Id if exemption else None,
             orderStatus=order_status,
             cancelSummary=cancel_summary,
@@ -705,7 +718,7 @@ def submit_refund_exemption(
         reason=exemption.Reason,
         screenshotUrl=exemption.ScreenshotUrl,
         status=exemption.Status,
-        rejectReason=exemption.RejectReason,
+        rejectReason=optional_model_value(exemption, "RejectReason"),
         createdAt=exemption.CreatedAt,
     )
 
