@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import or_
+from sqlalchemy import inspect as sa_inspect, or_
 from sqlalchemy.orm import Session
 
 from models import (
@@ -48,6 +48,18 @@ from models import (
     AppUserPreferenceTag,
     AppUserSubscribeAuth,
 )
+
+
+def _orm_table_exists(db: Session, model) -> bool:
+    """本地库尚未跑 ensure_schema 时，EAP 测评表可能不存在，删除用户须跳过。"""
+    try:
+        bind = db.get_bind()
+        name = getattr(model, "__tablename__", None)
+        if not name:
+            return False
+        return bool(sa_inspect(bind).has_table(name))
+    except Exception:
+        return False
 
 
 def soft_delete_account(
@@ -384,19 +396,21 @@ def hard_delete_account(
     db.query(AppPsychScaleResult).filter(AppPsychScaleResult.AccountId == account_id).delete(
         synchronize_session=False
     )
-    db.query(AppAssessmentReport).filter(AppAssessmentReport.AccountId == account_id).delete(
-        synchronize_session=False
-    )
-    # 审计事实需要保留，但账号被物理删除后不能继续保留操作者标识。
-    db.query(AppAssessmentAuditLog).filter(
-        AppAssessmentAuditLog.ActorAccountId == account_id
-    ).update(
-        {
-            AppAssessmentAuditLog.ActorAccountId: None,
-            AppAssessmentAuditLog.ActorRole: None,
-        },
-        synchronize_session=False,
-    )
+    # EAP 测评表由 ensure_schema 创建；未建表时跳过，避免 42S02 导致整次删除回滚
+    if _orm_table_exists(db, AppAssessmentReport):
+        db.query(AppAssessmentReport).filter(AppAssessmentReport.AccountId == account_id).delete(
+            synchronize_session=False
+        )
+    if _orm_table_exists(db, AppAssessmentAuditLog):
+        db.query(AppAssessmentAuditLog).filter(
+            AppAssessmentAuditLog.ActorAccountId == account_id
+        ).update(
+            {
+                AppAssessmentAuditLog.ActorAccountId: None,
+                AppAssessmentAuditLog.ActorRole: None,
+            },
+            synchronize_session=False,
+        )
     db.query(AppFeedback).filter(AppFeedback.AccountId == account_id).delete(
         synchronize_session=False
     )
