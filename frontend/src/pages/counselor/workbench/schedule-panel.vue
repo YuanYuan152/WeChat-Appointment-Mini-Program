@@ -428,6 +428,7 @@ import { formatDateLocal, ROLLING_WINDOW_DAYS, PAST_WINDOW_DAYS, LIST_WINDOW_DAY
 import { openCounselorCaseRecord } from '@/utils/case-record'
 import { formatPatientInline } from '@/utils/patientContract'
 import { fetchSystemSettings, formatProxyOrderPushHint } from '@/utils/systemSettings'
+import { refreshSubscribeHint, tryOfficialRoleSubscribeInGesture } from '@/utils/subscribePrompt'
 
 const proxyOrderTtlMinutes = ref(120)
 const proxyOrderPayHint = computed(() => formatProxyOrderPushHint(proxyOrderTtlMinutes.value))
@@ -1326,7 +1327,7 @@ const handleCancelSlot = (slot: CalendarSlot) => {
   })
 }
 
-const submitSlot = async () => {
+const submitSlot = () => {
   if (submitting.value) return
   const { centerId, roomId, startTime, endTime, slotKey } = form.value
   if (!centerId || !slotKey || !startTime || !endTime) {
@@ -1338,31 +1339,37 @@ const submitSlot = async () => {
     return
   }
 
+  // 手势内同步官方订阅（咨询提醒），禁止业务成功后再弹自定义框
+  const subscribeDone = tryOfficialRoleSubscribeInGesture('schedule')
   submitting.value = true
-  try {
-    const res = await httpV2.post(API_ENDPOINTS.counselor.schedules, {
-      start_time: startTime.slice(0, 19),
-      end_time: endTime.slice(0, 19),
-      center_id: centerId,
-      room_id: isVideoCenter(centerId) ? null : (roomId === NO_PREF ? null : roomId),
-    })
-    if (res.code === 0) {
-      showAdd.value = false
-      uni.showToast({ title: '排期成功', icon: 'success' })
-      await refresh()
-      await loadSlotOptions()
-    } else {
-      uni.showToast({ title: res.msg || '排期失败', icon: 'none' })
+  void (async () => {
+    try {
+      const res = await httpV2.post(API_ENDPOINTS.counselor.schedules, {
+        start_time: startTime.slice(0, 19),
+        end_time: endTime.slice(0, 19),
+        center_id: centerId,
+        room_id: isVideoCenter(centerId) ? null : (roomId === NO_PREF ? null : roomId),
+      })
+      await subscribeDone
+      if (res.code === 0) {
+        showAdd.value = false
+        uni.showToast({ title: '排期成功', icon: 'success' })
+        await refresh()
+        await loadSlotOptions()
+      } else {
+        uni.showToast({ title: res.msg || '排期失败', icon: 'none' })
+      }
+    } catch (err: any) {
+      uni.showToast({ title: err?.message || '排期失败', icon: 'none' })
+    } finally {
+      submitting.value = false
     }
-  } catch (err: any) {
-    uni.showToast({ title: err?.message || '排期失败', icon: 'none' })
-  } finally {
-    submitting.value = false
-  }
+  })()
 }
 
 onMounted(() => {
   loadCalendar()
+  void refreshSubscribeHint()
   fetchSystemSettings().then(data => {
     proxyOrderTtlMinutes.value = data.proxyOrderTtlMinutes
   })

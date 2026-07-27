@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     # Wechat configuration (placeholders for now)
     WECHAT_APPID: str = ""
     WECHAT_SECRET: str = ""
+    # 订阅消息跳转环境：developer | trial | formal
+    WECHAT_MINIPROGRAM_STATE: str = "developer"
 
     # WeChat Pay configuration (placeholders)
     WECHAT_PAY_MCH_ID: str = ""

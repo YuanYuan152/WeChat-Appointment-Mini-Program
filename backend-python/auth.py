@@ -67,6 +67,95 @@ def _is_wechat_configured() -> bool:
     return appid not in _WECHAT_PLACEHOLDER_APPIDS and secret not in _WECHAT_PLACEHOLDER_SECRETS
 
 
+def _wechat_http():
+    """直连微信 API，忽略系统/环境代理（避免 ProxyError / SSL EOF）。"""
+    import requests
+
+    session = requests.Session()
+    session.trust_env = False
+    return session
+
+
+def _sanitize_wechat_error(exc: BaseException) -> str:
+    """去掉 URL 中的 secret，避免把凭证回显到前端。"""
+    import re
+
+    text = str(exc)
+    text = re.sub(r"(secret=)[^&\s]+", r"\1***", text, flags=re.IGNORECASE)
+    text = re.sub(r"(appsecret=)[^&\s]+", r"\1***", text, flags=re.IGNORECASE)
+    if "ProxyError" in text or "proxy" in text.lower():
+        return (
+            "无法连接微信服务器（代理/SSL 异常）。"
+            "请关闭系统代理或 VPN 后重启后端，或确认本机可直连 api.weixin.qq.com"
+        )
+    if "Max retries exceeded" in text or "SSLEOFError" in text or "SSLError" in text:
+        return "连接微信服务器失败，请检查本机网络是否可访问 api.weixin.qq.com"
+    return text[:240]
+
+
+def _code_to_session(js_code: str) -> dict:
+    """wx.login code → openid / session_key（不经 wechatpy，避免代理与 token 干扰）。"""
+    session = _wechat_http()
+    resp = session.get(
+        "https://api.weixin.qq.com/sns/jscode2session",
+        params={
+            "appid": settings.WECHAT_APPID,
+            "secret": settings.WECHAT_SECRET,
+            "js_code": js_code,
+            "grant_type": "authorization_code",
+        },
+        timeout=15,
+    )
+    data = resp.json() if resp.content else {}
+    errcode = data.get("errcode", 0)
+    if errcode not in (0, None):
+        raise RuntimeError(f"{errcode}: {data.get('errmsg', 'jscode2session failed')}")
+    if not data.get("openid"):
+        raise RuntimeError("微信未返回 openid")
+    return data
+
+
+def _get_access_token() -> str:
+    session = _wechat_http()
+    resp = session.get(
+        "https://api.weixin.qq.com/cgi-bin/token",
+        params={
+            "grant_type": "client_credential",
+            "appid": settings.WECHAT_APPID,
+            "secret": settings.WECHAT_SECRET,
+        },
+        timeout=15,
+    )
+    data = resp.json() if resp.content else {}
+    token = data.get("access_token")
+    if not token:
+        raise RuntimeError(
+            f"{data.get('errcode', '')}: {data.get('errmsg', '获取 access_token 失败')}"
+        )
+    return token
+
+
+def _exchange_wechat_phone_number(phone_code: str) -> str:
+    """用 getPhoneNumber 返回的 code 换取手机号。"""
+    session = _wechat_http()
+    access_token = _get_access_token()
+    resp = session.post(
+        "https://api.weixin.qq.com/wxa/business/getuserphonenumber",
+        params={"access_token": access_token},
+        json={"code": phone_code},
+        timeout=15,
+    )
+    data = resp.json() if resp.content else {}
+    errcode = data.get("errcode", 0)
+    if errcode not in (0, None):
+        raise RuntimeError(f"{errcode}: {data.get('errmsg', 'unknown')}")
+    phone_info = data.get("phone_info") or {}
+    mobile = phone_info.get("purePhoneNumber") or phone_info.get("phoneNumber")
+    if not mobile:
+        raise RuntimeError("微信未返回手机号，请确认已开通手机号快速验证能力")
+    return str(mobile).strip()
+
+
 def _mock_openid_for_code(code: str) -> str:
     mapped = DEV_MOCK_CODE_OPENIDS.get(code)
     if mapped:
@@ -83,6 +172,19 @@ class LoginRequest(BaseModel):
 class LoginResponse(BaseModel):
     token: str
     is_new_user: bool
+    openId: Optional[str] = None
+    activeRole: Optional[str] = None
+    roles: list[str] = []
+    nickname: Optional[str] = None
+    avatarUrl: Optional[str] = None
+    id: Optional[int] = None
+    mobile: Optional[str] = None
+    # True = 后端走了 mock openid（未配置真实微信凭证）
+    isMockAuth: bool = False
+    # 新用户引导：完善资料 / 订阅消息
+    needProfileSetup: bool = False
+    needSubscribeGuide: bool = False
+
 
 class BindMobileRequest(BaseModel):
     # 微信获取手机号的 code（微信基础库 >= 2.21.2 的新版方式）
@@ -98,6 +200,10 @@ class UserInfo(BaseModel):
     gender: Optional[str] = None
     roles: list[str] = []
     activeRole: Optional[str] = None
+    profileCompleted: bool = False
+    subscribeOptIn: bool = False
+    needProfileSetup: bool = False
+    needSubscribeGuide: bool = False
 
 
 class SwitchRoleRequest(BaseModel):
@@ -109,7 +215,26 @@ class ProfileUpdateRequest(BaseModel):
     avatarUrl: Optional[str] = None
     realName: Optional[str] = None
     gender: Optional[str] = None
+    markProfileCompleted: Optional[bool] = True
 
+
+def _profile_completed(account: AppAccount) -> bool:
+    return bool(getattr(account, "ProfileCompletedAt", None) or (account.Nickname or "").strip())
+
+
+def _subscribe_opt_in(account: AppAccount) -> bool:
+    return bool(getattr(account, "SubscribeOptInAt", None))
+
+
+def _need_profile_setup(account: AppAccount, is_new_user: bool = False) -> bool:
+    return is_new_user or not _profile_completed(account)
+
+
+def _need_subscribe_guide(account: AppAccount, is_new_user: bool = False) -> bool:
+    # 仅新用户注册链路强制引导一次；老用户在业务页再次订阅
+    if _subscribe_opt_in(account):
+        return False
+    return bool(is_new_user)
 # ---------------------------------------------------------------------------
 # JWT helpers
 # ---------------------------------------------------------------------------
@@ -226,16 +351,16 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
         session_key = "mock_session_key"
     else:
         try:
-            from wechatpy import WeChatClient
-            client = WeChatClient(settings.WECHAT_APPID, settings.WECHAT_SECRET)
-            session_info = client.wxa.code_to_session(request.code)
+            session_info = _code_to_session(request.code)
             openid = session_info.get("openid")
             unionid = session_info.get("unionid")
             session_key = session_info.get("session_key", "")
             if not openid:
                 raise HTTPException(status_code=400, detail="无法获取 openid，请检查 code 是否有效")
+        except HTTPException:
+            raise
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"微信登录失败: {str(e)}")
+            raise HTTPException(status_code=400, detail=f"微信登录失败: {_sanitize_wechat_error(e)}")
 
     is_new_user = False
     account: Optional[AppAccount] = (
@@ -295,7 +420,37 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
     db.add(session)
     db.commit()
 
-    return LoginResponse(token=token, is_new_user=is_new_user)
+    consolidate_account_role_bindings(db, account.Id)
+    role = get_account_role(db, account.Id)
+    if getattr(account, "ActiveRole", None) != role:
+        account.ActiveRole = role
+        account.UpdatedAt = datetime.utcnow()
+        db.commit()
+        db.refresh(account)
+
+    return LoginResponse(
+        token=token,
+        is_new_user=is_new_user,
+        openId=account.OpenId or openid,
+        activeRole=role,
+        roles=[role],
+        nickname=account.Nickname,
+        avatarUrl=account.AvatarUrl,
+        id=account.Id,
+        mobile=account.Mobile,
+        isMockAuth=use_mock_login,
+        needProfileSetup=_need_profile_setup(account, is_new_user),
+        needSubscribeGuide=_need_subscribe_guide(account, is_new_user),
+    )
+
+
+@router.get("/wechat-status", summary="微信凭证是否已配置（前端据此切换正式/联调流程）")
+def wechat_status():
+    return {
+        "configured": _is_wechat_configured(),
+        "appIdConfigured": bool((settings.WECHAT_APPID or "").strip())
+        and (settings.WECHAT_APPID or "").strip() not in _WECHAT_PLACEHOLDER_APPIDS,
+    }
 
 
 @router.post("/bind-mobile", summary="绑定微信手机号")
@@ -308,18 +463,21 @@ def bind_mobile(
     使用微信 getPhoneNumber 返回的 code 换取真实手机号并绑定到当前账号。
     未配置真实凭证时返回 mock 手机号方便本地测试。
     """
-    if settings.WECHAT_APPID and settings.WECHAT_SECRET:
+    if _is_wechat_configured():
         try:
-            from wechatpy import WeChatClient
-            client = WeChatClient(settings.WECHAT_APPID, settings.WECHAT_SECRET)
-            phone_info = client.wxa.get_phone_number(request.phoneCode)
-            mobile = phone_info.get("phone_info", {}).get("phoneNumber")
-            if not mobile:
-                raise HTTPException(status_code=400, detail="无法获取手机号")
+            mobile = _exchange_wechat_phone_number(request.phoneCode)
+        except HTTPException:
+            raise
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"获取手机号失败: {str(e)}")
+            err = _sanitize_wechat_error(e)
+            raise HTTPException(
+                status_code=400,
+                detail=f"获取手机号失败: {err}",
+            )
     else:
-        mobile = f"138{request.phoneCode[-8:].zfill(8)}"
+        # 本地未配置真实微信时：用 phoneCode 生成可区分的 mock 手机号，便于联调
+        tail = "".join(ch for ch in request.phoneCode if ch.isalnum())[-8:].zfill(8)
+        mobile = f"138{tail}"
 
     # 检查手机号是否已被其他账号绑定
     existing = db.query(AppAccount).filter(
@@ -333,7 +491,11 @@ def bind_mobile(
     current_account.UpdatedAt = datetime.utcnow()
     db.commit()
 
-    return {"message": "手机号绑定成功", "mobile": mobile}
+    return {
+        "message": "手机号绑定成功",
+        "mobile": mobile,
+        "isMockAuth": not _is_wechat_configured(),
+    }
 
 
 @router.get("/me", response_model=UserInfo, summary="获取当前用户信息及角色")
@@ -364,6 +526,10 @@ def get_me(
         gender=current_account.Gender,
         roles=[role],
         activeRole=role,
+        profileCompleted=_profile_completed(current_account),
+        subscribeOptIn=_subscribe_opt_in(current_account),
+        needProfileSetup=_need_profile_setup(current_account),
+        needSubscribeGuide=_need_subscribe_guide(current_account),
     )
 
 
@@ -383,6 +549,12 @@ def update_me(
         val = getattr(body, src, None)
         if val is not None:
             setattr(current_account, dst, val)
+    if body.markProfileCompleted and (
+        (body.nickname is not None and str(body.nickname).strip())
+        or (current_account.Nickname or "").strip()
+    ):
+        if not getattr(current_account, "ProfileCompletedAt", None):
+            current_account.ProfileCompletedAt = datetime.utcnow()
     current_account.UpdatedAt = datetime.utcnow()
     db.commit()
     db.refresh(current_account)
@@ -390,66 +562,33 @@ def update_me(
 
 
 @router.delete("/account", summary="注销当前账号（软删除，保留业务表追溯）")
+@router.post("/account/deactivate", summary="注销当前账号（POST 兼容，逻辑同 DELETE）")
 def delete_account(
     request: Request,
     current_account: AppAccount = Depends(get_current_account),
     db: Session = Depends(get_db),
 ):
     """
-    微信小程序合规要求：用户必须能在 App 内自主注销账号。
-    本接口采取"软注销"策略：
-      - AppAccount 行不物理删除，避免咨询记录 / 订单 / 提醒任务出现悬挂引用
-      - 清空可识别字段（OpenId / UnionId / Mobile / Nickname / AvatarUrl / RealName / 紧急联系）
-      - 保留 Id 与历史 CreatedAt 用于审计
-      - 删除该账号所有 AppRoleBinding（防止越权）
-      - 把所有 AppLoginSession 失效
+    微信小程序合规：用户可自主注销。
+
+    软注销策略（合规追溯）：
+      - 不物理删除 AppAccount，也不删除咨询 / 订单 / 个案等业务行
+      - 清空 OpenId / 手机号 / 昵称等可识别字段，会话与角色失效
+      - 同一微信再次登录会创建新账号，与旧业务数据通过旧 AccountId 隔离保留
     """
-    # 1. 失效所有 token
-    db.query(AppLoginSession).filter(
-        AppLoginSession.AccountId == current_account.Id
-    ).delete(synchronize_session=False)
+    from account_deletion_service import soft_delete_account
 
-    # 2. 解绑所有角色
-    db.query(AppRoleBinding).filter(
-        AppRoleBinding.AccountId == current_account.Id
-    ).delete(synchronize_session=False)
-
-    # 3. 写一条注销日志（复用 RoleSwitchLog，FromRole=current, ToRole=DELETED）
-    db.add(AppRoleSwitchLog(
-        AccountId=current_account.Id,
-        FromRole=getattr(current_account, "ActiveRole", None),
-        ToRole="DELETED",
-        Ip=request.client.host if request.client else None,
-        UserAgent=request.headers.get("user-agent", "")[:200] if request.headers else None,
-    ))
-
-    # 4. 清空可识别字段并标记为已注销
-    # 用 bulk UPDATE 写库，避免 InstrumentedAttribute 在某些刷新模式下漏字段
-    now = datetime.utcnow()
-    new_openid = f"deleted_{current_account.Id}_{int(now.timestamp())}"
-    db.query(AppAccount).filter(AppAccount.Id == current_account.Id).update(
-        {
-            AppAccount.OpenId: new_openid,
-            AppAccount.UnionId: None,
-            AppAccount.Mobile: None,
-            AppAccount.Nickname: None,
-            AppAccount.AvatarUrl: None,
-            AppAccount.RealName: None,
-            AppAccount.Gender: None,
-            AppAccount.Birthday: None,
-            AppAccount.EmergencyContact: None,
-            AppAccount.EmergencyRelation: None,
-            AppAccount.EmergencyPhone: None,
-            AppAccount.ActiveRole: None,
-            AppAccount.IsActive: False,
-            AppAccount.DeletedAt: now,
-            AppAccount.UpdatedAt: now,
-        },
-        synchronize_session=False,
-    )
-
-    db.commit()
-    return {"message": "账号已注销，所有登录会话已失效"}
+    try:
+        result = soft_delete_account(
+            db,
+            current_account,
+            ip=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+        )
+        return result
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"注销失败: {str(e)[:200]}")
 
 
 @router.post("/switch-role", summary="切换角色（单账号仅一个角色，已禁用）")

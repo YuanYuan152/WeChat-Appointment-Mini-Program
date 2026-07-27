@@ -176,7 +176,7 @@ const emptyHint = computed(() => {
   const cat = categories.value.find(c => c.value === activeCategory.value)
   if (cat && cat.value !== 'ALL') return `暂无「${cat.label}」类消息`
   if (isAdminOpsInbox.value) {
-    return '新增预约、豁免审核、咨询师请假、记录修改、风险上报、定价与抽成、代理预约等通知会在这里显示'
+    return '新增预约、退款审核、咨询师请假、记录修改、风险上报、定价与抽成、代理预约等通知会在这里显示'
   }
   return '预约、请假、取消等通知会在这里显示'
 })

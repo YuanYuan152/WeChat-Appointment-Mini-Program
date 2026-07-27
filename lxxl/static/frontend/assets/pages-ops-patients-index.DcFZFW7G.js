@@ -1,0 +1,1 @@
+import{q as s,i as a}from"./index-Duou9WLa.js";import{e,Y as t,ae as r,af as n}from"./vendor.Det90LAL.js";const o=e({__name:"index",setup:e=>(t(()=>{s({url:"/pages/ops/users/index?tab=patients"})}),(s,e)=>{const t=a;return n(),r(t)})});export{o as default};

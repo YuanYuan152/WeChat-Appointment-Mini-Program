@@ -5,6 +5,7 @@
  */
 import { updateTabBarForRole, readStoredRole } from '@/utils/tabBar'
 import { warnIfDeviceCannotReachLocalApi } from '@/utils/auth'
+import { migrateLegacySession } from '@/utils/session'
 
 let launched = false
 
@@ -14,6 +15,11 @@ export default {
     launched = true
     console.log('App Launch')
     console.log('V2 API:', import.meta.env.VITE_API_V2_BASE_URL || 'http://localhost:8000')
+    try {
+      migrateLegacySession()
+    } catch (e) {
+      console.warn('migrateLegacySession failed', e)
+    }
     setTimeout(() => {
       try {
         warnIfDeviceCannotReachLocalApi()

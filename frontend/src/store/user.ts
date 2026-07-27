@@ -1,17 +1,22 @@
 import { defineStore } from 'pinia'
 import { AuthApi, type UserInfo } from '@/apis/auth'
 import { resolveAccountRole } from '@/constants/roles'
-import { setToken, clearToken, getToken } from '@/utils/auth'
+import { clearToken, getToken } from '@/utils/auth'
+import { saveSession, clearSession, getStoredUserInfo, migrateLegacySession } from '@/utils/session'
 import { updateTabBarForRole } from '@/utils/tabBar'
 
 export const useUserStore = defineStore('user', {
-  state: () => ({
-    userInfo: null as UserInfo | null,
-    token: getToken() || '',
-    roles: [] as string[],
-    activeRole: '' as string,
-    isLogin: !!getToken(),
-  }),
+  state: () => {
+    migrateLegacySession()
+    const stored = getStoredUserInfo()
+    return {
+      userInfo: null as UserInfo | null,
+      token: stored?.token || getToken() || '',
+      roles: stored?.role ? [stored.role] : ([] as string[]),
+      activeRole: (stored?.role || '') as string,
+      isLogin: !!(stored?.token || getToken()),
+    }
+  },
 
   getters: {
     userId: (state) => state.userInfo?.id,
@@ -31,6 +36,10 @@ export const useUserStore = defineStore('user', {
       const result = await AuthApi.wxLogin(code)
       this.token = getToken() || ''
       this.isLogin = true
+      if (result.activeRole) {
+        this.activeRole = result.activeRole
+        this.roles = result.roles || [result.activeRole]
+      }
 
       await this.fetchUserInfo()
       return result
@@ -41,8 +50,18 @@ export const useUserStore = defineStore('user', {
       this.userInfo = me
       this.roles = me.roles || []
       this.activeRole = me.activeRole || resolveAccountRole(this.roles)
-      uni.setStorageSync('user_roles', JSON.stringify([this.activeRole]))
-      if (me.activeRole) uni.setStorageSync('active_role', this.activeRole)
+      const token = getToken() || ''
+      if (token) {
+        saveSession({
+          token,
+          openid: me.openId,
+          role: this.activeRole,
+          nickname: me.nickname,
+          avatar: me.avatarUrl,
+          id: me.id,
+          mobile: me.mobile,
+        })
+      }
       updateTabBarForRole(this.activeRole)
     },
 
@@ -60,17 +79,22 @@ export const useUserStore = defineStore('user', {
       this.activeRole = ''
       this.isLogin = false
       clearToken()
-      uni.removeStorageSync('user_roles')
-      uni.removeStorageSync('active_role')
+      clearSession()
       updateTabBarForRole([])
       uni.switchTab({ url: '/pages/index/index' })
     },
 
     checkLoginStatus(): boolean {
+      migrateLegacySession()
       const token = getToken()
       if (token) {
         this.token = token
         this.isLogin = true
+        const stored = getStoredUserInfo()
+        if (stored?.role) {
+          this.activeRole = stored.role
+          this.roles = [stored.role]
+        }
         return true
       }
       return false

@@ -110,13 +110,15 @@ def cleanup_legacy_demo(db):
         db.query(AppBanner).filter(AppBanner.Title == title).delete(synchronize_session=False)
 
 
-def ensure_subscribe_template(db, event_key, template_id, description):
+def ensure_subscribe_template(db, event_key, template_id, description, role_scope="All"):
     row = db.query(AppSubscribeTemplate).filter(AppSubscribeTemplate.EventKey == event_key).first()
     if not row:
         row = AppSubscribeTemplate(EventKey=event_key)
         db.add(row)
     row.TemplateId = template_id
     row.Description = description
+    if hasattr(AppSubscribeTemplate, "RoleScope"):
+        row.RoleScope = role_scope
     row.IsActive = True
 
 
@@ -189,9 +191,44 @@ def main():
             "避免简单归因于「不努力」。若困扰持续或影响日常功能，可陪同了解心理咨询资源。</p>",
             3,
         )
-        ensure_subscribe_template(db, "APPOINTMENT_OK", "TPL_APPOINTMENT_OK_MOCK", "预约成功通知")
-        ensure_subscribe_template(db, "APPOINTMENT_REMIND", "TPL_APPOINTMENT_REMIND_MOCK", "咨询前提醒")
-        ensure_subscribe_template(db, "PAY_SUCCESS", "TPL_PAY_SUCCESS_MOCK", "支付成功通知")
+        ensure_subscribe_template(
+            db,
+            "APPOINTMENT_OK",
+            "eywQth4gdVTtfS1nlH8Do6IfsPizWlnWSN4jk6p4KjQ",
+            "预约成功通知",
+            "Patient",
+        )
+        ensure_subscribe_template(
+            db,
+            "APPOINTMENT_REMIND",
+            "_F8vuT9qgssNOC3Bq0x5Dg9--TKO7znDJFe99m_aeSM",
+            "咨询提醒",
+            "All",
+        )
+        ensure_subscribe_template(
+            db, "ORDER_STATUS", "TPL_ORDER_STATUS_MOCK", "来访-订单状态变更", "Patient"
+        )
+        ensure_subscribe_template(
+            db, "PAY_SUCCESS", "TPL_PAY_SUCCESS_MOCK", "来访-支付成功通知", "Patient"
+        )
+        ensure_subscribe_template(
+            db, "COUNSELOR_APPOINTMENT_NEW", "TPL_COUNSELOR_NEW_MOCK", "咨询师-来访预约提醒", "Counselor"
+        )
+        ensure_subscribe_template(
+            db, "COUNSELOR_APPOINTMENT_CANCEL", "TPL_COUNSELOR_CANCEL_MOCK", "咨询师-预约取消提醒", "Counselor"
+        )
+        ensure_subscribe_template(
+            db,
+            "STAFF_APPROVAL_PENDING",
+            "LlsSPQqaMgrySH-Hh7Q3JtshNLPzD5etdEKEO822QlI",
+            "待审核提醒",
+            "Staff",
+        )
+        # 首期未接的事件保持库内行但可在 seed_subscribe_templates 中关闭
+        for _k in ("ORDER_STATUS", "PAY_SUCCESS", "COUNSELOR_APPOINTMENT_NEW", "COUNSELOR_APPOINTMENT_CANCEL"):
+            _row = db.query(AppSubscribeTemplate).filter(AppSubscribeTemplate.EventKey == _k).first()
+            if _row:
+                _row.IsActive = False
         for cfg in DEMO_PATIENTS:
             acc = patient_map[cfg["real_name"]]
             ensure_patient_consultations(
