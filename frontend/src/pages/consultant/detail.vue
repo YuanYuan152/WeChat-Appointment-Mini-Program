@@ -254,9 +254,9 @@
       </view>
     </view>
 
-    <!-- 协议弹框（底部上推） -->
+    <!-- 协议弹框（底部上推，约屏高 4/5） -->
     <view v-if="showAgreement" class="modal-overlay modern-modal modal-overlay--bottom">
-      <view class="modal-content full-height">
+      <view class="modal-content sheet-agreement" :style="agreementSheetStyle">
         <view class="modal-header-modern">
           <text class="modal-title">签署心理咨询协议</text>
           <view class="modal-close-btn" @click="closeAgreement">×</view>
@@ -366,9 +366,9 @@
       </view>
     </view>
 
-    <!-- 支付弹框（底部上推） -->
+    <!-- 支付弹框（底部上推，约屏高 3/4） -->
     <view v-if="showPayment" class="modal-overlay modern-modal modal-overlay--bottom">
-      <view class="modal-content bottom-sheet">
+      <view class="modal-content bottom-sheet sheet-pay" :style="paymentSheetStyle">
         <view class="modal-header-modern">
           <text class="modal-title">确认订单</text>
           <view class="modal-close-btn" @click="closePayment">×</view>
@@ -407,7 +407,7 @@
             <view class="pay-rules-list">
               <text class="pay-rule-item">· 距咨询开始超过24小时可免费取消；</text>
               <text class="pay-rule-item">· 距咨询开始24小时内取消或爽约，不予退款；</text>
-              <text class="pay-rule-item">· 特殊情况可致电咨询，申请人工豁免；</text>
+              <text class="pay-rule-item">· 特殊情况可致电咨询，申请人工退款；</text>
               <text class="pay-rule-item">· 迟到15分钟以上视为爽约。</text>
             </view>
           </view>
@@ -463,6 +463,7 @@ import {
   normalizeAgreementPhone,
   validateAgreementEmergencyContact,
 } from '@/utils/consultationAgreement'
+import { requestOfficialSubscribeInGesture, DEFAULT_ONBOARDING_EVENT_KEYS } from '@/utils/subscribeMessage'
 
 const tongxinAgreementTitle = TONGXIN_AGREEMENT_TITLE
 const yangfanAgreementTitle = YANGFAN_AGREEMENT_TITLE
@@ -559,6 +560,24 @@ const showAgeConfirm = ref(false)
 const showAgreement = ref(false)
 const showPayment = ref(false)
 const showAssistantContact = ref(false)
+/** 真机 vh 不可靠：协议约 4/5 屏、支付约 3/4 屏，用像素高度强制 */
+const modalWindowHeightPx = ref(667)
+const refreshModalWindowHeight = () => {
+  try {
+    const info = uni.getSystemInfoSync()
+    modalWindowHeightPx.value = Number(info.windowHeight) || Number(info.screenHeight) || 667
+  } catch {
+    modalWindowHeightPx.value = 667
+  }
+}
+const agreementSheetStyle = computed(() => {
+  const h = Math.max(420, Math.round(modalWindowHeightPx.value * (4 / 5)))
+  return { height: `${h}px`, maxHeight: `${h}px`, minHeight: `${h}px` }
+})
+const paymentSheetStyle = computed(() => {
+  const h = Math.max(360, Math.round(modalWindowHeightPx.value * (3 / 4)))
+  return { height: `${h}px`, maxHeight: `${h}px`, minHeight: `${h}px` }
+})
 const showSignatureCanvas = ref(false)
 /** 签字浮层布局稳定后再挂载画布，避免坐标漂移 */
 const signaturePadReady = ref(false)
@@ -1019,6 +1038,7 @@ const loadIntakeStatus = async () => {
 
 const proceedToPayment = () => {
   payRulesAgreed.value = false
+  refreshModalWindowHeight()
   showPayment.value = true
 }
 
@@ -1197,6 +1217,7 @@ const onEmergencyPhoneInput = (e: { detail: { value: string } }) => {
 const confirmAge = (isTongxin: boolean) => {
   intakeIsAdult.value = isTongxin
   closeAgeConfirm()
+  refreshModalWindowHeight()
   showAgreement.value = true
   rebuildCurrentAgreement()
   prefillEmergencyContact()
@@ -1309,6 +1330,7 @@ const confirmAgreement = () => {
   
   hideAgreementModal()
   payRulesAgreed.value = false
+  refreshModalWindowHeight()
   showPayment.value = true
 }
 
@@ -1347,7 +1369,7 @@ const confirmPayment = async () => {
     if (orderId) {
       setTimeout(() => {
         uni.navigateTo({ url: `/pages/consultation/payment-result?order_id=${orderId}` })
-      }, 600)
+      }, 500)
     }
   }
 
@@ -1360,7 +1382,6 @@ const confirmPayment = async () => {
     return
   }
 
-  let signatureUrl: string | undefined
   if (needsIntakeAgreement.value) {
     if (intakeIsAdult.value === null) {
       uni.showToast({ title: '请先选择签署协议', icon: 'none' })
@@ -1370,6 +1391,18 @@ const confirmPayment = async () => {
       uni.showToast({ title: '请先完成协议签字', icon: 'none' })
       return
     }
+    const emergencyErrorEarly = validateAgreementEmergencyContact(emergencyPayload.value)
+    if (emergencyErrorEarly) {
+      uni.showToast({ title: emergencyErrorEarly, icon: 'none' })
+      return
+    }
+  }
+
+  // 校验通过后、在点击手势内立刻官方订阅续订（一次性模板）
+  const subscribePromise = requestOfficialSubscribeInGesture(DEFAULT_ONBOARDING_EVENT_KEYS)
+
+  let signatureUrl: string | undefined
+  if (needsIntakeAgreement.value) {
     uni.showLoading({ title: '正在上传签名...' })
     try {
       const uploadRes = await httpV2.upload(API_ENDPOINTS.upload.file, signatureData.value, 'file')
@@ -1386,6 +1419,8 @@ const confirmPayment = async () => {
     }
   }
 
+  await subscribePromise
+
   const payBody: Record<string, unknown> = {
     slot_id: selectedSlotId.value,
     center_id: selectedCenterId.value,
@@ -1393,11 +1428,6 @@ const confirmPayment = async () => {
     description: `心理咨询预约 - ${doctor.value.name}`,
   }
   if (needsIntakeAgreement.value) {
-    const emergencyError = validateAgreementEmergencyContact(emergencyPayload.value)
-    if (emergencyError) {
-      uni.showToast({ title: emergencyError, icon: 'none' })
-      return
-    }
     payBody.is_adult = intakeIsAdult.value
     payBody.signature_url = signatureUrl
     payBody.emergency_contact = emergencyPayload.value.name
@@ -2342,17 +2372,30 @@ onMounted(() => {
 .modal-content.bottom-sheet {
   width: 100%;
   max-width: 100%;
-  max-height: 92vh;
   border-radius: 40rpx 40rpx 0 0;
   margin-top: auto;
   overflow: hidden;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-content.sheet-agreement,
+.modal-content.sheet-pay {
+  width: 100%;
+  max-width: 100%;
+  border-radius: 40rpx 40rpx 0 0;
+  margin-top: auto;
+  overflow: hidden;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
 }
 
 .modal-content.full-height {
   width: 100%;
   max-width: 100%;
-  height: 92vh;
+  height: 80vh;
   border-radius: 40rpx 40rpx 0 0;
   margin-top: auto;
   overflow: hidden;

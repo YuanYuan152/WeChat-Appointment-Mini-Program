@@ -61,7 +61,7 @@ export function canReviewAsOpsAdmin(activeRole: string): boolean {
 export function messageDisplayTitle(item: MessageItem): string {
   const rt = item.RelatedType || ''
   if (rt === 'REFUND_EXEMPTION_PENDING' || isExemptionPendingMessage(item)) {
-    return '豁免申请待审核'
+    return '退款申请待审核'
   }
   if (rt === 'CASE_RECORD_AMENDMENT_PENDING' || isCaseRecordAmendmentPendingMessage(item)) {
     return '咨询记录修改待审核'
@@ -79,12 +79,12 @@ export function messageDisplayTitle(item: MessageItem): string {
   }
   if (rt === 'REFUND_EXEMPTION') {
     const detail = parseMessageContent(item.Content).detail as Record<string, unknown> | undefined
-    if (detail?.status === 'APPROVED' || detail?.approved === true) return '豁免申请已通过'
-    if (detail?.status === 'REJECTED' || detail?.approved === false) return '豁免申请未通过'
+    if (detail?.status === 'APPROVED' || detail?.approved === true) return '退款申请已通过'
+    if (detail?.status === 'REJECTED' || detail?.approved === false) return '退款申请未通过'
     const title = item.Title || ''
-    if (title.includes('未通过')) return '豁免申请未通过'
-    if (title.includes('已通过')) return '豁免申请已通过'
-    if (title.includes('待审核')) return '豁免申请待审核'
+    if (title.includes('未通过')) return '退款申请未通过'
+    if (title.includes('已通过')) return '退款申请已通过'
+    if (title.includes('待审核')) return '退款申请待审核'
   }
   return item.Title || '消息'
 }
@@ -136,8 +136,8 @@ export const RELATED_TYPE_LABELS: Record<string, string> = {
   COUNSELOR_LEAVE: '咨询师请假',
   COUNSELOR_LEAVE_SUBMITTED: '请假提交',
   COUNSELOR_LEAVE_SUCCESS: '请假成功',
-  REFUND_EXEMPTION: '退款豁免',
-  REFUND_EXEMPTION_PENDING: '豁免待审核',
+  REFUND_EXEMPTION: '退款申请',
+  REFUND_EXEMPTION_PENDING: '退款待审核',
   CASE_RECORD_AMENDMENT: '记录修改',
   CASE_RECORD_AMENDMENT_PENDING: '记录修改待审核',
   CASE_RECORD_AMENDMENT_SUBMITTED: '记录修改已提交',
@@ -195,7 +195,7 @@ export interface MessageCategoryOption {
 export const STAFF_WORKBENCH_MESSAGE_CATEGORIES: MessageCategoryOption[] = [
   { value: 'appointment_new', label: '新增预约' },
   { value: 'appointment_cancel', label: '预约取消' },
-  { value: 'exemption', label: '豁免审核' },
+  { value: 'exemption', label: '退款审核' },
   { value: 'counselor_leave', label: '咨询师请假' },
   { value: 'case_record_amendment', label: '记录修改审核' },
   { value: 'case_record_crisis', label: '风险上报' },
@@ -291,7 +291,7 @@ export function getMessageCategoriesForRole(role: string): MessageCategoryOption
     { value: 'appointment_remind', label: '预约提醒' },
     { value: 'activity', label: '活动' },
     { value: 'leave_notice', label: '请假通知' },
-    { value: 'exemption', label: '豁免结果' },
+    { value: 'exemption', label: '退款结果' },
   ]
 }
 
@@ -302,7 +302,7 @@ export function canSearchMessages(role: string): boolean {
 export function messageCategoryLabel(item: MessageItem): string {
   const rt = item.RelatedType || ''
   if (rt === 'REFUND_EXEMPTION_PENDING' || isExemptionPendingMessage(item)) {
-    return '豁免待审核'
+    return '退款待审核'
   }
   if (rt === 'CASE_RECORD_AMENDMENT_PENDING' || isCaseRecordAmendmentPendingMessage(item)) {
     return '记录修改待审核'
@@ -320,8 +320,8 @@ export function messageCategoryLabel(item: MessageItem): string {
   }
   if (rt === 'REFUND_EXEMPTION') {
     const detail = parseMessageContent(item.Content).detail as Record<string, unknown> | undefined
-    if (detail?.status === 'APPROVED' || detail?.approved === true) return '豁免已通过'
-    if (detail?.status === 'REJECTED' || detail?.approved === false) return '豁免未通过'
+    if (detail?.status === 'APPROVED' || detail?.approved === true) return '退款已通过'
+    if (detail?.status === 'REJECTED' || detail?.approved === false) return '退款未通过'
   }
   if (RELATED_TYPE_LABELS[rt]) return RELATED_TYPE_LABELS[rt]
   if (MESSAGE_TYPE_LABELS[item.Type]) return MESSAGE_TYPE_LABELS[item.Type]

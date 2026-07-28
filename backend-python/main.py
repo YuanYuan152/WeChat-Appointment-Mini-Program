@@ -48,10 +48,12 @@ def _ensure_db_schema():
             ensure_counselor_profile_columns,
             ensure_leave_request_columns,
             ensure_schedule_cancel_log_columns,
+            ensure_subscribe_template_columns,
             ensure_tables,
         )
         ensure_tables()
         ensure_app_account_columns()
+        ensure_subscribe_template_columns()
         ensure_app_order_columns()
         ensure_leave_request_columns()
         ensure_schedule_cancel_log_columns()

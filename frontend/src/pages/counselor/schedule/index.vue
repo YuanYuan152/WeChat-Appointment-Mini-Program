@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <view class="page-schedule">
     <!-- 新增排班按钮 -->
     <view class="toolbar">
@@ -107,6 +107,7 @@ import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
 import { APPOINTMENT_CENTERS, APPOINTMENT_CENTER_MAP } from '@/constants/appointmentCenters'
 import { getRoomName, getRoomsByCenter } from '@/constants/consultationRooms'
+import { refreshSubscribeHint, tryOfficialRoleSubscribeInGesture } from '@/utils/subscribePrompt'
 
 interface Schedule {
   Id: number
@@ -206,7 +207,7 @@ const loadSchedules = async () => {
   if (res.code === 0 && res.data) schedules.value = res.data
 }
 
-const submitSchedule = async () => {
+const submitSchedule = () => {
   if (submitting.value) return
   const { startDate, startTime, endDate, endTime, centerId, roomId } = form.value
   if (!startDate || !startTime || !endDate || !endTime || !centerId || !roomId) {
@@ -224,34 +225,38 @@ const submitSchedule = async () => {
     return
   }
 
+  const subscribeDone = tryOfficialRoleSubscribeInGesture('schedule')
   submitting.value = true
-  try {
-    const res = await httpV2.post(API_ENDPOINTS.counselor.schedules, {
-      start_time: `${startDate}T${startTime}:00`,
-      end_time: `${endDate}T${endTime}:00`,
-      center_id: centerId,
-      room_id: roomId === NO_PREF ? null : roomId,
-    })
-    if (res.code === 0) {
-      showAdd.value = false
-      form.value = {
-        startDate: '',
-        startTime: '',
-        endDate: '',
-        endTime: '',
-        centerId: defaultCenterId,
-        roomId: NO_PREF,
+  void (async () => {
+    try {
+      const res = await httpV2.post(API_ENDPOINTS.counselor.schedules, {
+        start_time: `${startDate}T${startTime}:00`,
+        end_time: `${endDate}T${endTime}:00`,
+        center_id: centerId,
+        room_id: roomId === NO_PREF ? null : roomId,
+      })
+      await subscribeDone
+      if (res.code === 0) {
+        showAdd.value = false
+        form.value = {
+          startDate: '',
+          startTime: '',
+          endDate: '',
+          endTime: '',
+          centerId: defaultCenterId,
+          roomId: NO_PREF,
+        }
+        await loadSchedules()
+        uni.showToast({ title: '排期成功', icon: 'success' })
+      } else {
+        uni.showToast({ title: res.msg || '添加失败', icon: 'none' })
       }
-      await loadSchedules()
-      uni.showToast({ title: '排期成功', icon: 'success' })
-    } else {
-      uni.showToast({ title: res.msg || '添加失败', icon: 'none' })
+    } catch (err: any) {
+      uni.showToast({ title: err?.message || '添加失败', icon: 'none' })
+    } finally {
+      submitting.value = false
     }
-  } catch (err: any) {
-    uni.showToast({ title: err?.message || '添加失败', icon: 'none' })
-  } finally {
-    submitting.value = false
-  }
+  })()
 }
 
 const cancelSchedule = async (id: number) => {
@@ -268,7 +273,10 @@ const cancelSchedule = async (id: number) => {
 }
 
 onShow(loadSchedules)
-onMounted(loadSchedules)
+onMounted(() => {
+  void loadSchedules()
+  void refreshSubscribeHint()
+})
 </script>
 
 <style scoped>

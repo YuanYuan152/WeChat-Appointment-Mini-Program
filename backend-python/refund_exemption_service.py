@@ -1,4 +1,4 @@
-"""退款豁免申请：提交校验、管理员审核、消息通知。"""
+"""退款申请：提交校验、管理员审核、消息通知。"""
 import json
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
@@ -51,17 +51,17 @@ def validate_exemption_submission(
     pending: Optional[AppRefundExemption],
 ) -> None:
     if consultation.PatientId != patient_id:
-        raise ValueError("无权为该预约申请豁免")
+        raise ValueError("无权为该预约申请退款")
     if not can_visitor_cancel(consultation.Status):
-        raise ValueError("当前状态不可申请豁免")
+        raise ValueError("当前状态不可申请退款")
     if is_refund_eligible(consultation.StartTime):
-        raise ValueError("距咨询开始超过24小时，请直接取消预约即可退款，无需申请豁免")
+        raise ValueError("距咨询开始超过24小时，请直接取消预约即可退款，无需另行申请")
     if not (reason or "").strip():
         raise ValueError("请填写申请原因")
     if amount <= 0:
         raise ValueError("申请金额须大于 0")
     if pending:
-        raise ValueError("该预约已有待审核的豁免申请")
+        raise ValueError("该预约已有待审核的退款申请")
 
 
 def _admin_account_ids(db: Session) -> List[int]:
@@ -121,6 +121,14 @@ def notify_admins_new_exemption(
         related_type="REFUND_EXEMPTION_PENDING",
         related_id=exemption.Id,
     )
+    from staff_message_service import push_staff_approval_subscribe
+
+    push_staff_approval_subscribe(
+        db,
+        applicant=patient_name,
+        biz_type="退款申请",
+        apply_time=getattr(exemption, "CreatedAt", None),
+    )
 
 
 def notify_patient_exemption_result(
@@ -156,7 +164,7 @@ def approve_refund_exemption(
     if not consultation:
         raise ValueError("关联咨询记录不存在")
     if not can_visitor_cancel(consultation.Status):
-        raise ValueError("咨询状态已变更，无法通过豁免取消")
+        raise ValueError("咨询状态已变更，无法通过退款取消")
 
     refunded, cancel_msg = cancel_consultation_for_visitor(
         db,

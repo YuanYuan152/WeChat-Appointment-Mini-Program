@@ -76,7 +76,7 @@ def cancel_consultation_for_visitor(
     """
     取消咨询单。返回 (是否退款, 提示文案)。
     仅本人、待确认/已确认/进行中可取消。
-    force_refund=True 时无视 24 小时规则（管理员豁免审核通过）。
+    force_refund=True 时无视 24 小时规则（管理员退款审核通过）。
     """
     if consultation.PatientId != patient_id:
         raise PermissionError("无权取消该咨询")

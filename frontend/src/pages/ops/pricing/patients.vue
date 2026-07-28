@@ -207,6 +207,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
+import { refreshSubscribeHint, tryOfficialRoleSubscribeInGesture } from '@/utils/subscribePrompt'
 
 interface CounselorInfo {
   counselorId: number
@@ -511,31 +512,35 @@ const closeEdit = () => {
   editing.value = null
 }
 
-const saveEdit = async () => {
+const saveEdit = () => {
   if (!editing.value || !counselorId.value) return
+  const subscribeDone = tryOfficialRoleSubscribeInGesture('workbench')
   saving.value = true
-  try {
-    const payload: Record<string, unknown> = {
-      adjustmentYuan: Number(form.adjustmentYuan) || 0,
-      shareMode: 'AMOUNT',
-      revenueShareYuan: counselorShareYuan.value,
+  void (async () => {
+    try {
+      const payload: Record<string, unknown> = {
+        adjustmentYuan: Number(form.adjustmentYuan) || 0,
+        shareMode: 'AMOUNT',
+        revenueShareYuan: counselorShareYuan.value,
+      }
+      const res = await httpV2.put(
+        API_ENDPOINTS.admin.pricingCounselorPatientUpdate(counselorId.value, editing.value!.patientId),
+        payload,
+      )
+      await subscribeDone
+      if (res.code === 0) {
+        uni.showToast({ title: '已保存', icon: 'success' })
+        closeEdit()
+        await reload(true)
+      } else {
+        uni.showToast({ title: res.msg || '保存失败', icon: 'none' })
+      }
+    } catch {
+      uni.showToast({ title: '保存失败', icon: 'none' })
+    } finally {
+      saving.value = false
     }
-    const res = await httpV2.put(
-      API_ENDPOINTS.admin.pricingCounselorPatientUpdate(counselorId.value, editing.value.patientId),
-      payload,
-    )
-    if (res.code === 0) {
-      uni.showToast({ title: '已保存', icon: 'success' })
-      closeEdit()
-      await reload(true)
-    } else {
-      uni.showToast({ title: res.msg || '保存失败', icon: 'none' })
-    }
-  } catch {
-    uni.showToast({ title: '保存失败', icon: 'none' })
-  } finally {
-    saving.value = false
-  }
+  })()
 }
 
 onLoad((options) => {
@@ -543,7 +548,10 @@ onLoad((options) => {
   counselorName.value = decodeURIComponent(String(options?.counselorName || '咨询师'))
 })
 
-onShow(() => reload(true))
+onShow(() => {
+  void reload(true)
+  void refreshSubscribeHint()
+})
 </script>
 
 <style scoped>

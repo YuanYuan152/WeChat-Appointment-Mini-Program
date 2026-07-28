@@ -32,7 +32,8 @@ import {
   clearToken,
   getDevLoginCode,
   getDevLoginRole,
-  isMockLoginEnabled,
+  isDevMode,
+  setDevEntranceOpen,
   setDevLoginRole,
   type DevLoginRole,
 } from '@/utils/auth'
@@ -50,7 +51,8 @@ const emit = defineEmits<{
   switched: [role: DevLoginRole]
 }>()
 
-const showPicker = isMockLoginEnabled()
+/** 仅开发模式展示；登录页另用 v-if 控制「开发者入口」展开 */
+const showPicker = isDevMode()
 const switching = ref(false)
 const currentRole = ref<DevLoginRole>('patient')
 const currentLabel = computed(() => {
@@ -92,17 +94,16 @@ const selectRole = async (role: DevLoginRole) => {
 
   if (!props.autoSwitch) {
     if (!roleChanged) return
+    setDevEntranceOpen(true)
     clearToken()
-    uni.removeStorageSync('user_roles')
-    uni.removeStorageSync('active_role')
     emit('change', role)
     uni.showToast({ title: `已切换为${label}，请重新登录`, icon: 'none' })
     return
   }
 
   switching.value = true
+  setDevEntranceOpen(true)
   clearToken()
-  uni.removeStorageSync('user_roles')
   emit('change', role)
   try {
     await AuthApi.wxLogin(getDevLoginCode())

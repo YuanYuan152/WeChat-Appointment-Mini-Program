@@ -413,6 +413,14 @@ def notify_admins_new_amendment(
         related_type="CASE_RECORD_AMENDMENT_PENDING",
         related_id=amendment.Id,
     )
+    from staff_message_service import push_staff_approval_subscribe
+
+    push_staff_approval_subscribe(
+        db,
+        applicant=counselor_name,
+        biz_type="咨询记录修改",
+        apply_time=getattr(amendment, "CreatedAt", None),
+    )
 
 
 def _update_admin_pending_messages(

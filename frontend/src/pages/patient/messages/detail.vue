@@ -71,11 +71,11 @@
           <text class="value" :class="{ highlight: detail.refunded }">{{ detail.refundText }}</text>
         </view>
         <view class="detail-row">
-          <text class="label">豁免申请</text>
+          <text class="label">退款申请</text>
           <text class="value">{{ detail.exemptionLabel }}</text>
         </view>
         <view v-if="detail.exemptionReason" class="detail-row">
-          <text class="label">豁免原因</text>
+          <text class="label">退款原因</text>
           <text class="value">{{ detail.exemptionReason }}</text>
         </view>
       </view>
@@ -444,7 +444,7 @@
           <text class="value" :class="{ highlight: detail.refunded }">{{ detail.refundText }}</text>
         </view>
         <view v-if="relatedType === 'COUNSELOR_APPOINTMENT_CANCEL'" class="detail-row">
-          <text class="label">豁免申请</text>
+          <text class="label">退款申请</text>
           <text class="value">{{ detail.exemptionLabel }}</text>
         </view>
       </view>
@@ -682,7 +682,7 @@ const amendmentPendingTip = computed(() => {
 const exemptionPendingTip = computed(() => {
   const text = detail.value.resultText as string | undefined
   if (text && text.includes('您的')) return text
-  return '待审核：请在工作台「审批管理」中处理对应豁免申请'
+  return '待审核：请在工作台「审批管理」中处理对应退款申请'
 })
 const exemptionStatusLabel = computed(() => {
   if (isExemptionPending.value) return '待审核'

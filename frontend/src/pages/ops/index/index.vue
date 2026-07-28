@@ -55,7 +55,7 @@ const allEntries = [
   { title: '运营看板', desc: '关键指标与日活数据', symbol: '数', tone: 'tone-muted', path: '/pages/ops/dashboard/index', roles: ['Ops', 'Admin'] },
   { title: '角色&权限绑定', desc: '为账号绑定角色并分配管理工作台权限', symbol: '人', tone: 'tone-green', path: '/pages/ops/admin-roles/index' },
   { title: '定价管理', desc: '咨询师基础价与个性化调价', symbol: '价', tone: 'tone-gold', path: '/pages/ops/pricing/index' },
-  { title: '审批管理', desc: '退款豁免与咨询师请假 · 助理/主任/管理员', symbol: '审', tone: 'tone-gold', path: '/pages/ops/approvals/index' },
+  { title: '审批管理', desc: '退款申请与咨询师请假 · 助理/主任/管理员', symbol: '审', tone: 'tone-gold', path: '/pages/ops/approvals/index' },
   { title: '咨询记录修改审核', desc: '咨询师提交的记录修改申请', symbol: '改', tone: 'tone-gold', path: '/pages/ops/case-record-amendments/index' },
   { title: '用户管理', desc: '来访者信息与咨询师档案管理', symbol: '用', tone: 'tone-green', path: '/pages/ops/users/index' },
   { title: '代理预约', desc: '为来访推送待支付预约订单', symbol: '代', tone: 'tone-gold', path: '/pages/ops/proxy-booking/index' },

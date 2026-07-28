@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-07-24T08:38:49+00:00",
+  "updatedAt": "2026-07-27T09:05:36+00:00",
   "assessments": {
     "bsi-18": {
       "id": "bsi-18",
@@ -8,10 +8,10 @@
       "title": "简明症状量表（BSI-18）",
       "status": "published",
       "sortOrder": 0,
-      "publishedVersion": 1,
+      "publishedVersion": 3,
       "draftVersion": null,
       "draftRevision": null,
-      "updatedAt": "2026-07-24T08:38:49+00:00",
+      "updatedAt": "2026-07-27T09:05:36+00:00",
       "archivedAt": null
     },
     "aas": {
