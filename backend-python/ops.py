@@ -41,7 +41,7 @@ from room_slot_status import (
     slot_start_iso,
     slot_status_map_for_room,
     upsert_slot_statuses,
-    is_slot_operational,
+    is_booking_window_operational,
 )
 from schedule_meta import (
     center_display_name, room_display_name, get_consultation_rooms,
@@ -598,13 +598,7 @@ def _room_occupancy_at(
     manual_status = resolve_slot_manual_status(
         db, room_db_id, status_slot_start, room_default_status or "AVAILABLE",
     )
-    if manual_status == "DISABLED":
-        return {
-            "occupancy": "DISABLED", "label": "停用", "manualStatus": manual_status,
-            "slotStartTime": status_slot_start,
-        }
-
-    for s in active_schedules_at(db, status_slot_start):
+    for s in active_schedules_at(db, status_slot_start, duration_minutes=30):
         if parse_center_id(s.Note) != center_id or parse_room_id(s.Note) != room_code:
             continue
         if s.Status != "BOOKED" or not parse_room_id(s.Note):
@@ -630,6 +624,11 @@ def _room_occupancy_at(
             "startTime": s.StartTime,
             "endTime": s.EndTime,
             "scheduleStatus": s.Status,
+        }
+    if manual_status == "DISABLED":
+        return {
+            "occupancy": "DISABLED", "label": "停用", "manualStatus": manual_status,
+            "slotStartTime": status_slot_start,
         }
     idle_label = {"AVAILABLE": "可用", "DISABLED": "停用"}.get(
         manual_status, "可用",
@@ -889,8 +888,10 @@ def get_room_detail(
     all_bounds: List[tuple] = []
     cursor = start_date
     while cursor <= end_date:
-        for start_dt, end_dt in all_slot_bounds_for_date(cursor):
-            all_bounds.append((cursor.isoformat(), start_dt, end_dt))
+        for start_dt, _ in all_slot_bounds_for_date(cursor):
+            all_bounds.append(
+                (cursor.isoformat(), start_dt, start_dt + timedelta(minutes=30))
+            )
         cursor += timedelta(days=1)
 
     status_by_start = slot_status_map_for_room(
@@ -1028,13 +1029,13 @@ def _available_rooms_for_schedule(
         room_code = room["id"]
         if exclude_current and room_code == current_room:
             continue
-        slot_status = resolve_slot_manual_status(
+        room_ok = is_booking_window_operational(
             db,
             room.get("dbId"),
             schedule.StartTime,
             room.get("status", "AVAILABLE"),
         )
-        if not is_slot_operational(slot_status):
+        if not room_ok:
             continue
         if room_code in occupied:
             continue

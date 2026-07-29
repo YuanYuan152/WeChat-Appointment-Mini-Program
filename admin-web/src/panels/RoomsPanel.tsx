@@ -29,7 +29,11 @@ import type {
 } from "@/types/api";
 import type { RoomFilters } from "@/types/app";
 
-const FIXED_TIME_SLOTS = ["09:00", "10:00", "11:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00"];
+const FIXED_TIME_SLOTS = [9, 10, 11, 13, 14, 15, 16, 17, 18].flatMap((hour) =>
+  [0, 30].map(
+    (minute) => `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`,
+  ),
+);
 type RoomEditableStatus = Exclude<RoomSlotManualStatus, "MAINTENANCE">;
 const ROOM_STATUS_OPTIONS: RoomEditableStatus[] = ["AVAILABLE", "DISABLED"];
 
@@ -105,7 +109,7 @@ export function RoomsPanel({
             <div>
               <h2 className="text-xl font-semibold tracking-normal">咨询室情况</h2>
               <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">
-                快照：{snapshotText}。支持按预约中心、日期和固定时段查询。
+                快照：{snapshotText}。支持按预约中心、日期和半小时时段查询。
               </p>
             </div>
             <button
@@ -438,7 +442,7 @@ function RoomDetailPanel({
           <div>
             <h4 className="text-sm font-semibold">未来时段</h4>
             <p className="mt-1 text-xs text-[var(--lxxl-muted)]">
-              只维护固定时段的可用/停用状态；已预约、已开始或已过去的时段不可改。
+              以半小时为单位维护可用/停用状态；一次预约占用“50 分钟咨询 + 10 分钟打扫”对应的两个半小时时段。
             </p>
           </div>
           <button
@@ -502,6 +506,9 @@ function RoomSlotRow({
   return (
     <div className="grid gap-3 px-4 py-3 text-xs sm:grid-cols-[120px_1fr_150px] sm:items-center">
       <div>
+        {slot.patientName && (
+          <div className="mb-1 font-medium text-[#315D4B]">来访：{slot.patientName}</div>
+        )}
         <div className="font-medium text-[var(--lxxl-text)]">{slot.timeLabel}</div>
         <div className="mt-1 text-[var(--lxxl-muted)]">{slot.past ? "已过时段" : locked ? "不可调整" : "可调整"}</div>
       </div>
@@ -643,10 +650,11 @@ function CreateRoomModal({
 }
 
 function slotLabel(slot: string) {
-  const [hourText] = slot.split(":");
-  const hour = Number(hourText);
-  if (Number.isNaN(hour)) {
+  const [hourText, minuteText] = slot.split(":");
+  const start = Number(hourText) * 60 + Number(minuteText);
+  if (!Number.isFinite(start)) {
     return slot;
   }
-  return `${slot}-${String(hour).padStart(2, "0")}:50`;
+  const end = start + 30;
+  return `${slot}-${String(Math.floor(end / 60)).padStart(2, "0")}:${String(end % 60).padStart(2, "0")}`;
 }

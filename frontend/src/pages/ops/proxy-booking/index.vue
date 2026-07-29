@@ -138,7 +138,7 @@
     <view v-if="showAdd" class="modal-overlay" @touchmove.stop.prevent>
       <view class="modal-card" @tap.stop>
         <text class="modal-title">代理预约</text>
-        <text class="modal-sub">选择预约中心、日期、时间槽与咨询室，推送后{{ proxyOrderPayHint }}</text>
+        <text class="modal-sub">选择预约中心、日期、开始时间与咨询室，推送后{{ proxyOrderPayHint }}</text>
 
         <view class="form-item">
           <text class="form-label">预约中心</text>
@@ -163,7 +163,7 @@
         </view>
 
         <view class="form-item">
-          <text class="form-label">时间槽</text>
+          <text class="form-label">开始时间</text>
           <view v-if="slotOptionsLoading" class="picker-row">加载时段...</view>
           <view v-else class="slot-grid">
             <view
@@ -177,9 +177,15 @@
               }"
               @tap="selectTimeSlot(ts)"
             >
-              {{ ts.label }}{{ slotChipHint(ts) }}
+              {{ ts.key }}{{ slotChipHint(ts) }}
             </view>
           </view>
+          <text class="form-hint">支持整点和半点开始；咨询 50 分钟，随后预留 10 分钟打扫</text>
+        </view>
+
+        <view v-if="selectedTimeSlot" class="duration-card">
+          <text class="duration-title">本次预约</text>
+          <text class="duration-text">{{ bookingDurationText(selectedTimeSlot.startTime) }}</text>
         </view>
 
         <view v-if="!isVideoCenterSelected" class="form-item">
@@ -465,6 +471,20 @@ const roomOptionsForSlot = computed(() => {
   const ts = timeSlotOptions.value.find((t) => t.key === form.value.slotKey)
   return ts?.rooms || []
 })
+
+const selectedTimeSlot = computed(() =>
+  timeSlotOptions.value.find((item) => item.key === form.value.slotKey)
+)
+
+const bookingDurationText = (startTime: string) => {
+  const start = new Date(startTime)
+  if (Number.isNaN(start.getTime())) return startTime
+  const consultationEnd = new Date(start.getTime() + 50 * 60_000)
+  const cleaningEnd = new Date(start.getTime() + 60 * 60_000)
+  const hhmm = (value: Date) =>
+    `${String(value.getHours()).padStart(2, '0')}:${String(value.getMinutes()).padStart(2, '0')}`
+  return `咨询 ${hhmm(start)}–${hhmm(consultationEnd)}，打扫 ${hhmm(consultationEnd)}–${hhmm(cleaningEnd)}`
+}
 
 const slotChipHint = (ts: TimeSlotOption) => {
   if (ts.past) return '（已过）'
@@ -1138,6 +1158,12 @@ onLoad(async (opts) => {
   margin-bottom: 12rpx;
   line-height: 1.5;
 }
+.duration-card {
+  margin-bottom: 24rpx; padding: 22rpx 24rpx; border-radius: 16rpx;
+  background: #ECFDF5; border: 2rpx solid #A7F3D0;
+}
+.duration-title { display: block; font-size: 24rpx; color: #047857; margin-bottom: 6rpx; }
+.duration-text { display: block; font-size: 26rpx; font-weight: 600; color: #065F46; }
 
 .required {
   color: #EF4444;

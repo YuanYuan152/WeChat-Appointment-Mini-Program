@@ -704,6 +704,27 @@ class PatientContractTests(BackendServiceTestCase):
 
 
 class CounselorSafetyTests(BackendServiceTestCase):
+    def test_proxy_slot_options_support_half_hour_and_block_cleaning_overlap(self):
+        slot_date = datetime(2026, 2, 2).date()
+        self.db.add(
+            AppSchedule(
+                CounselorId=10,
+                StartTime=datetime(2026, 2, 2, 10, 0),
+                EndTime=datetime(2026, 2, 2, 10, 50),
+                Status="AVAILABLE",
+                Note="center:video",
+            )
+        )
+        self.db.flush()
+
+        with patch("proxy_booking_service._now", return_value=datetime(2026, 2, 1, 8, 0)):
+            options = build_proxy_slot_options(self.db, 10, slot_date, "video")
+
+        by_key = {item["key"]: item for item in options}
+        self.assertIn("10:30", by_key)
+        self.assertTrue(by_key["10:30"]["counselorOccupied"])
+        self.assertFalse(by_key["10:30"]["selectable"])
+
     def test_leave_review_refund_text_matches_full_refund_workflow(self):
         self.add_counselor(10, "咨询师甲")
         patient = AppAccount(
@@ -1131,7 +1152,14 @@ class CounselorSafetyTests(BackendServiceTestCase):
             StartTime=slot_start,
             Status="AVAILABLE",
         )
-        self.db.add(override)
+        self.db.add_all([
+            override,
+            AppConsultationRoomSlot(
+                RoomId=room.Id,
+                StartTime=datetime(2026, 2, 2, 9, 30),
+                Status="AVAILABLE",
+            ),
+        ])
         self.db.flush()
         with (
             patch("proxy_booking_service._now", return_value=datetime(2026, 2, 1, 8, 0)),
@@ -1262,8 +1290,7 @@ class CounselorSafetyTests(BackendServiceTestCase):
             assign_room_for_payment(self.db, schedule, "yangpu")
 
     @patch("room_assignment.paid_occupied_rooms_at_center", return_value={"A"})
-    @patch("room_assignment.is_slot_operational", return_value=True)
-    @patch("room_assignment.resolve_slot_manual_status", return_value="AVAILABLE")
+    @patch("room_assignment.is_booking_window_operational", return_value=True)
     @patch(
         "room_assignment.get_consultation_rooms",
         return_value=[{"id": "A", "dbId": 1}, {"id": "B", "dbId": 2}],
@@ -1271,7 +1298,6 @@ class CounselorSafetyTests(BackendServiceTestCase):
     def test_proxy_payment_never_falls_back_from_required_room(
         self,
         _rooms,
-        _status,
         _operational,
         _occupied,
     ):

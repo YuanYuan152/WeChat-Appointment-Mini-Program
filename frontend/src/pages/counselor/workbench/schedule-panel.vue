@@ -176,7 +176,7 @@
         </view>
 
         <view class="form-item">
-          <text class="form-label">时间槽</text>
+          <text class="form-label">开始时间</text>
           <view v-if="slotOptionsLoading" class="picker-row">加载时段...</view>
           <view v-else class="slot-grid">
             <view
@@ -188,8 +188,14 @@
                 disabled: ts.past || ts.allRoomsFull || ts.counselorOccupied,
               }"
               @tap="selectTimeSlot(ts)"
-            >{{ ts.label }}{{ ts.counselorOccupied ? '（已排期）' : '' }}</view>
+            >{{ ts.key }}{{ ts.counselorOccupied ? '（已排期）' : '' }}</view>
           </view>
+          <text class="form-hint">支持整点和半点开始；咨询 50 分钟，随后预留 10 分钟打扫</text>
+        </view>
+
+        <view v-if="selectedTimeSlot" class="duration-card">
+          <text class="duration-title">本次排期</text>
+          <text class="duration-text">{{ bookingDurationText(selectedTimeSlot.startTime) }}</text>
         </view>
 
         <view v-if="!isVideoCenterSelected" class="form-item">
@@ -278,7 +284,7 @@
         </view>
 
         <view class="form-item">
-          <text class="form-label">时间槽</text>
+          <text class="form-label">开始时间</text>
           <view v-if="proxySlotOptionsLoading" class="picker-row">加载时段...</view>
           <view v-else class="slot-grid">
             <view
@@ -291,8 +297,14 @@
                 available: ts.selectable && !!ts.existingAvailableScheduleId,
               }"
               @tap="selectProxyTimeSlot(ts)"
-            >{{ ts.label }}{{ proxySlotChipHint(ts) }}</view>
+            >{{ ts.key }}{{ proxySlotChipHint(ts) }}</view>
           </view>
+          <text class="form-hint">支持整点和半点开始；咨询 50 分钟，随后预留 10 分钟打扫</text>
+        </view>
+
+        <view v-if="selectedProxyTimeSlot" class="duration-card">
+          <text class="duration-title">本次预约</text>
+          <text class="duration-text">{{ bookingDurationText(selectedProxyTimeSlot.startTime) }}</text>
         </view>
 
         <view v-if="!isProxyVideoCenterSelected" class="form-item">
@@ -642,14 +654,14 @@ const isVideoCenterSelected = computed(() => isVideoCenter(form.value.centerId))
 
 const toolbarTip = computed(() =>
   isVideoCenterSelected.value
-    ? '标准时间槽 50 分钟/节；视频咨询不占咨询室，来访者预约成功后线上进行'
-    : '标准时间槽 50 分钟/节；线下中心排期可设咨询室偏好，付款后才占用咨询室',
+    ? '支持整点/半点开始；咨询 50 分钟并预留 10 分钟打扫，视频咨询不占咨询室'
+    : '支持整点/半点开始；咨询 50 分钟并预留 10 分钟打扫，付款后才占用咨询室',
 )
 
 const addModalSub = computed(() =>
   isVideoCenterSelected.value
-    ? '仅可安排一个月内未开始的标准时段（视频咨询）'
-    : '仅可安排一个月内未开始的标准时段',
+    ? '选择一个月内未开始的整点或半点开始时间（视频咨询）'
+    : '选择一个月内未开始的整点或半点开始时间',
 )
 
 const slotRoomText = (slot: CalendarSlot) => {
@@ -928,6 +940,20 @@ const switchViewMode = async (mode: ViewMode) => {
 const selectedTimeSlot = computed(() =>
   timeSlotOptions.value.find(t => t.key === form.value.slotKey) || null,
 )
+
+const selectedProxyTimeSlot = computed(() =>
+  proxyTimeSlotOptions.value.find(t => t.key === proxyForm.value.slotKey) || null,
+)
+
+const bookingDurationText = (startTime: string) => {
+  const start = new Date(startTime)
+  if (Number.isNaN(start.getTime())) return startTime
+  const consultationEnd = new Date(start.getTime() + 50 * 60_000)
+  const cleaningEnd = new Date(start.getTime() + 60 * 60_000)
+  const hhmm = (value: Date) =>
+    `${String(value.getHours()).padStart(2, '0')}:${String(value.getMinutes()).padStart(2, '0')}`
+  return `咨询 ${hhmm(start)}–${hhmm(consultationEnd)}，打扫 ${hhmm(consultationEnd)}–${hhmm(cleaningEnd)}`
+}
 
 const roomOptionsForSlot = computed(() => selectedTimeSlot.value?.rooms || [])
 
@@ -1626,6 +1652,13 @@ defineExpose({ refresh, focusScheduleId, applyListFilter, getUnrecordedCount })
 .center-chip.active, .slot-chip.active { background: #E8E4DE; color: #3D5A4E; font-weight: 600; }
 .center-chip.disabled, .slot-chip.disabled { opacity: 0.45; }
 .slot-grid { display: flex; flex-wrap: wrap; gap: 12rpx; }
+.form-hint { display: block; margin-top: 12rpx; font-size: 23rpx; color: #6B7280; line-height: 1.5; }
+.duration-card {
+  margin-bottom: 24rpx; padding: 22rpx 24rpx; border-radius: 16rpx;
+  background: #ECFDF5; border: 2rpx solid #A7F3D0;
+}
+.duration-title { display: block; font-size: 24rpx; color: #047857; margin-bottom: 6rpx; }
+.duration-text { display: block; font-size: 26rpx; font-weight: 600; color: #065F46; }
 .picker-row {
   background: #F9FAFB; padding: 20rpx 24rpx; border-radius: 16rpx; font-size: 28rpx;
 }

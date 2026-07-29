@@ -69,7 +69,9 @@ from schedule_meta import (
     release_assigned_room,
     schedule_pref_note,
 )
-from room_slot_status import resolve_slot_manual_status, is_slot_operational
+from room_slot_status import (
+    is_booking_window_operational,
+)
 from schedule_display import resolve_schedule_display, DISPLAY_LABELS, is_consultation_recordable
 from schedule_slots import (
     ROLLING_WINDOW_DAYS,
@@ -936,13 +938,12 @@ def schedule_slot_options(
         usable_room_ids = []
         paid_occupied = paid_occupied_rooms_at_center(db, center_id, start_dt) if rooms else set()
         for room in rooms:
-            slot_status = resolve_slot_manual_status(
+            room_ok = is_booking_window_operational(
                 db,
                 room.get("dbId"),
                 start_dt,
                 room.get("status", "AVAILABLE"),
             )
-            room_ok = is_slot_operational(slot_status)
             if room_ok:
                 usable_room_ids.append(room["id"])
             paid_taken = room["id"] in paid_occupied
@@ -1116,13 +1117,12 @@ def create_schedule(
         rooms = get_consultation_rooms(db, body.center_id)
         usable_room_ids = []
         for r in rooms:
-            slot_status = resolve_slot_manual_status(
+            if is_booking_window_operational(
                 db,
                 r.get("dbId"),
                 body.start_time,
                 r.get("status", "AVAILABLE"),
-            )
-            if is_slot_operational(slot_status):
+            ):
                 usable_room_ids.append(r["id"])
         if not usable_room_ids:
             raise HTTPException(status_code=400, detail="该中心暂无可用咨询室")
@@ -1193,13 +1193,13 @@ def update_schedule(
             selected_room = next((room for room in rooms if room["id"] == pref), None)
             if not selected_room:
                 raise HTTPException(status_code=400, detail="无效的咨询室偏好")
-            slot_status = resolve_slot_manual_status(
+            room_ok = is_booking_window_operational(
                 db,
                 selected_room.get("dbId"),
                 schedule.StartTime,
                 selected_room.get("status", "AVAILABLE"),
             )
-            if not is_slot_operational(slot_status):
+            if not room_ok:
                 raise HTTPException(status_code=400, detail="咨询室偏好在该时段不可用")
         schedule.Note = schedule_pref_note(body.center_id, pref)
     elif body.note is not None:

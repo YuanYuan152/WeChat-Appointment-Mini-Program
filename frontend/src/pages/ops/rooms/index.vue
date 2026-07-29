@@ -90,7 +90,7 @@ import { onShow } from '@dcloudio/uni-app'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
 import { APPOINTMENT_CENTERS } from '@/constants/appointmentCenters'
-import { currentStandardSlot, SLOT_START_HOURS } from '@/constants/scheduleSlots'
+import { currentStandardSlot, SLOT_START_TIMES } from '@/constants/scheduleSlots'
 import { formatPatientInline } from '@/utils/patientContract'
 
 interface RoomSnapshot {
@@ -121,9 +121,7 @@ const centerOptions = APPOINTMENT_CENTERS
 const centerLabels = centerOptions.map(c => c.name)
 const centerIndex = ref(0)
 
-const slotLabels = computed(() =>
-  SLOT_START_HOURS.map(h => `${String(h).padStart(2, '0')}:00`)
-)
+const slotLabels = computed(() => SLOT_START_TIMES)
 
 const groupedCenters = computed(() => {
   const byCenter = new Map<string, RoomSnapshot[]>()

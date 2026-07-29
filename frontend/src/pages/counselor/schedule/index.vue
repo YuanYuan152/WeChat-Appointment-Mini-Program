@@ -37,25 +37,16 @@
               <text>{{ form.startDate || '选择日期' }}</text>
             </view>
           </picker>
-          <picker mode="time" :value="form.startTime" @change="onStartTime">
+          <picker :range="startTimeOptions" :value="startTimeIndex" @change="onStartTime">
             <view class="picker-row">
               <text>{{ form.startTime || '选择时间' }}</text>
             </view>
           </picker>
         </view>
 
-        <view class="form-item">
-          <text class="form-label">结束时间</text>
-          <picker mode="date" :value="form.endDate" @change="onEndDate">
-            <view class="picker-row">
-              <text>{{ form.endDate || '选择日期' }}</text>
-            </view>
-          </picker>
-          <picker mode="time" :value="form.endTime" @change="onEndTime">
-            <view class="picker-row">
-              <text>{{ form.endTime || '选择时间' }}</text>
-            </view>
-          </picker>
+        <view v-if="bookingSummary" class="duration-card">
+          <text class="duration-title">本次排期</text>
+          <text class="duration-text">{{ bookingSummary }}</text>
         </view>
 
         <view class="form-item">
@@ -107,6 +98,7 @@ import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
 import { APPOINTMENT_CENTERS, APPOINTMENT_CENTER_MAP } from '@/constants/appointmentCenters'
 import { getRoomName, getRoomsByCenter } from '@/constants/consultationRooms'
+import { SLOT_START_TIMES } from '@/constants/scheduleSlots'
 import { refreshSubscribeHint, tryOfficialRoleSubscribeInGesture } from '@/utils/subscribePrompt'
 
 interface Schedule {
@@ -126,13 +118,13 @@ const centers = APPOINTMENT_CENTERS
 const form = ref({
   startDate: '',
   startTime: '',
-  endDate: '',
-  endTime: '',
   centerId: defaultCenterId,
   roomId: NO_PREF,
 })
 
 const roomOptions = computed(() => getRoomsByCenter(form.value.centerId))
+const startTimeOptions = SLOT_START_TIMES
+const startTimeIndex = computed(() => Math.max(0, startTimeOptions.indexOf(form.value.startTime)))
 
 const parseNotePart = (note: string, key: string) => {
   for (const part of note.split(';')) {
@@ -185,17 +177,38 @@ const formatDate = (dt: string) => dt ? dt.slice(0, 10) : ''
 const formatTime = (dt: string) => dt ? dt.slice(11, 16) : ''
 
 const onStartDate = (e: any) => { form.value.startDate = e.detail.value }
-const onStartTime = (e: any) => { form.value.startTime = e.detail.value }
-const onEndDate = (e: any) => { form.value.endDate = e.detail.value }
-const onEndTime = (e: any) => { form.value.endTime = e.detail.value }
+const onStartTime = (e: any) => {
+  form.value.startTime = startTimeOptions[Number(e.detail.value)] || ''
+}
+
+const bookingTimes = computed(() => {
+  if (!form.value.startDate || !form.value.startTime) return null
+  const start = new Date(`${form.value.startDate}T${form.value.startTime}:00`)
+  if (Number.isNaN(start.getTime())) return null
+  return {
+    start,
+    consultationEnd: new Date(start.getTime() + 50 * 60_000),
+    cleaningEnd: new Date(start.getTime() + 60 * 60_000),
+  }
+})
+
+const dateTimeLocal = (value: Date) =>
+  `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}T${String(value.getHours()).padStart(2, '0')}:${String(value.getMinutes()).padStart(2, '0')}:00`
+
+const hhmm = (value: Date) =>
+  `${String(value.getHours()).padStart(2, '0')}:${String(value.getMinutes()).padStart(2, '0')}`
+
+const bookingSummary = computed(() => {
+  const times = bookingTimes.value
+  if (!times) return ''
+  return `咨询 ${hhmm(times.start)}–${hhmm(times.consultationEnd)}，打扫 ${hhmm(times.consultationEnd)}–${hhmm(times.cleaningEnd)}`
+})
 
 const openAddModal = () => {
   const today = formatToday()
   form.value = {
     startDate: today,
     startTime: '10:00',
-    endDate: today,
-    endTime: '10:50',
     centerId: defaultCenterId,
     roomId: NO_PREF,
   }
@@ -209,29 +222,24 @@ const loadSchedules = async () => {
 
 const submitSchedule = () => {
   if (submitting.value) return
-  const { startDate, startTime, endDate, endTime, centerId, roomId } = form.value
-  if (!startDate || !startTime || !endDate || !endTime || !centerId || !roomId) {
-    uni.showToast({ title: '请选择中心、咨询室偏好并填写时间', icon: 'none' })
+  const { startDate, startTime, centerId, roomId } = form.value
+  if (!startDate || !startTime || !centerId || !roomId || !bookingTimes.value) {
+    uni.showToast({ title: '请选择中心、咨询室偏好和开始时间', icon: 'none' })
     return
   }
-  const startAt = new Date(`${startDate}T${startTime}:00`)
-  const endAt = new Date(`${endDate}T${endTime}:00`)
-  if (Number.isNaN(startAt.getTime()) || Number.isNaN(endAt.getTime())) {
-    uni.showToast({ title: '时间格式无效', icon: 'none' })
+  if (!['00', '30'].includes(startTime.split(':')[1])) {
+    uni.showToast({ title: '开始时间仅支持整点或半点', icon: 'none' })
     return
   }
-  if (endAt <= startAt) {
-    uni.showToast({ title: '结束时间须晚于开始时间', icon: 'none' })
-    return
-  }
+  const times = bookingTimes.value
 
   const subscribeDone = tryOfficialRoleSubscribeInGesture('schedule')
   submitting.value = true
   void (async () => {
     try {
       const res = await httpV2.post(API_ENDPOINTS.counselor.schedules, {
-        start_time: `${startDate}T${startTime}:00`,
-        end_time: `${endDate}T${endTime}:00`,
+        start_time: dateTimeLocal(times.start),
+        end_time: dateTimeLocal(times.consultationEnd),
         center_id: centerId,
         room_id: roomId === NO_PREF ? null : roomId,
       })
@@ -241,8 +249,6 @@ const submitSchedule = () => {
         form.value = {
           startDate: '',
           startTime: '',
-          endDate: '',
-          endTime: '',
           centerId: defaultCenterId,
           roomId: NO_PREF,
         }
@@ -351,6 +357,12 @@ onMounted(() => {
   font-size: 28rpx;
   color: #1F2937;
 }
+.duration-card {
+  margin-bottom: 24rpx; padding: 24rpx; border-radius: 16rpx;
+  background: #ECFDF5; border: 2rpx solid #A7F3D0;
+}
+.duration-title { display: block; font-size: 24rpx; color: #047857; margin-bottom: 8rpx; }
+.duration-text { display: block; font-size: 28rpx; font-weight: 600; color: #065F46; }
 .form-input {
   background: #F9FAFB;
   border-radius: 16rpx;
