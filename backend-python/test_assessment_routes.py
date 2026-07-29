@@ -80,6 +80,22 @@ class AssessmentRouteTests(unittest.TestCase):
             assessment_routes.get_published_assessment("not-found")
         self.assertEqual(404, raised.exception.status_code)
 
+    def test_public_detail_disables_insecure_non_local_share_url(self) -> None:
+        with (
+            patch.object(
+                settings,
+                "ASSESSMENT_SHARE_SECRET",
+                "assessment-share-test-secret-32-characters",
+            ),
+            patch.object(settings, "BASE_URL", "http://124.221.56.121"),
+        ):
+            detail = assessment_routes.get_published_assessment(
+                "dark-light-personality"
+            )
+
+        self.assertIsNone(detail["shareCode"])
+        self.assertIsNone(detail["shareUrl"])
+
     def test_admin_list_is_available_under_existing_prefix(self) -> None:
         route = next(
             item

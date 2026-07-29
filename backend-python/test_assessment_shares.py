@@ -19,6 +19,7 @@ from api_response import ApiResponseEnvelopeMiddleware
 from assessment_definition_service import AssessmentDefinitionStore
 from assessment_share_routes import (
     register_assessment_share_admin_routes,
+    router as assessment_share_router,
     scan_assessment_share,
 )
 from assessment_share_service import (
@@ -71,6 +72,18 @@ async def asgi_get_json(
     query_string: str = "",
 ) -> tuple[int, dict[str, object]]:
     """Exercise FastAPI's real ASGI routing without the unavailable httpx package."""
+    status, _, body = await asgi_request(app, path, query_string=query_string)
+    return status, json.loads(body)
+
+
+async def asgi_request(
+    app: FastAPI,
+    path: str,
+    *,
+    method: str = "GET",
+    query_string: str = "",
+) -> tuple[int, dict[str, str], bytes]:
+    """Exercise FastAPI's real ASGI routing and expose status, headers and body."""
     messages: list[dict[str, object]] = []
     request_sent = False
 
@@ -89,7 +102,7 @@ async def asgi_get_json(
             "type": "http",
             "asgi": {"version": "3.0", "spec_version": "2.3"},
             "http_version": "1.1",
-            "method": "GET",
+            "method": method,
             "scheme": "http",
             "path": path,
             "raw_path": path.encode("ascii"),
@@ -108,7 +121,11 @@ async def asgi_get_json(
         for message in messages
         if message["type"] == "http.response.body"
     )
-    return int(start["status"]), json.loads(body)
+    headers = {
+        key.decode("latin-1").lower(): value.decode("latin-1")
+        for key, value in start.get("headers", [])
+    }
+    return int(start["status"]), headers, body
 
 
 class AssessmentShareTests(unittest.TestCase):
@@ -159,7 +176,7 @@ class AssessmentShareTests(unittest.TestCase):
             settings, "ASSESSMENT_SHARE_SECRET", TEST_SECRET
         )
         self.frontend_patch = patch.object(
-            settings, "ASSESSMENT_FRONTEND_BASE_URL", "http://eap.test"
+            settings, "ASSESSMENT_FRONTEND_BASE_URL", "https://eap.test"
         )
         self.secret_patch.start()
         self.frontend_patch.start()
@@ -226,6 +243,74 @@ class AssessmentShareTests(unittest.TestCase):
         self.assertEqual(64, len(rows[0].VisitorHash))
         self.assertNotIn("127.0.0.1", rows[0].VisitorHash)
         self.assertEqual(302, second_response.status_code)
+
+    def test_head_scan_validates_and_redirects_without_tracking_or_cookie(self) -> None:
+        share_code = build_share_code("dark-light-personality")
+        app = FastAPI()
+        app.include_router(assessment_share_router)
+
+        with (
+            patch(
+                "assessment_share_routes.get_assessment_store",
+                return_value=self.store,
+            ),
+            patch("assessment_share_routes.new_visitor_token") as new_token,
+            patch(
+                "assessment_share_routes.add_scan_if_not_recent"
+            ) as add_scan,
+        ):
+            status, headers, _ = asyncio.run(
+                asgi_request(
+                    app,
+                    (
+                        "/api/web/assessment-shares/"
+                        f"{share_code}/scan"
+                    ),
+                    method="HEAD",
+                )
+            )
+
+        self.assertEqual(302, status)
+        self.assertIn(
+            "/assessment/fun/dark-light-personality?shareCode=as1.",
+            headers["location"],
+        )
+        self.assertEqual("no-store", headers["cache-control"])
+        self.assertEqual("no-referrer", headers["referrer-policy"])
+        self.assertNotIn("set-cookie", headers)
+        new_token.assert_not_called()
+        add_scan.assert_not_called()
+        self.assertEqual(0, self.db.query(AppAssessmentShareScan).count())
+
+    def test_scan_rejects_insecure_public_frontend_before_tracking(self) -> None:
+        share_code = build_share_code("dark-light-personality")
+        with (
+            patch(
+                "assessment_share_routes.get_assessment_store",
+                return_value=self.store,
+            ),
+            patch.object(
+                settings,
+                "ASSESSMENT_FRONTEND_BASE_URL",
+                "http://124.221.56.121",
+            ),
+            patch("assessment_share_routes.new_visitor_token") as new_token,
+            patch(
+                "assessment_share_routes.add_scan_if_not_recent"
+            ) as add_scan,
+        ):
+            with self.assertRaises(HTTPException) as raised:
+                scan_assessment_share(
+                    share_code=share_code,
+                    request=request(),
+                    db=self.db,
+                )
+
+        self.assertEqual(503, raised.exception.status_code)
+        self.assertIn("HTTPS", str(raised.exception.detail))
+        new_token.assert_not_called()
+        add_scan.assert_not_called()
+        self.assertEqual(0, self.db.query(AppAssessmentShareScan).count())
 
     def test_scan_records_different_visitors_and_same_visitor_after_31_seconds(
         self,

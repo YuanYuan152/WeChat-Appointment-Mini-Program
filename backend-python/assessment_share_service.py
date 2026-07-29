@@ -9,7 +9,7 @@ import re
 import secrets
 from datetime import datetime, timedelta
 from typing import Any, Optional
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 from sqlalchemy import distinct, func
 from sqlalchemy.orm import Session
@@ -26,6 +26,7 @@ SCAN_DEDUP_WINDOW = timedelta(seconds=30)
 _ASSESSMENT_ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _VISITOR_TOKEN_PATTERN = re.compile(r"^[A-Za-z0-9_-]{24,128}$")
 _BASE64URL_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
+_LOCAL_DEVELOPMENT_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
 
 class AssessmentShareError(Exception):
@@ -38,6 +39,41 @@ class AssessmentShareConfigurationError(AssessmentShareError):
 
 class AssessmentShareCodeError(AssessmentShareError):
     status_code = 404
+
+
+def normalize_assessment_public_base_url(
+    value: str | None,
+    *,
+    setting_name: str,
+) -> str:
+    """Require HTTPS for public share URLs while preserving local development."""
+    normalized = (value or "").strip().rstrip("/")
+    if not normalized:
+        raise AssessmentShareConfigurationError(f"{setting_name} 尚未配置")
+
+    try:
+        parsed = urlsplit(normalized)
+    except ValueError as exc:
+        raise AssessmentShareConfigurationError(
+            f"{setting_name} 配置无效"
+        ) from exc
+
+    if (
+        not parsed.hostname
+        or parsed.username
+        or parsed.password
+        or parsed.query
+        or parsed.fragment
+        or parsed.scheme not in {"http", "https"}
+        or (
+            parsed.scheme == "http"
+            and parsed.hostname.lower() not in _LOCAL_DEVELOPMENT_HOSTS
+        )
+    ):
+        raise AssessmentShareConfigurationError(
+            f"{setting_name} 必须使用公网 HTTPS 地址"
+        )
+    return normalized
 
 
 def _base64url_encode(value: bytes) -> str:
@@ -123,9 +159,10 @@ def decode_share_code(
 
 def public_share_info(assessment_id: str) -> dict[str, str]:
     share_code = build_share_code(assessment_id)
-    base_url = settings.BASE_URL.strip().rstrip("/")
-    if not base_url:
-        raise AssessmentShareConfigurationError("量表分享服务地址尚未配置")
+    base_url = normalize_assessment_public_base_url(
+        settings.BASE_URL,
+        setting_name="量表分享服务地址",
+    )
     return {
         "shareCode": share_code,
         "shareUrl": (

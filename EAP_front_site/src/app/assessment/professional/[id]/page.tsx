@@ -1,7 +1,12 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { getAssessment } from "@/lib/assessment/api";
+import {
+  buildAssessmentMetadata,
+  missingAssessmentMetadata,
+} from "@/lib/assessment/metadata";
 import { QuizClient } from "@/components/assessment/quiz-client";
 import { AssessmentAuthGate } from "@/components/assessment/assessment-auth-gate";
 import { ProfessionalAssessmentPrivacyGate } from "@/components/assessment/professional-assessment-privacy";
@@ -11,6 +16,16 @@ import { AssessmentShareButton } from "@/components/assessment/assessment-share-
 interface QuizPageProps {
   params: Promise<{ id: string }>;
   searchParams: Promise<{ shareCode?: string | string[] }>;
+}
+
+export async function generateMetadata({
+  params,
+}: QuizPageProps): Promise<Metadata> {
+  const { id } = await params;
+  const assessment = await getAssessment(id, "professional");
+  return assessment
+    ? buildAssessmentMetadata(assessment, "professional")
+    : missingAssessmentMetadata;
 }
 
 export default async function ProfessionalQuizPage({ params, searchParams }: QuizPageProps) {

@@ -57,6 +57,81 @@ export function safeAssessmentShareFileName(title: string): string {
   return `${normalized || "心理测评"}-分享海报.png`;
 }
 
+export interface AssessmentLinkSharePayload {
+  title: string;
+  text: string;
+  url: string;
+}
+
+export interface AssessmentPosterSharePayload<TFile = File> {
+  files: TFile[];
+}
+
+export type AssessmentShareKind = "link" | "poster";
+
+export function createAssessmentLinkSharePayload(
+  title: string,
+  url: string
+): AssessmentLinkSharePayload {
+  return {
+    title,
+    text: `邀请你完成「${title}」心理测评`,
+    url,
+  };
+}
+
+export function createAssessmentPosterSharePayload<TFile>(
+  file: TFile
+): AssessmentPosterSharePayload<TFile> {
+  return { files: [file] };
+}
+
+export function isWechatUserAgent(userAgent: string): boolean {
+  return /MicroMessenger/i.test(userAgent);
+}
+
+function shareErrorName(reason: unknown): string | null {
+  if (
+    typeof reason === "object" &&
+    reason !== null &&
+    "name" in reason &&
+    typeof reason.name === "string"
+  ) {
+    return reason.name;
+  }
+  return null;
+}
+
+export function assessmentShareErrorMessage(
+  reason: unknown,
+  kind: AssessmentShareKind
+): string | null {
+  const errorName = shareErrorName(reason);
+  if (errorName === "AbortError") return null;
+
+  const fallback =
+    kind === "link"
+      ? "链接分享失败，请复制链接后发送"
+      : "图片分享失败，请保存海报后发送";
+
+  if (errorName === "NotAllowedError") {
+    return kind === "link"
+      ? "浏览器未允许分享，请确认使用 HTTPS，或复制链接后发送"
+      : "浏览器未允许图片分享，请确认使用 HTTPS，或保存海报后发送";
+  }
+  if (errorName === "DataError") {
+    return kind === "link"
+      ? "微信或当前应用无法接收该链接，请复制链接后发送"
+      : "微信或当前应用无法接收该图片，请保存海报后发送";
+  }
+  if (errorName === "TypeError") {
+    return kind === "link"
+      ? "当前浏览器不支持链接分享，请复制链接后发送"
+      : "当前浏览器不支持图片分享，请保存海报后发送";
+  }
+  return fallback;
+}
+
 export function createAssessmentPosterState<TBlob = Blob>(
   sourceKey: string
 ): AssessmentPosterState<TBlob> {

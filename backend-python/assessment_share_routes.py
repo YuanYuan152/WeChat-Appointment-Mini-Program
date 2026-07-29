@@ -25,6 +25,7 @@ from assessment_share_service import (
     assessment_share_stats,
     decode_share_code,
     new_visitor_token,
+    normalize_assessment_public_base_url,
     normalize_visitor_token,
     visitor_hash,
 )
@@ -95,12 +96,10 @@ def _raise_share_http_error(exc: Exception) -> None:
     raise HTTPException(status_code=500, detail="量表分享服务异常") from exc
 
 
-@router.get("/{share_code}/scan", response_class=RedirectResponse)
-def scan_assessment_share(
+def _resolve_assessment_share_target(
     share_code: str,
-    request: Request,
-    db: Session = Depends(get_db),
-):
+) -> tuple[str, str, str]:
+    """Validate a share code and build its published assessment target."""
     normalized_share_code = share_code.strip()
     try:
         assessment_id = decode_share_code(normalized_share_code)
@@ -112,9 +111,46 @@ def scan_assessment_share(
     ) as exc:
         _raise_share_http_error(exc)
 
-    frontend_base = settings.ASSESSMENT_FRONTEND_BASE_URL.strip().rstrip("/")
-    if not frontend_base:
-        raise HTTPException(status_code=503, detail="量表页面地址尚未配置")
+    try:
+        frontend_base = normalize_assessment_public_base_url(
+            settings.ASSESSMENT_FRONTEND_BASE_URL,
+            setting_name="量表页面地址",
+        )
+    except AssessmentShareConfigurationError as exc:
+        _raise_share_http_error(exc)
+
+    definition = published["definition"]
+    query = urlencode({"shareCode": normalized_share_code})
+    target = (
+        f"{frontend_base}/assessment/{quote(definition['category'], safe='')}/"
+        f"{quote(assessment_id, safe='')}?{query}"
+    )
+    return normalized_share_code, assessment_id, target
+
+
+def _share_redirect(target: str) -> RedirectResponse:
+    response = RedirectResponse(url=target, status_code=302)
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    return response
+
+
+@router.head("/{share_code}/scan", response_class=RedirectResponse)
+def inspect_assessment_share(share_code: str):
+    """Validate a share URL without recording a scan or setting a visitor cookie."""
+    _, _, target = _resolve_assessment_share_target(share_code)
+    return _share_redirect(target)
+
+
+@router.get("/{share_code}/scan", response_class=RedirectResponse)
+def scan_assessment_share(
+    share_code: str,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    normalized_share_code, assessment_id, target = (
+        _resolve_assessment_share_target(share_code)
+    )
 
     visitor_token = normalize_visitor_token(
         request.cookies.get(VISITOR_COOKIE_NAME)
@@ -146,15 +182,7 @@ def scan_assessment_share(
             exc_info=(type(exc), exc, exc.__traceback__),
         )
 
-    definition = published["definition"]
-    query = urlencode({"shareCode": normalized_share_code})
-    target = (
-        f"{frontend_base}/assessment/{quote(definition['category'], safe='')}/"
-        f"{quote(assessment_id, safe='')}?{query}"
-    )
-    response = RedirectResponse(url=target, status_code=302)
-    response.headers["Cache-Control"] = "no-store"
-    response.headers["Referrer-Policy"] = "no-referrer"
+    response = _share_redirect(target)
     response.set_cookie(
         VISITOR_COOKIE_NAME,
         visitor_token,

@@ -148,3 +148,60 @@ test("sanitizes the downloaded poster filename", () => {
     "心理测评-分享海报.png"
   );
 });
+
+test("creates separate link and poster share payloads", () => {
+  assert.deepEqual(
+    shareState.createAssessmentLinkSharePayload(
+      "睡眠质量测评",
+      "https://eap.example/scan?code=valid"
+    ),
+    {
+      title: "睡眠质量测评",
+      text: "邀请你完成「睡眠质量测评」心理测评",
+      url: "https://eap.example/scan?code=valid",
+    }
+  );
+
+  const file = { name: "poster.png" };
+  assert.deepEqual(shareState.createAssessmentPosterSharePayload(file), {
+    files: [file],
+  });
+});
+
+test("recognizes WeChat user agents without matching ordinary browsers", () => {
+  assert.equal(
+    shareState.isWechatUserAgent(
+      "Mozilla/5.0 (Linux; Android 14) AppleWebKit MicroMessenger/8.0.50"
+    ),
+    true
+  );
+  assert.equal(
+    shareState.isWechatUserAgent(
+      "Mozilla/5.0 (iPhone) AppleWebKit/605.1.15 Mobile Safari/604.1"
+    ),
+    false
+  );
+});
+
+test("maps share errors to actionable messages", () => {
+  assert.equal(
+    shareState.assessmentShareErrorMessage({ name: "AbortError" }, "link"),
+    null
+  );
+  assert.equal(
+    shareState.assessmentShareErrorMessage({ name: "NotAllowedError" }, "link"),
+    "浏览器未允许分享，请确认使用 HTTPS，或复制链接后发送"
+  );
+  assert.equal(
+    shareState.assessmentShareErrorMessage({ name: "DataError" }, "poster"),
+    "微信或当前应用无法接收该图片，请保存海报后发送"
+  );
+  assert.equal(
+    shareState.assessmentShareErrorMessage({ name: "TypeError" }, "link"),
+    "当前浏览器不支持链接分享，请复制链接后发送"
+  );
+  assert.equal(
+    shareState.assessmentShareErrorMessage(new Error("unknown"), "poster"),
+    "图片分享失败，请保存海报后发送"
+  );
+});

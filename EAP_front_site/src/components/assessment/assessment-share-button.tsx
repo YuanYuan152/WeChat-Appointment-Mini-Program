@@ -13,9 +13,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  assessmentShareErrorMessage,
   assessmentPosterReducer,
   assessmentShareSourceKey,
+  createAssessmentLinkSharePayload,
+  createAssessmentPosterSharePayload,
   createAssessmentPosterState,
+  isWechatUserAgent,
   safeAssessmentShareFileName,
 } from "@/lib/assessment/assessment-share-state";
 import type { Assessment } from "@/lib/api/types";
@@ -286,6 +290,7 @@ function AssessmentShareButtonContent({
 
   const openDialog = () => {
     setOpen(true);
+    setMessage(null);
     void preparePoster();
   };
 
@@ -301,79 +306,105 @@ function AssessmentShareButtonContent({
     setMessage("已触发保存，请确认浏览器下载");
   };
 
-  const sharePoster = async () => {
-    if (!poster || !shareUrl) return;
-    const file = new File([poster.blob], safeAssessmentShareFileName(assessment.title), {
-      type: "image/png",
-    });
-    const fullPayload: ShareData = {
-      title: assessment.title,
-      text: `邀请你完成「${assessment.title}」心理测评`,
-      url: shareUrl,
-      files: [file],
-    };
-    const filesOnlyPayload: ShareData = { files: [file] };
-    const shareCandidates: ShareData[] = [];
-    const nativeShare =
-      typeof navigator.share === "function"
-        ? navigator.share.bind(navigator)
-        : null;
-    const canShare =
-      typeof navigator.canShare === "function"
-        ? navigator.canShare.bind(navigator)
-        : null;
-
-    if (nativeShare) {
-      if (!canShare) {
-        shareCandidates.push(fullPayload, filesOnlyPayload);
-      } else {
-        try {
-          if (canShare(fullPayload)) {
-            shareCandidates.push(fullPayload);
-          }
-        } catch {
-          // An implementation may expose canShare but reject newer fields.
-          // The visible preview remains the reliable fallback.
-        }
-        try {
-          if (canShare(filesOnlyPayload)) {
-            shareCandidates.push(filesOnlyPayload);
-          }
-        } catch {
-          // Keep the long-press preview fallback below.
-        }
+  const copyShareUrl = async (): Promise<boolean> => {
+    if (!shareUrl) return false;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(shareUrl);
+        return true;
       }
+    } catch {
+      // Older WeChat WebViews can expose the Clipboard API but reject it.
+      // Continue with the synchronous selection fallback while the click
+      // still originates from the user's gesture.
     }
 
-    if (!nativeShare) {
-      setMessage("当前浏览器无法直接分享图片，请长按上方海报保存后从微信发送");
+    const textarea = document.createElement("textarea");
+    textarea.value = shareUrl;
+    textarea.readOnly = true;
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+    textarea.setSelectionRange(0, textarea.value.length);
+    try {
+      return document.execCommand("copy");
+    } catch {
+      return false;
+    } finally {
+      textarea.remove();
+    }
+  };
+
+  const shareLink = async () => {
+    if (!shareUrl) return;
+    if (isWechatUserAgent(navigator.userAgent)) {
+      const copied = await copyShareUrl();
+      setMessage(
+        copied
+          ? "量表邀请链接已复制，请打开好友对话粘贴发送；分享到朋友圈请使用海报"
+          : `请长按复制量表邀请链接后发送：${shareUrl}`
+      );
       return;
     }
 
-    for (const payload of shareCandidates) {
+    if (typeof navigator.share !== "function") {
+      setMessage("当前浏览器不支持系统分享，请复制链接后发送");
+      return;
+    }
+
+    try {
+      await navigator.share(createAssessmentLinkSharePayload(assessment.title, shareUrl));
+      setMessage("已打开系统分享面板");
+    } catch (reason) {
+      setMessage(assessmentShareErrorMessage(reason, "link"));
+    }
+  };
+
+  const sharePoster = async () => {
+    if (!poster) return;
+    if (isWechatUserAgent(navigator.userAgent)) {
+      setMessage("请长按上方海报保存图片，再发送给微信好友或朋友圈");
+      return;
+    }
+
+    const file = new File([poster.blob], safeAssessmentShareFileName(assessment.title), {
+      type: "image/png",
+    });
+    const payload = createAssessmentPosterSharePayload(file);
+    if (typeof navigator.share !== "function") {
+      setMessage("当前浏览器不支持图片分享，请保存海报后发送");
+      return;
+    }
+
+    if (typeof navigator.canShare === "function") {
       try {
-        await nativeShare(payload);
-        setMessage("已打开系统分享面板");
-        return;
-      } catch (reason) {
-        if (reason instanceof DOMException && reason.name === "AbortError") {
+        if (!navigator.canShare(payload)) {
+          setMessage("当前浏览器不支持图片分享，请保存海报后发送");
           return;
         }
-        // Some browsers accept the combined payload in canShare but reject
-        // it at invocation time. Continue with the files-only candidate.
+      } catch {
+        setMessage("当前浏览器无法确认图片分享能力，请保存海报后发送");
+        return;
       }
     }
-    setMessage("当前浏览器无法直接分享图片，请长按上方海报保存后从微信发送");
+
+    try {
+      await navigator.share(payload);
+      setMessage("已打开系统分享面板");
+    } catch (reason) {
+      setMessage(assessmentShareErrorMessage(reason, "poster"));
+    }
   };
 
   const copyLink = async () => {
     if (!shareUrl) return;
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-      setMessage("量表链接已复制");
-    } catch {
-      setMessage("复制失败，请长按二维码保存图片");
-    }
+    const copied = await copyShareUrl();
+    setMessage(
+      copied
+        ? "量表邀请链接已复制"
+        : `复制失败，请长按复制此链接：${shareUrl}`
+    );
   };
 
   return (
@@ -442,19 +473,23 @@ function AssessmentShareButtonContent({
           </div>
 
           <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-            微信内可长按上方图片保存，再发送给好友或分享到朋友圈；支持系统分享的浏览器可直接点击“分享图片”。
+            微信内可复制链接发送给好友，或长按保存海报后发送给好友、发布朋友圈；其他浏览器可分别调用系统分享。
           </p>
-          {message && poster ? (
-            <p className="mt-2 text-sm text-primary">{message}</p>
+          {message ? (
+            <p className="mt-2 select-text break-all text-sm text-primary">{message}</p>
           ) : null}
           <div className="mt-5 flex flex-wrap gap-2">
-            <Button onClick={() => void sharePoster()} disabled={!poster}>
+            <Button onClick={() => void shareLink()}>
               <Share2 className="mr-2 h-4 w-4" />
-              分享图片
+              分享链接
+            </Button>
+            <Button variant="outline" onClick={() => void sharePoster()} disabled={!poster}>
+              <Share2 className="mr-2 h-4 w-4" />
+              分享海报
             </Button>
             <Button variant="outline" onClick={downloadPoster} disabled={!poster}>
               <Download className="mr-2 h-4 w-4" />
-              保存图片
+              保存海报
             </Button>
             <Button variant="outline" onClick={() => void copyLink()}>
               <Copy className="mr-2 h-4 w-4" />
