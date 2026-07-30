@@ -120,6 +120,7 @@ check_file "${DEPLOY_ROOT}/nginx/mini-program-http-bootstrap.conf" "Nginx TLS �
 check_file "${DEPLOY_ROOT}/rsyslog/30-mini-program.conf" "rsyslog 配置"
 check_file "${DEPLOY_ROOT}/logrotate/mini-program" "logrotate 配置"
 check_file "${DEPLOY_ROOT}/OPERATIONS.md" "运维文档"
+check_file "${SCRIPT_DIR}/nginx-server-name-count.awk" "Nginx server_name 计数脚本"
 
 while IFS= read -r script; do
   if ! bash -n "${script}"; then
@@ -461,36 +462,8 @@ if [[ -n "${nginx_dump:-}" ]]; then
     eap.ji-psy.com admin.ji-psy.com \
     test.eap.ji-psy.com test.admin.ji-psy.com; do
     active_server_count="$(
-      awk -v target="${domain}" '
-        $1 == "server_name" {
-          collecting = 1
-          line = $0
-          if (index($0, ";")) {
-            collecting = 0
-          } else {
-            next
-          }
-        }
-        collecting {
-          line = line " " $0
-          if (index($0, ";")) {
-            collecting = 0
-          } else {
-            next
-          }
-        }
-        line != "" && !collecting {
-          gsub(/;/, " ", line)
-          count = split(line, fields, /[[:space:]]+/)
-          for (index = 2; index <= count; index++) {
-            if (fields[index] == target) {
-              matches++
-            }
-          }
-          line = ""
-        }
-        END { print matches + 0 }
-      ' <<<"${nginx_dump}"
+      awk -v target="${domain}" \
+        -f "${SCRIPT_DIR}/nginx-server-name-count.awk" <<<"${nginx_dump}"
     )"
     if [[ "${active_server_count}" != "2" ]]; then
       warn "系统 Nginx 中 ${domain} 应恰好出现在 HTTP/HTTPS 两个 server_name，当前 ${active_server_count}；请禁用旧站点"

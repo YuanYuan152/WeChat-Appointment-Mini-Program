@@ -42,6 +42,32 @@ while IFS= read -r script; do
   fi
 done < <(find "${SCRIPT_DIR}" -maxdepth 1 -type f -name '*.sh' -print | sort)
 
+info "检查 Nginx server_name 计数脚本的 awk 兼容性"
+nginx_server_name_awk="${SCRIPT_DIR}/nginx-server-name-count.awk"
+nginx_server_name_fixture='
+server_name test.eap.ji-psy.com test.admin.ji-psy.com;
+server_name
+  test.eap.ji-psy.com
+  example.invalid;
+server_name example.invalid;
+'
+awk_implementations=(awk)
+if command -v mawk >/dev/null 2>&1; then
+  awk_implementations+=(mawk)
+fi
+for awk_implementation in "${awk_implementations[@]}"; do
+  if ! actual_count="$(
+    "${awk_implementation}" -v target="test.eap.ji-psy.com" \
+      -f "${nginx_server_name_awk}" <<<"${nginx_server_name_fixture}"
+  )"; then
+    warn "${awk_implementation} 无法执行 Nginx server_name 计数脚本"
+    failures=$((failures + 1))
+  elif [[ "${actual_count}" != "2" ]]; then
+    warn "${awk_implementation} 的 Nginx server_name 计数结果应为 2，实际 ${actual_count}"
+    failures=$((failures + 1))
+  fi
+done
+
 provision_script="${REPO_ROOT}/backend-python/provision_runtime_db_user.py"
 provision_test="${REPO_ROOT}/backend-python/test_provision_runtime_db_user.py"
 
