@@ -1,0 +1,11 @@
+.git
+.gitignore
+.next/
+node_modules/
+.env
+.env.*
+!.env.example
+coverage/
+*.log
+*.tsbuildinfo
+next-env.d.ts

@@ -1,0 +1,42 @@
+name: mini-local
+
+x-local-logging: &local-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
+services:
+  mssql:
+    volumes:
+      - "${MSSQL_BACKUP_HOST_DIR:-/tmp/mini-program/local/backups}:/var/opt/mssql/backup"
+    logging: *local-logging
+
+  db-init:
+    logging: *local-logging
+
+  migrate:
+    volumes:
+      - "${UPLOAD_HOST_DIR:-/tmp/mini-program/local/uploads}:/data/uploads"
+      - "${ASSESSMENT_DATA_HOST_DIR:-/tmp/mini-program/local/assessment-data}:/data/assessment-data"
+      - "${ASSESSMENT_ASSET_HOST_DIR:-/tmp/mini-program/local/assessment-assets}:/data/assessment-assets"
+    logging: *local-logging
+
+  backend:
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - "${UPLOAD_HOST_DIR:-/tmp/mini-program/local/uploads}:/data/uploads"
+      - "${ASSESSMENT_DATA_HOST_DIR:-/tmp/mini-program/local/assessment-data}:/data/assessment-data"
+      - "${ASSESSMENT_ASSET_HOST_DIR:-/tmp/mini-program/local/assessment-assets}:/data/assessment-assets"
+    logging: *local-logging
+
+  admin:
+    ports:
+      - "127.0.0.1:3001:3000"
+    logging: *local-logging
+
+  eap:
+    ports:
+      - "127.0.0.1:3000:3000"
+    logging: *local-logging

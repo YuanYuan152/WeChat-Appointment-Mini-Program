@@ -1,0 +1,95 @@
+name: mini-production
+
+x-production-syslog: &production-syslog
+  driver: syslog
+  options:
+    syslog-address: "${SYSLOG_ADDRESS:-unixgram:///dev/log}"
+
+x-production-mssql-resources: &production-mssql-resources
+  cpus: "${MSSQL_CPUS_LIMIT:-2.00}"
+  mem_limit: "${MSSQL_MEMORY_LIMIT:-3g}"
+  mem_reservation: "${MSSQL_MEMORY_RESERVATION:-1536m}"
+  pids_limit: "${MSSQL_PIDS_LIMIT:-768}"
+
+x-production-job-resources: &production-job-resources
+  cpus: "${DATABASE_JOB_CPUS_LIMIT:-1.00}"
+  mem_limit: "${DATABASE_JOB_MEMORY_LIMIT:-1g}"
+  mem_reservation: "${DATABASE_JOB_MEMORY_RESERVATION:-256m}"
+  pids_limit: "${DATABASE_JOB_PIDS_LIMIT:-256}"
+
+x-production-backend-resources: &production-backend-resources
+  cpus: "${BACKEND_CPUS_LIMIT:-1.50}"
+  mem_limit: "${BACKEND_MEMORY_LIMIT:-1536m}"
+  mem_reservation: "${BACKEND_MEMORY_RESERVATION:-512m}"
+  pids_limit: "${BACKEND_PIDS_LIMIT:-384}"
+
+x-production-frontend-resources: &production-frontend-resources
+  cpus: "${FRONTEND_CPUS_LIMIT:-0.50}"
+  mem_limit: "${FRONTEND_MEMORY_LIMIT:-512m}"
+  mem_reservation: "${FRONTEND_MEMORY_RESERVATION:-128m}"
+  pids_limit: "${FRONTEND_PIDS_LIMIT:-192}"
+
+services:
+  mssql:
+    <<: *production-mssql-resources
+    volumes:
+      - "${MSSQL_BACKUP_HOST_DIR:-/data/mini_program/backups/production}:/var/opt/mssql/backup"
+    logging:
+      <<: *production-syslog
+      options:
+        syslog-address: "${SYSLOG_ADDRESS:-unixgram:///dev/log}"
+        tag: mini-production-mssql
+
+  db-init:
+    <<: *production-job-resources
+    logging:
+      <<: *production-syslog
+      options:
+        syslog-address: "${SYSLOG_ADDRESS:-unixgram:///dev/log}"
+        tag: mini-production-db-init
+
+  migrate:
+    <<: *production-job-resources
+    volumes:
+      - "${UPLOAD_HOST_DIR:-/data/mini_program/shared/production/uploads}:/data/uploads"
+      - "${ASSESSMENT_DATA_HOST_DIR:-/data/mini_program/shared/production/assessment-data}:/data/assessment-data"
+      - "${ASSESSMENT_ASSET_HOST_DIR:-/data/mini_program/shared/production/assessment-assets}:/data/assessment-assets"
+    logging:
+      <<: *production-syslog
+      options:
+        syslog-address: "${SYSLOG_ADDRESS:-unixgram:///dev/log}"
+        tag: mini-production-migrate
+
+  backend:
+    <<: *production-backend-resources
+    ports:
+      - "127.0.0.1:28000:8000"
+    volumes:
+      - "${UPLOAD_HOST_DIR:-/data/mini_program/shared/production/uploads}:/data/uploads"
+      - "${ASSESSMENT_DATA_HOST_DIR:-/data/mini_program/shared/production/assessment-data}:/data/assessment-data"
+      - "${ASSESSMENT_ASSET_HOST_DIR:-/data/mini_program/shared/production/assessment-assets}:/data/assessment-assets"
+    logging:
+      <<: *production-syslog
+      options:
+        syslog-address: "${SYSLOG_ADDRESS:-unixgram:///dev/log}"
+        tag: mini-production-backend
+
+  admin:
+    <<: *production-frontend-resources
+    ports:
+      - "127.0.0.1:23001:3000"
+    logging:
+      <<: *production-syslog
+      options:
+        syslog-address: "${SYSLOG_ADDRESS:-unixgram:///dev/log}"
+        tag: mini-production-admin
+
+  eap:
+    <<: *production-frontend-resources
+    ports:
+      - "127.0.0.1:23000:3000"
+    logging:
+      <<: *production-syslog
+      options:
+        syslog-address: "${SYSLOG_ADDRESS:-unixgram:///dev/log}"
+        tag: mini-production-eap

@@ -1,0 +1,317 @@
+x-backend-environment: &backend-environment
+  APP_ENV: "${APP_ENV:?APP_ENV is required}"
+  APP_VERSION: "${APP_VERSION:-unknown}"
+  LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+  ENABLE_API_DOCS: "${ENABLE_API_DOCS:-false}"
+  AUTO_MIGRATE_SCHEMA: "false"
+  ALLOW_DEV_LOGIN: "${ALLOW_DEV_LOGIN:-false}"
+  ALLOW_SIMULATED_PAYMENT: "${ALLOW_SIMULATED_PAYMENT:-false}"
+  CORS_ALLOWED_ORIGINS: "${CORS_ALLOWED_ORIGINS:?CORS_ALLOWED_ORIGINS is required}"
+  DB_SERVER: "mssql"
+  DB_PORT: "1433"
+  DB_NAME: "${DB_NAME:?DB_NAME is required}"
+  DB_USER: "${DB_USER:-sa}"
+  DB_PASSWORD: "${DB_PASSWORD:?DB_PASSWORD is required}"
+  DB_DRIVER: "ODBC Driver 18 for SQL Server"
+  DB_TRUSTED_CONNECTION: "false"
+  DB_TRUST_SERVER_CERTIFICATE: "true"
+  DB_CONNECT_TIMEOUT: "${DB_CONNECT_TIMEOUT:-5}"
+  SKIP_LEGACY_QUERIES: "${SKIP_LEGACY_QUERIES:-true}"
+  JWT_SECRET: "${JWT_SECRET:?JWT_SECRET is required}"
+  JWT_ALGORITHM: "${JWT_ALGORITHM:-HS256}"
+  JWT_EXPIRATION_HOURS: "${JWT_EXPIRATION_HOURS:-168}"
+  BASE_URL: "${BASE_URL:?BASE_URL is required}"
+  UPLOAD_DIR: "/data/uploads"
+  ASSESSMENT_DATA_DIR: "/data/assessment-data"
+  ASSESSMENT_ASSET_DIR: "/data/assessment-assets"
+  ASSESSMENT_SEED_DATA_DIR: "/workspace/EAP_front_site/src/data"
+  ASSESSMENT_CONSENT_VERSION: "${ASSESSMENT_CONSENT_VERSION:-2026-01}"
+  ASSESSMENT_SHARE_SECRET: "${ASSESSMENT_SHARE_SECRET:?ASSESSMENT_SHARE_SECRET is required}"
+  ASSESSMENT_FRONTEND_BASE_URL: "${ASSESSMENT_FRONTEND_BASE_URL:?ASSESSMENT_FRONTEND_BASE_URL is required}"
+  MESSAGE_INTERNAL_TOKEN: "${MESSAGE_INTERNAL_TOKEN:-}"
+  WECHAT_APPID: "${WECHAT_APPID:-}"
+  WECHAT_SECRET: "${WECHAT_SECRET:-}"
+  WECHAT_MINIPROGRAM_STATE: "${WECHAT_MINIPROGRAM_STATE:-developer}"
+  WECHAT_PAY_MCH_ID: "${WECHAT_PAY_MCH_ID:-}"
+  WECHAT_PAY_KEY: "${WECHAT_PAY_KEY:-}"
+  WECHAT_PAY_NOTIFY_URL: "${WECHAT_PAY_NOTIFY_URL:-}"
+  SMS_MOCK: "${SMS_MOCK:-true}"
+  SMS_CODE_LENGTH: "${SMS_CODE_LENGTH:-6}"
+  SMS_CODE_TTL_MINUTES: "${SMS_CODE_TTL_MINUTES:-5}"
+  SMS_RESEND_INTERVAL_SECONDS: "${SMS_RESEND_INTERVAL_SECONDS:-60}"
+
+x-json-logging: &json-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
+x-app-security: &app-security
+  init: true
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+
+services:
+  mssql:
+    image: "${MSSQL_IMAGE:-mcr.microsoft.com/mssql/server:2022-latest}"
+    platform: "${MSSQL_PLATFORM:-linux/amd64}"
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: "${MSSQL_PID:-Developer}"
+      MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD:?MSSQL_SA_PASSWORD is required}"
+    volumes:
+      - mssql-data:/var/opt/mssql
+    networks:
+      - app
+    restart: unless-stopped
+    stop_grace_period: 60s
+    logging: *json-logging
+    healthcheck:
+      test:
+        - CMD
+        - /bin/bash
+        - -ec
+        - exec 3<>/dev/tcp/127.0.0.1/1433
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  db-init:
+    profiles:
+      - database-init
+    image: "mini-${APP_ENV:?APP_ENV is required}-backend:${IMAGE_TAG:-local}"
+    build:
+      context: ..
+      dockerfile: backend-python/Dockerfile
+      args:
+        APP_VERSION: "${APP_VERSION:-unknown}"
+        VCS_REF: "${VCS_REF:-${APP_VERSION:-unknown}}"
+    command:
+      - python
+      - -c
+      - |
+        import os
+        import re
+        import time
+
+        import pyodbc
+
+        database_name = os.environ["DB_NAME"]
+        if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,127}", database_name):
+            raise SystemExit("DB_NAME must be a safe SQL identifier")
+
+        connection_string = (
+            f"DRIVER={{{os.environ['DB_DRIVER']}}};"
+            f"SERVER={os.environ['DB_SERVER']},{os.environ['DB_PORT']};"
+            "DATABASE=master;"
+            f"UID={os.environ['DB_USER']};"
+            f"PWD={os.environ['DB_PASSWORD']};"
+            "Encrypt=yes;TrustServerCertificate=yes;Connection Timeout=5;"
+        )
+        connection = None
+        for attempt in range(1, 61):
+            try:
+                connection = pyodbc.connect(connection_string, autocommit=True)
+                break
+            except pyodbc.Error:
+                print(
+                    f"database connection attempt {attempt}/60 failed (pyodbc.Error)",
+                    flush=True,
+                )
+                time.sleep(2)
+        if connection is None:
+            raise SystemExit("database remained unavailable after 60 attempts")
+
+        with connection:
+            row = connection.execute(
+                "SELECT DB_ID(?)",
+                database_name,
+            ).fetchone()
+            if row[0] is None:
+                connection.execute(f"CREATE DATABASE [{database_name}]")
+                print(f"created empty database {database_name}", flush=True)
+            else:
+                print(f"database {database_name} already exists", flush=True)
+    environment:
+      DB_NAME: "${DB_NAME:?DB_NAME is required}"
+      DB_SERVER: "mssql"
+      DB_PORT: "1433"
+      DB_USER: "sa"
+      DB_PASSWORD: "${MSSQL_SA_PASSWORD:?MSSQL_SA_PASSWORD is required}"
+      DB_DRIVER: "ODBC Driver 18 for SQL Server"
+    depends_on:
+      mssql:
+        condition: service_healthy
+    networks:
+      - app
+    restart: "no"
+    logging: *json-logging
+    security_opt:
+      - no-new-privileges:true
+
+  migrate:
+    profiles:
+      - database-init
+    image: "mini-${APP_ENV:?APP_ENV is required}-backend:${IMAGE_TAG:-local}"
+    build:
+      context: ..
+      dockerfile: backend-python/Dockerfile
+      args:
+        APP_VERSION: "${APP_VERSION:-unknown}"
+        VCS_REF: "${VCS_REF:-${APP_VERSION:-unknown}}"
+    command:
+      - python
+      - ensure_schema.py
+    environment:
+      <<: *backend-environment
+      # DDL runs under a separate elevated identity. The long-running backend
+      # must use the least-privilege DB_USER/DB_PASSWORD pair instead.
+      DB_USER: "${MIGRATION_DB_USER:-sa}"
+      DB_PASSWORD: "${MIGRATION_DB_PASSWORD:-${MSSQL_SA_PASSWORD:?MSSQL_SA_PASSWORD is required}}"
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    networks:
+      - app
+    restart: "no"
+    logging: *json-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  backend:
+    <<: *app-security
+    image: "mini-${APP_ENV:?APP_ENV is required}-backend:${IMAGE_TAG:-local}"
+    build:
+      context: ..
+      dockerfile: backend-python/Dockerfile
+      args:
+        APP_VERSION: "${APP_VERSION:-unknown}"
+        VCS_REF: "${VCS_REF:-${APP_VERSION:-unknown}}"
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        for data_dir in /data/uploads /data/assessment-data /data/assessment-assets; do
+          if [ ! -d "$${data_dir}" ] || [ ! -w "$${data_dir}" ]; then
+            echo "persistent data directory is missing or not writable by uid 10001: $${data_dir}" >&2
+            echo "prepare the bind directories before starting the application" >&2
+            exit 1
+          fi
+        done
+        exec uvicorn main:app \
+          --host 0.0.0.0 \
+          --port 8000 \
+          --workers "${BACKEND_WORKERS:-1}" \
+          --proxy-headers
+    environment: *backend-environment
+    depends_on:
+      mssql:
+        condition: service_healthy
+    networks:
+      - app
+    restart: unless-stopped
+    stop_grace_period: 30s
+    logging: *json-logging
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import urllib.request;
+          urllib.request.urlopen("http://127.0.0.1:8000/health/ready", timeout=3).read()
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  admin:
+    <<: *app-security
+    image: "mini-${APP_ENV:?APP_ENV is required}-admin:${IMAGE_TAG:-local}"
+    build:
+      context: ../admin-web
+      dockerfile: Dockerfile
+      args:
+        APP_VERSION: "${APP_VERSION:-unknown}"
+        VCS_REF: "${VCS_REF:-${APP_VERSION:-unknown}}"
+        NEXT_PUBLIC_API_BASE_URL: "${ADMIN_PUBLIC_API_BASE_URL:?ADMIN_PUBLIC_API_BASE_URL is required}"
+        NEXT_PUBLIC_EAP_BASE_URL: "${EAP_PUBLIC_SITE_URL:?EAP_PUBLIC_SITE_URL is required}"
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: "0.0.0.0"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - app
+    restart: unless-stopped
+    stop_grace_period: 30s
+    logging: *json-logging
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - >-
+          fetch("http://127.0.0.1:3000/health").then(r => {
+            if (!r.ok) process.exit(1)
+          }).catch(() => process.exit(1))
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  eap:
+    <<: *app-security
+    image: "mini-${APP_ENV:?APP_ENV is required}-eap:${IMAGE_TAG:-local}"
+    build:
+      context: ../EAP_front_site
+      dockerfile: Dockerfile
+      args:
+        APP_VERSION: "${APP_VERSION:-unknown}"
+        VCS_REF: "${VCS_REF:-${APP_VERSION:-unknown}}"
+        NEXT_PUBLIC_API_BASE_URL: "${EAP_PUBLIC_API_BASE_URL:?EAP_PUBLIC_API_BASE_URL is required}"
+        NEXT_PUBLIC_SITE_URL: "${EAP_PUBLIC_SITE_URL:?EAP_PUBLIC_SITE_URL is required}"
+        NEXT_PUBLIC_DATA_SOURCE: "${NEXT_PUBLIC_DATA_SOURCE:-mock}"
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: "0.0.0.0"
+      API_INTERNAL_BASE_URL: "http://backend:8000"
+      NEXT_PUBLIC_API_BASE_URL: "${EAP_PUBLIC_API_BASE_URL:?EAP_PUBLIC_API_BASE_URL is required}"
+      NEXT_PUBLIC_SITE_URL: "${EAP_PUBLIC_SITE_URL:?EAP_PUBLIC_SITE_URL is required}"
+      NEXT_PUBLIC_DATA_SOURCE: "${NEXT_PUBLIC_DATA_SOURCE:-mock}"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - app
+    restart: unless-stopped
+    stop_grace_period: 30s
+    logging: *json-logging
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - >-
+          fetch("http://127.0.0.1:3000/health").then(r => {
+            if (!r.ok) process.exit(1)
+          }).catch(() => process.exit(1))
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+networks:
+  app:
+    driver: bridge
+
+volumes:
+  mssql-data:
