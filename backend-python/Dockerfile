@@ -41,13 +41,19 @@ RUN set -eux; \
 
 WORKDIR /workspace/backend-python
 
+ARG PIP_INDEX_URL=
+
 COPY backend-python/requirements.txt /tmp/requirements.txt
 
 # The repository currently stores this file as BOM-less UTF-16 LE. Normalize
 # only the image-local copy so pip and Linux tooling receive deterministic
 # UTF-8 input. Keep BOM support for future editors that may add one.
 RUN python -c "from pathlib import Path; p=Path('/tmp/requirements.txt'); raw=p.read_bytes(); is_utf16=raw.startswith((b'\xff\xfe', b'\xfe\xff')) or b'\x00' in raw[:256]; text=raw.decode('utf-16' if raw.startswith((b'\xff\xfe', b'\xfe\xff')) else 'utf-16-le') if is_utf16 else raw.decode('utf-8'); p.write_text(text, encoding='utf-8')" \
-    && python -m pip install --requirement /tmp/requirements.txt
+    && if [ -n "${PIP_INDEX_URL}" ]; then \
+         python -m pip install --index-url "${PIP_INDEX_URL}" --requirement /tmp/requirements.txt; \
+       else \
+         python -m pip install --requirement /tmp/requirements.txt; \
+       fi
 
 RUN useradd --create-home --uid 10001 --shell /usr/sbin/nologin app \
     && mkdir -p \

@@ -91,6 +91,7 @@ services:
         VCS_REF: "${VCS_REF:-${APP_VERSION:-unknown}}"
         DEBIAN_MIRROR: "${DEBIAN_MIRROR:-}"
         DEBIAN_SECURITY_MIRROR: "${DEBIAN_SECURITY_MIRROR:-}"
+        PIP_INDEX_URL: "${PIP_INDEX_URL:-}"
     command:
       - python
       - -c
@@ -166,6 +167,7 @@ services:
         VCS_REF: "${VCS_REF:-${APP_VERSION:-unknown}}"
         DEBIAN_MIRROR: "${DEBIAN_MIRROR:-}"
         DEBIAN_SECURITY_MIRROR: "${DEBIAN_SECURITY_MIRROR:-}"
+        PIP_INDEX_URL: "${PIP_INDEX_URL:-}"
     command:
       - python
       - ensure_schema.py
@@ -202,6 +204,7 @@ services:
         VCS_REF: "${VCS_REF:-${APP_VERSION:-unknown}}"
         DEBIAN_MIRROR: "${DEBIAN_MIRROR:-}"
         DEBIAN_SECURITY_MIRROR: "${DEBIAN_SECURITY_MIRROR:-}"
+        PIP_INDEX_URL: "${PIP_INDEX_URL:-}"
     command:
       - /bin/sh
       - -ec
