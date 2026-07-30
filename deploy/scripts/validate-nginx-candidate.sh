@@ -268,7 +268,6 @@ for candidate in "${candidates[@]}"; do
 
   "${nginx_bin}" \
     -t \
-    -e stderr \
     -p "${tmp_dir}/" \
     -c "${wrapper}"
 done
