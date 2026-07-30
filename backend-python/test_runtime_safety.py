@@ -5,6 +5,7 @@ import logging
 import os
 import tempfile
 import unittest
+from datetime import datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -209,6 +210,36 @@ class AuthAndPaymentSafetyTests(unittest.TestCase):
                     "13800000000",
                 )
         self.assertEqual(503, caught.exception.status_code)
+
+    def test_mock_sms_creates_code_with_configured_ttl(self):
+        class RecordingDatabase:
+            def __init__(self):
+                self.added = None
+                self.committed = False
+
+            def add(self, record):
+                self.added = record
+
+            def commit(self):
+                self.committed = True
+
+        database = RecordingDatabase()
+        now = datetime(2026, 7, 30, 12, 0, 0)
+        with (
+            patch.object(settings, "SMS_MOCK", True),
+            patch.object(settings, "SMS_CODE_TTL_MINUTES", 5),
+            patch("sms_service.china_now", return_value=now),
+            patch("sms_service._find_reusable_code", return_value=None),
+            patch("sms_service.generate_code", return_value="123456"),
+        ):
+            response = sms_service.send_verification_code(
+                database,
+                "13800000000",
+            )
+
+        self.assertTrue(database.committed)
+        self.assertEqual("123456", response["mockCode"])
+        self.assertEqual(now + timedelta(minutes=5), database.added.ExpiresAt)
 
 
 class StructuredRequestLogTests(unittest.TestCase):
