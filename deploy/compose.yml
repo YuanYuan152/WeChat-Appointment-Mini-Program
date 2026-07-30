@@ -89,6 +89,8 @@ services:
       args:
         APP_VERSION: "${APP_VERSION:-unknown}"
         VCS_REF: "${VCS_REF:-${APP_VERSION:-unknown}}"
+        DEBIAN_MIRROR: "${DEBIAN_MIRROR:-}"
+        DEBIAN_SECURITY_MIRROR: "${DEBIAN_SECURITY_MIRROR:-}"
     command:
       - python
       - -c
@@ -162,6 +164,8 @@ services:
       args:
         APP_VERSION: "${APP_VERSION:-unknown}"
         VCS_REF: "${VCS_REF:-${APP_VERSION:-unknown}}"
+        DEBIAN_MIRROR: "${DEBIAN_MIRROR:-}"
+        DEBIAN_SECURITY_MIRROR: "${DEBIAN_SECURITY_MIRROR:-}"
     command:
       - python
       - ensure_schema.py
@@ -196,6 +200,8 @@ services:
       args:
         APP_VERSION: "${APP_VERSION:-unknown}"
         VCS_REF: "${VCS_REF:-${APP_VERSION:-unknown}}"
+        DEBIAN_MIRROR: "${DEBIAN_MIRROR:-}"
+        DEBIAN_SECURITY_MIRROR: "${DEBIAN_SECURITY_MIRROR:-}"
     command:
       - /bin/sh
       - -ec

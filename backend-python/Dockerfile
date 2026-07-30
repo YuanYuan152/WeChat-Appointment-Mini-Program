@@ -4,6 +4,8 @@ FROM python:3.11-slim-bookworm@sha256:b18992999dbe963a45a8a4da40ac2b1975be1a776d
 
 ARG APP_VERSION=unknown
 ARG VCS_REF=unknown
+ARG DEBIAN_MIRROR=
+ARG DEBIAN_SECURITY_MIRROR=
 
 LABEL org.opencontainers.image.version="${APP_VERSION}" \
       org.opencontainers.image.revision="${VCS_REF}"
@@ -15,6 +17,18 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PIP_NO_CACHE_DIR=1
 
 RUN set -eux; \
+    if [ -n "${DEBIAN_MIRROR}" ]; then \
+      for source_file in /etc/apt/sources.list /etc/apt/sources.list.d/*.sources; do \
+        [ -f "${source_file}" ] || continue; \
+        sed -E -i "s#https?://deb\\.debian\\.org/debian([[:space:]]|$)#${DEBIAN_MIRROR%/}\\1#g" "${source_file}"; \
+      done; \
+    fi; \
+    if [ -n "${DEBIAN_SECURITY_MIRROR}" ]; then \
+      for source_file in /etc/apt/sources.list /etc/apt/sources.list.d/*.sources; do \
+        [ -f "${source_file}" ] || continue; \
+        sed -E -i "s#https?://(deb\\.debian\\.org/debian-security|security\\.debian\\.org/debian-security)([[:space:]]|$)#${DEBIAN_SECURITY_MIRROR%/}\\2#g" "${source_file}"; \
+      done; \
+    fi; \
     apt-get update; \
     apt-get install -y --no-install-recommends ca-certificates curl gnupg unixodbc; \
     curl -fsSL https://packages.microsoft.com/keys/microsoft.asc \
