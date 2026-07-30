@@ -17,7 +17,11 @@ Options:
   --build                  Build images before starting application services
   --include-database       Allow starting the mssql service (extra confirmation)
   --initialize-database    Run one-time db-init (requires --include-database)
-  --migrate                Run one-time schema migration (extra confirmation)
+  --migrate                Run general and controlled assessment migrations
+                           (extra confirmation)
+  --provision-runtime-db-user
+                           Create the least-privilege Backend DB identity
+                           (first deployment only; extra confirmation)
   --skip-smoke             Do not run post-deploy public smoke checks
   --compose-file PATH      Base Compose file
   --override-file PATH     Environment Compose override
@@ -29,6 +33,7 @@ Non-interactive confirmations:
   DATABASE_CONFIRMATION="START DATABASE <environment>"
   DB_INIT_CONFIRMATION="INITIALIZE DATABASE <environment>"
   MIGRATION_CONFIRMATION="MIGRATE DATABASE <environment>"
+  DB_USER_PROVISION_CONFIRMATION="PROVISION DATABASE USER <environment>"
 EOF
 }
 
@@ -38,6 +43,7 @@ build=false
 include_database=false
 initialize_database=false
 run_migrations=false
+provision_runtime_db_user=false
 skip_smoke=false
 compose_file="${COMPOSE_FILE:-}"
 override_file="${COMPOSE_OVERRIDE_FILE:-}"
@@ -68,6 +74,10 @@ while (($#)); do
       ;;
     --migrate)
       run_migrations=true
+      shift
+      ;;
+    --provision-runtime-db-user)
+      provision_runtime_db_user=true
       shift
       ;;
     --skip-smoke)
@@ -118,8 +128,10 @@ compose=(
 app_services=(backend admin eap)
 wait_timeout="${DEPLOY_WAIT_TIMEOUT:-180}"
 expected_version=""
+database_name=""
 if [[ -f "${env_file}" ]]; then
   expected_version="$(read_env_value APP_VERSION "${env_file}")"
+  database_name="$(read_env_value DB_NAME "${env_file}")"
 fi
 
 smoke_command=("${SCRIPT_DIR}/smoke.sh" --environment "${environment}")
@@ -153,7 +165,20 @@ if [[ "${apply}" == false ]]; then
   fi
   if [[ "${run_migrations}" == true ]]; then
     info "需要额外确认：MIGRATE DATABASE ${environment}"
+    print_command "${compose[@]}" run --rm --no-deps migrate \
+      python migrate_assessment_tables.py --preflight
     print_command "${compose[@]}" run --rm --no-deps migrate
+    print_command "${compose[@]}" run --rm --no-deps migrate \
+      python migrate_assessment_tables.py --apply \
+      --confirm-database "${database_name:-<DB_NAME>}"
+  fi
+  if [[ "${provision_runtime_db_user}" == true ]]; then
+    info "需要额外确认：PROVISION DATABASE USER ${environment}"
+    print_command "${compose[@]}" run --rm --no-deps migrate \
+      python provision_runtime_db_user.py
+    print_command "${compose[@]}" run --rm --no-deps migrate \
+      python provision_runtime_db_user.py --apply \
+      --confirm-database "${database_name:-<DB_NAME>}"
   fi
   print_command "${compose[@]}" up -d --no-deps --no-build --wait \
     --wait-timeout "${wait_timeout}" "${app_services[@]}"
@@ -176,6 +201,8 @@ confirm_exact "DEPLOY ${environment}"
 "${compose[@]}" config --quiet
 expected_version="$(read_env_value APP_VERSION "${env_file}")"
 [[ -n "${expected_version}" ]] || die "环境文件缺少 APP_VERSION"
+database_name="$(read_env_value DB_NAME "${env_file}")"
+[[ -n "${database_name}" ]] || die "环境文件缺少 DB_NAME"
 smoke_command=(
   "${SCRIPT_DIR}/smoke.sh"
   --environment "${environment}"
@@ -204,7 +231,27 @@ if [[ "${run_migrations}" == true ]]; then
     confirm_exact "MIGRATE DATABASE ${environment}"
   # --no-deps is mandatory: migrate depends on db-init in Compose, but a
   # schema migration must never initialize a database implicitly.
+  # Run the controlled assessment preflight before the general migration so
+  # existing drift blocks the operation before any DDL is attempted.
+  "${compose[@]}" run --rm --no-deps migrate \
+    python migrate_assessment_tables.py --preflight
   "${compose[@]}" run --rm --no-deps migrate
+  "${compose[@]}" run --rm --no-deps migrate \
+    python migrate_assessment_tables.py --apply \
+    --confirm-database "${database_name}"
+fi
+
+if [[ "${provision_runtime_db_user}" == true ]]; then
+  OPS_CONFIRMATION="${DB_USER_PROVISION_CONFIRMATION:-}" \
+    confirm_exact "PROVISION DATABASE USER ${environment}"
+  # The first invocation is an offline plan and is intentionally retained in
+  # the apply path.  The second command is the only one that opens a database
+  # connection; the runtime password is read from container environment only.
+  "${compose[@]}" run --rm --no-deps migrate \
+    python provision_runtime_db_user.py
+  "${compose[@]}" run --rm --no-deps migrate \
+    python provision_runtime_db_user.py --apply \
+    --confirm-database "${database_name}"
 fi
 
 # --no-deps prevents an ordinary application deploy from implicitly creating,

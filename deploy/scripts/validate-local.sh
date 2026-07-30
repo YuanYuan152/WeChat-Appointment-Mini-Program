@@ -14,6 +14,15 @@ assert_contains() {
   fi
 }
 
+assert_code_not_contains() {
+  local file="$1"
+  local unexpected="$2"
+  if sed 's/#.*$//' "${file}" | grep -Fq "${unexpected}"; then
+    warn "${file} 的有效配置不应包含：${unexpected}"
+    failures=$((failures + 1))
+  fi
+}
+
 assert_count() {
   local file="$1"
   local expected="$2"
@@ -33,8 +42,49 @@ while IFS= read -r script; do
   fi
 done < <(find "${SCRIPT_DIR}" -maxdepth 1 -type f -name '*.sh' -print | sort)
 
+provision_script="${REPO_ROOT}/backend-python/provision_runtime_db_user.py"
+provision_test="${REPO_ROOT}/backend-python/test_provision_runtime_db_user.py"
+
+info "检查数据库迁移与最小权限运行账户门禁"
+assert_contains "${DEPLOY_ROOT}/compose.yml" 'RUNTIME_DB_USER: "${DB_USER:?DB_USER is required}"'
+assert_contains "${DEPLOY_ROOT}/compose.yml" 'RUNTIME_DB_PASSWORD: "${DB_PASSWORD:?DB_PASSWORD is required}"'
+assert_contains "${SCRIPT_DIR}/deploy.sh" 'python migrate_assessment_tables.py --preflight'
+assert_contains "${SCRIPT_DIR}/deploy.sh" 'python migrate_assessment_tables.py --apply'
+assert_contains "${SCRIPT_DIR}/deploy.sh" 'python provision_runtime_db_user.py --apply'
+assert_contains "${SCRIPT_DIR}/verify-dual-local.sh" 'python migrate_assessment_tables.py --apply'
+assert_contains "${SCRIPT_DIR}/verify-dual-local.sh" 'python provision_runtime_db_user.py --apply'
+assert_contains "${provision_script}" 'RUNTIME_DB_PASSWORD'
+assert_contains "${provision_script}" 'refusing silent reuse'
+assert_contains "${provision_script}" 'GRANT SELECT, INSERT, UPDATE, DELETE'
+assert_code_not_contains "${provision_script}" '"--password"'
+
+if command -v python3 >/dev/null 2>&1; then
+  if ! python3 "${provision_script}" >/dev/null; then
+    warn "最小权限运行账户脚本默认 dry-run 失败"
+    failures=$((failures + 1))
+  fi
+  if ! (
+    cd "${REPO_ROOT}/backend-python"
+    python3 -m unittest -q "$(basename "${provision_test}" .py)"
+  ); then
+    warn "最小权限运行账户单元测试失败"
+    failures=$((failures + 1))
+  fi
+  if ! python3 -c \
+    'import pathlib, sys; path = pathlib.Path(sys.argv[1]); compile(path.read_text(encoding="utf-8"), str(path), "exec")' \
+    "${REPO_ROOT}/backend-python/migrate_assessment_tables.py"; then
+    warn "受控量表迁移 Python 语法检查失败"
+    failures=$((failures + 1))
+  fi
+else
+  warn "缺少 python3，无法验证数据库安全脚本"
+  failures=$((failures + 1))
+fi
+
 nginx_config="${DEPLOY_ROOT}/nginx/mini-program.conf"
 bootstrap_config="${DEPLOY_ROOT}/nginx/mini-program-http-bootstrap.conf"
+test_only_nginx_config="${DEPLOY_ROOT}/nginx/mini-program-test-only.conf"
+test_only_bootstrap_config="${DEPLOY_ROOT}/nginx/mini-program-test-only-http-bootstrap.conf"
 logrotate_config="${DEPLOY_ROOT}/logrotate/mini-program"
 rsyslog_config="${DEPLOY_ROOT}/rsyslog/30-mini-program.conf"
 
@@ -63,6 +113,45 @@ if grep -Fq '$request_uri' <(
 fi
 if grep -Eq 'ssl_certificate|listen 443' "${bootstrap_config}"; then
   warn "TLS bootstrap 配置不得依赖尚未签发的证书"
+  failures=$((failures + 1))
+fi
+
+info "检查可与 legacy/生产 vhost 共存的 test-only Nginx 配置"
+for config in "${test_only_bootstrap_config}" "${test_only_nginx_config}"; do
+  for domain in test.eap.ji-psy.com test.admin.ji-psy.com; do
+    assert_contains "${config}" "${domain}"
+  done
+  assert_code_not_contains "${config}" "default_server"
+  assert_code_not_contains "${config}" "server_name _"
+  assert_code_not_contains "${config}" "server_name eap.ji-psy.com"
+  assert_code_not_contains "${config}" "server_name admin.ji-psy.com"
+  assert_code_not_contains "${config}" "127.0.0.1:23000"
+  assert_code_not_contains "${config}" "127.0.0.1:23001"
+  assert_code_not_contains "${config}" "127.0.0.1:28000"
+done
+for port in 18000 13001 13000; do
+  assert_contains "${test_only_nginx_config}" "127.0.0.1:${port}"
+done
+assert_contains "${test_only_nginx_config}" '"uri":"$mini_test_only_safe_uri"'
+assert_contains "${test_only_nginx_config}" '"remote_addr":"$mini_test_only_safe_remote_addr"'
+assert_contains "${test_only_nginx_config}" 'add_header Content-Security-Policy'
+assert_contains "${test_only_nginx_config}" 'listen 443 ssl;'
+assert_contains "${test_only_bootstrap_config}" '"uri":"$mini_test_only_bootstrap_safe_uri"'
+assert_contains "${test_only_bootstrap_config}" '"remote_addr":"$mini_test_only_bootstrap_safe_remote_addr"'
+if grep -Fq '$request_uri' <(
+  sed -n '/log_format mini_test_only_access/,/;/p' "${test_only_nginx_config}"
+); then
+  warn "mini_test_only_access 不得记录带 query 的 \$request_uri"
+  failures=$((failures + 1))
+fi
+if grep -Fq '$request_uri' <(
+  sed -n '/log_format mini_test_only_bootstrap_access/,/;/p' "${test_only_bootstrap_config}"
+); then
+  warn "mini_test_only_bootstrap_access 不得记录带 query 的 \$request_uri"
+  failures=$((failures + 1))
+fi
+if grep -Eq 'ssl_certificate|listen 443' "${test_only_bootstrap_config}"; then
+  warn "test-only TLS bootstrap 配置不得依赖尚未签发的证书"
   failures=$((failures + 1))
 fi
 

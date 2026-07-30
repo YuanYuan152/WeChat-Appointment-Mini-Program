@@ -27,6 +27,10 @@ named volume、数据库名、密钥、上传目录和量表目录。
 - `env/test.env.example` / `env/production.env.example`：只含占位符的配置模板。
 - `nginx/mini-program-http-bootstrap.conf`：证书签发前的纯 HTTP 配置。
 - `nginx/mini-program.conf`：四域 HTTPS 反代配置。
+- `nginx/mini-program-test-only-http-bootstrap.conf`：保留服务器现有生产
+  vhost 时，仅为两个测试域名签发证书的过渡配置。
+- `nginx/mini-program-test-only.conf`：与现有生产/legacy vhost 共存、仅接管
+  两个测试域名的 HTTPS 反代配置。
 - `rsyslog/30-mini-program.conf`：按环境和服务拆分应用日志。
 - `logrotate/mini-program`：日志按日轮转、日期后缀、压缩、保留 30 天。
 - `scripts/`：预检、部署、冒烟、回滚和 SQL Server 备份校验脚本。
@@ -113,14 +117,22 @@ curl -fsS http://127.0.0.1:3001/health
 curl -fsS http://127.0.0.1:3000/health
 ```
 
-首次需要验收量表报告和扫码统计时，仅对本地隔离数据库显式执行受控迁移：
+首次需要验收量表报告和扫码统计时，仅对本地隔离数据库显式执行受控迁移。
+DDL 必须继续使用 `migrate` 服务中的迁移身份，不能借用长驻 Backend 运行账户：
 
 ```bash
 docker compose \
   --env-file deploy/env/local.env.example \
   -f deploy/compose.yml \
   -f deploy/compose.local.yml \
-  exec -T backend \
+  --profile database-init run --rm --no-deps migrate \
+  python migrate_assessment_tables.py --preflight
+
+docker compose \
+  --env-file deploy/env/local.env.example \
+  -f deploy/compose.yml \
+  -f deploy/compose.local.yml \
+  --profile database-init run --rm --no-deps migrate \
   python migrate_assessment_tables.py \
     --apply --confirm-database lxxlBuild_local
 ```
@@ -149,8 +161,10 @@ docker compose \
 ./deploy/scripts/verify-dual-local.sh --run
 ```
 
-它会验证双环境镜像构建、显式建库/迁移、8 个健康端点、生产安全开关、
-数据库名、network、volume、OCI revision，以及停止测试后端不影响生产。
+它会验证双环境镜像构建、显式建库、通用及三张受控量表表迁移、独立最小
+权限运行账户、8 个健康端点、生产安全开关、数据库名、network、volume、
+OCI revision，以及停止测试后端不影响生产。`--run` 是允许脚本修改其两个
+一次性本地数据库的显式开关；默认 dry-run 不连接数据库。
 
 ## 4. 环境配置硬约束
 
@@ -193,6 +207,9 @@ CORS_ALLOWED_ORIGINS=https://eap.ji-psy.com,https://admin.ji-psy.com
 
 创建最小权限数据库 login/user 属于数据库变更，必须先单独批准；在批准并
 执行前，真实环境运行时预检应保持失败，不得退回让 Backend 使用 `sa`。
+`compose.yml` 只在一次性 `migrate` 服务中把 `DB_USER`、`DB_PASSWORD`
+映射为 `RUNTIME_DB_USER`、`RUNTIME_DB_PASSWORD`。运行账户创建脚本不接受
+密码命令行参数，也不会打印密码；真实 env 必须保持 `0600`。
 
 ## 5. TLS 与 Nginx
 
@@ -229,6 +246,27 @@ Nginx access log 不记录 query string；分享码、上传文件标识、数�
 路径会被模板化，IPv4 只保留 `/24`，IPv6 和 User-Agent 不持久化。应用日志
 也不得输出 Authorization、Cookie、密码、支付密钥、微信密钥、问卷答案或
 咨询内容。
+
+### 5.3 保留现有生产 vhost，仅接入测试环境
+
+服务器现有生产/legacy Nginx 配置仍在运行时，不安装四域配置，也不删除或
+禁用任何现有站点。按下面的替换顺序只接管测试域名：
+
+1. 安装 `mini-program-test-only-http-bootstrap.conf`。它不声明
+   `default_server`、生产域名、生产 upstream 或全局 `server_tokens`。
+2. 在完整宿主配置中执行 `nginx -t`，确认没有重复的 `server_name`、
+   `log_format`、`map` 或 upstream 名称，再 reload。
+3. 以 `/var/www/certbot` 为 webroot，签发同时包含
+   `test.eap.ji-psy.com`、`test.admin.ji-psy.com` 的测试 SAN 证书。
+4. 禁用 bootstrap 文件并安装 `mini-program-test-only.conf`；两个文件不可
+   同时启用。
+5. 再次执行完整宿主 `nginx -t`，确认通过后 reload，验证 HTTP 301、证书
+   SAN、`/healthz`、EAP 和 Admin 页面。
+
+`validate-nginx-candidate.sh` 会在本地生成带 production/default server 的
+legacy fixture，与两个 test-only 候选分别组合执行隔离 `nginx -t`。该检查
+用于提前发现 listener 和 http-context 冲突，但不能替代目标机完整配置的
+`nginx -t`。
 
 ## 6. 日志
 
@@ -292,7 +330,37 @@ sudo ./deploy/scripts/prepare-data-dirs.sh \
 
 - `--include-database`：`START DATABASE <environment>`
 - `--initialize-database`：`INITIALIZE DATABASE <environment>`
-- `--migrate`：`MIGRATE DATABASE <environment>`
+- `--migrate`：`MIGRATE DATABASE <environment>`。依次执行受控量表只读
+  preflight、通用 schema 迁移及三张量表表的受控迁移；后者仍使用精确
+  `DB_NAME` 作为二次目标库校验。
+- `--provision-runtime-db-user`：
+  `PROVISION DATABASE USER <environment>`。仅用于首次创建运行账户；
+  默认先展示离线计划，执行时还必须把精确 `DB_NAME` 传给
+  `--confirm-database`。发现同名 server login 或 database user 时立即
+  拒绝，绝不静默复用或改密。
+
+首次测试环境建库的 review 顺序：
+
+```bash
+# 1. 先展示完整计划，不连接数据库
+./deploy/scripts/deploy.sh \
+  --environment test \
+  --include-database --initialize-database --migrate \
+  --provision-runtime-db-user
+
+# 2. 获得数据库变更批准后才追加 --apply，并逐项输入精确确认短语
+./deploy/scripts/deploy.sh \
+  --environment test --apply \
+  --include-database --initialize-database --migrate \
+  --provision-runtime-db-user
+```
+
+运行账户最终只通过 `mini_app_runtime` 角色获得 `dbo` schema 的
+`SELECT/INSERT/UPDATE/DELETE`。不得添加 `db_owner`、`db_ddladmin`、
+数据库级 `EXECUTE` 或 `VIEW DEFINITION`。业务使用的
+`sys.sp_getapplock` 默认以 `public` database principal 执行，不需要扩大
+授权。账户脚本会验证四项 DML、拒绝 DDL/CONTROL/VIEW DEFINITION，并在
+事务回滚中验证应用锁。
 
 生产迁移必须先取得用户批准并完成备份。`AUTO_MIGRATE_SCHEMA` 始终为
 `false`；不得利用容器启动自动改表。

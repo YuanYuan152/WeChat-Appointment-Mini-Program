@@ -11,8 +11,9 @@ Usage:
 Default mode is a dry-run. --run creates two disposable local Docker projects,
 mini-verify-test and mini-verify-production, with separate SQL Server volumes,
 databases, networks, bind directories and loopback ports. It explicitly runs
-database initialization and the existing general schema migration only inside
-those disposable local databases.
+database initialization, the general schema migration, the controlled
+assessment migration and least-privilege runtime identity provisioning only
+inside those disposable local databases.
 
 --keep leaves the two local projects and volumes running after a successful
 verification. Without --keep, the script removes only its own disposable
@@ -50,11 +51,12 @@ if [[ "${run}" == false ]]; then
   cat <<'EOF'
   1. 生成仅存在于临时目录的 test/production 本地环境文件。
   2. 为两个环境分别构建 Backend、Admin、EAP 镜像。
-  3. 分别显式启动 SQL Server、运行 db-init、运行通用 schema migration。
-  4. 普通 compose up 启动应用，并确认未隐式执行数据库 job。
-  5. 校验 8 个健康端点、生产安全开关、数据库名、网络、volume 和 OCI SHA label。
-  6. 停止 test Backend，确认 production Backend 仍健康，再恢复 test。
-  7. 默认删除且仅删除 mini-verify-* 临时项目和 volume。
+  3. 分别显式启动 SQL Server，运行 db-init、通用及受控量表迁移。
+  4. 创建独立最小权限运行账户，并校验 DML、无 DDL 和应用锁能力。
+  5. 普通 compose up 启动应用，并确认未隐式执行数据库 job。
+  6. 校验 8 个健康端点、三张量表表、数据库名、网络、volume 和 OCI SHA label。
+  7. 停止 test Backend，确认 production Backend 仍健康，再恢复 test。
+  8. 默认删除且仅删除 mini-verify-* 临时项目和 volume。
 EOF
   info "实际执行请追加 --run；保留环境可再追加 --keep"
   exit 0
@@ -144,6 +146,8 @@ jwt_test="$(openssl rand -hex 32)"
 jwt_production="$(openssl rand -hex 32)"
 share_test="$(openssl rand -hex 32)"
 share_production="$(openssl rand -hex 32)"
+runtime_test_password="RuntimeTest_$(openssl rand -hex 16)!Aa1"
+runtime_production_password="RuntimeProduction_$(openssl rand -hex 16)!Aa1"
 
 write_env() {
   local destination="$1"
@@ -158,6 +162,8 @@ write_env() {
   local simulated_payment="${10}"
   local docs="${11}"
   local sms_mock="${12}"
+  local runtime_db_user="${13}"
+  local runtime_db_password="${14}"
 
   {
     printf 'APP_ENV=%s\n' "${environment}"
@@ -175,10 +181,8 @@ write_env() {
     printf 'MSSQL_SA_PASSWORD=%s\n' "${sa_password}"
     printf 'MIGRATION_DB_USER=sa\n'
     printf 'MIGRATION_DB_PASSWORD=%s\n' "${sa_password}"
-    # Disposable local verification intentionally uses sa. Runtime preflight
-    # rejects this for real deployed environments.
-    printf 'DB_USER=sa\n'
-    printf 'DB_PASSWORD=%s\n' "${sa_password}"
+    printf 'DB_USER=%s\n' "${runtime_db_user}"
+    printf 'DB_PASSWORD=%s\n' "${runtime_db_password}"
     printf 'DB_NAME=%s\n' "${database_name}"
     printf 'DB_CONNECT_TIMEOUT=5\n'
     printf 'SKIP_LEGACY_QUERIES=true\n'
@@ -219,16 +223,19 @@ write_env \
   "${test_env}" test lxxlBuild_verify_test "${data_root}/test" \
   "${jwt_test}" "${share_test}" \
   https://test.eap.ji-psy.com https://test.admin.ji-psy.com \
-  true true true true
+  true true true true \
+  mini_verify_test_app "${runtime_test_password}"
 write_env \
   "${production_env}" production lxxlBuild_verify_production \
   "${data_root}/production" "${jwt_production}" "${share_production}" \
   https://eap.ji-psy.com https://admin.ji-psy.com \
-  false false false false
+  false false false false \
+  mini_verify_production_app "${runtime_production_password}"
 
 start_environment() {
   local label="$1"
-  shift
+  local database_name="$2"
+  shift 2
   local -a compose=("$@")
 
   info "${label}：渲染并构建三个应用镜像"
@@ -239,15 +246,26 @@ start_environment() {
   "${compose[@]}" up -d --wait --wait-timeout 300 mssql
   info "${label}：显式建库"
   "${compose[@]}" --profile database-init run --rm --no-deps db-init
+  info "${label}：受控量表迁移只读预检"
+  "${compose[@]}" --profile database-init run --rm --no-deps migrate \
+    python migrate_assessment_tables.py --preflight
   info "${label}：显式运行通用 schema migration"
   "${compose[@]}" --profile database-init run --rm --no-deps migrate
+  info "${label}：显式运行受控量表 schema migration"
+  "${compose[@]}" --profile database-init run --rm --no-deps migrate \
+    python migrate_assessment_tables.py --apply \
+    --confirm-database "${database_name}"
+  info "${label}：显式创建并验证最小权限运行账户"
+  "${compose[@]}" --profile database-init run --rm --no-deps migrate \
+    python provision_runtime_db_user.py --apply \
+    --confirm-database "${database_name}"
 
   info "${label}：普通 up 启动应用（不会执行 database-init profile）"
   "${compose[@]}" up -d --wait --wait-timeout 300
 }
 
-start_environment test "${compose_test[@]}"
-start_environment production "${compose_production[@]}"
+start_environment test lxxlBuild_verify_test "${compose_test[@]}"
+start_environment production lxxlBuild_verify_production "${compose_production[@]}"
 
 assert_status() {
   local expected="$1"
@@ -291,22 +309,36 @@ login_status="$(
 [[ "${login_status}" == "403" ]] \
   || die "production 开发登录应返回 403，实际 ${login_status}"
 
-database_name() {
-  local expected="$1"
-  shift
+database_runtime_contract() {
+  local expected_database="$1"
+  local expected_user="$2"
+  shift 2
   local -a compose=("$@")
-  local actual
+  local actual actual_database actual_login actual_user permission_bits
+  local app_table_count controlled_table_count
   actual="$(
     "${compose[@]}" exec -T backend python -c \
-      'import os, pyodbc; c=pyodbc.connect("DRIVER={"+os.environ["DB_DRIVER"]+"};SERVER="+os.environ["DB_SERVER"]+","+os.environ["DB_PORT"]+";DATABASE="+os.environ["DB_NAME"]+";UID="+os.environ["DB_USER"]+";PWD="+os.environ["DB_PASSWORD"]+";Encrypt=yes;TrustServerCertificate=yes"); print(c.cursor().execute("SELECT DB_NAME()").fetchone()[0]); c.close()'
+      'import os, pyodbc; c=pyodbc.connect("DRIVER={"+os.environ["DB_DRIVER"]+"};SERVER="+os.environ["DB_SERVER"]+","+os.environ["DB_PORT"]+";DATABASE="+os.environ["DB_NAME"]+";UID="+os.environ["DB_USER"]+";PWD="+os.environ["DB_PASSWORD"]+";Encrypt=yes;TrustServerCertificate=yes"); q=c.cursor(); i=q.execute("SELECT DB_NAME(), SUSER_SNAME(), USER_NAME()").fetchone(); p=q.execute("SELECT HAS_PERMS_BY_NAME(N'\''dbo'\'',N'\''SCHEMA'\'',N'\''SELECT'\''),HAS_PERMS_BY_NAME(N'\''dbo'\'',N'\''SCHEMA'\'',N'\''INSERT'\''),HAS_PERMS_BY_NAME(N'\''dbo'\'',N'\''SCHEMA'\'',N'\''UPDATE'\''),HAS_PERMS_BY_NAME(N'\''dbo'\'',N'\''SCHEMA'\'',N'\''DELETE'\''),HAS_PERMS_BY_NAME(DB_NAME(),N'\''DATABASE'\'',N'\''ALTER'\''),HAS_PERMS_BY_NAME(DB_NAME(),N'\''DATABASE'\'',N'\''CONTROL'\''),HAS_PERMS_BY_NAME(DB_NAME(),N'\''DATABASE'\'',N'\''VIEW DEFINITION'\'')").fetchone(); a=q.execute("SELECT COUNT(*) FROM sys.tables WHERE name LIKE '\''App%'\''").fetchone()[0]; t=q.execute("SELECT COUNT(*) FROM sys.tables WHERE name IN ('\''AppAssessmentReport'\'','\''AppAssessmentShareScan'\'','\''AppAssessmentAuditLog'\'')").fetchone()[0]; print("|".join([str(i[0]),str(i[1]),str(i[2]),"".join(str(int(x or 0)) for x in p),str(a),str(t)])); c.close()'
   )"
-  [[ "${actual}" == "${expected}" ]] \
-    || die "数据库隔离失败：期望 ${expected}，实际 ${actual}"
-  info "数据库：${actual}"
+  IFS='|' read -r actual_database actual_login actual_user permission_bits \
+    app_table_count controlled_table_count <<<"${actual}"
+  [[ "${actual_database}" == "${expected_database}" ]] \
+    || die "数据库隔离失败：期望 ${expected_database}，实际 ${actual_database}"
+  [[ "${actual_login}" == "${expected_user}" && "${actual_user}" == "${expected_user}" ]] \
+    || die "运行账户错误：期望 ${expected_user}，实际 ${actual_login}/${actual_user}"
+  [[ "${permission_bits}" == "1111000" ]] \
+    || die "运行账户权限边界错误：${permission_bits}"
+  [[ "${controlled_table_count}" == "3" ]] \
+    || die "受控量表表应为 3 张，实际 ${controlled_table_count}"
+  ((app_table_count >= 40)) \
+    || die "App 表数量异常：期望至少 40，实际 ${app_table_count}"
+  info "数据库：${actual_database}；运行账户：${actual_login}；App 表：${app_table_count}"
 }
 
-database_name lxxlBuild_verify_test "${compose_test[@]}"
-database_name lxxlBuild_verify_production "${compose_production[@]}"
+database_runtime_contract \
+  lxxlBuild_verify_test mini_verify_test_app "${compose_test[@]}"
+database_runtime_contract \
+  lxxlBuild_verify_production mini_verify_production_app "${compose_production[@]}"
 
 docker network inspect "${test_project}_app" >/dev/null
 docker network inspect "${production_project}_app" >/dev/null

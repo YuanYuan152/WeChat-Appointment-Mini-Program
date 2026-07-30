@@ -10,6 +10,8 @@ else
   candidates=(
     "${REPO_ROOT}/deploy/nginx/mini-program-http-bootstrap.conf"
     "${REPO_ROOT}/deploy/nginx/mini-program.conf"
+    "${REPO_ROOT}/deploy/nginx/mini-program-test-only-http-bootstrap.conf"
+    "${REPO_ROOT}/deploy/nginx/mini-program-test-only.conf"
   )
 fi
 
@@ -59,6 +61,29 @@ openssl req \
   -keyout "${tmp_dir}/candidate.key" \
   -out "${tmp_dir}/candidate.crt" \
   >/dev/null 2>&1
+
+# Simulate the production/legacy vhosts that remain installed while the
+# test-only candidate is enabled. This catches accidental ownership of the
+# default listener and http-context directive conflicts without reading or
+# changing the target server.
+legacy_fixture="${tmp_dir}/legacy-vhosts.conf"
+cat >"${legacy_fixture}" <<EOF
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name legacy.invalid eap.ji-psy.com admin.ji-psy.com;
+    return 204;
+}
+
+server {
+    listen 443 ssl default_server;
+    listen [::]:443 ssl default_server;
+    server_name legacy.invalid eap.ji-psy.com admin.ji-psy.com;
+    ssl_certificate ${tmp_dir}/candidate.crt;
+    ssl_certificate_key ${tmp_dir}/candidate.key;
+    return 204;
+}
+EOF
 
 check_duplicate_server_names() {
   local candidate="$1"
@@ -145,6 +170,53 @@ print(f"OK: no duplicate server_name/listen pairs: {path}")
 PY
 }
 
+check_test_only_scope() {
+  local candidate="$1"
+  python3 - "${candidate}" <<'PY'
+from __future__ import annotations
+
+import re
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+source = path.read_text(encoding="utf-8")
+source = re.sub(r"(?m)#.*$", "", source)
+
+problems: list[str] = []
+if re.search(r"\bdefault_server\b", source):
+    problems.append("must not claim a default_server listener")
+if re.search(r"(?m)^server_tokens\s+", source):
+    problems.append("must not redeclare the legacy http-level server_tokens directive")
+
+server_names: set[str] = set()
+for value in re.findall(r"(?m)^\s*server_name\s+([^;]+);", source):
+    server_names.update(value.split())
+
+allowed_names = {"test.eap.ji-psy.com", "test.admin.ji-psy.com"}
+unexpected_names = sorted(server_names - allowed_names)
+missing_names = sorted(allowed_names - server_names)
+if unexpected_names:
+    problems.append(f"unexpected server_name values: {', '.join(unexpected_names)}")
+if missing_names:
+    problems.append(f"missing test server_name values: {', '.join(missing_names)}")
+
+production_ports = sorted(
+    set(re.findall(r"127\.0\.0\.1:(?:23000|23001|28000)\b", source))
+)
+if production_ports:
+    problems.append(f"must not reference production upstreams: {', '.join(production_ports)}")
+
+if problems:
+    print(f"ERROR: test-only coexistence contract failed: {path}", file=sys.stderr)
+    for problem in problems:
+        print(f"  - {problem}", file=sys.stderr)
+    raise SystemExit(1)
+
+print(f"OK: test-only coexistence scope: {path}")
+PY
+}
+
 prepare_isolated_candidate() {
   local source="$1"
   local destination="$2"
@@ -165,6 +237,14 @@ for candidate in "${candidates[@]}"; do
   check_duplicate_server_names "${candidate}"
 
   candidate_name="$(basename "${candidate}")"
+  is_test_only=false
+  case "${candidate_name}" in
+    mini-program-test-only.conf|mini-program-test-only-http-bootstrap.conf)
+      is_test_only=true
+      check_test_only_scope "${candidate}"
+      ;;
+  esac
+
   isolated_candidate="${tmp_dir}/${candidate_name}"
   prepare_isolated_candidate "${candidate}" "${isolated_candidate}"
 
@@ -179,8 +259,12 @@ for candidate in "${candidates[@]}"; do
     '}' \
     '' \
     'http {' \
-    "    include ${isolated_candidate};" \
-    '}' >"${wrapper}"
+    "    include ${isolated_candidate};" >"${wrapper}"
+
+  if [[ "${is_test_only}" == true ]]; then
+    printf '    include %s;\n' "${legacy_fixture}" >>"${wrapper}"
+  fi
+  printf '%s\n' '}' >>"${wrapper}"
 
   "${nginx_bin}" \
     -t \

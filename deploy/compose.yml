@@ -171,6 +171,10 @@ services:
       # must use the least-privilege DB_USER/DB_PASSWORD pair instead.
       DB_USER: "${MIGRATION_DB_USER:-sa}"
       DB_PASSWORD: "${MIGRATION_DB_PASSWORD:-${MSSQL_SA_PASSWORD:?MSSQL_SA_PASSWORD is required}}"
+      # The one-time provisioning command reads these distinct variables.
+      # Passwords are never accepted through command-line arguments.
+      RUNTIME_DB_USER: "${DB_USER:?DB_USER is required}"
+      RUNTIME_DB_PASSWORD: "${DB_PASSWORD:?DB_PASSWORD is required}"
     depends_on:
       db-init:
         condition: service_completed_successfully
