@@ -1,0 +1,46 @@
+/data/mini_program/logs/test/backend/*.log
+/data/mini_program/logs/test/admin/*.log
+/data/mini_program/logs/test/eap/*.log
+/data/mini_program/logs/test/mssql/*.log
+/data/mini_program/logs/test/db-init/*.log
+/data/mini_program/logs/test/migrate/*.log
+/data/mini_program/logs/production/backend/*.log
+/data/mini_program/logs/production/admin/*.log
+/data/mini_program/logs/production/eap/*.log
+/data/mini_program/logs/production/mssql/*.log
+/data/mini_program/logs/production/db-init/*.log
+/data/mini_program/logs/production/migrate/*.log {
+    daily
+    dateext
+    dateformat -%Y%m%d
+    rotate 30
+    maxage 30
+    missingok
+    notifempty
+    compress
+    delaycompress
+    create 0640 syslog adm
+    sharedscripts
+    postrotate
+        /bin/systemctl kill -s HUP rsyslog.service >/dev/null 2>&1 || true
+    endscript
+}
+
+/data/mini_program/logs/test/nginx/*.log
+/data/mini_program/logs/production/nginx/*.log
+/data/mini_program/logs/system/nginx/*.log {
+    daily
+    dateext
+    dateformat -%Y%m%d
+    rotate 30
+    maxage 30
+    missingok
+    notifempty
+    compress
+    delaycompress
+    create 0640 www-data adm
+    sharedscripts
+    postrotate
+        /usr/sbin/nginx -s reopen >/dev/null 2>&1 || true
+    endscript
+}
