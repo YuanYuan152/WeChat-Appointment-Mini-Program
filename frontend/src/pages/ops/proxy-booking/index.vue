@@ -138,7 +138,7 @@
     <view v-if="showAdd" class="modal-overlay" @touchmove.stop.prevent>
       <view class="modal-card" @tap.stop>
         <text class="modal-title">代理预约</text>
-        <text class="modal-sub">选择预约中心、日期、时间槽与咨询室，推送后{{ proxyOrderPayHint }}</text>
+        <text class="modal-sub">选择预约中心、日期、开始时间与咨询室，推送后{{ proxyOrderPayHint }}</text>
 
         <view class="form-item">
           <text class="form-label">预约中心</text>
@@ -163,7 +163,7 @@
         </view>
 
         <view class="form-item">
-          <text class="form-label">时间槽</text>
+          <text class="form-label">开始时间</text>
           <view v-if="slotOptionsLoading" class="picker-row">加载时段...</view>
           <view v-else class="slot-grid">
             <view
@@ -177,9 +177,15 @@
               }"
               @tap="selectTimeSlot(ts)"
             >
-              {{ ts.label }}{{ slotChipHint(ts) }}
+              {{ ts.key }}{{ slotChipHint(ts) }}
             </view>
           </view>
+          <text class="form-hint">支持整点和半点开始；咨询 50 分钟，随后预留 10 分钟打扫</text>
+        </view>
+
+        <view v-if="selectedTimeSlot" class="duration-card">
+          <text class="duration-title">本次预约</text>
+          <text class="duration-text">{{ bookingDurationText(selectedTimeSlot.startTime) }}</text>
         </view>
 
         <view v-if="!isVideoCenterSelected" class="form-item">
@@ -241,6 +247,7 @@ import { SCHEDULE_DISPLAY_META, type ScheduleDisplayStatus } from '@/constants/s
 import { formatDateLocal, ROLLING_WINDOW_DAYS, addDays } from '@/constants/scheduleSlots'
 import { formatPatientInline } from '@/utils/patientContract'
 import { fetchSystemSettings, formatProxyOrderPushHint } from '@/utils/systemSettings'
+import { refreshSubscribeHint, tryOfficialRoleSubscribeInGesture } from '@/utils/subscribePrompt'
 import {
   TONGXIN_AGREEMENT_TITLE,
   YANGFAN_AGREEMENT_TITLE,
@@ -259,6 +266,7 @@ const loadSystemSettings = async () => {
 
 onShow(() => {
   loadSystemSettings()
+  void refreshSubscribeHint()
 })
 
 const defaultCenterId = 'yangpu'
@@ -464,6 +472,20 @@ const roomOptionsForSlot = computed(() => {
   return ts?.rooms || []
 })
 
+const selectedTimeSlot = computed(() =>
+  timeSlotOptions.value.find((item) => item.key === form.value.slotKey)
+)
+
+const bookingDurationText = (startTime: string) => {
+  const start = new Date(startTime)
+  if (Number.isNaN(start.getTime())) return startTime
+  const consultationEnd = new Date(start.getTime() + 50 * 60_000)
+  const cleaningEnd = new Date(start.getTime() + 60 * 60_000)
+  const hhmm = (value: Date) =>
+    `${String(value.getHours()).padStart(2, '0')}:${String(value.getMinutes()).padStart(2, '0')}`
+  return `咨询 ${hhmm(start)}–${hhmm(consultationEnd)}，打扫 ${hhmm(consultationEnd)}–${hhmm(cleaningEnd)}`
+}
+
 const slotChipHint = (ts: TimeSlotOption) => {
   if (ts.past) return '（已过）'
   if (ts.counselorOccupied && !ts.existingAvailableScheduleId) return '（已预约）'
@@ -655,7 +677,7 @@ const selectRoom = (room: RoomOption) => {
   form.value.roomId = room.roomId
 }
 
-const submitProxyOrder = async () => {
+const submitProxyOrder = () => {
   if (!selectedPatient.value || !selectedCounselor.value) return
   if (!form.value.slotKey) {
     uni.showToast({ title: '请选择时间槽', icon: 'none' })
@@ -669,35 +691,39 @@ const submitProxyOrder = async () => {
     uni.showToast({ title: '请选择签署协议类型', icon: 'none' })
     return
   }
+  const subscribeDone = tryOfficialRoleSubscribeInGesture('workbench')
   submitting.value = true
-  try {
-    const payload: Record<string, unknown> = {
-      patient_id: selectedPatient.value.id,
-      counselor_id: selectedCounselor.value.id,
-      center_id: form.value.centerId,
-      start_time: form.value.startTime,
-      end_time: form.value.endTime,
-      room_id: isVideoCenterSelected.value ? null : form.value.roomId,
-      schedule_id: form.value.scheduleId,
+  void (async () => {
+    try {
+      const payload: Record<string, unknown> = {
+        patient_id: selectedPatient.value!.id,
+        counselor_id: selectedCounselor.value!.id,
+        center_id: form.value.centerId,
+        start_time: form.value.startTime,
+        end_time: form.value.endTime,
+        room_id: isVideoCenterSelected.value ? null : form.value.roomId,
+        schedule_id: form.value.scheduleId,
+      }
+      if (!patientContractSigned.value) {
+        payload.agreement_is_adult = form.value.agreementIsAdult
+      }
+      const res = await httpV2.post(API_ENDPOINTS.admin.proxyBookingPushOrder, payload)
+      await subscribeDone
+      if (res.code !== 0) {
+        uni.showToast({ title: res.msg || '推送失败', icon: 'none' })
+        return
+      }
+      uni.showToast({ title: '订单已推送', icon: 'success' })
+      showAdd.value = false
+      await loadSchedules()
+      if (viewMode.value === 'calendar') await loadMonthSlots()
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : '推送失败'
+      uni.showToast({ title: msg, icon: 'none' })
+    } finally {
+      submitting.value = false
     }
-    if (!patientContractSigned.value) {
-      payload.agreement_is_adult = form.value.agreementIsAdult
-    }
-    const res = await httpV2.post(API_ENDPOINTS.admin.proxyBookingPushOrder, payload)
-    if (res.code !== 0) {
-      uni.showToast({ title: res.msg || '推送失败', icon: 'none' })
-      return
-    }
-    uni.showToast({ title: '订单已推送', icon: 'success' })
-    showAdd.value = false
-    await loadSchedules()
-    if (viewMode.value === 'calendar') await loadMonthSlots()
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : '推送失败'
-    uni.showToast({ title: msg, icon: 'none' })
-  } finally {
-    submitting.value = false
-  }
+  })()
 }
 
 watch(canShowSchedule, (ok) => {
@@ -1132,6 +1158,12 @@ onLoad(async (opts) => {
   margin-bottom: 12rpx;
   line-height: 1.5;
 }
+.duration-card {
+  margin-bottom: 24rpx; padding: 22rpx 24rpx; border-radius: 16rpx;
+  background: #ECFDF5; border: 2rpx solid #A7F3D0;
+}
+.duration-title { display: block; font-size: 24rpx; color: #047857; margin-bottom: 6rpx; }
+.duration-text { display: block; font-size: 26rpx; font-weight: 600; color: #065F46; }
 
 .required {
   color: #EF4444;

@@ -1,5 +1,6 @@
 """付款成功后分配咨询室：优先偏好，否则随机选空闲室。视频咨询不分配咨询室。"""
 import random
+from datetime import timedelta
 from typing import Optional
 
 from sqlalchemy import or_, text
@@ -15,7 +16,7 @@ from schedule_meta import (
     parse_pref_room_id,
     parse_room_id,
 )
-from room_slot_status import resolve_slot_manual_status, is_slot_operational
+from room_slot_status import is_booking_window_operational
 from schedule_slots import paid_occupied_rooms_at_center
 
 
@@ -28,19 +29,26 @@ def _acquire_center_slot_lock(
     bind = db.get_bind()
     if not bind or bind.dialect.name != "mssql":
         return
-    resource = f"booking:center:{center_id}:{schedule.StartTime.strftime('%Y%m%d%H%M%S')}"
-    result = db.execute(
-        text(
-            "SET NOCOUNT ON; DECLARE @result int; "
-            "EXEC @result = sys.sp_getapplock "
-            "@Resource=:resource, @LockMode='Exclusive', "
-            "@LockOwner='Transaction', @LockTimeout=10000; "
-            "SELECT @result"
-        ),
-        {"resource": resource},
-    ).scalar()
-    if result is None or int(result) < 0:
-        raise ValueError("该时段正在处理其他预约，请稍后重试")
+    resources = [
+        f"booking:center:{center_id}:{point.strftime('%Y%m%d%H%M%S')}"
+        for point in (
+            schedule.StartTime,
+            schedule.StartTime + timedelta(minutes=30),
+        )
+    ]
+    for resource in sorted(resources):
+        result = db.execute(
+            text(
+                "SET NOCOUNT ON; DECLARE @result int; "
+                "EXEC @result = sys.sp_getapplock "
+                "@Resource=:resource, @LockMode='Exclusive', "
+                "@LockOwner='Transaction', @LockTimeout=10000; "
+                "SELECT @result"
+            ),
+            {"resource": resource},
+        ).scalar()
+        if result is None or int(result) < 0:
+            raise ValueError("该时段正在处理其他预约，请稍后重试")
 
 
 def _pending_proxy_reserved_rooms(
@@ -53,7 +61,8 @@ def _pending_proxy_reserved_rooms(
         db.query(AppSchedule)
         .join(AppOrder, AppOrder.SlotId == AppSchedule.Id)
         .filter(
-            AppSchedule.StartTime == schedule.StartTime,
+            AppSchedule.StartTime < schedule.StartTime + timedelta(minutes=60),
+            AppSchedule.StartTime > schedule.StartTime - timedelta(minutes=60),
             AppSchedule.Status == "AVAILABLE",
             AppSchedule.Id != schedule.Id,
             AppOrder.Status == "PENDING",
@@ -92,13 +101,13 @@ def assign_room_for_payment(
     rooms = get_consultation_rooms(db, center_id)
     available_ids = []
     for r in rooms:
-        slot_status = resolve_slot_manual_status(
+        room_ok = is_booking_window_operational(
             db,
             r.get("dbId"),
             schedule.StartTime,
             r.get("status", "AVAILABLE"),
         )
-        if is_slot_operational(slot_status):
+        if room_ok:
             available_ids.append(r["id"])
     if not available_ids:
         raise ValueError("该中心暂无可用咨询室")

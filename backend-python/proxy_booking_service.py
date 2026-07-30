@@ -30,7 +30,9 @@ from schedule_meta import (
     release_assigned_room,
     schedule_note,
 )
-from room_slot_status import is_slot_operational, resolve_slot_manual_status
+from room_slot_status import (
+    is_booking_window_operational,
+)
 from schedule_slots import (
     active_schedules_at,
     all_slot_bounds_for_date,
@@ -123,13 +125,18 @@ def _acquire_proxy_booking_locks(
     bind = db.get_bind()
     if not bind or bind.dialect.name != "mssql":
         return
-    slot_key = start_time.strftime("%Y%m%d%H%M%S")
-    resources = [
-        f"booking:center:{center_id}:{slot_key}",
-        f"proxy:counselor:{int(counselor_id)}:{slot_key}",
+    slot_keys = [
+        point.strftime("%Y%m%d%H%M%S")
+        for point in (start_time, start_time + timedelta(minutes=30))
     ]
-    if room_id:
-        resources.append(f"proxy:room:{center_id}:{room_id}:{slot_key}")
+    resources = []
+    for slot_key in slot_keys:
+        resources.extend([
+            f"booking:center:{center_id}:{slot_key}",
+            f"proxy:counselor:{int(counselor_id)}:{slot_key}",
+        ])
+        if room_id:
+            resources.append(f"proxy:room:{center_id}:{room_id}:{slot_key}")
     for resource in sorted(resources):
         result = db.execute(
             text(
@@ -450,8 +457,17 @@ def build_proxy_slot_options(
         key = start_dt.strftime("%H:%M")
         label = f"{key} – {end_dt.strftime('%H:%M')}"
         past = start_dt <= now
+        counselor_rows = [
+            row
+            for row in active_schedules_at(db, start_dt)
+            if row.CounselorId == counselor_id
+        ]
         self_row = next(
-            (r for r in active_schedules_at(db, start_dt) if r.CounselorId == counselor_id),
+            (row for row in counselor_rows if row.StartTime == start_dt),
+            None,
+        )
+        overlapping_row = next(
+            (row for row in counselor_rows if row.StartTime != start_dt),
             None,
         )
         is_booked = self_row is not None and self_row.Status == "BOOKED"
@@ -460,7 +476,7 @@ def build_proxy_slot_options(
             and self_row.Status == "AVAILABLE"
             and pending_proxy_order_for_schedule(db, self_row.Id) is not None
         )
-        counselor_occupied = is_booked or pending_on_self
+        counselor_occupied = overlapping_row is not None or is_booked or pending_on_self
 
         proxy_occupied = _rooms_with_proxy_pending(
             db, center_id, start_dt, exclude_schedule_id=self_row.Id if self_row else None,
@@ -472,13 +488,12 @@ def build_proxy_slot_options(
         for room in rooms:
             # 单时段状态覆盖咨询室的全局状态；未配置单时段状态时必须沿用
             # 房间本身的 AVAILABLE / DISABLED，不能把停用房间重新当成可用。
-            slot_status = resolve_slot_manual_status(
+            room_ok = is_booking_window_operational(
                 db,
                 room.get("dbId"),
                 start_dt,
                 room.get("status", "AVAILABLE"),
             )
-            room_ok = is_slot_operational(slot_status)
             taken = room["id"] in all_occupied
             room_opts.append(
                 {
@@ -497,8 +512,7 @@ def build_proxy_slot_options(
 
         available_slot = (
             not past
-            and not is_booked
-            and not pending_on_self
+            and not counselor_occupied
             and (is_video_center(center_id) or any(r["available"] for r in room_opts))
         )
 
@@ -616,13 +630,12 @@ def push_proxy_order(
         selected_room = next((room for room in rooms if room["id"] == room_id), None)
         if not selected_room:
             raise ValueError("无效的咨询室")
-        selected_room_status = resolve_slot_manual_status(
+        if not is_booking_window_operational(
             db,
             selected_room.get("dbId"),
             start_time,
             selected_room.get("status", "AVAILABLE"),
-        )
-        if not is_slot_operational(selected_room_status):
+        ):
             raise ValueError("该咨询室在该时段不可用")
         occupied = _rooms_with_proxy_pending(db, center_id, start_time)
         occupied |= paid_occupied_rooms_at_center(db, center_id, start_time)

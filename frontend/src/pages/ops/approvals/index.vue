@@ -2,7 +2,7 @@
   <view class="page-approvals">
     <view class="hero-card">
       <text class="hero-title">审批管理</text>
-      <text class="hero-sub">咨询助理、咨询主任、管理员可审批退款豁免与咨询师请假</text>
+      <text class="hero-sub">咨询助理、咨询主任、管理员可审批退款申请与咨询师请假</text>
     </view>
 
     <view class="category-bar">
@@ -37,7 +37,7 @@
         <view class="card-head">
           <view class="head-left">
             <text class="type-tag" :class="item.kind === 'EXEMPTION' ? 'tag-exemption' : 'tag-leave'">
-              {{ item.kind === 'EXEMPTION' ? '豁免申请' : '咨询师请假' }}
+              {{ item.kind === 'EXEMPTION' ? '退款申请' : '咨询师请假' }}
             </text>
             <text class="title">{{ item.title }}</text>
           </view>
@@ -49,11 +49,11 @@
       </view>
     </view>
 
-    <!-- 豁免详情 -->
+    <!-- 退款详情 -->
     <view v-if="showExemptionDetail && exemptionDetail" class="overlay" @touchmove.stop.prevent>
       <view class="detail-card" @tap.stop>
         <view class="detail-header">
-          <text class="detail-title">豁免申请详情</text>
+          <text class="detail-title">退款申请详情</text>
           <view class="detail-close-btn" @tap="closeExemptionDetail">×</view>
         </view>
         <view class="detail-body">
@@ -73,12 +73,12 @@
         </view>
         <view v-if="exemptionDetail.status === 'PENDING'" class="actions">
           <button class="btn reject" :disabled="processing" @tap="showRejectInput = true">拒绝</button>
-          <button class="btn approve" :loading="processing" @tap="approveExemption">同意豁免</button>
+          <button class="btn approve" :loading="processing" @tap="approveExemption">同意退款</button>
         </view>
         <button v-else class="btn close" @tap="closeExemptionDetail">关闭</button>
         <view v-if="showRejectInput" class="reject-form">
           <text class="reject-form-title">填写拒绝理由（来访者可见）</text>
-          <textarea v-model="rejectReason" class="reject-textarea" placeholder="请说明不予豁免的原因" maxlength="500" />
+          <textarea v-model="rejectReason" class="reject-textarea" placeholder="请说明不予退款的原因" maxlength="500" />
           <view class="reject-actions">
             <button class="btn ghost" @tap="showRejectInput = false">取消</button>
             <button class="btn reject" :loading="processing" @tap="rejectExemption">确认拒绝</button>
@@ -186,7 +186,7 @@ interface DisplayItem {
 
 const categories = [
   { label: '全部', value: 'ALL' as CategoryFilter },
-  { label: '豁免申请', value: 'EXEMPTION' as CategoryFilter },
+  { label: '退款申请', value: 'EXEMPTION' as CategoryFilter },
   { label: '咨询师请假', value: 'LEAVE' as CategoryFilter },
 ]
 
@@ -390,7 +390,7 @@ const approveExemption = async () => {
   try {
     const res = await httpV2.post(API_ENDPOINTS.admin.refundExemptionApprove(exemptionDetail.value.id))
     if (res.code === 0) {
-      uni.showToast({ title: '已同意豁免', icon: 'success' })
+      uni.showToast({ title: '已同意退款', icon: 'success' })
       closeExemptionDetail()
       await load()
     } else {

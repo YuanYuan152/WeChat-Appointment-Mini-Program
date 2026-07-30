@@ -500,40 +500,58 @@ const handleLogout = () => {
 }
 
 /**
- * 注销账号（升级方案 §6 / 微信小程序合规）
- * 二次确认 → 调用 DELETE /api/mini/auth/account → 清空 token → 跳回首页
+ * 注销账号（软注销）：清空登录身份，预约/订单等业务数据仍保留作合规追溯
  */
 const handleDeleteAccount = () => {
+  if (!isLoggedIn.value) {
+    uni.showToast({ title: '请先登录', icon: 'none' })
+    return
+  }
+
   uni.showModal({
     title: '确认注销账号',
-    content: '注销后将清空登录信息和角色绑定，已发生的咨询记录会保留作合规追溯。此操作不可撤销。',
+    content:
+      '注销后将无法再用当前微信登录此账号。已产生的预约、订单、咨询记录会保留在系统中供合规追溯，但不再与你的微信身份关联。此操作不可撤销。',
     confirmText: '继续注销',
     confirmColor: '#EF4444',
     success: (res) => {
       if (!res.confirm) return
-      uni.showModal({
-        title: '再次确认',
-        content: '请确认你要永久注销当前账号？',
-        confirmText: '是的，注销',
-        confirmColor: '#EF4444',
-        success: async (res2) => {
-          if (!res2.confirm) return
-          try {
-            uni.showLoading({ title: '注销中...' })
-            await AuthApi.deleteAccount()
-            uni.hideLoading()
-            clearToken()
-            isLoggedIn.value = false
-            uni.showToast({ title: '已注销账号', icon: 'success' })
-            setTimeout(() => {
-              uni.switchTab({ url: '/pages/index/index' })
-            }, 1200)
-          } catch (e: any) {
-            uni.hideLoading()
-            uni.showToast({ title: e?.message || '注销失败', icon: 'none' })
-          }
-        },
-      })
+      // 延迟再弹第二次，避免部分真机嵌套 modal 点不动
+      setTimeout(() => {
+        uni.showModal({
+          title: '再次确认',
+          content: '确定永久注销当前账号吗？',
+          confirmText: '确认注销',
+          confirmColor: '#EF4444',
+          success: async (res2) => {
+            if (!res2.confirm) return
+            try {
+              uni.showLoading({ title: '注销中...', mask: true })
+              const result = await AuthApi.deleteAccount()
+              uni.hideLoading()
+              clearToken()
+              isLoggedIn.value = false
+              resetPageState()
+              updateTabBarForRole('Patient')
+              uni.showModal({
+                title: '已注销',
+                content: result?.message || '账号已注销，相关预约记录已按规定保留。',
+                showCancel: false,
+                success: () => {
+                  uni.reLaunch({ url: '/pages/auth/login' })
+                },
+              })
+            } catch (e: any) {
+              uni.hideLoading()
+              uni.showModal({
+                title: '注销失败',
+                content: e?.message || '请检查网络后重试',
+                showCancel: false,
+              })
+            }
+          },
+        })
+      }, 320)
     },
   })
 }

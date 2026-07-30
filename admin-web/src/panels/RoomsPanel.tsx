@@ -29,7 +29,11 @@ import type {
 } from "@/types/api";
 import type { RoomFilters } from "@/types/app";
 
-const FIXED_TIME_SLOTS = ["09:00", "10:00", "11:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00"];
+const FIXED_TIME_SLOTS = [9, 10, 11, 13, 14, 15, 16, 17, 18].flatMap((hour) =>
+  [0, 30].map(
+    (minute) => `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`,
+  ),
+);
 type RoomEditableStatus = Exclude<RoomSlotManualStatus, "MAINTENANCE">;
 const ROOM_STATUS_OPTIONS: RoomEditableStatus[] = ["AVAILABLE", "DISABLED"];
 
@@ -105,7 +109,10 @@ export function RoomsPanel({
             <div>
               <h2 className="text-xl font-semibold tracking-normal">咨询室情况</h2>
               <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">
-                快照：{snapshotText}。支持按预约中心、日期和固定时段查询。
+                快照：{snapshotText}。支持按预约中心、日期和半小时时段查询。
+              </p>
+              <p className="mt-1 text-sm leading-6 text-[var(--lxxl-muted)]">
+                咨询室状态控制整间房间是否可约；时段状态按半小时维护可用/停用，已过时段不可修改，停用后对应时间不可预约。
               </p>
             </div>
             <button
@@ -330,7 +337,7 @@ function RoomDetailPanel({
 
   const changedSlots = room.days.flatMap((day) =>
     day.slots
-      .filter((slot) => slot.startTime && slot.editable)
+      .filter((slot) => slot.startTime && slot.editable && !slot.past)
       .map((slot) => ({
         startTime: slot.startTime as string,
         original: normalizeSlotStatus(slot.manualStatus),
@@ -371,35 +378,6 @@ function RoomDetailPanel({
         </div>
       </CollapsibleSection>
 
-      <CollapsibleSection title="编辑咨询室">
-        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <QueryField label="咨询室名称">
-            <input className={queryControlClass} value={name} onChange={(event) => setName(event.target.value)} />
-          </QueryField>
-          <QueryField label="状态">
-            <select
-              className={queryControlClass}
-              value={status}
-              onChange={(event) => setStatus(event.target.value as RoomEditableStatus)}
-            >
-              {ROOM_STATUS_OPTIONS.map((item) => (
-                <option key={item} value={item}>
-                  {roomStatusLabel(item)}
-                </option>
-              ))}
-            </select>
-          </QueryField>
-        </div>
-        <button
-          className="mt-4 h-10 rounded-xl bg-[var(--lxxl-green)] px-4 text-sm font-medium text-white disabled:opacity-50"
-          type="button"
-          disabled={actionLoading || !room.id || !name.trim()}
-          onClick={() => room.id && onSaveRoom(room.id, { name: name.trim(), status })}
-        >
-          保存
-        </button>
-      </CollapsibleSection>
-
       <CollapsibleSection title="调换咨询室">
         {scheduleId ? (
           <div className="mt-3 space-y-3">
@@ -433,52 +411,135 @@ function RoomDetailPanel({
         )}
       </CollapsibleSection>
 
-      <CollapsibleSection count={room.days.reduce((total, day) => total + day.slots.length, 0)} title="未来时段">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h4 className="text-sm font-semibold">未来时段</h4>
-            <p className="mt-1 text-xs text-[var(--lxxl-muted)]">
-              只维护固定时段的可用/停用状态；已预约、已开始或已过去的时段不可改。
-            </p>
-          </div>
-          <button
-            className="h-10 rounded-xl bg-[var(--lxxl-green)] px-4 text-sm font-medium text-white disabled:opacity-50"
-            type="button"
-            disabled={actionLoading || !room.id || changedSlots.length === 0}
-            onClick={() => room.id && onSaveSlotStatuses(room.id, changedSlots)}
-          >
-            保存时段状态
-          </button>
-        </div>
-        <div className="mt-3 space-y-3">
-          {room.days.map((day) => (
-            <div key={day.date} className="rounded-xl border border-[var(--lxxl-border)]">
-              <div className="border-b border-[var(--lxxl-border)] px-4 py-3 text-sm font-medium">{day.date}</div>
-              <div className="divide-y divide-[var(--lxxl-border)]">
-                {day.slots.map((slot) => {
-                  const draftStatus = slot.startTime
-                    ? slotStatusDrafts[slot.startTime] || normalizeSlotStatus(slot.manualStatus)
-                    : normalizeSlotStatus(slot.manualStatus);
-                  return (
-                    <RoomSlotRow
-                      key={`${day.date}-${slot.key}`}
-                      actionLoading={actionLoading}
-                      draftStatus={draftStatus}
-                      onChange={(nextStatus) => {
-                        if (!slot.startTime) {
-                          return;
-                        }
-                        setSlotStatusDrafts((prev) => ({ ...prev, [slot.startTime as string]: nextStatus }));
-                      }}
-                      slot={slot}
-                    />
-                  );
-                })}
-              </div>
+      <CollapsibleSection
+        count={room.days.reduce((total, day) => total + day.slots.length, 0)}
+        title="咨询室状态调整"
+      >
+        <div className="mt-4 space-y-6">
+          <section>
+            <h4 className="text-sm font-semibold">批量调整状态</h4>
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <QueryField label="咨询室名称">
+                <input className={queryControlClass} value={name} onChange={(event) => setName(event.target.value)} />
+              </QueryField>
+              <QueryField label="状态">
+                <select
+                  className={queryControlClass}
+                  value={status}
+                  onChange={(event) => setStatus(event.target.value as RoomEditableStatus)}
+                >
+                  {ROOM_STATUS_OPTIONS.map((item) => (
+                    <option key={item} value={item}>
+                      {roomStatusLabel(item)}
+                    </option>
+                  ))}
+                </select>
+              </QueryField>
             </div>
-          ))}
+            <button
+              className="mt-4 h-10 rounded-xl bg-[var(--lxxl-green)] px-4 text-sm font-medium text-white disabled:opacity-50"
+              type="button"
+              disabled={actionLoading || !room.id || !name.trim()}
+              onClick={() => room.id && onSaveRoom(room.id, { name: name.trim(), status })}
+            >
+              保存
+            </button>
+          </section>
+
+          <section>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h4 className="text-sm font-semibold">按时段调整状态</h4>
+                <p className="mt-1 text-xs text-[var(--lxxl-muted)]">
+                  以半小时为单位维护可用/停用状态；一次预约占用“50 分钟咨询 + 10 分钟打扫”对应的两个半小时时段。
+                </p>
+              </div>
+              <button
+                className="h-10 rounded-xl bg-[var(--lxxl-green)] px-4 text-sm font-medium text-white disabled:opacity-50"
+                type="button"
+                disabled={actionLoading || !room.id || changedSlots.length === 0}
+                onClick={() => room.id && onSaveSlotStatuses(room.id, changedSlots)}
+              >
+                保存时段状态
+              </button>
+            </div>
+            <div className="mt-3 space-y-3">
+              {room.days.map((day) => (
+                <RoomDaySlots
+                  key={day.date}
+                  actionLoading={actionLoading}
+                  day={day}
+                  defaultOpen={day.date === getLocalDateValue()}
+                  slotStatusDrafts={slotStatusDrafts}
+                  onChangeSlot={(startTime, nextStatus) => {
+                    setSlotStatusDrafts((prev) => ({ ...prev, [startTime]: nextStatus }));
+                  }}
+                />
+              ))}
+            </div>
+          </section>
         </div>
       </CollapsibleSection>
+    </div>
+  );
+}
+
+function RoomDaySlots({
+  day,
+  defaultOpen = false,
+  actionLoading,
+  slotStatusDrafts,
+  onChangeSlot,
+}: {
+  day: RoomDetail["days"][number];
+  defaultOpen?: boolean;
+  actionLoading: boolean;
+  slotStatusDrafts: Record<string, RoomEditableStatus>;
+  onChangeSlot: (startTime: string, status: RoomEditableStatus) => void;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const editableCount = day.slots.filter((slot) => !slot.past && slot.editable && slot.occupancy !== "IN_SESSION").length;
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-[var(--lxxl-border)]">
+      <button
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-[var(--lxxl-bg)]"
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+      >
+        <span className="min-w-0">
+          <span className="text-sm font-medium text-[var(--lxxl-text)]">{day.date}</span>
+          <span className="ml-2 text-xs text-[var(--lxxl-muted)]">
+            {day.slots.length} 个时段
+            {editableCount > 0 ? ` · ${editableCount} 个可调整` : ""}
+          </span>
+        </span>
+        <span className="shrink-0 text-sm font-medium text-[var(--lxxl-green)]">{open ? "收起" : "展开"}</span>
+      </button>
+      {open && (
+        <div className="divide-y divide-[var(--lxxl-border)] border-t border-[var(--lxxl-border)]">
+          {day.slots.map((slot) => {
+            const draftStatus = slot.startTime
+              ? slotStatusDrafts[slot.startTime] || normalizeSlotStatus(slot.manualStatus)
+              : normalizeSlotStatus(slot.manualStatus);
+            return (
+              <RoomSlotRow
+                key={`${day.date}-${slot.key}`}
+                actionLoading={actionLoading}
+                draftStatus={draftStatus}
+                onChange={(nextStatus) => {
+                  if (!slot.startTime) {
+                    return;
+                  }
+                  onChangeSlot(slot.startTime, nextStatus);
+                }}
+                slot={slot}
+              />
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -494,16 +555,36 @@ function RoomSlotRow({
   actionLoading: boolean;
   onChange: (status: RoomEditableStatus) => void;
 }) {
-  const locked = !slot.editable || slot.occupancy === "IN_SESSION";
-  const statusTone = slot.occupancy === "IN_SESSION" ? "gold" : slot.occupancy === "IDLE" ? "green" : "neutral";
+  const past = Boolean(slot.past);
+  const locked = past || !slot.editable || slot.occupancy === "IN_SESSION";
+  const statusTone = past
+    ? "neutral"
+    : slot.occupancy === "IN_SESSION"
+      ? "gold"
+      : slot.occupancy === "IDLE"
+        ? "green"
+        : "neutral";
   const displayStatus =
     !slot.occupancy || slot.occupancy === "IDLE" ? roomStatusLabel(draftStatus) : roomStatusLabel(slot.occupancy);
 
   return (
-    <div className="grid gap-3 px-4 py-3 text-xs sm:grid-cols-[120px_1fr_150px] sm:items-center">
+    <div
+      className={`grid gap-3 px-4 py-3 text-xs sm:grid-cols-[120px_1fr_150px] sm:items-center ${
+        past ? "bg-[var(--lxxl-bg)] text-[var(--lxxl-muted)] opacity-70" : ""
+      }`}
+    >
       <div>
-        <div className="font-medium text-[var(--lxxl-text)]">{slot.timeLabel}</div>
-        <div className="mt-1 text-[var(--lxxl-muted)]">{slot.past ? "已过时段" : locked ? "不可调整" : "可调整"}</div>
+        {slot.patientName && (
+          <div className={`mb-1 font-medium ${past ? "text-[var(--lxxl-muted)]" : "text-[#315D4B]"}`}>
+            来访：{slot.patientName}
+          </div>
+        )}
+        <div className={`font-medium ${past ? "text-[var(--lxxl-muted)]" : "text-[var(--lxxl-text)]"}`}>
+          {slot.timeLabel}
+        </div>
+        <div className="mt-1 text-[var(--lxxl-muted)]">
+          {past ? "已过时段" : locked ? "不可调整" : "可调整"}
+        </div>
       </div>
       <div className="space-y-2 text-[var(--lxxl-muted)]">
         <div className="flex flex-wrap items-center gap-2">
@@ -523,7 +604,9 @@ function RoomSlotRow({
         </div>
       </div>
       <select
-        className={`${queryControlClass} h-9`}
+        className={`${queryControlClass} h-9 ${
+          past ? "cursor-not-allowed bg-[var(--lxxl-border)] text-[var(--lxxl-muted)]" : ""
+        }`}
         disabled={actionLoading || locked}
         value={draftStatus}
         onChange={(event) => onChange(event.target.value as RoomEditableStatus)}
@@ -643,10 +726,11 @@ function CreateRoomModal({
 }
 
 function slotLabel(slot: string) {
-  const [hourText] = slot.split(":");
-  const hour = Number(hourText);
-  if (Number.isNaN(hour)) {
+  const [hourText, minuteText] = slot.split(":");
+  const start = Number(hourText) * 60 + Number(minuteText);
+  if (!Number.isFinite(start)) {
     return slot;
   }
-  return `${slot}-${String(hour).padStart(2, "0")}:50`;
+  const end = start + 30;
+  return `${slot}-${String(Math.floor(end / 60)).padStart(2, "0")}:${String(end % 60).padStart(2, "0")}`;
 }

@@ -1,4 +1,4 @@
-"""来访者站内消息：活动、预约成功、开始前提醒、咨询师请假、豁免结果。"""
+"""来访者站内消息：活动、预约成功、开始前提醒、咨询师请假、退款结果。"""
 import json
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
@@ -208,6 +208,25 @@ def notify_patient_appointment_success(
         related_type="PATIENT_APPOINTMENT_SUCCESS",
         related_id=consultation.Id,
     )
+    # 微信服务通知（用户曾授权 APPOINTMENT_OK 订阅模板后才会真正下发）
+    from wechat_subscribe_service import try_send
+
+    patient_acc = db.query(AppAccount).filter(AppAccount.Id == consultation.PatientId).first()
+    patient_name = (
+        (patient_acc.Nickname if patient_acc else None)
+        or (patient_acc.RealName if patient_acc else None)
+        or "来访者"
+    )
+    try_send(
+        db,
+        consultation.PatientId,
+        "APPOINTMENT_OK",
+        {
+            "name": patient_name,
+            "slot": time_text,
+            "location": center_name,
+        },
+    )
 
 
 def notify_patient_appointment_cancelled(
@@ -351,8 +370,8 @@ def notify_patient_refund_exemption_pending(
     consultation: AppConsultation,
 ) -> None:
     amount_yuan = f"{exemption.Amount / 100:.2f}"
-    title = "豁免申请待审核"
-    summary = f"您的退款豁免申请已提交，金额 ¥{amount_yuan}，请等待审核"
+    title = "退款申请待审核"
+    summary = f"您的退款申请已提交，金额 ¥{amount_yuan}，请等待审核"
     detail = {
         "status": "PENDING",
         "amountYuan": amount_yuan,
@@ -360,7 +379,7 @@ def notify_patient_refund_exemption_pending(
         "exemptionId": exemption.Id,
         "consultationId": exemption.ConsultationId,
         "counselorName": _counselor_display_name(db, consultation.CounselorId),
-        "resultText": "您的退款豁免申请正在审核中，审核结果将在此通知。",
+        "resultText": "您的退款申请正在审核中，审核结果将在此通知。",
     }
     _notify_patient(
         db,
@@ -381,24 +400,24 @@ def notify_patient_refund_exemption_result(
     reject_reason: Optional[str] = None,
 ) -> None:
     if approved:
-        title = "豁免申请已通过"
+        title = "退款申请已通过"
         summary = f"退款 {exemption.Amount / 100:.2f} 元将原路退回"
         detail = {
             "status": "APPROVED",
             "approved": True,
-            "resultText": "您的退款豁免申请已审核通过，预约已取消。",
+            "resultText": "您的退款申请已审核通过，预约已取消。",
             "amountYuan": f"{exemption.Amount / 100:.2f}",
             "exemptionId": exemption.Id,
             "consultationId": exemption.ConsultationId,
         }
     else:
         reason_text = (reject_reason or "").strip() or "未说明具体原因"
-        title = "豁免申请未通过"
+        title = "退款申请未通过"
         summary = f"拒绝理由：{reason_text}"
         detail = {
             "status": "REJECTED",
             "approved": False,
-            "resultText": "您的退款豁免申请未通过审核，预约与订单维持不变。",
+            "resultText": "您的退款申请未通过审核，预约与订单维持不变。",
             "rejectReason": reason_text,
             "exemptionId": exemption.Id,
             "consultationId": exemption.ConsultationId,

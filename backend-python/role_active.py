@@ -4,7 +4,15 @@ from typing import Iterable, List, Optional, Sequence
 from sqlalchemy.orm import Session
 
 # 历史多绑定时合并用；正常运行期每账号仅一个角色
-ROLE_PRIORITY: Sequence[str] = ("Patient", "Counselor", "Assistant", "Ops", "Admin")
+# Tester：测试账号，可被管理员强制物理删除（含咨询/订单等业务数据）
+ROLE_PRIORITY: Sequence[str] = (
+    "Patient",
+    "Tester",
+    "Counselor",
+    "Assistant",
+    "Ops",
+    "Admin",
+)
 
 VALID_ROLES = frozenset(ROLE_PRIORITY)
 

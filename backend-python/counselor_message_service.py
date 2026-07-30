@@ -406,6 +406,26 @@ def notify_counselor_new_appointment(
         related_type="COUNSELOR_APPOINTMENT_NEW",
         related_id=consultation.Id,
     )
+    # 首期仅启用 APPOINTMENT_REMIND（咨询提醒）真实模板；咨询师排期/完善资料授权的也是该事件。
+    # COUNSELOR_APPOINTMENT_NEW 未配置真实模板且未授权，会导致服务通知 SKIPPED_NO_AUTH。
+    from wechat_subscribe_service import try_send
+
+    counselor_acc = db.query(AppAccount).filter(AppAccount.Id == consultation.CounselorId).first()
+    counselor_name = (
+        (counselor_acc.RealName if counselor_acc else None)
+        or (counselor_acc.Nickname if counselor_acc else None)
+        or "您"
+    )
+    try_send(
+        db,
+        consultation.CounselorId,
+        "APPOINTMENT_REMIND",
+        {
+            "time": time_text,
+            "patient": patient_label,
+            "counselor": counselor_name,
+        },
+    )
 
 
 def schedule_counselor_consultation_reminder(
@@ -569,6 +589,25 @@ def notify_counselor_appointment_cancelled(
         content=_message_payload(summary, detail),
         related_type="COUNSELOR_APPOINTMENT_CANCEL",
         related_id=consultation.Id,
+    )
+    from wechat_subscribe_service import try_send
+
+    # 与新预约相同：复用已启用的「咨询提醒」模板（COUNSELOR_APPOINTMENT_CANCEL 首期未启用）
+    counselor_acc = db.query(AppAccount).filter(AppAccount.Id == consultation.CounselorId).first()
+    counselor_name = (
+        (counselor_acc.RealName if counselor_acc else None)
+        or (counselor_acc.Nickname if counselor_acc else None)
+        or "您"
+    )
+    try_send(
+        db,
+        consultation.CounselorId,
+        "APPOINTMENT_REMIND",
+        {
+            "time": time_text,
+            "patient": f"{patient_label}（已取消）",
+            "counselor": counselor_name,
+        },
     )
 
 

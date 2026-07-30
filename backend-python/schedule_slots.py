@@ -10,23 +10,32 @@ from schedule_meta import parse_center_id, parse_room_id
 
 ROLLING_WINDOW_DAYS = 30
 SLOT_DURATION_MINUTES = 50
-# 每日标准时段（50 分钟/节，午休 12 点不排）
+# 每节咨询 50 分钟，结束后预留 10 分钟打扫；相邻预约因此仍至少间隔 60 分钟。
+CLEANING_DURATION_MINUTES = 10
+OCCUPANCY_DURATION_MINUTES = SLOT_DURATION_MINUTES + CLEANING_DURATION_MINUTES
+# 每日可选开始小时（午休 12 点不排），每小时支持整点和半点开始。
 SLOT_START_HOURS = [9, 10, 11, 13, 14, 15, 16, 17, 18]
+SLOT_START_MINUTES = (0, 30)
 
 
-def slot_bounds_for_date(d: date, hour: int) -> Tuple[datetime, datetime]:
-    start = datetime.combine(d, time(hour, 0))
+def slot_bounds_for_date(d: date, hour: int, minute: int = 0) -> Tuple[datetime, datetime]:
+    start = datetime.combine(d, time(hour, minute))
     end = start + timedelta(minutes=SLOT_DURATION_MINUTES)
     return start, end
 
 
 def all_slot_bounds_for_date(d: date) -> List[Tuple[datetime, datetime]]:
-    return [slot_bounds_for_date(d, h) for h in SLOT_START_HOURS]
+    return [
+        slot_bounds_for_date(d, hour, minute)
+        for hour in SLOT_START_HOURS
+        for minute in SLOT_START_MINUTES
+    ]
 
 
 def standard_slot_start_containing(at_time: datetime) -> Optional[datetime]:
     """返回 at_time 所在标准时段的起始时刻。"""
-    for start, end in all_slot_bounds_for_date(at_time.date()):
+    for start, _ in reversed(all_slot_bounds_for_date(at_time.date())):
+        end = start + timedelta(minutes=OCCUPANCY_DURATION_MINUTES)
         if start <= at_time < end:
             return start
     return None
@@ -37,7 +46,7 @@ def standard_slot_start_for_status(at_time: datetime) -> datetime:
     hit = standard_slot_start_containing(at_time)
     if hit:
         return hit
-    day_starts = [slot_bounds_for_date(at_time.date(), h)[0] for h in SLOT_START_HOURS]
+    day_starts = [start for start, _ in all_slot_bounds_for_date(at_time.date())]
     future = [s for s in day_starts if s > at_time]
     if future:
         return future[0]
@@ -71,7 +80,7 @@ def validate_slot_in_rolling_window(start: datetime, now: Optional[datetime] = N
 
 
 def is_aligned_standard_slot(start: datetime, end: datetime) -> bool:
-    if start.minute != 0 or start.second != 0:
+    if start.minute not in SLOT_START_MINUTES or start.second != 0 or start.microsecond != 0:
         return False
     expected_end = start + timedelta(minutes=SLOT_DURATION_MINUTES)
     return end == expected_end and start.hour in SLOT_START_HOURS
@@ -82,14 +91,28 @@ def active_schedules_at(
     start_time: datetime,
     *,
     exclude_id: Optional[int] = None,
+    duration_minutes: int = OCCUPANCY_DURATION_MINUTES,
 ) -> List[AppSchedule]:
+    """返回与指定占用窗口重叠的有效排期。
+
+    排期自身按“50 分钟咨询 + 10 分钟打扫”占用 60 分钟。调用方可用
+    ``duration_minutes=30`` 查询咨询室半小时视图。
+    """
+    requested_end = start_time + timedelta(minutes=duration_minutes)
+    earliest_candidate = start_time - timedelta(minutes=OCCUPANCY_DURATION_MINUTES)
     q = db.query(AppSchedule).filter(
-        AppSchedule.StartTime == start_time,
+        AppSchedule.StartTime < requested_end,
+        AppSchedule.StartTime > earliest_candidate,
         AppSchedule.Status != "CANCELLED",
     )
     if exclude_id:
         q = q.filter(AppSchedule.Id != exclude_id)
-    return q.all()
+    return [
+        row
+        for row in q.all()
+        if row.StartTime < requested_end
+        and row.StartTime + timedelta(minutes=OCCUPANCY_DURATION_MINUTES) > start_time
+    ]
 
 
 def counselor_has_slot(db: Session, counselor_id: int, start_time: datetime, exclude_id: Optional[int] = None) -> bool:

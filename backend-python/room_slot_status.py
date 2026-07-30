@@ -1,5 +1,5 @@
 """咨询室单时段管理状态读写。"""
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
 from sqlalchemy.exc import OperationalError, ProgrammingError
@@ -84,6 +84,21 @@ def slot_status_map_for_room(
 
 def is_slot_operational(status: str) -> bool:
     return status == "AVAILABLE"
+
+
+def is_booking_window_operational(
+    db: Session,
+    room_id: Optional[int],
+    start_time: datetime,
+    default: str = "AVAILABLE",
+) -> bool:
+    """50 分钟咨询 + 10 分钟打扫占用两个连续半小时时段。"""
+    return all(
+        is_slot_operational(
+            resolve_slot_manual_status(db, room_id, point, default)
+        )
+        for point in (start_time, start_time + timedelta(minutes=30))
+    )
 
 
 def upsert_slot_statuses(

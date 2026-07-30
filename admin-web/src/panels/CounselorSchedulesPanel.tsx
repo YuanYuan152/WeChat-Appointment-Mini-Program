@@ -893,55 +893,30 @@ function CounselorProxyBookingModal({
             </div>
           ) : (
             <div className="space-y-6">
-              <QueryField label="时段" required>
-                <div className="mb-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-[var(--lxxl-muted)]">
-                  <span className="inline-flex items-center gap-2">
-                    <span className="h-3 w-3 rounded-sm border border-[#BFD9C9] bg-[#EAF2ED]" />
-                    已排期、尚未预约
-                  </span>
-                  <span className="inline-flex items-center gap-2">
-                    <span className="h-3 w-3 rounded-sm border border-[var(--lxxl-border)] bg-white" />
-                    尚未排期，可新建
-                  </span>
-                  <span className="inline-flex items-center gap-2">
-                    <span className="h-3 w-3 rounded-sm border border-[var(--lxxl-border)] bg-[#F4F1EB]" />
-                    已预约或不可用
-                  </span>
-                </div>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <QueryField label="开始时间" required>
+                <select
+                  className={queryControlClass}
+                  value={slotKey}
+                  onChange={(event) => {
+                    setSlotKey(event.target.value);
+                    setRoomId("");
+                    setSubmitError("");
+                  }}
+                >
+                  <option value="">请选择开始时间</option>
                   {slotOptions.slots.map((slot) => {
                     const selectable =
                       slot.selectable && !slot.past && !slot.counselorOccupied && !slot.allRoomsFull;
-                    const selected = slotKey === slot.key;
-                    const existingAvailableSchedule = Boolean(slot.existingAvailableScheduleId);
                     return (
-                      <button
-                        className={`rounded-xl border px-4 py-3 text-left text-sm transition ${
-                          selected
-                            ? "border-[var(--lxxl-green)] bg-[#F4FBF7]"
-                            : selectable && existingAvailableSchedule
-                              ? "border-[#BFD9C9] bg-[#EAF2ED] text-[var(--lxxl-green-dark)] hover:border-[var(--lxxl-green)]"
-                              : selectable
-                                ? "border-[var(--lxxl-border)] bg-white hover:border-[var(--lxxl-green)]"
-                                : "cursor-not-allowed border-[var(--lxxl-border)] bg-[#F4F1EB] text-[var(--lxxl-muted)]"
-                        }`}
-                        disabled={!selectable}
-                        key={slot.key}
-                        type="button"
-                        onClick={() => {
-                          setSlotKey(slot.key);
-                          setRoomId("");
-                          setSubmitError("");
-                        }}
-                      >
-                        <span className="block font-medium">{slot.label}</span>
-                        <span className="mt-1 block text-xs text-[var(--lxxl-muted)]">
-                          {proxySlotHint(slot)}
-                        </span>
-                      </button>
+                      <option disabled={!selectable} key={slot.key} value={slot.key}>
+                        {slot.key}{selectable ? "" : `（${proxySlotHint(slot)}）`}
+                      </option>
                     );
                   })}
-                </div>
+                </select>
+                <p className="mt-2 text-xs text-[var(--lxxl-muted)]">
+                  支持整点和半点开始；咨询 50 分钟，随后预留 10 分钟打扫。
+                </p>
               </QueryField>
 
               {!isVideo && selectedSlot && (
@@ -980,8 +955,7 @@ function CounselorProxyBookingModal({
 
               {selectedSlot && (
                 <div className="rounded-xl bg-[#FAF8F4] px-4 py-3 text-sm leading-6 text-[var(--lxxl-muted)]">
-                  将推送待支付订单：{formatDateTime(selectedSlot.startTime)} 至{" "}
-                  {formatDateTime(selectedSlot.endTime)}
+                  {bookingDurationText(selectedSlot.startTime)}
                   {!isVideo
                     ? selectedRoom
                       ? ` · ${selectedRoom.roomName}`
@@ -1009,6 +983,17 @@ function CounselorProxyBookingModal({
       </section>
     </div>
   );
+}
+
+function bookingDurationText(startTime?: string | null) {
+  if (!startTime) return "";
+  const start = new Date(startTime);
+  if (Number.isNaN(start.getTime())) return `开始时间：${formatDateTime(startTime)}`;
+  const consultationEnd = new Date(start.getTime() + 50 * 60_000);
+  const cleaningEnd = new Date(start.getTime() + 60 * 60_000);
+  const hhmm = (value: Date) =>
+    `${String(value.getHours()).padStart(2, "0")}:${String(value.getMinutes()).padStart(2, "0")}`;
+  return `开始 ${hhmm(start)} · 咨询 ${hhmm(start)}–${hhmm(consultationEnd)} · 打扫 ${hhmm(consultationEnd)}–${hhmm(cleaningEnd)}`;
 }
 
 function formatCounselorContractTag(tag?: string | null) {
@@ -1168,25 +1153,28 @@ function CreateScheduleModal({
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <QueryField label="时段">
+              <QueryField label="开始时间">
                 <select
                 className={queryControlClass}
                   disabled={submitting}
                   value={draft.slotKey}
                   onChange={(event) => setDraft((prev) => ({ ...prev, slotKey: event.target.value, roomId: "" }))}
                 >
-                  <option value="">请选择时段</option>
+                  <option value="">请选择开始时间</option>
                   {slotOptions.slots.map((slot) => (
                     <option
                       key={slot.key}
                       disabled={slot.past || slot.counselorOccupied || slot.allRoomsFull}
                       value={slot.key}
                     >
-                      {slot.label}
+                      {slot.key}
                       {slot.past ? "（已过期）" : slot.counselorOccupied ? "（已有排期）" : slot.allRoomsFull ? "（已约满）" : ""}
                     </option>
                   ))}
                 </select>
+                <p className="mt-2 text-xs text-[var(--lxxl-muted)]">
+                  支持整点和半点开始；咨询 50 分钟，随后预留 10 分钟打扫。
+                </p>
               </QueryField>
               {draft.centerId !== "video" && (
                 <QueryField label="咨询室">
@@ -1205,6 +1193,11 @@ function CreateScheduleModal({
                   </select>
                 </QueryField>
               )}
+            </div>
+          )}
+          {selectedSlot && (
+            <div className="rounded-xl bg-[#FAF8F4] px-4 py-3 text-sm leading-6 text-[var(--lxxl-muted)]">
+              {bookingDurationText(selectedSlot.startTime)}
             </div>
           )}
         </div>

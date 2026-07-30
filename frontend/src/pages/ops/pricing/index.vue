@@ -136,6 +136,7 @@ import { computed, reactive, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
+import { refreshSubscribeHint, tryOfficialRoleSubscribeInGesture } from '@/utils/subscribePrompt'
 
 const DEFAULT_SHARE_PERCENT = 50
 
@@ -280,34 +281,38 @@ const closeShareEdit = () => {
   shareEditing.value = null
 }
 
-const saveBase = async () => {
+const saveBase = () => {
   if (!editing.value) return
   const yuan = Number(basePriceInput.value)
   if (Number.isNaN(yuan) || yuan < 0) {
     uni.showToast({ title: '请输入有效价格', icon: 'none' })
     return
   }
+  const subscribeDone = tryOfficialRoleSubscribeInGesture('workbench')
   saving.value = true
-  try {
-    const res = await httpV2.put(
-      API_ENDPOINTS.admin.pricingCounselorBase(editing.value.counselorId),
-      { basePriceYuan: yuan },
-    )
-    if (res.code === 0) {
-      uni.showToast({ title: '已保存', icon: 'success' })
-      closeEdit()
-      await reload()
-    } else {
-      uni.showToast({ title: res.msg || '保存失败', icon: 'none' })
+  void (async () => {
+    try {
+      const res = await httpV2.put(
+        API_ENDPOINTS.admin.pricingCounselorBase(editing.value!.counselorId),
+        { basePriceYuan: yuan },
+      )
+      await subscribeDone
+      if (res.code === 0) {
+        uni.showToast({ title: '已保存', icon: 'success' })
+        closeEdit()
+        await reload()
+      } else {
+        uni.showToast({ title: res.msg || '保存失败', icon: 'none' })
+      }
+    } catch {
+      uni.showToast({ title: '保存失败', icon: 'none' })
+    } finally {
+      saving.value = false
     }
-  } catch {
-    uni.showToast({ title: '保存失败', icon: 'none' })
-  } finally {
-    saving.value = false
-  }
+  })()
 }
 
-const saveShare = async () => {
+const saveShare = () => {
   if (!shareEditing.value) return
   const baseYuan = shareEditing.value.basePriceYuan
   if (shareForm.shareMode === 'AMOUNT') {
@@ -328,35 +333,42 @@ const saveShare = async () => {
       return
     }
   }
+  const subscribeDone = tryOfficialRoleSubscribeInGesture('workbench')
   shareSaving.value = true
-  try {
-    const payload: Record<string, unknown> = {
-      shareMode: shareForm.shareMode || null,
+  void (async () => {
+    try {
+      const payload: Record<string, unknown> = {
+        shareMode: shareForm.shareMode || null,
+      }
+      if (shareForm.shareMode === 'AMOUNT') {
+        payload.revenueShareYuan = Number(shareForm.revenueShareYuan)
+      } else if (shareForm.shareMode === 'PERCENT') {
+        payload.revenueSharePercent = Number(shareForm.revenueSharePercent)
+      }
+      const res = await httpV2.put(
+        API_ENDPOINTS.admin.pricingCounselorDefaultShare(shareEditing.value!.counselorId),
+        payload,
+      )
+      await subscribeDone
+      if (res.code === 0) {
+        uni.showToast({ title: '默认抽成已更新', icon: 'success' })
+        closeShareEdit()
+        await reload()
+      } else {
+        uni.showToast({ title: res.msg || '保存失败', icon: 'none' })
+      }
+    } catch {
+      uni.showToast({ title: '保存失败', icon: 'none' })
+    } finally {
+      shareSaving.value = false
     }
-    if (shareForm.shareMode === 'AMOUNT') {
-      payload.revenueShareYuan = Number(shareForm.revenueShareYuan)
-    } else if (shareForm.shareMode === 'PERCENT') {
-      payload.revenueSharePercent = Number(shareForm.revenueSharePercent)
-    }
-    const res = await httpV2.put(
-      API_ENDPOINTS.admin.pricingCounselorDefaultShare(shareEditing.value.counselorId),
-      payload,
-    )
-    if (res.code === 0) {
-      uni.showToast({ title: '默认抽成已更新', icon: 'success' })
-      closeShareEdit()
-      await reload()
-    } else {
-      uni.showToast({ title: res.msg || '保存失败', icon: 'none' })
-    }
-  } catch {
-    uni.showToast({ title: '保存失败', icon: 'none' })
-  } finally {
-    shareSaving.value = false
-  }
+  })()
 }
 
-onShow(reload)
+onShow(() => {
+  void reload()
+  void refreshSubscribeHint()
+})
 </script>
 
 <style scoped>

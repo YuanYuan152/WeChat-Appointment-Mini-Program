@@ -1,13 +1,18 @@
 <template>
   <view v-if="visible" class="sheet-root">
-    <view class="sheet-overlay" @touchmove.stop.prevent @tap="onClose">
-      <view class="sheet-card" @tap.stop>
+    <view class="sheet-mask" @touchmove.stop.prevent @tap="onClose" />
+    <view
+      class="sheet-card"
+      :class="showAgreementStep ? 'sheet-agreement' : 'sheet-pay'"
+      :style="sheetCardStyle"
+      @tap.stop
+    >
       <view class="sheet-header">
         <text class="sheet-title">{{ sheetTitle }}</text>
         <text class="sheet-close" @tap="onClose">×</text>
       </view>
 
-      <view v-if="loading" class="sheet-loading">加载订单详情...</view>
+      <view v-if="loading && !order" class="sheet-loading">加载订单详情...</view>
 
       <!-- 协议签署步骤 -->
       <template v-else-if="showAgreementStep">
@@ -32,6 +37,7 @@
             class="agreement-body-scroll"
             scroll-y
             :show-scrollbar="false"
+            :style="scrollAreaStyle"
           >
             <view class="agreement-scroll">
               <text class="agreement-text">{{ agreementText }}</text>
@@ -105,7 +111,12 @@
 
       <!-- 支付确认步骤 -->
       <template v-else-if="order">
-        <scroll-view class="pay-body-scroll" scroll-y :show-scrollbar="false">
+        <scroll-view
+          class="pay-body-scroll"
+          scroll-y
+          :show-scrollbar="false"
+          :style="scrollAreaStyle"
+        >
           <view class="amount-box">
             <text class="amount-currency">¥</text>
             <text class="amount-value">{{ (order.TotalFee / 100).toFixed(2) }}</text>
@@ -165,7 +176,6 @@
         </view>
       </template>
     </view>
-    </view>
 
     <!-- 签名浮层：不能挂在 catchtouchmove 祖先下，否则触点事件收不到、无笔画 -->
     <view v-if="showSignatureCanvas" class="sig-pad-overlay">
@@ -221,6 +231,10 @@ import {
   expireHintText,
   formatOrderTime,
 } from '@/utils/orderPayment'
+import {
+  DEFAULT_ONBOARDING_EVENT_KEYS,
+  requestOfficialSubscribeInGesture,
+} from '@/utils/subscribeMessage'
 
 const tongxinAgreementTitle = TONGXIN_AGREEMENT_TITLE
 const yangfanAgreementTitle = YANGFAN_AGREEMENT_TITLE
@@ -322,6 +336,30 @@ const sheetTitle = computed(() =>
   showAgreementStep.value ? '签署协议' : '确认预约与支付',
 )
 
+/** 真机：底部绝对定位 + 像素高度字符串（协议约 4/5，支付约 3/4） */
+const windowHeightPx = ref(667)
+const sheetHeightPx = ref(534)
+const refreshWindowHeight = () => {
+  try {
+    const info = uni.getSystemInfoSync()
+    windowHeightPx.value = Number(info.windowHeight) || Number(info.screenHeight) || 667
+  } catch {
+    windowHeightPx.value = 667
+  }
+  const ratio = showAgreementStep.value ? 0.8 : 0.75
+  sheetHeightPx.value = Math.max(420, Math.round(windowHeightPx.value * ratio))
+}
+const sheetCardStyle = computed(() => {
+  const h = sheetHeightPx.value
+  return `position:absolute;left:0;right:0;bottom:0;width:100%;height:${h}px;max-height:${h}px;min-height:${h}px;box-sizing:border-box;`
+})
+/** scroll-view 在微信里需明确高度才能占满剩余区域 */
+const scrollAreaStyle = computed(() => {
+  const reserved = showAgreementStep.value ? 280 : 200
+  const h = Math.max(240, sheetHeightPx.value - reserved)
+  return `height:${h}px;`
+})
+
 const resetAgreementState = () => {
   showAgeConfirm.value = true
   intakeIsAdult.value = null
@@ -383,21 +421,29 @@ const loadOrder = async () => {
     order.value = null
     return
   }
-  loading.value = true
+  const hadData = !!order.value
+  if (!hadData) loading.value = true
   try {
-    const res = await httpV2.get<PatientOrder>(API_ENDPOINTS.patient.orderDetail(id))
+    const res = await httpV2.get<PatientOrder>(
+      API_ENDPOINTS.patient.orderDetail(id),
+      undefined,
+      { showLoading: false, showError: false },
+    )
     if (res.code === 0 && res.data) {
       order.value = res.data
+      refreshWindowHeight()
       if (showAgreementStep.value) {
         applyPresetAgreementIfNeeded()
       }
-    } else {
+    } else if (!hadData) {
       uni.showToast({ title: res.msg || '加载订单失败', icon: 'none' })
       emit('close')
     }
   } catch {
-    uni.showToast({ title: '加载订单失败', icon: 'none' })
-    emit('close')
+    if (!hadData) {
+      uni.showToast({ title: '加载订单失败', icon: 'none' })
+      emit('close')
+    }
   } finally {
     loading.value = false
   }
@@ -409,10 +455,34 @@ watch(
     if (vis) {
       agreed.value = false
       resetAgreementState()
+      // 先用列表传入的订单渲染，避免空白/矮弹层闪屏
+      if (props.initialOrder) {
+        order.value = { ...props.initialOrder }
+        if (
+          order.value.proxyAgreementLabel
+          && order.value.needsContractAgreement == null
+        ) {
+          order.value.needsContractAgreement = true
+        }
+        refreshWindowHeight()
+        if (showAgreementStep.value) {
+          applyPresetAgreementIfNeeded()
+        }
+      } else {
+        order.value = null
+        refreshWindowHeight()
+      }
       loadOrder()
+    } else {
+      order.value = null
+      loading.value = false
     }
   },
 )
+
+watch(showAgreementStep, () => {
+  if (props.visible) refreshWindowHeight()
+})
 
 const confirmAge = (isAdult: boolean) => {
   if (!order.value) return
@@ -525,40 +595,64 @@ const submitAgreement = async () => {
 
 const onClose = () => emit('close')
 
-const onConfirm = async () => {
+/**
+ * 确认支付：在同一点击手势内先弹微信官方订阅授权（图一，一次性模板续订），
+ * 用户允许/拒绝后再发起支付。支付成功后后端即可下发「预约成功」到服务通知。
+ * 不使用自定义「接收提醒」按钮。
+ */
+const onConfirm = () => {
   if (!agreed.value || !order.value || paying.value) return
   paying.value = true
-  try {
-    const result = await executeOrderPayment(order.value.Id)
-    if (result.ok) {
-      uni.showToast({ title: '支付成功', icon: 'success' })
-      emit('paid')
-      emit('close')
-    } else {
-      uni.showToast({ title: result.msg || '支付失败', icon: 'none' })
+  const orderId = order.value.Id
+
+  // 同步发起官方授权（不可先 await）
+  const subscribePromise = requestOfficialSubscribeInGesture(DEFAULT_ONBOARDING_EVENT_KEYS)
+
+  const runPay = async () => {
+    try {
+      await subscribePromise
+      const result = await executeOrderPayment(orderId)
+      if (result.ok) {
+        uni.showToast({ title: '支付成功', icon: 'success' })
+        emit('paid')
+        emit('close')
+      } else {
+        uni.showToast({ title: result.msg || '支付失败', icon: 'none' })
+      }
+    } catch {
+      uni.showToast({ title: '支付失败', icon: 'none' })
+    } finally {
+      paying.value = false
     }
-  } finally {
-    paying.value = false
   }
+
+  runPay()
 }
 </script>
 
 <style scoped>
 .sheet-root {
   position: fixed;
-  inset: 0;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
   z-index: 200;
 }
-.sheet-overlay {
+.sheet-mask {
   position: absolute;
-  inset: 0;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
   background: rgba(0, 0, 0, 0.45);
-  display: flex;
-  align-items: flex-end;
 }
 .sheet-card {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
   width: 100%;
-  max-height: 92vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -566,18 +660,13 @@ const onConfirm = async () => {
   border-radius: 32rpx 32rpx 0 0;
   padding: 32rpx 32rpx calc(32rpx + env(safe-area-inset-bottom));
   box-sizing: border-box;
+  z-index: 1;
 }
-.agreement-body-scroll {
-  flex: 1;
-  height: 0;
-  min-height: 320rpx;
-  margin-bottom: 16rpx;
-}
+.agreement-body-scroll,
 .pay-body-scroll {
-  flex: 1;
-  height: 0;
-  min-height: 240rpx;
-  margin-bottom: 8rpx;
+  width: 100%;
+  margin-bottom: 16rpx;
+  box-sizing: border-box;
 }
 .sheet-footer {
   flex-shrink: 0;

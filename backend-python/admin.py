@@ -158,7 +158,9 @@ class CreateUserByMobileRequest(BaseModel):
     counselor_type: Optional[str] = None
 
 
-BINDABLE_ROLE_TYPES = frozenset({"Counselor", "Assistant", "Ops", "Patient", "Admin"})
+BINDABLE_ROLE_TYPES = frozenset(
+    {"Counselor", "Assistant", "Ops", "Patient", "Tester", "Admin"}
+)
 
 
 @router.get("/role-policy", summary="当前操作者可赋权的角色列表")
@@ -709,7 +711,8 @@ def delete_user_account(
     """
     物理删除用户账号：
     - 从数据库中彻底移除 AppAccount 及会话、角色、档案等附属数据
-    - 若存在咨询记录、个案或已支付订单，则拒绝删除（需解绑角色保留历史）
+    - 普通角色：若存在咨询记录、个案或已支付订单，则拒绝删除
+    - Tester：即使有咨询/订单等业务数据，也级联删除后彻底移除账号
     """
     if user_id == admin.Id:
         raise HTTPException(status_code=400, detail="不能删除当前登录账号")
@@ -722,7 +725,7 @@ def delete_user_account(
     _guard_manage_user(db, admin, user_role)
 
     try:
-        hard_delete_account(db, user_id)
+        hard_delete_account(db, user_id, purge_business=(user_role == "Tester"))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -786,7 +789,7 @@ def _build_exemption_admin_out(
 @router.get(
     "/refund-exemptions",
     response_model=List[RefundExemptionAdminOut],
-    summary="退款豁免申请列表（管理工作台审核）",
+    summary="退款申请列表（管理工作台审核）",
 )
 def list_refund_exemptions(
     status: Optional[str] = Query(None, description="PENDING / APPROVED / REJECTED / ALL"),
@@ -826,7 +829,7 @@ def list_refund_exemptions(
 
 @router.post(
     "/refund-exemptions/{exemption_id}/approve",
-    summary="同意退款豁免申请",
+    summary="同意退款申请",
 )
 def approve_refund_exemption_request(
     exemption_id: int,
@@ -846,7 +849,7 @@ def approve_refund_exemption_request(
 
 @router.post(
     "/refund-exemptions/{exemption_id}/reject",
-    summary="拒绝退款豁免申请",
+    summary="拒绝退款申请",
 )
 def reject_refund_exemption_request(
     exemption_id: int,
@@ -1044,14 +1047,20 @@ def _admin_staff_account_ids(db: Session) -> set[int]:
 
 def _admin_visitor_patient_ids(db: Session) -> set[int]:
     staff_ids = _admin_staff_account_ids(db)
+    tester_ids = {
+        b.AccountId
+        for b in db.query(AppRoleBinding)
+        .filter(AppRoleBinding.RoleType == "Tester")
+        .all()
+    }
     role_ids = {
         b.AccountId
         for b in db.query(AppRoleBinding)
         .filter(AppRoleBinding.RoleType == "Patient")
         .all()
-    } - staff_ids
+    } - staff_ids - tester_ids
     cons_rows = db.query(AppConsultation.PatientId).distinct().all()
-    cons_ids = {row[0] for row in cons_rows if row[0]} - staff_ids
+    cons_ids = {row[0] for row in cons_rows if row[0]} - staff_ids - tester_ids
     return role_ids | cons_ids
 
 

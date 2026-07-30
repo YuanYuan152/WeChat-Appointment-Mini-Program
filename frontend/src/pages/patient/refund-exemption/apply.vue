@@ -1,8 +1,8 @@
 <template>
   <view class="page-exemption">
     <view class="tip-card">
-      <text class="tip-title">申请退款豁免</text>
-      <text class="tip-desc">距咨询开始不足24小时时，可提交豁免申请由管理员审核。审核通过前预约与订单维持不变。</text>
+      <text class="tip-title">申请退款</text>
+      <text class="tip-desc">距咨询开始不足24小时时，可提交退款申请由管理员审核。审核通过前预约与订单维持不变。</text>
     </view>
 
     <view v-if="counselorName || slotText" class="info-card">
@@ -14,12 +14,12 @@
 
     <view class="form-card">
       <view class="form-item">
-        <text class="label">申请豁免金额（元）</text>
+        <text class="label">申请退款金额（元）</text>
         <input
           class="input"
           type="digit"
           v-model="form.amountYuan"
-          placeholder="请输入申请豁免退款的金额"
+          placeholder="请输入申请退款的金额"
         />
       </view>
 
@@ -132,7 +132,7 @@ const submit = async () => {
   }
   const amountYuan = parseFloat(form.value.amountYuan)
   if (!amountYuan || amountYuan <= 0) {
-    uni.showToast({ title: '请填写有效的申请豁免金额', icon: 'none' })
+    uni.showToast({ title: '请填写有效的申请退款金额', icon: 'none' })
     return
   }
   const reason = form.value.reason.trim()

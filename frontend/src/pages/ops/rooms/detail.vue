@@ -43,6 +43,9 @@
             :class="[slotClass(day.date, slot), { draft: isSlotDraft(day.date, slot), editable: slot.editable, 'in-session': slot.occupancy === 'IN_SESSION' }]"
             @tap="onSlotTap(slot, day.date)"
           >
+            <text v-if="slot.patientName" class="slot-patient">
+              来访：{{ formatPatientInline(slot.patientName, slot.patientContractTag) }}
+            </text>
             <text class="slot-time">{{ slot.timeLabel }}</text>
             <text class="slot-status">{{ slotStatusText(day.date, slot) }}</text>
             <text v-if="slot.counselorName && slot.occupancy !== 'IN_SESSION'" class="slot-meta">{{ slot.counselorName }}</text>
@@ -166,6 +169,7 @@ interface SlotItem {
   counselorName?: string
   counselorMobile?: string
   patientName?: string
+  patientContractTag?: string
   patientMobile?: string
   roomCode?: string
   roomName?: string
@@ -197,6 +201,7 @@ interface RoomDetail {
     counselorName?: string
     counselorMobile?: string
     patientName?: string
+    patientContractTag?: string
     patientMobile?: string
     startTime?: string
     endTime?: string
@@ -537,6 +542,10 @@ onLoad((opts) => {
 .slot-card.past { opacity: 0.65; }
 .slot-card.draft { box-shadow: 0 0 0 2rpx #F59E0B inset; }
 .slot-time { display: block; font-size: 26rpx; font-weight: 700; color: #374151; }
+.slot-patient {
+  display: block; margin-bottom: 6rpx; font-size: 22rpx; font-weight: 700; color: #047857;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .slot-status { display: block; margin-top: 6rpx; font-size: 22rpx; color: #6B7280; }
 .slot-meta {
   display: block; margin-top: 4rpx; font-size: 20rpx; color: #9CA3AF;

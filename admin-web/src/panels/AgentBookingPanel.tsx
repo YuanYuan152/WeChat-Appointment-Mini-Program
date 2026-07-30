@@ -753,54 +753,28 @@ function ProxyBookingModal({
             </div>
           ) : (
             <div className="mt-5 space-y-6">
-              <QueryField label="时段" required>
-                <div className="mb-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-[var(--lxxl-muted)]">
-                  <span className="inline-flex items-center gap-2">
-                    <span className="h-3 w-3 rounded-sm border border-[#BFD9C9] bg-[#EAF2ED]" />
-                    咨询师已排期、尚未预约
-                  </span>
-                  <span className="inline-flex items-center gap-2">
-                    <span className="h-3 w-3 rounded-sm border border-[var(--lxxl-border)] bg-white" />
-                    咨询师尚未排期，可新建
-                  </span>
-                  <span className="inline-flex items-center gap-2">
-                    <span className="h-3 w-3 rounded-sm border border-[var(--lxxl-border)] bg-[#F4F1EB]" />
-                    已预约或不可用
-                  </span>
-                </div>
-                {slotOptions.slots.length === 0 ? (
-                  <div className="rounded-xl bg-[#FAF8F4] px-4 py-4 text-sm text-[var(--lxxl-muted)]">
-                    当前日期和预约中心暂无可代理时段。
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                    {slotOptions.slots.map((slot) => {
-                      const selectable = slot.selectable && !slot.past && !slot.counselorOccupied && !slot.allRoomsFull;
-                      const selected = draft.slotKey === slot.key;
-                      const existingAvailableSchedule = Boolean(slot.existingAvailableScheduleId);
-                      return (
-                        <button
-                          className={`rounded-xl border px-4 py-3 text-left text-sm transition ${
-                            selected
-                              ? "border-[var(--lxxl-green)] bg-[#F4FBF7]"
-                              : selectable && existingAvailableSchedule
-                                ? "border-[#BFD9C9] bg-[#EAF2ED] text-[var(--lxxl-green-dark)] hover:border-[var(--lxxl-green)]"
-                                : selectable
-                                  ? "border-[var(--lxxl-border)] bg-white hover:border-[var(--lxxl-green)]"
-                                  : "cursor-not-allowed border-[var(--lxxl-border)] bg-[#F4F1EB] text-[var(--lxxl-muted)]"
-                          }`}
-                          disabled={!selectable}
-                          key={slot.key}
-                          type="button"
-                          onClick={() => setDraft((prev) => ({ ...prev, slotKey: slot.key, roomId: "" }))}
-                        >
-                          <span className="block font-medium">{slot.label}</span>
-                          <span className="mt-1 block text-xs text-[var(--lxxl-muted)]">{slotHint(slot)}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
+              <QueryField label="开始时间" required>
+                <select
+                  className={queryControlClass}
+                  value={draft.slotKey}
+                  onChange={(event) =>
+                    setDraft((prev) => ({ ...prev, slotKey: event.target.value, roomId: "" }))
+                  }
+                >
+                  <option value="">请选择开始时间</option>
+                  {slotOptions.slots.map((slot) => {
+                    const selectable =
+                      slot.selectable && !slot.past && !slot.counselorOccupied && !slot.allRoomsFull;
+                    return (
+                      <option disabled={!selectable} key={slot.key} value={slot.key}>
+                        {slot.key}{selectable ? "" : `（${slotHint(slot)}）`}
+                      </option>
+                    );
+                  })}
+                </select>
+                <p className="mt-2 text-xs text-[var(--lxxl-muted)]">
+                  支持整点和半点开始；每次咨询 50 分钟，随后预留 10 分钟打扫。
+                </p>
               </QueryField>
 
               {draft.centerId !== "video" && selectedSlot && (
@@ -836,7 +810,7 @@ function ProxyBookingModal({
 
               {selectedSlot && (
                 <div className="rounded-xl bg-[#FAF8F4] px-4 py-3 text-sm leading-6 text-[var(--lxxl-muted)]">
-                  将推送待支付订单：{timeRangeText(selectedSlot.startTime, selectedSlot.endTime)}
+                  {bookingDurationText(selectedSlot.startTime)}
                   {draft.centerId !== "video"
                     ? selectedRoom
                       ? ` · ${selectedRoom.roomName}`
@@ -862,6 +836,17 @@ function ProxyBookingModal({
 
 function timeRangeText(startTime?: string | null, endTime?: string | null) {
   return `${formatDateTime(startTime)} 至 ${formatDateTime(endTime)}`;
+}
+
+function bookingDurationText(startTime?: string | null) {
+  if (!startTime) return "";
+  const start = new Date(startTime);
+  if (Number.isNaN(start.getTime())) return `开始时间：${formatDateTime(startTime)}`;
+  const consultationEnd = new Date(start.getTime() + 50 * 60_000);
+  const cleaningEnd = new Date(start.getTime() + 60 * 60_000);
+  const hhmm = (value: Date) =>
+    `${String(value.getHours()).padStart(2, "0")}:${String(value.getMinutes()).padStart(2, "0")}`;
+  return `开始 ${hhmm(start)} · 咨询 ${hhmm(start)}–${hhmm(consultationEnd)} · 打扫 ${hhmm(consultationEnd)}–${hhmm(cleaningEnd)}`;
 }
 
 function statusTone(status?: string | null): "neutral" | "green" | "gold" | "red" {

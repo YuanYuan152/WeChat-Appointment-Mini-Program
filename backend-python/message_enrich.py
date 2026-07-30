@@ -56,7 +56,7 @@ def _sync_exemption_payload(
     detail = dict(payload.get("detail") or {})
 
     if status == "PENDING":
-        title = "豁免申请待审核"
+        title = "退款申请待审核"
         related_type = "REFUND_EXEMPTION_PENDING"
         amount_yuan = f"{exemption.Amount / 100:.2f}"
         detail.update(
@@ -67,14 +67,14 @@ def _sync_exemption_payload(
                 "reason": exemption.Reason,
                 "exemptionId": exemption.Id,
                 "consultationId": exemption.ConsultationId,
-                "resultText": "您的退款豁免申请正在审核中，审核结果将在此通知。",
+                "resultText": "您的退款申请正在审核中，审核结果将在此通知。",
             }
         )
         payload["summary"] = (
-            f"您的退款豁免申请已提交，金额 ¥{amount_yuan}，请等待审核"
+            f"您的退款申请已提交，金额 ¥{amount_yuan}，请等待审核"
         )
     elif status == "APPROVED":
-        title = "豁免申请已通过"
+        title = "退款申请已通过"
         related_type = "REFUND_EXEMPTION"
         amount_yuan = f"{exemption.Amount / 100:.2f}"
         detail.update(
@@ -84,12 +84,12 @@ def _sync_exemption_payload(
                 "amountYuan": amount_yuan,
                 "exemptionId": exemption.Id,
                 "consultationId": exemption.ConsultationId,
-                "resultText": "您的退款豁免申请已审核通过，预约已取消。",
+                "resultText": "您的退款申请已审核通过，预约已取消。",
             }
         )
         payload["summary"] = f"退款 {amount_yuan} 元将原路退回"
     elif status == "REJECTED":
-        title = "豁免申请未通过"
+        title = "退款申请未通过"
         related_type = "REFUND_EXEMPTION"
         reason = (optional_model_value(exemption, "RejectReason") or "").strip() or "未说明具体原因"
         detail.update(
@@ -99,7 +99,7 @@ def _sync_exemption_payload(
                 "rejectReason": reason,
                 "exemptionId": exemption.Id,
                 "consultationId": exemption.ConsultationId,
-                "resultText": "您的退款豁免申请未通过审核，预约与订单维持不变。",
+                "resultText": "您的退款申请未通过审核，预约与订单维持不变。",
             }
         )
         payload["summary"] = f"拒绝理由：{reason}"
@@ -435,7 +435,7 @@ def enrich_message(msg: AppMessage, db: Session) -> AppMessage:
                 title, content, related_type, exemption,
             )
         elif related_type == "REFUND_EXEMPTION_PENDING":
-            title = "豁免申请待审核"
+            title = "退款申请待审核"
 
     if related_type == "COUNSELOR_LEAVE":
         leave = _leave_request_for_message(msg, db)
