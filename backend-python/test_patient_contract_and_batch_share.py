@@ -1392,7 +1392,13 @@ class CounselorSafetyTests(BackendServiceTestCase):
                 self.committed = True
 
         fake_db = FakeDb()
-        with patch("payment.complete_paid_order", side_effect=ValueError("指定咨询室已被占用")):
+        with (
+            patch("payment._wechat_callback_signature_valid", return_value=True),
+            patch(
+                "payment.complete_paid_order",
+                side_effect=ValueError("指定咨询室已被占用"),
+            ),
+        ):
             response = asyncio.run(payment_callback(FakeRequest(), db=fake_db))
 
         self.assertIn(b"<return_code>FAIL</return_code>", response.body)

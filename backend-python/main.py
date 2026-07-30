@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -30,8 +31,24 @@ from assessment_routes import (
 )
 from assessment_report_routes import web_report_router as assessment_report_router
 from assessment_share_routes import router as assessment_share_router
+from config import settings
+from database import engine
+from runtime_safety import (
+    RequestLogMiddleware,
+    configure_structured_logging,
+    readiness_checks,
+)
 
-app = FastAPI(title="LXXL API", version="2.0")
+
+configure_structured_logging()
+
+app = FastAPI(
+    title="LXXL API",
+    version=settings.APP_VERSION,
+    docs_url="/docs" if settings.ENABLE_API_DOCS else None,
+    redoc_url="/redoc" if settings.ENABLE_API_DOCS else None,
+    openapi_url="/openapi.json" if settings.ENABLE_API_DOCS else None,
+)
 
 app.add_exception_handler(StarletteHTTPException, api_http_exception_handler)
 app.add_exception_handler(RequestValidationError, api_validation_exception_handler)
@@ -41,6 +58,8 @@ app.add_exception_handler(Exception, api_unhandled_exception_handler)
 @app.on_event("startup")
 def _ensure_db_schema():
     """启动时补齐 AppOrder 等表缺失列（如 ExpiresAt、ProxyCreatedByAccountId）。"""
+    if not settings.AUTO_MIGRATE_SCHEMA:
+        return
     try:
         from ensure_schema import (
             ensure_app_order_columns,
@@ -68,7 +87,14 @@ def _ensure_db_schema():
             db.close()
     except Exception as exc:
         import logging
-        logging.getLogger("uvicorn.error").warning("ensure_schema skipped: %s", exc)
+
+        logging.getLogger("uvicorn.error").warning(
+            "schema_initialization_failed",
+            extra={
+                "event": "schema_initialization_failed",
+                "result": type(exc).__name__,
+            },
+        )
 
 
 @app.on_event("startup")
@@ -80,18 +106,23 @@ def _ensure_assessment_definition_files():
         import logging
 
         logging.getLogger("uvicorn.error").warning(
-            "assessment definitions initialization skipped: %s", exc
+            "assessment_definition_initialization_failed",
+            extra={
+                "event": "assessment_definition_initialization_failed",
+                "result": type(exc).__name__,
+            },
         )
 
 # Enable CORS for frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 app.add_middleware(ApiResponseEnvelopeMiddleware)
+app.add_middleware(RequestLogMiddleware)
 
 
 @app.middleware("http")
@@ -107,6 +138,11 @@ async def add_static_upload_security_headers(request, call_next):
 # 上传目录必须独立持久化，并在通用 /static 之前挂载。
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 ASSESSMENT_ASSET_DIR.mkdir(parents=True, exist_ok=True)
+ASSESSMENT_DATA_DIR = (
+    Path(settings.ASSESSMENT_DATA_DIR).expanduser()
+    if settings.ASSESSMENT_DATA_DIR.strip()
+    else Path(__file__).parent / "runtime" / "assessment-data"
+)
 app.mount(
     "/static/uploads",
     StaticFiles(directory=str(UPLOAD_DIR)),
@@ -139,6 +175,39 @@ app.include_router(web_auth_router)
 app.include_router(assessment_public_router)
 app.include_router(assessment_report_router)
 app.include_router(assessment_share_router)
+
+
+@app.get("/health/live", include_in_schema=False)
+def health_live():
+    return {
+        "status": "ok",
+        "service": "backend",
+        "environment": settings.APP_ENV,
+        "version": settings.APP_VERSION,
+    }
+
+
+@app.get("/health/ready", include_in_schema=False)
+def health_ready():
+    ready, checks = readiness_checks(
+        engine,
+        (
+            ("upload_dir", UPLOAD_DIR),
+            ("assessment_data_dir", ASSESSMENT_DATA_DIR),
+            ("assessment_asset_dir", ASSESSMENT_ASSET_DIR),
+        ),
+    )
+    payload = {
+        "status": "ok" if ready else "not_ready",
+        "service": "backend",
+        "environment": settings.APP_ENV,
+        "version": settings.APP_VERSION,
+        "checks": checks,
+    }
+    if ready:
+        return payload
+    return JSONResponse(status_code=503, content=payload)
+
 
 @app.get("/")
 def read_root():

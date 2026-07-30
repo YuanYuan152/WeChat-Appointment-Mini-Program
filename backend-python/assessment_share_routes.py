@@ -171,15 +171,20 @@ def scan_assessment_share(
         # return the normal redirect below.
         try:
             db.rollback()
-        except Exception:
-            logger.exception(
-                "assessment share scan rollback failed for assessment %s",
-                assessment_id,
+        except Exception as rollback_exc:
+            logger.error(
+                "assessment share scan rollback failed",
+                extra={
+                    "event": "assessment_share_scan_rollback_failed",
+                    "result": type(rollback_exc).__name__,
+                },
             )
         logger.error(
-            "assessment share scan tracking failed for assessment %s",
-            assessment_id,
-            exc_info=(type(exc), exc, exc.__traceback__),
+            "assessment share scan tracking failed",
+            extra={
+                "event": "assessment_share_scan_tracking_failed",
+                "result": type(exc).__name__,
+            },
         )
 
     response = _share_redirect(target)

@@ -11,8 +11,8 @@ pip install -r requirements.txt
 ## 2. 配置环境变量
 
 ```bash
-# 将 .env.production 复制为 .env 并填写真实值
-copy .env.production .env
+# 将安全模板复制为 .env 并填写真实值；.env 不得提交
+copy .env.example .env
 # 编辑 .env 填写 WECHAT_APPID / WECHAT_SECRET / WECHAT_PAY_* / JWT_SECRET / BASE_URL 等
 ```
 

@@ -74,7 +74,15 @@ async def api_validation_exception_handler(
 
 
 async def api_unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-    logger.exception("Unhandled API error on %s", request.url.path, exc_info=exc)
+    # The raw path can contain account IDs, phone numbers or share codes.
+    # RequestLogMiddleware already records the sanitized route template.
+    logger.error(
+        "unhandled_api_error",
+        extra={
+            "event": "unhandled_api_error",
+            "result": type(exc).__name__,
+        },
+    )
     return JSONResponse(
         status_code=500,
         content=error_payload(500, "服务器内部错误"),

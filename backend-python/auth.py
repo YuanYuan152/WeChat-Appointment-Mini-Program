@@ -330,6 +330,22 @@ def _restore_demo_staff_on_mock_login(
     db.commit()
 
 
+def _should_use_mock_login(code: str) -> bool:
+    """Resolve auth mode without silently enabling mock auth in production."""
+
+    if code in DEV_MOCK_CODES:
+        if not settings.dev_login_enabled:
+            raise HTTPException(status_code=403, detail="当前环境未启用开发登录")
+        return True
+
+    if _is_wechat_configured():
+        return False
+
+    if not settings.dev_login_enabled:
+        raise HTTPException(status_code=503, detail="微信登录服务尚未配置")
+    return True
+
+
 @router.post("/login", response_model=LoginResponse, summary="微信小程序一键登录")
 def login(request: LoginRequest, db: Session = Depends(get_db)):
     """
@@ -343,7 +359,7 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
       3. 都没有命中再创建新账号。
     """
     unionid: Optional[str] = None
-    use_mock_login = request.code in DEV_MOCK_CODES or not _is_wechat_configured()
+    use_mock_login = _should_use_mock_login(request.code)
 
     if use_mock_login:
         openid = _mock_openid_for_code(request.code)
@@ -475,7 +491,9 @@ def bind_mobile(
                 detail=f"获取手机号失败: {err}",
             )
     else:
-        # 本地未配置真实微信时：用 phoneCode 生成可区分的 mock 手机号，便于联调
+        if not settings.dev_login_enabled:
+            raise HTTPException(status_code=503, detail="微信手机号服务尚未配置")
+        # 仅开发联调：用 phoneCode 生成可区分的 mock 手机号。
         tail = "".join(ch for ch in request.phoneCode if ch.isalnum())[-8:].zfill(8)
         mobile = f"138{tail}"
 
@@ -494,7 +512,7 @@ def bind_mobile(
     return {
         "message": "手机号绑定成功",
         "mobile": mobile,
-        "isMockAuth": not _is_wechat_configured(),
+        "isMockAuth": not _is_wechat_configured() and settings.dev_login_enabled,
     }
 
 

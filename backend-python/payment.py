@@ -8,7 +8,7 @@ POST /api/payment/wechat/callback → 微信支付异步回调（更新订单状
 
 import hashlib
 import hmac
-import random
+import secrets
 import string
 import time
 import xml.etree.ElementTree as ET
@@ -44,7 +44,7 @@ _PAY_PLACEHOLDERS = frozenset({"", "your_mch_id", "your_pay_api_key"})
 # ---------------------------------------------------------------------------
 
 def _is_real_wechat_pay_configured() -> bool:
-    """占位符视为未配置，本地开发可走 mock + confirm-dev。"""
+    """Return whether all real WeChat Pay credentials are configured."""
     appid = (settings.WECHAT_APPID or "").strip()
     mch_id = (settings.WECHAT_PAY_MCH_ID or "").strip()
     pay_key = (settings.WECHAT_PAY_KEY or "").strip()
@@ -55,12 +55,27 @@ def _is_real_wechat_pay_configured() -> bool:
     )
 
 
+def _require_payment_provider_or_simulation() -> None:
+    """Fail before mutating an order when no permitted payment path exists."""
+
+    if _is_real_wechat_pay_configured() or settings.simulated_payment_enabled:
+        return
+    raise HTTPException(status_code=503, detail="支付服务暂不可用")
+
+
+def _require_simulated_payment_enabled() -> None:
+    if not settings.simulated_payment_enabled:
+        raise HTTPException(status_code=403, detail="当前环境未启用模拟支付")
+
+
 def _random_nonce(length: int = 16) -> str:
-    return "".join(random.choices(string.ascii_lowercase + string.digits, k=length))
+    alphabet = string.ascii_lowercase + string.digits
+    return "".join(secrets.choice(alphabet) for _ in range(length))
 
 
 def _mock_pay_params(out_trade_no: str, total_fee: int) -> dict:
     """返回 mock wx.requestPayment 参数，方便在未配置真实支付时前端联调流程。"""
+    _require_simulated_payment_enabled()
     nonce_str = _random_nonce()
     timestamp = str(int(time.time()))
     return {
@@ -77,7 +92,7 @@ def _mock_pay_params(out_trade_no: str, total_fee: int) -> dict:
 def _wechat_callback_signature_valid(values: dict[str, Optional[str]]) -> bool:
     """真实微信支付回调必须校验商户号、AppId 和 V2 签名。"""
     if not _is_real_wechat_pay_configured():
-        return True
+        return False
     if values.get("appid") != settings.WECHAT_APPID:
         return False
     if values.get("mch_id") != settings.WECHAT_PAY_MCH_ID:
@@ -257,7 +272,8 @@ def create_order(
     current_account: AppAccount = Depends(get_current_account),
     db: Session = Depends(get_db),
 ):
-    out_trade_no = f"LXXL{int(time.time())}{random.randint(1000, 9999)}"
+    _require_payment_provider_or_simulation()
+    out_trade_no = f"LXXL{int(time.time())}{secrets.randbelow(9000) + 1000}"
     order, _schedule = _create_pending_order(db, current_account, req, out_trade_no)
     db.commit()
     db.refresh(order)
@@ -375,6 +391,7 @@ def pay_existing_order(
     current_account: AppAccount = Depends(get_current_account),
     db: Session = Depends(get_db),
 ):
+    _require_payment_provider_or_simulation()
     order = _load_payable_order(db, current_account, req.order_id)
     try:
         _attach_order_agreement_if_needed(
@@ -418,6 +435,7 @@ def simulate_pay_existing_order(
     current_account: AppAccount = Depends(get_current_account),
     db: Session = Depends(get_db),
 ):
+    _require_simulated_payment_enabled()
     if _is_real_wechat_pay_configured():
         raise HTTPException(status_code=403, detail="已配置真实支付，请使用微信支付流程")
     order = _load_payable_order(db, current_account, req.order_id)
@@ -472,10 +490,11 @@ def simulate_pay(
     点击「确认支付」即完成：创建订单 → 标记 PAID → 时段 BOOKED → 写入咨询记录。
     未配置真实微信支付时可用；上线后请改用 create + 微信回调。
     """
+    _require_simulated_payment_enabled()
     if _is_real_wechat_pay_configured():
         raise HTTPException(status_code=403, detail="已配置真实支付，请使用微信支付流程")
 
-    out_trade_no = f"LXXL{int(time.time())}{random.randint(1000, 9999)}"
+    out_trade_no = f"LXXL{int(time.time())}{secrets.randbelow(9000) + 1000}"
     order, _schedule = _create_pending_order(db, current_account, req, out_trade_no)
 
     center_id = req.center_id
@@ -516,6 +535,7 @@ def confirm_dev_payment(
     db: Session = Depends(get_db),
 ):
     """未配置真实微信支付时，由后端确认到账并 BOOKED 时段（全员置灰）。"""
+    _require_simulated_payment_enabled()
     if _is_real_wechat_pay_configured():
         raise HTTPException(status_code=403, detail="已配置真实支付，不可使用开发确认接口")
 

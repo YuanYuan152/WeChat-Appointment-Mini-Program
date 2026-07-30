@@ -412,14 +412,28 @@ def send_subscribe_message(
                 synchronize_session=False,
             )
             db.commit()
-        logger.warning("subscribe send failed account=%s event=%s body=%s", account_id, event_key, body)
+        # Do not copy account identifiers or the provider response into stdout:
+        # both may contain personal or credential-related values.
+        logger.warning(
+            "wechat_subscribe_send_failed",
+            extra={
+                "event": "wechat_subscribe_send_failed",
+                "result": str(errcode),
+            },
+        )
         return {"ok": False, "reason": "wechat_error", "detail": body}
-    except Exception as e:
+    except Exception as exc:
         log.Status = "FAILED"
-        log.ErrorMessage = str(e)[:500]
+        log.ErrorMessage = str(exc)[:500]
         db.commit()
-        logger.exception("subscribe send exception")
-        return {"ok": False, "reason": "exception", "detail": str(e)}
+        logger.error(
+            "wechat_subscribe_send_exception",
+            extra={
+                "event": "wechat_subscribe_send_exception",
+                "result": type(exc).__name__,
+            },
+        )
+        return {"ok": False, "reason": "exception", "detail": str(exc)}
 
 
 def try_send(
@@ -432,5 +446,11 @@ def try_send(
     """业务钩子用：失败不影响主流程。"""
     try:
         send_subscribe_message(db, account_id, event_key, payload, **kwargs)
-    except Exception:
-        logger.exception("try_send subscribe failed event=%s account=%s", event_key, account_id)
+    except Exception as exc:
+        logger.error(
+            "wechat_subscribe_try_send_failed",
+            extra={
+                "event": "wechat_subscribe_try_send_failed",
+                "result": type(exc).__name__,
+            },
+        )
