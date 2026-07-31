@@ -1,7 +1,9 @@
 # 双环境部署与运维手册
 
-> 当前阶段仅完成仓库内配置、脚本和本地静态验证。本文中的任何服务器安装、
-> 容器启动、Nginx reload、证书签发、数据库备份或迁移都尚未执行。
+> 本文是可重复执行的运维手册，不代表服务器当前运行状态。截至
+> 2026-07-31，Docker 测试环境及测试日志已部署并验收，生产 Docker 环境尚未
+> 启动。当前服务器实况、运行版本和日志边界见
+> [DEPLOYMENT_STATUS.md](./DEPLOYMENT_STATUS.md)。
 
 ## 1. 环境与域名
 
@@ -16,6 +18,9 @@
 |---|---:|---:|---:|
 | 测试 | `127.0.0.1:13000` | `127.0.0.1:13001` | `127.0.0.1:18000` |
 | 生产 | `127.0.0.1:23000` | `127.0.0.1:23001` | `127.0.0.1:28000` |
+
+测试环境使用独立测试子域名，不使用 `/test` 路径前缀，避免 Next.js
+`basePath`、API 路由、Cookie、静态资源及微信回调路径相互污染。
 
 SQL Server 不发布宿主端口。测试和生产必须使用不同 Compose network、
 named volume、数据库名、密钥、上传目录和量表目录。
@@ -34,6 +39,7 @@ named volume、数据库名、密钥、上传目录和量表目录。
 - `rsyslog/30-mini-program.conf`：按环境和服务拆分应用日志。
 - `logrotate/mini-program`：日志按日轮转、日期后缀、压缩、保留 30 天。
 - `scripts/`：预检、部署、冒烟、回滚和 SQL Server 备份校验脚本。
+- `DEPLOYMENT_STATUS.md`：服务器当前部署、版本、日志与生产阻断状态快照。
 - `ARCHITECTURE_REVIEW.md`：架构边界、生产阻断项和后续加固建议。
 
 真实 `.env` 不得提交到 Git，服务器权限必须为 `0600`。
@@ -249,6 +255,9 @@ Nginx access log 不记录 query string；分享码、上传文件标识、数�
 
 ### 5.3 保留现有生产 vhost，仅接入测试环境
 
+截至 2026-07-31，目标服务器采用本节方案：只接管两个测试子域名，保留旧
+正式域名配置。
+
 服务器现有生产/legacy Nginx 配置仍在运行时，不安装四域配置，也不删除或
 禁用任何现有站点。按下面的替换顺序只接管测试域名：
 
@@ -283,13 +292,13 @@ legacy fixture，与两个 test-only 候选分别组合执行隔离 `nginx -t`�
 │   ├── migrate/application.log
 │   └── nginx/{api,eap,admin}.{access,error}.log
 ├── production/
-    ├── backend/application.log
-    ├── admin/application.log
-    ├── eap/application.log
-    ├── mssql/application.log
-    ├── db-init/application.log
-    ├── migrate/application.log
-    └── nginx/{api,eap,admin}.{access,error}.log
+│   ├── backend/application.log
+│   ├── admin/application.log
+│   ├── eap/application.log
+│   ├── mssql/application.log
+│   ├── db-init/application.log
+│   ├── migrate/application.log
+│   └── nginx/{api,eap,admin}.{access,error}.log
 └── system/
     └── nginx/{unknown-host,bootstrap-unknown-host}.{access,error}.log
 ```
@@ -303,7 +312,23 @@ Compose 的 syslog tag 必须精确为：
 
 安装 rsyslog 和 logrotate 片段前应创建上述目录，目录 `0750`，日志
 `0640`。轮转策略为 `daily + dateext + compress + rotate 30 + maxage 30`。
-Docker 自身还应配置有限大小的本地日志缓存，避免 rsyslog 异常时占满根盘。
+服务器 Compose 使用 syslog driver；后续还应配置 non-blocking 缓冲和容量
+上限，避免 rsyslog 短暂异常反向阻塞应用。本地开发覆盖层使用有限大小的
+`json-file` 日志。
+
+### 6.1 现网接入状态
+
+- 测试：rsyslog、logrotate 已安装并启用，Backend、Admin、EAP、SQL Server、
+  数据库任务和 Nginx 已产生实际日志。
+- 生产：production 路由与轮转规则已经安装，但 `mini-production` 未启动，
+  因此尚无 Docker 生产应用日志。
+- 正式域名现有旧 systemd 服务的 journal/Nginx 日志不属于新的生产 Docker
+  日志链路，生产切流时必须单独迁移和验收。
+
+Backend 输出结构化 JSON，包含 `environment`、`version`、`request_id`、
+`method`、路由模板、`status` 和 `duration_ms`。请求体、query string、
+Authorization、Cookie、密码、支付/微信密钥、问卷答案和咨询内容不得进入
+日志。其他容器的 stdout/stderr 由 Compose syslog tag 分类落盘。
 
 首次启动前先 review 再准备 bind mount 目录：
 
@@ -368,6 +393,13 @@ sudo ./deploy/scripts/prepare-data-dirs.sh \
 ## 8. 冒烟与验收
 
 ```bash
+# 当前已部署的测试环境
+./deploy/scripts/smoke.sh \
+  --environment test \
+  --public-ip 124.221.56.121 \
+  --run
+
+# 仅在生产暗部署和正式域名切换完成后
 ./deploy/scripts/smoke.sh \
   --environment all \
   --public-ip 124.221.56.121 \

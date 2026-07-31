@@ -1,10 +1,11 @@
 # 部署架构评审与上线门禁
 
 > 本文记录仓库内 Docker 双环境方案的边界、已完成验证和仍需产品或运维
-> 决策的事项。它不是“已经上线”的证明。当前所有运行验证都只使用本机
-> Docker 和本地隔离数据库，未连接或修改远程数据库。
+> 决策的事项。它不是“已经上线”的证明。截至 2026-07-31，测试 Docker
+> 环境已经部署并完成日志验收，生产 Docker 环境尚未启动。当前服务器实况见
+> [DEPLOYMENT_STATUS.md](./DEPLOYMENT_STATUS.md)。
 
-## 1. 当前方案
+## 1. 目标架构与已提交配置
 
 - 测试和生产分别使用 `mini-test`、`mini-production` Compose project。
 - 两个环境使用不同 network、SQL Server volume、数据库名、宿主持久目录、
@@ -16,7 +17,8 @@
   `no-new-privileges`，并设置健康检查和资源上限。
 - 普通应用启动、发布和回滚不执行建库或迁移。建库、通用 schema 迁移和
   量表受控迁移必须分别显式执行并单独批准。
-- 测试和生产日志按环境、服务和日期隔离，Docker 本地缓存也设置大小上限。
+- 测试和生产日志使用独立 syslog tag，并由宿主 rsyslog 按环境和服务落盘，
+  logrotate 按日轮转并保留 30 天。
 - 发布镜像使用 Git SHA 标签和 OCI revision label，不使用 `latest`。
 
 ## 2. 本地验证结论
@@ -33,6 +35,13 @@
   相关 API 返回 `200`。
 
 可复现命令和验收口径见 [OPERATIONS.md](./OPERATIONS.md)。
+
+### 2.1 服务器验证边界
+
+服务器已经验证 `mini-test` 的 Backend、Admin、EAP 和 SQL Server 健康，
+测试域名与测试日志链路正常。生产 Compose、生产日志路由和轮转规则已经具备，
+但 `mini-production` 尚未启动，正式域名仍由旧 systemd 服务承载。因此生产
+运行与生产日志不能标记为已验收。
 
 ## 3. 生产上线阻断项
 
@@ -92,6 +101,8 @@ sysadmin。该项涉及数据库 login/user/grant 变更，必须先获得数据
   告警。业务量增长后将测试与生产拆分到不同宿主机。
 - 日志只记录路由模板和必要状态；敏感静态、扫码和账户标识路由关闭 access
   log 或使用脱敏日志。日志目录最小权限并保留访问审计。
+- 为 syslog driver 增加 non-blocking 缓冲和容量上限，避免 rsyslog 短暂异常
+  反向阻塞应用日志写入。
 - 每月执行一次隔离恢复演练；`RESTORE VERIFYONLY` 不能替代真实恢复。
 - 冒烟后继续使用专用测试账户验收登录、量表分享、上传、代理预约和支付，
   不把只读 `/health` 当作业务可用性证明。
