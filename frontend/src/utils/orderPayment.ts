@@ -23,7 +23,16 @@ export interface PatientOrder {
   proxyAgreementLabel?: string | null
 }
 
+/** 上线真实支付：在 .env 设置 VITE_ENABLE_REAL_PAY=true */
 export const useRealWechatPay = () => import.meta.env.VITE_ENABLE_REAL_PAY === 'true'
+
+async function syncOrderAfterPay(orderId: number | string): Promise<void> {
+  try {
+    await httpV2.post(API_ENDPOINTS.payment.syncOrder, { order_id: Number(orderId) })
+  } catch {
+    /* 回调与轮询兜底，查单失败不阻断前端 */
+  }
+}
 
 export async function executeOrderPayment(orderId: number): Promise<{ ok: boolean; msg?: string }> {
   if (!useRealWechatPay()) {
@@ -58,9 +67,13 @@ export async function executeOrderPayment(orderId: number): Promise<{ ok: boolea
         timeStamp: payParams.timeStamp,
         nonceStr: payParams.nonceStr,
         package: payParams.package,
-        signType: payParams.signType,
+        signType: payParams.signType || 'RSA',
         paySign: payParams.paySign,
-        success: () => resolve({ ok: true }),
+        success: async () => {
+          // 官方指引：收银台返回后应查单确认
+          await syncOrderAfterPay(orderId)
+          resolve({ ok: true })
+        },
         fail: () => resolve({ ok: false, msg: '支付取消或失败' }),
       } as any)
     })

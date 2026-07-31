@@ -13,7 +13,8 @@ pip install -r requirements.txt
 ```bash
 # 将 .env.production 复制为 .env 并填写真实值
 copy .env.production .env
-# 编辑 .env 填写 WECHAT_APPID / WECHAT_SECRET / WECHAT_PAY_* / JWT_SECRET / BASE_URL 等
+# 编辑 .env 填写 WECHAT_APPID / WECHAT_SECRET / WECHAT_PAY_*（含 APIv3 密钥与证书路径）/ JWT_SECRET / BASE_URL 等
+# 支付敏感凭证只写在 .env，业务通过 wechat_pay_credentials 加载，详见 WECHAT_PAY_V3.md
 ```
 
 ## 3. 创建数据库表

@@ -54,14 +54,34 @@ def can_visitor_cancel(status: str) -> bool:
     return status in ("PENDING", "CONFIRMED", "ONGOING")
 
 
+def _refund_paid_order(order: AppOrder, *, reason: str) -> None:
+    """
+    已支付订单退款：
+    - 真实支付：申请退款并查单确认受理（PROCESSING/SUCCESS）后本地标 REFUNDED；
+      资金到账以退款结果回调 SUCCESS 再确认。
+    - 模拟：仅更新本地订单为 REFUNDED。
+    """
+    from wechat_pay_service import (
+        apply_local_refund,
+        refund_status_accepted,
+        request_wechat_refund,
+    )
+
+    result = request_wechat_refund(order, reason=reason)
+    if result is not None and not refund_status_accepted(result):
+        status = (result.get("status") or "未知")
+        raise ValueError(f"微信退款未受理成功（{status}），请稍后重试")
+    # 受理成功即本地关单，避免重复退款；终态由退款回调 SUCCESS 确认
+    apply_local_refund(order)
+
+
 def refund_order_for_counselor_leave(db: Session, consultation: AppConsultation) -> bool:
     """咨询师请假导致预约取消：已支付订单无条件全额退款。"""
     if not consultation.OrderId:
         return False
     order = db.query(AppOrder).filter(AppOrder.Id == consultation.OrderId).first()
     if order and order.Status == "PAID":
-        order.Status = "REFUNDED"
-        order.UpdatedAt = datetime.utcnow()
+        _refund_paid_order(order, reason="咨询师请假取消预约")
         return True
     return bool(order and order.Status == "REFUNDED")
 
@@ -94,8 +114,11 @@ def cancel_consultation_for_visitor(
     if consultation.OrderId:
         order = db.query(AppOrder).filter(AppOrder.Id == consultation.OrderId).first()
         if order and order.Status == "PAID":
-            order.Status = "REFUNDED" if refund else "CANCELLED"
-            order.UpdatedAt = datetime.utcnow()
+            if refund:
+                _refund_paid_order(order, reason="用户取消预约退款")
+            else:
+                order.Status = "CANCELLED"
+                order.UpdatedAt = datetime.utcnow()
 
     if consultation.ScheduleId:
         schedule = db.query(AppSchedule).filter(AppSchedule.Id == consultation.ScheduleId).first()

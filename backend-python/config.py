@@ -31,10 +31,16 @@ class Settings(BaseSettings):
     # 订阅消息跳转环境：developer | trial | formal
     WECHAT_MINIPROGRAM_STATE: str = "developer"
 
-    # WeChat Pay configuration (placeholders)
+    # WeChat Pay —— 真实值只写在 .env / .env.production，此处默认全部为空
     WECHAT_PAY_MCH_ID: str = ""
-    WECHAT_PAY_KEY: str = ""
-    WECHAT_PAY_NOTIFY_URL: str = "https://your-domain.com/api/payment/wechat/callback"
+    WECHAT_PAY_KEY: str = ""  # 旧 V2 API 密钥，V3 不使用
+    WECHAT_PAY_API_V3_KEY: str = ""
+    WECHAT_PAY_MCH_CERT_SERIAL: str = ""
+    WECHAT_PAY_MCH_PRIVATE_KEY_PATH: str = ""
+    WECHAT_PAY_PUBLIC_KEY_ID: str = ""
+    WECHAT_PAY_PUBLIC_KEY_PATH: str = ""
+    WECHAT_PAY_NOTIFY_URL: str = ""
+    WECHAT_PAY_REFUND_NOTIFY_URL: str = ""
 
     # Server base URL (used for building absolute file URLs)
     BASE_URL: str = "http://localhost:8000"
