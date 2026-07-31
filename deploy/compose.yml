@@ -82,7 +82,7 @@ services:
   db-init:
     profiles:
       - database-init
-    image: "mini-${APP_ENV:?APP_ENV is required}-backend:${IMAGE_TAG:-local}"
+    image: "${BACKEND_IMAGE:-mini-${APP_ENV:?APP_ENV is required}-backend:${IMAGE_TAG:-local}}"
     build:
       context: ..
       dockerfile: backend-python/Dockerfile
@@ -158,7 +158,7 @@ services:
   migrate:
     profiles:
       - database-init
-    image: "mini-${APP_ENV:?APP_ENV is required}-backend:${IMAGE_TAG:-local}"
+    image: "${BACKEND_IMAGE:-mini-${APP_ENV:?APP_ENV is required}-backend:${IMAGE_TAG:-local}}"
     build:
       context: ..
       dockerfile: backend-python/Dockerfile
@@ -195,7 +195,7 @@ services:
 
   backend:
     <<: *app-security
-    image: "mini-${APP_ENV:?APP_ENV is required}-backend:${IMAGE_TAG:-local}"
+    image: "${BACKEND_IMAGE:-mini-${APP_ENV:?APP_ENV is required}-backend:${IMAGE_TAG:-local}}"
     build:
       context: ..
       dockerfile: backend-python/Dockerfile
@@ -245,7 +245,7 @@ services:
 
   admin:
     <<: *app-security
-    image: "mini-${APP_ENV:?APP_ENV is required}-admin:${IMAGE_TAG:-local}"
+    image: "${ADMIN_IMAGE:-mini-${APP_ENV:?APP_ENV is required}-admin:${IMAGE_TAG:-local}}"
     build:
       context: ../admin-web
       dockerfile: Dockerfile
@@ -256,6 +256,7 @@ services:
         NEXT_PUBLIC_EAP_BASE_URL: "${EAP_PUBLIC_SITE_URL:?EAP_PUBLIC_SITE_URL is required}"
     environment:
       NODE_ENV: production
+      APP_VERSION: "${APP_VERSION:-unknown}"
       PORT: "3000"
       HOSTNAME: "0.0.0.0"
     depends_on:
@@ -282,7 +283,7 @@ services:
 
   eap:
     <<: *app-security
-    image: "mini-${APP_ENV:?APP_ENV is required}-eap:${IMAGE_TAG:-local}"
+    image: "${EAP_IMAGE:-mini-${APP_ENV:?APP_ENV is required}-eap:${IMAGE_TAG:-local}}"
     build:
       context: ../EAP_front_site
       dockerfile: Dockerfile
@@ -294,6 +295,7 @@ services:
         NEXT_PUBLIC_DATA_SOURCE: "${NEXT_PUBLIC_DATA_SOURCE:-mock}"
     environment:
       NODE_ENV: production
+      APP_VERSION: "${APP_VERSION:-unknown}"
       PORT: "3000"
       HOSTNAME: "0.0.0.0"
       API_INTERNAL_BASE_URL: "http://backend:8000"

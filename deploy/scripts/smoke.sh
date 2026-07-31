@@ -12,7 +12,8 @@ Default behavior is a dry-run. --run performs only unauthenticated HTTP/TLS
 checks; it does not submit forms or call authenticated business endpoints.
 
 Options:
-  --expected-version SHA  Require backend /healthz to report this APP_VERSION
+  --expected-version SHA  Require frontend /health and backend /healthz to
+                          report this APP_VERSION
   --public-ip ADDRESS     Verify the IP default vhost does not serve the app
 EOF
 }
@@ -78,6 +79,10 @@ if [[ "${run}" == false ]]; then
       printf '  检查 http://%s/ 为 301 到 HTTPS\n' "${domain}"
       printf '  检查 https://%s/ 返回 200、HTML 且包含对应站点标题\n' "${domain}"
       printf '  检查 https://%s/health 返回 200 且标识对应前端服务\n' "${domain}"
+      if [[ -n "${expected_version}" ]]; then
+        printf '  检查 https://%s/health 报告版本 %s\n' \
+          "${domain}" "${expected_version}"
+      fi
       printf '  检查 https://%s/healthz 返回 200 且后端状态、环境正确\n' "${domain}"
       if [[ -n "${expected_version}" ]]; then
         printf '  检查 https://%s/healthz 报告版本 %s\n' \
@@ -165,6 +170,12 @@ check_domain() {
       "\"service\"[[:space:]]*:[[:space:]]*\"${frontend_service}\"" \
       "${body_file}"; then
     warn "${domain} /health 未返回预期前端服务 ${frontend_service} 的健康 JSON"
+    failures=$((failures + 1))
+  elif [[ -n "${expected_version}" ]] \
+    && ! grep -Eq \
+      "\"version\"[[:space:]]*:[[:space:]]*\"${expected_version}\"" \
+      "${body_file}"; then
+    warn "${domain} /health 未报告预期版本 ${expected_version}"
     failures=$((failures + 1))
   fi
 

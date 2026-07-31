@@ -1,0 +1,521 @@
+name: Deploy test
+
+on:
+  push:
+    branches:
+      - dev
+
+# Keep the workflow token read-only by default. Only image jobs may publish
+# packages. Deployment receives package-read access solely so the restricted
+# host gateway can pull the exact digests; public verification gets no token.
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-test
+  # A running SSH deployment is a remote transaction. Let it finish or
+  # fail/rollback at the server freshness gate before the next run starts.
+  cancel-in-progress: false
+
+env:
+  DEPLOY_POLICY_VERSION: actions-test-v1
+  GHCR_IMAGE_PREFIX: ghcr.io/yuanyuan152/wechat-appointment-mini-program
+  SOURCE_REPOSITORY: https://github.com/YuanYuan152/WeChat-Appointment-Mini-Program
+  TEST_ADMIN_ORIGIN: https://test.admin.ji-psy.com
+  TEST_EAP_ORIGIN: https://test.eap.ji-psy.com
+
+jobs:
+  validate:
+    name: Validate release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      deploy_sha: ${{ steps.release.outputs.sha }}
+    steps:
+      - name: Check out release
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
+      - name: Resolve immutable release SHA
+        id: release
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          deploy_sha="$(git rev-parse --verify HEAD)"
+          [[ "${deploy_sha}" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "::error::Unable to resolve a full lowercase Git SHA"
+            exit 1
+          }
+          remote_dev_sha="$(
+            git ls-remote \
+              https://github.com/YuanYuan152/WeChat-Appointment-Mini-Program.git \
+              refs/heads/dev |
+              awk 'NR == 1 { print $1 }'
+          )"
+          [[ "${remote_dev_sha}" == "${deploy_sha}" ]] || {
+            echo "::error::This run is no longer the current dev commit"
+            exit 1
+          }
+          printf 'sha=%s\n' "${deploy_sha}" >>"${GITHUB_OUTPUT}"
+
+      - name: Validate deployment files
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ./deploy/scripts/validate-local.sh
+          git diff --check
+
+  build-backend:
+    name: Publish backend image
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest: ${{ steps.publish.outputs.digest }}
+    steps:
+      - name: Check out immutable release
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          ref: ${{ needs.validate.outputs.deploy_sha }}
+
+      - name: Build and publish backend image
+        id: publish
+        shell: bash
+        env:
+          DEPLOY_SHA: ${{ needs.validate.outputs.deploy_sha }}
+          GHCR_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          [[ "${DEPLOY_SHA}" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "::error::Invalid deployment SHA"
+            exit 1
+          }
+
+          image="${GHCR_IMAGE_PREFIX}/backend-test"
+          tag="${image}:${DEPLOY_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          metadata_file="$(mktemp)"
+          builder="mini-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          printf '%s' "${GHCR_TOKEN}" |
+            docker login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
+          trap 'rm -f -- "${metadata_file}"; docker buildx rm "${builder}" >/dev/null 2>&1 || true; docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
+          docker buildx create \
+            --driver docker-container \
+            --name "${builder}" \
+            --use
+          docker buildx inspect --bootstrap
+
+          docker buildx build \
+            --pull \
+            --push \
+            --provenance=true \
+            --metadata-file "${metadata_file}" \
+            --file backend-python/Dockerfile \
+            --tag "${tag}" \
+            --label "org.opencontainers.image.source=${SOURCE_REPOSITORY}" \
+            --build-arg "APP_VERSION=${DEPLOY_SHA}" \
+            --build-arg "VCS_REF=${DEPLOY_SHA}" \
+            .
+
+          digest="$(
+            jq -er \
+              '."containerimage.digest" | select(type == "string")' \
+              "${metadata_file}"
+          )"
+          [[ "${digest}" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+            echo "::error::Unable to resolve backend digest from this build"
+            exit 1
+          }
+          printf 'digest=%s\n' "${digest}" >>"${GITHUB_OUTPUT}"
+
+  build-admin:
+    name: Publish admin image
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest: ${{ steps.publish.outputs.digest }}
+    steps:
+      - name: Check out immutable release
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          ref: ${{ needs.validate.outputs.deploy_sha }}
+
+      - name: Build and publish admin image
+        id: publish
+        shell: bash
+        env:
+          DEPLOY_SHA: ${{ needs.validate.outputs.deploy_sha }}
+          GHCR_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          [[ "${DEPLOY_SHA}" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "::error::Invalid deployment SHA"
+            exit 1
+          }
+
+          image="${GHCR_IMAGE_PREFIX}/admin-test"
+          tag="${image}:${DEPLOY_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          metadata_file="$(mktemp)"
+          builder="mini-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          printf '%s' "${GHCR_TOKEN}" |
+            docker login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
+          trap 'rm -f -- "${metadata_file}"; docker buildx rm "${builder}" >/dev/null 2>&1 || true; docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
+          docker buildx create \
+            --driver docker-container \
+            --name "${builder}" \
+            --use
+          docker buildx inspect --bootstrap
+
+          docker buildx build \
+            --pull \
+            --push \
+            --provenance=true \
+            --metadata-file "${metadata_file}" \
+            --file admin-web/Dockerfile \
+            --tag "${tag}" \
+            --label "org.opencontainers.image.source=${SOURCE_REPOSITORY}" \
+            --build-arg "APP_VERSION=${DEPLOY_SHA}" \
+            --build-arg "VCS_REF=${DEPLOY_SHA}" \
+            --build-arg "NEXT_PUBLIC_API_BASE_URL=${TEST_ADMIN_ORIGIN}" \
+            --build-arg "NEXT_PUBLIC_EAP_BASE_URL=${TEST_EAP_ORIGIN}" \
+            admin-web
+
+          digest="$(
+            jq -er \
+              '."containerimage.digest" | select(type == "string")' \
+              "${metadata_file}"
+          )"
+          [[ "${digest}" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+            echo "::error::Unable to resolve admin digest from this build"
+            exit 1
+          }
+          printf 'digest=%s\n' "${digest}" >>"${GITHUB_OUTPUT}"
+
+  build-eap:
+    name: Publish EAP image
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest: ${{ steps.publish.outputs.digest }}
+    steps:
+      - name: Check out immutable release
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          ref: ${{ needs.validate.outputs.deploy_sha }}
+
+      - name: Build and publish EAP image
+        id: publish
+        shell: bash
+        env:
+          DEPLOY_SHA: ${{ needs.validate.outputs.deploy_sha }}
+          GHCR_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          [[ "${DEPLOY_SHA}" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "::error::Invalid deployment SHA"
+            exit 1
+          }
+
+          image="${GHCR_IMAGE_PREFIX}/eap-test"
+          tag="${image}:${DEPLOY_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          metadata_file="$(mktemp)"
+          builder="mini-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          printf '%s' "${GHCR_TOKEN}" |
+            docker login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
+          trap 'rm -f -- "${metadata_file}"; docker buildx rm "${builder}" >/dev/null 2>&1 || true; docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
+          docker buildx create \
+            --driver docker-container \
+            --name "${builder}" \
+            --use
+          docker buildx inspect --bootstrap
+
+          docker buildx build \
+            --pull \
+            --push \
+            --provenance=true \
+            --metadata-file "${metadata_file}" \
+            --file EAP_front_site/Dockerfile \
+            --tag "${tag}" \
+            --label "org.opencontainers.image.source=${SOURCE_REPOSITORY}" \
+            --build-arg "APP_VERSION=${DEPLOY_SHA}" \
+            --build-arg "VCS_REF=${DEPLOY_SHA}" \
+            --build-arg "NEXT_PUBLIC_API_BASE_URL=${TEST_EAP_ORIGIN}" \
+            --build-arg "NEXT_PUBLIC_SITE_URL=${TEST_EAP_ORIGIN}" \
+            --build-arg "NEXT_PUBLIC_DATA_SOURCE=mock" \
+            EAP_front_site
+
+          digest="$(
+            jq -er \
+              '."containerimage.digest" | select(type == "string")' \
+              "${metadata_file}"
+          )"
+          [[ "${digest}" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+            echo "::error::Unable to resolve EAP digest from this build"
+            exit 1
+          }
+          printf 'digest=%s\n' "${digest}" >>"${GITHUB_OUTPUT}"
+
+  deploy:
+    name: Deploy test environment
+    needs:
+      - validate
+      - build-backend
+      - build-admin
+      - build-eap
+    runs-on: ubuntu-latest
+    # The host gateway reserves up to 20 minutes for forward work and another
+    # 8 minutes for an orderly rollback after SIGTERM.
+    timeout-minutes: 35
+    permissions:
+      contents: read
+      id-token: write
+      packages: read
+    environment:
+      name: test
+      url: https://test.admin.ji-psy.com
+    steps:
+      - name: Deploy image digests through restricted SSH gateway
+        shell: bash
+        env:
+          DEPLOY_SHA: ${{ needs.validate.outputs.deploy_sha }}
+          BACKEND_DIGEST: ${{ needs.build-backend.outputs.digest }}
+          ADMIN_DIGEST: ${{ needs.build-admin.outputs.digest }}
+          EAP_DIGEST: ${{ needs.build-eap.outputs.digest }}
+          DEPLOY_ACTOR: ${{ github.actor }}
+          GHCR_TOKEN: ${{ github.token }}
+          TEST_DEPLOY_SSH_KEY: ${{ secrets.TEST_DEPLOY_SSH_KEY }}
+          OIDC_AUDIENCE: urn:ji-psy:test-deploy:124.221.56.121
+        run: |
+          set -Eeuo pipefail
+          deploy_host="124.221.56.121"
+          deploy_user="gha-test-deploy"
+          deploy_port="22"
+          deploy_known_host="124.221.56.121 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINewYzJuPGLWsMJMFiiFi3u6d8rHN2OvZfKE8uvM1lE+"
+
+          : "${TEST_DEPLOY_SSH_KEY:?TEST_DEPLOY_SSH_KEY secret is required}"
+          [[ "${DEPLOY_SHA}" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "::error::Invalid deployment SHA"
+            exit 1
+          }
+          for digest in "${BACKEND_DIGEST}" "${ADMIN_DIGEST}" "${EAP_DIGEST}"; do
+            [[ "${digest}" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+              echo "::error::Invalid deployment image digest"
+              exit 1
+            }
+          done
+          [[ "${GITHUB_RUN_ID}" =~ ^[0-9]+$ ]] || {
+            echo "::error::Invalid GitHub run ID"
+            exit 1
+          }
+          [[ "${GITHUB_RUN_ATTEMPT}" =~ ^[0-9]+$ ]] || {
+            echo "::error::Invalid GitHub run attempt"
+            exit 1
+          }
+          [[ "${DEPLOY_ACTOR}" =~ ^[A-Za-z0-9-]{1,39}$ ]] || {
+            echo "::error::Invalid GitHub actor"
+            exit 1
+          }
+          : "${GHCR_TOKEN:?GitHub package token is required}"
+          : "${ACTIONS_ID_TOKEN_REQUEST_URL:?GitHub OIDC request URL is required}"
+          : "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:?GitHub OIDC request token is required}"
+          [[ "${OIDC_AUDIENCE}" == \
+            "urn:ji-psy:test-deploy:124.221.56.121" ]] || {
+            echo "::error::Unexpected GitHub OIDC audience"
+            exit 1
+          }
+          [[ "${DEPLOY_POLICY_VERSION}" == "actions-test-v1" ]] || {
+            echo "::error::Unexpected host policy version"
+            exit 1
+          }
+
+          umask 077
+          install -d -m 700 "${HOME}/.ssh"
+          key_file="${HOME}/.ssh/test_deploy"
+          known_hosts_file="${HOME}/.ssh/known_hosts"
+          trap 'rm -f -- "${key_file}" "${known_hosts_file}"' EXIT
+
+          printf '%s\n' "${TEST_DEPLOY_SSH_KEY}" >"${key_file}"
+          printf '%s\n' "${deploy_known_host}" >"${known_hosts_file}"
+          chmod 600 "${key_file}" "${known_hosts_file}"
+
+          ssh-keygen -y -P '' -f "${key_file}" >/dev/null
+
+          ssh-keygen -F "${deploy_host}" \
+            -f "${known_hosts_file}" >/dev/null || {
+            echo "::error::Pinned known_hosts entry does not contain the deployment host"
+            exit 1
+          }
+
+          oidc_token="$(
+            curl \
+              --fail \
+              --silent \
+              --show-error \
+              --connect-timeout 5 \
+              --max-time 15 \
+              --header "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+              "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${OIDC_AUDIENCE}" |
+              jq -er '.value | select(type == "string")'
+          )"
+          [[ "${oidc_token}" =~ ^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$ ]] \
+            || {
+              echo "::error::GitHub OIDC provider returned an invalid JWT"
+              exit 1
+            }
+
+          printf '%s\n%s\n' "${GHCR_TOKEN}" "${oidc_token}" |
+            timeout --foreground --signal=TERM --kill-after=1m 31m \
+            ssh \
+              -T \
+              -i "${key_file}" \
+              -p "${deploy_port}" \
+              -o BatchMode=yes \
+              -o ClearAllForwardings=yes \
+              -o ConnectTimeout=15 \
+              -o ForwardAgent=no \
+              -o IdentitiesOnly=yes \
+              -o PermitLocalCommand=no \
+              -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile="${known_hosts_file}" \
+              -- "${deploy_user}@${deploy_host}" \
+              "deploy-test ${DEPLOY_POLICY_VERSION} ${DEPLOY_SHA} ${BACKEND_DIGEST} ${ADMIN_DIGEST} ${EAP_DIGEST} ${GITHUB_RUN_ID} ${GITHUB_RUN_ATTEMPT} ${DEPLOY_ACTOR}"
+          unset oidc_token
+
+  public-smoke:
+    name: Verify public test deployment
+    needs:
+      - validate
+      - deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions: {}
+    steps:
+      - name: Verify all deployed version endpoints
+        shell: bash
+        env:
+          DEPLOY_SHA: ${{ needs.validate.outputs.deploy_sha }}
+        run: |
+          set -Eeuo pipefail
+          [[ "${DEPLOY_SHA}" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "::error::Invalid deployment SHA"
+            exit 1
+          }
+
+          tmp_dir="$(mktemp -d)"
+          trap 'rm -rf -- "${tmp_dir}"' EXIT
+
+          verify_endpoint() {
+            local name="$1"
+            local url="$2"
+            local service="$3"
+            local expected_environment="${4:-}"
+            local body_file="${tmp_dir}/${name}.json"
+
+            for attempt in $(seq 1 24); do
+              if curl \
+                --fail \
+                --silent \
+                --show-error \
+                --connect-timeout 5 \
+                --max-time 15 \
+                --output "${body_file}" \
+                "${url}" &&
+                HEALTH_FILE="${body_file}" \
+                EXPECTED_SERVICE="${service}" \
+                EXPECTED_VERSION="${DEPLOY_SHA}" \
+                EXPECTED_ENVIRONMENT="${expected_environment}" \
+                python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          payload = json.loads(Path(os.environ["HEALTH_FILE"]).read_text())
+          assert payload.get("status") == "ok", payload
+          assert payload.get("service") == os.environ["EXPECTED_SERVICE"], payload
+          assert payload.get("version") == os.environ["EXPECTED_VERSION"], payload
+          expected_environment = os.environ["EXPECTED_ENVIRONMENT"]
+          if expected_environment:
+              assert payload.get("environment") == expected_environment, payload
+          PY
+              then
+                echo "${name} reports ${DEPLOY_SHA}"
+                return 0
+              fi
+
+              echo "Waiting for ${name} (${attempt}/24)"
+              sleep 5
+            done
+
+            echo "::error::${name} did not report expected version ${DEPLOY_SHA}"
+            if [[ -s "${body_file}" ]]; then
+              sed -n '1,20p' "${body_file}"
+            fi
+            return 1
+          }
+
+          verify_endpoint \
+            admin \
+            "${TEST_ADMIN_ORIGIN}/health" \
+            admin-web
+          verify_endpoint \
+            eap \
+            "${TEST_EAP_ORIGIN}/health" \
+            eap-front-site
+          verify_endpoint \
+            backend \
+            "${TEST_ADMIN_ORIGIN}/healthz" \
+            backend \
+            test
+          verify_endpoint \
+            backend-via-eap \
+            "${TEST_EAP_ORIGIN}/healthz" \
+            backend \
+            test
+
+          verify_access_gate() {
+            local name="$1"
+            local url="$2"
+            local status
+
+            status="$(
+              curl \
+                --silent \
+                --show-error \
+                --connect-timeout 5 \
+                --max-time 15 \
+                --output /dev/null \
+                --write-out '%{http_code}' \
+                "${url}" || true
+            )"
+            case "${status}" in
+              302|401|403)
+                echo "${name} public root is protected (HTTP ${status})"
+                ;;
+              *)
+                echo "::error::${name} public root must require the external test access gate; got HTTP ${status:-none}"
+                return 1
+                ;;
+            esac
+          }
+
+          verify_access_gate admin "${TEST_ADMIN_ORIGIN}/"
+          verify_access_gate eap "${TEST_EAP_ORIGIN}/"

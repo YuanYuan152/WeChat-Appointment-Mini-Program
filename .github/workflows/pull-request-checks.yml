@@ -1,0 +1,40 @@
+name: Pull request checks
+
+on:
+  pull_request:
+    branches:
+      - dev
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pull-request-checks-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  deployment-policy:
+    name: Deployment policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out proposed merge
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Validate repository deployment contracts
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          ./deploy/scripts/validate-local.sh
+          git diff --check
+
+      - name: Check Dockerfiles without publishing images
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          docker build --check --file backend-python/Dockerfile .
+          docker build --check --file admin-web/Dockerfile admin-web
+          docker build --check --file EAP_front_site/Dockerfile EAP_front_site

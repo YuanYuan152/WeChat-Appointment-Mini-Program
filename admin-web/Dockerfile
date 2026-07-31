@@ -13,10 +13,12 @@ RUN pnpm install --frozen-lockfile
 
 FROM dependencies AS builder
 
+ARG APP_VERSION=unknown
 ARG NEXT_PUBLIC_API_BASE_URL
 ARG NEXT_PUBLIC_EAP_BASE_URL
 
-ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL} \
+ENV APP_VERSION=${APP_VERSION} \
+    NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL} \
     NEXT_PUBLIC_EAP_BASE_URL=${NEXT_PUBLIC_EAP_BASE_URL}
 
 COPY . .
@@ -28,7 +30,8 @@ ARG APP_VERSION=unknown
 ARG VCS_REF=unknown
 
 LABEL org.opencontainers.image.version="${APP_VERSION}" \
-      org.opencontainers.image.revision="${VCS_REF}"
+      org.opencontainers.image.revision="${VCS_REF}" \
+      org.opencontainers.image.source="https://github.com/YuanYuan152/WeChat-Appointment-Mini-Program"
 
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \

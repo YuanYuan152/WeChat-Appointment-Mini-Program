@@ -71,6 +71,12 @@ override_file="${override_file:-$(default_compose_override_for "${environment}")
 env_file="${env_file:-$(default_env_file_for "${environment}")}"
 project_name="$(project_name_for "${environment}")"
 
+if [[ "${environment}" == "test" && "${apply}" == true ]] \
+  && { [[ -f /etc/mini-program-actions/test-actions-only ]] \
+    || [[ -f /etc/mini-program-actions/test-actions-deploying ]]; }; then
+  die "测试环境正在由 GitHub Actions 发布或已被接管；手工回滚已被主机策略禁用"
+fi
+
 compose=(
   docker compose
   --project-name "${project_name}"

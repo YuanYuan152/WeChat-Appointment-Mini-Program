@@ -117,6 +117,11 @@ project_name="$(project_name_for "${environment}")"
 
 [[ "${initialize_database}" == false || "${include_database}" == true ]] \
   || die "--initialize-database 必须与 --include-database 一起使用"
+if [[ "${environment}" == "test" && "${apply}" == true ]] \
+  && { [[ -f /etc/mini-program-actions/test-actions-only ]] \
+    || [[ -f /etc/mini-program-actions/test-actions-deploying ]]; }; then
+  die "测试环境正在由 GitHub Actions 发布或已被接管；手工部署、迁移和数据库操作已被主机策略禁用"
+fi
 
 compose=(
   docker compose

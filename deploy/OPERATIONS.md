@@ -2,7 +2,8 @@
 
 > 本文是可重复执行的运维手册，不代表服务器当前运行状态。截至
 > 2026-07-31，Docker 测试环境及测试日志已部署并验收，生产 Docker 环境尚未
-> 启动。当前服务器实况、运行版本和日志边界见
+> 启动；GitHub Actions 测试发布链路正在切换中，首次成功运行前仍按“待接管”
+> 处理。当前服务器实况、运行版本和日志边界见
 > [DEPLOYMENT_STATUS.md](./DEPLOYMENT_STATUS.md)。
 
 ## 1. 环境与域名
@@ -39,6 +40,13 @@ named volume、数据库名、密钥、上传目录和量表目录。
 - `rsyslog/30-mini-program.conf`：按环境和服务拆分应用日志。
 - `logrotate/mini-program`：日志按日轮转、日期后缀、压缩、保留 30 天。
 - `scripts/`：预检、部署、冒烟、回滚和 SQL Server 备份校验脚本。
+- `actions-test/`：安装到服务器 root-owned 固定目录的 test-only Compose 和
+  本机健康检查，不包含 SQL Server 服务。
+- `scripts/actions-test-gateway.sh`：forced-command 使用的固定 digest 发布入口。
+- `scripts/install-actions-test-host.sh`：默认 dry-run 的服务器一次性初始化。
+- `.github/workflows/deploy-test.yml`：`dev` 测试环境自动构建、发布与烟测。
+- `ACTIONS_DEPLOYMENT.md`：GitHub Environment、服务端固定入口、权限边界和
+  首次接管验收步骤。
 - `DEPLOYMENT_STATUS.md`：服务器当前部署、版本、日志与生产阻断状态快照。
 - `ARCHITECTURE_REVIEW.md`：架构边界、生产阻断项和后续加固建议。
 
@@ -47,11 +55,15 @@ named volume、数据库名、密钥、上传目录和量表目录。
 ### 2.1 分支与发布基线
 
 - 功能和部署配置都先在当前功能分支形成可审查提交，再合入 `dev`。
-- 服务器只部署已经合入的 `dev` 精确 Git SHA，不直接部署未合并的功能分支。
+- GitHub Actions 只构建和部署已经合入的 `dev` 精确 Git SHA，不直接部署
+  未合并的功能分支。
 - `linux_dev` 是历史上承载过服务器专用改动的分支，已经与 `dev` 分叉；
   它不再作为发布基线，也不得整分支反向合入 `dev`。仍有价值的历史改动应逐项
   审查后在当前配置中重新实现。
 - 镜像标签使用该次 `dev` 提交 SHA，禁止 `latest`，以便定位和回滚。
+- 测试环境日常发布由 GitHub Actions 使用 GHCR 不可变 digest 完成；手工
+  `deploy.sh` 仅保留为有记录、有审批的 break-glass 工具。完整配置见
+  [ACTIONS_DEPLOYMENT.md](./ACTIONS_DEPLOYMENT.md)。
 
 ## 3. 本地验证
 
@@ -339,7 +351,58 @@ sudo ./deploy/scripts/prepare-data-dirs.sh \
 
 ## 7. 部署
 
-普通应用发布默认不触碰数据库：
+### 7.1 测试环境日常发布
+
+`dev` 的普通应用发布由 `.github/workflows/deploy-test.yml` 自动完成：
+
+- 构建 Backend、Admin、EAP 并推送 GHCR。
+- 服务器固定入口只接收完整 Git SHA 和三个不可变 digest。
+- 只更新 `backend/admin/eap`，不更新或重建 SQL Server。
+- 发布后独立验证两个测试域名和三个版本健康端点。
+- 失败时回滚到上一份已验证 digest manifest。
+- 拉取前要求 Docker 存储至少剩余 10 GiB，拉取后至少剩余 5 GiB。
+- 固定清理器只处理三个 `*-test` GHCR 仓库中未受 current、上一版本、最近
+  8 份历史清单和运行中容器保护的 digest；禁止任何全局 prune。
+
+GitHub Environment 和服务器一次性初始化、密钥边界、首次接管检查见
+[ACTIONS_DEPLOYMENT.md](./ACTIONS_DEPLOYMENT.md)。首次 workflow 全链路成功
+前，不得把现有手工部署状态表述为已经由 Actions 接管。
+
+只读查看测试镜像清理候选：
+
+```bash
+sudo /etc/mini-program-actions/test/cleanup-test-images.sh
+```
+
+人工确认后使用 `--apply`。它与部署使用同一把锁，不会枚举或删除生产镜像。
+
+### 7.2 Break-glass 固定版本恢复
+
+Actions 自动回滚失败、current 对应容器漂移或需要恢复上一版本时，只使用
+安装在 root-owned 固定 bundle 的恢复脚本：
+
+```bash
+# 使用 current manifest 和本地镜像重建当前版本
+sudo /etc/mini-program-actions/test/restore-test-release.sh --current
+
+# 使用最新 previous-*.env 和本地镜像恢复上一版本
+sudo /etc/mini-program-actions/test/restore-test-release.sh --previous
+```
+
+脚本只接受上述两个参数，与网关共用测试部署锁，严格解析 root-owned
+manifest，只接受三个固定 `*-test` GHCR digest 或
+`mini-test-{backend,admin,eap}:<40SHA>` legacy 引用。它不会登录、拉取或
+构建镜像；本地镜像不存在或 OCI revision/version/source、RepoDigest
+不匹配时会在替换容器前失败。成功后保存原 current 到历史并原子更新
+current，失败则尝试恢复原 current。全过程只更新三个应用服务，并执行本机和
+公网 smoke，不操作数据库容器、network、volume 或数据目录。`--previous`
+会跳过失败 Actions 尝试留下的、与 current 完全相同的 baseline，选择最新
+一份真正不同的历史版本。
+
+### 7.3 Break-glass 手工应用发布
+
+以下命令不再是测试环境日常发布入口，只用于 GitHub Actions 不可用且已经
+记录原因、版本和回滚点的紧急操作。普通应用发布默认不触碰数据库：
 
 ```bash
 ./deploy/scripts/deploy.sh --environment test --build
@@ -350,6 +413,8 @@ sudo ./deploy/scripts/prepare-data-dirs.sh \
 `--apply` 需要输入 `DEPLOY test` 或 `DEPLOY production`。脚本使用
 `up --no-deps --no-build backend admin eap`，防止普通应用发版隐式创建、
 替换或初始化数据库，也防止回滚时拿当前源码伪造旧标签。
+
+### 7.4 数据库操作
 
 数据库相关选项都有第二次独立确认：
 

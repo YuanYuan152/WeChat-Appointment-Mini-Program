@@ -2,7 +2,9 @@
 
 > 本文记录仓库内 Docker 双环境方案的边界、已完成验证和仍需产品或运维
 > 决策的事项。它不是“已经上线”的证明。截至 2026-07-31，测试 Docker
-> 环境已经部署并完成日志验收，生产 Docker 环境尚未启动。当前服务器实况见
+> 环境已经部署并完成日志验收，生产 Docker 环境尚未启动。测试环境的
+> GitHub Actions 发布替代方案正在接入，首次 workflow 全链路成功前不视为
+> 已接管。当前服务器实况见
 > [DEPLOYMENT_STATUS.md](./DEPLOYMENT_STATUS.md)。
 
 ## 1. 目标架构与已提交配置
@@ -20,6 +22,12 @@
 - 测试和生产日志使用独立 syslog tag，并由宿主 rsyslog 按环境和服务落盘，
   logrotate 按日轮转并保留 30 天。
 - 发布镜像使用 Git SHA 标签和 OCI revision label，不使用 `latest`。
+- 测试环境目标发布链路由 GitHub-hosted runner 构建三类镜像、推送 GHCR，
+  再按不可变 digest 调用服务器 root-owned 固定入口。入口不执行 release
+  提交里的脚本、Compose 或 Dockerfile。
+- 固定入口在拉取前后执行 Docker 存储 fail-closed 水位检查（10 GiB/5 GiB）；
+  保守清理器仅操作三个测试 GHCR 仓库，并保护 current、上一版本、最近历史
+  和运行中容器，不使用任何全局 prune。
 
 ## 2. 本地验证结论
 
@@ -42,6 +50,28 @@
 测试域名与测试日志链路正常。生产 Compose、生产日志路由和轮转规则已经具备，
 但 `mini-production` 尚未启动，正式域名仍由旧 systemd 服务承载。因此生产
 运行与生产日志不能标记为已验收。
+
+### 2.2 GitHub Actions 接管边界
+
+仓库侧已增加测试发布 workflow、digest 镜像引用、固定 gateway 约束和静态
+校验。它们只有在以下事项全部完成后才能标记为“已接管”：
+
+1. 当前 repository secret + 固定 `test` Environment OIDC 双因子链路完成
+   技术验收；仓库 owner 再把私钥迁至 Environment secret，并配置仅 `dev`、
+   reviewer 和 `dev` branch protection。
+2. 专用、无 Docker/sudo 组权限的 SSH 用户和 forced command 完成安装。
+3. root-owned 固定 bundle、测试 `.env`、GHCR 拉取身份及首个回滚 manifest
+   完成初始化。
+4. 从 `dev` 完成一次 build、push、deploy、public smoke 全绿运行。
+5. 现场确认三个容器 revision 与 workflow SHA 一致，且数据库容器、volume、
+   数据和生产服务均未发生变化。
+6. 现场确认 Docker 空间水位门禁及测试镜像清理 dry-run 不包含生产镜像。
+7. 公网测试域名已启用 VPN/IP allowlist/Cloudflare Access/独立 Cookie gate
+   等不覆盖应用 Bearer `Authorization` 的外层访问控制，且曾明文传递的
+   服务器密码已轮换、密码 SSH/root 密码登录已停用。
+
+详细接入和验收口径见
+[ACTIONS_DEPLOYMENT.md](./ACTIONS_DEPLOYMENT.md)。
 
 ## 3. 生产上线阻断项
 
@@ -72,12 +102,14 @@
 
 量表封面等公开素材应与受保护文件分目录、分权限存储；历史敏感文件需要迁移。
 
-### 3.3 运行时数据库仍使用 `sa`
+### 3.3 生产运行时数据库账户尚未验收
 
-建库和迁移可使用高权限账户，Backend 运行时不得长期使用 SQL Server
-sysadmin。该项涉及数据库 login/user/grant 变更，必须先获得数据库变更批准。
-建议创建环境独立的应用账户，只授予当前数据库所需 DML 和存储过程权限，
-并把 `MSSQL_SA_PASSWORD` 与 `DB_PASSWORD` 分开。
+当前测试环境已经以 `mini_test_app` 作为 Backend 运行账户并保持健康；本次
+Actions 变更不会创建 login/user、改授权或接触数据库服务。生产 Docker
+环境尚未启动，生产运行账户仍需在上线前独立验收。建库和迁移可使用高权限
+账户，但 Backend 运行时不得长期使用 SQL Server sysadmin。若生产仍需创建
+环境独立账户或调整 grant，属于数据库变更，必须先取得单独批准，并保持
+`MSSQL_SA_PASSWORD` 与 `DB_PASSWORD` 分离。
 
 ### 3.4 历史凭据必须轮换
 
@@ -106,6 +138,12 @@ sysadmin。该项涉及数据库 login/user/grant 变更，必须先获得数据
 - 每月执行一次隔离恢复演练；`RESTORE VERIFYONLY` 不能替代真实恢复。
 - 冒烟后继续使用专用测试账户验收登录、量表分享、上传、代理预约和支付，
   不把只读 `/health` 当作业务可用性证明。
+- 为 `dev` 配置 branch protection，并为 GitHub `test` Environment 配置
+  reviewer；Actions 接管后定期轮换部署密钥，并审计 build/deploy job 的
+  `packages: write/read` 最小权限。服务器不保存长期 GHCR token。
+- 测试与生产目前同宿主，root-owned gateway 只能降低发布密钥和仓库代码的
+  权限面，不能消除宿主内核、Docker daemon、磁盘耗尽等共同故障域。生产上线
+  前仍建议拆分宿主或至少拆分独立节点。
 
 ## 5. 发布分支约定
 

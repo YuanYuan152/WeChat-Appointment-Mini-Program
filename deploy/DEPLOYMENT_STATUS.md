@@ -13,15 +13,16 @@
 |---|---|---|
 | Docker 双环境代码 | 已完成 | `mini-test`、`mini-production` 的网络、端口、数据库卷、数据目录和日志标签相互隔离 |
 | 测试环境 Docker | 已部署并验收 | Backend、Admin、EAP、SQL Server 共 4 个容器健康 |
+| 测试 GitHub Actions 发布 | 待首次接管验收 | 仓库侧正在加入 GHCR digest 构建和固定 gateway；首次 workflow 全绿前，现有运行环境仍视为手工发布 |
 | 生产环境 Docker | 未部署 | 服务器上不存在运行中的 `mini-production` |
 | 测试环境日志 | 已接入并验收 | 应用、SQL Server 与 Nginx 均有实际日志 |
 | 生产环境日志 | 配置已安装，未产生 | 生产容器尚未启动，因此不能宣称生产日志已经验收 |
 | 架构与运维文档 | 已完成 | 包含部署、预检、备份、回滚、日志和生产阻断项 |
 
 仓库远程 `dev` 在本次核实时为
-`1d22af8f876bf5225bac11e4d56062d42ad13583`。测试环境运行镜像版本为
+`21204bedc035aa3dc8b30847a35d583c12582200`。测试环境运行镜像版本为
 `24a95af56676b08bb8430709f5e8014f5aa2f8b6`；两者之间仅有部署预检脚本的
-`mawk` 兼容修复，不包含应用业务代码变更。
+`mawk` 兼容修复和后续文档提交，不代表新 SHA 已经部署。
 
 ## 2. 环境实况
 
@@ -107,7 +108,31 @@
 由于生产容器尚未启动，目前没有生产应用日志。这是“配置完成、运行未接入”，
 不是日志故障。生产部署后必须实际验证日志写入、日期轮转、压缩和保留策略。
 
-## 4. 已进入 `dev` 的部署能力
+## 4. GitHub Actions 接管状态
+
+本次变更的目标是由 GitHub Actions 直接负责测试环境普通应用发布：
+
+- `dev` 构建 Backend、Admin、EAP 并推送 GHCR。
+- 使用三个不可变镜像 digest，而不是在服务器 Git 目录中构建。
+- 专用 SSH key 只能进入 root-owned 固定 gateway；repository secret 当前还
+  必须叠加固定 `test` Environment OIDC 验签、远程 `dev` freshness 和防重放。
+- gateway 只更新三个应用容器，拒绝数据库 profile 和数据库操作参数。
+- 发布失败恢复上一份已验证 digest，成功后执行公共只读冒烟。
+- gateway 在拉取前后要求 Docker 存储至少保留 10 GiB/5 GiB；清理范围固定为
+  三个测试 GHCR 仓库，并保护 current、上一版本及最近历史。
+
+截至本快照，GitHub API 显示仓库尚无 `test` Environment，部署私钥仍是
+repository secret；Environment secret、仅 `dev` deployment policy、
+reviewer 和 `dev` branch protection 需要仓库 owner 配置。服务器专用
+用户/forced command、root-owned OIDC/bundle、外层测试访问
+控制、服务器密码轮换与首次成功 workflow 也尚未完成现场验收。因此当前测试
+环境虽然健康，仍不能表述为“已经由 GitHub Actions 接管”。生产环境未包含
+在本次 Actions 变更中，也没有因此启动、停止或修改。
+
+接管步骤和验收口径见
+[ACTIONS_DEPLOYMENT.md](./ACTIONS_DEPLOYMENT.md)。
+
+## 5. 已进入 `dev` 的部署能力
 
 - 测试/生产独立 Compose project、network、volume、数据库名、端口和目录。
 - 容器非 root 运行、删除多余 capabilities、`no-new-privileges`、健康检查、
@@ -117,30 +142,33 @@
 - Nginx 四域 HTTPS、安全响应头、默认拒绝未知 Host/SNI 和日志脱敏。
 - 后端结构化请求日志和 `X-Request-ID` 关联。
 
-## 5. 未完成与生产阻断项
+## 6. 未完成与生产阻断项
 
 生产切流前仍需处理：
 
-1. 真实短信供应商尚未接入，`SMS_MOCK=false` 时验证码接口会安全返回 `503`。
-2. 协议签名和沟通截图仍可能通过 `/static/uploads/<uuid>` 匿名读取。
-3. 生产 Admin 尚无可用的正式登录方式，开发角色登录在生产配置中被禁用。
-4. 正式微信支付配置和回调需要真实凭据与端到端验收。
-5. 生产数据库需要确认“迁移现有数据”或“建立空库”，并单独批准建库、迁移和
+1. 测试 Actions 首次接管验收尚未完成。
+2. 真实短信供应商尚未接入，`SMS_MOCK=false` 时验证码接口会安全返回 `503`。
+3. 协议签名和沟通截图仍可能通过 `/static/uploads/<uuid>` 匿名读取。
+4. 生产 Admin 尚无可用的正式登录方式，开发角色登录在生产配置中被禁用。
+5. 正式微信支付配置和回调需要真实凭据与端到端验收。
+6. 生产数据库需要确认“迁移现有数据”或“建立空库”，并单独批准建库、迁移和
    最小权限运行账户变更。
-6. Secrets 尚未迁移到 Docker secrets 或宿主只读 secret files。
-7. 登录、验证码、上传和支付的限流、宿主资源告警、自动异机备份及真实恢复
+7. Secrets 尚未迁移到 Docker secrets 或宿主只读 secret files。
+8. 登录、验证码、上传和支付的限流、宿主资源告警、自动异机备份及真实恢复
    演练尚未完成。
-8. syslog driver 尚未配置 non-blocking 缓冲；rsyslog 异常时的日志写入韧性
+9. syslog driver 尚未配置 non-blocking 缓冲；rsyslog 异常时的日志写入韧性
    仍需加强。
-9. 旧部署部分环境文件权限仍为 `0664`，生产部署前必须收紧为 `0600`、核对
+10. 旧部署部分环境文件权限仍为 `0664`，生产部署前必须收紧为 `0600`、核对
    属主，并评估其中历史凭据是否需要轮换。
 
 完整风险分析见 [ARCHITECTURE_REVIEW.md](./ARCHITECTURE_REVIEW.md)。
 
-## 6. 状态更新规则
+## 7. 状态更新规则
 
 - 服务器只部署已经合入 `dev` 的精确 SHA。
 - 每次部署后记录 Git SHA、镜像版本、环境、数据库操作、冒烟结果和回滚点。
+- Actions 只有在 workflow 全绿并完成现场 SHA/digest/数据库未变检查后才能
+  标记为已接管。
 - “配置存在”与“服务器实际运行并验收”必须分开表述。
 - 生产日志只有在 `mini-production` 启动并完成写入、轮转检查后才能标记为
   “已接入并验收”。
