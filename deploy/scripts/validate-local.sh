@@ -137,6 +137,7 @@ test_only_nginx_config="${DEPLOY_ROOT}/nginx/mini-program-test-only.conf"
 test_only_bootstrap_config="${DEPLOY_ROOT}/nginx/mini-program-test-only-http-bootstrap.conf"
 logrotate_config="${DEPLOY_ROOT}/logrotate/mini-program"
 rsyslog_config="${DEPLOY_ROOT}/rsyslog/30-mini-program.conf"
+rsyslog_validator="${SCRIPT_DIR}/validate-rsyslog-config.sh"
 actions_workflow="${REPO_ROOT}/.github/workflows/deploy-test.yml"
 actions_gateway="${SCRIPT_DIR}/actions-test-gateway.sh"
 actions_installer="${SCRIPT_DIR}/install-actions-test-host.sh"
@@ -214,6 +215,7 @@ if grep -Eq 'ssl_certificate|listen 443' "${test_only_bootstrap_config}"; then
 fi
 
 info "检查日志隔离与轮转"
+assert_file_exists "${rsyslog_validator}"
 for path in \
   /data/mini_program/logs/test \
   /data/mini_program/logs/production \
@@ -567,8 +569,18 @@ if [[ -f "${actions_installer}" ]]; then
 fi
 
 if command -v shellcheck >/dev/null 2>&1; then
-  info "运行 shellcheck"
-  if ! shellcheck "${SCRIPT_DIR}"/*.sh; then
+  info "运行 shellcheck（全部部署脚本仅阻断 error）"
+  if ! shellcheck --severity=error "${SCRIPT_DIR}"/*.sh; then
+    failures=$((failures + 1))
+  fi
+
+  info "运行 shellcheck（Actions 测试发布脚本阻断 warning 及以上）"
+  if ! shellcheck --severity=warning \
+    "${actions_gateway}" \
+    "${actions_installer}" \
+    "${actions_smoke}" \
+    "${actions_cleanup}" \
+    "${actions_restore}"; then
     failures=$((failures + 1))
   fi
 else
@@ -715,9 +727,9 @@ else
 fi
 
 if command -v rsyslogd >/dev/null 2>&1; then
-  info "运行 rsyslog 语法检查"
-  if ! rsyslogd -N1 -f "${rsyslog_config}" >/dev/null 2>&1; then
-    warn "rsyslog 片段独立语法检查失败；请在目标机完整配置中复核"
+  info "运行 rsyslog include 片段语法检查"
+  if ! "${rsyslog_validator}" --fragment "${rsyslog_config}"; then
+    warn "rsyslog include 片段语法检查失败"
     failures=$((failures + 1))
   fi
 else

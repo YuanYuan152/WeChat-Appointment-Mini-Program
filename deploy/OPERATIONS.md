@@ -324,6 +324,9 @@ Compose 的 syslog tag 必须精确为：
 
 安装 rsyslog 和 logrotate 片段前应创建上述目录，目录 `0750`，日志
 `0640`。轮转策略为 `daily + dateext + compress + rotate 30 + maxage 30`。
+仓库内的 include 片段使用 `validate-rsyslog-config.sh --fragment` 做可移植
+语法检查；安装到服务器后仍必须使用 `sudo rsyslogd -N1` 校验完整生效配置，
+通过后才能重载 rsyslog。
 服务器 Compose 使用 syslog driver；后续还应配置 non-blocking 缓冲和容量
 上限，避免 rsyslog 短暂异常反向阻塞应用。本地开发覆盖层使用有限大小的
 `json-file` 日志。

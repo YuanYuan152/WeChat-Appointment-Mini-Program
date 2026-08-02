@@ -52,6 +52,14 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# `nginx -t` opens configured listeners on some Linux builds. Keep this
+# isolated validation usable by unprivileged CI users by mapping the public
+# ports to high, non-privileged ports in the throwaway copies only. The
+# repository candidates are still checked in their original form by the
+# semantic checks above, and are never modified in place.
+validation_http_port=18080
+validation_https_port=18443
+
 openssl req \
   -x509 \
   -newkey rsa:2048 \
@@ -69,15 +77,15 @@ openssl req \
 legacy_fixture="${tmp_dir}/legacy-vhosts.conf"
 cat >"${legacy_fixture}" <<EOF
 server {
-    listen 80 default_server;
-    listen [::]:80 default_server;
+    listen ${validation_http_port} default_server;
+    listen [::]:${validation_http_port} default_server;
     server_name legacy.invalid eap.ji-psy.com admin.ji-psy.com;
     return 204;
 }
 
 server {
-    listen 443 ssl default_server;
-    listen [::]:443 ssl default_server;
+    listen ${validation_https_port} ssl default_server;
+    listen [::]:${validation_https_port} ssl default_server;
     server_name legacy.invalid eap.ji-psy.com admin.ji-psy.com;
     ssl_certificate ${tmp_dir}/candidate.crt;
     ssl_certificate_key ${tmp_dir}/candidate.key;
@@ -224,6 +232,10 @@ prepare_isolated_candidate() {
   escaped_tmp="${tmp_dir//\//\\/}"
 
   sed \
+    -e "s#^\\([[:space:]]*listen[[:space:]][[:space:]]*\\)80\\([[:space:];]\\)#\\1${validation_http_port}\\2#" \
+    -e "s#^\\([[:space:]]*listen[[:space:]][[:space:]]*\\)\\[::\\]:80\\([[:space:];]\\)#\\1[::]:${validation_http_port}\\2#" \
+    -e "s#^\\([[:space:]]*listen[[:space:]][[:space:]]*\\)443\\([[:space:];]\\)#\\1${validation_https_port}\\2#" \
+    -e "s#^\\([[:space:]]*listen[[:space:]][[:space:]]*\\)\\[::\\]:443\\([[:space:];]\\)#\\1[::]:${validation_https_port}\\2#" \
     -e "s#^[[:space:]]*ssl_certificate[[:space:]].*;#    ssl_certificate ${escaped_tmp}\\/candidate.crt;#" \
     -e "s#^[[:space:]]*ssl_certificate_key[[:space:]].*;#    ssl_certificate_key ${escaped_tmp}\\/candidate.key;#" \
     -e '/^[[:space:]]*include[[:space:]][[:space:]]*\/etc\/letsencrypt\/.*;[[:space:]]*$/d' \
