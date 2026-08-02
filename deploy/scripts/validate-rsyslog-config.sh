@@ -67,17 +67,28 @@ fi
 if [[ "${mode}" == "fragment" ]]; then
   validation_level="2"
   validation_label="include fragment"
-  # Ubuntu's rsyslogd may drop to the syslog account even during validation.
-  # GitHub's checkout parents are not traversable by that account, so validate
-  # an exact, world-readable throwaway copy in /tmp rather than weakening the
-  # repository permissions.
-  validation_path="$(mktemp "${TMPDIR:-/tmp}/mini-rsyslog-fragment.XXXXXX.conf")"
-  cleanup() {
-    rm -f -- "${validation_path}"
-  }
-  trap cleanup EXIT
-  cp -- "${config_path}" "${validation_path}"
-  chmod 0644 "${validation_path}"
+  if [[ "${use_sudo}" == true ]]; then
+    # Ubuntu confines rsyslogd to its configuration directories. GitHub-hosted
+    # runners are disposable, so place an exact temporary copy under the
+    # allowed include directory and remove it without reloading the service.
+    validation_path="$(
+      sudo -n -- mktemp /etc/rsyslog.d/99-mini-program-validation.XXXXXX.conf
+    )"
+    cleanup() {
+      sudo -n -- rm -f -- "${validation_path}"
+    }
+    trap cleanup EXIT
+    sudo -n -- install -o root -g root -m 0644 \
+      -- "${config_path}" "${validation_path}"
+  else
+    validation_path="$(mktemp "${TMPDIR:-/tmp}/mini-rsyslog-fragment.XXXXXX.conf")"
+    cleanup() {
+      rm -f -- "${validation_path}"
+    }
+    trap cleanup EXIT
+    cp -- "${config_path}" "${validation_path}"
+    chmod 0644 "${validation_path}"
+  fi
 else
   validation_level="1"
   validation_label="full configuration"
