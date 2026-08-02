@@ -271,6 +271,7 @@ for candidate in "${candidates[@]}"; do
     '}' \
     '' \
     'http {' \
+    "    access_log ${tmp_dir}/${candidate_name}.root-access.log;" \
     "    include ${isolated_candidate};" >"${wrapper}"
 
   if [[ "${is_test_only}" == true ]]; then

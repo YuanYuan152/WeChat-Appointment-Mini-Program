@@ -54,13 +54,25 @@ command -v rsyslogd >/dev/null 2>&1 || die "rsyslogd is not installed"
 if [[ "${mode}" == "fragment" ]]; then
   validation_level="2"
   validation_label="include fragment"
+  # Ubuntu's rsyslogd may drop to the syslog account even during validation.
+  # GitHub's checkout parents are not traversable by that account, so validate
+  # an exact, world-readable throwaway copy in /tmp rather than weakening the
+  # repository permissions.
+  validation_path="$(mktemp "${TMPDIR:-/tmp}/mini-rsyslog-fragment.XXXXXX.conf")"
+  cleanup() {
+    rm -f -- "${validation_path}"
+  }
+  trap cleanup EXIT
+  cp -- "${config_path}" "${validation_path}"
+  chmod 0644 "${validation_path}"
 else
   validation_level="1"
   validation_label="full configuration"
+  validation_path="${config_path}"
 fi
 
 if ! validation_output="$(
-  rsyslogd "-N${validation_level}" -f "${config_path}" 2>&1
+  rsyslogd "-N${validation_level}" -f "${validation_path}" 2>&1
 )"; then
   printf 'rsyslog %s validation failed: %s\n' \
     "${validation_label}" "${config_path}" >&2
