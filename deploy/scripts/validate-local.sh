@@ -728,7 +728,14 @@ fi
 
 if command -v rsyslogd >/dev/null 2>&1; then
   info "运行 rsyslog include 片段语法检查"
-  if ! "${rsyslog_validator}" --fragment "${rsyslog_config}"; then
+  rsyslog_validation_args=(--fragment "${rsyslog_config}")
+  if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
+    # Ubuntu's packaged rsyslogd is confined and cannot read a GitHub
+    # workspace as the runner user. Validation mode is read-only, and hosted
+    # runners provide passwordless sudo for this exact system-level check.
+    rsyslog_validation_args=(--sudo "${rsyslog_validation_args[@]}")
+  fi
+  if ! "${rsyslog_validator}" "${rsyslog_validation_args[@]}"; then
     warn "rsyslog include 片段语法检查失败"
     failures=$((failures + 1))
   fi

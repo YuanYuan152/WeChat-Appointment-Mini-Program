@@ -5,8 +5,8 @@ set -Eeuo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  validate-rsyslog-config.sh --fragment PATH
-  validate-rsyslog-config.sh --full-config PATH
+  validate-rsyslog-config.sh [--sudo] --fragment PATH
+  validate-rsyslog-config.sh [--sudo] --full-config PATH
 
 Validate an rsyslog include fragment with -N2, or an installed main
 configuration with the stricter -N1 full-configuration check.
@@ -20,6 +20,7 @@ die() {
 
 mode=""
 config_path=""
+use_sudo=false
 
 while (($# > 0)); do
   case "$1" in
@@ -37,6 +38,10 @@ while (($# > 0)); do
       config_path="$2"
       shift 2
       ;;
+    --sudo)
+      use_sudo=true
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -49,7 +54,15 @@ done
 
 [[ -n "${mode}" ]] || die "a validation mode is required"
 [[ -f "${config_path}" ]] || die "rsyslog configuration not found: ${config_path}"
-command -v rsyslogd >/dev/null 2>&1 || die "rsyslogd is not installed"
+rsyslog_bin="$(command -v rsyslogd || true)"
+[[ -n "${rsyslog_bin}" ]] || die "rsyslogd is not installed"
+
+validator=("${rsyslog_bin}")
+if [[ "${use_sudo}" == true ]]; then
+  command -v sudo >/dev/null 2>&1 || die "sudo is required for this validation"
+  sudo -n true >/dev/null 2>&1 || die "passwordless sudo is required for this validation"
+  validator=(sudo -n -- "${rsyslog_bin}")
+fi
 
 if [[ "${mode}" == "fragment" ]]; then
   validation_level="2"
@@ -72,7 +85,7 @@ else
 fi
 
 if ! validation_output="$(
-  rsyslogd "-N${validation_level}" -f "${validation_path}" 2>&1
+  "${validator[@]}" "-N${validation_level}" -f "${validation_path}" 2>&1
 )"; then
   printf 'rsyslog %s validation failed: %s\n' \
     "${validation_label}" "${config_path}" >&2
