@@ -43,18 +43,23 @@ class WeChatPayV3Error(Exception):
         self.body = body
 
 
+def _strip_pem_comments(data: bytes) -> bytes:
+    """去掉以 # 开头的说明行，保留 PEM 正文。"""
+    lines = [
+        line
+        for line in data.splitlines()
+        if line.strip() and not line.lstrip().startswith(b"#")
+    ]
+    return b"\n".join(lines) + b"\n"
+
+
 def _load_private_key(path: str):
-    data = Path(path).read_bytes()
-    # 跳过我们写入的 MOCK 注释行
-    if data.startswith(b"#"):
-        data = b"\n".join(data.splitlines()[1:])
+    data = _strip_pem_comments(Path(path).read_bytes())
     return serialization.load_pem_private_key(data, password=None)
 
 
 def _load_public_key(path: str):
-    data = Path(path).read_bytes()
-    if data.startswith(b"#"):
-        data = b"\n".join(data.splitlines()[1:])
+    data = _strip_pem_comments(Path(path).read_bytes())
     return serialization.load_pem_public_key(data)
 
 
