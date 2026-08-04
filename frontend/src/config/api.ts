@@ -77,12 +77,13 @@ export const API_ENDPOINTS = {
     deactivateAccount: '/api/mini/auth/account/deactivate',
   },
 
-  // 支付
+  // 支付（APIv3：create/pay-order → requestPayment → sync-order / 回调）
   payment: {
     createOrder: '/api/payment/wechat/create',
     simulatePay: '/api/payment/wechat/simulate-pay',
     simulatePayOrder: '/api/payment/wechat/simulate-pay-order',
     payOrder: '/api/payment/wechat/pay-order',
+    syncOrder: '/api/payment/wechat/sync-order',
     attachOrderAgreement: '/api/payment/wechat/attach-order-agreement',
     confirmDev: '/api/payment/wechat/confirm-dev',
   },

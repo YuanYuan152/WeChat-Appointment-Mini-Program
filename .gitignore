@@ -77,16 +77,12 @@ frontend/.env.local
 # Next.js 本地编译产物（不要提交；含被占用的 .next/dev/lock）
 **/.next/
 admin-web/node_modules/
-admin-web/.env*
-!admin-web/.env.example
+admin-web/.env
+admin-web/.env.local
 EAP_front_site/node_modules/
-EAP_front_site/.env*
-!EAP_front_site/.env.example
-backend-python/.env*
-!backend-python/.env.example
+EAP_front_site/.env
+EAP_front_site/.env.local
 backend-python/runtime/
-deploy/env/*.env
-!deploy/env/*.env.example
 
 # Visual Studio 2015/2017 cache/options directory
 .vs/
@@ -432,4 +428,6 @@ lxxl/Web.config
 backend-python/.env
 frontend/.env
 frontend/.env.production
+# 微信支付证书/私钥（只保留 README，勿提交真实 pem）
+backend-python/certs/wechat_pay/*.pem
 .pnpm-store/

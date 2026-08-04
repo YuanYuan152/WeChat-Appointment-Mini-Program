@@ -1457,7 +1457,7 @@ const confirmPayment = async () => {
     return
   }
 
-  // 上线真实支付：create → wx.requestPayment → 微信回调到账
+  // 上线真实支付：create → requestPayment → sync-order 查单 → 回调兜底
   uni.showLoading({ title: '正在下单...' })
   try {
     const orderRes = await httpV2.post(API_ENDPOINTS.payment.createOrder, payBody)
@@ -1478,9 +1478,16 @@ const confirmPayment = async () => {
       timeStamp: payParams.timeStamp,
       nonceStr: payParams.nonceStr,
       package: payParams.package,
-      signType: payParams.signType,
+      signType: payParams.signType || 'RSA',
       paySign: payParams.paySign,
-      success: () => { finishOk(orderId) },
+      success: async () => {
+        if (orderId) {
+          try {
+            await httpV2.post(API_ENDPOINTS.payment.syncOrder, { order_id: Number(orderId) })
+          } catch { /* 回调与结果页轮询兜底 */ }
+        }
+        finishOk(orderId)
+      },
       fail: () => uni.showToast({ title: '支付取消或失败', icon: 'none' }),
     } as any)
   } catch (e: any) {

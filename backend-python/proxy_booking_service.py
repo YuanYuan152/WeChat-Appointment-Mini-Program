@@ -63,6 +63,9 @@ def _proxy_order_created_schedule(order: AppOrder) -> bool:
 def _cancel_pending_proxy_order(db: Session, order: AppOrder) -> None:
     if order.Status != "PENDING":
         return
+    from wechat_pay_service import close_wechat_order_quietly
+
+    close_wechat_order_quietly(order.OutTradeNo)
     order.Status = "CANCELLED"
     order.UpdatedAt = _now()
     if not order.SlotId:

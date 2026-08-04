@@ -1,4 +1,5 @@
 import asyncio
+import json
 import unittest
 from datetime import datetime
 from unittest.mock import patch
@@ -72,7 +73,7 @@ from payment_service import (
     _assert_proxy_order_binding_current,
     complete_paid_order,
 )
-from payment import _wechat_callback_signature_valid, payment_callback
+from payment import payment_callback
 from room_assignment import assign_room_for_payment
 
 
@@ -1356,13 +1357,23 @@ class CounselorSafetyTests(BackendServiceTestCase):
             )
 
     def test_wechat_callback_returns_fail_when_business_validation_fails(self):
+        class FakeHeaders(dict):
+            def get(self, key, default=""):
+                return dict.get(self, key, default)
+
         class FakeRequest:
+            headers = FakeHeaders()
+
             async def body(self):
-                return (
-                    b"<xml><return_code>SUCCESS</return_code>"
-                    b"<result_code>SUCCESS</result_code>"
-                    b"<out_trade_no>PROXY-FAIL</out_trade_no></xml>"
-                )
+                # 模拟模式：明文 JSON 回调
+                return json.dumps(
+                    {
+                        "trade_state": "SUCCESS",
+                        "out_trade_no": "PROXY-FAIL",
+                        "transaction_id": "TX-FAIL",
+                        "amount": {"total": 60000},
+                    }
+                ).encode("utf-8")
 
         class FakeQuery:
             def filter(self, *_args):
@@ -1392,36 +1403,59 @@ class CounselorSafetyTests(BackendServiceTestCase):
                 self.committed = True
 
         fake_db = FakeDb()
-        with (
-            patch("payment._wechat_callback_signature_valid", return_value=True),
-            patch(
-                "payment.complete_paid_order",
-                side_effect=ValueError("指定咨询室已被占用"),
-            ),
-        ):
+        with patch("payment.complete_paid_order", side_effect=ValueError("指定咨询室已被占用")):
             response = asyncio.run(payment_callback(FakeRequest(), db=fake_db))
 
-        self.assertIn(b"<return_code>FAIL</return_code>", response.body)
+        # 业务校验失败仍应答 204，避免微信无限重推；订单保持 PENDING 供查单/人工处理
+        self.assertEqual(response.status_code, 204)
         self.assertTrue(fake_db.rolled_back)
         self.assertFalse(fake_db.committed)
 
     def test_real_wechat_callback_rejects_invalid_signature(self):
-        values = {
-            "appid": "wx-test",
-            "mch_id": "mch-test",
-            "return_code": "SUCCESS",
-            "result_code": "SUCCESS",
-            "out_trade_no": "TEST-ORDER",
-            "total_fee": "60000",
-            "sign": "INVALID",
-        }
+        class FakeHeaders(dict):
+            def get(self, key, default=""):
+                return dict.get(self, key, default)
+
+        class FakeRequest:
+            headers = FakeHeaders(
+                {
+                    "Wechatpay-Timestamp": "1710000000",
+                    "Wechatpay-Nonce": "nonce",
+                    "Wechatpay-Signature": "invalid",
+                    "Wechatpay-Serial": "PUB_KEY_ID_test",
+                }
+            )
+
+            async def body(self):
+                return b'{"id":"evt"}'
+
+        class FakeClient:
+            def verify_notification_signature(self, **_kwargs):
+                return False
+
         with (
-            patch("payment._is_real_wechat_pay_configured", return_value=True),
-            patch("payment.settings.WECHAT_APPID", "wx-test"),
-            patch("payment.settings.WECHAT_PAY_MCH_ID", "mch-test"),
-            patch("payment.settings.WECHAT_PAY_KEY", "secret"),
+            patch("payment.is_real_wechat_pay_configured", return_value=True),
+            patch("payment.get_wechat_pay_client", return_value=FakeClient()),
         ):
-            self.assertFalse(_wechat_callback_signature_valid(values))
+            response = asyncio.run(payment_callback(FakeRequest(), db=object()))
+            self.assertEqual(response.status_code, 401)
+            payload = json.loads(response.body.decode("utf-8"))
+            self.assertEqual(payload["code"], "FAIL")
+            self.assertIn("签名", payload["message"])
+
+    def test_wechat_signtest_probe_is_rejected(self):
+        from wechat_pay_v3 import WeChatPayV3Client
+
+        client = WeChatPayV3Client.__new__(WeChatPayV3Client)
+        ok = WeChatPayV3Client.verify_notification_signature(
+            client,
+            timestamp="1",
+            nonce="n",
+            body="{}",
+            signature="WECHATPAY/SIGNTEST/abc",
+            serial="PUB_KEY_ID_x",
+        )
+        self.assertFalse(ok)
 
 
 class BatchDefaultShareTests(BackendServiceTestCase):

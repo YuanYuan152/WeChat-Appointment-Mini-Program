@@ -59,6 +59,11 @@ const statusDesc = computed(() => {
 
 const pollOrderStatus = async (orderId: string) => {
   try {
+    // 官方指引：收银台返回后先查单再展示结果
+    await httpV2.post(API_ENDPOINTS.payment.syncOrder, { order_id: Number(orderId) })
+  } catch { /* ignore */ }
+
+  try {
     const res = await httpV2.get<any>(API_ENDPOINTS.patient.orderDetail(orderId), undefined, { showLoading: false })
     if (res.code === 0 && res.data) {
       orderInfo.value = res.data
