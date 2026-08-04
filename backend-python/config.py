@@ -1,9 +1,30 @@
 import urllib.parse
+from typing import Literal
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+_DEVELOPMENT_CORS_ORIGINS = ",".join(
+    (
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+    )
+)
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+
+    # Runtime mode and deployment switches.
+    APP_ENV: Literal["development", "test", "production"] = "development"
+    APP_VERSION: str = "2.0"
+    ALLOW_DEV_LOGIN: bool = True
+    AUTO_MIGRATE_SCHEMA: bool = True
+    CORS_ALLOWED_ORIGINS: str = _DEVELOPMENT_CORS_ORIGINS
+    ENABLE_API_DOCS: bool = True
+    LOG_LEVEL: str = "INFO"
 
     # Database configuration
     # 默认使用 Windows 集成认证连接本机 SQLEXPRESS。
@@ -73,6 +94,19 @@ class Settings(BaseSettings):
     SMS_CODE_LENGTH: int = 6
     SMS_CODE_TTL_MINUTES: int = 5
     SMS_RESEND_INTERVAL_SECONDS: int = 1
+
+    @property
+    def dev_login_enabled(self) -> bool:
+        return self.APP_ENV != "production" and self.ALLOW_DEV_LOGIN
+
+    @property
+    def cors_allowed_origins(self) -> list[str]:
+        origins: list[str] = []
+        for item in self.CORS_ALLOWED_ORIGINS.split(","):
+            normalized = item.strip().rstrip("/")
+            if normalized and normalized not in origins:
+                origins.append(normalized)
+        return origins
 
     @property
     def database_url(self) -> str:

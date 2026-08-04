@@ -137,94 +137,104 @@
 
     <view v-if="showAdd" class="modal-overlay" @touchmove.stop.prevent>
       <view class="modal-card" @tap.stop>
-        <text class="modal-title">代理预约</text>
-        <text class="modal-sub">选择预约中心、日期、开始时间与咨询室，推送后{{ proxyOrderPayHint }}</text>
+        <scroll-view
+          class="modal-scroll"
+          scroll-y
+          enhanced
+          :show-scrollbar="false"
+          @touchmove.stop
+        >
+          <view class="modal-content">
+            <text class="modal-title">代理预约</text>
+            <text class="modal-sub">选择预约中心、日期、开始时间与咨询室，推送后{{ proxyOrderPayHint }}</text>
 
-        <view class="form-item">
-          <text class="form-label">预约中心</text>
-          <view class="center-row">
-            <view
-              v-for="c in centers"
-              :key="c.id"
-              class="center-chip"
-              :class="{ active: form.centerId === c.id }"
-              @tap="onCenterChange(c.id)"
-            >
-              {{ c.name }}
+            <view class="form-item">
+              <text class="form-label">预约中心</text>
+              <view class="center-row">
+                <view
+                  v-for="c in centers"
+                  :key="c.id"
+                  class="center-chip"
+                  :class="{ active: form.centerId === c.id }"
+                  @tap="onCenterChange(c.id)"
+                >
+                  {{ c.name }}
+                </view>
+              </view>
+            </view>
+
+            <view class="form-item">
+              <text class="form-label">日期</text>
+              <picker mode="date" :value="form.date" :start="minDate" :end="maxDate" @change="onDateChange">
+                <view class="picker-row">{{ form.date || '选择日期' }}</view>
+              </picker>
+            </view>
+
+            <view class="form-item">
+              <text class="form-label">开始时间</text>
+              <view v-if="slotOptionsLoading" class="picker-row">加载时段...</view>
+              <view v-else class="slot-grid">
+                <view
+                  v-for="ts in timeSlotOptions"
+                  :key="ts.key"
+                  class="slot-chip"
+                  :class="{
+                    active: form.slotKey === ts.key,
+                    disabled: !ts.selectable,
+                    available: ts.selectable && !!ts.existingAvailableScheduleId,
+                  }"
+                  @tap="selectTimeSlot(ts)"
+                >
+                  {{ ts.key }}{{ slotChipHint(ts) }}
+                </view>
+              </view>
+              <text class="form-hint">支持整点和半点开始；咨询 50 分钟，随后预留 10 分钟打扫</text>
+            </view>
+
+            <view v-if="selectedTimeSlot" class="duration-card">
+              <text class="duration-title">本次预约</text>
+              <text class="duration-text">{{ bookingDurationText(selectedTimeSlot.startTime) }}</text>
+            </view>
+
+            <view v-if="!isVideoCenterSelected" class="form-item">
+              <text class="form-label">咨询室（必选）</text>
+              <view class="center-row">
+                <view
+                  v-for="room in roomOptionsForSlot"
+                  :key="room.roomId"
+                  class="center-chip"
+                  :class="{
+                    active: form.roomId === room.roomId,
+                    disabled: !room.available,
+                  }"
+                  @tap="selectRoom(room)"
+                >
+                  {{ room.roomName }}{{ room.occupiedByOther ? '（已占用）' : '' }}
+                </view>
+              </view>
+            </view>
+            <view v-else class="form-item">
+              <text class="video-hint">视频咨询无需选择咨询室</text>
+            </view>
+
+            <view v-if="!patientContractSigned" class="form-item">
+              <text class="form-label">签约协议 <text class="required">*</text></text>
+              <text class="form-hint">未签约来访需选择推送的协议，来访支付前将按此协议签署</text>
+              <view class="center-row agreement-row">
+                <view
+                  class="center-chip"
+                  :class="{ active: form.agreementIsAdult === true }"
+                  @tap="form.agreementIsAdult = true"
+                >{{ tongxinAgreementTitle }}</view>
+                <view
+                  class="center-chip"
+                  :class="{ active: form.agreementIsAdult === false }"
+                  @tap="form.agreementIsAdult = false"
+                >{{ yangfanAgreementTitle }}</view>
+              </view>
             </view>
           </view>
-        </view>
-
-        <view class="form-item">
-          <text class="form-label">日期</text>
-          <picker mode="date" :value="form.date" :start="minDate" :end="maxDate" @change="onDateChange">
-            <view class="picker-row">{{ form.date || '选择日期' }}</view>
-          </picker>
-        </view>
-
-        <view class="form-item">
-          <text class="form-label">开始时间</text>
-          <view v-if="slotOptionsLoading" class="picker-row">加载时段...</view>
-          <view v-else class="slot-grid">
-            <view
-              v-for="ts in timeSlotOptions"
-              :key="ts.key"
-              class="slot-chip"
-              :class="{
-                active: form.slotKey === ts.key,
-                disabled: !ts.selectable,
-                available: ts.selectable && !!ts.existingAvailableScheduleId,
-              }"
-              @tap="selectTimeSlot(ts)"
-            >
-              {{ ts.key }}{{ slotChipHint(ts) }}
-            </view>
-          </view>
-          <text class="form-hint">支持整点和半点开始；咨询 50 分钟，随后预留 10 分钟打扫</text>
-        </view>
-
-        <view v-if="selectedTimeSlot" class="duration-card">
-          <text class="duration-title">本次预约</text>
-          <text class="duration-text">{{ bookingDurationText(selectedTimeSlot.startTime) }}</text>
-        </view>
-
-        <view v-if="!isVideoCenterSelected" class="form-item">
-          <text class="form-label">咨询室（必选）</text>
-          <view class="center-row">
-            <view
-              v-for="room in roomOptionsForSlot"
-              :key="room.roomId"
-              class="center-chip"
-              :class="{
-                active: form.roomId === room.roomId,
-                disabled: !room.available,
-              }"
-              @tap="selectRoom(room)"
-            >
-              {{ room.roomName }}{{ room.occupiedByOther ? '（已占用）' : '' }}
-            </view>
-          </view>
-        </view>
-        <view v-else class="form-item">
-          <text class="video-hint">视频咨询无需选择咨询室</text>
-        </view>
-
-        <view v-if="!patientContractSigned" class="form-item">
-          <text class="form-label">签约协议 <text class="required">*</text></text>
-          <text class="form-hint">未签约来访需选择推送的协议，来访支付前将按此协议签署</text>
-          <view class="center-row agreement-row">
-            <view
-              class="center-chip"
-              :class="{ active: form.agreementIsAdult === true }"
-              @tap="form.agreementIsAdult = true"
-            >{{ tongxinAgreementTitle }}</view>
-            <view
-              class="center-chip"
-              :class="{ active: form.agreementIsAdult === false }"
-              @tap="form.agreementIsAdult = false"
-            >{{ yangfanAgreementTitle }}</view>
-          </view>
-        </view>
+        </scroll-view>
 
         <view class="modal-btns">
           <button class="modal-btn cancel" @tap="showAdd = false">取消</button>
@@ -1031,11 +1041,25 @@ onLoad(async (opts) => {
 
 .modal-card {
   width: 100%;
+  height: 85vh;
   max-height: 85vh;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  overflow: hidden;
   background: #fff;
   border-radius: 32rpx 32rpx 0 0;
-  padding: 36rpx 32rpx calc(32rpx + env(safe-area-inset-bottom));
+}
+
+.modal-scroll {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+
+.modal-content {
+  padding: 36rpx 32rpx 24rpx;
+  box-sizing: border-box;
 }
 
 .modal-title {
@@ -1170,9 +1194,12 @@ onLoad(async (opts) => {
 }
 
 .modal-btns {
+  flex-shrink: 0;
   display: flex;
   gap: 16rpx;
-  margin-top: 24rpx;
+  padding: 20rpx 32rpx calc(20rpx + env(safe-area-inset-bottom));
+  border-top: 1rpx solid #E5E7EB;
+  background: #fff;
 }
 
 .modal-btn {
