@@ -1,4 +1,4 @@
-name: Deploy test
+name: Deploy dev
 
 on:
   push:
@@ -12,17 +12,17 @@ permissions:
   contents: read
 
 concurrency:
-  group: deploy-test
+  group: deploy-dev
   # A running SSH deployment is a remote transaction. Let it finish or
   # fail/rollback at the server freshness gate before the next run starts.
   cancel-in-progress: false
 
 env:
-  DEPLOY_POLICY_VERSION: actions-test-v1
+  DEPLOY_POLICY_VERSION: actions-dev-v1
   GHCR_IMAGE_PREFIX: ghcr.io/yuanyuan152/wechat-appointment-mini-program
   SOURCE_REPOSITORY: https://github.com/YuanYuan152/WeChat-Appointment-Mini-Program
-  TEST_ADMIN_ORIGIN: https://test.admin.ji-psy.com
-  TEST_EAP_ORIGIN: https://test.eap.ji-psy.com
+  DEV_ADMIN_ORIGIN: https://dev.admin.ji-psy.com
+  DEV_EAP_ORIGIN: https://dev.eap.ji-psy.com
 
 jobs:
   validate:
@@ -99,7 +99,7 @@ jobs:
             exit 1
           }
 
-          image="${GHCR_IMAGE_PREFIX}/backend-test"
+          image="${GHCR_IMAGE_PREFIX}/backend-dev"
           tag="${image}:${DEPLOY_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           metadata_file="$(mktemp)"
           builder="mini-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
@@ -166,7 +166,7 @@ jobs:
             exit 1
           }
 
-          image="${GHCR_IMAGE_PREFIX}/admin-test"
+          image="${GHCR_IMAGE_PREFIX}/admin-dev"
           tag="${image}:${DEPLOY_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           metadata_file="$(mktemp)"
           builder="mini-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
@@ -189,8 +189,8 @@ jobs:
             --label "org.opencontainers.image.source=${SOURCE_REPOSITORY}" \
             --build-arg "APP_VERSION=${DEPLOY_SHA}" \
             --build-arg "VCS_REF=${DEPLOY_SHA}" \
-            --build-arg "NEXT_PUBLIC_API_BASE_URL=${TEST_ADMIN_ORIGIN}" \
-            --build-arg "NEXT_PUBLIC_EAP_BASE_URL=${TEST_EAP_ORIGIN}" \
+            --build-arg "NEXT_PUBLIC_API_BASE_URL=${DEV_ADMIN_ORIGIN}" \
+            --build-arg "NEXT_PUBLIC_EAP_BASE_URL=${DEV_EAP_ORIGIN}" \
             admin-web
 
           digest="$(
@@ -235,7 +235,7 @@ jobs:
             exit 1
           }
 
-          image="${GHCR_IMAGE_PREFIX}/eap-test"
+          image="${GHCR_IMAGE_PREFIX}/eap-dev"
           tag="${image}:${DEPLOY_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           metadata_file="$(mktemp)"
           builder="mini-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
@@ -258,8 +258,8 @@ jobs:
             --label "org.opencontainers.image.source=${SOURCE_REPOSITORY}" \
             --build-arg "APP_VERSION=${DEPLOY_SHA}" \
             --build-arg "VCS_REF=${DEPLOY_SHA}" \
-            --build-arg "NEXT_PUBLIC_API_BASE_URL=${TEST_EAP_ORIGIN}" \
-            --build-arg "NEXT_PUBLIC_SITE_URL=${TEST_EAP_ORIGIN}" \
+            --build-arg "NEXT_PUBLIC_API_BASE_URL=${DEV_EAP_ORIGIN}" \
+            --build-arg "NEXT_PUBLIC_SITE_URL=${DEV_EAP_ORIGIN}" \
             --build-arg "NEXT_PUBLIC_DATA_SOURCE=mock" \
             EAP_front_site
 
@@ -275,7 +275,7 @@ jobs:
           printf 'digest=%s\n' "${digest}" >>"${GITHUB_OUTPUT}"
 
   deploy:
-    name: Deploy test environment
+    name: Deploy dev environment
     needs:
       - validate
       - build-backend
@@ -290,8 +290,8 @@ jobs:
       id-token: write
       packages: read
     environment:
-      name: test
-      url: https://test.admin.ji-psy.com
+      name: dev
+      url: https://dev.admin.ji-psy.com
     steps:
       - name: Deploy image digests through restricted SSH gateway
         shell: bash
@@ -302,16 +302,16 @@ jobs:
           EAP_DIGEST: ${{ needs.build-eap.outputs.digest }}
           DEPLOY_ACTOR: ${{ github.actor }}
           GHCR_TOKEN: ${{ github.token }}
-          TEST_DEPLOY_SSH_KEY: ${{ secrets.TEST_DEPLOY_SSH_KEY }}
-          OIDC_AUDIENCE: urn:ji-psy:test-deploy:124.221.56.121
+          DEV_DEPLOY_SSH_KEY: ${{ secrets.DEV_DEPLOY_SSH_KEY }}
+          OIDC_AUDIENCE: urn:ji-psy:dev-deploy:124.221.56.121
         run: |
           set -Eeuo pipefail
           deploy_host="124.221.56.121"
-          deploy_user="gha-test-deploy"
+          deploy_user="dev"
           deploy_port="22"
           deploy_known_host="124.221.56.121 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINewYzJuPGLWsMJMFiiFi3u6d8rHN2OvZfKE8uvM1lE+"
 
-          : "${TEST_DEPLOY_SSH_KEY:?TEST_DEPLOY_SSH_KEY secret is required}"
+          : "${DEV_DEPLOY_SSH_KEY:?DEV_DEPLOY_SSH_KEY secret is required}"
           [[ "${DEPLOY_SHA}" =~ ^[0-9a-f]{40}$ ]] || {
             echo "::error::Invalid deployment SHA"
             exit 1
@@ -338,22 +338,22 @@ jobs:
           : "${ACTIONS_ID_TOKEN_REQUEST_URL:?GitHub OIDC request URL is required}"
           : "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:?GitHub OIDC request token is required}"
           [[ "${OIDC_AUDIENCE}" == \
-            "urn:ji-psy:test-deploy:124.221.56.121" ]] || {
+            "urn:ji-psy:dev-deploy:124.221.56.121" ]] || {
             echo "::error::Unexpected GitHub OIDC audience"
             exit 1
           }
-          [[ "${DEPLOY_POLICY_VERSION}" == "actions-test-v1" ]] || {
+          [[ "${DEPLOY_POLICY_VERSION}" == "actions-dev-v1" ]] || {
             echo "::error::Unexpected host policy version"
             exit 1
           }
 
           umask 077
           install -d -m 700 "${HOME}/.ssh"
-          key_file="${HOME}/.ssh/test_deploy"
+          key_file="${HOME}/.ssh/dev_deploy"
           known_hosts_file="${HOME}/.ssh/known_hosts"
           trap 'rm -f -- "${key_file}" "${known_hosts_file}"' EXIT
 
-          printf '%s\n' "${TEST_DEPLOY_SSH_KEY}" >"${key_file}"
+          printf '%s\n' "${DEV_DEPLOY_SSH_KEY}" >"${key_file}"
           printf '%s\n' "${deploy_known_host}" >"${known_hosts_file}"
           chmod 600 "${key_file}" "${known_hosts_file}"
 
@@ -397,11 +397,11 @@ jobs:
               -o StrictHostKeyChecking=yes \
               -o UserKnownHostsFile="${known_hosts_file}" \
               -- "${deploy_user}@${deploy_host}" \
-              "deploy-test ${DEPLOY_POLICY_VERSION} ${DEPLOY_SHA} ${BACKEND_DIGEST} ${ADMIN_DIGEST} ${EAP_DIGEST} ${GITHUB_RUN_ID} ${GITHUB_RUN_ATTEMPT} ${DEPLOY_ACTOR}"
+              "deploy-dev ${DEPLOY_POLICY_VERSION} ${DEPLOY_SHA} ${BACKEND_DIGEST} ${ADMIN_DIGEST} ${EAP_DIGEST} ${GITHUB_RUN_ID} ${GITHUB_RUN_ATTEMPT} ${DEPLOY_ACTOR}"
           unset oidc_token
 
   public-smoke:
-    name: Verify public test deployment
+    name: Verify public dev deployment
     needs:
       - validate
       - deploy
@@ -474,24 +474,24 @@ jobs:
 
           verify_endpoint \
             admin \
-            "${TEST_ADMIN_ORIGIN}/health" \
+            "${DEV_ADMIN_ORIGIN}/health" \
             admin-web
           verify_endpoint \
             eap \
-            "${TEST_EAP_ORIGIN}/health" \
+            "${DEV_EAP_ORIGIN}/health" \
             eap-front-site
           verify_endpoint \
             backend \
-            "${TEST_ADMIN_ORIGIN}/healthz" \
+            "${DEV_ADMIN_ORIGIN}/healthz" \
             backend \
-            test
+            development
           verify_endpoint \
             backend-via-eap \
-            "${TEST_EAP_ORIGIN}/healthz" \
+            "${DEV_EAP_ORIGIN}/healthz" \
             backend \
-            test
+            development
 
-          verify_access_gate() {
+          verify_public_root() {
             local name="$1"
             local url="$2"
             local status
@@ -506,16 +506,12 @@ jobs:
                 --write-out '%{http_code}' \
                 "${url}" || true
             )"
-            case "${status}" in
-              302|401|403)
-                echo "${name} public root is protected (HTTP ${status})"
-                ;;
-              *)
-                echo "::error::${name} public root must require the external test access gate; got HTTP ${status:-none}"
-                return 1
-                ;;
-            esac
+            if [[ "${status}" != "200" ]]; then
+              echo "::error::${name} public root returned HTTP ${status:-none}; expected 200"
+              return 1
+            fi
+            echo "${name} public root is available (HTTP 200)"
           }
 
-          verify_access_gate admin "${TEST_ADMIN_ORIGIN}/"
-          verify_access_gate eap "${TEST_EAP_ORIGIN}/"
+          verify_public_root admin "${DEV_ADMIN_ORIGIN}/"
+          verify_public_root eap "${DEV_EAP_ORIGIN}/"

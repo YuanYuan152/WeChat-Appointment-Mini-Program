@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>连心心理微信小程序功能手册</title>
+  <style>
+    :root{--ink:#24312c;--muted:#69736f;--brand:#35594b;--paper:#fff;--bg:#f4f2ed;--line:#dfe3de;--green:#e7efe9;--gold:#936723;--goldbg:#f8efdd;--blue:#3e6879;--bluebg:#e7f0f4;--red:#9a453d;--redbg:#f9ebe8}
+    *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;color:var(--ink);background:var(--bg);font:15px/1.75 "Microsoft YaHei","PingFang SC",system-ui,sans-serif}
+    .layout{display:grid;grid-template-columns:275px minmax(0,1fr);min-height:100vh}.side{position:sticky;top:0;height:100vh;overflow:auto;padding:26px 21px;color:#fff;background:#294238}.side h2{margin:0}.side p{margin:3px 0 15px;color:#b9c7c1;font-size:12px}.side a{display:block;padding:6px 9px;color:#dce6e2;border-radius:7px;text-decoration:none}.side a:hover{background:#3c584c}.group{margin:16px 8px 5px;color:#92a89e;font-size:11px;font-weight:700;letter-spacing:.1em}.search{width:100%;padding:9px 11px;color:#fff;background:#ffffff16;border:1px solid #ffffff38;border-radius:9px}.search::placeholder{color:#ffffff9c}
+    main{width:min(1160px,100%);margin:auto;padding:42px clamp(20px,5vw,68px) 75px}.hero{padding:44px;color:#fff;background:var(--brand);border-radius:23px}.hero small{letter-spacing:.14em}.hero h1{margin:8px 0;font-size:clamp(31px,5vw,50px);line-height:1.22}.hero p{max-width:780px;color:#d9e4df}.meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:19px}.meta span,.tag{padding:4px 9px;border-radius:999px;font-size:12px}.meta span{border:1px solid #ffffff45}
+    section{margin-top:49px;scroll-margin-top:20px}h2{margin:0 0 7px;font-size:29px}h3{margin:0 0 10px;font-size:19px}h4{margin:22px 0 8px;font-size:16px}.lead{margin:0 0 19px;color:var(--muted)}
+    .role-head{display:flex;gap:13px;align-items:center;margin-bottom:18px}.role-no{display:grid;flex:0 0 40px;height:40px;place-items:center;color:#fff;background:var(--brand);border-radius:12px;font-weight:800}
+    .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px}.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px}.card{padding:21px;background:#fff;border:1px solid var(--line);border-radius:15px}.card p,.card ul,.card ol{margin-bottom:0}.tag{display:inline-block;margin-bottom:10px;color:var(--brand);background:var(--green);font-weight:700}.tag.gold{color:var(--gold);background:var(--goldbg)}.tag.blue{color:var(--blue);background:var(--bluebg)}.tag.red{color:var(--red);background:var(--redbg)}
+    .entry{margin:10px 0;padding:11px 13px;background:#f1f4f1;border-radius:9px}.entry b{display:block;color:var(--brand);font-size:12px}.entry code{font:13px Consolas,monospace}.flow{display:grid;gap:9px;counter-reset:n}.step{position:relative;padding:15px 15px 15px 55px;background:#fff;border:1px solid var(--line);border-radius:11px;counter-increment:n}.step:before{position:absolute;top:14px;left:15px;display:grid;width:27px;height:27px;place-items:center;color:#fff;background:var(--brand);border-radius:50%;content:counter(n);font-weight:700}.step strong{display:block}.step span{color:var(--muted)}
+    .note{margin:17px 0;padding:15px 17px;background:var(--green);border-left:4px solid var(--brand);border-radius:0 10px 10px 0}.note.warn{color:#674716;background:var(--goldbg);border-color:var(--gold)}.note.red{color:#73332e;background:var(--redbg);border-color:var(--red)}
+    .table{overflow:auto;background:#fff;border:1px solid var(--line);border-radius:14px}table{width:100%;min-width:740px;border-collapse:collapse}th,td{padding:12px 14px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}th{color:var(--muted);background:#f7f8f5;font-size:12px}tr:last-child td{border-bottom:0}
+    details{margin-top:9px;background:#fff;border:1px solid var(--line);border-radius:11px}summary{padding:14px 16px;cursor:pointer;font-weight:700}details div{padding:0 16px 15px;color:var(--muted)}.empty{display:none;padding:20px;text-align:center;background:#fff;border-radius:12px}.menu{display:none;position:fixed;z-index:4;right:14px;top:14px;padding:9px 12px;color:#fff;background:var(--brand);border:0;border-radius:8px}
+    @media(max-width:900px){.layout{display:block}.side{position:fixed;z-index:3;width:300px;transform:translateX(-105%);transition:.2s}body.open .side{transform:none}.menu{display:block}main{padding-top:68px}.grid,.grid3{grid-template-columns:1fr}}
+    @media print{body{background:#fff}.side,.menu,.search{display:none}.layout{display:block}main{width:100%;padding:0}.hero{color:#000;background:#fff;border:2px solid #333}.hero p{color:#333}.card,.step,.table{break-inside:avoid}}
+  </style>
+</head>
+<body>
+  <button class="menu" onclick="document.body.classList.toggle('open')">目录</button>
+  <div class="layout">
+    <aside class="side">
+      <h2>微信小程序手册</h2><p>按角色说明入口与操作顺序</p>
+      <input id="search" class="search" type="search" placeholder="搜索功能">
+      <nav>
+        <div class="group">通用</div><a href="#common">登录与导航</a>
+        <div class="group">后台管理者</div><a href="#staff-entry">角色与工作台</a><a href="#staff-schedule">排期和咨询室</a><a href="#staff-approval">审批与用户</a><a href="#staff-proxy">代理预约</a>
+        <div class="group">咨询师</div><a href="#counselor-entry">咨询师工作台</a><a href="#counselor-schedule">排期与请假</a><a href="#counselor-record">咨询记录</a>
+        <div class="group">用户</div><a href="#patient-entry">用户首页</a><a href="#patient-booking">预约与支付</a><a href="#patient-records">记录与退款</a><a href="#patient-other">消息、测评与资料</a>
+        <div class="group">附录</div><a href="#status">状态说明</a><a href="#faq">常见问题</a>
+      </nav>
+    </aside>
+    <main>
+      <header class="hero">
+        <small>WECHAT MINI PROGRAM MANUAL</small>
+        <h1>连心心理微信小程序<br>分角色功能手册</h1>
+        <p>分别面向后台管理者（咨询助理、咨询主任、管理员）、咨询师和来访用户，按“从哪里进入—如何操作—完成后发生什么”说明。</p>
+        <div class="meta"><span>文档版本 1.0</span><span>2026-08-04</span><span>来访者 / 咨询师 / 三种后台角色</span></div>
+      </header>
+      <div id="empty" class="empty">未找到匹配功能。</div>
+
+      <section id="common" class="searchable">
+        <h2>通用：登录与底部导航</h2>
+        <div class="grid">
+          <article class="card"><h3>微信一键登录</h3><div class="entry"><b>入口</b>“我的” → 立即登录；或点击需要登录的功能后自动进入登录页</div><div class="flow"><div class="step"><strong>勾选两份协议</strong><span>用户服务协议和隐私政策必须同时确认。</span></div><div class="step"><strong>点击微信一键登录</strong><span>授权微信身份及手机号。</span></div><div class="step"><strong>完善资料</strong><span>新用户按提示设置昵称、头像等资料。</span></div><div class="step"><strong>进入角色首页</strong><span>系统根据唯一角色进入预约记录或工作台。</span></div></div></article>
+          <article class="card"><h3>底部四个 Tab</h3><div class="table"><table><thead><tr><th>Tab</th><th>用户</th><th>员工角色</th></tr></thead><tbody><tr><td>首页</td><td>浏览内容和快捷入口</td><td>同用户</td></tr><tr><td>心理咨询</td><td>咨询师列表</td><td>同用户</td></tr><tr><td>预约记录 / 工作台</td><td>显示预约记录</td><td>显示工作台并按角色路由</td></tr><tr><td>我的</td><td>个人资料与服务</td><td>账号信息和角色入口</td></tr></tbody></table></div></article>
+        </div>
+        <div class="note warn"><strong>账号规则：</strong>当前为单账号单角色，不支持用户自行切换角色。需要变更角色时，由有权限的后台人员处理。</div>
+      </section>
+
+      <section id="staff-entry" class="searchable">
+        <div class="role-head"><span class="role-no">1</span><div><h2>后台管理者：角色与工作台</h2><p class="lead">咨询助理 Assistant、咨询主任 Ops、管理员 Admin 共用移动管理工作台，但可见权限不同。</p></div></div>
+        <div class="entry"><b>主入口</b>底部 Tab“工作台” → 自动进入“运营工作台”</div>
+        <div class="table"><table><thead><tr><th>功能</th><th>咨询助理</th><th>咨询主任</th><th>管理员</th></tr></thead><tbody>
+          <tr><td>排期、咨询室、审批、用户、代理预约</td><td>可用</td><td>可用</td><td>可用</td></tr>
+          <tr><td>运营看板</td><td>不可见</td><td>可用</td><td>可用</td></tr>
+          <tr><td>系统设置（如代理订单有效期）</td><td>不可见</td><td>不可见</td><td>可用</td></tr>
+          <tr><td>角色管理</td><td>只能管理授权范围内角色</td><td>可管理助理、咨询师和用户</td><td>权限最高</td></tr>
+        </tbody></table></div>
+        <div class="note">代码中保留一套独立助理任务/风险页面，但默认 Tab 实际进入统一管理工作台，本手册以默认入口为准。</div>
+      </section>
+
+      <section id="staff-schedule" class="searchable">
+        <h2>后台管理者：排期与咨询室</h2>
+        <div class="grid">
+          <article class="card"><span class="tag">排期情况</span><h3>查看咨询师排期</h3><div class="entry"><b>入口</b>工作台 → 排期情况 → 选择咨询师</div><ol><li>在列表中查看咨询师未来排期摘要。</li><li>点击咨询师进入排期详情。</li><li>切换普通模式或日历模式。</li><li>按日期查看开放、待支付、已预约、已完成、请假或过期时段。</li><li>点击时段查看来访、地点、咨询室及记录状态。</li></ol></article>
+          <article class="card"><span class="tag">咨询室情况</span><h3>查看与维护咨询室</h3><div class="entry"><b>入口</b>工作台 → 咨询室情况 → 选择中心和房间</div><ol><li>选择查询日期和半小时时间点。</li><li>查看房间可用、停用或正在使用状态。</li><li>进入房间详情查看未来时段及占用来访。</li><li>按权限调整可用/停用状态，或为已预约记录更换房间。</li><li>保存后重新查询确认结果。</li></ol></article>
+        </div>
+        <div class="note warn"><strong>占用规则：</strong>一次预约为 50 分钟咨询加 10 分钟打扫，咨询室视图按半小时显示，因此会占用连续两个显示段。</div>
+      </section>
+
+      <section id="staff-approval" class="searchable">
+        <h2>后台管理者：审批、用户与业务监管</h2>
+        <div class="grid3">
+          <article class="card"><span class="tag gold">审批管理</span><div class="entry"><b>入口</b>工作台 → 审批管理</div><ol><li>选择退款申请或咨询师请假。</li><li>选择“待审核”并打开详情。</li><li>核对人员、预约、原因、材料和退款影响。</li><li>点击通过或拒绝；拒绝时填写理由。</li><li>返回列表确认状态，相关人员会收到消息。</li></ol></article>
+          <article class="card"><span class="tag blue">用户与角色</span><div class="entry"><b>入口</b>工作台 → 用户管理 / 角色&权限绑定</div><ol><li>按姓名或手机号搜索账号。</li><li>打开来访或咨询师详情。</li><li>查看资料、订单、预约、备注及绑定关系。</li><li>按权限创建账号、绑定唯一角色或维护咨询师关系。</li><li>保存后确认角色和资料状态。</li></ol></article>
+          <article class="card"><span class="tag red">咨询记录</span><div class="entry"><b>入口</b>工作台 → 咨询记录 / 咨询记录修改审核</div><ol><li>查看咨询师记录填写概览。</li><li>进入咨询师或单条记录详情。</li><li>查看记录内容、版本和风险信息。</li><li>对修改申请执行通过或驳回。</li><li>风险上报按机构线下制度继续跟进。</li></ol></article>
+        </div>
+      </section>
+
+      <section id="staff-proxy" class="searchable">
+        <h2>后台管理者：代理预约</h2>
+        <div class="entry"><b>入口</b>工作台 → 代理预约；或 用户管理 → 来访详情 → 代理预约</div>
+        <div class="flow">
+          <div class="step"><strong>搜索并选择来访</strong><span>系统显示签约状态和绑定咨询师；未绑定时先完成绑定。</span></div>
+          <div class="step"><strong>打开代理预约</strong><span>确认来访与咨询师关系正确。</span></div>
+          <div class="step"><strong>选择预约中心与日期</strong><span>选择实体中心或视频咨询。</span></div>
+          <div class="step"><strong>选择开始时间</strong><span>支持整点和半点，系统校验咨询师与房间冲突。</span></div>
+          <div class="step"><strong>选择咨询室或协议</strong><span>实体咨询必选房间；未签约来访需选待签协议。</span></div>
+          <div class="step"><strong>推送订单</strong><span>来访收到待支付订单，支付前该时段显示待支付。</span></div>
+          <div class="step"><strong>跟踪结果</strong><span>来访有效期内支付后变为已预约；超时则释放资源。</span></div>
+        </div>
+      </section>
+
+      <section id="counselor-entry" class="searchable">
+        <div class="role-head"><span class="role-no">2</span><div><h2>咨询师：进入个人工作台</h2><p class="lead">咨询师登录后，底部第三个 Tab 显示“工作台”。</p></div></div>
+        <div class="entry"><b>主入口</b>底部“工作台” → 咨询师工作台</div>
+        <div class="grid">
+          <article class="card"><h3>咨询排期面板</h3><ul><li>查看普通列表或日历。</li><li>新增排期、取消空闲排期。</li><li>对已预约时段提交请假。</li><li>为绑定来访发起代理预约。</li><li>从已完成时段进入咨询记录。</li></ul></article>
+          <article class="card"><h3>个人看板面板</h3><ul><li>选择统计时间范围。</li><li>查看完成订单、收入、预约和咨询记录数量。</li><li>点击指标进入相应明细。</li><li>从个人中心维护咨询师资料。</li></ul></article>
+        </div>
+      </section>
+
+      <section id="counselor-schedule" class="searchable">
+        <h2>咨询师：新增排期、取消与请假</h2>
+        <div class="grid">
+          <article class="card"><h3>新增排期</h3><div class="entry"><b>入口</b>工作台 → 咨询排期 → “+ 新建排期”</div><div class="flow"><div class="step"><strong>选中心</strong><span>选择实体中心或视频。</span></div><div class="step"><strong>选日期</strong><span>只能选择允许的未来日期。</span></div><div class="step"><strong>选开始时间</strong><span>支持整点、半点，固定 50+10 分钟。</span></div><div class="step"><strong>确认咨询室偏好</strong><span>系统检查房间与排期冲突。</span></div><div class="step"><strong>提交</strong><span>成功后时段出现在排期日历。</span></div></div></article>
+          <article class="card"><h3>取消排期或请假</h3><div class="entry"><b>入口</b>工作台 → 咨询排期 → 选择目标时段</div><ol><li>未被预约的排期：点击取消，填写原因并确认。</li><li>已经有来访预约：点击请假，填写原因。</li><li>按页面要求上传沟通截图。</li><li>提交后状态进入请假审核。</li><li>审核通过后受影响预约取消并按规则退款；驳回则原预约保持。</li></ol></article>
+        </div>
+        <h3 style="margin-top:25px">咨询师代理预约</h3>
+        <div class="entry"><b>入口</b>工作台 → 咨询排期 → “代理预约”</div>
+        <div class="flow"><div class="step"><strong>选择来访</strong><span>仅显示已绑定本人且符合条件的来访。</span></div><div class="step"><strong>选择中心、日期和时间</strong><span>可使用已有开放排期或允许的新时段。</span></div><div class="step"><strong>选择咨询室</strong><span>视频咨询无需实体房间。</span></div><div class="step"><strong>推送订单</strong><span>来访收到消息后自行签约、支付。</span></div></div>
+      </section>
+
+      <section id="counselor-record" class="searchable">
+        <h2>咨询师：咨询单与咨询记录</h2>
+        <div class="grid">
+          <article class="card"><h3>填写咨询记录</h3><div class="entry"><b>入口</b>工作台 → 已完成时段 → 填写咨询记录；或“我的” → 咨询记录填写</div><ol><li>打开对应咨询，确认来访与时间。</li><li>填写主观描述、客观描述、评估和咨询要点。</li><li>完成风险评估等必填内容。</li><li>提交记录并确认成功。</li><li>高风险内容会触发管理侧风险提醒。</li></ol></article>
+          <article class="card"><h3>修改已提交记录</h3><div class="entry"><b>入口</b>工作台 → 查看咨询记录 → 申请修改</div><ol><li>打开原记录和历史版本。</li><li>进入修改模式，填写修订内容及原因。</li><li>提交修改申请。</li><li>等待咨询主任或管理员审核。</li><li>通过后新版本生效；驳回则保留原记录。</li></ol></article>
+        </div>
+      </section>
+
+      <section id="patient-entry" class="searchable">
+        <div class="role-head"><span class="role-no">3</span><div><h2>来访用户：首页与咨询师浏览</h2><p class="lead">用户无需登录即可浏览公开内容，预约、订单和记录功能需要登录。</p></div></div>
+        <div class="grid3">
+          <article class="card"><h3>首页</h3><div class="entry"><b>入口</b>底部“首页”</div><ol><li>查看 Banner、推荐咨询师、活动和文章。</li><li>点击搜索查找咨询师或内容。</li><li>点击卡片进入对应详情。</li></ol></article>
+          <article class="card"><h3>咨询师列表</h3><div class="entry"><b>入口</b>底部“心理咨询”</div><ol><li>浏览咨询师列表。</li><li>使用页面筛选或搜索。</li><li>点击咨询师查看详细介绍、中心、价格和排期。</li></ol></article>
+          <article class="card"><h3>收藏咨询师</h3><div class="entry"><b>入口</b>咨询师详情 → 收藏；或“我的” → 我的收藏</div><ol><li>登录后点击收藏。</li><li>在我的收藏查看已收藏咨询师。</li><li>再次点击可取消收藏。</li></ol></article>
+        </div>
+      </section>
+
+      <section id="patient-booking" class="searchable">
+        <h2>来访用户：首次预约、自助续约与支付</h2>
+        <div class="note warn"><strong>首次预约限制：</strong>首次预约需要联系咨询助理，由工作人员完成咨询师绑定、签约及首单流程。完成首单后，才可自助预约当前签约咨询师。</div>
+        <h3>自助预约入口与步骤</h3>
+        <div class="entry"><b>入口</b>底部“心理咨询” → 当前签约咨询师详情 → 可约时间</div>
+        <div class="flow">
+          <div class="step"><strong>确认预约权限</strong><span>系统校验已绑定并签约当前咨询师。</span></div>
+          <div class="step"><strong>选择中心与开始时间</strong><span>从实时可用安排中选择。</span></div>
+          <div class="step"><strong>核对订单信息</strong><span>确认咨询师、时间、地点和金额。</span></div>
+          <div class="step"><strong>签署或确认协议</strong><span>首次相关流程按页面填写紧急联系人和签名。</span></div>
+          <div class="step"><strong>完成微信支付</strong><span>支付成功后排期变为已预约。</span></div>
+          <div class="step"><strong>查看预约</strong><span>从底部“预约记录”或“我的订单”查看。</span></div>
+        </div>
+        <h3 style="margin-top:24px">支付工作人员推送的代理订单</h3>
+        <div class="entry"><b>入口</b>“我的消息” → 待支付预约；或“我的” → 我的订单 → 待支付</div>
+        <ol><li>打开代理预约消息或待支付订单。</li><li>核对咨询师、日期、时间、中心和金额。</li><li>未签约时按页面完成协议确认和签名。</li><li>在订单有效期内完成支付。</li><li>支付成功后查看预约记录；超时未支付会释放时段。</li></ol>
+      </section>
+
+      <section id="patient-records" class="searchable">
+        <h2>来访用户：预约记录、取消、退款与反馈</h2>
+        <div class="grid">
+          <article class="card"><h3>查看预约记录</h3><div class="entry"><b>入口</b>底部“预约记录”</div><ol><li>选择未完成、已完成、已反馈或已取消。</li><li>点击记录查看时间、地点、咨询师和状态。</li><li>待支付记录点击“去支付”。</li><li>已完成记录点击“去反馈”。</li></ol></article>
+          <article class="card"><h3>取消与退款</h3><div class="entry"><b>入口</b>预约记录 → 未完成 → 取消预约</div><ol><li>打开待取消记录并查看退款提示。</li><li>距开始超过 24 小时，按常规流程确认取消。</li><li>24 小时内通常不退款，可选择申请退款豁免。</li><li>填写原因和材料后提交审核。</li><li>从消息或已取消记录查看结果。</li></ol></article>
+          <article class="card"><h3>咨询反馈</h3><div class="entry"><b>入口</b>预约记录 → 已完成 → 去反馈</div><ol><li>填写目标达成评分。</li><li>填写议题节奏评分。</li><li>选择改进项并提交。</li><li>提交后记录进入已反馈分类。</li></ol></article>
+          <article class="card"><h3>订单详情</h3><div class="entry"><b>入口</b>“我的” → 我的订单 → 选择订单</div><ol><li>查看待支付、已支付和已取消订单。</li><li>检查金额、有效期和关联预约。</li><li>待支付订单可继续支付。</li><li>已取消订单查看取消或退款说明。</li></ol></article>
+        </div>
+      </section>
+
+      <section id="patient-other" class="searchable">
+        <h2>来访用户：消息、测评与个人资料</h2>
+        <div class="table"><table><thead><tr><th>功能</th><th>入口</th><th>操作顺序</th><th>说明</th></tr></thead><tbody>
+          <tr><td>我的消息</td><td>“我的” → 我的消息</td><td>选择分类 → 打开消息 → 点击业务按钮</td><td>预约、取消、提醒、退款、请假和代理订单消息</td></tr>
+          <tr><td>心理登记表</td><td>“我的” → 心理登记表</td><td>填写个人及心理相关信息 → 保存</td><td>按页面必填项完成</td></tr>
+          <tr><td>编辑资料</td><td>“我的” → 个人信息 / 编辑资料</td><td>修改昵称、头像等 → 保存</td><td>部分身份信息可能受限制</td></tr>
+          <tr><td>心理测评</td><td>首页/“我的” → 心理测评</td><td>选择专业或趣味测评 → WebView 打开 EAP → 登录答题</td><td>详细步骤见 EAP 手册</td></tr>
+          <tr><td>服务通知</td><td>“我的” → 服务通知设置</td><td>查看订阅状态 → 发起微信授权 → 保存偏好</td><td>用于预约和业务提醒</td></tr>
+          <tr><td>意见反馈</td><td>“我的” → 意见反馈</td><td>选择类别 → 填写内容和联系方式 → 提交</td><td>区别于单次咨询反馈</td></tr>
+        </tbody></table></div>
+      </section>
+
+      <section id="status" class="searchable">
+        <h2>状态速查</h2>
+        <div class="table"><table><thead><tr><th>状态</th><th>含义</th><th>用户操作</th><th>员工操作</th></tr></thead><tbody>
+          <tr><td>待支付</td><td>已创建订单，尚未支付</td><td>有效期内支付</td><td>等待支付，避免重复推送</td></tr>
+          <tr><td>开放/可约</td><td>咨询师已排期且可预约</td><td>符合条件时选择</td><td>查看资源状态</td></tr>
+          <tr><td>已预约</td><td>来访已支付并占用资源</td><td>按时参加或按规则取消</td><td>查看详情；请假走审核</td></tr>
+          <tr><td>已完成</td><td>咨询结束</td><td>提交反馈</td><td>咨询师填写记录</td></tr>
+          <tr><td>待审核</td><td>退款、请假或修改申请等待处理</td><td>等待消息结果</td><td>授权角色审核</td></tr>
+          <tr><td>已取消</td><td>订单或预约失效</td><td>查看退款说明</td><td>查看操作记录</td></tr>
+        </tbody></table></div>
+      </section>
+
+      <section id="faq" class="searchable">
+        <h2>常见问题</h2>
+        <details><summary>为什么用户无法直接选择咨询师时间？</summary><div>首次预约需联系咨询助理完成绑定、签约和首单支付。后续只能自助预约当前签约咨询师。</div></details>
+        <details><summary>为什么代理预约按钮不可用？</summary><div>先确认已选择来访、来访已绑定咨询师，并选择可用中心、日期、开始时间和咨询室；未签约时还需选择协议。</div></details>
+        <details><summary>为什么房间看起来空闲却不能选择？</summary><div>系统按完整 60 分钟窗口校验两个连续半小时时段；其中任一时段停用或冲突都会禁止选择。</div></details>
+        <details><summary>为什么员工看不到运营看板或系统设置？</summary><div>咨询助理不能查看运营看板；系统设置仅管理员可用。菜单按唯一角色权限显示。</div></details>
+      </section>
+    </main>
+  </div>
+  <script>
+    const q=document.getElementById('search'),ss=[...document.querySelectorAll('.searchable')],empty=document.getElementById('empty');
+    q.addEventListener('input',()=>{const k=q.value.trim().toLowerCase();let n=0;ss.forEach(s=>{const ok=!k||s.textContent.toLowerCase().includes(k);s.style.display=ok?'':'none';if(ok)n++});empty.style.display=n?'none':'block'});
+    document.querySelectorAll('.side a').forEach(a=>a.onclick=()=>document.body.classList.remove('open'));
+  </script>
+</body>
+</html>

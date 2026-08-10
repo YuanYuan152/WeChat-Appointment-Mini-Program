@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>连心心理 EAP 网站功能手册</title>
+  <style>
+    :root{--ink:#24312c;--muted:#68736f;--brand:#35594b;--soft:#e8f0ea;--paper:#fff;--bg:#f4f2ed;--line:#dfe3de;--warn:#8b6123;--warnbg:#f8efdd}
+    *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;color:var(--ink);background:var(--bg);font:15px/1.75 "Microsoft YaHei","PingFang SC",system-ui,sans-serif}
+    .layout{display:grid;grid-template-columns:260px minmax(0,1fr);min-height:100vh}.side{position:sticky;top:0;height:100vh;overflow:auto;padding:28px 22px;color:#fff;background:#294238}
+    .side h2{margin:0;font-size:20px}.side p{margin:4px 0 20px;color:#b9c8c1;font-size:12px}.side a{display:block;padding:7px 9px;color:#dce7e2;border-radius:8px;text-decoration:none}.side a:hover{background:#3b574b}
+    .search{width:100%;margin-bottom:16px;padding:9px 11px;color:#fff;background:#ffffff16;border:1px solid #ffffff38;border-radius:9px}.search::placeholder{color:#ffffff9c}
+    main{width:min(1120px,100%);margin:auto;padding:42px clamp(20px,5vw,68px) 70px}.hero{padding:42px;color:#fff;background:var(--brand);border-radius:22px}.hero small{letter-spacing:.14em}.hero h1{margin:8px 0;font-size:clamp(31px,5vw,50px);line-height:1.25}.hero p{max-width:760px;color:#d9e4df}.meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px}.meta span,.tag{padding:4px 9px;border-radius:999px;font-size:12px}.meta span{border:1px solid #ffffff45}
+    section{margin-top:48px;scroll-margin-top:20px}h2{margin:0 0 8px;font-size:29px}h3{margin:0 0 10px;font-size:19px}.lead{margin:0 0 20px;color:var(--muted)}
+    .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px}.card{padding:21px;background:var(--paper);border:1px solid var(--line);border-radius:15px}.card p,.card ul{margin-bottom:0}.tag{display:inline-block;margin-bottom:10px;color:var(--brand);background:var(--soft);font-weight:700}
+    .path{margin:12px 0;padding:11px 13px;color:#42514b;background:#f2f5f2;border-radius:9px;font-family:Consolas,monospace;font-size:13px}.flow{counter-reset:n;display:grid;gap:10px}.step{position:relative;padding:16px 16px 16px 56px;background:#fff;border:1px solid var(--line);border-radius:12px;counter-increment:n}.step:before{position:absolute;left:16px;top:15px;display:grid;width:28px;height:28px;place-items:center;color:#fff;background:var(--brand);border-radius:50%;content:counter(n);font-weight:700}.step strong{display:block}.step span{color:var(--muted)}
+    .note{margin:17px 0;padding:15px 17px;background:var(--soft);border-left:4px solid var(--brand);border-radius:0 10px 10px 0}.note.warn{color:#694817;background:var(--warnbg);border-color:var(--warn)}
+    .table{overflow:auto;background:#fff;border:1px solid var(--line);border-radius:14px}table{width:100%;min-width:700px;border-collapse:collapse}th,td{padding:12px 14px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}th{color:var(--muted);background:#f7f8f5;font-size:12px}tr:last-child td{border-bottom:0}
+    details{margin-top:9px;background:#fff;border:1px solid var(--line);border-radius:11px}summary{padding:14px 16px;cursor:pointer;font-weight:700}details div{padding:0 16px 15px;color:var(--muted)}.empty{display:none;padding:20px;text-align:center;background:#fff;border-radius:12px}
+    .menu{display:none;position:fixed;z-index:4;right:14px;top:14px;padding:9px 12px;color:#fff;background:var(--brand);border:0;border-radius:8px}
+    @media(max-width:850px){.layout{display:block}.side{position:fixed;z-index:3;width:290px;transform:translateX(-105%);transition:.2s}body.open .side{transform:none}.menu{display:block}main{padding-top:68px}.grid{grid-template-columns:1fr}}
+    @media print{body{background:#fff}.side,.menu,.search{display:none}.layout{display:block}main{width:100%;padding:0}.hero{color:#000;background:#fff;border:2px solid #333}.hero p{color:#333}.card,.step,.table{break-inside:avoid}}
+  </style>
+</head>
+<body>
+  <button class="menu" onclick="document.body.classList.toggle('open')">目录</button>
+  <div class="layout">
+    <aside class="side">
+      <h2>EAP 功能手册</h2><p>用户网站 · 内容 · 咨询 · 测评</p>
+      <input id="search" class="search" type="search" placeholder="搜索功能">
+      <nav>
+        <a href="#start">进入与导航</a>
+        <a href="#content">公开内容</a>
+        <a href="#account">注册与登录</a>
+        <a href="#consultation">预约咨询</a>
+        <a href="#records">记录与消息</a>
+        <a href="#assessment">心理测评</a>
+        <a href="#report">报告与分享</a>
+        <a href="#profile">个人中心</a>
+        <a href="#rules">规则与限制</a>
+        <a href="#faq">常见问题</a>
+      </nav>
+    </aside>
+    <main>
+      <header class="hero">
+        <small>EAP WEBSITE MANUAL</small>
+        <h1>连心心理 EAP 网站<br>功能与操作手册</h1>
+        <p>面向来访者和公众用户，重点说明每项功能从哪里进入、需要满足什么条件、按什么顺序操作，以及完成后的结果。</p>
+        <div class="meta"><span>文档版本 1.0</span><span>2026-08-04</span><span>适用端：浏览器 / 小程序 WebView</span></div>
+      </header>
+      <div id="empty" class="empty">未找到匹配功能。</div>
+
+      <section id="start" class="searchable">
+        <h2>1. 进入与导航</h2><p class="lead">EAP 网站可直接从浏览器访问，也可从微信小程序“心理测评”等入口打开。</p>
+        <div class="grid">
+          <article class="card"><span class="tag">公开访问</span><h3>无需登录即可使用</h3><ul><li>浏览首页、心理图文、问答、故事和音频。</li><li>查看咨询师列表与介绍。</li><li>浏览专业测评和趣味测评列表。</li></ul></article>
+          <article class="card"><span class="tag">需要登录</span><h3>登录后才能使用</h3><ul><li>开始测评、保存报告和查看历史报告。</li><li>创建预约、支付、查看预约和消息。</li><li>收藏咨询师、提交反馈和退款豁免申请。</li></ul></article>
+        </div>
+      </section>
+
+      <section id="content" class="searchable">
+        <h2>2. 公开内容浏览</h2><p class="lead">主要用于了解心理知识、机构服务与咨询相关内容。</p>
+        <div class="table"><table><thead><tr><th>功能</th><th>入口</th><th>操作顺序</th><th>结果</th></tr></thead><tbody>
+          <tr><td>心理图文</td><td>首页 → 心理图文</td><td>进入列表 → 选择文章 → 阅读章节内容</td><td>查看完整文章与相关推荐</td></tr>
+          <tr><td>心理问答</td><td>首页 → 心理问答</td><td>浏览问题 → 点击感兴趣的问题</td><td>查看来访困惑与专业解答</td></tr>
+          <tr><td>我们的故事</td><td>首页 → 我们的故事</td><td>选择来访故事、学员故事或咨询师手记 → 阅读详情</td><td>了解真实经历与机构理念</td></tr>
+          <tr><td>心理音画</td><td>首页 → 心理音画</td><td>选择节目 → 播放、暂停或切换音频</td><td>在线收听心理音频内容</td></tr>
+        </tbody></table></div>
+        <div class="note warn"><strong>内容管理边界：</strong>EAP 的图文、问答、故事和音频当前主要来自站点内置内容，不等同于 Web 管理后台的“小程序内容管理”。</div>
+      </section>
+
+      <section id="account" class="searchable">
+        <h2>3. 注册与登录</h2><p class="lead">网站账号与微信小程序共用业务账号数据，手机号一致时可识别为同一用户。</p>
+        <div class="grid">
+          <article class="card"><h3>注册入口</h3><div class="path">网站右上角 / 导航栏 → 注册</div><div class="flow"><div class="step"><strong>填写手机号</strong><span>输入本人可用手机号。</span></div><div class="step"><strong>选择验证方式</strong><span>按页面使用验证码或设置密码。</span></div><div class="step"><strong>提交注册</strong><span>完成校验后建立账号并登录。</span></div></div></article>
+          <article class="card"><h3>登录入口</h3><div class="path">网站右上角 / 受保护功能拦截页 → 登录</div><div class="flow"><div class="step"><strong>输入手机号</strong><span>使用已注册或小程序绑定的手机号。</span></div><div class="step"><strong>完成验证</strong><span>输入验证码或密码。</span></div><div class="step"><strong>返回原功能</strong><span>登录成功后继续预约、测评或查看记录。</span></div></div></article>
+        </div>
+      </section>
+
+      <section id="consultation" class="searchable">
+        <h2>4. 预约咨询</h2><p class="lead">入口集中在“电话咨询/预约咨询”模块；预约、支付和取消规则与小程序共用后端。</p>
+        <h3>4.1 浏览并选择咨询师</h3>
+        <div class="path">顶部导航 → 预约咨询 → 咨询师列表 → 咨询师详情</div>
+        <div class="flow">
+          <div class="step"><strong>浏览或搜索咨询师</strong><span>查看姓名、方向、介绍和价格信息。</span></div>
+          <div class="step"><strong>进入咨询师详情</strong><span>确认专业介绍、咨询中心和可预约安排。</span></div>
+          <div class="step"><strong>收藏或开始预约</strong><span>收藏需要登录；预约会进入时段选择。</span></div>
+        </div>
+        <h3 style="margin-top:24px">4.2 创建预约</h3>
+        <div class="flow">
+          <div class="step"><strong>确认登录状态</strong><span>未登录时先完成登录。</span></div>
+          <div class="step"><strong>选择中心与时间</strong><span>选择杨浦、浦东或视频，以及可预约开始时间。</span></div>
+          <div class="step"><strong>填写首次预约信息</strong><span>按页面确认成年状态、紧急联系人等信息。</span></div>
+          <div class="step"><strong>阅读并签署协议</strong><span>确认心理咨询协议并完成手写签名。</span></div>
+          <div class="step"><strong>确认订单并支付</strong><span>核对咨询师、时间、地点和金额后支付。</span></div>
+          <div class="step"><strong>查看支付结果</strong><span>支付成功后生成咨询单，可在“我的预约”查看。</span></div>
+        </div>
+        <div class="note"><strong>时间规则：</strong>每次预约为 50 分钟咨询加 10 分钟打扫，总占用 60 分钟；可预约时间以系统实时返回为准。</div>
+      </section>
+
+      <section id="records" class="searchable">
+        <h2>5. 我的预约、消息与反馈</h2>
+        <div class="grid">
+          <article class="card"><h3>我的预约</h3><div class="path">个人中心 → 我的预约</div><ol><li>选择未完成、已完成、已反馈或已取消分类。</li><li>点击记录查看咨询师、时间、地点和状态。</li><li>待支付订单进入支付；可取消记录按页面规则操作。</li><li>已完成咨询可进入反馈页面。</li></ol></article>
+          <article class="card"><h3>我的消息</h3><div class="path">个人中心 → 我的消息</div><ol><li>查看未读角标和消息列表。</li><li>打开预约、取消、退款或代理预约消息。</li><li>点击消息内操作按钮进入关联订单或预约。</li><li>阅读后消息更新为已读。</li></ol></article>
+          <article class="card"><h3>咨询反馈</h3><div class="path">我的预约 → 已完成 → 去反馈</div><ol><li>选择目标达成和议题节奏评分。</li><li>勾选需要改进的方面。</li><li>提交后记录进入“已反馈”。</li></ol></article>
+          <article class="card"><h3>退款豁免申请</h3><div class="path">我的预约 → 取消/退款 → 申请豁免</div><ol><li>确认当前不满足常规退款条件。</li><li>填写特殊情况原因并按页面上传材料。</li><li>提交后等待管理后台审核。</li><li>从消息或预约记录查看结果。</li></ol></article>
+        </div>
+      </section>
+
+      <section id="assessment" class="searchable">
+        <h2>6. 心理测评</h2><p class="lead">专业测评和趣味测评都可浏览，但开始作答和保存报告需要来访者账号登录。</p>
+        <div class="path">顶部导航 / 首页 → 心理测评 → 专业测评或趣味测评 → 选择量表</div>
+        <div class="flow">
+          <div class="step"><strong>选择量表</strong><span>查看量表介绍、预计题量和适用说明。</span></div>
+          <div class="step"><strong>登录并确认须知</strong><span>专业测评还需阅读并同意当前隐私保护协议。</span></div>
+          <div class="step"><strong>逐题作答</strong><span>按提示选择答案；本地可保留未完成进度。</span></div>
+          <div class="step"><strong>补充人口学信息</strong><span>在结果提交前填写量表要求的必填信息。</span></div>
+          <div class="step"><strong>提交报告</strong><span>系统计分并保存本次量表版本和结果快照。</span></div>
+          <div class="step"><strong>查看结果</strong><span>查看总分、维度、解释、建议和可视化内容。</span></div>
+        </div>
+        <div class="note warn"><strong>适用角色：</strong>测评报告提交、历史查看和删除面向来访者账号。员工角色不应使用后台工作账号代替来访者完成测评。</div>
+      </section>
+
+      <section id="report" class="searchable">
+        <h2>7. 我的报告、下载与分享</h2>
+        <div class="grid">
+          <article class="card"><h3>查看历史报告</h3><div class="path">心理测评 → 我的报告，或个人中心 → 我的测评</div><ol><li>登录后进入报告列表。</li><li>按完成时间选择一份报告。</li><li>查看提交时的量表版本和结果快照。</li><li>按页面提供的删除功能删除本人报告；删除不可恢复。</li></ol></article>
+          <article class="card"><h3>下载与分享</h3><div class="path">量表详情或结果页 → 分享 / 下载</div><ol><li>选择下载 PDF、生成邀请海报或二维码。</li><li>分享二维码只指向对应量表，不包含个人报告内容。</li><li>扫码者登录后可开始该量表。</li><li>分享配置缺失时，分享按钮会被禁用。</li></ol></article>
+        </div>
+      </section>
+
+      <section id="profile" class="searchable">
+        <h2>8. 个人中心</h2>
+        <div class="table"><table><thead><tr><th>入口</th><th>功能</th><th>操作</th></tr></thead><tbody>
+          <tr><td>个人中心 → 我的预约</td><td>查看咨询进度</td><td>筛选状态、查看详情、支付、取消或反馈</td></tr>
+          <tr><td>个人中心 → 我的消息</td><td>查看业务通知</td><td>打开消息、标记已读、跳转关联业务</td></tr>
+          <tr><td>个人中心 → 联系助理</td><td>获取人工协助</td><td>按页面展示的联系方式联系咨询助理</td></tr>
+          <tr><td>个人中心 → 我的测评</td><td>管理测评报告</td><td>查看、下载或删除本人报告</td></tr>
+          <tr><td>个人中心 → 退出登录</td><td>结束当前会话</td><td>确认退出后清除本地登录状态</td></tr>
+        </tbody></table></div>
+      </section>
+
+      <section id="rules" class="searchable">
+        <h2>9. 业务规则与限制</h2>
+        <div class="grid">
+          <article class="card"><h3>取消与退款</h3><ul><li>距咨询开始超过 24 小时取消，按规则可全额退款。</li><li>24 小时内、咨询已开始或已结束，通常不予全额退款。</li><li>特殊情况可提交退款豁免，由后台审核。</li></ul></article>
+          <article class="card"><h3>报告版本</h3><ul><li>报告保存提交时的量表版本快照。</li><li>后台后续更新量表，不会覆盖历史报告。</li><li>测评结果仅供参考，不能替代专业诊断。</li></ul></article>
+          <article class="card"><h3>网络与浏览器</h3><ul><li>正式环境必须通过可访问的 HTTPS 地址打开。</li><li>登录失效时重新登录后再继续操作。</li><li>支付结果以订单最终状态为准，避免重复支付。</li></ul></article>
+          <article class="card"><h3>数据与隐私</h3><ul><li>仅使用本人账号填写和查看测评。</li><li>不要通过公开渠道发送个人报告截图或敏感信息。</li><li>删除报告前确认已完成必要备份。</li></ul></article>
+        </div>
+      </section>
+
+      <section id="faq" class="searchable">
+        <h2>10. 常见问题</h2>
+        <details><summary>为什么点击开始测评后要求登录？</summary><div>量表报告需要绑定来访者账号，便于保存历史报告和保护数据访问权限。</div></details>
+        <details><summary>为什么分享按钮不可用？</summary><div>分享依赖后台分享密钥和 EAP 公网地址。配置缺失时，浏览、答题和报告仍可能正常，但分享入口会停用。</div></details>
+        <details><summary>取消预约后为什么没有自动退款？</summary><div>请先确认距离咨询开始是否超过 24 小时。未满足常规退款条件时需要提交退款豁免申请并等待审核。</div></details>
+        <details><summary>为什么历史报告和现在的量表文案不同？</summary><div>历史报告固定使用提交时的量表版本快照，后台新版本不会覆盖过去报告。</div></details>
+      </section>
+    </main>
+  </div>
+  <script>
+    const q=document.getElementById('search'),ss=[...document.querySelectorAll('.searchable')],empty=document.getElementById('empty');
+    q.addEventListener('input',()=>{const k=q.value.trim().toLowerCase();let n=0;ss.forEach(s=>{const ok=!k||s.textContent.toLowerCase().includes(k);s.style.display=ok?'':'none';if(ok)n++});empty.style.display=n?'none':'block'});
+    document.querySelectorAll('.side a').forEach(a=>a.onclick=()=>document.body.classList.remove('open'));
+  </script>
+</body>
+</html>

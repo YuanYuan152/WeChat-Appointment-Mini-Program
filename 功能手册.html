@@ -1,0 +1,944 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>连心心理平台功能手册</title>
+  <style>
+    :root {
+      --ink: #24312c;
+      --muted: #66736e;
+      --paper: #ffffff;
+      --canvas: #f4f2ed;
+      --brand: #35594b;
+      --brand-soft: #e7efe9;
+      --gold: #a8762b;
+      --gold-soft: #f7efdf;
+      --red: #a5483f;
+      --red-soft: #faece9;
+      --blue: #3d6475;
+      --blue-soft: #e8f0f3;
+      --line: #dfe3de;
+      --radius: 16px;
+      --sidebar: 270px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--canvas);
+      font-family: "Microsoft YaHei", "PingFang SC", system-ui, -apple-system, sans-serif;
+      line-height: 1.7;
+    }
+    a { color: inherit; }
+    button, input { font: inherit; }
+
+    .layout {
+      display: grid;
+      grid-template-columns: var(--sidebar) minmax(0, 1fr);
+      min-height: 100vh;
+    }
+    .sidebar {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      padding: 28px 22px;
+      color: #f7faf8;
+      background: #263f35;
+    }
+    .brand {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 22px;
+    }
+    .brand-mark {
+      display: grid;
+      width: 40px;
+      height: 40px;
+      place-items: center;
+      border: 1px solid rgba(255,255,255,.34);
+      border-radius: 12px;
+      font-weight: 800;
+      letter-spacing: .08em;
+    }
+    .brand strong, .brand small { display: block; }
+    .brand small { color: rgba(255,255,255,.68); }
+    .search {
+      width: 100%;
+      margin-bottom: 20px;
+      padding: 10px 12px;
+      color: #fff;
+      background: rgba(255,255,255,.1);
+      border: 1px solid rgba(255,255,255,.22);
+      border-radius: 10px;
+      outline: none;
+    }
+    .search::placeholder { color: rgba(255,255,255,.62); }
+    .search:focus { border-color: rgba(255,255,255,.65); }
+    .toc-group { margin-top: 18px; }
+    .toc-title {
+      margin: 0 0 7px;
+      color: rgba(255,255,255,.48);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .12em;
+    }
+    .toc a {
+      display: block;
+      padding: 7px 10px;
+      color: rgba(255,255,255,.8);
+      border-radius: 8px;
+      font-size: 14px;
+      text-decoration: none;
+    }
+    .toc a:hover, .toc a:focus { color: #fff; background: rgba(255,255,255,.1); }
+    .sidebar-note {
+      margin-top: 24px;
+      padding-top: 18px;
+      color: rgba(255,255,255,.58);
+      border-top: 1px solid rgba(255,255,255,.16);
+      font-size: 12px;
+    }
+
+    main {
+      width: min(1180px, 100%);
+      margin: 0 auto;
+      padding: 40px clamp(22px, 5vw, 70px) 80px;
+    }
+    .hero {
+      position: relative;
+      overflow: hidden;
+      padding: clamp(30px, 5vw, 56px);
+      color: #fff;
+      background: var(--brand);
+      border-radius: 24px;
+    }
+    .hero::after {
+      position: absolute;
+      right: -70px;
+      bottom: -100px;
+      width: 260px;
+      height: 260px;
+      content: "";
+      border: 42px solid rgba(255,255,255,.08);
+      border-radius: 50%;
+    }
+    .eyebrow {
+      margin: 0 0 8px;
+      color: rgba(255,255,255,.72);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: .14em;
+    }
+    h1, h2, h3, h4 { line-height: 1.35; }
+    h1 { max-width: 720px; margin: 0; font-size: clamp(32px, 5vw, 54px); }
+    .hero p { max-width: 740px; margin: 18px 0 0; color: rgba(255,255,255,.82); }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 26px;
+    }
+    .meta span {
+      padding: 6px 11px;
+      background: rgba(255,255,255,.1);
+      border: 1px solid rgba(255,255,255,.2);
+      border-radius: 999px;
+      font-size: 12px;
+    }
+
+    .section { margin-top: 54px; scroll-margin-top: 24px; }
+    .section-head {
+      display: flex;
+      gap: 18px;
+      align-items: flex-start;
+      margin-bottom: 20px;
+    }
+    .section-number {
+      flex: 0 0 auto;
+      color: var(--brand);
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: .08em;
+    }
+    h2 { margin: 0; font-size: clamp(25px, 3vw, 34px); }
+    h3 { margin: 0 0 12px; font-size: 20px; }
+    h4 { margin: 20px 0 8px; font-size: 16px; }
+    .lead { margin: 6px 0 0; color: var(--muted); }
+
+    .grid { display: grid; gap: 16px; }
+    .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .card {
+      padding: 22px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+    }
+    .card p:last-child, .card ul:last-child { margin-bottom: 0; }
+    .card-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-start;
+      margin-bottom: 10px;
+    }
+    .badge {
+      display: inline-block;
+      padding: 3px 9px;
+      color: var(--brand);
+      background: var(--brand-soft);
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .badge.gold { color: #7c571d; background: var(--gold-soft); }
+    .badge.blue { color: var(--blue); background: var(--blue-soft); }
+    .badge.red { color: var(--red); background: var(--red-soft); }
+    .platform {
+      display: inline-flex;
+      gap: 6px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .platform::before {
+      width: 7px;
+      height: 7px;
+      content: "";
+      background: var(--gold);
+      border-radius: 50%;
+    }
+    ul, ol { padding-left: 1.35em; }
+    li + li { margin-top: 5px; }
+    .compact { margin: 8px 0; color: var(--muted); }
+
+    .notice {
+      margin: 18px 0;
+      padding: 16px 18px;
+      background: var(--blue-soft);
+      border-left: 4px solid var(--blue);
+      border-radius: 0 12px 12px 0;
+    }
+    .notice.warning { background: var(--gold-soft); border-color: var(--gold); }
+    .notice.danger { background: var(--red-soft); border-color: var(--red); }
+    .notice strong { display: block; margin-bottom: 3px; }
+
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 18px;
+      counter-reset: step;
+    }
+    .step {
+      position: relative;
+      min-height: 132px;
+      padding: 42px 15px 15px;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      counter-increment: step;
+    }
+    .step::before {
+      position: absolute;
+      top: 13px;
+      left: 15px;
+      color: var(--brand);
+      content: "0" counter(step);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .08em;
+    }
+    .step strong { display: block; margin-bottom: 5px; }
+    .step span { color: var(--muted); font-size: 13px; }
+
+    .table-wrap {
+      overflow-x: auto;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+    }
+    table {
+      width: 100%;
+      min-width: 690px;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    th, td {
+      padding: 13px 15px;
+      text-align: left;
+      vertical-align: top;
+      border-bottom: 1px solid var(--line);
+    }
+    th { color: var(--muted); background: #f7f8f5; font-size: 12px; letter-spacing: .04em; }
+    tr:last-child td { border-bottom: 0; }
+
+    details {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+    }
+    details + details { margin-top: 10px; }
+    summary {
+      padding: 15px 18px;
+      cursor: pointer;
+      font-weight: 700;
+    }
+    details > div { padding: 0 18px 16px; color: var(--muted); }
+    code {
+      padding: 2px 6px;
+      background: #edf0ec;
+      border-radius: 5px;
+      font-family: Consolas, monospace;
+      font-size: .92em;
+    }
+    .empty-search {
+      display: none;
+      margin-top: 28px;
+      padding: 22px;
+      text-align: center;
+      background: var(--paper);
+      border-radius: var(--radius);
+    }
+    .footer {
+      margin-top: 60px;
+      padding-top: 22px;
+      color: var(--muted);
+      border-top: 1px solid var(--line);
+      font-size: 13px;
+    }
+    .mobile-menu { display: none; }
+
+    @media (max-width: 960px) {
+      .layout { display: block; }
+      .sidebar {
+        position: fixed;
+        z-index: 20;
+        left: 0;
+        width: min(86vw, 320px);
+        transform: translateX(-105%);
+        transition: transform .2s ease;
+      }
+      body.nav-open .sidebar { transform: translateX(0); }
+      .mobile-menu {
+        position: fixed;
+        z-index: 30;
+        top: 14px;
+        right: 14px;
+        display: block;
+        padding: 9px 12px;
+        color: #fff;
+        background: var(--brand);
+        border: 0;
+        border-radius: 9px;
+      }
+      main { padding-top: 70px; }
+      .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 640px) {
+      main { padding-right: 15px; padding-left: 15px; }
+      .hero { border-radius: 18px; }
+      .grid-2, .grid-3, .steps { grid-template-columns: 1fr; }
+      .section { margin-top: 42px; }
+      .section-head { display: block; }
+      .section-number { display: block; margin-bottom: 6px; }
+    }
+    @media print {
+      body { background: #fff; }
+      .layout { display: block; }
+      .sidebar, .mobile-menu, .search { display: none !important; }
+      main { width: 100%; padding: 0; }
+      .hero { color: #000; background: #fff; border: 2px solid #333; }
+      .hero p, .eyebrow { color: #333; }
+      .meta span { color: #333; border-color: #999; }
+      .section { break-inside: avoid; margin-top: 32px; }
+      .card, details, .table-wrap, .step { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <button class="mobile-menu" type="button" aria-label="打开目录" onclick="document.body.classList.toggle('nav-open')">目录</button>
+  <div class="layout">
+    <aside class="sidebar" aria-label="功能手册目录">
+      <div class="brand">
+        <div class="brand-mark">LXXL</div>
+        <div><strong>连心心理</strong><small>功能手册</small></div>
+      </div>
+      <input id="search" class="search" type="search" placeholder="搜索功能或流程">
+      <nav class="toc">
+        <div class="toc-group">
+          <p class="toc-title">开始使用</p>
+          <a href="#overview">平台概览</a>
+          <a href="#account">登录与账号</a>
+          <a href="#roles">角色与权限</a>
+        </div>
+        <div class="toc-group">
+          <p class="toc-title">角色功能</p>
+          <a href="#patient">来访者</a>
+          <a href="#counselor">咨询师</a>
+          <a href="#assistant">咨询助理</a>
+          <a href="#operations">运营与管理员</a>
+        </div>
+        <div class="toc-group">
+          <p class="toc-title">业务模块</p>
+          <a href="#assessment">心理测评</a>
+          <a href="#eap">EAP 网站</a>
+          <a href="#workflows">核心流程</a>
+          <a href="#status">状态说明</a>
+        </div>
+        <div class="toc-group">
+          <p class="toc-title">帮助</p>
+          <a href="#notes">使用边界</a>
+          <a href="#faq">常见问题</a>
+        </div>
+      </nav>
+      <p class="sidebar-note">本手册依据仓库当前实现整理。实际可见功能取决于账号角色、部署环境与后台开关。</p>
+    </aside>
+
+    <main>
+      <header class="hero">
+        <p class="eyebrow">PRODUCT FUNCTION MANUAL</p>
+        <h1>连心心理平台<br>功能使用手册</h1>
+        <p>覆盖微信小程序、Web 管理后台与 EAP 心理网站，按来访者、咨询师、咨询助理、运营和管理员五类角色说明功能与业务流程。</p>
+        <div class="meta">
+          <span>文档版本：1.0</span>
+          <span>整理日期：2026-08-04</span>
+          <span>依据分支：当前本地代码</span>
+          <span>支持打印 / PDF</span>
+        </div>
+      </header>
+
+      <div id="emptySearch" class="empty-search">没有找到匹配内容，请尝试其他关键词。</div>
+
+      <section id="overview" class="section searchable">
+        <div class="section-head">
+          <span class="section-number">01</span>
+          <div><h2>平台概览</h2><p class="lead">同一套业务后端连接三个用户入口，各入口承担不同工作。</p></div>
+        </div>
+        <div class="grid grid-3">
+          <article class="card">
+            <div class="card-top"><h3>微信小程序</h3><span class="badge">移动端</span></div>
+            <p class="compact">来访者使用的主要入口，也提供咨询师、助理、运营和管理员移动工作台。</p>
+            <ul>
+              <li>咨询师浏览、预约、支付与记录</li>
+              <li>订单、消息、资料和服务通知</li>
+              <li>按账号角色动态进入对应工作台</li>
+            </ul>
+          </article>
+          <article class="card">
+            <div class="card-top"><h3>Web 管理后台</h3><span class="badge gold">电脑端</span></div>
+            <p class="compact">面向管理员、运营、咨询助理和咨询师的重后台，提高批量查询与业务处理效率。</p>
+            <ul>
+              <li>来访、咨询师、排期和咨询室管理</li>
+              <li>代理预约、审核、定价和业务记录</li>
+              <li>量表、报告、分享统计与内容管理</li>
+            </ul>
+          </article>
+          <article class="card">
+            <div class="card-top"><h3>EAP 心理网站</h3><span class="badge blue">Web 端</span></div>
+            <p class="compact">面向公众和已登录用户的内容、心理测评及咨询服务网站。</p>
+            <ul>
+              <li>心理图文、问答、故事和音频</li>
+              <li>专业量表、趣味测评和历史报告</li>
+              <li>手机号登录、咨询预约与个人中心</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section id="account" class="section searchable">
+        <div class="section-head">
+          <span class="section-number">02</span>
+          <div><h2>登录、账号与个人资料</h2><p class="lead">不同入口可使用不同登录方式，但账号数据由同一业务系统管理。</p></div>
+        </div>
+        <div class="grid grid-2">
+          <article class="card">
+            <span class="platform">微信小程序</span>
+            <h3>微信一键登录</h3>
+            <ol>
+              <li>阅读并勾选用户服务协议与隐私政策。</li>
+              <li>点击“微信一键登录”，授权微信身份和手机号。</li>
+              <li>新用户按提示完善昵称等资料。</li>
+              <li>按需授权服务通知，用于预约、审核和订单提醒。</li>
+            </ol>
+          </article>
+          <article class="card">
+            <span class="platform">EAP 网站</span>
+            <h3>手机号登录或注册</h3>
+            <ul>
+              <li>支持手机号验证码或密码方式。</li>
+              <li>手机号一致时，可与小程序账号识别为同一用户。</li>
+              <li>登录后可查看测评报告、咨询记录、消息和个人资料。</li>
+            </ul>
+          </article>
+        </div>
+        <div class="notice warning">
+          <strong>单账号单角色</strong>
+          当前系统中一个账号只保留一个角色，不支持自行切换角色。系统根据该唯一角色展示工作台与底部导航；需要变更身份时，应由有权限的工作人员在用户与角色管理中更换角色。
+        </div>
+        <div class="notice">
+          <strong>Web 管理后台登录边界</strong>
+          当前 admin-web 员工登录仍使用开发联调登录方式，尚未内置正式员工登录页。正式部署前应由实施人员确认生产环境采用的员工认证入口。
+        </div>
+      </section>
+
+      <section id="roles" class="section searchable">
+        <div class="section-head">
+          <span class="section-number">03</span>
+          <div><h2>角色与权限范围</h2><p class="lead">业务数据按照角色授权访问，敏感报告、记录和审核操作受额外限制。</p></div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>角色</th><th>主要职责</th><th>典型入口</th><th>关键权限</th></tr></thead>
+            <tbody>
+              <tr><td>来访者 Patient</td><td>浏览、预约、支付、参与咨询与测评</td><td>微信小程序、EAP 网站</td><td>仅查看和处理本人数据</td></tr>
+              <tr><td>咨询师 Counselor</td><td>管理排期、咨询、请假和咨询记录</td><td>小程序工作台、Web 咨询师工作台</td><td>仅处理与本人相关的来访和咨询</td></tr>
+              <tr><td>咨询助理 Assistant</td><td>协调排期、审核协作、代理预约和业务跟进</td><td>小程序管理工作台、Web 后台</td><td>按授权查看业务数据并协助处理</td></tr>
+              <tr><td>运营/咨询主任 Ops</td><td>处理日常运营、审核、配置和用户管理</td><td>小程序运营工作台、Web 后台</td><td>大部分运营功能，部分高权限操作除外</td></tr>
+              <tr><td>管理员 Admin</td><td>系统治理、角色、业务配置和敏感管理</td><td>Web 管理后台、小程序运营后台</td><td>完整后台权限及管理员专属操作</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="patient" class="section searchable">
+        <div class="section-head">
+          <span class="section-number">04</span>
+          <div><h2>来访者功能</h2><p class="lead">从了解咨询师到预约、支付、完成咨询和后续反馈的完整移动服务。</p></div>
+        </div>
+        <div class="grid grid-3">
+          <article class="card">
+            <h3>首页与内容浏览</h3>
+            <ul>
+              <li>查看首页推荐、活动、文章和主题内容。</li>
+              <li>使用搜索查找咨询师或内容。</li>
+              <li>浏览心理图文、往期精华、联系我们等公开页面。</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>咨询师浏览</h3>
+            <ul>
+              <li>查看咨询师列表、详情、介绍和可预约时间。</li>
+              <li>收藏感兴趣的咨询师。</li>
+              <li>从咨询师详情进入预约流程。</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>预约与支付</h3>
+            <ul>
+              <li>首次预约需联系咨询助理完成咨询师绑定、签约和首单支付。</li>
+              <li>完成首单后，才可自助预约当前签约咨询师。</li>
+              <li>选择日期、开始时间、咨询形式及可用资源。</li>
+              <li>确认信息并签署适用的咨询协议。</li>
+              <li>创建订单并完成微信支付；查看支付结果。</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>订单与预约记录</h3>
+            <ul>
+              <li>查看待支付、已支付和已取消订单。</li>
+              <li>查看未完成、已完成和已取消预约。</li>
+              <li>代理预约订单可从消息或订单列表继续支付。</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>取消、退款与反馈</h3>
+            <ul>
+              <li>距咨询开始超过 24 小时取消，可按规则全额退款。</li>
+              <li>24 小时内取消或爽约通常不退款，特殊情况可提交退款豁免申请。</li>
+              <li>咨询结束后填写咨询反馈并查看处理状态。</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>个人中心</h3>
+            <ul>
+              <li>编辑个人资料和心理登记表。</li>
+              <li>查看消息、收藏、测评报告和服务通知设置。</li>
+              <li>查看用户协议、隐私政策及提交意见反馈。</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section id="counselor" class="section searchable">
+        <div class="section-head">
+          <span class="section-number">05</span>
+          <div><h2>咨询师功能</h2><p class="lead">围绕个人排期、预约执行、记录填写和业务统计开展工作。</p></div>
+        </div>
+        <div class="grid grid-2">
+          <article class="card">
+            <div class="card-top"><h3>工作台与统计</h3><span class="badge">小程序 / Web</span></div>
+            <ul>
+              <li>查看今日安排、待处理事项、预约和消息。</li>
+              <li>查看个人咨询数据、完成订单和收入明细。</li>
+              <li>按时间范围查看咨询与订单统计。</li>
+            </ul>
+          </article>
+          <article class="card">
+            <div class="card-top"><h3>排期管理</h3><span class="badge">核心</span></div>
+            <ul>
+              <li>按日期选择整点或半点开始时间新建排期。</li>
+              <li>查看开放、已预约、已完成、请假和过期排期。</li>
+              <li>未被预约的排期可按规则取消。</li>
+              <li>已影响预约时通过请假流程提交审核。</li>
+            </ul>
+          </article>
+          <article class="card">
+            <div class="card-top"><h3>代理预约</h3><span class="badge gold">受限操作</span></div>
+            <ul>
+              <li>仅为已绑定本人且符合条件的来访推送订单。</li>
+              <li>选择中心、日期、开始时间和咨询室。</li>
+              <li>可使用已有开放排期，也可在允许时新建预约时段。</li>
+              <li>订单推送后由来访在有效期内签约并支付。</li>
+            </ul>
+          </article>
+          <article class="card">
+            <div class="card-top"><h3>咨询记录</h3><span class="badge red">敏感数据</span></div>
+            <ul>
+              <li>查看本人咨询单和预约明细。</li>
+              <li>咨询完成后填写咨询记录。</li>
+              <li>记录提交后需要修改时发起修改申请。</li>
+              <li>按业务要求进行风险标记或风险上报。</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section id="assistant" class="section searchable">
+        <div class="section-head">
+          <span class="section-number">06</span>
+          <div><h2>咨询助理功能</h2><p class="lead">协助咨询团队处理任务、风险、排期协调与来访跟进。</p></div>
+        </div>
+        <div class="grid grid-2">
+          <article class="card">
+            <h3>小程序管理工作台</h3>
+            <ul>
+              <li>默认与运营、管理员共用移动管理工作台。</li>
+              <li>查看排期、咨询室、审批、用户和咨询记录。</li>
+              <li>协助代理预约、定价、反馈与角色管理。</li>
+              <li>运营看板、系统设置等高权限入口按角色隐藏。</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>Web 协同处理</h3>
+            <ul>
+              <li>按权限查看排期、咨询室、来访和咨询师信息。</li>
+              <li>参与审核管理、咨询反馈和咨询记录处理。</li>
+              <li>使用代理预约、消息和运营配置等授权模块。</li>
+            </ul>
+          </article>
+        </div>
+        <div class="notice warning">
+          <strong>备用页面说明</strong>
+          代码中还保留独立的助理任务、风险、排期和联系记录页面，但当前默认 Tab 不会进入该子工作台。本手册以实际默认的管理工作台流程为准。
+        </div>
+      </section>
+
+      <section id="operations" class="section searchable">
+        <div class="section-head">
+          <span class="section-number">07</span>
+          <div><h2>运营与管理员功能</h2><p class="lead">Web 管理后台为主要操作入口，小程序提供移动端补充。</p></div>
+        </div>
+        <div class="grid grid-3">
+          <article class="card">
+            <h3>总览与消息</h3>
+            <ul>
+              <li>查看运营指标、待办、未读消息和异常提醒。</li>
+              <li>按消息类型、已读状态和关键词筛选。</li>
+              <li>从消息跳转到审核、记录或排期详情。</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>用户与角色</h3>
+            <ul>
+              <li>创建业务账号并绑定角色。</li>
+              <li>维护来访来源、咨询师类型等属性。</li>
+              <li>查看来访和咨询师看板、资料及内部备注。</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>来访管理</h3>
+            <ul>
+              <li>查看资料、订单、金额、预约、退款和豁免。</li>
+              <li>绑定、更换或解除咨询师。</li>
+              <li>从来访详情发起代理预约或再次预约。</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>排期与代理预约</h3>
+            <ul>
+              <li>查看咨询师排期总览、日历及状态。</li>
+              <li>选择来访后自动使用其绑定咨询师。</li>
+              <li>推送待支付订单，并跟踪支付和占用情况。</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>咨询室管理</h3>
+            <ul>
+              <li>查看各中心咨询室当前状态和占用来访。</li>
+              <li>按半小时查看单间咨询室时段。</li>
+              <li>按半小时维护可用或停用状态。</li>
+              <li>预约会占用连续两个半小时显示段。</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>审核管理</h3>
+            <ul>
+              <li>审核退款豁免申请。</li>
+              <li>审核咨询师请假及受影响预约。</li>
+              <li>审核咨询记录修改申请。</li>
+              <li>查看处理结果和关联消息。</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>定价管理</h3>
+            <ul>
+              <li>维护基础价格和相关业务配置。</li>
+              <li>按来访设置个性化价格调整。</li>
+              <li>查看定价与抽成相关提醒。</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>咨询与业务记录</h3>
+            <ul>
+              <li>查询咨询记录、提交状态和详情。</li>
+              <li>查看咨询反馈及风险上报。</li>
+              <li>查看订单、预约、请假、房间等操作记录。</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>内容与辅助工具</h3>
+            <ul>
+              <li>维护小程序使用的 Banner、活动和文章等运营内容。</li>
+              <li>EAP 官网图文、问答、故事和音频当前主要使用站点内置数据，不与此处实时联动。</li>
+              <li>按部署版本使用已完成订单数据导入入口。</li>
+              <li>通过系统设置维护业务级参数。</li>
+            </ul>
+          </article>
+        </div>
+        <div class="notice danger">
+          <strong>高影响操作提示</strong>
+          角色变更、审核、定价、咨询室停用、量表发布等操作会影响真实业务。操作前应确认目标环境、对象和影响范围。
+        </div>
+      </section>
+
+      <section id="assessment" class="section searchable">
+        <div class="section-head">
+          <span class="section-number">08</span>
+          <div><h2>心理测评功能</h2><p class="lead">支持量表维护、用户答题、报告保存、分享二维码与运营统计。</p></div>
+        </div>
+        <div class="grid grid-2">
+          <article class="card">
+            <h3>用户测评</h3>
+            <ul>
+              <li>浏览专业测评与趣味测评列表。</li>
+              <li>阅读指导语，填写人口学问题和量表题目。</li>
+              <li>提交后查看即时结果、维度解释和可视化报告。</li>
+              <li>登录用户可查看历史测评报告。</li>
+              <li>可按页面能力下载 PDF 报告或删除本人报告；删除后不可恢复。</li>
+              <li>专业量表按要求确认当前隐私同意版本。</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>量表生命周期</h3>
+            <ul>
+              <li><strong>新建：</strong>创建量表草稿和计分定义。</li>
+              <li><strong>编辑：</strong>校验题目、选项、维度、结果和图片。</li>
+              <li><strong>发布：</strong>生成新的不可覆盖版本，供用户使用。</li>
+              <li><strong>归档：</strong>从正常使用入口下线，但保留历史数据。</li>
+              <li><strong>恢复：</strong>把历史版本恢复为新草稿，而非覆盖旧版本。</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>报告与敏感数据</h3>
+            <ul>
+              <li>后台可按权限查询报告列表和详情。</li>
+              <li>历史报告使用提交时的量表版本和结果快照。</li>
+              <li>删除、原始答案和人口学数据按角色分级授权。</li>
+              <li>管理操作写入量表审计记录。</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>分享二维码与统计</h3>
+            <ul>
+              <li>每个量表可生成带签名的分享入口和邀请海报。</li>
+              <li>扫码后进入对应量表页面，不包含个人报告内容。</li>
+              <li>统计扫码次数、近似独立访客、归因完成和完成比例。</li>
+              <li>分享配置缺失时，浏览和答题可用，但分享按钮会停用。</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section id="eap" class="section searchable">
+        <div class="section-head">
+          <span class="section-number">09</span>
+          <div><h2>EAP 心理网站</h2><p class="lead">兼顾公开内容传播、测评服务与登录后的咨询服务。</p></div>
+        </div>
+        <div class="grid grid-3">
+          <article class="card"><h3>心理内容</h3><p>心理图文、心理问答、来访故事、学员故事、咨询师手记和心理音频。</p></article>
+          <article class="card"><h3>心理测评</h3><p>专业量表、趣味测评、答题结果、历史报告和二维码分享入口。</p></article>
+          <article class="card"><h3>咨询服务</h3><p>咨询师列表与详情、预约入口、支付结果、咨询记录、联系和反馈。</p></article>
+          <article class="card"><h3>账号中心</h3><p>手机号登录注册、个人资料、消息列表和账号相关信息。</p></article>
+          <article class="card"><h3>多端账号</h3><p>网站与小程序复用业务后端，手机号一致时可归并同一用户身份。</p></article>
+          <article class="card"><h3>内容数据边界</h3><p>部分通用图文内容使用站点内置数据；量表、登录和预约连接真实后端。</p></article>
+        </div>
+      </section>
+
+      <section id="workflows" class="section searchable">
+        <div class="section-head">
+          <span class="section-number">10</span>
+          <div><h2>核心业务流程</h2><p class="lead">以下流程用于理解各角色之间的协作关系。</p></div>
+        </div>
+        <h3>来访者自主预约</h3>
+        <div class="steps">
+          <div class="step"><strong>选择咨询师</strong><span>浏览详情与可预约安排。</span></div>
+          <div class="step"><strong>选择开始时间</strong><span>支持整点和半点开始。</span></div>
+          <div class="step"><strong>确认与签约</strong><span>核对信息并确认适用协议。</span></div>
+          <div class="step"><strong>支付订单</strong><span>支付成功后锁定预约与资源。</span></div>
+          <div class="step"><strong>咨询与反馈</strong><span>完成咨询后查看记录并反馈。</span></div>
+        </div>
+
+        <h3 style="margin-top:28px">管理员或咨询师代理预约</h3>
+        <div class="steps">
+          <div class="step"><strong>选择来访</strong><span>必须存在合适的绑定咨询师关系。</span></div>
+          <div class="step"><strong>校验签约状态</strong><span>未签约时选择待推送协议。</span></div>
+          <div class="step"><strong>选择资源</strong><span>中心、日期、开始时间和咨询室。</span></div>
+          <div class="step"><strong>推送订单</strong><span>来访收到待支付消息与订单。</span></div>
+          <div class="step"><strong>来访支付</strong><span>有效期内支付后正式占用时段。</span></div>
+        </div>
+
+        <div class="notice">
+          <strong>预约时长规则</strong>
+          每次预约由“50 分钟咨询 + 10 分钟打扫”组成，总占用 60 分钟。开始时间支持整点和半点；咨询室管理以半小时为单位显示，因此一次预约覆盖连续两个显示段。
+        </div>
+
+        <h3 style="margin-top:28px">咨询师请假与退款影响</h3>
+        <div class="steps">
+          <div class="step"><strong>提交请假</strong><span>填写原因并关联受影响安排。</span></div>
+          <div class="step"><strong>进入审核</strong><span>运营或管理员查看申请详情。</span></div>
+          <div class="step"><strong>通过或驳回</strong><span>审核决定后通知相关人员。</span></div>
+          <div class="step"><strong>处理预约</strong><span>通过后取消受影响预约。</span></div>
+          <div class="step"><strong>处理退款</strong><span>已支付订单按业务规则安排退款。</span></div>
+        </div>
+      </section>
+
+      <section id="status" class="section searchable">
+        <div class="section-head">
+          <span class="section-number">11</span>
+          <div><h2>常见状态说明</h2><p class="lead">页面中文可能因业务对象不同略有差异，以下为常见含义。</p></div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>对象</th><th>状态</th><th>含义</th><th>通常可执行操作</th></tr></thead>
+            <tbody>
+              <tr><td>订单</td><td>待支付 PENDING</td><td>订单已创建，尚未完成支付</td><td>支付；超时后由系统取消</td></tr>
+              <tr><td>订单</td><td>已支付 PAID</td><td>支付成功，预约资源已确认</td><td>查看详情；按规则申请取消</td></tr>
+              <tr><td>订单</td><td>已取消 CANCELLED</td><td>订单失效或预约已取消</td><td>查看取消与退款说明</td></tr>
+              <tr><td>排期</td><td>开放 OPEN</td><td>咨询师已排期，当前可预约</td><td>来访预约或代理预约</td></tr>
+              <tr><td>排期</td><td>待支付 PENDING_PAYMENT</td><td>已生成代理订单，等待来访支付</td><td>等待支付或到期释放</td></tr>
+              <tr><td>排期</td><td>已预约 BOOKED</td><td>来访已支付并占用时间</td><td>查看预约；请假需走审核</td></tr>
+              <tr><td>排期</td><td>已完成 DONE</td><td>咨询已经结束</td><td>填写咨询记录或查看详情</td></tr>
+              <tr><td>审批</td><td>待审核 PENDING</td><td>申请已提交，尚未处理</td><td>审核角色通过或驳回</td></tr>
+              <tr><td>审批</td><td>已通过 APPROVED</td><td>申请获批并执行相应业务处理</td><td>查看处理结果</td></tr>
+              <tr><td>审批</td><td>已驳回 REJECTED</td><td>申请未获批准，原业务通常保持</td><td>查看原因或重新处理</td></tr>
+              <tr><td>量表</td><td>草稿 DRAFT</td><td>仅后台可编辑，用户不可见</td><td>编辑、校验和发布</td></tr>
+              <tr><td>量表</td><td>已发布 PUBLISHED</td><td>用户端可见，不可原地覆盖</td><td>创建新版本或归档</td></tr>
+              <tr><td>量表</td><td>已归档 ARCHIVED</td><td>从正常入口下线，历史数据保留</td><td>查看历史或恢复为草稿</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="notes" class="section searchable">
+        <div class="section-head">
+          <span class="section-number">12</span>
+          <div><h2>使用边界与注意事项</h2><p class="lead">区分正式业务功能、权限限制和开发联调能力。</p></div>
+        </div>
+        <div class="grid grid-2">
+          <article class="card">
+            <h3>正式业务注意事项</h3>
+            <ul>
+              <li>敏感数据只应由有业务需要的授权角色查看。</li>
+              <li>支付、退款、请假和审核结果以服务端最终状态为准。</li>
+              <li>修改咨询师绑定关系会影响签约状态和代理预约条件。</li>
+              <li>已发布量表和历史报告采用版本快照，不随新版本覆盖。</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>开发测试专用功能</h3>
+            <ul>
+              <li>开发者入口、模拟角色登录和 <code>dev_*</code> 登录码。</li>
+              <li>API 测试页面、Mock 短信和模拟支付。</li>
+              <li>开发者工具中的“不校验合法域名”。</li>
+              <li>这些能力不应作为正式生产功能写入对外操作流程。</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section id="faq" class="section searchable">
+        <div class="section-head">
+          <span class="section-number">13</span>
+          <div><h2>常见问题</h2><p class="lead">遇到问题时，先确认当前角色、环境和业务状态。</p></div>
+        </div>
+        <details>
+          <summary>为什么看不到某个菜单或功能？</summary>
+          <div>功能菜单会按照账号的唯一角色过滤。请确认账号已绑定正确角色；当前不支持账号自行切换角色，如需变更应由有权限的工作人员调整。部分功能仅管理员或运营可用。</div>
+        </details>
+        <details>
+          <summary>为什么代理预约按钮不可用？</summary>
+          <div>通常需要先选择来访，并确认来访已经绑定咨询师。还需选择有效日期、可预约开始时间和咨询室；未签约来访还必须选择待签署协议。</div>
+        </details>
+        <details>
+          <summary>为什么时间可选但咨询室不可选？</summary>
+          <div>预约会占用 60 分钟，系统会同时校验两个连续半小时时段。任一时段被占用、停用或冲突，咨询室都不可选择；视频咨询通常不要求实体咨询室。</div>
+        </details>
+        <details>
+          <summary>为什么分享量表按钮被禁用？</summary>
+          <div>分享功能依赖后台分享密钥和 EAP 公网地址。配置缺失时仍可浏览和答题，但系统会主动禁用二维码分享。</div>
+        </details>
+        <details>
+          <summary>为什么体验版提示网络连接失败？</summary>
+          <div>确认发布包使用可从手机访问的 HTTPS 后端地址，微信公众平台已配置 request 合法域名，且上传后已把新版本设置为体验版。发布包不能使用 localhost 或 127.0.0.1。</div>
+        </details>
+        <details>
+          <summary>咨询记录提交后还能直接修改吗？</summary>
+          <div>已提交记录通常不能任意覆盖。咨询师需要发起修改申请，由授权人员审核，以保留业务追踪和审计记录。</div>
+        </details>
+      </section>
+
+      <footer class="footer">
+        <strong>文档说明：</strong>本手册根据 <code>WeChat-Appointment-Mini-Program</code> 当前代码中的页面、导航、权限和业务交互整理。若功能、角色权限或业务规则变更，应同步更新本文件。
+      </footer>
+    </main>
+  </div>
+
+  <script>
+    const search = document.getElementById("search");
+    const sections = Array.from(document.querySelectorAll(".searchable"));
+    const empty = document.getElementById("emptySearch");
+    search.addEventListener("input", () => {
+      const keyword = search.value.trim().toLowerCase();
+      let visible = 0;
+      sections.forEach((section) => {
+        const matched = !keyword || section.textContent.toLowerCase().includes(keyword);
+        section.style.display = matched ? "" : "none";
+        if (matched) visible += 1;
+      });
+      empty.style.display = visible ? "none" : "block";
+    });
+    document.querySelectorAll(".toc a").forEach((link) => {
+      link.addEventListener("click", () => document.body.classList.remove("nav-open"));
+    });
+  </script>
+</body>
+</html>
