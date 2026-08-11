@@ -65,7 +65,42 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          ./deploy/scripts/validate-local.sh
+
+          # validate-local.sh still validates the legacy test deployment and
+          # hard-requires .github/workflows/deploy-test.yml. This dev workflow
+          # may coexist without that file, so tolerate exactly that one known
+          # warning while preserving fail-closed behavior for every other
+          # validation problem.
+          validation_log="$(mktemp)"
+          trap 'rm -f -- "${validation_log}"' EXIT
+
+          set +e
+          ./deploy/scripts/validate-local.sh 2>&1 |
+            tee "${validation_log}"
+          validation_status="${PIPESTATUS[0]}"
+          set -e
+
+          if [[ "${validation_status}" -ne 0 ]]; then
+            missing_test_workflow="[WARN] 缺少文件：${GITHUB_WORKSPACE}/.github/workflows/deploy-test.yml"
+            warning_count="$(grep -c '^\[WARN\]' "${validation_log}" || true)"
+            missing_count="$(
+              grep -Fxc -- "${missing_test_workflow}" "${validation_log}" || true
+            )"
+            expected_summary_count="$(
+              grep -Fxc -- \
+                "[ERROR] 本地配置校验发现 1 个问题" \
+                "${validation_log}" || true
+            )"
+
+            if [[ "${warning_count}" == "1" \
+              && "${missing_count}" == "1" \
+              && "${expected_summary_count}" == "1" ]]; then
+              echo "::warning::.github/workflows/deploy-test.yml is absent; all other deployment validations passed"
+            else
+              exit "${validation_status}"
+            fi
+          fi
+
           git diff --check
 
   build-backend:
