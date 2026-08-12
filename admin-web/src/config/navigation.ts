@@ -53,7 +53,7 @@ export const sections: NavigationSection[] = [
   { id: "pricing", label: "调价管理", desc: "基础价与个体调价", path: "/pricing", allowedRoles: ["Admin", "Ops", "Assistant"] },
   { id: "caseRecords", label: "咨询记录", desc: "记录提交概览", path: "/case-records", allowedRoles: ["Admin", "Ops", "Assistant"] },
   { id: "operationLogs", label: "操作记录", desc: "现有业务记录入口", path: "/operation-logs", allowedRoles: ["Admin", "Ops", "Assistant"] },
-  { id: "dataImport", label: "数据导入", desc: "导入完成订单", path: "/data-import", allowedRoles: ["Admin", "Ops", "Assistant"] },
+  { id: "dataImport", label: "数据导入&导出", desc: "按类型导入与导出 Excel 数据", path: "/data-import", allowedRoles: ["Admin", "Ops", "Assistant"] },
   {
     id: "userBoard",
     label: "来访管理",
