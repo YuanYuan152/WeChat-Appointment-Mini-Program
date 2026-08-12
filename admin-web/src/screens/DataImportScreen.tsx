@@ -1,43 +1,130 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { AppRoute, useAppRoute } from "@/components/AppRoute";
-import { Badge, EmptyState, PanelHeader, QueryButton, QueryResetButton } from "@/components/ui";
-import { formatFullDateTime, formatMoneyFromCents } from "@/lib/format";
-import { formatPatientNameWithContractTag } from "@/lib/patientContract";
-import { importCompletedOrders } from "@/services/imports";
-import type { CompletedOrderImportResult, CompletedOrderImportRowResult, CompletedOrderImportStatus } from "@/types/api";
+import {
+  Badge,
+  EmptyState,
+  PanelHeader,
+  QueryButton,
+  QueryField,
+  QueryResetButton,
+  queryControlClass,
+} from "@/components/ui";
+import {
+  downloadDataTransferTemplate,
+  exportDataTransfer,
+  importDataTransfer,
+} from "@/services/imports";
+import type {
+  DataTransferImportResult,
+  DataTransferKind,
+} from "@/types/api";
 
-const REQUIRED_HEADERS = [
-  "日期",
-  "星期",
-  "时间",
-  "咨询师",
-  "来访者",
-  "付费状况",
-  "付费时间",
-  "付费方式",
-  "付费金额",
-  "取消备注",
-  "形式",
-  "地点",
-  "咨询室",
-  "次数",
-  "咨询时数",
-  "备注",
-  "助理",
-  "目前阶段",
-  "最后咨询次数",
-  "总时长",
-  "合计收入",
-];
+const KINDS: DataTransferKind[] = ["visitors", "counselors", "orders"];
+const HISTORY_LIMIT = 8;
 
-const statusConfig: Record<CompletedOrderImportStatus, { label: string; tone: "green" | "gold" | "red" }> = {
-  IMPORTED: { label: "已导入", tone: "green" },
-  SKIPPED: { label: "已跳过", tone: "gold" },
-  FAILED: { label: "失败", tone: "red" },
+const KIND_CONFIG: Record<
+  DataTransferKind,
+  { label: string; description: string; rules: string[]; filename: string }
+> = {
+  visitors: {
+    label: "来访数据",
+    description: "批量维护来访者基础资料。",
+    rules: [
+      "请先下载最新模板，保持工作表名称和表头不变。",
+      "每行填写一位来访者；必填项、格式和可选值以模板中的说明为准。",
+      "系统会先校验整张表；只要存在任一错误，本次整表零写入。请根据下方工作表、单元格和问题修正后重试。",
+    ],
+    filename: "来访数据",
+  },
+  counselors: {
+    label: "咨询师数据",
+    description: "批量维护咨询师账号及资料。",
+    rules: [
+      "请使用本页下载的最新模板，不要删除或重命名工作表及表头。",
+      "每行填写一位咨询师；必填项、格式和可选值以模板中的说明为准。",
+      "系统会先校验整张表；只要存在任一错误，本次整表零写入。请根据下方工作表、单元格和问题修正后重试。",
+    ],
+    filename: "咨询师数据",
+  },
+  orders: {
+    label: "订单数据",
+    description: "批量维护预约及订单数据。",
+    rules: [
+      "请使用最新订单模板，并保持工作表名称、表头和日期时间格式不变。",
+      "导入前请确认来访者、咨询师及预约时间等关联信息准确，具体约束以模板说明为准。",
+      "系统会先校验整张表；只要存在任一错误，本次整表零写入。订单导出必须选择预约开始日期范围。",
+    ],
+    filename: "订单数据",
+  },
 };
+
+interface ImportHistoryItem {
+  id: string;
+  importedAt: string;
+  fileName: string;
+  success: boolean;
+  summary: string;
+}
+
+type KindFiles = Record<DataTransferKind, File | null>;
+type KindResults = Record<DataTransferKind, DataTransferImportResult | null>;
+type KindHistory = Record<DataTransferKind, ImportHistoryItem[]>;
+
+const emptyFiles = (): KindFiles => ({ visitors: null, counselors: null, orders: null });
+const emptyResults = (): KindResults => ({ visitors: null, counselors: null, orders: null });
+const emptyHistory = (): KindHistory => ({ visitors: [], counselors: [], orders: [] });
+
+function historyKey(kind: DataTransferKind) {
+  return `lxxl_admin_data_transfer_history_${kind}`;
+}
+
+function readHistory(kind: DataTransferKind): ImportHistoryItem[] {
+  try {
+    const value = window.localStorage.getItem(historyKey(kind));
+    if (!value) return [];
+    const parsed = JSON.parse(value) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (item): item is ImportHistoryItem =>
+        Boolean(
+          item &&
+            typeof item === "object" &&
+            "id" in item &&
+            "importedAt" in item &&
+            "fileName" in item &&
+            "success" in item &&
+            "summary" in item,
+        ),
+    ).slice(0, HISTORY_LIMIT);
+  } catch {
+    return [];
+  }
+}
+
+function saveFile(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
+function timestampForFilename() {
+  return new Date().toISOString().slice(0, 19).replaceAll(":", "-").replace("T", "_");
+}
+
+function formatFileSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+}
 
 export function DataImportScreen() {
   return (
@@ -50,199 +137,334 @@ export function DataImportScreen() {
 function DataImportContent() {
   const { clearNotice, setLoading, showNotice } = useAppRoute();
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const [file, setFile] = useState<File | null>(null);
-  const [result, setResult] = useState<CompletedOrderImportResult | null>(null);
+  const [activeKind, setActiveKind] = useState<DataTransferKind>("visitors");
+  const [files, setFiles] = useState<KindFiles>(emptyFiles);
+  const [results, setResults] = useState<KindResults>(emptyResults);
+  const [history, setHistory] = useState<KindHistory>(emptyHistory);
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [busyAction, setBusyAction] = useState<"template" | "import" | "export" | null>(null);
 
-  const hasRows = Boolean(result?.rows.length);
+  const config = KIND_CONFIG[activeKind];
+  const file = files[activeKind];
+  const result = results[activeKind];
 
-  const sortedRows = useMemo(() => {
-    if (!result) {
-      return [];
-    }
-    return [...result.rows].sort((left, right) => {
-      const order = { FAILED: 0, IMPORTED: 1, SKIPPED: 2 };
-      return order[left.status] - order[right.status] || left.rowNumber - right.rowNumber;
+  useEffect(() => {
+    setHistory({
+      visitors: readHistory("visitors"),
+      counselors: readHistory("counselors"),
+      orders: readHistory("orders"),
     });
-  }, [result]);
+  }, []);
 
-  const handleSubmit = async () => {
-    if (!file) {
-      showNotice("error", "请先选择需要导入的 .xlsx 文件");
-      return;
-    }
+  const runBusy = async (
+    action: "template" | "import" | "export",
+    work: () => Promise<void>,
+  ) => {
     clearNotice();
+    setBusyAction(action);
     setLoading(true);
     try {
-      const response = await importCompletedOrders(file);
-      setResult(response);
-      showNotice(response.failedCount > 0 ? "info" : "success", response.message || "导入完成");
+      await work();
     } catch (error) {
-      showNotice("error", error instanceof Error ? error.message : "导入失败");
+      throw error;
     } finally {
+      setBusyAction(null);
       setLoading(false);
     }
   };
 
-  const handleReset = () => {
-    setFile(null);
-    setResult(null);
-    if (inputRef.current) {
-      inputRef.current.value = "";
+  const addHistory = (
+    kind: DataTransferKind,
+    item: Omit<ImportHistoryItem, "id" | "importedAt">,
+  ) => {
+    const entry: ImportHistoryItem = {
+      ...item,
+      id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      importedAt: new Date().toISOString(),
+    };
+    setHistory((current) => {
+      const nextItems = [entry, ...current[kind]].slice(0, HISTORY_LIMIT);
+      window.localStorage.setItem(historyKey(kind), JSON.stringify(nextItems));
+      return { ...current, [kind]: nextItems };
+    });
+  };
+
+  const handleTemplateDownload = async () => {
+    try {
+      await runBusy("template", async () => {
+        const response = await downloadDataTransferTemplate(activeKind);
+        saveFile(response.blob, response.filename || `${config.filename}导入模板.xlsx`);
+        showNotice("success", "模板下载已开始");
+      });
+    } catch (error) {
+      showNotice("error", error instanceof Error ? error.message : "模板下载失败");
     }
+  };
+
+  const handleSelectedFileDownload = () => {
+    if (!file) {
+      showNotice("error", "请先选择 .xlsx 文件");
+      return;
+    }
+    saveFile(file, file.name);
+  };
+
+  const handleImport = async () => {
+    if (!file) {
+      showNotice("error", "请先选择需要导入的 .xlsx 文件");
+      return;
+    }
+    try {
+      await runBusy("import", async () => {
+        const response = await importDataTransfer(activeKind, file);
+        setResults((current) => ({ ...current, [activeKind]: response }));
+        const failedCount = response.errors.length;
+        const summary = `共 ${response.totalRows} 行，成功 ${response.importedCount} 行，错误 ${failedCount} 项`;
+        addHistory(activeKind, {
+          fileName: file.name,
+          success: failedCount === 0,
+          summary,
+        });
+        showNotice(failedCount > 0 ? "info" : "success", response.message || "导入完成");
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "导入失败";
+      addHistory(activeKind, { fileName: file.name, success: false, summary: message });
+      showNotice("error", message);
+    }
+  };
+
+  const handleExport = async () => {
+    if (activeKind === "orders") {
+      if (!startDate || !endDate) {
+        showNotice("error", "请选择预约开始日期的开始和结束日期");
+        return;
+      }
+      if (startDate > endDate) {
+        showNotice("error", "开始日期不能晚于结束日期");
+        return;
+      }
+    }
+    try {
+      await runBusy("export", async () => {
+        const response = await exportDataTransfer(
+          activeKind,
+          activeKind === "orders" ? { startDate, endDate } : undefined,
+        );
+        saveFile(
+          response.blob,
+          response.filename || `${config.filename}导出_${timestampForFilename()}.xlsx`,
+        );
+        showNotice("success", "数据导出已开始");
+      });
+    } catch (error) {
+      showNotice("error", error instanceof Error ? error.message : "数据导出失败");
+    }
+  };
+
+  const handleReset = () => {
+    setFiles((current) => ({ ...current, [activeKind]: null }));
+    setResults((current) => ({ ...current, [activeKind]: null }));
+    if (inputRef.current) inputRef.current.value = "";
     clearNotice();
+  };
+
+  const changeTab = (kind: DataTransferKind) => {
+    setActiveKind(kind);
+    clearNotice();
+    if (inputRef.current) inputRef.current.value = "";
   };
 
   return (
     <section className="overflow-hidden rounded-xl border border-[var(--lxxl-border)] bg-white">
       <PanelHeader
-        title="数据导入"
-        description="按模板导入历史客户记录；每一行客户记录会写入为一条已支付、已完成的咨询订单。"
+        title="数据导入导出"
+        description="下载标准模板、导入 Excel，或按数据类型导出备份。"
       />
 
-      <div className="space-y-6 px-6 py-5">
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
-          <div>
-            <h3 className="text-sm font-semibold">导入规则</h3>
-            <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">
-              系统会复用现有用户、角色、排期、订单和咨询单表。未找到来访者时会按姓名创建来访账号；
-              一条客户记录会导入为一条已支付、已完成的订单记录。未找到咨询师、地点无法识别或同时间已有咨询时，
-              该行会标记失败并继续处理下一行。
+      <div className="flex overflow-x-auto border-b border-[var(--lxxl-border)] px-6" role="tablist">
+        {KINDS.map((kind) => (
+          <button
+            key={kind}
+            aria-selected={activeKind === kind}
+            className={`shrink-0 border-b-2 px-5 py-4 text-sm font-medium transition ${
+              activeKind === kind
+                ? "border-[var(--lxxl-green)] text-[var(--lxxl-green)]"
+                : "border-transparent text-[var(--lxxl-muted)] hover:text-[var(--lxxl-text)]"
+            }`}
+            role="tab"
+            type="button"
+            onClick={() => changeTab(kind)}
+          >
+            {KIND_CONFIG[kind].label}
+          </button>
+        ))}
+      </div>
+
+      <div className="space-y-6 px-6 py-5" role="tabpanel">
+        <div>
+          <h3 className="text-sm font-semibold">{config.label}导入规则</h3>
+          <p className="mt-1 text-sm text-[var(--lxxl-muted)]">{config.description}</p>
+          <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm leading-6 text-[var(--lxxl-muted)]">
+            {config.rules.map((rule) => <li key={rule}>{rule}</li>)}
+          </ol>
+          <QueryResetButton className="mt-4 w-auto" disabled={busyAction !== null} onClick={handleTemplateDownload}>
+            {busyAction === "template" ? "下载中..." : "下载 Excel 模板"}
+          </QueryResetButton>
+        </div>
+
+        <div className="grid gap-5 lg:grid-cols-2">
+          <div className="rounded-xl bg-[#FAF8F4] p-4">
+            <h3 className="text-sm font-semibold">正式导入</h3>
+            <label className="mt-4 block text-xs font-medium text-[var(--lxxl-muted)]">
+              Excel 文件 <span className="ml-1 text-[#B34B43]">*</span>
+            </label>
+            <input
+              key={activeKind}
+              ref={inputRef}
+              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              className="mt-2 block w-full cursor-pointer rounded-xl border border-[var(--lxxl-border)] bg-white px-3 py-2 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-[var(--lxxl-green)] file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white"
+              type="file"
+              onChange={(event) => {
+                const selected = event.target.files?.[0] || null;
+                if (selected && !selected.name.toLowerCase().endsWith(".xlsx")) {
+                  event.target.value = "";
+                  showNotice("error", "仅支持 .xlsx 文件");
+                  return;
+                }
+                setFiles((current) => ({ ...current, [activeKind]: selected }));
+                setResults((current) => ({ ...current, [activeKind]: null }));
+              }}
+            />
+            <p className="mt-3 break-all text-xs leading-5 text-[var(--lxxl-muted)]">
+              {file ? `已选择：${file.name}（${formatFileSize(file.size)}）` : "仅支持 .xlsx 文件。"}
             </p>
-            <p className="mt-2 text-xs leading-5 text-[var(--lxxl-muted)]">
-              Excel 第一行需包含以下全部表头；星期、备注及累计统计字段可以留空，但表头需要保留。
-            </p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {REQUIRED_HEADERS.map((header) => (
-                <span
-                  key={header}
-                  className="rounded-full bg-[#FAF8F4] px-3 py-1 text-xs font-medium text-[var(--lxxl-muted)]"
-                >
-                  {header}
-                </span>
-              ))}
+            <div className="mt-4 flex flex-wrap gap-3">
+              <QueryButton disabled={!file || busyAction !== null} onClick={handleImport}>
+                {busyAction === "import" ? "导入中..." : "正式导入"}
+              </QueryButton>
+              <QueryResetButton disabled={!file || busyAction !== null} onClick={handleSelectedFileDownload}>
+                重新下载
+              </QueryResetButton>
+              <QueryResetButton disabled={busyAction !== null} onClick={handleReset}>重置</QueryResetButton>
             </div>
           </div>
 
           <div className="rounded-xl bg-[#FAF8F4] p-4">
-            <label className="block text-xs font-medium text-[var(--lxxl-muted)]">
-              Excel 文件 <span className="ml-1 text-[#B34B43]">*</span>
-            </label>
-            <input
-              ref={inputRef}
-              accept=".xlsx"
-              className="mt-2 block w-full cursor-pointer rounded-xl border border-[var(--lxxl-border)] bg-white px-3 py-2 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-[var(--lxxl-green)] file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white"
-              type="file"
-              onChange={(event) => {
-                setFile(event.target.files?.[0] || null);
-                setResult(null);
-              }}
-            />
-            <div className="mt-3 text-xs leading-5 text-[var(--lxxl-muted)]">
-              {file ? `已选择：${file.name}` : "仅支持 .xlsx 文件。"}
-            </div>
-            <div className="mt-4 flex gap-3">
-              <QueryButton disabled={!file} onClick={handleSubmit}>
-                开始导入
-              </QueryButton>
-              <QueryResetButton onClick={handleReset}>重置</QueryResetButton>
-            </div>
+            <h3 className="text-sm font-semibold">数据导出</h3>
+            <p className="mt-2 text-xs leading-5 text-[var(--lxxl-muted)]">
+              {activeKind === "orders"
+                ? "按预约开始日期范围导出订单数据，开始和结束日期均包含在范围内。"
+                : `导出当前系统中的全部${config.label}。`}
+            </p>
+            {activeKind === "orders" && (
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <QueryField label="预约开始日期（起）" required>
+                  <input className={queryControlClass} type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+                </QueryField>
+                <QueryField label="预约开始日期（止）" required>
+                  <input className={queryControlClass} type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+                </QueryField>
+              </div>
+            )}
+            <QueryButton className="mt-4 w-auto" disabled={busyAction !== null} onClick={handleExport}>
+              {busyAction === "export" ? "导出中..." : activeKind === "orders" ? "按日期范围导出" : "导出全部"}
+            </QueryButton>
           </div>
         </div>
 
         {result && (
-          <div className="grid gap-3 sm:grid-cols-4">
-            <ImportStat label="总行数" value={result.totalRows} />
-            <ImportStat label="成功导入" value={result.importedCount} tone="green" />
-            <ImportStat label="跳过" value={result.skippedCount} tone="gold" />
-            <ImportStat label="失败" value={result.failedCount} tone="red" />
+          <div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <ImportStat label="总行数" value={result.totalRows} />
+              <ImportStat label="成功导入" value={result.importedCount} tone="green" />
+              <ImportStat label="错误项" value={result.errors.length} tone="red" />
+            </div>
+            <p className="mt-3 text-sm text-[var(--lxxl-muted)]">{result.message}</p>
           </div>
         )}
       </div>
 
-      <div className="border-t border-[var(--lxxl-border)]">
-        {!hasRows ? (
-          <EmptyState text="导入后会在这里展示每一行的处理结果。" />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[920px] text-left text-sm">
-              <thead className="bg-[#FAF8F4] text-xs text-[var(--lxxl-muted)]">
-                <tr>
-                  <th className="px-5 py-3">行号</th>
-                  <th className="px-5 py-3">状态</th>
-                  <th className="px-5 py-3">来访者</th>
-                  <th className="px-5 py-3">咨询师</th>
-                  <th className="px-5 py-3">咨询时间</th>
-                  <th className="px-5 py-3">金额</th>
-                  <th className="px-5 py-3">结果说明</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedRows.map((row) => (
-                  <ImportResultRow key={`${row.rowNumber}-${row.status}`} row={row} />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      <ImportErrors result={result} />
+      <ImportHistory items={history[activeKind]} />
     </section>
   );
 }
 
-function ImportStat({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number;
-  tone?: "green" | "gold" | "red";
-}) {
-  const toneClass = {
-    green: "text-[var(--lxxl-green)]",
-    gold: "text-[#967342]",
-    red: "text-[#A13F37]",
-  }[tone || "green"];
-
+function ImportStat({ label, value, tone }: { label: string; value: number; tone?: "green" | "red" }) {
   return (
     <div className="rounded-xl bg-[#FAF8F4] p-4">
       <div className="text-xs text-[var(--lxxl-muted)]">{label}</div>
-      <div className={`mt-1 text-xl font-semibold ${tone ? toneClass : ""}`}>{value}</div>
+      <div className={`mt-1 text-xl font-semibold ${tone === "green" ? "text-[var(--lxxl-green)]" : tone === "red" ? "text-[#A13F37]" : ""}`}>
+        {value}
+      </div>
     </div>
   );
 }
 
-function ImportResultRow({ row }: { row: CompletedOrderImportRowResult }) {
-  const status = statusConfig[row.status];
-  const timeRange =
-    row.startTime || row.endTime
-      ? `${formatFullDateTime(row.startTime)} 至 ${formatFullDateTime(row.endTime)}`
-      : "-";
-
+function ImportErrors({ result }: { result: DataTransferImportResult | null }) {
   return (
-    <tr className="border-t border-[var(--lxxl-border)] align-top">
-      <td className="whitespace-nowrap px-5 py-4 text-[var(--lxxl-muted)]">{row.rowNumber}</td>
-      <td className="whitespace-nowrap px-5 py-4">
-        <Badge tone={status.tone}>{status.label}</Badge>
-      </td>
-      <td className="px-5 py-4">
-        {formatPatientNameWithContractTag(row.patientName, row.patientContractTag) || "-"}
-      </td>
-      <td className="px-5 py-4">{row.counselorName || "-"}</td>
-      <td className="px-5 py-4 text-[var(--lxxl-muted)]">{timeRange}</td>
-      <td className="whitespace-nowrap px-5 py-4">
-        {row.amount == null ? "-" : formatMoneyFromCents(row.amount)}
-      </td>
-      <td className="px-5 py-4 text-[var(--lxxl-muted)]">
-        <div>{row.message}</div>
-        {(row.orderId || row.consultationId) && (
-          <div className="mt-1 text-xs">
-            已生成{row.orderId ? "订单" : ""}
-            {row.orderId && row.consultationId ? "和" : ""}
-            {row.consultationId ? "咨询记录" : ""}
-          </div>
-        )}
-      </td>
-    </tr>
+    <div className="border-t border-[var(--lxxl-border)]">
+      <div className="px-6 pt-5">
+        <h3 className="text-sm font-semibold">Excel 错误详情</h3>
+      </div>
+      {!result ? (
+        <EmptyState text="导入后会在这里显示工作表、单元格和问题。" />
+      ) : result.errors.length === 0 ? (
+        <EmptyState text="本次导入没有 Excel 校验错误。" />
+      ) : (
+        <div className="overflow-x-auto px-6 pb-5 pt-4">
+          <table className="w-full min-w-[680px] text-left text-sm">
+            <thead className="bg-[#FAF8F4] text-xs text-[var(--lxxl-muted)]">
+              <tr><th className="px-4 py-3">工作表</th><th className="px-4 py-3">单元格</th><th className="px-4 py-3">问题</th></tr>
+            </thead>
+            <tbody>
+              {result.errors.map((error, index) => (
+                <tr key={`${error.sheet}-${error.cell}-${index}`} className="border-t border-[var(--lxxl-border)] align-top">
+                  <td className="px-4 py-3">{error.sheet || "-"}</td>
+                  <td className="whitespace-nowrap px-4 py-3 font-medium text-[#A13F37]">{error.cell || "-"}</td>
+                  <td className="px-4 py-3 text-[var(--lxxl-muted)]">{error.message || "-"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ImportHistory({ items }: { items: ImportHistoryItem[] }) {
+  return (
+    <div className="border-t border-[var(--lxxl-border)]">
+      <div className="px-6 pt-5">
+        <h3 className="text-sm font-semibold">最近导入结果</h3>
+        <p className="mt-1 text-xs text-[var(--lxxl-muted)]">
+          最多保留最近 {HISTORY_LIMIT} 次；记录仅保存在当前浏览器，不会同步到其他设备或账号。
+        </p>
+      </div>
+      {items.length === 0 ? (
+        <EmptyState text="当前浏览器暂无该类型的导入记录。" />
+      ) : (
+        <div className="overflow-x-auto px-6 pb-5 pt-4">
+          <table className="w-full min-w-[760px] text-left text-sm">
+            <thead className="bg-[#FAF8F4] text-xs text-[var(--lxxl-muted)]">
+              <tr><th className="px-4 py-3">时间</th><th className="px-4 py-3">文件</th><th className="px-4 py-3">结果</th><th className="px-4 py-3">摘要</th></tr>
+            </thead>
+            <tbody>
+              {items.map((item) => (
+                <tr key={item.id} className="border-t border-[var(--lxxl-border)] align-top">
+                  <td className="whitespace-nowrap px-4 py-3 text-[var(--lxxl-muted)]">{new Date(item.importedAt).toLocaleString("zh-CN", { hour12: false })}</td>
+                  <td className="max-w-64 break-all px-4 py-3">{item.fileName}</td>
+                  <td className="px-4 py-3"><Badge tone={item.success ? "green" : "red"}>{item.success ? "成功" : "失败/有错误"}</Badge></td>
+                  <td className="px-4 py-3 text-[var(--lxxl-muted)]">{item.summary}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
   );
 }

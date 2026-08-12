@@ -12,7 +12,7 @@ from io import BytesIO
 from typing import Any, Optional
 from xml.etree import ElementTree as ET
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
 from sqlalchemy import or_
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.orm import Session
@@ -46,8 +46,17 @@ from schedule_meta import schedule_note
 from patient_contract_service import patient_contract_extras
 from staff_remark_service import get_staff_remark, get_staff_remarks_map
 from staff_roles import account_has_staff_workbench, staff_workbench_account_ids
+from data_transfer_service import export_bytes, import_workbook, template_bytes
 
 router = APIRouter(prefix="/api/web/admin", tags=["WebAdmin"])
+
+
+def _xlsx_response(content: bytes, filename: str) -> Response:
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 def require_ops_or_admin(
@@ -75,6 +84,59 @@ def require_staff_workbench(
     ):
         raise HTTPException(status_code=403, detail="无管理工作台权限")
     return current_account
+
+
+@router.get("/data-transfer/{kind}/template", summary="下载数据导入模板")
+def data_transfer_template(
+    kind: str,
+    _admin: AppAccount = Depends(require_ops_or_admin),
+):
+    try:
+        content = template_bytes(kind)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return _xlsx_response(content, f"{kind}-template.xlsx")
+
+
+@router.post("/data-transfer/{kind}/import", summary="导入管理数据")
+async def data_transfer_import(
+    kind: str,
+    file: UploadFile = File(...),
+    current_admin: AppAccount = Depends(require_ops_or_admin),
+    db: Session = Depends(get_db),
+):
+    try:
+        template_bytes(kind)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if not (file.filename or "").lower().endswith(".xlsx"):
+        return {
+            "message": "导入失败，共发现 1 个错误，未写入任何数据",
+            "totalRows": 0,
+            "importedCount": 0,
+            "errors": [{"sheet": "文件", "cell": "", "message": "请上传 .xlsx 格式文件"}],
+        }
+    return import_workbook(kind, await file.read(), db, current_admin.Id)
+
+
+@router.get("/data-transfer/{kind}/export", summary="导出管理数据")
+def data_transfer_export(
+    kind: str,
+    start_date: Optional[date] = Query(None, alias="startDate"),
+    end_date: Optional[date] = Query(None, alias="endDate"),
+    _admin: AppAccount = Depends(require_ops_or_admin),
+    db: Session = Depends(get_db),
+):
+    try:
+        content = export_bytes(
+            kind,
+            db,
+            start_date=start_date,
+            end_date=end_date,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _xlsx_response(content, f"{kind}-export.xlsx")
 
 
 def _visitor_account_ids(db: Session) -> set[int]:

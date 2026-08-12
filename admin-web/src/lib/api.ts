@@ -147,6 +147,58 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
   return payload as T;
 }
 
+export interface ApiFileResponse {
+  blob: Blob;
+  filename?: string;
+}
+
+function getDownloadFilename(contentDisposition: string | null) {
+  if (!contentDisposition) {
+    return undefined;
+  }
+  const encodedMatch = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (encodedMatch) {
+    try {
+      return decodeURIComponent(encodedMatch[1]);
+    } catch {
+      return encodedMatch[1];
+    }
+  }
+  const plainMatch = contentDisposition.match(/filename="?([^";]+)"?/i);
+  return plainMatch?.[1];
+}
+
+export async function apiFileRequest(path: string, init: RequestInit = {}): Promise<ApiFileResponse> {
+  const headers = new Headers(init.headers);
+  const token = getStoredToken();
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...init,
+    headers,
+  });
+
+  if (response.status === 401) {
+    notifyUnauthorized(token);
+  }
+  if (!response.ok) {
+    const text = await response.text();
+    const payload = parseResponsePayload(text);
+    throw new ApiError(
+      response.status,
+      getErrorMessage(payload, `下载失败：HTTP ${response.status}`),
+      payload,
+    );
+  }
+
+  return {
+    blob: await response.blob(),
+    filename: getDownloadFilename(response.headers.get("Content-Disposition")),
+  };
+}
+
 export async function loginWithDevCode(code: DevLoginCode) {
   const result = await apiRequest<LoginResponse>("/api/mini/auth/login", {
     method: "POST",

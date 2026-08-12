@@ -228,6 +228,21 @@ export interface CompletedOrderImportResult {
   rows: CompletedOrderImportRowResult[];
 }
 
+export type DataTransferKind = "visitors" | "counselors" | "orders";
+
+export interface DataTransferImportError {
+  sheet: string;
+  cell: string;
+  message: string;
+}
+
+export interface DataTransferImportResult {
+  message: string;
+  totalRows: number;
+  importedCount: number;
+  errors: DataTransferImportError[];
+}
+
 export interface Banner {
   Id: number;
   Title: string;
