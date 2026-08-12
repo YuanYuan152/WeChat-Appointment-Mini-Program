@@ -236,11 +236,23 @@ export interface DataTransferImportError {
   message: string;
 }
 
+export type DataTransferImportStatus = "IMPORTED" | "REJECTED" | "FAILED";
+
+export interface DataTransferImportRowResult {
+  sheet: string;
+  rowNumber: number;
+  status: DataTransferImportStatus;
+  errors: DataTransferImportError[];
+}
+
 export interface DataTransferImportResult {
-  message: string;
+  message?: string;
   totalRows: number;
   importedCount: number;
+  rejectedCount: number;
+  failedCount: number;
   errors: DataTransferImportError[];
+  rows: DataTransferImportRowResult[];
 }
 
 export interface Banner {

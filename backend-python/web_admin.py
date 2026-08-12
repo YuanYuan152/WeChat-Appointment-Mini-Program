@@ -111,10 +111,13 @@ async def data_transfer_import(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     if not (file.filename or "").lower().endswith(".xlsx"):
         return {
-            "message": "导入失败，共发现 1 个错误，未写入任何数据",
+            "message": "导入失败：请上传 .xlsx 格式文件",
             "totalRows": 0,
             "importedCount": 0,
+            "rejectedCount": 0,
+            "failedCount": 0,
             "errors": [{"sheet": "文件", "cell": "", "message": "请上传 .xlsx 格式文件"}],
+            "rows": [],
         }
     return import_workbook(kind, await file.read(), db, current_admin.Id)
 

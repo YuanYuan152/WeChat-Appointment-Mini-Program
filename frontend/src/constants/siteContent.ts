@@ -1,5 +1,7 @@
 /** 站点静态内容：往期精华、了解咨询、联系我们、济心理 */
 
+import { ASSISTANT_CONTACT } from './contactInfo'
+
 export interface ContentCard {
   id: string
   title: string
@@ -314,7 +316,7 @@ export const ABOUT_CONTENT: ContentDetail = {
     {
       heading: '联系方式',
       paragraphs: [
-        '咨询助理电话：17702168106',
+        `咨询助理电话：${ASSISTANT_CONTACT.phone}`,
         '机构电话：64433888-2807',
         '邮箱：03123312@163.com',
       ],

@@ -1,6 +1,7 @@
 import unittest
 from datetime import date, datetime
 from io import BytesIO
+from unittest.mock import patch
 
 from openpyxl import Workbook, load_workbook
 from sqlalchemy import create_engine
@@ -105,7 +106,7 @@ class DataTransferServiceTests(unittest.TestCase):
             0,
         )
 
-    def test_visitor_and_counselor_import_upsert_profiles_prices_and_remarks(self):
+    def test_visitor_and_counselor_import_create_profiles_prices_and_remarks(self):
         visitor_result = import_workbook(
             "visitors",
             workbook_bytes(
@@ -205,7 +206,7 @@ class DataTransferServiceTests(unittest.TestCase):
         self.assertEqual(consultation.Status, "DONE")
         self.assertEqual(record.Subjective, "主观")
 
-    def test_order_without_code_is_idempotent_and_risk_text_alone_is_not_a_record(self):
+    def test_order_without_code_rejects_duplicate_and_risk_text_alone_is_not_a_record(self):
         patient = self.add_role_account(1, "13800000001", "Patient", "来访甲")
         counselor = self.add_role_account(2, "13800000002", "Counselor", "咨询师甲")
         self.db.add(
@@ -243,7 +244,9 @@ class DataTransferServiceTests(unittest.TestCase):
         )
 
         self.assertEqual(first["importedCount"], 1)
-        self.assertEqual(second["importedCount"], 1)
+        self.assertEqual(second["importedCount"], 0)
+        self.assertEqual(second["rejectedCount"], 1)
+        self.assertEqual(second["rows"][0]["status"], "REJECTED")
         self.assertEqual(self.db.query(AppOrder).count(), 1)
         self.assertEqual(self.db.query(AppConsultation).count(), 1)
         self.assertEqual(self.db.query(AppSchedule).count(), 1)
@@ -260,6 +263,136 @@ class DataTransferServiceTests(unittest.TestCase):
             any("主观、客观、评估或计划" in error["message"] for error in invalid["errors"])
         )
         self.assertEqual(self.db.query(AppOrder).count(), 1)
+
+    def test_visitor_partial_success_duplicate_and_statistics(self):
+        self.db.add(
+            AppAccount(
+                Id=10,
+                Mobile="13800000010",
+                ActiveRole="Patient",
+                IsActive=False,
+                DeletedAt=datetime(2026, 1, 1),
+            )
+        )
+        self.db.commit()
+        content = workbook_bytes(
+            "visitors",
+            [
+                ["13800000001", "甲", "", "", "", "", "小程序注册", ""],
+                ["13800000001", "重复甲", "", "", "", "", "小程序注册", ""],
+                ["13800000010", "已删除账号", "", "", "", "", "小程序注册", ""],
+                ["13800000003", "丙", "", "", "", "", "未知来源", ""],
+                ["13800000004", "丁", "", "", "", "", "小程序注册", ""],
+            ],
+        )
+
+        result = import_workbook("visitors", content, self.db, 99)
+
+        self.assertEqual(result["totalRows"], 5)
+        self.assertEqual(result["importedCount"], 2)
+        self.assertEqual(result["rejectedCount"], 3)
+        self.assertEqual(result["failedCount"], 0)
+        self.assertEqual(
+            [row["status"] for row in result["rows"]],
+            ["IMPORTED", "REJECTED", "REJECTED", "REJECTED", "IMPORTED"],
+        )
+        self.assertEqual(
+            self.db.query(AppAccount)
+            .filter(AppAccount.Mobile.in_(["13800000001", "13800000004"]))
+            .count(),
+            2,
+        )
+
+    def test_row_failure_rolls_back_only_current_row(self):
+        content = workbook_bytes(
+            "visitors",
+            [
+                ["13800000001", "甲", "", "", "", "", "小程序注册", ""],
+                ["13800000002", "乙", "", "", "", "", "小程序注册", ""],
+                ["13800000003", "丙", "", "", "", "", "小程序注册", ""],
+            ],
+        )
+        from data_transfer_service import _apply_visitor
+
+        def fail_middle(value, db, actor_id):
+            if value["mobile"] == "13800000002":
+                raise RuntimeError("模拟当前行写入失败")
+            return _apply_visitor(value, db, actor_id)
+
+        with patch("data_transfer_service._apply_visitor", side_effect=fail_middle):
+            result = import_workbook("visitors", content, self.db, 99)
+
+        self.assertEqual(result["importedCount"], 2)
+        self.assertEqual(result["rejectedCount"], 0)
+        self.assertEqual(result["failedCount"], 1)
+        self.assertEqual(
+            [row["status"] for row in result["rows"]],
+            ["IMPORTED", "FAILED", "IMPORTED"],
+        )
+        self.assertIsNotNone(
+            self.db.query(AppAccount).filter(AppAccount.Mobile == "13800000001").first()
+        )
+        self.assertIsNone(
+            self.db.query(AppAccount).filter(AppAccount.Mobile == "13800000002").first()
+        )
+        self.assertIsNotNone(
+            self.db.query(AppAccount).filter(AppAccount.Mobile == "13800000003").first()
+        )
+
+    def test_order_duplicate_checks_include_cancelled_consultations(self):
+        patient = self.add_role_account(1, "13800000001", "Patient", "来访甲")
+        counselor = self.add_role_account(2, "13800000002", "Counselor", "咨询师甲")
+        self.db.add(
+            AppCounselorProfile(
+                AccountId=counselor.Id,
+                Name="咨询师甲",
+                CounselorType="PROFESSIONAL",
+                Billing=70000,
+                IsActive=True,
+            )
+        )
+        self.db.add(
+            AppConsultation(
+                PatientId=patient.Id,
+                CounselorId=counselor.Id,
+                Status="CANCELLED",
+                StartTime=datetime(2026, 8, 12, 14, 0),
+                EndTime=datetime(2026, 8, 12, 15, 0),
+            )
+        )
+        self.db.commit()
+
+        result = import_workbook(
+            "orders",
+            workbook_bytes(
+                "orders",
+                [[
+                    "NEW-CODE",
+                    patient.Mobile,
+                    "",
+                    counselor.Mobile,
+                    "",
+                    ORDER_STATUSES[0],
+                    datetime(2026, 8, 12, 14, 0),
+                    "视频",
+                    "线上",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                ]],
+            ),
+            self.db,
+            99,
+        )
+
+        self.assertEqual(result["importedCount"], 0)
+        self.assertEqual(result["rejectedCount"], 1)
+        self.assertTrue(
+            any("订单已存在" in error["message"] for error in result["errors"])
+        )
+        self.assertEqual(self.db.query(AppOrder).count(), 0)
 
     def test_order_export_filters_inclusive_dates_and_derives_status(self):
         patient = self.add_role_account(1, "13800000001", "Patient", "来访甲")

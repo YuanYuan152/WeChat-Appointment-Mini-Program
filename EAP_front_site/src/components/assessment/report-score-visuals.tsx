@@ -2,8 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 import type { DimensionScoreItem, ScoreRange } from "@/lib/api/types";
+import { ASSISTANT_CONTACT } from "@/lib/booking/contact-info";
 
 export function getRangeMax(ranges?: ScoreRange[]): number {
   if (!ranges?.length) return 100;
@@ -782,37 +784,14 @@ export function DimensionRadar({
           </div>
 
           <div className="mt-auto flex w-full flex-col items-center gap-1 pb-1 pt-3">
-            <div
-              className="flex h-12 w-12 items-center justify-center rounded border border-border bg-white p-0.5"
-              aria-hidden
-            >
-              <svg viewBox="0 0 29 29" className="h-full w-full text-foreground" role="img">
-                <title>联系助理二维码（示意）</title>
-                <rect width="29" height="29" fill="#fff" />
-                {[
-                  [0, 0],
-                  [22, 0],
-                  [0, 22],
-                ].map(([ox, oy], i) => (
-                  <g key={i}>
-                    <rect x={ox} y={oy} width="7" height="7" fill="currentColor" />
-                    <rect x={ox + 1} y={oy + 1} width="5" height="5" fill="#fff" />
-                    <rect x={ox + 2} y={oy + 2} width="3" height="3" fill="currentColor" />
-                  </g>
-                ))}
-                {[
-                  [9, 1], [11, 1], [13, 2], [10, 3], [14, 3], [16, 4], [12, 5], [15, 5],
-                  [9, 7], [11, 7], [13, 7], [17, 7], [19, 8], [10, 9], [14, 9], [16, 9],
-                  [18, 10], [12, 11], [15, 11], [20, 11], [9, 12], [13, 13], [17, 13],
-                  [11, 14], [19, 14], [10, 15], [14, 15], [16, 16], [12, 17], [18, 17],
-                  [9, 18], [13, 18], [15, 19], [17, 19], [11, 20], [19, 20],
-                  [8, 22], [10, 23], [12, 22], [14, 24], [16, 23], [18, 24], [20, 22],
-                  [22, 9], [24, 10], [23, 12], [25, 14], [22, 15], [24, 17], [23, 19],
-                  [8, 9], [1, 9], [3, 10], [2, 12], [4, 14], [1, 15], [3, 17], [2, 19],
-                ].map(([x, y], i) => (
-                  <rect key={`c-${i}`} x={x} y={y} width="1.2" height="1.2" fill="currentColor" />
-                ))}
-              </svg>
+            <div className="flex h-36 w-24 items-center justify-center overflow-hidden rounded border border-border bg-white">
+              <Image
+                alt="联系助理微信二维码"
+                className="h-full w-full object-contain"
+                height={256}
+                src={ASSISTANT_CONTACT.qrcodeSrc}
+                width={160}
+              />
             </div>
             <p className="max-w-[120px] text-center text-[9px] leading-snug text-muted-foreground/65">
               如需获取完整详细报告和专业指导请扫码联系助理

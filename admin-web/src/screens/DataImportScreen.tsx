@@ -35,7 +35,8 @@ const KIND_CONFIG: Record<
     rules: [
       "请先下载最新模板，保持工作表名称和表头不变。",
       "每行填写一位来访者；必填项、格式和可选值以模板中的说明为准。",
-      "系统会先校验整张表；只要存在任一错误，本次整表零写入。请根据下方工作表、单元格和问题修正后重试。",
+      "来访手机号与数据库或同一文件中已成功导入的手机号重复时，该行不会导入。",
+      "错误行或重复行仅拒绝该行，其他合格行会继续导入；请根据下方工作表、单元格和问题修正后重试。",
     ],
     filename: "来访用户信息表",
   },
@@ -45,7 +46,8 @@ const KIND_CONFIG: Record<
     rules: [
       "请使用本页下载的最新模板，不要删除或重命名工作表及表头。",
       "每行填写一位咨询师；必填项、格式和可选值以模板中的说明为准。",
-      "系统会先校验整张表；只要存在任一错误，本次整表零写入。请根据下方工作表、单元格和问题修正后重试。",
+      "咨询师手机号与数据库或同一文件中已成功导入的手机号重复时，该行不会导入。",
+      "错误行或重复行仅拒绝该行，其他合格行会继续导入；请根据下方工作表、单元格和问题修正后重试。",
     ],
     filename: "咨询师用户信息表",
   },
@@ -55,7 +57,8 @@ const KIND_CONFIG: Record<
     rules: [
       "请使用最新订单模板，并保持工作表名称、表头和日期时间格式不变。",
       "导入前请确认来访者、咨询师及预约时间等关联信息准确，具体约束以模板说明为准。",
-      "系统会先校验整张表；只要存在任一错误，本次整表零写入。订单导出必须选择预约开始日期范围。",
+      "来访电话、咨询师电话与咨询时间三项和数据库或同一文件中的订单重复时，该行不会导入。",
+      "错误行或重复行仅拒绝该行，其他合格行会继续导入；订单导出必须选择预约开始日期范围。",
     ],
     filename: "咨询订单信息表",
   },
@@ -228,14 +231,14 @@ function DataImportContent() {
       await runBusy("import", async () => {
         const response = await importDataTransfer(activeKind, file);
         setResults((current) => ({ ...current, [activeKind]: response }));
-        const failedCount = response.errors.length;
-        const summary = `共 ${response.totalRows} 行，成功 ${response.importedCount} 行，错误 ${failedCount} 项`;
+        const unsuccessfulCount = response.rejectedCount + response.failedCount;
+        const summary = `共 ${response.totalRows} 行，导入 ${response.importedCount} 行，拒绝 ${response.rejectedCount} 行，失败 ${response.failedCount} 行`;
         addHistory(activeKind, {
           fileName: file.name,
-          success: failedCount === 0,
+          success: unsuccessfulCount === 0,
           summary,
         });
-        showNotice(failedCount > 0 ? "info" : "success", response.message || "导入完成");
+        showNotice(unsuccessfulCount > 0 ? "info" : "success", response.message || "导入完成");
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "导入失败";
@@ -277,16 +280,10 @@ function DataImportContent() {
   };
 
   const clearSelectedFile = () => {
-    if (!activeKind) return;
+    if (!activeKind || busyAction !== null) return;
     setFiles((current) => ({ ...current, [activeKind]: null }));
-    if (inputRef.current) inputRef.current.value = "";
-  };
-
-  const handleReset = () => {
-    if (!activeKind) return;
-    clearSelectedFile();
     setResults((current) => ({ ...current, [activeKind]: null }));
-    clearNotice();
+    if (inputRef.current) inputRef.current.value = "";
   };
 
   const changeKind = (kind: DataTransferKind | "") => {
@@ -399,35 +396,52 @@ function DataImportContent() {
                   }}
                 />
               </label>
-              <span className="min-w-0 flex-1 break-all text-xs leading-5 text-[var(--lxxl-muted)]">
+              <span className="min-w-0 flex-1 text-xs leading-5 text-[var(--lxxl-muted)]">
                 {!hasType
                   ? "请先选择导入&导出类型后再选择文件"
                   : file
-                    ? `已选择：${file.name}（${formatFileSize(file.size)}）`
+                    ? "已选择 1 个文件"
                     : "未选择文件（仅支持 .xlsx）"}
               </span>
             </div>
 
             {file ? (
-              <div className="mt-4 flex flex-wrap gap-3">
+              <>
+                <div className="relative mt-4 rounded-lg border border-[var(--lxxl-border)] bg-white px-4 py-3 pr-11">
+                  <button
+                    className="block max-w-full break-all text-left text-sm font-medium text-[var(--lxxl-green)] underline underline-offset-2 hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-45"
+                    disabled={busyAction !== null}
+                    title="下载所选原文件"
+                    type="button"
+                    onClick={handleSelectedFileDownload}
+                  >
+                    {file.name}
+                  </button>
+                  <p className="mt-1 text-xs text-[var(--lxxl-muted)]">
+                    {formatFileSize(file.size)}
+                  </p>
+                  <button
+                    aria-label={`删除文件 ${file.name}`}
+                    className="absolute right-3 top-2 text-xl leading-none text-[#B34B43] hover:opacity-70 disabled:cursor-not-allowed disabled:opacity-35"
+                    disabled={busyAction !== null}
+                    title="删除文件"
+                    type="button"
+                    onClick={clearSelectedFile}
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className="mt-4">
                 <QueryButton disabled={busyAction !== null} onClick={handleImport}>
                   {busyAction === "import" ? "导入中..." : "开始导入"}
                 </QueryButton>
-                <QueryResetButton
-                  disabled={busyAction !== null}
-                  onClick={handleSelectedFileDownload}
-                >
-                  下载并预览
-                </QueryResetButton>
-                <QueryResetButton disabled={busyAction !== null} onClick={handleReset}>
-                  重置
-                </QueryResetButton>
-              </div>
+                </div>
+              </>
             ) : (
               <p className="mt-4 text-xs text-[var(--lxxl-muted)]">
                 {hasType
-                  ? "选择文件后，将显示「开始导入 / 下载并预览 / 重置」。"
-                  : "选择导入&导出类型并选择文件后，将显示「开始导入 / 下载并预览 / 重置」。"}
+                  ? "选择文件后，将显示文件卡片和「开始导入」。"
+                  : "选择导入&导出类型并选择文件后，将显示文件卡片和「开始导入」。"}
               </p>
             )}
           </div>
@@ -478,12 +492,15 @@ function DataImportContent() {
 
         {result && (
           <div>
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <ImportStat label="总行数" value={result.totalRows} />
               <ImportStat label="成功导入" value={result.importedCount} tone="green" />
-              <ImportStat label="错误项" value={result.errors.length} tone="red" />
+              <ImportStat label="拒绝行数" value={result.rejectedCount} tone="red" />
+              <ImportStat label="失败行数" value={result.failedCount} tone="red" />
             </div>
-            <p className="mt-3 text-sm text-[var(--lxxl-muted)]">{result.message}</p>
+            {result.message && (
+              <p className="mt-3 text-sm text-[var(--lxxl-muted)]">{result.message}</p>
+            )}
           </div>
         )}
       </div>

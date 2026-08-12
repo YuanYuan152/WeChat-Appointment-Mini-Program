@@ -355,162 +355,105 @@ def _validate_row(
     return clean, errors
 
 
-def _existing_order_context(
-    db: Session, order_code: str
-) -> tuple[Optional[AppOrder], Optional[AppConsultation], Optional[AppSchedule]]:
-    if not order_code:
-        return None, None, None
-    order = db.query(AppOrder).filter(AppOrder.OutTradeNo == order_code).first()
-    consultation = (
-        db.query(AppConsultation).filter(AppConsultation.OrderId == order.Id).first()
-        if order
-        else None
-    )
-    schedule_id = (
-        consultation.ScheduleId
-        if consultation and consultation.ScheduleId
-        else order.SlotId
-        if order
-        else None
-    )
-    schedule = (
-        db.query(AppSchedule).filter(AppSchedule.Id == schedule_id).first()
-        if schedule_id
-        else None
-    )
-    return order, consultation, schedule
-
-
 def _validate_order_business(
-    rows: list[dict[str, Any]],
+    clean: dict[str, Any],
+    sheet: str,
+    row_number: int,
     db: Session,
 ) -> list[dict[str, str]]:
     errors: list[dict[str, str]] = []
-    seen_codes: dict[str, dict[str, Any]] = {}
-    seen_slots: list[dict[str, Any]] = []
     columns = ORDER_COLUMNS
+    required = ("patient_mobile_id", "counselor_mobile_id", "start_at", "end_at")
+    if not all(key in clean for key in required):
+        return errors
 
-    for item in rows:
-        clean = item["values"]
-        sheet, number = item["sheet"], item["row"]
-        if not all(
-            key in clean
-            for key in ("patient_mobile_id", "counselor_mobile_id", "start_at", "end_at")
-        ):
-            continue
-        code = clean["order_code"] or _generated_order_code(clean)
-        clean["order_code"] = code
-        if len(code) > 64:
-            errors.append(
-                _error(
-                    sheet,
-                    _field_cell(columns, "order_code", number),
-                    "订单代码不能超过 64 个字符",
-                )
+    code = clean["order_code"] or _generated_order_code(clean)
+    clean["order_code"] = code
+    if len(code) > 64:
+        errors.append(
+            _error(
+                sheet,
+                _field_cell(columns, "order_code", row_number),
+                "订单代码不能超过 64 个字符",
             )
-        if code in seen_codes:
-            errors.append(
-                _error(
-                    sheet,
-                    _field_cell(columns, "order_code", number),
-                    "同一文件中订单代码重复",
-                )
+        )
+    elif db.query(AppOrder).filter(AppOrder.OutTradeNo == code).first():
+        errors.append(
+            _error(
+                sheet,
+                _field_cell(columns, "order_code", row_number),
+                "订单代码已存在",
             )
-        else:
-            seen_codes[code] = item
+        )
 
-        existing_order, existing_consultation, existing_schedule = _existing_order_context(db, code)
-        clean["existing_order_id"] = existing_order.Id if existing_order else None
-        clean["existing_consultation_id"] = (
-            existing_consultation.Id if existing_consultation else None
+    profile = (
+        db.query(AppCounselorProfile)
+        .filter(AppCounselorProfile.AccountId == clean["counselor_mobile_id"])
+        .first()
+    )
+    if not profile or not profile.Billing:
+        errors.append(
+            _error(
+                sheet,
+                _field_cell(columns, "counselor_mobile", row_number),
+                "该咨询师缺少有效的基础价格档案",
+            )
         )
-        clean["existing_schedule_id"] = existing_schedule.Id if existing_schedule else None
 
-        profile = (
-            db.query(AppCounselorProfile)
-            .filter(AppCounselorProfile.AccountId == clean["counselor_mobile_id"])
-            .first()
+    duplicate = (
+        db.query(AppConsultation)
+        .filter(
+            AppConsultation.PatientId == clean["patient_mobile_id"],
+            AppConsultation.CounselorId == clean["counselor_mobile_id"],
+            AppConsultation.StartTime == clean["start_at"],
         )
-        if not profile or not profile.Billing:
-            errors.append(
-                _error(
-                    sheet,
-                    _field_cell(columns, "counselor_mobile", number),
-                    "该咨询师缺少有效的基础价格档案",
-                )
+        .first()
+    )
+    if duplicate:
+        errors.append(
+            _error(
+                sheet,
+                _field_cell(columns, "start_time", row_number),
+                "相同来访、咨询师和咨询时间的订单已存在",
             )
+        )
 
-        duplicate = (
-            db.query(AppConsultation)
-            .filter(
-                AppConsultation.PatientId == clean["patient_mobile_id"],
-                AppConsultation.CounselorId == clean["counselor_mobile_id"],
-                AppConsultation.StartTime == clean["start_at"],
-                AppConsultation.Status.in_(["PENDING", "CONFIRMED", "ONGOING", "DONE"]),
-            )
-            .first()
+    conflict = (
+        db.query(AppConsultation)
+        .filter(
+            AppConsultation.CounselorId == clean["counselor_mobile_id"],
+            AppConsultation.Status.in_(["PENDING", "CONFIRMED", "ONGOING", "DONE"]),
+            AppConsultation.StartTime < clean["end_at"],
+            AppConsultation.EndTime > clean["start_at"],
         )
-        if duplicate and duplicate.Id != clean["existing_consultation_id"]:
-            errors.append(
-                _error(
-                    sheet,
-                    _field_cell(columns, "start_time", number),
-                    "相同来访、咨询师和咨询时间的订单已存在",
-                )
+        .first()
+    )
+    if conflict and not duplicate:
+        errors.append(
+            _error(
+                sheet,
+                _field_cell(columns, "start_time", row_number),
+                "该咨询师在此时间段已有订单",
             )
-
-        conflict = (
-            db.query(AppConsultation)
-            .filter(
-                AppConsultation.CounselorId == clean["counselor_mobile_id"],
-                AppConsultation.Status.in_(["PENDING", "CONFIRMED", "ONGOING", "DONE"]),
-                AppConsultation.StartTime < clean["end_at"],
-                AppConsultation.EndTime > clean["start_at"],
-            )
-            .first()
         )
-        if conflict and conflict.Id != clean["existing_consultation_id"]:
-            errors.append(
-                _error(
-                    sheet,
-                    _field_cell(columns, "start_time", number),
-                    "该咨询师在此时间段已有订单",
-                )
-            )
-        schedule_conflict = (
-            db.query(AppSchedule)
-            .filter(
-                AppSchedule.CounselorId == clean["counselor_mobile_id"],
-                AppSchedule.Status == "BOOKED",
-                AppSchedule.StartTime < clean["end_at"],
-                AppSchedule.EndTime > clean["start_at"],
-            )
-            .first()
+    schedule_conflict = (
+        db.query(AppSchedule)
+        .filter(
+            AppSchedule.CounselorId == clean["counselor_mobile_id"],
+            AppSchedule.Status == "BOOKED",
+            AppSchedule.StartTime < clean["end_at"],
+            AppSchedule.EndTime > clean["start_at"],
         )
-        if schedule_conflict and schedule_conflict.Id != clean["existing_schedule_id"]:
-            errors.append(
-                _error(
-                    sheet,
-                    _field_cell(columns, "start_time", number),
-                    "该咨询师在此时间段已有排期",
-                )
+        .first()
+    )
+    if schedule_conflict:
+        errors.append(
+            _error(
+                sheet,
+                _field_cell(columns, "start_time", row_number),
+                "该咨询师在此时间段已有排期",
             )
-        for other in seen_slots:
-            other_values = other["values"]
-            if (
-                other_values["counselor_mobile_id"] == clean["counselor_mobile_id"]
-                and other_values["start_at"] < clean["end_at"]
-                and other_values["end_at"] > clean["start_at"]
-            ):
-                errors.append(
-                    _error(
-                        sheet,
-                        _field_cell(columns, "start_time", number),
-                        "与导入文件中的另一订单时段冲突",
-                    )
-                )
-                break
-        seen_slots.append(item)
+        )
     return errors
 
 
@@ -551,32 +494,10 @@ def parse_and_validate(
             errors.extend(row_errors)
             parsed_rows.append({"sheet": sheet.title, "row": row_number, "values": clean})
 
-    if kind in ("visitors", "counselors"):
-        seen: set[str] = set()
-        for item in parsed_rows:
-            mobile = item["values"].get("mobile")
-            if mobile and mobile in seen:
-                errors.append(
-                    _error(
-                        item["sheet"],
-                        _field_cell(columns, "mobile", item["row"]),
-                        "同一文件中手机号重复",
-                    )
-                )
-            elif mobile:
-                seen.add(mobile)
-    elif kind == "orders":
-        errors.extend(_validate_order_business(parsed_rows, db))
-
     return parsed_rows, errors, len(parsed_rows)
 
 
-def _ensure_role(db: Session, account_id: int, role: str) -> None:
-    if not _has_role(db, account_id, role):
-        db.add(AppRoleBinding(AccountId=account_id, RoleType=role))
-
-
-def _upsert_account(
+def _new_account(
     db: Session,
     mobile: str,
     role: str,
@@ -584,89 +505,60 @@ def _upsert_account(
     real_name: str = "",
     nickname: str = "",
 ) -> AppAccount:
-    account = _account_by_mobile(db, mobile)
-    if not account:
-        digest = hashlib.sha1(f"{role}:{mobile}".encode("utf-8")).hexdigest()[:24]
-        account = AppAccount(
-            OpenId=f"import-{role.lower()}-{digest}",
-            Mobile=mobile,
-            ActiveRole=role,
-            IsActive=True,
-        )
-        db.add(account)
-        db.flush()
-    _ensure_role(db, account.Id, role)
-    if real_name:
-        account.RealName = real_name
-    if nickname:
-        account.Nickname = nickname
-    if not account.ActiveRole:
-        account.ActiveRole = role
-    account.IsActive = True
+    digest = hashlib.sha1(f"{role}:{mobile}".encode("utf-8")).hexdigest()[:24]
+    account = AppAccount(
+        OpenId=f"import-{role.lower()}-{digest}",
+        Mobile=mobile,
+        ActiveRole=role,
+        IsActive=True,
+        RealName=real_name or None,
+        Nickname=nickname or None,
+    )
+    db.add(account)
+    db.flush()
+    db.add(AppRoleBinding(AccountId=account.Id, RoleType=role))
     return account
 
 
-def _apply_visitors(rows: list[dict[str, Any]], db: Session, actor_id: int) -> None:
-    for item in rows:
-        value = item["values"]
-        account = _upsert_account(
-            db,
-            value["mobile"],
-            "Patient",
-            real_name=value["real_name"],
-            nickname=value["nickname"],
-        )
-        account.PatientSource = value["patient_source"]
-        if value["contract_status"]:
-            account.IsContractSigned = value["is_contract_signed"]
-        if value.get("bound_counselor_id"):
-            account.BoundCounselorId = value["bound_counselor_id"]
-            account.BoundCounselorChangedAt = datetime.utcnow()
-        elif not value["bound_counselor_mobile"] and not value["bound_counselor_name"]:
-            account.BoundCounselorId = None
-            account.BoundCounselorChangedAt = datetime.utcnow()
-        set_staff_remark(db, account.Id, value["remark"], actor_id)
+def _apply_visitor(value: dict[str, Any], db: Session, actor_id: int) -> None:
+    account = _new_account(
+        db,
+        value["mobile"],
+        "Patient",
+        real_name=value["real_name"],
+        nickname=value["nickname"],
+    )
+    account.PatientSource = value["patient_source"]
+    if value["contract_status"]:
+        account.IsContractSigned = value["is_contract_signed"]
+    if value.get("bound_counselor_id"):
+        account.BoundCounselorId = value["bound_counselor_id"]
+        account.BoundCounselorChangedAt = datetime.utcnow()
+    set_staff_remark(db, account.Id, value["remark"], actor_id)
 
 
-def _apply_counselors(rows: list[dict[str, Any]], db: Session, actor_id: int) -> None:
-    for item in rows:
-        value = item["values"]
-        account = _upsert_account(
-            db,
-            value["mobile"],
-            "Counselor",
-            real_name=value["name"],
-            nickname=value["name"],
+def _apply_counselor(value: dict[str, Any], db: Session, actor_id: int) -> None:
+    account = _new_account(
+        db,
+        value["mobile"],
+        "Counselor",
+        real_name=value["name"],
+        nickname=value["name"],
+    )
+    counselor_type = value["counselor_type"] or "PROFESSIONAL"
+    db.add(
+        AppCounselorProfile(
+            AccountId=account.Id,
+            Name=value["name"] or account.RealName or account.Nickname,
+            CounselorType=counselor_type,
+            Billing=(
+                value["billing_cents"]
+                or default_base_price_cents_for_type(counselor_type)
+            ),
+            IsActive=True,
         )
-        profile = (
-            db.query(AppCounselorProfile)
-            .filter(AppCounselorProfile.AccountId == account.Id)
-            .first()
-        )
-        counselor_type = value["counselor_type"] or (
-            profile.CounselorType if profile else "PROFESSIONAL"
-        )
-        if not profile:
-            profile = AppCounselorProfile(
-                AccountId=account.Id,
-                Name=value["name"] or account.RealName or account.Nickname,
-                CounselorType=counselor_type,
-                Billing=(
-                    value["billing_cents"]
-                    or default_base_price_cents_for_type(counselor_type)
-                ),
-                IsActive=True,
-            )
-            db.add(profile)
-        else:
-            if value["name"]:
-                profile.Name = value["name"]
-            if value["counselor_type"]:
-                profile.CounselorType = counselor_type
-            if value["billing_cents"] is not None:
-                profile.Billing = value["billing_cents"]
-            profile.IsActive = True
-        set_staff_remark(db, account.Id, value["remark"], actor_id)
+    )
+    set_staff_remark(db, account.Id, value["remark"], actor_id)
 
 
 def _generated_order_code(value: dict[str, Any]) -> str:
@@ -677,110 +569,109 @@ def _generated_order_code(value: dict[str, Any]) -> str:
     return f"IMPORT-{hashlib.sha1(identity.encode('utf-8')).hexdigest()[:24].upper()}"
 
 
-def _apply_orders(rows: list[dict[str, Any]], db: Session) -> None:
-    for item in rows:
-        value = item["values"]
-        patient = db.query(AppAccount).filter(AppAccount.Id == value["patient_mobile_id"]).one()
-        counselor = (
-            db.query(AppAccount).filter(AppAccount.Id == value["counselor_mobile_id"]).one()
-        )
-        profile = (
-            db.query(AppCounselorProfile)
-            .filter(AppCounselorProfile.AccountId == counselor.Id)
-            .first()
-        )
-        if not profile:
-            raise ValueError(f"咨询师 {value['counselor_mobile']} 缺少咨询师档案")
-        code = value["order_code"] or _generated_order_code(value)
-        order, consultation, schedule = _existing_order_context(db, code)
-        center_id = LOCATION_TO_CENTER[value["location"]]
-        note = schedule_note(center_id)
-        consultation_status = (
-            "CONFIRMED" if value["order_status"] == ORDER_STATUSES[0] else "DONE"
-        )
-
-        if not schedule:
-            schedule = AppSchedule(
-                CounselorId=counselor.Id,
-                StartTime=value["start_at"],
-                EndTime=value["end_at"],
-                Status="BOOKED",
-                Note=note,
-            )
-            db.add(schedule)
-            db.flush()
-        schedule.CounselorId = counselor.Id
-        schedule.StartTime = value["start_at"]
-        schedule.EndTime = value["end_at"]
-        schedule.Status = "BOOKED"
-        schedule.Note = note
-
-        if not order:
-            order = AppOrder(
-                AccountId=patient.Id,
-                OutTradeNo=code,
-                TotalFee=int(profile.Billing),
-                Status="PAID",
-                CreatedAt=value["start_at"],
-                PaidAt=value["start_at"],
-            )
-            db.add(order)
-            db.flush()
-        order.AccountId = patient.Id
-        order.SlotId = schedule.Id
-        order.TotalFee = int(profile.Billing)
-        order.Status = "PAID"
-        order.Description = (
+def _apply_order(value: dict[str, Any], db: Session) -> None:
+    patient = db.query(AppAccount).filter(AppAccount.Id == value["patient_mobile_id"]).one()
+    counselor = db.query(AppAccount).filter(AppAccount.Id == value["counselor_mobile_id"]).one()
+    profile = (
+        db.query(AppCounselorProfile)
+        .filter(AppCounselorProfile.AccountId == counselor.Id)
+        .one()
+    )
+    center_id = LOCATION_TO_CENTER[value["location"]]
+    note = schedule_note(center_id)
+    consultation_status = (
+        "CONFIRMED" if value["order_status"] == ORDER_STATUSES[0] else "DONE"
+    )
+    schedule = AppSchedule(
+        CounselorId=counselor.Id,
+        StartTime=value["start_at"],
+        EndTime=value["end_at"],
+        Status="BOOKED",
+        Note=note,
+    )
+    db.add(schedule)
+    db.flush()
+    order = AppOrder(
+        AccountId=patient.Id,
+        SlotId=schedule.Id,
+        OutTradeNo=value["order_code"],
+        TotalFee=int(profile.Billing),
+        Status="PAID",
+        CreatedAt=value["start_at"],
+        PaidAt=value["start_at"],
+        Description=(
             f"{value['patient_alias'] or patient.RealName or patient.Nickname or patient.Mobile}"
             f" / {value['counselor_name'] or profile.Name or counselor.RealName or counselor.Mobile}"
-        )[:200]
-        if not order.PaidAt:
-            order.PaidAt = value["start_at"]
-
-        if not consultation:
-            consultation = AppConsultation(
-                OrderId=order.Id,
-                PatientId=patient.Id,
-                CounselorId=counselor.Id,
-                ScheduleId=schedule.Id,
-                Status=consultation_status,
-                StartTime=value["start_at"],
-                EndTime=value["end_at"],
-                Note=note,
-            )
-            db.add(consultation)
-            db.flush()
-        consultation.OrderId = order.Id
-        consultation.PatientId = patient.Id
-        consultation.CounselorId = counselor.Id
-        consultation.ScheduleId = schedule.Id
-        consultation.Status = consultation_status
-        consultation.StartTime = value["start_at"]
-        consultation.EndTime = value["end_at"]
-        consultation.Note = note
-
-        record = (
-            db.query(AppCaseRecord)
-            .filter(AppCaseRecord.ConsultationId == consultation.Id)
-            .first()
-        )
-        record_values = {
-            "Subjective": value["subjective"],
-            "Objective": value["objective"],
-            "Assessment": value["assessment"],
-            "Plan": value["plan"],
-            "RiskAssessment": value["risk_assessment"],
-        }
-        if value["has_record_content"] and not record:
-            record = AppCaseRecord(
+        )[:200],
+    )
+    db.add(order)
+    db.flush()
+    consultation = AppConsultation(
+        OrderId=order.Id,
+        PatientId=patient.Id,
+        CounselorId=counselor.Id,
+        ScheduleId=schedule.Id,
+        Status=consultation_status,
+        StartTime=value["start_at"],
+        EndTime=value["end_at"],
+        Note=note,
+    )
+    db.add(consultation)
+    db.flush()
+    if value["has_record_content"]:
+        db.add(
+            AppCaseRecord(
                 ConsultationId=consultation.Id,
                 CounselorId=counselor.Id,
+                Subjective=value["subjective"] or None,
+                Objective=value["objective"] or None,
+                Assessment=value["assessment"] or None,
+                Plan=value["plan"] or None,
+                RiskAssessment=value["risk_assessment"] or None,
             )
-            db.add(record)
-        if record:
-            record.CounselorId = counselor.Id
-            for attribute, content in record_values.items():
-                setattr(record, attribute, content or None)
+        )
+
+
+def _duplicate_errors(
+    kind: str,
+    value: dict[str, Any],
+    sheet: str,
+    row_number: int,
+    db: Session,
+) -> list[dict[str, str]]:
+    if kind in ("visitors", "counselors"):
+        mobile = value.get("mobile")
+        if mobile and PHONE_RE.fullmatch(mobile) and _account_by_mobile(db, mobile):
+            return [
+                _error(
+                    sheet,
+                    _field_cell(_columns(kind), "mobile", row_number),
+                    "该手机号已存在，导入仅支持新增",
+                )
+            ]
+        return []
+    return _validate_order_business(value, sheet, row_number, db)
+
+
+def _result_row(
+    sheet: str,
+    row_number: int,
+    status: str,
+    errors: list[dict[str, str]],
+) -> dict[str, Any]:
+    message = (
+        "导入成功"
+        if status == "IMPORTED"
+        else "；".join(error["message"] for error in errors)
+    )
+    return {
+        "sheet": sheet,
+        "row": row_number,
+        "rowNumber": row_number,
+        "status": status,
+        "message": message,
+        "errors": errors,
+    }
 
 
 def import_workbook(
@@ -789,37 +680,135 @@ def import_workbook(
     db: Session,
     actor_id: int,
 ) -> dict[str, Any]:
-    rows, errors, total = parse_and_validate(kind, file_bytes, db)
-    if not rows and not errors:
-        errors = [_error("文件", "", "导入文件没有数据行")]
-    if errors:
-        return {
-            "message": f"导入失败，共发现 {len(errors)} 个错误，未写入任何数据",
-            "totalRows": total,
-            "importedCount": 0,
-            "errors": errors,
-        }
+    columns = _columns(kind)
     try:
-        if kind == "visitors":
-            _apply_visitors(rows, db, actor_id)
-        elif kind == "counselors":
-            _apply_counselors(rows, db, actor_id)
-        else:
-            _apply_orders(rows, db)
-        db.commit()
+        workbook = load_workbook(BytesIO(file_bytes), data_only=True)
     except Exception as exc:
-        db.rollback()
+        errors = [_error("文件", "", f"无法读取 Excel 文件：{exc}")]
         return {
-            "message": "导入事务失败，已回滚全部数据",
-            "totalRows": total,
+            "message": "导入失败：无法读取 Excel 文件",
+            "totalRows": 0,
             "importedCount": 0,
-            "errors": [_error("数据库", "", str(exc))],
+            "rejectedCount": 0,
+            "failedCount": 0,
+            "errors": errors,
+            "rows": [],
         }
+
+    source_rows: list[dict[str, Any]] = []
+    workbook_errors: list[dict[str, str]] = []
+    expected_headers = [column.header for column in columns]
+    for sheet in workbook.worksheets:
+        header_errors: list[dict[str, str]] = []
+        actual_headers = [
+            _text(sheet.cell(1, index).value)
+            for index in range(1, sheet.max_column + 1)
+        ]
+        for index, expected in enumerate(expected_headers, start=1):
+            actual = actual_headers[index - 1] if index <= len(actual_headers) else ""
+            if actual != expected:
+                header_errors.append(
+                    _error(sheet.title, f"{get_column_letter(index)}1", f"表头应为“{expected}”")
+                )
+        for index in range(len(expected_headers) + 1, len(actual_headers) + 1):
+            if actual_headers[index - 1]:
+                header_errors.append(
+                    _error(sheet.title, f"{get_column_letter(index)}1", "存在模板定义之外的列")
+                )
+        workbook_errors.extend(header_errors)
+        for row_number in range(2, sheet.max_row + 1):
+            values = [
+                sheet.cell(row_number, index).value
+                for index in range(1, len(columns) + 1)
+            ]
+            if not any(_text(value) for value in values):
+                continue
+            source_rows.append(
+                {
+                    "sheet": sheet.title,
+                    "row": row_number,
+                    "raw": {
+                        column.key: values[index]
+                        for index, column in enumerate(columns)
+                    },
+                    "header_errors": list(header_errors),
+                }
+            )
+
+    result_rows: list[dict[str, Any]] = []
+    all_errors: list[dict[str, str]] = []
+    successful_keys: set[tuple[Any, ...]] = set()
+    if not source_rows:
+        all_errors.extend(workbook_errors)
+        all_errors.append(_error("文件", "", "导入文件没有数据行"))
+
+    for item in source_rows:
+        sheet = item["sheet"]
+        row_number = item["row"]
+        clean, row_errors = _validate_row(
+            kind, item["raw"], sheet, row_number, db
+        )
+        row_errors = list(item["header_errors"]) + row_errors
+        key: tuple[Any, ...]
+        if kind in ("visitors", "counselors"):
+            key = (clean.get("mobile"),)
+        else:
+            key = (
+                clean.get("patient_mobile"),
+                clean.get("counselor_mobile"),
+                clean.get("start_at"),
+            )
+        if all(key) and key in successful_keys:
+            duplicate_key = "mobile" if kind != "orders" else "start_time"
+            row_errors.append(
+                _error(
+                    sheet,
+                    _field_cell(columns, duplicate_key, row_number),
+                    "同一文件中与此前成功导入的行重复",
+                )
+            )
+        row_errors.extend(_duplicate_errors(kind, clean, sheet, row_number, db))
+        if row_errors:
+            db.rollback()
+            all_errors.extend(row_errors)
+            result_rows.append(_result_row(sheet, row_number, "REJECTED", row_errors))
+            continue
+
+        # 在真正写入前再次查询，缩短校验与写入之间的竞态窗口。
+        second_errors = _duplicate_errors(kind, clean, sheet, row_number, db)
+        if second_errors:
+            db.rollback()
+            all_errors.extend(second_errors)
+            result_rows.append(_result_row(sheet, row_number, "REJECTED", second_errors))
+            continue
+        try:
+            if kind == "visitors":
+                _apply_visitor(clean, db, actor_id)
+            elif kind == "counselors":
+                _apply_counselor(clean, db, actor_id)
+            else:
+                _apply_order(clean, db)
+            db.commit()
+        except Exception as exc:
+            db.rollback()
+            failed_errors = [_error(sheet, "", str(exc))]
+            all_errors.extend(failed_errors)
+            result_rows.append(_result_row(sheet, row_number, "FAILED", failed_errors))
+            continue
+        successful_keys.add(key)
+        result_rows.append(_result_row(sheet, row_number, "IMPORTED", []))
+
+    imported = sum(row["status"] == "IMPORTED" for row in result_rows)
+    rejected = sum(row["status"] == "REJECTED" for row in result_rows)
+    failed = sum(row["status"] == "FAILED" for row in result_rows)
     return {
-        "message": f"成功导入 {total} 行",
-        "totalRows": total,
-        "importedCount": total,
-        "errors": [],
+        "message": f"导入完成：成功 {imported} 行，拒绝 {rejected} 行，失败 {failed} 行",
+        "totalRows": len(source_rows),
+        "importedCount": imported,
+        "rejectedCount": rejected,
+        "failedCount": failed,
+        "errors": all_errors,
+        "rows": result_rows,
     }
 
 

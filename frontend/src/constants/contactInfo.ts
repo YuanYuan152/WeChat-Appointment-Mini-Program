@@ -31,8 +31,8 @@ export const CONTACT_CENTERS: ContactCenter[] = [
 
 export const ASSISTANT_CONTACT: AssistantContact = {
   name: '咨询助理',
-  phone: '021-5858-0123',
-  phoneDial: '02158580123',
+  phone: '15316025286',
+  phoneDial: '15316025286',
   qrcodeSrc: '/static/images-opt/assistant-qrcode.jpg',
   hint: '扫码添加咨询助理微信，预约咨询、改期与疑问均可联系',
   workHours: '工作时间：周一到周日9:00-21:00，法定节假日除外',

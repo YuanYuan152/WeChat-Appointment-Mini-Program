@@ -235,98 +235,108 @@
 
     <!-- 代理预约 -->
     <view v-if="showProxy" class="modal-overlay" @touchmove.stop.prevent>
-      <view class="modal-card" @tap.stop @touchmove.stop.prevent>
-        <text class="modal-title">代理预约</text>
-        <text class="modal-sub">为已签约来访推送待支付订单，{{ proxyOrderPayHint }}</text>
+      <view class="modal-card proxy-modal-card" @tap.stop>
+        <scroll-view
+          class="proxy-modal-scroll"
+          scroll-y
+          enhanced
+          :show-scrollbar="false"
+          @touchmove.stop
+        >
+          <view class="proxy-modal-content">
+            <text class="modal-title">代理预约</text>
+            <text class="modal-sub">为已签约来访推送待支付订单，{{ proxyOrderPayHint }}</text>
 
-        <view class="form-item">
-          <text class="form-label">选择来访 <text class="required">*</text></text>
-          <input
-            class="patient-input"
-            placeholder="输入姓名/手机号搜索"
-            :value="proxyPatientKeyword"
-            @input="onProxyPatientInput"
-            @focus="showProxyPatientDropdown = true"
-          />
-          <view v-if="showProxyPatientDropdown && proxyPatientSuggestions.length" class="patient-dropdown">
-            <view
-              v-for="p in proxyPatientSuggestions"
-              :key="p.id"
-              class="patient-dropdown-item"
-              :class="{ disabled: p.canProxyPush === false }"
-              @tap="selectProxyPatient(p)"
-            >{{ p.label || formatPatientInline(p.name, p.contractTag) }}</view>
+            <view class="form-item">
+              <text class="form-label">选择来访 <text class="required">*</text></text>
+              <input
+                class="patient-input"
+                placeholder="输入姓名/手机号搜索"
+                :value="proxyPatientKeyword"
+                @input="onProxyPatientInput"
+                @focus="showProxyPatientDropdown = true"
+              />
+              <view v-if="showProxyPatientDropdown && proxyPatientSuggestions.length" class="patient-dropdown">
+                <view
+                  v-for="p in proxyPatientSuggestions"
+                  :key="p.id"
+                  class="patient-dropdown-item"
+                  :class="{ disabled: p.canProxyPush === false }"
+                  @tap="selectProxyPatient(p)"
+                >{{ p.label || formatPatientInline(p.name, p.contractTag) }}</view>
+              </view>
+              <text v-if="proxySelectedPatient" class="selected-patient-tag">
+                已选：{{ formatPatientInline(proxySelectedPatient.name, proxySelectedPatient.contractTag) }}
+              </text>
+              <text v-else class="proxy-patient-hint">仅可选择已绑定您且已签约的来访</text>
+            </view>
+
+            <view class="form-item">
+              <text class="form-label">预约中心</text>
+              <view class="center-row">
+                <view
+                  v-for="c in centers"
+                  :key="c.id"
+                  class="center-chip"
+                  :class="{ active: proxyForm.centerId === c.id }"
+                  @tap="onProxyCenterChange(c.id)"
+                >{{ c.name }}</view>
+              </view>
+            </view>
+
+            <view class="form-item" @tap.stop>
+              <text class="form-label">日期</text>
+              <picker mode="date" :value="proxyForm.date" :start="minDate" :end="maxDate" @change="onProxyDateChange">
+                <view class="picker-row" hover-class="none">{{ proxyForm.date || '选择日期' }}</view>
+              </picker>
+            </view>
+
+            <view class="form-item">
+              <text class="form-label">开始时间</text>
+              <view v-if="proxySlotOptionsLoading" class="picker-row">加载时段...</view>
+              <view v-else class="slot-grid">
+                <view
+                  v-for="ts in proxyTimeSlotOptions"
+                  :key="ts.key"
+                  class="slot-chip"
+                  :class="{
+                    active: proxyForm.slotKey === ts.key,
+                    disabled: !ts.selectable,
+                    available: ts.selectable && !!ts.existingAvailableScheduleId,
+                  }"
+                  @tap="selectProxyTimeSlot(ts)"
+                >{{ ts.key }}{{ proxySlotChipHint(ts) }}</view>
+              </view>
+              <text class="form-hint">支持整点和半点开始；咨询 50 分钟，随后预留 10 分钟打扫</text>
+            </view>
+
+            <view v-if="selectedProxyTimeSlot" class="duration-card">
+              <text class="duration-title">本次预约</text>
+              <text class="duration-text">{{ bookingDurationText(selectedProxyTimeSlot.startTime) }}</text>
+            </view>
+
+            <view v-if="!isProxyVideoCenterSelected" class="form-item">
+              <text class="form-label">咨询室（必选）</text>
+              <view class="center-row">
+                <view
+                  v-for="room in proxyRoomOptionsForSlot"
+                  :key="room.roomId"
+                  class="center-chip"
+                  :class="{
+                    active: proxyForm.roomId === room.roomId,
+                    disabled: !room.available,
+                  }"
+                  @tap="selectProxyRoom(room)"
+                >{{ room.roomName }}{{ room.occupiedByOther ? '（已占用）' : '' }}</view>
+              </view>
+            </view>
+            <view v-else class="form-item video-center-hint">
+              <text class="video-hint-text">视频咨询无需选择咨询室</text>
+            </view>
           </view>
-          <text v-if="proxySelectedPatient" class="selected-patient-tag">
-            已选：{{ formatPatientInline(proxySelectedPatient.name, proxySelectedPatient.contractTag) }}
-          </text>
-          <text v-else class="proxy-patient-hint">仅可选择已绑定您且已签约的来访</text>
-        </view>
+        </scroll-view>
 
-        <view class="form-item">
-          <text class="form-label">预约中心</text>
-          <view class="center-row">
-            <view
-              v-for="c in centers"
-              :key="c.id"
-              class="center-chip"
-              :class="{ active: proxyForm.centerId === c.id }"
-              @tap="onProxyCenterChange(c.id)"
-            >{{ c.name }}</view>
-          </view>
-        </view>
-
-        <view class="form-item" @tap.stop>
-          <text class="form-label">日期</text>
-          <picker mode="date" :value="proxyForm.date" :start="minDate" :end="maxDate" @change="onProxyDateChange">
-            <view class="picker-row" hover-class="none">{{ proxyForm.date || '选择日期' }}</view>
-          </picker>
-        </view>
-
-        <view class="form-item">
-          <text class="form-label">开始时间</text>
-          <view v-if="proxySlotOptionsLoading" class="picker-row">加载时段...</view>
-          <view v-else class="slot-grid">
-            <view
-              v-for="ts in proxyTimeSlotOptions"
-              :key="ts.key"
-              class="slot-chip"
-              :class="{
-                active: proxyForm.slotKey === ts.key,
-                disabled: !ts.selectable,
-                available: ts.selectable && !!ts.existingAvailableScheduleId,
-              }"
-              @tap="selectProxyTimeSlot(ts)"
-            >{{ ts.key }}{{ proxySlotChipHint(ts) }}</view>
-          </view>
-          <text class="form-hint">支持整点和半点开始；咨询 50 分钟，随后预留 10 分钟打扫</text>
-        </view>
-
-        <view v-if="selectedProxyTimeSlot" class="duration-card">
-          <text class="duration-title">本次预约</text>
-          <text class="duration-text">{{ bookingDurationText(selectedProxyTimeSlot.startTime) }}</text>
-        </view>
-
-        <view v-if="!isProxyVideoCenterSelected" class="form-item">
-          <text class="form-label">咨询室（必选）</text>
-          <view class="center-row">
-            <view
-              v-for="room in proxyRoomOptionsForSlot"
-              :key="room.roomId"
-              class="center-chip"
-              :class="{
-                active: proxyForm.roomId === room.roomId,
-                disabled: !room.available,
-              }"
-              @tap="selectProxyRoom(room)"
-            >{{ room.roomName }}{{ room.occupiedByOther ? '（已占用）' : '' }}</view>
-          </view>
-        </view>
-        <view v-else class="form-item video-center-hint">
-          <text class="video-hint-text">视频咨询无需选择咨询室</text>
-        </view>
-
-        <view class="modal-btns">
+        <view class="modal-btns proxy-modal-btns">
           <button class="modal-btn cancel" @tap.stop="showProxy = false">取消</button>
           <button class="modal-btn confirm" :disabled="proxySubmitting || !canPushProxyOrder" @tap.stop="submitProxyOrder">
             {{ proxySubmitting ? '推送中...' : '推送订单' }}
@@ -1635,6 +1645,31 @@ defineExpose({ refresh, focusScheduleId, applyListFilter, getUnrecordedCount })
 .modal-card {
   width: 100%; background: #fff; border-radius: 32rpx 32rpx 0 0;
   padding: 40rpx 32rpx 48rpx; max-height: 85vh; overflow-y: auto;
+}
+.proxy-modal-card {
+  height: 85vh;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  padding: 0;
+  overflow: hidden;
+}
+.proxy-modal-scroll {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+.proxy-modal-content {
+  padding: 40rpx 32rpx 24rpx;
+  box-sizing: border-box;
+}
+.proxy-modal-btns {
+  flex-shrink: 0;
+  margin-top: 0;
+  padding: 20rpx 32rpx calc(20rpx + env(safe-area-inset-bottom));
+  border-top: 1rpx solid #E5E7EB;
+  background: #fff;
 }
 .modal-title { font-size: 34rpx; font-weight: 800; color: #1F2937; }
 .modal-sub { display: block; font-size: 24rpx; color: #9CA3AF; margin: 8rpx 0 24rpx; }

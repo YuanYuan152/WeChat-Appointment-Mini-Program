@@ -2,6 +2,7 @@
 
 import type { Assessment, AssessmentScoreResult } from "@/lib/api/types";
 import { getLevelTone, getRangeMax } from "@/components/assessment/report-score-visuals";
+import { ASSISTANT_CONTACT } from "@/lib/booking/contact-info";
 
 function sanitizeFilename(name: string) {
   return name.replace(/[\\/:*?"<>|]+/g, "_").slice(0, 60);
@@ -115,47 +116,20 @@ function drawPageFooter(ctx: CanvasRenderingContext2D, pageNo: number, pageTotal
   ctx.fillText(`${pageNo} / ${pageTotal}`, PAGE_W - MARGIN - 20, PAGE_H - MARGIN - 8);
 }
 
-/** 模拟二维码点阵（与报告页示意二维码一致） */
-function drawMockQrCode(ctx: CanvasRenderingContext2D, left: number, top: number, size: number) {
-  const cells = 29;
-  const cell = size / cells;
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(left, top, size, size);
-  ctx.strokeStyle = "#e5e7eb";
-  ctx.lineWidth = 1;
-  ctx.strokeRect(left + 0.5, top + 0.5, size - 1, size - 1);
-
-  const fillCell = (cx: number, cy: number, w = 1, h = 1, color = "#2c2c2c") => {
-    ctx.fillStyle = color;
-    ctx.fillRect(left + cx * cell, top + cy * cell, w * cell, h * cell);
-  };
-
-  const drawFinder = (ox: number, oy: number) => {
-    fillCell(ox, oy, 7, 7);
-    fillCell(ox + 1, oy + 1, 5, 5, "#ffffff");
-    fillCell(ox + 2, oy + 2, 3, 3);
-  };
-  drawFinder(0, 0);
-  drawFinder(22, 0);
-  drawFinder(0, 22);
-
-  const dots: Array<[number, number]> = [
-    [9, 1], [11, 1], [13, 2], [10, 3], [14, 3], [16, 4], [12, 5], [15, 5],
-    [9, 7], [11, 7], [13, 7], [17, 7], [19, 8], [10, 9], [14, 9], [16, 9],
-    [18, 10], [12, 11], [15, 11], [20, 11], [9, 12], [13, 13], [17, 13],
-    [11, 14], [19, 14], [10, 15], [14, 15], [16, 16], [12, 17], [18, 17],
-    [9, 18], [13, 18], [15, 19], [17, 19], [11, 20], [19, 20],
-    [8, 22], [10, 23], [12, 22], [14, 24], [16, 23], [18, 24], [20, 22],
-    [22, 9], [24, 10], [23, 12], [25, 14], [22, 15], [24, 17], [23, 19],
-    [8, 9], [1, 9], [3, 10], [2, 12], [4, 14], [1, 15], [3, 17], [2, 19],
-  ];
-  for (const [dx, dy] of dots) {
-    fillCell(dx, dy, 1.2, 1.2);
-  }
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("无法加载助理二维码"));
+    image.src = src;
+  });
 }
 
 /** 报告右下角：二维码 + 浅色说明（画在页脚线上方） */
-function drawAssistantQrCorner(ctx: CanvasRenderingContext2D) {
+function drawAssistantQrCorner(
+  ctx: CanvasRenderingContext2D,
+  assistantQr: HTMLImageElement
+) {
   const blockRight = PAGE_W - MARGIN;
   const blockW = 100;
   const footerLineY = PAGE_H - MARGIN - 22;
@@ -167,7 +141,19 @@ function drawAssistantQrCorner(ctx: CanvasRenderingContext2D) {
   const qrLeft = blockRight - qrSize;
   const blockTop = footerLineY - 8 - blockH;
 
-  drawMockQrCode(ctx, qrLeft, blockTop, qrSize);
+  const sourceWidth = assistantQr.naturalWidth;
+  const sourceHeight = assistantQr.naturalHeight;
+  ctx.drawImage(
+    assistantQr,
+    sourceWidth * 0.1,
+    sourceHeight * 0.33,
+    sourceWidth * 0.8,
+    sourceHeight * 0.5,
+    qrLeft,
+    blockTop,
+    qrSize,
+    qrSize
+  );
 
   ctx.font = `400 8px "Microsoft YaHei","PingFang SC",sans-serif`;
   ctx.fillStyle = "rgba(107,101,96,0.72)";
@@ -402,6 +388,7 @@ export async function downloadAssessmentReportPdf(options: {
 }): Promise<void> {
   const { assessment, result } = options;
   const filename = `${sanitizeFilename(assessment.title)}_测评报告.pdf`;
+  const assistantQr = await loadImage(ASSISTANT_CONTACT.qrcodeSrc);
 
   const pages: PageCtx[] = [createPage()];
   let page = pages[0];
@@ -649,7 +636,7 @@ export async function downloadAssessmentReportPdf(options: {
   pages.forEach((p, i) => {
     drawPageFooter(p.ctx, i + 1, total);
     if (i === total - 1) {
-      drawAssistantQrCorner(p.ctx);
+      drawAssistantQrCorner(p.ctx, assistantQr);
     }
   });
 
