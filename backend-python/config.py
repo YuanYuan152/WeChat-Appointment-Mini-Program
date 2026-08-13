@@ -62,6 +62,8 @@ class Settings(BaseSettings):
     WECHAT_PAY_PUBLIC_KEY_PATH: str = ""
     WECHAT_PAY_NOTIFY_URL: str = ""
     WECHAT_PAY_REFUND_NOTIFY_URL: str = ""
+    # true：即使已配置真实商户密钥/证书，也强制走本地模拟支付（不调微信下单）
+    WECHAT_PAY_FORCE_SIMULATE: bool = False
 
     # Server base URL (used for building absolute file URLs)
     BASE_URL: str = "http://localhost:8000"

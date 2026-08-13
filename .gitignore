@@ -72,16 +72,11 @@ FormApplication/
 frontend/node_modules/
 frontend/dist/
 frontend/unpackage/
-frontend/.env.local
 
 # Next.js 本地编译产物（不要提交；含被占用的 .next/dev/lock）
 **/.next/
 admin-web/node_modules/
-admin-web/.env
-admin-web/.env.local
 EAP_front_site/node_modules/
-EAP_front_site/.env
-EAP_front_site/.env.local
 backend-python/runtime/
 
 # Visual Studio 2015/2017 cache/options directory
@@ -423,12 +418,23 @@ backend-python/.local/
 *.py[cod]
 .Python
 
-# 敏感配置文件（含密钥，不提交）
+# =============================================================================
+# 敏感配置 / 密钥（本地保留，不提交；*.example 模板仍可提交）
+# =============================================================================
 lxxl/Web.config
-backend-python/.env
-frontend/.env
-frontend/.env.production
-backend-python/.env.production
-# 微信支付证书/私钥（只保留 README，勿提交真实 pem）
+
+# 各子项目 .env（含 .local / .production / .development.local 等）
+**/.env
+**/.env.*
+!**/.env.example
+!**/*.env.example
+
+# 微信支付商户证书与私钥（只保留 certs/wechat_pay/README.md）
 backend-python/certs/wechat_pay/*.pem
+backend-python/certs/wechat_pay/*.key
+backend-python/certs/wechat_pay/*.p12
+backend-python/certs/wechat_pay/*.pfx
+backend-python/certs/**/*.pem
+backend-python/certs/**/*.key
+
 .pnpm-store/

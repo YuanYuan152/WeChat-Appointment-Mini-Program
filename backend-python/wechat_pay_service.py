@@ -26,6 +26,15 @@ logger = logging.getLogger(__name__)
 
 
 def is_real_wechat_pay_configured() -> bool:
+    """是否走官方真实支付。
+
+    凭证齐全且未开启 WECHAT_PAY_FORCE_SIMULATE 时返回 True。
+    本地想保留真实密钥文件、但先用模拟支付时：在 .env 设 WECHAT_PAY_FORCE_SIMULATE=true。
+    """
+    from config import settings
+
+    if settings.WECHAT_PAY_FORCE_SIMULATE:
+        return False
     return pay_credentials.is_real_configured()
 
 
