@@ -1,8 +1,9 @@
-import { apiRequest } from "@/lib/api";
+import { apiFileRequest, apiRequest } from "@/lib/api";
 import type {
   CounselorBoardDetail,
   CounselorBoardSummary,
   PatientContractInfo,
+  PatientContractArtifact,
   PagedResult,
   StaffRemarkUpdateResult,
   UserBoardDetail,
@@ -36,6 +37,14 @@ export function fetchUserBoardDetail(accountId: number) {
 
 export function fetchPatientContractInfo(accountId: number) {
   return apiRequest<PatientContractInfo>(`/api/mini/admin/patients/${accountId}`);
+}
+
+export function fetchPatientContractArtifact(accountId: number) {
+  return apiRequest<PatientContractArtifact>(`${PATIENT_BOARD}/${accountId}/contract-material`);
+}
+
+export function downloadPatientContractSignature(path: string) {
+  return apiFileRequest(path);
 }
 
 export function updatePatientBoundCounselor(accountId: number, counselorId: number | null) {

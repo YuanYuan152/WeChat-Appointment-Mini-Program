@@ -605,6 +605,23 @@ export interface PatientContractInfo {
   contractTag?: string | null;
 }
 
+export interface PatientContractArtifact {
+  orderId: number;
+  agreementType: "TONGXIN" | "YANGFAN";
+  agreementTypeLabel: string;
+  isTongxin: boolean;
+  signedAt: string;
+  patientName: string;
+  counselorName: string;
+  billingYuan: number;
+  emergencyContact?: {
+    name?: string | null;
+    relation?: string | null;
+    phone?: string | null;
+  } | null;
+  signatureDownloadPath: string;
+}
+
 export interface UserBoardDetail {
   profile: UserBoardSummary;
   orders: Array<{

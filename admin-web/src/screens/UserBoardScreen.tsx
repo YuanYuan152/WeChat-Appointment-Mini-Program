@@ -7,6 +7,8 @@ import { useRouter } from "next/navigation";
 import {
   fetchUserBoard,
   fetchUserBoardDetail,
+  fetchPatientContractArtifact,
+  downloadPatientContractSignature,
   updatePatientBoundCounselor,
   updateStaffRemark,
 } from "@/services/boards";
@@ -15,6 +17,7 @@ import { AppRoute, useAppRoute } from "@/components/AppRoute";
 import { UserBoardPanel, type UserProxyBookingTarget } from "@/panels/UserBoardPanel";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
 import type { ProxyPersonOption, UserBoardDetail } from "@/types/api";
+import { downloadContractPdf } from "@/lib/download-contract-pdf";
 import type { ScreenData, UserBoardFilters } from "@/types/app";
 
 const INITIAL_USER_BOARD_FILTERS: UserBoardFilters = {
@@ -40,6 +43,7 @@ function UserBoardScreenContent() {
   const [selectedUserBoard, setSelectedUserBoard] = useState<UserBoardDetail>();
   const [detailLoading, setDetailLoading] = useState(false);
   const [remarkSavingAccountId, setRemarkSavingAccountId] = useState<number>();
+  const [contractDownloadingAccountId, setContractDownloadingAccountId] = useState<number>();
   const [filters, setFilters] = useState<UserBoardFilters>(INITIAL_USER_BOARD_FILTERS);
   const [draftFilters, setDraftFilters] = useState<UserBoardFilters>(INITIAL_USER_BOARD_FILTERS);
   const listRequestSeq = useRef(0);
@@ -277,6 +281,21 @@ function UserBoardScreenContent() {
     }
   }, [clearNotice, showNotice]);
 
+  const downloadContract = useCallback(async (accountId: number) => {
+    clearNotice();
+    setContractDownloadingAccountId(accountId);
+    try {
+      const artifact = await fetchPatientContractArtifact(accountId);
+      const signature = await downloadPatientContractSignature(artifact.signatureDownloadPath);
+      await downloadContractPdf(artifact, signature.blob);
+      showNotice("success", "签约文件已生成");
+    } catch (error) {
+      showNotice("error", error instanceof Error ? error.message : "签约文件生成失败");
+    } finally {
+      setContractDownloadingAccountId(undefined);
+    }
+  }, [clearNotice, showNotice]);
+
   return (
     <UserBoardPanel
       users={data.userBoard}
@@ -297,6 +316,8 @@ function UserBoardScreenContent() {
       onBindCounselor={bindCounselor}
       remarkSaving={remarkSavingAccountId === selectedUserBoard?.profile.id}
       onSaveRemark={saveStaffRemark}
+      contractDownloading={contractDownloadingAccountId === selectedUserBoard?.profile.id}
+      onDownloadContract={downloadContract}
     />
   );
 }

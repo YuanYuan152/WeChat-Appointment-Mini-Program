@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import type { FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { ChangeEvent, FormEvent } from "react";
 
 import { QueryField, queryControlClass } from "@/components/ui";
+import { API_BASE_URL } from "@/lib/api";
+import { getCounselorAvatarFileError } from "@/lib/counselor-avatar";
+import { uploadImage } from "@/services/uploads";
 import type { AdminCounselorIntroProfile, AdminCounselorIntroUpdatePayload } from "@/types/api";
 
 const MODE_OPTIONS = ["线上", "线下", "线上/线下"];
@@ -60,6 +63,25 @@ function nonNegativeNumber(value: string) {
   return Number.isFinite(parsedValue) ? Math.max(0, Math.trunc(parsedValue)) : Number.NaN;
 }
 
+function resolveAvatarPreviewUrl(value?: string | null) {
+  const trimmedValue = value?.trim();
+  if (!trimmedValue) {
+    return "";
+  }
+  try {
+    const resolvedUrl = new URL(trimmedValue, `${API_BASE_URL}/`);
+    return ["http:", "https:", "blob:", "data:"].includes(resolvedUrl.protocol)
+      ? resolvedUrl.toString()
+      : "";
+  } catch {
+    return "";
+  }
+}
+
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof Error && error.message.trim() ? error.message : fallback;
+}
+
 export function CounselorIntroEditor({
   profile,
   saving,
@@ -73,11 +95,39 @@ export function CounselorIntroEditor({
 }) {
   const [draft, setDraft] = useState<CounselorIntroDraft>(() => toDraft(profile));
   const [errors, setErrors] = useState<CounselorIntroErrors>({});
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarObjectUrl, setAvatarObjectUrl] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const avatarObjectUrlRef = useRef("");
+  const submittingRef = useRef(false);
 
   useEffect(() => {
+    if (avatarObjectUrlRef.current) {
+      URL.revokeObjectURL(avatarObjectUrlRef.current);
+      avatarObjectUrlRef.current = "";
+    }
     setDraft(toDraft(profile));
     setErrors({});
+    setAvatarFile(null);
+    setAvatarObjectUrl("");
+    if (avatarInputRef.current) {
+      avatarInputRef.current.value = "";
+    }
   }, [profile]);
+
+  useEffect(
+    () => () => {
+      if (avatarObjectUrlRef.current) {
+        URL.revokeObjectURL(avatarObjectUrlRef.current);
+      }
+    },
+    [],
+  );
+
+  const busy = saving || submitting;
+  const avatarPreviewUrl =
+    avatarObjectUrl || resolveAvatarPreviewUrl(draft.avatarUrl);
 
   const authenticityText = useMemo(() => {
     if (!profile.infoAuthenticityCommitted) {
@@ -100,8 +150,56 @@ export function CounselorIntroEditor({
     });
   };
 
+  const releaseAvatarObjectUrl = () => {
+    if (avatarObjectUrlRef.current) {
+      URL.revokeObjectURL(avatarObjectUrlRef.current);
+      avatarObjectUrlRef.current = "";
+    }
+    setAvatarObjectUrl("");
+  };
+
+  const selectAvatar = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+    releaseAvatarObjectUrl();
+    setAvatarFile(null);
+    const validationError = getCounselorAvatarFileError(file);
+    if (validationError) {
+      setErrors((prev) => ({ ...prev, avatarUrl: validationError }));
+      event.target.value = "";
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(file);
+    avatarObjectUrlRef.current = objectUrl;
+    setAvatarObjectUrl(objectUrl);
+    setAvatarFile(file);
+    setErrors((prev) => {
+      const next = { ...prev };
+      delete next.avatarUrl;
+      return next;
+    });
+  };
+
+  const cancel = () => {
+    if (busy) {
+      return;
+    }
+    releaseAvatarObjectUrl();
+    setAvatarFile(null);
+    if (avatarInputRef.current) {
+      avatarInputRef.current.value = "";
+    }
+    onCancel();
+  };
+
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (submittingRef.current || saving) {
+      return;
+    }
     const nextErrors: CounselorIntroErrors = {};
     const workYears = nonNegativeNumber(draft.workYears);
     const consultHours = nonNegativeNumber(draft.consultHours);
@@ -121,26 +219,88 @@ export function CounselorIntroEditor({
       return;
     }
 
-    await onSave({
-      name: draft.name.trim(),
-      avatarUrl: nullableText(draft.avatarUrl),
-      title: nullableText(draft.title),
-      workYears,
-      consultHours,
-      career: nullableText(draft.career),
-      mode: nullableText(draft.mode),
-      field: nullableText(draft.field),
-      targetGroup: nullableText(draft.targetGroup),
-      specialty: nullableText(draft.specialty),
-      introduce: nullableText(draft.introduce),
-      qualification: nullableText(draft.qualification),
-      isActive: profile.isActive,
-    });
-    onCancel();
+    submittingRef.current = true;
+    setSubmitting(true);
+    try {
+      let avatarUrl = nullableText(draft.avatarUrl);
+      if (avatarFile) {
+        try {
+          const uploadResult = await uploadImage(avatarFile);
+          avatarUrl = nullableText(uploadResult.url || "");
+          if (!avatarUrl) {
+            throw new Error("上传接口未返回头像地址");
+          }
+        } catch (error) {
+          setErrors((prev) => ({
+            ...prev,
+            avatarUrl: errorMessage(error, "头像上传失败，请重试"),
+          }));
+          return;
+        }
+      }
+
+      await onSave({
+        name: draft.name.trim(),
+        avatarUrl,
+        title: nullableText(draft.title),
+        workYears,
+        consultHours,
+        career: nullableText(draft.career),
+        mode: nullableText(draft.mode),
+        field: nullableText(draft.field),
+        targetGroup: nullableText(draft.targetGroup),
+        specialty: nullableText(draft.specialty),
+        introduce: nullableText(draft.introduce),
+        qualification: nullableText(draft.qualification),
+        isActive: profile.isActive,
+      });
+      releaseAvatarObjectUrl();
+      onCancel();
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
+    }
   };
 
   return (
     <form className="space-y-5" onSubmit={submit}>
+      <section className="flex flex-col items-center">
+        <button
+          aria-label="选择咨询师头像"
+          className="relative flex h-28 w-28 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-[#FAF8F4] text-3xl font-semibold text-[var(--lxxl-green)] shadow-sm ring-1 ring-[var(--lxxl-border)] transition hover:ring-[var(--lxxl-green)] disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={busy}
+          type="button"
+          onClick={() => avatarInputRef.current?.click()}
+        >
+          {avatarPreviewUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element -- 本地 object URL 无法交给 Next Image 优化。
+            <img
+              alt={`${draft.name || "咨询师"}头像`}
+              className="h-full w-full object-cover"
+              src={avatarPreviewUrl}
+            />
+          ) : (
+            <span aria-hidden="true">{draft.name.trim().slice(0, 1) || "头像"}</span>
+          )}
+        </button>
+        <input
+          ref={avatarInputRef}
+          accept="image/jpeg,image/png,image/webp"
+          className="hidden"
+          disabled={busy}
+          type="file"
+          onChange={selectAvatar}
+        />
+        <div className="mt-2 text-xs text-[var(--lxxl-muted)]">
+          点击头像更换，支持 JPEG、PNG、WebP，最大 10MB
+        </div>
+        {errors.avatarUrl ? (
+          <div className="mt-1 text-xs text-[#A13F37]" role="alert">
+            {errors.avatarUrl}
+          </div>
+        ) : null}
+      </section>
+
       <section className="rounded-xl bg-[#FAF8F4] px-4 py-3 text-sm text-[var(--lxxl-muted)]">
         <div className="font-medium text-[var(--lxxl-text)]">当前介绍页</div>
         <div className="mt-2 grid gap-2 sm:grid-cols-2">
@@ -159,14 +319,6 @@ export function CounselorIntroEditor({
               className={queryControlClass}
               value={draft.name}
               onChange={(event) => updateDraft("name", event.target.value)}
-            />
-          </QueryField>
-          <QueryField label="头像 URL">
-            <input
-              className={queryControlClass}
-              placeholder="https://..."
-              value={draft.avatarUrl}
-              onChange={(event) => updateDraft("avatarUrl", event.target.value)}
             />
           </QueryField>
           <QueryField label="职称/头衔">
@@ -262,16 +414,16 @@ export function CounselorIntroEditor({
       <div className="sticky bottom-0 -mx-6 flex gap-3 border-t border-[var(--lxxl-border)] bg-white px-6 py-4">
         <button
           className="h-10 rounded-xl bg-[var(--lxxl-green)] px-5 text-sm font-medium text-white transition hover:bg-[var(--lxxl-green-dark)] disabled:cursor-not-allowed disabled:opacity-50"
-          disabled={saving}
+          disabled={busy}
           type="submit"
         >
-          {saving ? "保存中..." : "保存"}
+          {busy ? (avatarFile ? "上传并保存中..." : "保存中...") : "保存"}
         </button>
         <button
           className="h-10 rounded-xl border border-[var(--lxxl-border)] px-5 text-sm font-medium text-[var(--lxxl-muted)] transition hover:border-[var(--lxxl-green)] hover:text-[var(--lxxl-green)]"
-          disabled={saving}
+          disabled={busy}
           type="button"
-          onClick={onCancel}
+          onClick={cancel}
         >
           取消
         </button>

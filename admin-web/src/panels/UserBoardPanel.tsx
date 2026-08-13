@@ -47,6 +47,8 @@ export function UserBoardPanel({
   onBindCounselor,
   remarkSaving,
   onSaveRemark,
+  contractDownloading,
+  onDownloadContract,
 }: {
   users?: PagedResult<UserBoardSummary>;
   listLoading: boolean;
@@ -66,6 +68,8 @@ export function UserBoardPanel({
   onBindCounselor?: (patientId: number, counselorId: number | null) => Promise<void>;
   remarkSaving: boolean;
   onSaveRemark: (accountId: number, remark: string) => Promise<string>;
+  contractDownloading: boolean;
+  onDownloadContract: (accountId: number) => Promise<void>;
 }) {
   return (
     <>
@@ -93,6 +97,8 @@ export function UserBoardPanel({
               onSearchCounselors={onSearchCounselors}
               remarkSaving={remarkSaving}
               onSaveRemark={onSaveRemark}
+              contractDownloading={contractDownloading}
+              onDownloadContract={onDownloadContract}
             />
           ) : null}
         </DetailDrawer>
@@ -243,6 +249,8 @@ function UserDetailPanel({
   onBindCounselor,
   remarkSaving,
   onSaveRemark,
+  contractDownloading,
+  onDownloadContract,
 }: {
   detail: UserBoardDetail;
   onProxyBooking?: (target: UserProxyBookingTarget) => void;
@@ -251,6 +259,8 @@ function UserDetailPanel({
   onBindCounselor?: (patientId: number, counselorId: number | null) => Promise<void>;
   remarkSaving: boolean;
   onSaveRemark: (accountId: number, remark: string) => Promise<string>;
+  contractDownloading: boolean;
+  onDownloadContract: (accountId: number) => Promise<void>;
 }) {
   const [bindOpen, setBindOpen] = useState(false);
   const [bindKeyword, setBindKeyword] = useState("");
@@ -376,6 +386,21 @@ function UserDetailPanel({
       )}
       {canProxyBooking && (
         <div className="mt-4 rounded-xl bg-[#FAF8F4] px-4 py-3 text-sm leading-6">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <h4 className="font-semibold">
+              {detail.profile.isContractSigned
+                ? `已签约-【${detail.profile.boundCounselorName || "咨询师"}】`
+                : "未签约"}
+            </h4>
+            {detail.profile.isContractSigned && (
+              <QueryResetButton
+                disabled={contractDownloading}
+                onClick={() => void onDownloadContract(detail.profile.id)}
+              >
+                {contractDownloading ? "生成中..." : "下载签约文件"}
+              </QueryResetButton>
+            )}
+          </div>
           <div className="grid grid-cols-[5rem_minmax(0,1fr)] gap-x-3">
             <span className="text-[var(--lxxl-muted)]">是否签约</span>
             <span className="font-medium">{detail.profile.isContractSigned ? "是" : "否"}</span>

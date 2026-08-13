@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any, Callable, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
@@ -24,7 +25,13 @@ from models import (
     AppSchedule,
     AppScheduleCancelLog,
 )
-from patient_contract_service import batch_patient_contract_extras, patient_contract_extras
+from patient_contract_service import (
+    batch_patient_contract_extras,
+    contract_signature_file_path,
+    current_patient_contract_order,
+    patient_contract_extras,
+    patient_contract_material,
+)
 from schedule_meta import center_display_name, parse_center_id, parse_room_id, room_display_name
 from staff_remark_service import get_staff_remark, get_staff_remarks_map
 
@@ -342,6 +349,59 @@ def register_admin_board_routes(
                 if c.ScheduleId
             ],
         }
+
+    @router.get(
+        "/boards/patients/{account_id}/contract-material",
+        summary="获取来访当前签约材料",
+    )
+    def patient_contract_material_detail(
+        account_id: int,
+        _staff: AppAccount = Depends(require_staff_workbench),
+        db: Session = Depends(get_db),
+    ):
+        if account_id not in visitor_patient_ids(db):
+            raise HTTPException(status_code=404, detail="签约材料不存在")
+        account = db.query(AppAccount).filter(AppAccount.Id == account_id).first()
+        material = patient_contract_material(
+            db,
+            account,
+            signature_download_url=(
+                f"/api/mini/admin/boards/patients/{account_id}/"
+                "contract-material/signature"
+            ),
+        )
+        if not material:
+            raise HTTPException(status_code=404, detail="签约材料不存在")
+        return material
+
+    @router.get(
+        "/boards/patients/{account_id}/contract-material/signature",
+        summary="下载来访当前签约签名",
+    )
+    def download_patient_contract_signature(
+        account_id: int,
+        _staff: AppAccount = Depends(require_staff_workbench),
+        db: Session = Depends(get_db),
+    ):
+        if account_id not in visitor_patient_ids(db):
+            raise HTTPException(status_code=404, detail="签名文件不存在")
+        account = db.query(AppAccount).filter(AppAccount.Id == account_id).first()
+        order = current_patient_contract_order(db, account)
+        signature_path = (
+            contract_signature_file_path(order.IntakeSignatureUrl)
+            if order
+            else None
+        )
+        if not order or not signature_path:
+            raise HTTPException(status_code=404, detail="签名文件不存在")
+        return FileResponse(
+            path=str(signature_path),
+            filename=f"contract-signature-{order.Id}{signature_path.suffix.lower()}",
+            headers={
+                "Cache-Control": "private, no-store",
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
 
     @router.get("/boards/counselors", summary="咨询师管理看板列表")
     def counselor_board_list(

@@ -1,11 +1,14 @@
 """来访者签约状态与绑定咨询师。"""
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, Optional
+from urllib.parse import unquote, urlsplit
 
 from sqlalchemy import or_, text
 from sqlalchemy.orm import Session
 
 from app_time import china_now
+from assessment_asset_service import UPLOAD_DIR
 from models import (
     AppAccount,
     AppConsultation,
@@ -316,6 +319,134 @@ def batch_patient_contract_extras(
             ),
         }
     return out
+
+
+def current_patient_contract_order(
+    db: Session,
+    account: Optional[AppAccount],
+) -> Optional[AppOrder]:
+    """返回当前绑定周期内、能证明签约材料归属的最新已支付订单。"""
+    if (
+        not account
+        or not getattr(account, "IsContractSigned", False)
+        or not getattr(account, "BoundCounselorId", None)
+        or not getattr(account, "BoundCounselorChangedAt", None)
+    ):
+        return None
+
+    rows = (
+        db.query(AppOrder)
+        .join(AppConsultation, AppConsultation.OrderId == AppOrder.Id)
+        .filter(
+            AppOrder.AccountId == int(account.Id),
+            AppOrder.Status == "PAID",
+            AppOrder.PaidAt.isnot(None),
+            AppOrder.PaidAt >= account.BoundCounselorChangedAt,
+            AppOrder.IntakeIsAdult.isnot(None),
+            AppOrder.IntakeSignatureUrl.isnot(None),
+            AppConsultation.PatientId == int(account.Id),
+            AppConsultation.CounselorId == int(account.BoundCounselorId),
+        )
+        .order_by(
+            AppOrder.PaidAt.desc(),
+            AppOrder.CreatedAt.desc(),
+            AppOrder.Id.desc(),
+        )
+        .all()
+    )
+    return next(
+        (
+            order
+            for order in rows
+            if (getattr(order, "IntakeSignatureUrl", None) or "").strip()
+        ),
+        None,
+    )
+
+
+def contract_signature_file_path(
+    signature_url: str,
+    *,
+    upload_dir: Optional[Path] = None,
+) -> Optional[Path]:
+    """把本地或绝对上传 URL 安全解析为 UPLOAD_DIR 内的现有文件。"""
+    value = (signature_url or "").strip()
+    if not value:
+        return None
+    parsed = urlsplit(value)
+    if parsed.scheme and parsed.scheme.lower() not in ("http", "https"):
+        return None
+    if (parsed.scheme and not parsed.netloc) or (not parsed.scheme and parsed.netloc):
+        return None
+    if parsed.query or parsed.fragment:
+        return None
+
+    path = unquote(parsed.path)
+    prefix = "/static/uploads/"
+    if (
+        not path.startswith(prefix)
+        or "\\" in path
+        or "\x00" in path
+    ):
+        return None
+    relative_path = path[len(prefix):]
+    if not relative_path:
+        return None
+
+    root = Path(upload_dir or UPLOAD_DIR).resolve()
+    candidate = (root / relative_path).resolve()
+    try:
+        candidate.relative_to(root)
+    except ValueError:
+        return None
+    if not candidate.is_file():
+        return None
+    return candidate
+
+
+def patient_contract_material(
+    db: Session,
+    account: Optional[AppAccount],
+    *,
+    signature_download_url: str,
+) -> Optional[Dict[str, Any]]:
+    """生成管理工作台所需的当前有效签约材料。"""
+    order = current_patient_contract_order(db, account)
+    if not account or not order:
+        return None
+    signature_path = contract_signature_file_path(order.IntakeSignatureUrl)
+    if not signature_path:
+        return None
+
+    is_tongxin = bool(order.IntakeIsAdult)
+    signature_download_path = signature_download_url
+    signed_at = order.PaidAt
+    account_signed_at = getattr(account, "IntakeAgreementSignedAt", None)
+    if (
+        account_signed_at
+        and account_signed_at >= account.BoundCounselorChangedAt
+        and (getattr(account, "IntakeSignatureUrl", None) or "").strip()
+        == (order.IntakeSignatureUrl or "").strip()
+    ):
+        signed_at = account_signed_at
+    return {
+        "agreementType": "TONGXIN" if is_tongxin else "YANGFAN",
+        "agreementTypeLabel": "同心理咨询协议" if is_tongxin else "“扬帆计划”协议",
+        "isTongxin": is_tongxin,
+        "signedAt": signed_at,
+        "orderId": order.Id,
+        "patientName": _base_patient_name(account),
+        "counselorName": _counselor_name(db, int(account.BoundCounselorId)),
+        "billingYuan": (order.TotalFee or 0) / 100,
+        "emergencyContact": {
+            "name": account.EmergencyContact,
+            "relation": account.EmergencyRelation,
+            "phone": account.EmergencyPhone,
+        },
+        "signatureFileId": signature_path.name,
+        "signatureDownloadUrl": signature_download_path,
+        "signatureDownloadPath": signature_download_path,
+    }
 
 
 def patient_display_name(

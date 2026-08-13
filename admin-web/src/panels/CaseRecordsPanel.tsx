@@ -16,6 +16,7 @@ import {
 import { API_BASE_URL } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import { formatPatientNameWithContractTag } from "@/lib/patientContract";
+import { downloadCaseRecordPdf, formatCaseRecordHeaderInfo } from "@/lib/download-case-record-pdf";
 
 import { getPageItems } from "@/lib/pagination";
 import { Badge, CollapsibleSection, EmptyState, Pagination, PanelHeader, TableActionButton } from "@/components/ui";
@@ -414,6 +415,8 @@ function CounselorRecordListView({
 
 function CaseRecordDetailView({ record, onBack }: { record: AdminCaseRecordDetail; onBack: () => void }) {
   const riskAssessment = record.RiskAssessment ? normalizeRiskAssessment(record.RiskAssessment) : null;
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState("");
 
   return (
     <div className="space-y-5">
@@ -429,13 +432,42 @@ function CaseRecordDetailView({ record, onBack }: { record: AdminCaseRecordDetai
         </div>
         <TableActionButton onClick={onBack}>返回记录列表</TableActionButton>
       </div>
+      <RecordBlock title="表头信息" value={formatCaseRecordHeaderInfo(record.HeaderInfo)} />
       <RecordBlock title="患者情况记录（主观陈述）" value={record.Subjective} />
       <RecordBlock title="客观观察" value={record.Objective} />
       <RecordBlock title="评估分析" value={record.Assessment} />
       <RecordBlock title="计划方向" value={record.Plan} />
       <RiskAssessmentBlock value={riskAssessment} />
       {record.PhotoUrls.length > 0 && <RecordPhotos urls={record.PhotoUrls} />}
+      <div className="flex justify-end border-t border-[var(--lxxl-border)] pt-5">
+        {downloadError && <span className="mr-3 self-center text-xs text-[#B42318]">{downloadError}</span>}
+        <QueryButton
+          disabled={downloading}
+          onClick={async () => {
+            setDownloading(true);
+            setDownloadError("");
+            try {
+              await downloadCaseRecordPdf(record);
+            } catch (error) {
+              setDownloadError(error instanceof Error ? error.message : "PDF 生成失败");
+            } finally {
+              setDownloading(false);
+            }
+          }}
+        >
+          <DownloadIcon />
+          {downloading ? "生成 PDF 中..." : "下载咨询记录 PDF"}
+        </QueryButton>
+      </div>
     </div>
+  );
+}
+
+function DownloadIcon() {
+  return (
+    <svg aria-hidden="true" className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
+      <path d="M12 3v12m0 0 4-4m-4 4-4-4M5 19h14" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
+    </svg>
   );
 }
 
