@@ -430,7 +430,27 @@ function CaseRecordDetailView({ record, onBack }: { record: AdminCaseRecordDetai
             创建 {formatDateTime(record.CreatedAt)} · 更新 {formatDateTime(record.UpdatedAt)}
           </p>
         </div>
-        <TableActionButton onClick={onBack}>返回记录列表</TableActionButton>
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-3">
+          {downloadError && <span className="text-xs text-[#B42318]">{downloadError}</span>}
+          <QueryButton
+            disabled={downloading}
+            onClick={async () => {
+              setDownloading(true);
+              setDownloadError("");
+              try {
+                await downloadCaseRecordPdf(record);
+              } catch (error) {
+                setDownloadError(error instanceof Error ? error.message : "PDF 生成失败");
+              } finally {
+                setDownloading(false);
+              }
+            }}
+          >
+            <DownloadIcon />
+            {downloading ? "生成 PDF 中..." : "下载咨询记录 PDF"}
+          </QueryButton>
+          <TableActionButton onClick={onBack}>返回记录列表</TableActionButton>
+        </div>
       </div>
       <RecordBlock title="表头信息" value={formatCaseRecordHeaderInfo(record.HeaderInfo)} />
       <RecordBlock title="患者情况记录（主观陈述）" value={record.Subjective} />
@@ -439,26 +459,6 @@ function CaseRecordDetailView({ record, onBack }: { record: AdminCaseRecordDetai
       <RecordBlock title="计划方向" value={record.Plan} />
       <RiskAssessmentBlock value={riskAssessment} />
       {record.PhotoUrls.length > 0 && <RecordPhotos urls={record.PhotoUrls} />}
-      <div className="flex justify-end border-t border-[var(--lxxl-border)] pt-5">
-        {downloadError && <span className="mr-3 self-center text-xs text-[#B42318]">{downloadError}</span>}
-        <QueryButton
-          disabled={downloading}
-          onClick={async () => {
-            setDownloading(true);
-            setDownloadError("");
-            try {
-              await downloadCaseRecordPdf(record);
-            } catch (error) {
-              setDownloadError(error instanceof Error ? error.message : "PDF 生成失败");
-            } finally {
-              setDownloading(false);
-            }
-          }}
-        >
-          <DownloadIcon />
-          {downloading ? "生成 PDF 中..." : "下载咨询记录 PDF"}
-        </QueryButton>
-      </div>
     </div>
   );
 }

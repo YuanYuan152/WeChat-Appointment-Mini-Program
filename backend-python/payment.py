@@ -61,6 +61,7 @@ class CreateOrderRequest(BaseModel):
     center_id: Optional[str] = None
     is_adult: Optional[bool] = None
     signature_url: Optional[str] = None
+    real_name: Optional[str] = None
     emergency_contact: Optional[str] = None
     emergency_relation: Optional[str] = None
     emergency_phone: Optional[str] = None
@@ -75,6 +76,7 @@ class PayExistingOrderRequest(BaseModel):
     order_id: int
     is_adult: Optional[bool] = None
     signature_url: Optional[str] = None
+    real_name: Optional[str] = None
     emergency_contact: Optional[str] = None
     emergency_relation: Optional[str] = None
     emergency_phone: Optional[str] = None
@@ -84,6 +86,7 @@ class AttachOrderAgreementRequest(BaseModel):
     order_id: int
     is_adult: bool
     signature_url: str
+    real_name: Optional[str] = None
     emergency_contact: str
     emergency_relation: str
     emergency_phone: str
@@ -188,6 +191,7 @@ def _create_pending_order(
             order,
             is_adult=req.is_adult,
             signature_url=req.signature_url,
+            real_name=req.real_name,
             emergency_contact=req.emergency_contact,
             emergency_relation=req.emergency_relation,
             emergency_phone=req.emergency_phone,
@@ -242,6 +246,7 @@ def _attach_order_agreement_if_needed(
     *,
     is_adult: Optional[bool],
     signature_url: Optional[str],
+    real_name: Optional[str] = None,
     emergency_contact: Optional[str] = None,
     emergency_relation: Optional[str] = None,
     emergency_phone: Optional[str] = None,
@@ -254,6 +259,7 @@ def _attach_order_agreement_if_needed(
         order,
         is_adult=is_adult,
         signature_url=signature_url,
+        real_name=real_name,
         emergency_contact=emergency_contact,
         emergency_relation=emergency_relation,
         emergency_phone=emergency_phone,
@@ -363,6 +369,7 @@ def attach_order_agreement(
             order,
             is_adult=req.is_adult,
             signature_url=req.signature_url,
+            real_name=req.real_name,
             emergency_contact=req.emergency_contact,
             emergency_relation=req.emergency_relation,
             emergency_phone=req.emergency_phone,
@@ -390,6 +397,7 @@ def pay_existing_order(
             order,
             is_adult=req.is_adult,
             signature_url=req.signature_url,
+            real_name=req.real_name,
             emergency_contact=req.emergency_contact,
             emergency_relation=req.emergency_relation,
             emergency_phone=req.emergency_phone,
@@ -488,6 +496,7 @@ def simulate_pay_existing_order(
             order,
             is_adult=req.is_adult,
             signature_url=req.signature_url,
+            real_name=req.real_name,
             emergency_contact=req.emergency_contact,
             emergency_relation=req.emergency_relation,
             emergency_phone=req.emergency_phone,

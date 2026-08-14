@@ -31,6 +31,9 @@ interface BookingModalsProps {
   showAgreement: boolean;
   showPayment: boolean;
   agreementText: string;
+  realName: string;
+  hasStoredRealName: boolean;
+  onRealNameChange: (value: string) => void;
   emergencyContact: AgreementEmergencyContact;
   onEmergencyContactChange: (patch: Partial<AgreementEmergencyContact>) => void;
   signaturePreview: string | null;
@@ -57,6 +60,9 @@ export function BookingModals({
   showAgreement,
   showPayment,
   agreementText,
+  realName,
+  hasStoredRealName,
+  onRealNameChange,
   emergencyContact,
   onEmergencyContactChange,
   signaturePreview,
@@ -75,6 +81,7 @@ export function BookingModals({
   onConfirmPayment,
 }: BookingModalsProps) {
   const emergencyError = validateAgreementEmergencyContact(emergencyContact);
+  const realNameError = hasStoredRealName || realName.trim() ? "" : "请填写真实姓名";
   return (
     <>
       <Dialog open={showAge} onOpenChange={(open) => !open && onCloseAge()}>
@@ -106,6 +113,26 @@ export function BookingModals({
             <div className="rounded-xl bg-muted/50 p-4 text-sm leading-relaxed whitespace-pre-wrap">
               {agreementText}
             </div>
+            {!hasStoredRealName && (
+              <div className="space-y-3 rounded-xl border border-border bg-muted/30 p-4">
+                <div>
+                  <p className="text-sm font-medium">
+                    来访者真实姓名 <span className="text-red-500">*</span>
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    首次签约需填写，保存后后续签约无需重复填写
+                  </p>
+                </div>
+                <input
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2"
+                  value={realName}
+                  onChange={(event) => onRealNameChange(event.target.value)}
+                  placeholder="请输入真实姓名"
+                  maxLength={50}
+                />
+                {realNameError && <p className="text-xs text-red-500">{realNameError}</p>}
+              </div>
+            )}
             <div className="space-y-3 rounded-xl border border-border bg-muted/30 p-4">
               <div>
                 <p className="text-sm font-medium">
@@ -183,7 +210,7 @@ export function BookingModals({
           </div>
           <Button
             className="w-full"
-            disabled={!signaturePreview || !!emergencyError}
+            disabled={!signaturePreview || !!realNameError || !!emergencyError}
             onClick={onConfirmAgreement}
           >
             同意协议并继续
@@ -262,9 +289,10 @@ export function buildAgreementText(
   isAdult: boolean,
   counselorName: string,
   price: number,
-  emergency?: Partial<AgreementEmergencyContact> | null
+  emergency?: Partial<AgreementEmergencyContact> | null,
+  patientName?: string | null
 ): string {
   return isAdult
-    ? getAdultAgreement(counselorName, price, emergency)
-    : getMinorAgreement(counselorName, price, emergency);
+    ? getAdultAgreement(counselorName, price, emergency, patientName)
+    : getMinorAgreement(counselorName, price, emergency, patientName);
 }

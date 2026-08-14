@@ -26,6 +26,7 @@ def attach_intake_to_order(
     *,
     is_adult: Optional[bool],
     signature_url: Optional[str],
+    real_name: Optional[str] = None,
     emergency_contact: Optional[str] = None,
     emergency_relation: Optional[str] = None,
     emergency_phone: Optional[str] = None,
@@ -36,8 +37,12 @@ def attach_intake_to_order(
     url = (signature_url or "").strip()
     if is_adult is None or not url:
         raise ValueError("首次预约需选择协议并签署心理咨询协议")
-    from order_contract_agreement import apply_emergency_contact_to_account
+    from order_contract_agreement import (
+        apply_emergency_contact_to_account,
+        apply_real_name_to_account,
+    )
 
+    apply_real_name_to_account(account, real_name=real_name)
     apply_emergency_contact_to_account(
         account,
         emergency_contact=emergency_contact,

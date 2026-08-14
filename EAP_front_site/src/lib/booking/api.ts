@@ -150,6 +150,7 @@ export interface PayOrderPayload {
   description: string;
   is_adult?: boolean;
   signature_url?: string;
+  real_name?: string;
   emergency_contact?: string;
   emergency_relation?: string;
   emergency_phone?: string;

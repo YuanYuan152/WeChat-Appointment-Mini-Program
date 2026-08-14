@@ -22,6 +22,20 @@
         <text class="intro-notice">对外展示资料由平台统一维护</text>
         <text class="intro-text">{{ profileHeader.introduce || '暂无介绍，如需更新请联系运营' }}</text>
       </view>
+      <view class="contract-patients-card">
+        <view class="contract-patients-head">
+          <text class="intro-title">目前签约来访</text>
+          <text class="contract-patients-count">{{ stats.currentContractPatients.length }} 人</text>
+        </view>
+        <view v-if="stats.currentContractPatients.length" class="contract-patients-list">
+          <text
+            v-for="patient in stats.currentContractPatients"
+            :key="patient.id"
+            class="contract-patient-name"
+          >{{ patient.name }}</text>
+        </view>
+        <text v-else class="intro-notice">暂无当前签约来访</text>
+      </view>
       <view class="section-head">
         <text class="section-title">个人看板</text>
         <text class="section-sub">累计成单、咨询记录与预约履约概览</text>
@@ -138,6 +152,7 @@ interface DashboardStats {
   completedOrderRevenue: number
   caseRecordCount: number
   totalAppointments: number
+  currentContractPatients: Array<{ id: number; name: string }>
 }
 
 interface DetailItem {
@@ -181,6 +196,7 @@ const stats = ref<DashboardStats>({
   completedOrderRevenue: 0,
   caseRecordCount: 0,
   totalAppointments: 0,
+  currentContractPatients: [],
 })
 
 const showDetail = ref(false)
@@ -249,7 +265,7 @@ const load = async () => {
   loading.value = true
   try {
     await loadProfileHeader()
-    const res = await httpV2.get<DashboardStats & Record<string, number>>(
+    const res = await httpV2.get<DashboardStats>(
       API_ENDPOINTS.counselor.stats,
       { period: periodFilter.value },
       { showLoading: false },
@@ -260,6 +276,9 @@ const load = async () => {
         completedOrderRevenue: res.data.completedOrderRevenue ?? 0,
         caseRecordCount: res.data.caseRecordCount ?? 0,
         totalAppointments: res.data.totalAppointments ?? 0,
+        currentContractPatients: Array.isArray(res.data.currentContractPatients)
+          ? res.data.currentContractPatients
+          : [],
       }
     }
   } finally {
@@ -351,6 +370,42 @@ defineExpose({ refresh: load })
   padding: 28rpx;
   box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.03);
   border: 1rpx solid rgba(232, 228, 222, 0.9);
+}
+
+.contract-patients-card {
+  margin-top: 20rpx;
+  background: #fff;
+  border-radius: 24rpx;
+  padding: 28rpx;
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.03);
+  border: 1rpx solid rgba(232, 228, 222, 0.9);
+}
+
+.contract-patients-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.contract-patients-count {
+  font-size: 24rpx;
+  color: #8A8A8A;
+}
+
+.contract-patients-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  margin-top: 18rpx;
+}
+
+.contract-patient-name {
+  padding: 10rpx 18rpx;
+  border-radius: 999rpx;
+  background: #EEF2EF;
+  color: #3D5A4E;
+  font-size: 24rpx;
 }
 
 .intro-title {

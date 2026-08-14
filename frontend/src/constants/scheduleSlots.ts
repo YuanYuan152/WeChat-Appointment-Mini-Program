@@ -6,10 +6,10 @@ export const PAST_WINDOW_DAYS = 30
 export const LIST_WINDOW_DAYS = ROLLING_WINDOW_DAYS + PAST_WINDOW_DAYS
 export const SLOT_DURATION_MINUTES = 50
 export const CLEANING_DURATION_MINUTES = 10
-export const SLOT_START_HOURS = [9, 10, 11, 13, 14, 15, 16, 17, 18] as const
+export const SLOT_START_HOURS = [9, 10, 11, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23] as const
 export const SLOT_START_TIMES = SLOT_START_HOURS.flatMap(hour =>
   [0, 30].map(minute => `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`)
-)
+).filter(time => time !== '23:30')
 
 export const formatSlotLabel = (hour: number) => {
   const start = `${String(hour).padStart(2, '0')}:00`

@@ -84,6 +84,14 @@ def _find_active_account_by_mobile(db: Session, mobile: str) -> Optional[AppAcco
     )
 
 
+def _is_claimable_staff_invite(account: AppAccount, mobile: str) -> bool:
+    """助理代建的来访账号可由手机号本人通过短信完成激活。"""
+    return (
+        (account.OpenId or "") == f"admin_invite_{mobile}"
+        and (account.ActiveRole or "Patient") == "Patient"
+    )
+
+
 def _ensure_patient_role(db: Session, account: AppAccount) -> None:
     if not account.ActiveRole:
         set_account_role(db, account.Id, "Patient")
@@ -122,7 +130,7 @@ def web_send_code(body: SendCodeRequest, db: Session = Depends(get_db)):
 
     if body.purpose == "register":
         existing = _find_active_account_by_mobile(db, mobile)
-        if existing:
+        if existing and not _is_claimable_staff_invite(existing, mobile):
             raise HTTPException(status_code=409, detail="该手机号已注册，请直接登录")
 
     return send_verification_code(db, mobile, body.purpose)
@@ -135,7 +143,21 @@ def web_register(body: RegisterRequest, db: Session = Depends(get_db)):
 
     existing = _find_active_account_by_mobile(db, mobile)
     if existing:
-        raise HTTPException(status_code=409, detail="该手机号已注册，请直接登录")
+        if not _is_claimable_staff_invite(existing, mobile):
+            raise HTTPException(status_code=409, detail="该手机号已注册，请直接登录")
+        if not body.code:
+            raise HTTPException(status_code=400, detail="待激活账号请使用短信验证码完成注册")
+        verify_code(db, mobile, body.code, "register")
+        existing.OpenId = f"web_phone_{mobile}"
+        if body.password:
+            existing.PasswordHash = hash_password(body.password)
+        if body.nickname:
+            existing.Nickname = body.nickname
+        _ensure_patient_role(db, existing)
+        existing.UpdatedAt = datetime.utcnow()
+        db.commit()
+        token = _issue_token(db, existing)
+        return AuthTokenResponse(token=token, is_new_user=True)
 
     if body.code:
         verify_code(db, mobile, body.code, "register")

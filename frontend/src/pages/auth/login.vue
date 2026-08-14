@@ -216,12 +216,20 @@ const handlePhoneRegister = async (e: any) => {
     }
 
     const bindRes = await AuthApi.bindMobile(phoneCode)
+    const finalResult: WxLoginResponse = bindRes.token
+      ? {
+          ...result,
+          ...bindRes,
+          token: bindRes.token,
+          is_new_user: bindRes.is_new_user ?? false,
+        }
+      : result
     uni.showToast({
-      title: result.is_new_user ? '注册成功' : '登录成功',
+      title: finalResult.is_new_user ? '注册成功' : '登录成功',
       icon: 'success',
     })
-    console.info('[Auth] openid=', result.openId, 'token已保存, mobile=', bindRes.mobile)
-    afterLoginSuccess(result)
+    console.info('[Auth] openid=', finalResult.openId, 'token已保存, mobile=', bindRes.mobile)
+    afterLoginSuccess(finalResult)
   } catch (err: any) {
     uni.showModal({
       title: '登录失败',

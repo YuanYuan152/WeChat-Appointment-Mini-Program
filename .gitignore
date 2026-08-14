@@ -428,6 +428,8 @@ lxxl/Web.config
 backend-python/.env
 frontend/.env
 frontend/.env.production
+frontend/.env.development
+frontend/.env.development.local
 backend-python/.env.production
 # 微信支付证书/私钥（只保留 README，勿提交真实 pem）
 backend-python/certs/wechat_pay/*.pem

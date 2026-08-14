@@ -16,11 +16,13 @@ export function buildContractPdfBlocks(
         artifact.counselorName,
         artifact.billingYuan,
         artifact.emergencyContact,
+        artifact.patientName,
       )
     : buildYangfanConsultationAgreement(
         artifact.counselorName,
         artifact.billingYuan,
         artifact.emergencyContact,
+        artifact.patientName,
       );
   const metadata = [
     `协议类型：${artifact.agreementTypeLabel || title}`,

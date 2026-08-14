@@ -43,6 +43,21 @@
               <text class="agreement-text">{{ agreementText }}</text>
             </view>
 
+            <view v-if="!hasStoredRealName" class="emergency-box">
+              <text class="emergency-title">来访者真实姓名 <text class="sig-required">*</text></text>
+              <text class="emergency-hint">首次签约需填写，保存后后续签约无需重复填写</text>
+              <view class="emergency-field">
+                <input
+                  class="emergency-input"
+                  type="text"
+                  :maxlength="50"
+                  placeholder="请输入真实姓名"
+                  :value="realName"
+                  @input="onRealNameInput"
+                />
+              </view>
+            </view>
+
             <view class="emergency-box">
               <text class="emergency-title">紧急联系人信息 <text class="sig-required">*</text></text>
               <text class="emergency-hint">签署协议前请完整填写以下三项</text>
@@ -51,7 +66,7 @@
                 <input
                   class="emergency-input"
                   type="text"
-                  maxlength="50"
+                  :maxlength="50"
                   placeholder="请输入姓名"
                   :value="emergencyName"
                   @input="onEmergencyNameInput"
@@ -62,7 +77,7 @@
                 <input
                   class="emergency-input"
                   type="text"
-                  maxlength="30"
+                  :maxlength="30"
                   placeholder="如：父亲 / 配偶 / 朋友"
                   :value="emergencyRelation"
                   @input="onEmergencyRelationInput"
@@ -73,7 +88,7 @@
                 <input
                   class="emergency-input"
                   type="text"
-                  maxlength="20"
+                  :maxlength="20"
                   placeholder="请输入手机号"
                   :value="emergencyPhone"
                   @input="onEmergencyPhoneInput"
@@ -271,6 +286,8 @@ const signaturePadReady = ref(false)
 const emergencyName = ref('')
 const emergencyRelation = ref('')
 const emergencyPhone = ref('')
+const realName = ref('')
+const hasStoredRealName = ref(false)
 
 const resolveSigCanvasHeight = () => {
   try {
@@ -293,9 +310,13 @@ const emergencyPayload = computed(() => ({
   phone: normalizeAgreementPhone(emergencyPhone.value),
 }))
 const emergencyError = computed(() => validateAgreementEmergencyContact(emergencyPayload.value))
+const realNameError = computed(() =>
+  hasStoredRealName.value || realName.value.trim() ? '' : '请填写真实姓名',
+)
 const canSubmitAgreement = computed(() =>
   hasSignature.value
   && effectiveIsAdult.value !== null
+  && !realNameError.value
   && !emergencyError.value,
 )
 const agreementSubmitHint = computed(() => {
@@ -303,6 +324,7 @@ const agreementSubmitHint = computed(() => {
   if (effectiveIsAdult.value === null) {
     return hasPresetAgreement.value ? '请先完成签名' : '请先选择协议并完成签名'
   }
+  if (realNameError.value) return realNameError.value
   if (emergencyError.value) return emergencyError.value
   if (!hasSignature.value) return '请先完成来访者签字'
   return ''
@@ -372,6 +394,8 @@ const resetAgreementState = () => {
   emergencyName.value = ''
   emergencyRelation.value = ''
   emergencyPhone.value = ''
+  realName.value = ''
+  hasStoredRealName.value = false
   nextTick(() => {
     try { signatureRef.value?.clear?.() } catch { /* ignore */ }
   })
@@ -382,19 +406,22 @@ const rebuildAgreementText = () => {
   const counselorName = order.value.counselorName || '咨询师'
   const priceYuan = Math.round((order.value.TotalFee || 0) / 100)
   agreementText.value = effectiveIsAdult.value
-    ? buildTongxinConsultationAgreement(counselorName, priceYuan, emergencyPayload.value)
-    : buildYangfanConsultationAgreement(counselorName, priceYuan, emergencyPayload.value)
+    ? buildTongxinConsultationAgreement(counselorName, priceYuan, emergencyPayload.value, realName.value)
+    : buildYangfanConsultationAgreement(counselorName, priceYuan, emergencyPayload.value, realName.value)
   agreementDate.value = currentAgreementDate()
 }
 
 const prefillEmergencyContact = async () => {
   try {
     const res = await httpV2.get<{
+      realName?: string
       emergencyContact?: string
       emergencyRelation?: string
       emergencyPhone?: string
     }>(API_ENDPOINTS.patient.me, undefined, { showLoading: false, showError: false })
     if (res.code === 0 && res.data) {
+      realName.value = (res.data.realName || '').trim()
+      hasStoredRealName.value = Boolean(realName.value)
       emergencyName.value = res.data.emergencyContact || ''
       emergencyRelation.value = res.data.emergencyRelation || ''
       emergencyPhone.value = res.data.emergencyPhone || ''
@@ -496,6 +523,10 @@ const onEmergencyNameInput = (e: { detail: { value: string } }) => {
   emergencyName.value = e.detail.value
   rebuildAgreementText()
 }
+const onRealNameInput = (e: { detail: { value: string } }) => {
+  realName.value = e.detail.value
+  rebuildAgreementText()
+}
 const onEmergencyRelationInput = (e: { detail: { value: string } }) => {
   emergencyRelation.value = e.detail.value
   rebuildAgreementText()
@@ -562,6 +593,10 @@ const submitAgreement = async () => {
     uni.showToast({ title: emergencyError.value, icon: 'none' })
     return
   }
+  if (realNameError.value) {
+    uni.showToast({ title: realNameError.value, icon: 'none' })
+    return
+  }
   submittingAgreement.value = true
   try {
     uni.showLoading({ title: '正在上传签名...' })
@@ -575,6 +610,7 @@ const submitAgreement = async () => {
       order_id: order.value.Id,
       is_adult: effectiveIsAdult.value,
       signature_url: uploadRes.data.url,
+      real_name: hasStoredRealName.value ? undefined : realName.value.trim(),
       emergency_contact: emergencyPayload.value.name,
       emergency_relation: emergencyPayload.value.relation,
       emergency_phone: emergencyPayload.value.phone,

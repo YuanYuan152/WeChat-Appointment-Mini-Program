@@ -41,6 +41,7 @@ function fillPlaceholders(
   counselorName: string,
   priceYuan?: number,
   emergency?: Partial<AgreementEmergencyContact> | null,
+  patientName?: string | null,
 ): string {
   const name = (counselorName || '咨询师').trim() || '咨询师'
   const price = Math.max(0, Math.round(Number(priceYuan) || 0))
@@ -48,6 +49,7 @@ function fillPlaceholders(
   const emergencyName = (emergency?.name || '').trim() || '__________________'
   const emergencyRelation = (emergency?.relation || '').trim() || '__________________'
   const emergencyPhone = (emergency?.phone || '').trim() || '__________________'
+  const patient = (patientName || '').trim() || '__________________'
   return text
     .replaceAll('【咨询师姓名】', name)
     .replaceAll('【费用】', String(price))
@@ -55,6 +57,7 @@ function fillPlaceholders(
     .replaceAll('【紧急联系人姓名】', emergencyName)
     .replaceAll('【紧急联系人关系】', emergencyRelation)
     .replaceAll('【紧急联系人电话】', emergencyPhone)
+    .replaceAll('【来访者姓名】', patient)
 }
 
 const TONGXIN_AGREEMENT_TEMPLATE = `同心理咨询协议
@@ -65,7 +68,7 @@ const TONGXIN_AGREEMENT_TEMPLATE = `同心理咨询协议
 
 服务提供方（公司）：上海连心心理咨询有限公司
 
-服务接受方（来访者）：
+服务接受方（来访者）：【来访者姓名】
 
 第一条 协议适用
 
@@ -138,7 +141,7 @@ const TONGXIN_AGREEMENT_TEMPLATE = `同心理咨询协议
 
 const YANGFAN_AGREEMENT_TEMPLATE = `“扬帆计划”心理咨询服务协议
 
-重要提示：本服务协议是您与上海连心心理咨询有限公司（以下或简称“本公司”）之间就心理咨询服务等相关事宜所订立的协议，具有法律效力。您（以下或简称“来访者”）在使用本公司提供的各项服务（以下简称“本服务”）之前，请您务必审慎阅读、充分理解各条款内容，特别是免除或限制责任的条款。免除或限制责任的条款将以粗体标识，请重点阅读。如来访者对协议内容有任何疑问，请不要进行后续操作。若来访者为未成年人，应由来访者的监护人阅读本协议并向来访者解释说明。来访者的监护人需与来访者一同签署本协议。甲方（来访者）：_____________乙方（咨询机构）：上海连心心理咨询有限公司第一条 服务目的甲方主动寻求心理咨询与治疗的专业帮助，乙方从事专业心理咨询工作，乙方运用专业的咨询技术与方法帮助甲方，为甲方提供咨询。第二条 服务内容
+重要提示：本服务协议是您与上海连心心理咨询有限公司（以下或简称“本公司”）之间就心理咨询服务等相关事宜所订立的协议，具有法律效力。您（以下或简称“来访者”）在使用本公司提供的各项服务（以下简称“本服务”）之前，请您务必审慎阅读、充分理解各条款内容，特别是免除或限制责任的条款。免除或限制责任的条款将以粗体标识，请重点阅读。如来访者对协议内容有任何疑问，请不要进行后续操作。若来访者为未成年人，应由来访者的监护人阅读本协议并向来访者解释说明。来访者的监护人需与来访者一同签署本协议。甲方（来访者）：【来访者姓名】乙方（咨询机构）：上海连心心理咨询有限公司第一条 服务目的甲方主动寻求心理咨询与治疗的专业帮助，乙方从事专业心理咨询工作，乙方运用专业的咨询技术与方法帮助甲方，为甲方提供咨询。第二条 服务内容
 
 参与本项目的咨询师为受训中的新手心理咨询师，在督导师的督导下以公益价格独立接待个案。参与本项目的来访者，需本人申请，经过评估筛选，符合要求方能参与本项目。符合要求的来访者将获得30次或为期一年的低价公益咨询（满足其一即算期满）。
 
@@ -170,16 +173,18 @@ export function buildTongxinConsultationAgreement(
   counselorName: string,
   priceYuan: number,
   emergency?: Partial<AgreementEmergencyContact> | null,
+  patientName?: string | null,
 ): string {
-  return fillPlaceholders(TONGXIN_AGREEMENT_TEMPLATE, counselorName, priceYuan, emergency)
+  return fillPlaceholders(TONGXIN_AGREEMENT_TEMPLATE, counselorName, priceYuan, emergency, patientName)
 }
 
 export function buildYangfanConsultationAgreement(
   counselorName: string,
   priceYuan = 100,
   emergency?: Partial<AgreementEmergencyContact> | null,
+  patientName?: string | null,
 ): string {
-  return fillPlaceholders(YANGFAN_AGREEMENT_TEMPLATE, counselorName, priceYuan, emergency)
+  return fillPlaceholders(YANGFAN_AGREEMENT_TEMPLATE, counselorName, priceYuan, emergency, patientName)
 }
 
 /** @deprecated 兼容旧调用：成年协议 → 同心理咨询协议 */
@@ -210,13 +215,13 @@ export function currentAgreementDate(): string {
 
 
 /** @deprecated 兼容旧命名 */
-export function getAdultAgreement(counselorName: string, price: number, emergency?: Partial<AgreementEmergencyContact> | null): string {
-  return buildTongxinConsultationAgreement(counselorName, price, emergency)
+export function getAdultAgreement(counselorName: string, price: number, emergency?: Partial<AgreementEmergencyContact> | null, patientName?: string | null): string {
+  return buildTongxinConsultationAgreement(counselorName, price, emergency, patientName)
 }
 
 /** @deprecated 兼容旧命名 */
-export function getMinorAgreement(counselorName: string, price: number, emergency?: Partial<AgreementEmergencyContact> | null): string {
-  return buildYangfanConsultationAgreement(counselorName, price, emergency)
+export function getMinorAgreement(counselorName: string, price: number, emergency?: Partial<AgreementEmergencyContact> | null, patientName?: string | null): string {
+  return buildYangfanConsultationAgreement(counselorName, price, emergency, patientName)
 }
 
 export function currentDateLabel(): string {

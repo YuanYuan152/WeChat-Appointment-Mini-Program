@@ -1781,6 +1781,16 @@ def counselor_stats(
         AppCounselorProfile.AccountId == counselor.Id
     ).first()
     billing = profile.Billing if profile else 0
+    current_contract_patients = (
+        db.query(AppAccount)
+        .filter(
+            AppAccount.IsActive == True,
+            AppAccount.BoundCounselorId == counselor.Id,
+            AppAccount.IsContractSigned == True,
+        )
+        .order_by(AppAccount.RealName.asc(), AppAccount.Id.asc())
+        .all()
+    )
 
     return {
         "totalConsultations": total,
@@ -1788,6 +1798,18 @@ def counselor_stats(
         "pendingConsultations": pending,
         "doneConsultations": done,
         "estimatedRevenue": done * billing,
+        "currentContractPatients": [
+            {
+                "id": patient.Id,
+                "name": (
+                    patient.RealName
+                    or patient.Nickname
+                    or patient.Mobile
+                    or f"来访者#{patient.Id}"
+                ),
+            }
+            for patient in current_contract_patients
+        ],
         **metrics,
     }
 

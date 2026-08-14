@@ -190,6 +190,7 @@ class BindMobileRequest(BaseModel):
     # 微信获取手机号的 code（微信基础库 >= 2.21.2 的新版方式）
     phoneCode: str
 
+
 class UserInfo(BaseModel):
     id: int
     openId: Optional[str] = None
@@ -497,13 +498,78 @@ def bind_mobile(
         tail = "".join(ch for ch in request.phoneCode if ch.isalnum())[-8:].zfill(8)
         mobile = f"138{tail}"
 
-    # 检查手机号是否已被其他账号绑定
+    # 手机号已由工作人员预建，或仅在官网注册时，微信验号后应认领原账号，
+    # 以保留代理预约、签约关系等历史数据，而不是提示“已被绑定”。
     existing = db.query(AppAccount).filter(
         AppAccount.Mobile == mobile,
         AppAccount.Id != current_account.Id,
     ).first()
     if existing:
-        raise HTTPException(status_code=409, detail="该手机号已被其他账号绑定")
+        placeholder_openids = {
+            f"admin_invite_{mobile}",
+            f"web_phone_{mobile}",
+        }
+        if (existing.OpenId or "") not in placeholder_openids:
+            raise HTTPException(status_code=409, detail="该手机号已被其他微信账号绑定")
+        if current_account.Mobile and current_account.Mobile != mobile:
+            raise HTTPException(status_code=409, detail="当前微信账号已绑定其他手机号")
+
+        current_openid = current_account.OpenId
+        if not current_openid:
+            raise HTTPException(status_code=400, detail="当前微信账号缺少身份信息")
+
+        current_session = (
+            db.query(AppLoginSession)
+            .filter(AppLoginSession.AccountId == current_account.Id)
+            .order_by(AppLoginSession.Id.desc())
+            .first()
+        )
+        session_key = current_session.SessionKey if current_session else None
+
+        # 先释放当前临时账号的微信身份，再写入预建账号。
+        current_account.OpenId = f"merged_account_{current_account.Id}"
+        current_account.IsActive = False
+        current_account.DeletedAt = datetime.utcnow()
+        current_account.UpdatedAt = datetime.utcnow()
+        db.query(AppLoginSession).filter(
+            AppLoginSession.AccountId == current_account.Id
+        ).delete(synchronize_session=False)
+
+        existing.OpenId = current_openid
+        if current_account.UnionId and not existing.UnionId:
+            existing.UnionId = current_account.UnionId
+        existing.UpdatedAt = datetime.utcnow()
+
+        token, expire = create_access_token(
+            {"sub": str(existing.Id), "openid": current_openid}
+        )
+        db.add(
+            AppLoginSession(
+                AccountId=existing.Id,
+                Token=token,
+                SessionKey=session_key,
+                ExpiresAt=expire,
+            )
+        )
+        db.commit()
+        db.refresh(existing)
+
+        role = get_account_role(db, existing.Id)
+        return {
+            "message": "手机号绑定成功",
+            "mobile": mobile,
+            "token": token,
+            "openId": existing.OpenId,
+            "activeRole": role,
+            "roles": [role],
+            "nickname": existing.Nickname,
+            "avatarUrl": existing.AvatarUrl,
+            "id": existing.Id,
+            "is_new_user": False,
+            "needProfileSetup": _need_profile_setup(existing, False),
+            "needSubscribeGuide": _need_subscribe_guide(existing, False),
+            "isMockAuth": not _is_wechat_configured() and settings.dev_login_enabled,
+        }
 
     current_account.Mobile = mobile
     current_account.UpdatedAt = datetime.utcnow()

@@ -13,9 +13,18 @@ SLOT_DURATION_MINUTES = 50
 # 每节咨询 50 分钟，结束后预留 10 分钟打扫；相邻预约因此仍至少间隔 60 分钟。
 CLEANING_DURATION_MINUTES = 10
 OCCUPANCY_DURATION_MINUTES = SLOT_DURATION_MINUTES + CLEANING_DURATION_MINUTES
-# 每日可选开始小时（午休 12 点不排），每小时支持整点和半点开始。
-SLOT_START_HOURS = [9, 10, 11, 13, 14, 15, 16, 17, 18]
+# 每日可选开始小时（午休 12 点不排），每小时支持整点和半点开始；
+# 最晚开始时间为 23:00，不生成 23:30。
+SLOT_START_HOURS = [9, 10, 11, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
 SLOT_START_MINUTES = (0, 30)
+
+
+def is_standard_slot_start(hour: int, minute: int) -> bool:
+    return (
+        hour in SLOT_START_HOURS
+        and minute in SLOT_START_MINUTES
+        and not (hour == 23 and minute == 30)
+    )
 
 
 def slot_bounds_for_date(d: date, hour: int, minute: int = 0) -> Tuple[datetime, datetime]:
@@ -29,6 +38,7 @@ def all_slot_bounds_for_date(d: date) -> List[Tuple[datetime, datetime]]:
         slot_bounds_for_date(d, hour, minute)
         for hour in SLOT_START_HOURS
         for minute in SLOT_START_MINUTES
+        if is_standard_slot_start(hour, minute)
     ]
 
 
@@ -80,10 +90,14 @@ def validate_slot_in_rolling_window(start: datetime, now: Optional[datetime] = N
 
 
 def is_aligned_standard_slot(start: datetime, end: datetime) -> bool:
-    if start.minute not in SLOT_START_MINUTES or start.second != 0 or start.microsecond != 0:
+    if (
+        not is_standard_slot_start(start.hour, start.minute)
+        or start.second != 0
+        or start.microsecond != 0
+    ):
         return False
     expected_end = start + timedelta(minutes=SLOT_DURATION_MINUTES)
-    return end == expected_end and start.hour in SLOT_START_HOURS
+    return end == expected_end
 
 
 def active_schedules_at(

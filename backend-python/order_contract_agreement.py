@@ -44,6 +44,22 @@ def apply_emergency_contact_to_account(
     account.EmergencyPhone = phone
 
 
+def apply_real_name_to_account(
+    account: AppAccount,
+    *,
+    real_name: Optional[str],
+) -> None:
+    """首单签约时补齐真实姓名；已有姓名不要求重复填写，也不允许在此覆盖。"""
+    if (account.RealName or "").strip():
+        return
+    name = (real_name or "").strip()
+    if not name:
+        raise ValueError("请填写真实姓名")
+    if len(name) > 50:
+        raise ValueError("真实姓名不能超过50个字符")
+    account.RealName = name
+
+
 def order_schedule_counselor_id(db: Session, order: AppOrder) -> Optional[int]:
     if not order.SlotId:
         return None
@@ -88,6 +104,7 @@ def attach_contract_agreement_to_order(
     *,
     is_adult: Optional[bool],
     signature_url: Optional[str],
+    real_name: Optional[str] = None,
     emergency_contact: Optional[str] = None,
     emergency_relation: Optional[str] = None,
     emergency_phone: Optional[str] = None,
@@ -106,6 +123,7 @@ def attach_contract_agreement_to_order(
     url = (signature_url or "").strip()
     if effective_adult is None or not url:
         raise ValueError("请先签署心理咨询协议")
+    apply_real_name_to_account(account, real_name=real_name)
     apply_emergency_contact_to_account(
         account,
         emergency_contact=emergency_contact,

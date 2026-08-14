@@ -129,6 +129,86 @@ function formatFileSize(bytes: number) {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
 }
 
+function ChineseDateInput({
+  value,
+  label,
+  onChange,
+}: {
+  value: string;
+  label: string;
+  onChange: (value: string) => void;
+}) {
+  const parts = value.split("-");
+  const [year, setYear] = useState(parts[0] || "");
+  const [month, setMonth] = useState(parts[1] || "");
+  const [day, setDay] = useState(parts[2] || "");
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: currentYear - 1999 + 5 }, (_, index) => currentYear + 5 - index);
+  const daysInMonth =
+    year && month ? new Date(Number(year), Number(month), 0).getDate() : 31;
+
+  useEffect(() => {
+    const [nextYear = "", nextMonth = "", nextDay = ""] = value.split("-");
+    setYear(nextYear);
+    setMonth(nextMonth);
+    setDay(nextDay);
+  }, [value]);
+
+  const update = (nextYear: string, nextMonth: string, nextDay: string) => {
+    let normalizedDay = nextDay;
+    if (nextYear && nextMonth && nextDay) {
+      const maxDay = new Date(Number(nextYear), Number(nextMonth), 0).getDate();
+      normalizedDay = String(Math.min(Number(nextDay), maxDay)).padStart(2, "0");
+    }
+    setYear(nextYear);
+    setMonth(nextMonth);
+    setDay(normalizedDay);
+    onChange(
+      nextYear && nextMonth && normalizedDay
+        ? `${nextYear}-${nextMonth.padStart(2, "0")}-${normalizedDay.padStart(2, "0")}`
+        : "",
+    );
+  };
+
+  return (
+    <div className="grid grid-cols-3 gap-2" aria-label={label}>
+      <select
+        aria-label={`${label}年份`}
+        className={queryControlClass}
+        value={year}
+        onChange={(event) => update(event.target.value, month, day)}
+      >
+        <option value="">年份</option>
+        {years.map((item) => (
+          <option key={item} value={item}>{item}年</option>
+        ))}
+      </select>
+      <select
+        aria-label={`${label}月份`}
+        className={queryControlClass}
+        value={month}
+        onChange={(event) => update(year, event.target.value, day)}
+      >
+        <option value="">月份</option>
+        {Array.from({ length: 12 }, (_, index) => String(index + 1).padStart(2, "0")).map((item) => (
+          <option key={item} value={item}>{Number(item)}月</option>
+        ))}
+      </select>
+      <select
+        aria-label={`${label}日期`}
+        className={queryControlClass}
+        value={day}
+        onChange={(event) => update(year, month, event.target.value)}
+      >
+        <option value="">日期</option>
+        {Array.from({ length: daysInMonth }, (_, index) => String(index + 1).padStart(2, "0")).map((item) => (
+          <option key={item} value={item}>{Number(item)}日</option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 export function DataImportScreen() {
   return (
     <AppRoute sectionId="dataImport">
@@ -458,19 +538,17 @@ function DataImportContent() {
             {activeKind === "orders" && (
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 <QueryField label="预约开始日期（起）" required>
-                  <input
-                    className={queryControlClass}
-                    type="date"
+                  <ChineseDateInput
+                    label="预约开始日期（起）"
                     value={startDate}
-                    onChange={(event) => setStartDate(event.target.value)}
+                    onChange={setStartDate}
                   />
                 </QueryField>
                 <QueryField label="预约开始日期（止）" required>
-                  <input
-                    className={queryControlClass}
-                    type="date"
+                  <ChineseDateInput
+                    label="预约开始日期（止）"
                     value={endDate}
-                    onChange={(event) => setEndDate(event.target.value)}
+                    onChange={setEndDate}
                   />
                 </QueryField>
               </div>
@@ -539,6 +617,15 @@ function ImportStat({
 }
 
 function ImportErrors({ result }: { result: DataTransferImportResult | null }) {
+  const [expanded, setExpanded] = useState(false);
+  const errors = result?.errors || [];
+  const hasMore = errors.length > 10;
+  const visibleErrors = hasMore && !expanded ? errors.slice(0, 10) : errors;
+
+  useEffect(() => {
+    setExpanded(false);
+  }, [result]);
+
   return (
     <div className="border-t border-[var(--lxxl-border)]">
       <div className="px-6 pt-5">
@@ -546,7 +633,7 @@ function ImportErrors({ result }: { result: DataTransferImportResult | null }) {
       </div>
       {!result ? (
         <EmptyState text="导入后会在这里显示工作表、单元格和问题。" />
-      ) : result.errors.length === 0 ? (
+      ) : errors.length === 0 ? (
         <EmptyState text="本次导入没有 Excel 校验错误。" />
       ) : (
         <div className="overflow-x-auto px-6 pb-5 pt-4">
@@ -559,7 +646,7 @@ function ImportErrors({ result }: { result: DataTransferImportResult | null }) {
               </tr>
             </thead>
             <tbody>
-              {result.errors.map((error, index) => (
+              {visibleErrors.map((error, index) => (
                 <tr
                   key={`${error.sheet}-${error.cell}-${index}`}
                   className="border-t border-[var(--lxxl-border)] align-top"
@@ -573,6 +660,15 @@ function ImportErrors({ result }: { result: DataTransferImportResult | null }) {
               ))}
             </tbody>
           </table>
+          {hasMore && (
+            <button
+              className="mt-4 text-sm font-medium text-[var(--lxxl-green)] underline underline-offset-2"
+              type="button"
+              onClick={() => setExpanded((value) => !value)}
+            >
+              {expanded ? "收起错误详情" : `展开全部 ${errors.length} 条错误`}
+            </button>
+          )}
         </div>
       )}
     </div>

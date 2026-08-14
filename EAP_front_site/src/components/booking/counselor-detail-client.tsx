@@ -67,6 +67,8 @@ export function CounselorDetailClient({ counselorId, source }: CounselorDetailCl
   const [showPayment, setShowPayment] = useState(false);
   const [intakeIsAdult, setIntakeIsAdult] = useState<boolean | null>(null);
   const [agreementText, setAgreementText] = useState("");
+  const [realName, setRealName] = useState("");
+  const [hasStoredRealName, setHasStoredRealName] = useState(false);
   const [emergencyContact, setEmergencyContact] = useState({
     name: "",
     relation: "",
@@ -164,6 +166,8 @@ export function CounselorDetailClient({ counselorId, source }: CounselorDetailCl
     setSignaturePreview(null);
     setShowSignaturePad(false);
     setIntakeIsAdult(null);
+    setRealName("");
+    setHasStoredRealName(false);
     setEmergencyContact({ name: "", relation: "", phone: "" });
   };
 
@@ -194,6 +198,9 @@ export function CounselorDetailClient({ counselorId, source }: CounselorDetailCl
       try {
         const profile = await fetchPatientProfile(token);
         needIntake = profile.needsIntakeAgreement !== false;
+        const storedRealName = (profile.realName || "").trim();
+        setRealName(storedRealName);
+        setHasStoredRealName(Boolean(storedRealName));
         setNeedsIntakeAgreement(needIntake);
       } catch {
         needIntake = true;
@@ -234,14 +241,16 @@ export function CounselorDetailClient({ counselorId, source }: CounselorDetailCl
 
   const rebuildAgreementText = (
     isAdult: boolean,
-    emergency = emergencyContact
+    emergency = emergencyContact,
+    patientName = realName
   ) => {
     setAgreementText(
       buildAgreementText(
         isAdult,
         counselor?.name ?? "咨询师",
         selectedSlot?.Price ?? priceYuan,
-        emergency
+        emergency,
+        patientName
       )
     );
   };
@@ -250,9 +259,14 @@ export function CounselorDetailClient({ counselorId, source }: CounselorDetailCl
     setIntakeIsAdult(isAdult);
     setShowAge(false);
     let nextEmergency = emergencyContact;
+    let nextRealName = realName;
     if (token) {
       try {
         const profile = await fetchPatientProfile(token);
+        const storedRealName = (profile.realName || "").trim();
+        nextRealName = storedRealName;
+        setRealName(storedRealName);
+        setHasStoredRealName(Boolean(storedRealName));
         nextEmergency = {
           name: profile.emergencyContact || "",
           relation: profile.emergencyRelation || "",
@@ -263,7 +277,7 @@ export function CounselorDetailClient({ counselorId, source }: CounselorDetailCl
         /* ignore */
       }
     }
-    rebuildAgreementText(isAdult, nextEmergency);
+    rebuildAgreementText(isAdult, nextEmergency, nextRealName);
     setShowAgreement(true);
   };
 
@@ -277,6 +291,11 @@ export function CounselorDetailClient({ counselorId, source }: CounselorDetailCl
     });
   };
 
+  const handleRealNameChange = (value: string) => {
+    setRealName(value);
+    if (intakeIsAdult !== null) rebuildAgreementText(intakeIsAdult, emergencyContact, value);
+  };
+
   const handleSignatureConfirm = (blob: Blob) => {
     setSignatureBlob(blob);
     const url = URL.createObjectURL(blob);
@@ -286,6 +305,10 @@ export function CounselorDetailClient({ counselorId, source }: CounselorDetailCl
 
   const handleConfirmAgreement = () => {
     if (!signaturePreview) return;
+    if (!hasStoredRealName && !realName.trim()) {
+      setBookingError("请填写真实姓名");
+      return;
+    }
     const err = validateAgreementEmergencyContact(emergencyContact);
     if (err) {
       setBookingError(err);
@@ -310,6 +333,7 @@ export function CounselorDetailClient({ counselorId, source }: CounselorDetailCl
       if (needsIntakeAgreement) {
         if (intakeIsAdult === null) throw new Error("请先选择签署协议");
         if (!signatureBlob) throw new Error("请先完成协议签字");
+        if (!hasStoredRealName && !realName.trim()) throw new Error("请填写真实姓名");
         const emergencyError = validateAgreementEmergencyContact(emergencyContact);
         if (emergencyError) throw new Error(emergencyError);
         signatureUrl = await uploadSignature(token, signatureBlob);
@@ -324,6 +348,7 @@ export function CounselorDetailClient({ counselorId, source }: CounselorDetailCl
           ? {
               is_adult: intakeIsAdult!,
               signature_url: signatureUrl,
+              real_name: hasStoredRealName ? undefined : realName.trim(),
               emergency_contact: emergencyContact.name.trim(),
               emergency_relation: emergencyContact.relation.trim(),
               emergency_phone: emergencyContact.phone.trim(),
@@ -604,6 +629,9 @@ export function CounselorDetailClient({ counselorId, source }: CounselorDetailCl
         showAgreement={showAgreement}
         showPayment={showPayment}
         agreementText={agreementText}
+        realName={realName}
+        hasStoredRealName={hasStoredRealName}
+        onRealNameChange={handleRealNameChange}
         emergencyContact={emergencyContact}
         onEmergencyContactChange={handleEmergencyContactChange}
         signaturePreview={signaturePreview}

@@ -32,6 +32,22 @@ export interface BindMobileRequest {
   phoneCode: string
 }
 
+export interface BindMobileResponse {
+  message: string
+  mobile: string
+  token?: string
+  is_new_user?: boolean
+  openId?: string
+  activeRole?: string
+  roles?: string[]
+  nickname?: string
+  avatarUrl?: string
+  id?: number
+  isMockAuth?: boolean
+  needProfileSetup?: boolean
+  needSubscribeGuide?: boolean
+}
+
 export interface UserInfo {
   id: number
   openId?: string
@@ -93,16 +109,25 @@ export class AuthApi {
   /**
    * 绑定手机号（正式注册流程必需）
    */
-  static async bindMobile(phoneCode: string): Promise<{ message: string; mobile: string; isMockAuth?: boolean }> {
-    const res = await httpV2.post(
+  static async bindMobile(phoneCode: string): Promise<BindMobileResponse> {
+    const res = await httpV2.post<BindMobileResponse>(
       API_ENDPOINTS.auth.bindMobile,
       { phoneCode },
       { showLoading: false },
     )
     if (res.code === 0 && res.data) {
-      const token = String(uni.getStorageSync('token') || '')
+      const token = res.data.token || String(uni.getStorageSync('token') || '')
       if (token && res.data.mobile) {
-        saveSession({ token, mobile: res.data.mobile })
+        const role = resolveAccountRole(res.data.roles, res.data.activeRole)
+        saveSession({
+          token,
+          mobile: res.data.mobile,
+          openid: res.data.openId,
+          role,
+          nickname: res.data.nickname,
+          avatar: res.data.avatarUrl,
+          id: res.data.id,
+        })
       }
       return res.data
     }

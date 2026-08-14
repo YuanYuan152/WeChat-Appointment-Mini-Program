@@ -78,7 +78,7 @@
         <button v-else class="btn close" @tap="closeExemptionDetail">关闭</button>
         <view v-if="showRejectInput" class="reject-form">
           <text class="reject-form-title">填写拒绝理由（来访者可见）</text>
-          <textarea v-model="rejectReason" class="reject-textarea" placeholder="请说明不予退款的原因" maxlength="500" />
+          <textarea v-model="rejectReason" class="reject-textarea" placeholder="请说明不予退款的原因" :maxlength="500" />
           <view class="reject-actions">
             <button class="btn ghost" @tap="showRejectInput = false">取消</button>
             <button class="btn reject" :loading="processing" @tap="rejectExemption">确认拒绝</button>
@@ -88,37 +88,39 @@
     </view>
 
     <!-- 请假详情 -->
-    <view v-if="showLeaveDetail && leaveDetail" class="overlay overlay-sheet" @touchmove.stop.prevent>
+    <view v-if="showLeaveDetail && leaveDetail" class="overlay overlay-sheet" @touchmove.stop>
       <view class="detail-card sheet-card" @tap.stop>
         <view class="detail-header">
           <text class="detail-title">咨询师请假审批</text>
           <view class="detail-close-btn" @tap="closeLeaveDetail">×</view>
         </view>
-        <view class="detail-body">
-          <view class="detail-row"><text class="label">咨询师</text><text class="value">{{ leaveDetail.counselorName }}</text></view>
-          <view class="detail-row"><text class="label">请假时段</text><text class="value">{{ formatTime(leaveDetail.startTime) }} - {{ formatEndTime(leaveDetail.endTime) }}</text></view>
-          <view class="detail-row"><text class="label">预约地点</text><text class="value">{{ leaveDetail.location || '-' }}</text></view>
-          <view class="detail-row"><text class="label">审批状态</text><text class="value">{{ statusLabel(leaveDetail.status) }}</text></view>
-          <view class="reason-box">
-            <text class="reason-label">请假原因</text>
-            <text class="reason-text">{{ leaveDetail.reason }}</text>
-          </view>
-          <view v-if="leaveDetail.screenshotUrl" class="screenshot-box">
-            <text class="reason-label">沟通截图</text>
-            <image class="screenshot" :src="resolveAssetUrl(leaveDetail.screenshotUrl)" mode="aspectFit" @tap="previewScreenshot" />
-          </view>
-          <view v-if="leaveDetail.affectedPatients?.length" class="section-title">涉及预约与来访联系方式</view>
-          <view v-for="(patient, idx) in leaveDetail.affectedPatients || []" :key="idx" class="sub-card">
-            <view class="detail-row"><text class="label">来访者</text><text class="value">{{ patient.patientName }}</text></view>
-            <view class="detail-row"><text class="label">联系电话</text><text class="value">{{ patient.patientPhone || '未填写' }}</text></view>
-            <view v-if="patient.emergencyContact" class="detail-row">
-              <text class="label">紧急联系人</text>
-              <text class="value">{{ patient.emergencyContact }} {{ patient.emergencyPhone }}</text>
+        <scroll-view class="leave-detail-scroll" scroll-y enhanced :show-scrollbar="false" @touchmove.stop>
+          <view class="detail-body">
+            <view class="detail-row"><text class="label">咨询师</text><text class="value">{{ leaveDetail.counselorName }}</text></view>
+            <view class="detail-row"><text class="label">请假时段</text><text class="value">{{ formatTime(leaveDetail.startTime) }} - {{ formatEndTime(leaveDetail.endTime) }}</text></view>
+            <view class="detail-row"><text class="label">预约地点</text><text class="value">{{ leaveDetail.location || '-' }}</text></view>
+            <view class="detail-row"><text class="label">审批状态</text><text class="value">{{ statusLabel(leaveDetail.status) }}</text></view>
+            <view class="reason-box">
+              <text class="reason-label">请假原因</text>
+              <text class="reason-text">{{ leaveDetail.reason }}</text>
             </view>
-            <view class="detail-row"><text class="label">预约时间</text><text class="value">{{ formatTime(patient.startTime) }}</text></view>
-            <view class="detail-row"><text class="label">退款说明</text><text class="value">{{ patient.refundText }}</text></view>
+            <view v-if="leaveDetail.screenshotUrl" class="screenshot-box">
+              <text class="reason-label">沟通截图</text>
+              <image class="screenshot" :src="resolveAssetUrl(leaveDetail.screenshotUrl)" mode="aspectFit" @tap="previewScreenshot" />
+            </view>
+            <view v-if="leaveDetail.affectedPatients?.length" class="section-title">涉及预约与来访联系方式</view>
+            <view v-for="(patient, idx) in leaveDetail.affectedPatients || []" :key="idx" class="sub-card">
+              <view class="detail-row"><text class="label">来访者</text><text class="value">{{ patient.patientName }}</text></view>
+              <view class="detail-row"><text class="label">联系电话</text><text class="value">{{ patient.patientPhone || '未填写' }}</text></view>
+              <view v-if="patient.emergencyContact" class="detail-row">
+                <text class="label">紧急联系人</text>
+                <text class="value">{{ patient.emergencyContact }} {{ patient.emergencyPhone }}</text>
+              </view>
+              <view class="detail-row"><text class="label">预约时间</text><text class="value">{{ formatTime(patient.startTime) }}</text></view>
+              <view class="detail-row"><text class="label">退款说明</text><text class="value">{{ patient.refundText }}</text></view>
+            </view>
           </view>
-        </view>
+        </scroll-view>
         <view v-if="leaveDetail.status === 'PENDING'" class="actions">
           <button class="btn reject" :disabled="processing" @tap="rejectLeave">拒绝</button>
           <button class="btn approve" :loading="processing" @tap="approveLeave">通过请假</button>
@@ -519,9 +521,11 @@ onShow(load)
   width: 100%; max-width: 680rpx; background: #fff; border-radius: 24rpx; padding: 32rpx; box-sizing: border-box;
 }
 .sheet-card {
-  max-width: none; max-height: 88vh; overflow-y: auto;
+  max-width: none; height: 88vh; max-height: 88vh; overflow: hidden;
+  display: flex; flex-direction: column;
   border-radius: 32rpx 32rpx 0 0; padding: 36rpx 32rpx 48rpx;
 }
+.leave-detail-scroll { flex: 1; min-height: 0; width: 100%; }
 .detail-header {
   position: relative;
   margin-bottom: 24rpx;
@@ -565,7 +569,7 @@ onShow(load)
 .screenshot { width: 100%; height: 320rpx; border-radius: 16rpx; background: #E5E7EB; }
 .section-title { margin-top: 8rpx; font-size: 28rpx; font-weight: 700; color: #374151; }
 .sub-card { background: #F9FAFB; border-radius: 16rpx; padding: 20rpx; display: flex; flex-direction: column; gap: 12rpx; }
-.actions { display: flex; gap: 16rpx; margin-top: 28rpx; }
+.actions { display: flex; gap: 16rpx; margin-top: 28rpx; flex-shrink: 0; }
 .btn {
   flex: 1; height: 80rpx; line-height: 80rpx; border-radius: 100rpx;
   font-size: 28rpx; font-weight: 600; border: none;
@@ -573,7 +577,7 @@ onShow(load)
 .btn::after { border: none; }
 .btn.approve { background: #3D5A4E; color: #fff; }
 .btn.reject { background: #FEE2E2; color: #DC2626; }
-.btn.close { width: 100%; margin-top: 28rpx; background: #F3F4F6; color: #374151; }
+.btn.close { width: 100%; margin-top: 28rpx; background: #F3F4F6; color: #374151; flex-shrink: 0; }
 .reject-form { margin-top: 24rpx; padding-top: 24rpx; border-top: 1rpx solid #F3F4F6; }
 .reject-form-title { display: block; font-size: 26rpx; color: #374151; margin-bottom: 12rpx; }
 .reject-textarea {

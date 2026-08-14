@@ -44,6 +44,7 @@ export interface PatientProfile {
   id: number;
   mobile?: string | null;
   nickname?: string | null;
+  realName?: string | null;
   needsIntakeAgreement?: boolean;
   emergencyContact?: string | null;
   emergencyRelation?: string | null;

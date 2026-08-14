@@ -270,6 +270,21 @@
             </scroll-view>
           </view>
 
+          <view v-if="!hasStoredRealName" class="emergency-box">
+            <text class="emergency-title">来访者真实姓名 <text class="text-red">*</text></text>
+            <text class="emergency-hint">首次签约需填写，保存后后续签约无需重复填写</text>
+            <view class="emergency-field">
+              <input
+                class="emergency-input"
+                type="text"
+                :maxlength="50"
+                placeholder="请输入真实姓名"
+                :value="realName"
+                @input="onRealNameInput"
+              />
+            </view>
+          </view>
+
           <view class="emergency-box">
             <text class="emergency-title">紧急联系人信息 <text class="text-red">*</text></text>
             <text class="emergency-hint">签署协议前请完整填写以下三项</text>
@@ -278,7 +293,7 @@
               <input
                 class="emergency-input"
                 type="text"
-                maxlength="50"
+                :maxlength="50"
                 placeholder="请输入姓名"
                 :value="emergencyName"
                 @input="onEmergencyNameInput"
@@ -289,7 +304,7 @@
               <input
                 class="emergency-input"
                 type="text"
-                maxlength="30"
+                :maxlength="30"
                 placeholder="如：父亲 / 配偶 / 朋友"
                 :value="emergencyRelation"
                 @input="onEmergencyRelationInput"
@@ -300,7 +315,7 @@
               <input
                 class="emergency-input"
                 type="text"
-                maxlength="20"
+                :maxlength="20"
                 placeholder="请输入手机号"
                 :value="emergencyPhone"
                 @input="onEmergencyPhoneInput"
@@ -470,16 +485,22 @@ const yangfanAgreementTitle = YANGFAN_AGREEMENT_TITLE
 const emergencyName = ref('')
 const emergencyRelation = ref('')
 const emergencyPhone = ref('')
+const realName = ref('')
+const hasStoredRealName = ref(false)
 const emergencyPayload = computed(() => ({
   name: emergencyName.value.trim(),
   relation: emergencyRelation.value.trim(),
   phone: normalizeAgreementPhone(emergencyPhone.value),
 }))
 const emergencyError = computed(() => validateAgreementEmergencyContact(emergencyPayload.value))
+const realNameError = computed(() =>
+  hasStoredRealName.value || realName.value.trim() ? '' : '请填写真实姓名',
+)
 const canConfirmAgreement = computed(() =>
-  hasSignature.value && !emergencyError.value,
+  hasSignature.value && !realNameError.value && !emergencyError.value,
 )
 const agreementSubmitHint = computed(() => {
+  if (realNameError.value) return realNameError.value
   if (emergencyError.value) return emergencyError.value
   if (!hasSignature.value) return '请先完成来访者签字'
   return ''
@@ -901,7 +922,7 @@ const updateSectionOffsets = () => {
       query.select('#section0').boundingClientRect()
       query.select('#section1').boundingClientRect()
       query.select('.content-area').boundingClientRect()
-      query.select('.content-area').scrollOffset()
+      query.select('.content-area').scrollOffset(() => {})
       query.exec((res) => {
         if (!res || res.length < 4 || !res[0] || !res[2] || !res[3]) {
           resolve()
@@ -986,6 +1007,8 @@ const resetSignatureForNewBooking = () => {
   emergencyName.value = ''
   emergencyRelation.value = ''
   emergencyPhone.value = ''
+  realName.value = ''
+  hasStoredRealName.value = false
   try {
     uni.removeStorageSync('signatureImage')
   } catch {
@@ -1178,19 +1201,22 @@ const rebuildCurrentAgreement = () => {
   const counselorName = doctor.value.name || '咨询师'
   const priceYuan = selectedSlot.value?.Price || doctor.value.price || 0
   currentAgreement.value = intakeIsAdult.value
-    ? buildTongxinConsultationAgreement(counselorName, priceYuan, emergencyPayload.value)
-    : buildYangfanConsultationAgreement(counselorName, priceYuan, emergencyPayload.value)
+    ? buildTongxinConsultationAgreement(counselorName, priceYuan, emergencyPayload.value, realName.value)
+    : buildYangfanConsultationAgreement(counselorName, priceYuan, emergencyPayload.value, realName.value)
   currentDate.value = currentAgreementDate()
 }
 
 const prefillEmergencyContact = async () => {
   try {
     const res = await httpV2.get<{
+      realName?: string
       emergencyContact?: string
       emergencyRelation?: string
       emergencyPhone?: string
     }>(API_ENDPOINTS.patient.me, undefined, { showLoading: false, showError: false })
     if (res.code === 0 && res.data) {
+      realName.value = (res.data.realName || '').trim()
+      hasStoredRealName.value = Boolean(realName.value)
       emergencyName.value = res.data.emergencyContact || ''
       emergencyRelation.value = res.data.emergencyRelation || ''
       emergencyPhone.value = res.data.emergencyPhone || ''
@@ -1203,6 +1229,10 @@ const prefillEmergencyContact = async () => {
 
 const onEmergencyNameInput = (e: { detail: { value: string } }) => {
   emergencyName.value = e.detail.value
+  rebuildCurrentAgreement()
+}
+const onRealNameInput = (e: { detail: { value: string } }) => {
+  realName.value = e.detail.value
   rebuildCurrentAgreement()
 }
 const onEmergencyRelationInput = (e: { detail: { value: string } }) => {
@@ -1322,6 +1352,10 @@ const confirmAgreement = () => {
     })
     return
   }
+  if (realNameError.value) {
+    uni.showToast({ title: realNameError.value, icon: 'none' })
+    return
+  }
   const emergencyError = validateAgreementEmergencyContact(emergencyPayload.value)
   if (emergencyError) {
     uni.showToast({ title: emergencyError, icon: 'none' })
@@ -1391,6 +1425,10 @@ const confirmPayment = async () => {
       uni.showToast({ title: '请先完成协议签字', icon: 'none' })
       return
     }
+    if (realNameError.value) {
+      uni.showToast({ title: realNameError.value, icon: 'none' })
+      return
+    }
     const emergencyErrorEarly = validateAgreementEmergencyContact(emergencyPayload.value)
     if (emergencyErrorEarly) {
       uni.showToast({ title: emergencyErrorEarly, icon: 'none' })
@@ -1430,6 +1468,7 @@ const confirmPayment = async () => {
   if (needsIntakeAgreement.value) {
     payBody.is_adult = intakeIsAdult.value
     payBody.signature_url = signatureUrl
+    payBody.real_name = hasStoredRealName.value ? undefined : realName.value.trim()
     payBody.emergency_contact = emergencyPayload.value.name
     payBody.emergency_relation = emergencyPayload.value.relation
     payBody.emergency_phone = emergencyPayload.value.phone
