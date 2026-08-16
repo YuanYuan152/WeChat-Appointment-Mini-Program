@@ -44,7 +44,7 @@
 
       <section id="access" class="searchable">
         <h2>通用：登录与页面导航</h2>
-        <div class="note warn"><strong>当前登录边界：</strong>admin-web 目前使用后端开发联调登录，尚未内置正式员工登录页。生产使用前必须由实施人员确认正式认证入口，不能把 Mock 登录作为正式流程。</div>
+        <div class="note warn"><strong>当前登录边界：</strong>admin-web 使用已登记员工手机号和短信验证码登录，仅咨询师、咨询助理、咨询主任和管理员可进入；员工账号由管理员预先创建，不开放自助注册。生产使用前必须完成腾讯云短信真实发送验收。</div>
         <div class="grid">
           <article class="card"><h3>登录后的默认首页</h3><div class="table"><table><thead><tr><th>角色</th><th>默认进入</th><th>原因</th></tr></thead><tbody><tr><td>管理员 Admin</td><td>总览</td><td>查看运营指标和待办</td></tr><tr><td>咨询主任 Ops</td><td>总览</td><td>处理日常运营</td></tr><tr><td>咨询助理 Assistant</td><td>我的消息</td><td>从待办消息开始协作</td></tr><tr><td>咨询师 Counselor</td><td>个人看板</td><td>查看本人业务数据</td></tr></tbody></table></div></article>
           <article class="card"><h3>通用操作方式</h3><ol><li>从左侧分组菜单选择模块。</li><li>先使用顶部筛选项缩小数据范围。</li><li>点击表格行或“查看”进入详情。</li><li>新增、编辑、审核等操作通常在弹窗中完成。</li><li>提交成功后返回列表并刷新确认。</li></ol></article>

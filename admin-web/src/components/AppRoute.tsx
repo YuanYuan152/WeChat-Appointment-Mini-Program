@@ -5,13 +5,13 @@ import { useEffect } from "react";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { useRouter } from "next/navigation";
 
-import type { DevLoginCode } from "@/lib/api";
 import {
   AUTH_UNAUTHORIZED_EVENT,
   clearStoredToken,
   fetchCurrentUser,
   getStoredToken,
-  loginWithDevCode,
+  loginStaffWithCode,
+  sendStaffLoginCode,
 } from "@/lib/api";
 import { roleLabel } from "@/lib/format";
 import type { CurrentUser } from "@/types/api";
@@ -151,11 +151,18 @@ function AppRouteRoot({ sectionId, children }: { sectionId: SectionId; children:
     };
   }, [refreshUnreadMessageCount]);
 
-  const handleLogin = async (code: DevLoginCode) => {
+  const handleSendLoginCode = async (phone: string) => {
+    clearNotice();
+    const result = await sendStaffLoginCode(phone);
+    showNotice("success", result.message);
+    return result;
+  };
+
+  const handleLogin = async (phone: string, code: string) => {
     setLoading(true);
     clearNotice();
     try {
-      await loginWithDevCode(code);
+      await loginStaffWithCode(phone, code);
       const me = await fetchCurrentUser();
       setUnreadMessageCount(null);
       setCurrentUser(me);
@@ -219,7 +226,14 @@ function AppRouteRoot({ sectionId, children }: { sectionId: SectionId; children:
   }
 
   if (!currentUser || !contextValue) {
-    return <LoginScreen loading={loading} notice={notice} onLogin={handleLogin} />;
+    return (
+      <LoginScreen
+        loading={loading}
+        notice={notice}
+        onSendCode={handleSendLoginCode}
+        onLogin={handleLogin}
+      />
+    );
   }
 
   if (!canEnterWeb) {

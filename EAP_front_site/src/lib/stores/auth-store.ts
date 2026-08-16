@@ -5,9 +5,7 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import {
   fetchMe,
   loginWithCode,
-  loginWithPassword,
   registerWithCode,
-  registerWithPassword,
   type AuthUser,
 } from "@/lib/api/auth";
 
@@ -18,9 +16,7 @@ interface AuthState {
   setToken: (token: string | null) => void;
   setUser: (user: AuthUser | null) => void;
   loginByCode: (phone: string, code: string) => Promise<void>;
-  loginByPassword: (phone: string, password: string) => Promise<void>;
-  registerByCode: (phone: string, code: string, password?: string) => Promise<void>;
-  registerByPassword: (phone: string, password: string) => Promise<void>;
+  registerByCode: (phone: string, code: string) => Promise<void>;
   refreshUser: () => Promise<void>;
   logout: () => void;
 }
@@ -46,32 +42,10 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      loginByPassword: async (phone, password) => {
+      registerByCode: async (phone, code) => {
         set({ loading: true });
         try {
-          const { token } = await loginWithPassword(phone, password);
-          set({ token });
-          await get().refreshUser();
-        } finally {
-          set({ loading: false });
-        }
-      },
-
-      registerByCode: async (phone, code, password) => {
-        set({ loading: true });
-        try {
-          const { token } = await registerWithCode(phone, code, password);
-          set({ token });
-          await get().refreshUser();
-        } finally {
-          set({ loading: false });
-        }
-      },
-
-      registerByPassword: async (phone, password) => {
-        set({ loading: true });
-        try {
-          const { token } = await registerWithPassword(phone, password);
+          const { token } = await registerWithCode(phone, code);
           set({ token });
           await get().refreshUser();
         } finally {

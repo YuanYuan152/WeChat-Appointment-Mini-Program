@@ -241,6 +241,13 @@ required_keys=(
   CORS_ALLOWED_ORIGINS
   ENABLE_API_DOCS
   SMS_MOCK
+  SMS_PROVIDER
+  SMS_CODE_LENGTH
+  SMS_CODE_TTL_MINUTES
+  SMS_RESEND_INTERVAL_SECONDS
+  SMS_MAX_SENDS_PER_HOUR
+  SMS_MAX_VERIFY_ATTEMPTS
+  SMS_CODE_HASH_SECRET
   DB_NAME
   DB_USER
   DB_PASSWORD
@@ -258,6 +265,23 @@ for key in "${required_keys[@]}"; do
     warn "环境文件缺少 ${key}"
     failures=$((failures + 1))
   fi
+done
+
+sms_code_length_value="$(read_env_value SMS_CODE_LENGTH "${env_file}")"
+[[ "${sms_code_length_value}" == "6" ]] || {
+  warn "SMS_CODE_LENGTH 必须为 6，以匹配两个 Web 前端和腾讯云验证码模板"
+  failures=$((failures + 1))
+}
+for key in \
+  SMS_CODE_TTL_MINUTES \
+  SMS_RESEND_INTERVAL_SECONDS \
+  SMS_MAX_SENDS_PER_HOUR \
+  SMS_MAX_VERIFY_ATTEMPTS; do
+  value="$(read_env_value "${key}" "${env_file}")"
+  [[ "${value}" =~ ^[1-9][0-9]*$ ]] || {
+    warn "${key} 必须为正整数"
+    failures=$((failures + 1))
+  }
 done
 
 if grep -Eqi '=(change[-_]?me|replace([-_]?with|[-_]?me)?[^ ]*|your_[^ ]*|example|changeme)([[:space:]]*)$' "${env_file}"; then
@@ -361,16 +385,42 @@ if [[ "${environment}" == "production" ]]; then
     }
   done
 
-  # SMS_MOCK=false deliberately fails closed in the current backend because a
-  # real provider adapter has not been implemented. Do not allow an operator
-  # acknowledgement variable to turn this code gap into a false green check.
   sms_mock_value="$(read_env_value SMS_MOCK "${env_file}")"
   [[ "$(lowercase "${sms_mock_value}")" == "false" ]] || {
     warn "生产环境 SMS_MOCK 必须为 false"
     failures=$((failures + 1))
   }
-  warn "生产短信网关代码尚未实现；完成供应商适配和真实发送验收前禁止生产发布"
-  failures=$((failures + 1))
+
+  sms_provider_value="$(read_env_value SMS_PROVIDER "${env_file}")"
+  [[ "$(lowercase "${sms_provider_value}")" == "tencent" ]] || {
+    warn "生产环境 SMS_PROVIDER 必须为 tencent"
+    failures=$((failures + 1))
+  }
+
+  sms_hash_secret_value="$(read_env_value SMS_CODE_HASH_SECRET "${env_file}")"
+  (( ${#sms_hash_secret_value} >= 32 )) || {
+    warn "生产环境 SMS_CODE_HASH_SECRET 必须至少 32 个字符且不得复用 JWT_SECRET"
+    failures=$((failures + 1))
+  }
+  [[ "${sms_hash_secret_value}" != "$(read_env_value JWT_SECRET "${env_file}")" ]] || {
+    warn "生产环境 SMS_CODE_HASH_SECRET 不得复用 JWT_SECRET"
+    failures=$((failures + 1))
+  }
+
+  for key in \
+    TENCENTCLOUD_SECRET_ID \
+    TENCENTCLOUD_SECRET_KEY \
+    TENCENT_SMS_REGION \
+    TENCENT_SMS_SDK_APP_ID \
+    TENCENT_SMS_SIGN_NAME \
+    TENCENT_SMS_TEMPLATE_ID; do
+    value="$(read_env_value "${key}" "${env_file}")"
+    if [[ -z "${value}" ]] \
+      || [[ "${value}" =~ ^(REPLACE_|CHANGE_|YOUR_|change-|replace-|your_) ]]; then
+      warn "生产短信能力缺少有效 ${key}"
+      failures=$((failures + 1))
+    fi
+  done
 
   for key in \
     WECHAT_APPID \

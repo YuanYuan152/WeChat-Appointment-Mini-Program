@@ -66,9 +66,13 @@ services:
       WECHAT_PAY_KEY: ""
       WECHAT_PAY_NOTIFY_URL: https://test.eap.ji-psy.com/api/payment/wechat/callback
       SMS_MOCK: "true"
+      SMS_PROVIDER: tencent
       SMS_CODE_LENGTH: "${SMS_CODE_LENGTH:-6}"
       SMS_CODE_TTL_MINUTES: "${SMS_CODE_TTL_MINUTES:-5}"
       SMS_RESEND_INTERVAL_SECONDS: "${SMS_RESEND_INTERVAL_SECONDS:-60}"
+      SMS_MAX_SENDS_PER_HOUR: "${SMS_MAX_SENDS_PER_HOUR:-10}"
+      SMS_MAX_VERIFY_ATTEMPTS: "${SMS_MAX_VERIFY_ATTEMPTS:-5}"
+      SMS_CODE_HASH_SECRET: "${SMS_CODE_HASH_SECRET:-}"
     ports:
       - 127.0.0.1:18000:8000
     volumes:

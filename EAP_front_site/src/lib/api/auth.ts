@@ -30,7 +30,34 @@ export interface AuthTokenResponse {
 export interface SendCodeResponse {
   message: string;
   expiresIn: number;
+  resendAfter: number;
   mockCode?: string;
+}
+
+interface ApiEnvelope<T> {
+  code: number;
+  msg?: string;
+  data: T;
+  detail?: unknown;
+}
+
+function isApiEnvelope<T>(value: unknown): value is ApiEnvelope<T> {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      "code" in value &&
+      typeof (value as { code?: unknown }).code === "number" &&
+      "data" in value
+  );
+}
+
+function errorMessage(value: unknown, fallback: string) {
+  if (!value || typeof value !== "object") return fallback;
+  const payload = value as { detail?: unknown; msg?: unknown; message?: unknown };
+  for (const candidate of [payload.detail, payload.msg, payload.message]) {
+    if (typeof candidate === "string" && candidate.trim()) return candidate;
+  }
+  return fallback;
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -44,12 +71,17 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     headers,
   });
 
-  const data = await res.json().catch(() => ({}));
+  const payload: unknown = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const detail = (data as { detail?: string }).detail ?? "请求失败";
-    throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+    throw new Error(errorMessage(payload, "请求失败"));
   }
-  return data as T;
+  if (isApiEnvelope<T>(payload)) {
+    if (payload.code !== 0) {
+      throw new Error(errorMessage(payload, "请求失败"));
+    }
+    return payload.data;
+  }
+  return payload as T;
 }
 
 export function sendCode(phone: string, purpose: "login" | "register") {
@@ -59,17 +91,10 @@ export function sendCode(phone: string, purpose: "login" | "register") {
   });
 }
 
-export function registerWithCode(phone: string, code: string, password?: string) {
+export function registerWithCode(phone: string, code: string) {
   return request<AuthTokenResponse>("/api/web/auth/register", {
     method: "POST",
-    body: JSON.stringify({ phone, code, password: password || undefined }),
-  });
-}
-
-export function registerWithPassword(phone: string, password: string) {
-  return request<AuthTokenResponse>("/api/web/auth/register", {
-    method: "POST",
-    body: JSON.stringify({ phone, password }),
+    body: JSON.stringify({ phone, code }),
   });
 }
 
@@ -80,12 +105,6 @@ export function loginWithCode(phone: string, code: string) {
   });
 }
 
-export function loginWithPassword(phone: string, password: string) {
-  return request<AuthTokenResponse>("/api/web/auth/login", {
-    method: "POST",
-    body: JSON.stringify({ phone, password }),
-  });
-}
 
 export function fetchMe(token: string) {
   return request<AuthUser>("/api/web/auth/me", {

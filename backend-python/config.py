@@ -91,11 +91,24 @@ class Settings(BaseSettings):
     # 内部消息/提醒定时任务调用密钥；空值表示仅允许已登录后台工作人员。
     MESSAGE_INTERNAL_TOKEN: str = ""
 
-    # Web SMS (官网注册登录)
+    # Web SMS（EAP 注册/登录、Web 管理端员工登录）
+    # SMS_MOCK=true 时仅用于本地/测试联调；部署环境必须关闭并配置腾讯云。
     SMS_MOCK: bool = True
-    SMS_CODE_LENGTH: int = 6
+    SMS_PROVIDER: Literal["tencent"] = "tencent"
+    SMS_CODE_LENGTH: Literal[6] = 6
     SMS_CODE_TTL_MINUTES: int = 5
-    SMS_RESEND_INTERVAL_SECONDS: int = 1
+    SMS_RESEND_INTERVAL_SECONDS: int = 60
+    SMS_MAX_SENDS_PER_HOUR: int = 10
+    SMS_MAX_VERIFY_ATTEMPTS: int = 5
+    SMS_CODE_HASH_SECRET: str = ""
+
+    # 腾讯云短信 API 3.0（sms.tencentcloudapi.com / v2021-01-11）
+    TENCENTCLOUD_SECRET_ID: str = ""
+    TENCENTCLOUD_SECRET_KEY: str = ""
+    TENCENT_SMS_REGION: str = "ap-guangzhou"
+    TENCENT_SMS_SDK_APP_ID: str = ""
+    TENCENT_SMS_SIGN_NAME: str = ""
+    TENCENT_SMS_TEMPLATE_ID: str = ""
 
     @property
     def dev_login_enabled(self) -> bool:

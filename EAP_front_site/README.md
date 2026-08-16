@@ -49,7 +49,7 @@ src/
 | 电话咨询 | `/consultation` | 咨询师列表 + 预约表单 |
 | 专业测评 | `/assessment/professional` | BSI-18、AAS、PSQI、PBI、CBCL 等量表 |
 | 心理测评 | `/assessment` | 专业量表 + 趣味测评 |
-| 登录 / 注册 | `/login` `/register` | 手机号 + 验证码或密码，与小程序共用账号 |
+| 登录 / 注册 | `/login` `/register` | 手机号 + 短信验证码，与小程序共用账号 |
 
 ## 注册登录（共用后端）
 
@@ -72,7 +72,9 @@ python migrate_assessment_tables.py --preflight
 uvicorn main:app --reload --port 8000
 ```
 
-开发环境默认 `SMS_MOCK=true`，验证码会打印在后端控制台，并在接口响应中返回 `mockCode`。
+开发环境默认 `SMS_MOCK=true`，接口响应会返回 `mockCode` 供本地联调；测试/生产关闭
+mock 后由后端调用腾讯云短信，密钥不会进入浏览器包。完整配置和验收步骤见
+[Web 短信验证码认证](../docs/sms-auth.md)。
 `ensure_schema.py` 不会创建三张受控量表表，不能替代上述量表迁移。
 
 部署环境还必须配置：
@@ -101,8 +103,10 @@ cp .env.example .env.local
 | 接口 | 说明 |
 |------|------|
 | `POST /api/web/auth/send-code` | 发送验证码（purpose: login \| register） |
-| `POST /api/web/auth/register` | 注册（验证码或密码） |
-| `POST /api/web/auth/login` | 登录（验证码或密码） |
+| `POST /api/web/auth/register` | 验证码注册 |
+| `POST /api/web/auth/login` | 验证码登录 |
+| `POST /api/web/auth/staff/send-code` | 后台员工获取登录验证码 |
+| `POST /api/web/auth/staff/login` | 后台员工验证码登录 |
 | `GET /api/web/auth/me` | 当前用户（Bearer Token） |
 
 

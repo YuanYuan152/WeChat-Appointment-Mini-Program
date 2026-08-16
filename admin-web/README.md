@@ -53,12 +53,13 @@ NEXT_PUBLIC_EAP_BASE_URL=http://127.0.0.1:3000
 `NEXT_PUBLIC_EAP_BASE_URL` 用于解析历史报告快照中的 EAP 相对图片路径。生产构建必须写入
 对应环境的公网 HTTPS 地址；`NEXT_PUBLIC_*` 会进入浏览器包，修改后需要重新构建。
 
-开发登录入口：
+Web 管理端使用员工已登记手机号 + 短信验证码登录，不再依赖小程序
+`wx.login` 或开发角色按钮。管理员、咨询主任、咨询助理和咨询师可登录；管理端不开放
+自助注册，员工账号需先由管理员创建。开发环境 `SMS_MOCK=true` 时页面会自动显示并填入
+mock 验证码。
 
-- 管理员：复用后端 `dev_admin` mock code。
-- 运营：复用后端 `dev_ops` mock code。
-
-正式 Web 登录后续应补 `/api/web/auth/*`，不直接依赖小程序 `wx.login`。
+腾讯云所需资源、环境变量、接口和验收步骤见
+[Web 短信验证码认证](../docs/sms-auth.md)。
 
 ## 与现有系统的关系
 

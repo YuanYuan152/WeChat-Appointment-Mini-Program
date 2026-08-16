@@ -229,7 +229,7 @@ class AuthAndPaymentSafetyTests(unittest.TestCase):
             patch.object(settings, "SMS_MOCK", True),
             patch.object(settings, "SMS_CODE_TTL_MINUTES", 5),
             patch("sms_service.china_now", return_value=now),
-            patch("sms_service._find_reusable_code", return_value=None),
+            patch("sms_service._enforce_send_limits"),
             patch("sms_service.generate_code", return_value="123456"),
         ):
             response = sms_service.send_verification_code(

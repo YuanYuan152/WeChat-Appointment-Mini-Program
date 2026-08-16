@@ -1,7 +1,5 @@
 import type { CurrentUser, LoginResponse } from "@/types/api";
 
-export type DevLoginCode = "dev_admin" | "dev_ops" | "dev_assistant" | "dev_counselor";
-
 export const API_BASE_URL = (
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000"
 ).replace(/\/$/, "");
@@ -199,10 +197,24 @@ export async function apiFileRequest(path: string, init: RequestInit = {}): Prom
   };
 }
 
-export async function loginWithDevCode(code: DevLoginCode) {
-  const result = await apiRequest<LoginResponse>("/api/mini/auth/login", {
+export interface SendSmsCodeResponse {
+  message: string;
+  expiresIn: number;
+  resendAfter: number;
+  mockCode?: string;
+}
+
+export function sendStaffLoginCode(phone: string) {
+  return apiRequest<SendSmsCodeResponse>("/api/web/auth/staff/send-code", {
     method: "POST",
-    body: JSON.stringify({ code }),
+    body: JSON.stringify({ phone }),
+  });
+}
+
+export async function loginStaffWithCode(phone: string, code: string) {
+  const result = await apiRequest<LoginResponse>("/api/web/auth/staff/login", {
+    method: "POST",
+    body: JSON.stringify({ phone, code }),
   });
   setStoredToken(result.token);
   return result;
