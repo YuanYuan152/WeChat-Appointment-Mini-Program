@@ -10,6 +10,7 @@ import {
   fetchPatientContractArtifact,
   downloadPatientContractSignature,
   updatePatientBoundCounselor,
+  updatePatientSourceDetail,
   updateStaffRemark,
 } from "@/services/boards";
 import { searchProxyCounselors } from "@/services/proxyBooking";
@@ -43,6 +44,7 @@ function UserBoardScreenContent() {
   const [selectedUserBoard, setSelectedUserBoard] = useState<UserBoardDetail>();
   const [detailLoading, setDetailLoading] = useState(false);
   const [remarkSavingAccountId, setRemarkSavingAccountId] = useState<number>();
+  const [sourceSavingAccountId, setSourceSavingAccountId] = useState<number>();
   const [contractDownloadingAccountId, setContractDownloadingAccountId] = useState<number>();
   const [filters, setFilters] = useState<UserBoardFilters>(INITIAL_USER_BOARD_FILTERS);
   const [draftFilters, setDraftFilters] = useState<UserBoardFilters>(INITIAL_USER_BOARD_FILTERS);
@@ -281,6 +283,42 @@ function UserBoardScreenContent() {
     }
   }, [clearNotice, showNotice]);
 
+  const savePatientSource = useCallback(async (
+    accountId: number,
+    patientSource: string,
+    patientSourceDetail: string,
+  ) => {
+    clearNotice();
+    setSourceSavingAccountId(accountId);
+    try {
+      const profile = await updatePatientSourceDetail(
+        accountId,
+        patientSource,
+        patientSourceDetail,
+      );
+      setData((current) => ({
+        ...current,
+        userBoard: current.userBoard
+          ? {
+              ...current.userBoard,
+              items: current.userBoard.items.map((item) =>
+                item.id === accountId ? { ...item, ...profile } : item,
+              ),
+            }
+          : current.userBoard,
+      }));
+      setSelectedUserBoard((current) =>
+        current && current.profile.id === accountId ? { ...current, profile } : current,
+      );
+      showNotice("success", profile.patientSourceDetail ? "来访来源已保存" : "来访来源已清空");
+    } catch (error) {
+      showNotice("error", error instanceof Error ? error.message : "来访来源保存失败");
+      throw error;
+    } finally {
+      setSourceSavingAccountId(undefined);
+    }
+  }, [clearNotice, showNotice]);
+
   const downloadContract = useCallback(async (accountId: number) => {
     clearNotice();
     setContractDownloadingAccountId(accountId);
@@ -316,6 +354,8 @@ function UserBoardScreenContent() {
       onBindCounselor={bindCounselor}
       remarkSaving={remarkSavingAccountId === selectedUserBoard?.profile.id}
       onSaveRemark={saveStaffRemark}
+      sourceSaving={sourceSavingAccountId === selectedUserBoard?.profile.id}
+      onSaveSource={savePatientSource}
       contractDownloading={contractDownloadingAccountId === selectedUserBoard?.profile.id}
       onDownloadContract={downloadContract}
     />

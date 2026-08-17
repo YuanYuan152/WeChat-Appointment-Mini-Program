@@ -81,7 +81,7 @@ export function RoleEditModal({
           )}
           {patientSelected && (
             <div className="rounded-xl border border-[var(--lxxl-border)] bg-[#FAF8F4] p-4">
-              <QueryField label="来访来源" required>
+              <QueryField label="来访类别" required>
                 <select
                   className={queryControlClass}
                   value={patientSource}

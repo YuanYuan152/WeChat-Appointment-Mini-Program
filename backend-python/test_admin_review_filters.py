@@ -109,6 +109,7 @@ class AdminReviewFilterTests(unittest.TestCase):
                     AccountId=1,
                     Amount=60_000,
                     Reason="无法前来",
+                    ScreenshotUrl="/static/uploads/refund-proof.png",
                     Status="PENDING",
                     CreatedAt=datetime(2026, 7, 1, 8, 0),
                 ),
@@ -179,6 +180,7 @@ class AdminReviewFilterTests(unittest.TestCase):
 
         self.assertEqual([item.id for item in by_name], [1])
         self.assertEqual([item.id for item in by_mobile], [1])
+        self.assertEqual(by_name[0].screenshotUrl, "/static/uploads/refund-proof.png")
 
     def test_leave_request_filters_profile_name_and_mobile_before_pagination(self):
         by_name = list_leave_requests(

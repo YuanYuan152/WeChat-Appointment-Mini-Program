@@ -10,6 +10,7 @@ import zipfile
 from datetime import date, datetime, time, timedelta
 from io import BytesIO
 from typing import Any, Optional
+from urllib.parse import quote
 from xml.etree import ElementTree as ET
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
@@ -52,11 +53,24 @@ router = APIRouter(prefix="/api/web/admin", tags=["WebAdmin"])
 
 
 def _xlsx_response(content: bytes, filename: str) -> Response:
+    encoded_filename = quote(filename)
     return Response(
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="data.xlsx"; '
+                f"filename*=UTF-8''{encoded_filename}"
+            )
+        },
     )
+
+
+DATA_TRANSFER_TABLE_NAMES = {
+    "visitors": "来访用户表",
+    "counselors": "咨询师用户表",
+    "orders": "咨询订单表",
+}
 
 
 def require_ops_or_admin(
@@ -95,7 +109,7 @@ def data_transfer_template(
         content = template_bytes(kind)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    return _xlsx_response(content, f"{kind}-template.xlsx")
+    return _xlsx_response(content, f"{DATA_TRANSFER_TABLE_NAMES[kind]}导入模板.xlsx")
 
 
 @router.post("/data-transfer/{kind}/import", summary="导入管理数据")
@@ -139,7 +153,7 @@ def data_transfer_export(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return _xlsx_response(content, f"{kind}-export.xlsx")
+    return _xlsx_response(content, f"{DATA_TRANSFER_TABLE_NAMES[kind]}导出.xlsx")
 
 
 def _visitor_account_ids(db: Session) -> set[int]:

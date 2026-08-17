@@ -15,7 +15,7 @@
           <image src="/static/images-opt/seI.png" class="search-icon" mode="aspectFit" />
           <input 
             class="search-input" 
-            placeholder="搜索咨询师姓名、地区、专业" 
+            placeholder="搜索咨询师姓名、专业"
             placeholder-class="search-placeholder"
             v-model="searchKeyword"
             @confirm="handleSearch"
@@ -29,7 +29,7 @@
         <view class="filter-bar">
           <view 
             class="filter-item" 
-            :class="{ active: activeFilter === 'sort' }"
+            :class="{ active: activeFilter === 'sort' || !!currentSort }"
             @click="toggleFilter('sort')"
           >
             <text class="filter-text">{{ currentSortLabel }}</text>
@@ -37,27 +37,19 @@
           </view>
           <view 
             class="filter-item" 
-            :class="{ active: activeFilter === 'city' }"
-            @click="toggleFilter('city')"
+            :class="{ active: activeFilter === 'gender' || !!currentGender }"
+            @click="toggleFilter('gender')"
           >
-            <text class="filter-text">{{ currentCityLabel }}</text>
-            <view class="filter-chevron" :class="{ up: activeFilter === 'city' }" />
+            <text class="filter-text">{{ currentGenderLabel }}</text>
+            <view class="filter-chevron" :class="{ up: activeFilter === 'gender' }" />
           </view>
           <view 
             class="filter-item" 
-            :class="{ active: activeFilter === 'price' }"
-            @click="toggleFilter('price')"
+            :class="{ active: activeFilter === 'method' || !!currentMethod }"
+            @click="toggleFilter('method')"
           >
-            <text class="filter-text">{{ currentPriceLabel }}</text>
-            <view class="filter-chevron" :class="{ up: activeFilter === 'price' }" />
-          </view>
-          <view 
-            class="filter-item" 
-            :class="{ active: activeFilter === 'more' }"
-            @click="toggleFilter('more')"
-          >
-            <text class="filter-text">筛选</text>
-            <view class="filter-chevron" :class="{ up: activeFilter === 'more' }" />
+            <text class="filter-text">{{ currentMethodLabel }}</text>
+            <view class="filter-chevron" :class="{ up: activeFilter === 'method' }" />
           </view>
         </view>
 
@@ -77,67 +69,31 @@
             </view>
           </view>
 
-          <!-- 城市选择 -->
-          <view v-if="activeFilter === 'city'" class="dropdown-list">
+          <!-- 咨询师性别 -->
+          <view v-if="activeFilter === 'gender'" class="dropdown-list">
             <view 
               class="dropdown-item" 
-              v-for="(item, index) in cityOptions" 
+              v-for="(item, index) in genderOptions"
               :key="index"
-              :class="{ selected: currentCity === item.value }"
-              @click="selectCity(item)"
+              :class="{ selected: currentGender === item.value }"
+              @click="selectGender(item)"
             >
               <text>{{ item.label }}</text>
-              <text v-if="currentCity === item.value" class="check-icon">✓</text>
+              <text v-if="currentGender === item.value" class="check-icon">✓</text>
             </view>
           </view>
 
-          <!-- 价格区间 -->
-          <view v-if="activeFilter === 'price'" class="dropdown-list">
+          <!-- 咨询方式 -->
+          <view v-if="activeFilter === 'method'" class="dropdown-list">
             <view 
               class="dropdown-item" 
-              v-for="(item, index) in priceOptions" 
+              v-for="(item, index) in methodOptions"
               :key="index"
-              :class="{ selected: currentPrice === item.value }"
-              @click="selectPrice(item)"
+              :class="{ selected: currentMethod === item.value }"
+              @click="selectMethod(item)"
             >
               <text>{{ item.label }}</text>
-              <text v-if="currentPrice === item.value" class="check-icon">✓</text>
-            </view>
-          </view>
-
-          <!-- 更多筛选 -->
-          <view v-if="activeFilter === 'more'" class="dropdown-panel">
-            <view class="panel-group">
-              <text class="panel-title">咨询方式</text>
-              <view class="panel-tags">
-                <view 
-                  class="panel-tag" 
-                  v-for="(item, index) in methodOptions" 
-                  :key="index"
-                  :class="{ active: currentMethod === item.value }"
-                  @click="currentMethod = item.value"
-                >
-                  {{ item.label }}
-                </view>
-              </view>
-            </view>
-            <view class="panel-group">
-              <text class="panel-title">咨询师性别</text>
-              <view class="panel-tags">
-                <view 
-                  class="panel-tag" 
-                  v-for="(item, index) in genderOptions" 
-                  :key="index"
-                  :class="{ active: currentGender === item.value }"
-                  @click="currentGender = item.value"
-                >
-                  {{ item.label }}
-                </view>
-              </view>
-            </view>
-            <view class="panel-actions">
-              <button class="btn-reset" @click="resetMoreFilter">重置</button>
-              <button class="btn-confirm" @click="confirmMoreFilter">确定</button>
+              <text v-if="currentMethod === item.value" class="check-icon">✓</text>
             </view>
           </view>
         </view>
@@ -251,11 +207,10 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import { onShow, onReachBottom, onPullDownRefresh } from '@dcloudio/uni-app'
+import { onShow, onLoad, onReachBottom, onPullDownRefresh, onShareAppMessage } from '@dcloudio/uni-app'
 import { doctorApi } from '@/apis/index'
 import type { Doctor } from '@/types'
 import { fixImageUrl } from '@/utils/image'
-import { getMockConsultantFilterMetaResponse } from '@/mocks/bookingDemo'
 import ContactUsContent from '@/components/ContactUsContent.vue'
 
 // 咨询师数据接口扩展
@@ -285,68 +240,55 @@ const showAssistantContact = ref(false)
 const statusBarPx = ref(_sys.statusBarHeight || 0)
 const headerPlaceholderPx = ref((_sys.statusBarHeight || 0) + uni.upx2px(88 + 124 + 88))
 
-// 筛选栏（选项在 mock 时来自 getMockConsultantFilterMetaResponse；非 mock 用同结构默认项）
-const activeFilter = ref<'sort' | 'city' | 'price' | 'more' | ''>('')
-const sortOptions = ref<{ label: string; value: string }[]>([])
-const cityOptions = ref<{ label: string; value: string }[]>([])
-const priceOptions = ref<{ label: string; value: string }[]>([])
-const methodOptions = ref<{ label: string; value: string }[]>([])
-const genderOptions = ref<{ label: string; value: string }[]>([])
+const activeFilter = ref<'sort' | 'gender' | 'method' | ''>('')
+const sortOptions = [
+  { label: '价格从低到高', value: 'price_asc' },
+  { label: '价格从高到低', value: 'price_desc' },
+]
+const genderOptions = [
+  { label: '男咨询师', value: '男' },
+  { label: '女咨询师', value: '女' },
+]
+const methodOptions = [
+  { label: '面询', value: 'offline' },
+  { label: '视频咨询', value: 'online' },
+]
 
-const currentSort = ref('default')
-const currentCity = ref('')
-const currentPrice = ref('')
+const currentSort = ref('')
 const currentMethod = ref('')
 const currentGender = ref('')
 
 const currentSortLabel = computed(() => {
-  const hit = sortOptions.value.find((o) => o.value === currentSort.value)
-  return hit?.label || '综合排序'
+  const hit = sortOptions.find((o) => o.value === currentSort.value)
+  return hit?.label || '价格排序'
 })
-const currentCityLabel = computed(() => {
-  const hit = cityOptions.value.find((o) => o.value === currentCity.value)
-  return hit?.label || '城市'
+const currentGenderLabel = computed(() => {
+  const hit = genderOptions.find((o) => o.value === currentGender.value)
+  return hit?.label || '性别'
 })
-const currentPriceLabel = computed(() => {
-  const hit = priceOptions.value.find((o) => o.value === currentPrice.value)
-  return hit?.label || '价格'
+const currentMethodLabel = computed(() => {
+  const hit = methodOptions.find((o) => o.value === currentMethod.value)
+  return hit?.label || '咨询方式'
 })
 
-function initFilterOptionsFromMeta() {
-  const meta = getMockConsultantFilterMetaResponse().data!
-  sortOptions.value = meta.sortOptions
-  cityOptions.value = meta.provinces
-  priceOptions.value = meta.priceRanges
-  methodOptions.value = meta.consultationMethods
-  genderOptions.value = meta.genders
-}
-
-const toggleFilter = (key: 'sort' | 'city' | 'price' | 'more') => {
+const toggleFilter = (key: 'sort' | 'gender' | 'method') => {
   activeFilter.value = activeFilter.value === key ? '' : key
 }
 const closeFilter = () => {
   activeFilter.value = ''
 }
 const selectSort = (item: { label: string; value: string }) => {
-  currentSort.value = item.value
+  currentSort.value = currentSort.value === item.value ? '' : item.value
   closeFilter()
   fetchConsultants()
 }
-const selectCity = (item: { label: string; value: string }) => {
-  currentCity.value = item.value
+const selectGender = (item: { label: string; value: string }) => {
+  currentGender.value = currentGender.value === item.value ? '' : item.value
   closeFilter()
   fetchConsultants()
 }
-const selectPrice = (item: { label: string; value: string }) => {
-  currentPrice.value = item.value
-  closeFilter()
-  fetchConsultants()
-}
-const resetMoreFilter = () => {
-  currentMethod.value = ''
-  currentGender.value = ''
-}
-const confirmMoreFilter = () => {
+const selectMethod = (item: { label: string; value: string }) => {
+  currentMethod.value = currentMethod.value === item.value ? '' : item.value
   closeFilter()
   fetchConsultants()
 }
@@ -418,10 +360,8 @@ const fetchConsultants = async () => {
     const response = await doctorApi.getList(
       {
         keyword: searchKeyword.value.trim() || undefined,
-        province: currentCity.value || undefined,
         page: 1,
         pageSize: 50,
-        priceRange: currentPrice.value || undefined,
         sort: currentSort.value || undefined,
         gender: currentGender.value || undefined,
         consultMethod: currentMethod.value || undefined,
@@ -505,7 +445,26 @@ const handleImageLoad = (e: any) => {
 // 生命周期
 onMounted(() => {
   initPageLayout()
-  initFilterOptionsFromMeta()
+})
+
+onLoad((options) => {
+  searchKeyword.value = options?.keyword ? decodeURIComponent(String(options.keyword)) : ''
+  currentSort.value = sortOptions.some((item) => item.value === options?.sort) ? String(options?.sort) : ''
+  currentGender.value = genderOptions.some((item) => item.value === options?.gender) ? String(options?.gender) : ''
+  currentMethod.value = methodOptions.some((item) => item.value === options?.consultMethod) ? String(options?.consultMethod) : ''
+})
+
+onShareAppMessage(() => {
+  const params = [
+    searchKeyword.value.trim() ? `keyword=${encodeURIComponent(searchKeyword.value.trim())}` : '',
+    currentSort.value ? `sort=${encodeURIComponent(currentSort.value)}` : '',
+    currentGender.value ? `gender=${encodeURIComponent(currentGender.value)}` : '',
+    currentMethod.value ? `consultMethod=${encodeURIComponent(currentMethod.value)}` : '',
+  ].filter(Boolean)
+  return {
+    title: '预约心理咨询师',
+    path: `/pages/consultant/list${params.length ? `?${params.join('&')}` : ''}`,
+  }
 })
 
 onShow(() => {
@@ -687,7 +646,7 @@ onPullDownRefresh(async () => {
   left: 0;
   right: 0;
   background: #ffffff;
-  z-index: 3;
+  z-index: 120;
   max-height: 0;
   overflow: hidden;
   transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1);

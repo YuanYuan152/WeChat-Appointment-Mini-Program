@@ -29,11 +29,20 @@ export function canManageRole(currentRoles: Role[] = [], role: Role) {
 }
 
 export const PATIENT_SOURCE_OPTIONS = [
-  { value: "MINI_PROGRAM", label: "小程序注册" },
-  { value: "CHARITY_VISITOR", label: "公益来访" },
-  { value: "CHARITY_PROJECT_1", label: "公益项目1" },
-  { value: "CHARITY_PROJECT_2", label: "公益项目2" },
+  { value: "CHARITY", label: "公益" },
+  { value: "PROFESSIONAL", label: "正价" },
   { value: "HOSPITAL", label: "医院" },
+] as const;
+
+export const PATIENT_SOURCE_DETAIL_OPTIONS = [
+  "小红书",
+  "大众点评",
+  "公众号",
+  "医院转出",
+  "来访推荐",
+  "老来访",
+  "医生推荐",
+  "其他",
 ] as const;
 
 export const COUNSELOR_TYPE_OPTIONS = [

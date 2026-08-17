@@ -13,8 +13,9 @@ export interface BookingTimeSlot {
   numSign: number
   /** 所属预约中心，来自 API / 咨询师排班 */
   centerId: string
-  status?: 'AVAILABLE' | 'BOOKED' | 'EXPIRED' | 'NEGOTIATION'
+  status?: 'AVAILABLE' | 'BOOKED' | 'EXPIRED' | 'NEGOTIATION' | 'PENDING_PAYMENT' | 'TOO_SOON'
   isBookable?: boolean
+  unavailableReason?: string
   needsNegotiation?: boolean
   startTime?: string
   endTime?: string
@@ -59,6 +60,7 @@ export function normalizeBookingTimeSlots(raw: any[] = []): BookingTimeSlot[] {
           ),
         needsNegotiation: Boolean(slot.needsNegotiation ?? slot.needs_negotiation),
         priceLabel: slot.priceLabel || slot.price_label,
+        unavailableReason: slot.unavailableReason || slot.unavailable_reason,
         startTime: slot.startTime,
         endTime: slot.endTime,
         createTime: slot.createTime,
@@ -88,6 +90,7 @@ export function isSlotExpired(slot: BookingTimeSlot): boolean {
 
 /** 不可预约时段的展示文案 */
 export function slotUnavailableLabel(slot: BookingTimeSlot): string {
+  if (slot.unavailableReason) return slot.unavailableReason
   if (slot.needsNegotiation || slot.status === 'NEGOTIATION') return slot.priceLabel || '需议价'
   if (slot.priceNegotiation) return slot.priceLabel || '议价'
   if (isSlotExpired(slot)) return '已过期'

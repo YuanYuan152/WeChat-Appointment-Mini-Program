@@ -65,10 +65,12 @@ from case_record_service import snapshot_case_record
 from user_role_meta import (
     counselor_type_label,
     is_charity_patient_source,
+    normalize_patient_source,
     patient_source_label,
     validate_counselor_type,
     validate_patient_source,
 )
+from common import _normalize_gender_value, normalize_counselor_mode
 from account_deletion_service import hard_delete_account
 from counselor_identity_service import (
     apply_legacy_doctor_to_profile,
@@ -284,7 +286,7 @@ def _user_admin_out(db: Session, account: AppAccount, *, staff_remark: str = "")
         "counselorName": counselor_name,
         "activeRole": active_role,
         "activeRoleLabel": active_role_label,
-        "patientSource": patient_source if active_role == "Patient" else None,
+        "patientSource": normalize_patient_source(patient_source) if active_role == "Patient" else None,
         "patientSourceLabel": (
             patient_source_label(patient_source) if active_role == "Patient" else None
         ),
@@ -297,7 +299,10 @@ def _user_admin_out(db: Session, account: AppAccount, *, staff_remark: str = "")
         ),
         "roles": roles,
         "createdAt": getattr(account, "CreatedAt", None),
-        "isSelfRegistered": getattr(account, "PatientSource", None) == DEFAULT_PATIENT_SOURCE,
+        "isSelfRegistered": getattr(account, "PatientSource", None) in {
+            DEFAULT_PATIENT_SOURCE,
+            "MINI_PROGRAM",
+        },
     }
     if active_role in ("Counselor", "Patient"):
         out["staffRemark"] = staff_remark
@@ -650,7 +655,7 @@ def bind_user_role(
             return {"message": "咨询师类型已更新"}
     elif new_role == "Patient":
         if not body.patient_source:
-            raise HTTPException(status_code=400, detail="请选择来访来源")
+            raise HTTPException(status_code=400, detail="请选择来访类别")
         try:
             user.PatientSource = validate_patient_source(body.patient_source)
         except ValueError as exc:
@@ -658,7 +663,7 @@ def bind_user_role(
         if previous_role == "Patient":
             user.UpdatedAt = datetime.utcnow()
             db.commit()
-            return {"message": "来访来源已更新"}
+            return {"message": "来访类别已更新"}
 
     if previous_role == new_role:
         return {"message": "角色未变更"}
@@ -1170,6 +1175,9 @@ class AdminPatientSummaryOut(BaseModel):
     emergencyPhone: Optional[str] = None
     roleLabel: str = "来访"
     typeLabel: Optional[str] = None
+    patientSource: Optional[str] = None
+    patientSourceLabel: Optional[str] = None
+    patientSourceDetail: Optional[str] = None
     isContractSigned: bool = False
     boundCounselorId: Optional[int] = None
     boundCounselorName: Optional[str] = None
@@ -1223,6 +1231,9 @@ class AdminPatientDetailOut(BaseModel):
     emergencyPhone: Optional[str] = None
     roleLabel: str = "来访"
     typeLabel: Optional[str] = None
+    patientSource: Optional[str] = None
+    patientSourceLabel: Optional[str] = None
+    patientSourceDetail: Optional[str] = None
     isContractSigned: bool = False
     boundCounselorId: Optional[int] = None
     boundCounselorName: Optional[str] = None
@@ -1908,9 +1919,13 @@ def _admin_record_is_filled(record: Optional[AppCaseRecord]) -> bool:
 
 
 def _admin_patient_meta(account: AppAccount) -> dict:
+    source = getattr(account, "PatientSource", None)
     return {
         "roleLabel": "来访",
-        "typeLabel": patient_source_label(getattr(account, "PatientSource", None)),
+        "typeLabel": patient_source_label(source),
+        "patientSource": normalize_patient_source(source),
+        "patientSourceLabel": patient_source_label(source),
+        "patientSourceDetail": getattr(account, "PatientSourceDetail", None),
     }
 
 
@@ -1941,9 +1956,11 @@ def _admin_profile_dict(profile: Optional[AppCounselorProfile], counselor_id: in
         "field": profile.Field if profile else None,
         "introduce": profile.Introduce if profile else None,
         "career": profile.Career if profile else None,
+        "trainingExperience": profile.TrainingExperience if profile else None,
         "qualification": profile.Qualification if profile else None,
         "targetGroup": profile.TargetGroup if profile else None,
-        "mode": profile.Mode if profile else None,
+        "gender": _normalize_gender_value(acc.Gender if acc else None),
+        "mode": normalize_counselor_mode(profile.Mode if profile else None),
         "workYears": int(profile.WorkYears or 0) if profile else 0,
         "consultHours": int(profile.ConsultHours or 0) if profile else 0,
         "billing": billing,
@@ -2028,8 +2045,10 @@ class AdminCounselorDetailOut(BaseModel):
     field: Optional[str] = None
     introduce: Optional[str] = None
     career: Optional[str] = None
+    trainingExperience: Optional[str] = None
     qualification: Optional[str] = None
     targetGroup: Optional[str] = None
+    gender: Optional[str] = None
     mode: Optional[str] = None
     workYears: int = 0
     consultHours: int = 0
@@ -2057,8 +2076,10 @@ class AdminCounselorUpdatePayload(BaseModel):
     field: Optional[str] = None
     introduce: Optional[str] = None
     career: Optional[str] = None
+    trainingExperience: Optional[str] = None
     qualification: Optional[str] = None
     targetGroup: Optional[str] = None
+    gender: Optional[str] = None
     mode: Optional[str] = None
     workYears: Optional[int] = None
     consultHours: Optional[int] = None
@@ -2394,9 +2415,9 @@ def update_admin_counselor(
         "field": "Field",
         "introduce": "Introduce",
         "career": "Career",
+        "trainingExperience": "TrainingExperience",
         "qualification": "Qualification",
         "targetGroup": "TargetGroup",
-        "mode": "Mode",
         "workYears": "WorkYears",
         "consultHours": "ConsultHours",
         "isActive": "IsActive",
@@ -2405,6 +2426,19 @@ def update_admin_counselor(
         val = getattr(body, src, None)
         if val is not None:
             setattr(profile, dst, val)
+    if body.mode is not None:
+        normalized_mode = normalize_counselor_mode(body.mode)
+        if not normalized_mode:
+            raise HTTPException(status_code=400, detail="咨询方式不能为空")
+        profile.Mode = normalized_mode
+    if body.gender is not None:
+        normalized_gender = _normalize_gender_value(body.gender)
+        if body.gender.strip() and not normalized_gender:
+            raise HTTPException(status_code=400, detail="性别仅支持男或女")
+        account = db.query(AppAccount).filter(AppAccount.Id == counselor_id).first()
+        if not account:
+            raise HTTPException(status_code=404, detail="咨询师账号不存在")
+        account.Gender = normalized_gender
     if body.billingYuan is not None:
         profile.Billing = int(body.billingYuan) * 100
     if body.faceBillingYuan is not None:

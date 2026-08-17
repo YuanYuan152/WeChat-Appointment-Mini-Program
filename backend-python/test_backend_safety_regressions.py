@@ -16,6 +16,7 @@ from admin import (
     update_admin_counselor,
 )
 from app_time import china_now
+from booking_availability import schedules_to_booking_time_slots
 from counselor import ScheduleCreate, create_schedule, schedule_slot_options
 from database import Base
 from message import require_message_internal_or_staff
@@ -39,7 +40,13 @@ from patient_contract_service import (
 from ops import _available_rooms_for_schedule, _room_occupancy_at
 from payment import CreateOrderRequest, _create_pending_order, _load_payable_order
 from payment_service import complete_paid_order
+from proxy_booking_service import build_proxy_slot_options
 from role_active import get_account_role
+from schedule_slots import (
+    BOOKING_LEAD_TIME_MESSAGE,
+    booking_lead_time_reason,
+    validate_booking_lead_time,
+)
 
 
 class BackendSafetyRegressionTests(unittest.TestCase):
@@ -210,6 +217,108 @@ class BackendSafetyRegressionTests(unittest.TestCase):
         self.db.refresh(schedule)
         self.assertEqual(order.Status, "PENDING")
         self.assertEqual(schedule.Status, "AVAILABLE")
+
+    def test_booking_lead_time_accepts_exact_90_minute_boundary(self):
+        now = datetime(2026, 8, 14, 9, 0)
+
+        self.assertIsNone(booking_lead_time_reason(now + timedelta(minutes=90), now))
+        validate_booking_lead_time(now + timedelta(minutes=90), now)
+        self.assertEqual(
+            booking_lead_time_reason(now + timedelta(minutes=89, seconds=59), now),
+            BOOKING_LEAD_TIME_MESSAGE,
+        )
+
+    def test_payment_create_load_and_complete_reject_slots_under_90_minutes(self):
+        self.add_counselor()
+        patient = self.add_patient()
+        schedule, order = self.add_schedule_order()
+        now = china_now()
+        schedule.StartTime = now + timedelta(minutes=89)
+        schedule.EndTime = schedule.StartTime + timedelta(minutes=50)
+        order.ExpiresAt = now + timedelta(minutes=30)
+        self.db.commit()
+
+        request = CreateOrderRequest(slot_id=schedule.Id, total_fee=60_000)
+        with patch("schedule_slots.china_now", return_value=now):
+            with self.assertRaisesRegex(HTTPException, BOOKING_LEAD_TIME_MESSAGE):
+                _create_pending_order(self.db, patient, request, "LEAD-CREATE")
+            with self.assertRaisesRegex(HTTPException, BOOKING_LEAD_TIME_MESSAGE):
+                _load_payable_order(self.db, patient, order.Id)
+            with self.assertRaisesRegex(ValueError, BOOKING_LEAD_TIME_MESSAGE):
+                complete_paid_order(self.db, order, center_id="video")
+
+        self.db.refresh(order)
+        self.db.refresh(schedule)
+        self.assertEqual(order.Status, "PENDING")
+        self.assertEqual(schedule.Status, "AVAILABLE")
+
+    def test_booking_availability_returns_gray_reason_under_90_minutes(self):
+        now = china_now()
+        schedule = AppSchedule(
+            Id=8201,
+            CounselorId=2,
+            StartTime=now + timedelta(minutes=60),
+            EndTime=now + timedelta(minutes=110),
+            Status="AVAILABLE",
+            Note="center:video",
+        )
+        self.db.add(schedule)
+        self.db.commit()
+
+        with patch("schedule_slots.china_now", return_value=now):
+            slots, _center_ids = schedules_to_booking_time_slots(
+                self.db,
+                [schedule],
+                billing_cents=60_000,
+            )
+
+        self.assertEqual(slots[0]["status"], "TOO_SOON")
+        self.assertFalse(slots[0]["isBookable"])
+        self.assertEqual(slots[0]["unavailableReason"], BOOKING_LEAD_TIME_MESSAGE)
+
+    def test_counselor_and_proxy_slot_options_gray_slots_under_90_minutes(self):
+        counselor = self.add_counselor()
+        now = datetime(2026, 8, 14, 9, 0)
+
+        with patch("counselor.china_now", return_value=now):
+            counselor_options = schedule_slot_options(
+                date=now.date().isoformat(),
+                center_id="video",
+                counselor=counselor,
+                db=self.db,
+            )
+        counselor_slot = next(item for item in counselor_options.slots if item.startTime.hour == 10)
+        self.assertTrue(counselor_slot.tooSoon)
+        self.assertEqual(counselor_slot.unavailableReason, BOOKING_LEAD_TIME_MESSAGE)
+
+        with patch("proxy_booking_service._now", return_value=now):
+            proxy_options = build_proxy_slot_options(
+                self.db,
+                counselor.Id,
+                now.date(),
+                "video",
+            )
+        proxy_slot = next(item for item in proxy_options if item["key"] == "10:00")
+        self.assertTrue(proxy_slot["tooSoon"])
+        self.assertFalse(proxy_slot["selectable"])
+        self.assertEqual(proxy_slot["unavailableReason"], BOOKING_LEAD_TIME_MESSAGE)
+
+    def test_schedule_creation_rejects_slot_under_90_minutes(self):
+        counselor = self.add_counselor()
+        now = datetime(2026, 8, 14, 9, 0)
+        start = now + timedelta(minutes=60)
+
+        with patch("schedule_slots.china_now", return_value=now):
+            with self.assertRaisesRegex(HTTPException, BOOKING_LEAD_TIME_MESSAGE):
+                create_schedule(
+                    ScheduleCreate(
+                        start_time=start,
+                        end_time=start + timedelta(minutes=50),
+                        center_id="video",
+                    ),
+                    counselor,
+                    self.db,
+                )
 
     def test_active_counselor_check_requires_account_role_and_profile(self):
         counselor = self.add_counselor()

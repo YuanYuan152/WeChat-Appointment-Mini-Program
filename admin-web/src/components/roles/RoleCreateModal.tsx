@@ -29,14 +29,14 @@ export function RoleCreateModal({
   const [mobile, setMobile] = useState("");
   const [nickname, setNickname] = useState("");
   const [role, setRole] = useState<Role>(() => roleOptions[0]?.value || DEFAULT_ROLE);
-  const [patientSource, setPatientSource] = useState<PatientSource>("MINI_PROGRAM");
+  const [patientSource, setPatientSource] = useState<PatientSource>("PROFESSIONAL");
   const [counselorType, setCounselorType] = useState<CounselorType>("PROFESSIONAL");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState("");
 
   const roleHelperText = useMemo(() => {
     if (role === "Patient") {
-      return "来访者会自动保留基础来访角色，并记录来访来源。";
+      return "来访者会自动保留基础来访角色，并记录来访类别。";
     }
     if (role === "Counselor") {
       return "咨询师会同步创建或恢复咨询师档案。";
@@ -60,7 +60,7 @@ export function RoleCreateModal({
       nextErrors.role = "请选择当前账号可创建的角色";
     }
     if (role === "Patient" && !patientSource) {
-      nextErrors.patientSource = "请选择来访来源";
+      nextErrors.patientSource = "请选择来访类别";
     }
     if (role === "Counselor" && !counselorType) {
       nextErrors.counselorType = "请选择咨询师类型";
@@ -157,7 +157,7 @@ export function RoleCreateModal({
               <span className="mt-2 block text-xs leading-5 text-[var(--lxxl-muted)]">{roleHelperText}</span>
             </QueryField>
             {role === "Patient" && (
-              <QueryField label="来访来源" required error={errors.patientSource}>
+              <QueryField label="来访类别" required error={errors.patientSource}>
                 <select
                   className={queryControlClass}
                   value={patientSource}

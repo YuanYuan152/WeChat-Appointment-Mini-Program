@@ -54,6 +54,17 @@ export function updatePatientBoundCounselor(accountId: number, counselorId: numb
   });
 }
 
+export function updatePatientSourceDetail(
+  accountId: number,
+  patientSource: string,
+  patientSourceDetail: string,
+) {
+  return apiRequest<UserBoardSummary>(`${PATIENT_BOARD}/${accountId}/source`, {
+    method: "PUT",
+    body: JSON.stringify({ patientSource, patientSourceDetail }),
+  });
+}
+
 export function updateStaffRemark(accountId: number, remark: string) {
   return apiRequest<StaffRemarkUpdateResult>(`/api/mini/admin/accounts/${accountId}/staff-remark`, {
     method: "PUT",

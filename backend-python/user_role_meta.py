@@ -1,21 +1,30 @@
-"""添加用户时的来访来源 / 咨询师类型常量。"""
+"""添加用户时的来访类别 / 咨询师类型常量。"""
 
 from typing import Optional
 
 PATIENT_SOURCES = {
-    "MINI_PROGRAM": "小程序注册",
-    "CHARITY_VISITOR": "公益来访",
-    "CHARITY_PROJECT_1": "公益项目1",
-    "CHARITY_PROJECT_2": "公益项目2",
+    "CHARITY": "公益",
+    "PROFESSIONAL": "正价",
     "HOSPITAL": "医院",
 }
 
-# 可查看公益咨询师的来访来源
-CHARITY_PATIENT_SOURCES = frozenset({
-    "CHARITY_VISITOR",
-    "CHARITY_PROJECT_1",
-    "CHARITY_PROJECT_2",
-})
+# 历史值仅用于兼容读取和业务判断；新写入统一使用上面的三值。
+LEGACY_PATIENT_SOURCE_ALIASES = {
+    "MINI_PROGRAM": "PROFESSIONAL",
+    "CHARITY_VISITOR": "CHARITY",
+    "CHARITY_PROJECT_1": "CHARITY",
+    "CHARITY_PROJECT_2": "CHARITY",
+}
+PATIENT_SOURCE_DETAILS = (
+    "小红书",
+    "大众点评",
+    "公众号",
+    "医院转出",
+    "来访推荐",
+    "老来访",
+    "医生推荐",
+    "其他",
+)
 
 COUNSELOR_TYPES = {
     "CHARITY": "公益咨询师",
@@ -34,7 +43,15 @@ COUNSELOR_DIRECTORY_FULL_VISIBILITY_ROLES = frozenset({
 def patient_source_label(code: Optional[str]) -> Optional[str]:
     if not code:
         return None
-    return PATIENT_SOURCES.get(code, code)
+    normalized = normalize_patient_source(code)
+    return PATIENT_SOURCES.get(normalized, code)
+
+
+def normalize_patient_source(code: Optional[str]) -> Optional[str]:
+    """对外统一三值，但不要求迁移数据库中的历史来源。"""
+    if not code:
+        return None
+    return LEGACY_PATIENT_SOURCE_ALIASES.get(code, code)
 
 
 def counselor_type_label(code: Optional[str]) -> Optional[str]:
@@ -44,7 +61,7 @@ def counselor_type_label(code: Optional[str]) -> Optional[str]:
 
 
 def is_charity_patient_source(code: Optional[str]) -> bool:
-    return (code or "") in CHARITY_PATIENT_SOURCES
+    return normalize_patient_source(code) == "CHARITY"
 
 
 def counselor_visible_to_patient(
@@ -72,8 +89,17 @@ def counselor_visible_to_viewer(
 
 def validate_patient_source(code: Optional[str]) -> str:
     if code not in PATIENT_SOURCES:
-        raise ValueError("请选择来访来源")
+        raise ValueError("请选择来访类别")
     return code
+
+
+def validate_patient_source_detail(value: Optional[str]) -> Optional[str]:
+    detail = (value or "").strip()
+    if not detail:
+        return None
+    if detail not in PATIENT_SOURCE_DETAILS:
+        raise ValueError("请选择有效的来访来源")
+    return detail
 
 
 def validate_counselor_type(code: Optional[str]) -> str:

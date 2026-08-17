@@ -10,6 +10,7 @@ from typing import Any, Callable, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
+from pydantic import BaseModel, Field
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
@@ -34,6 +35,19 @@ from patient_contract_service import (
 )
 from schedule_meta import center_display_name, parse_center_id, parse_room_id, room_display_name
 from staff_remark_service import get_staff_remark, get_staff_remarks_map
+from user_role_meta import (
+    normalize_patient_source,
+    patient_source_label,
+    validate_patient_source,
+    validate_patient_source_detail,
+)
+
+
+class PatientSourceDetailUpdate(BaseModel):
+    patientSource: Optional[str] = None
+    patientSourceDetail: Optional[str] = Field(default=None, max_length=200)
+    # 兼容旧管理端仅以 source 传详细来源。
+    source: Optional[str] = Field(default=None, max_length=200)
 
 
 def _account_name(account: Optional[AppAccount]) -> str:
@@ -129,6 +143,9 @@ def _user_summary(
         "gender": account.Gender,
         "roles": roles,
         "activeRole": account.ActiveRole,
+        "patientSource": normalize_patient_source(account.PatientSource),
+        "patientSourceLabel": patient_source_label(account.PatientSource),
+        "patientSourceDetail": account.PatientSourceDetail,
         "isVisitor": is_visitor,
         "orderCount": len(orders),
         "paidOrderCount": len(paid_orders),
@@ -349,6 +366,38 @@ def register_admin_board_routes(
                 if c.ScheduleId
             ],
         }
+
+    @router.put("/boards/patients/{account_id}/source", summary="修改来访类型与详细来源")
+    def update_patient_source_detail(
+        account_id: int,
+        body: PatientSourceDetailUpdate,
+        _staff: AppAccount = Depends(require_staff_workbench),
+        db: Session = Depends(get_db),
+    ):
+        if account_id not in visitor_patient_ids(db):
+            raise HTTPException(status_code=404, detail="来访者不存在")
+        account = db.query(AppAccount).filter(AppAccount.Id == account_id).first()
+        if not account:
+            raise HTTPException(status_code=404, detail="来访者不存在")
+        if body.patientSource is not None:
+            try:
+                account.PatientSource = validate_patient_source(body.patientSource)
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+        detail_value = (
+            body.patientSourceDetail
+            if "patientSourceDetail" in body.model_fields_set
+            else body.source
+        )
+        if detail_value is not None or "patientSourceDetail" in body.model_fields_set:
+            try:
+                account.PatientSourceDetail = validate_patient_source_detail(detail_value)
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+        db.commit()
+        db.refresh(account)
+        roles = _roles_for_accounts(db, {account_id}).get(account_id, [])
+        return _user_summary(db, account, roles)
 
     @router.get(
         "/boards/patients/{account_id}/contract-material",

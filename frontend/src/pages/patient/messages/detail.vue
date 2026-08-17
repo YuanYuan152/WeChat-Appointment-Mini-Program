@@ -173,6 +173,13 @@
         <view v-else class="reason-box">
           <text class="reason-text">{{ payload.summary || message.Content }}</text>
         </view>
+        <image
+          v-if="detail.screenshotUrl"
+          class="message-screenshot"
+          :src="fixImageUrl(detail.screenshotUrl)"
+          mode="aspectFit"
+          @tap="previewMessageScreenshot"
+        />
       </view>
 
       <view v-else-if="isCaseRecordAmendmentPending" class="detail-body">
@@ -358,6 +365,13 @@
           <text v-if="detail.amountYuan" class="reason-text">退款金额：¥{{ detail.amountYuan }}</text>
           <text v-if="detail.rejectReason" class="reason-text">拒绝理由：{{ detail.rejectReason }}</text>
         </view>
+        <image
+          v-if="detail.screenshotUrl"
+          class="message-screenshot"
+          :src="fixImageUrl(detail.screenshotUrl)"
+          mode="aspectFit"
+          @tap="previewMessageScreenshot"
+        />
       </view>
 
       <view v-else-if="relatedType === 'PATIENT_PROXY_ORDER_PENDING'" class="detail-body">
@@ -542,6 +556,7 @@ import { API_ENDPOINTS } from '@/config/api'
 import { COUNSELOR_MESSAGE_TYPES, PATIENT_MESSAGE_TYPES, CASE_RECORD_AMENDMENT_REVIEW_PATH, caseRecordCrisisReportViewPath, isCaseRecordAmendmentPendingMessage, isExemptionPendingMessage, messageDisplayTitle, parseMessageContent, type MessageItem } from '@/utils/message'
 import { RISK_ASSESSMENT_ITEMS } from '@/constants/caseRecordRiskAssessment'
 import { patientNameFromDetail } from '@/utils/patientContract'
+import { fixImageUrl } from '@/utils/image'
 
 interface RecentCounselorContact {
   name?: string
@@ -550,6 +565,7 @@ interface RecentCounselorContact {
 }
 
 interface AffectedAppointment {
+  [key: string]: unknown
   patientName?: string
   patientPhone?: string
   emergencyContact?: string
@@ -695,6 +711,13 @@ const exemptionResultClass = computed(() => {
   if (exemptionStatusLabel.value === '未通过') return 'rejected-text'
   return 'pending-text'
 })
+
+const previewMessageScreenshot = () => {
+  const screenshot = detail.value.screenshotUrl
+  if (typeof screenshot !== 'string' || !screenshot) return
+  const url = fixImageUrl(screenshot)
+  uni.previewImage({ current: url, urls: [url] })
+}
 const affectedList = computed(() => {
   const list = detail.value.affectedAppointments
   return Array.isArray(list) ? (list as AffectedAppointment[]) : []
@@ -964,6 +987,13 @@ onLoad((options) => {
   border-radius: 24rpx;
   padding: 24rpx;
   border: 1rpx solid #F0EDE8;
+}
+
+.message-screenshot {
+  width: 100%;
+  height: 360rpx;
+  border-radius: 20rpx;
+  background: #F3F4F6;
 }
 
 .reason-label {

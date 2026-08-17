@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from models import AppAccount, AppOrder, AppSchedule, AppConsultation
 from room_assignment import apply_room_assignment
 from schedule_meta import is_video_center, parse_center_id, parse_room_id, schedule_note
+from schedule_slots import validate_booking_lead_time
 from intake_agreement import record_intake_from_order
 
 
@@ -99,6 +100,7 @@ def complete_paid_order(
         db.refresh(schedule)
         if schedule.Status != "AVAILABLE":
             raise ValueError("预约时段已被占用，请重新预约")
+        validate_booking_lead_time(schedule.StartTime)
         schedule_center = parse_center_id(schedule.Note)
         if center_id and schedule_center and center_id != schedule_center:
             raise ValueError("订单预约中心与排期不一致，请重新预约")

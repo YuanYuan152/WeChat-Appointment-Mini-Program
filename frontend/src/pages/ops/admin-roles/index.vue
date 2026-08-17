@@ -41,7 +41,7 @@
             <text class="uid">
               {{ u.isLegacyOnly ? `旧系统 ID ${u.legacyDoctorId}` : `ID ${u.id}` }}{{ u.mobile ? ' · ' + u.mobile : '' }}
             </text>
-            <text v-if="showPatientSourceMeta(u)" class="meta-line">来访来源：{{ u.patientSourceLabel }}</text>
+            <text v-if="showPatientSourceMeta(u)" class="meta-line">来访类别：{{ u.patientSourceLabel }}</text>
             <text v-if="showCounselorTypeMeta(u)" class="meta-line">咨询师类型：{{ u.counselorTypeLabel }}</text>
             <text v-if="u.createdAt" class="meta-line">注册时间：{{ formatCreatedAt(u.createdAt) }}</text>
           </view>
@@ -124,7 +124,7 @@
             class="form-input"
             placeholder-class="form-input-ph"
             type="number"
-            maxlength="11"
+            :maxlength="11"
             placeholder="11 位手机号"
           />
 
@@ -161,7 +161,7 @@
 
 
         <view v-if="addSelectedRole === 'Patient'" class="form-group">
-          <text class="form-label">来访来源 *</text>
+          <text class="form-label">来访类别 *</text>
           <picker
             :range="patientSourceLabels"
             :value="addForm.patientSourceIndex"
@@ -200,7 +200,7 @@
             class="form-input"
             placeholder-class="form-input-ph"
             type="text"
-            maxlength="20"
+            :maxlength="20"
             placeholder="请输入用户名，不填则自动生成"
           />
 
@@ -534,7 +534,7 @@ const submitAddUser = () => {
   if (role === 'Patient') {
     const patientSource = PATIENT_SOURCE_OPTIONS[addForm.patientSourceIndex]?.value
     if (!patientSource) {
-      uni.showToast({ title: '请选择来访来源', icon: 'none' })
+      uni.showToast({ title: '请选择来访类别', icon: 'none' })
       return
     }
   } else if (role === 'Counselor') {

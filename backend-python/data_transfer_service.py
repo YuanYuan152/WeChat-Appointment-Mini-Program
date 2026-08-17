@@ -16,10 +16,8 @@ from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
 from sqlalchemy.orm import Session
 
-from case_record_service import case_record_has_content
 from models import (
     AppAccount,
-    AppCaseRecord,
     AppConsultation,
     AppCounselorProfile,
     AppOrder,
@@ -29,18 +27,25 @@ from models import (
 from pricing_service import default_base_price_cents_for_type
 from schedule_meta import parse_center_id, schedule_note
 from staff_remark_service import get_staff_remarks_map, set_staff_remark
-from user_role_meta import COUNSELOR_TYPES, PATIENT_SOURCES
+from user_role_meta import (
+    COUNSELOR_TYPES,
+    PATIENT_SOURCES,
+    PATIENT_SOURCE_DETAILS,
+    normalize_patient_source,
+)
 
 
 PHONE_RE = re.compile(r"^1[3-9]\d{9}$")
 ORDER_STATUSES = (
     "已预约但未咨询",
     "已咨询未填写咨询记录",
-    "已完成咨询记录",
+    "已退款",
+    "已取消未退款",
 )
 CONSULTATION_MODES = ("线下", "视频")
 LOCATIONS = ("杨浦咨询中心", "浦东咨询中心", "线上")
 SIGN_STATUSES = ("已签约", "未签约")
+GENDERS = ("男", "女")
 
 SOURCE_BY_LABEL = {label: code for code, label in PATIENT_SOURCES.items()}
 COUNSELOR_TYPE_BY_LABEL = {label: code for code, label in COUNSELOR_TYPES.items()}
@@ -67,13 +72,15 @@ VISITOR_COLUMNS = (
     ColumnDef("签约状态", "contract_status", choices=SIGN_STATUSES),
     ColumnDef("绑定咨询师的名字", "bound_counselor_name"),
     ColumnDef("绑定的咨询师电话", "bound_counselor_mobile"),
-    ColumnDef("来访来源【必填】", "patient_source", True, tuple(PATIENT_SOURCES.values())),
+    ColumnDef("来访类别【必填】", "patient_source", True, tuple(PATIENT_SOURCES.values())),
+    ColumnDef("来访来源", "patient_source_detail", choices=PATIENT_SOURCE_DETAILS),
     ColumnDef("来访备注", "remark"),
 )
 
 COUNSELOR_COLUMNS = (
     ColumnDef("咨询师手机号【必填】", "mobile", True),
-    ColumnDef("咨询师姓名", "name"),
+    ColumnDef("咨询师姓名【必填】", "name", True),
+    ColumnDef("咨询师性别", "gender", choices=GENDERS),
     ColumnDef("咨询师类别", "counselor_type", choices=tuple(COUNSELOR_TYPES.values())),
     ColumnDef("咨询师基础价格", "billing"),
     ColumnDef("咨询师备注", "remark"),
@@ -82,18 +89,13 @@ COUNSELOR_COLUMNS = (
 ORDER_COLUMNS = (
     ColumnDef("订单代码", "order_code"),
     ColumnDef("来访电话【必填】", "patient_mobile", True),
-    ColumnDef("来访代称", "patient_alias"),
+    ColumnDef("来访姓名【必填】", "patient_name", True),
     ColumnDef("咨询师电话【必填】", "counselor_mobile", True),
     ColumnDef("咨询师姓名", "counselor_name"),
-    ColumnDef("订单状态", "order_status", choices=ORDER_STATUSES),
+    ColumnDef("咨询状态【必填】", "order_status", True, ORDER_STATUSES),
     ColumnDef("咨询时间【必填】", "start_time", True),
     ColumnDef("咨询方式", "mode", choices=CONSULTATION_MODES),
     ColumnDef("地点", "location", choices=LOCATIONS),
-    ColumnDef("主观记录", "subjective"),
-    ColumnDef("客观记录", "objective"),
-    ColumnDef("评估记录", "assessment"),
-    ColumnDef("计划记录", "plan"),
-    ColumnDef("风险评估", "risk_assessment"),
 )
 
 KIND_COLUMNS = {
@@ -149,7 +151,11 @@ def _workbook_bytes(kind: str, rows: list[list[Any]]) -> bytes:
     columns = _columns(kind)
     workbook = Workbook()
     sheet = workbook.active
-    sheet.title = {"visitors": "来访", "counselors": "咨询师", "orders": "订单"}[kind]
+    sheet.title = {
+        "visitors": "来访用户表",
+        "counselors": "咨询师用户表",
+        "orders": "咨询订单表",
+    }[kind]
     _style_sheet(sheet, columns)
     for row in rows:
         sheet.append(row)
@@ -321,19 +327,6 @@ def _validate_row(
         except ValueError as exc:
             if clean["start_time"]:
                 errors.append(_error(sheet, _field_cell(columns, "start_time", row_number), str(exc)))
-        # 风险评估在现有模型中是结构化 JSON；任意文本不能被当作一份已填写完成的
-        # 咨询记录。至少填写一项 SOAP 正文，才能与全站 case_record_has_content
-        # 的判定保持一致。
-        record_keys = ("subjective", "objective", "assessment", "plan")
-        clean["has_record_content"] = any(clean[key] for key in record_keys)
-        if status == ORDER_STATUSES[2] and not clean["has_record_content"]:
-            errors.append(
-                _error(
-                    sheet,
-                    _field_cell(columns, "subjective", row_number),
-                    "已完成咨询记录时至少填写主观、客观、评估或计划中的一项",
-                )
-            )
         for key, role, label in (
             ("patient_mobile", "Patient", "来访"),
             ("counselor_mobile", "Counselor", "咨询师"),
@@ -529,6 +522,7 @@ def _apply_visitor(value: dict[str, Any], db: Session, actor_id: int) -> None:
         nickname=value["nickname"],
     )
     account.PatientSource = value["patient_source"]
+    account.PatientSourceDetail = value["patient_source_detail"] or None
     if value["contract_status"]:
         account.IsContractSigned = value["is_contract_signed"]
     if value.get("bound_counselor_id"):
@@ -545,6 +539,7 @@ def _apply_counselor(value: dict[str, Any], db: Session, actor_id: int) -> None:
         real_name=value["name"],
         nickname=value["name"],
     )
+    account.Gender = value["gender"] or None
     counselor_type = value["counselor_type"] or "PROFESSIONAL"
     db.add(
         AppCounselorProfile(
@@ -579,14 +574,19 @@ def _apply_order(value: dict[str, Any], db: Session) -> None:
     )
     center_id = LOCATION_TO_CENTER[value["location"]]
     note = schedule_note(center_id)
+    is_cancelled = value["order_status"] in ORDER_STATUSES[2:]
     consultation_status = (
-        "CONFIRMED" if value["order_status"] == ORDER_STATUSES[0] else "DONE"
+        "CONFIRMED"
+        if value["order_status"] == ORDER_STATUSES[0]
+        else "CANCELLED"
+        if is_cancelled
+        else "DONE"
     )
     schedule = AppSchedule(
         CounselorId=counselor.Id,
         StartTime=value["start_at"],
         EndTime=value["end_at"],
-        Status="BOOKED",
+        Status="CANCELLED" if is_cancelled else "BOOKED",
         Note=note,
     )
     db.add(schedule)
@@ -596,11 +596,17 @@ def _apply_order(value: dict[str, Any], db: Session) -> None:
         SlotId=schedule.Id,
         OutTradeNo=value["order_code"],
         TotalFee=int(profile.Billing),
-        Status="PAID",
+        Status=(
+            "REFUNDED"
+            if value["order_status"] == ORDER_STATUSES[2]
+            else "CANCELLED"
+            if value["order_status"] == ORDER_STATUSES[3]
+            else "PAID"
+        ),
         CreatedAt=value["start_at"],
         PaidAt=value["start_at"],
         Description=(
-            f"{value['patient_alias'] or patient.RealName or patient.Nickname or patient.Mobile}"
+            f"{value['patient_name']}"
             f" / {value['counselor_name'] or profile.Name or counselor.RealName or counselor.Mobile}"
         )[:200],
     )
@@ -617,19 +623,6 @@ def _apply_order(value: dict[str, Any], db: Session) -> None:
         Note=note,
     )
     db.add(consultation)
-    db.flush()
-    if value["has_record_content"]:
-        db.add(
-            AppCaseRecord(
-                ConsultationId=consultation.Id,
-                CounselorId=counselor.Id,
-                Subjective=value["subjective"] or None,
-                Objective=value["objective"] or None,
-                Assessment=value["assessment"] or None,
-                Plan=value["plan"] or None,
-                RiskAssessment=value["risk_assessment"] or None,
-            )
-        )
 
 
 def _duplicate_errors(
@@ -846,7 +839,11 @@ def _export_visitors(db: Session) -> list[list[Any]]:
                     else ""
                 ),
                 counselor.Mobile or "" if counselor else "",
-                PATIENT_SOURCES.get(account.PatientSource, account.PatientSource or ""),
+                PATIENT_SOURCES.get(
+                    normalize_patient_source(account.PatientSource),
+                    account.PatientSource or "",
+                ),
+                account.PatientSourceDetail or "",
                 remarks.get(account.Id, ""),
             ]
         )
@@ -869,6 +866,7 @@ def _export_counselors(db: Session) -> list[list[Any]]:
             [
                 account.Mobile or "",
                 (profile.Name if profile else None) or account.RealName or account.Nickname or "",
+                account.Gender or "",
                 COUNSELOR_TYPES.get(
                     profile.CounselorType if profile else None,
                     profile.CounselorType if profile else "",
@@ -886,7 +884,7 @@ def _export_orders(
     end_date: Optional[date],
 ) -> list[list[Any]]:
     query = db.query(AppConsultation).filter(
-        AppConsultation.Status.in_(["PENDING", "CONFIRMED", "ONGOING", "DONE"]),
+        AppConsultation.Status.in_(["PENDING", "CONFIRMED", "ONGOING", "DONE", "CANCELLED", "CANCELED"]),
         AppConsultation.StartTime.isnot(None),
     )
     if start_date:
@@ -912,13 +910,6 @@ def _export_orders(
         order.Id: order
         for order in db.query(AppOrder).filter(AppOrder.Id.in_(order_ids)).all()
     } if order_ids else {}
-    consultation_ids = [consultation.Id for consultation in consultations]
-    records = {
-        record.ConsultationId: record
-        for record in db.query(AppCaseRecord)
-        .filter(AppCaseRecord.ConsultationId.in_(consultation_ids))
-        .all()
-    } if consultation_ids else {}
     profiles = {
         profile.AccountId: profile
         for profile in db.query(AppCounselorProfile)
@@ -936,12 +927,15 @@ def _export_orders(
         counselor = accounts.get(consultation.CounselorId)
         profile = profiles.get(consultation.CounselorId)
         order = orders.get(consultation.OrderId)
-        record = records.get(consultation.Id)
         center_id = parse_center_id(consultation.Note)
         location = CENTER_TO_LOCATION.get(center_id, "线上" if center_id == "video" else "")
         status = (
             ORDER_STATUSES[2]
-            if case_record_has_content(record)
+            if order and order.Status == "REFUNDED"
+            else ORDER_STATUSES[3]
+            if order and order.Status == "CANCELLED"
+            else ORDER_STATUSES[3]
+            if consultation.Status in ("CANCELLED", "CANCELED")
             else ORDER_STATUSES[1]
             if consultation.Status == "DONE"
             else ORDER_STATUSES[0]
@@ -950,7 +944,7 @@ def _export_orders(
             [
                 order.OutTradeNo if order else "",
                 patient.Mobile if patient else "",
-                (patient.Nickname or patient.RealName or "") if patient else "",
+                (patient.RealName or patient.Nickname or "") if patient else "",
                 counselor.Mobile if counselor else "",
                 (
                     (profile.Name if profile else None)
@@ -962,11 +956,6 @@ def _export_orders(
                 consultation.StartTime,
                 "视频" if center_id == "video" else "线下",
                 location,
-                record.Subjective if record else "",
-                record.Objective if record else "",
-                record.Assessment if record else "",
-                record.Plan if record else "",
-                record.RiskAssessment if record else "",
             ]
         )
     return rows

@@ -185,10 +185,10 @@
               class="slot-chip"
               :class="{
                 active: form.slotKey === ts.key,
-                disabled: ts.past || ts.allRoomsFull || ts.counselorOccupied,
+                disabled: ts.tooSoon || ts.allRoomsFull || ts.counselorOccupied,
               }"
               @tap="selectTimeSlot(ts)"
-            >{{ ts.key }}{{ ts.counselorOccupied ? '（已排期）' : '' }}</view>
+            >{{ ts.key }}{{ scheduleSlotChipHint(ts) }}</view>
           </view>
           <text class="form-hint">支持整点和半点开始；咨询 50 分钟，随后预留 10 分钟打扫</text>
         </view>
@@ -373,6 +373,15 @@
           <text class="detail-label">状态</text>
           <text class="detail-value">{{ leaveDetailStatusLabel }}</text>
         </view>
+        <view v-if="leaveDetailScreenshotUrl" class="detail-block">
+          <text class="detail-label">沟通截图</text>
+          <image
+            class="leave-detail-screenshot"
+            :src="fixImageUrl(leaveDetailScreenshotUrl)"
+            mode="aspectFit"
+            @tap="previewLeaveDetailScreenshot"
+          />
+        </view>
         <button class="notice-btn primary detail-close" @tap="showLeaveDetail = false">关闭</button>
       </view>
     </view>
@@ -396,7 +405,7 @@
             v-model="cancelLeaveReason"
             class="leave-reason-input"
             placeholder="请说明无法履约的原因"
-            maxlength="1000"
+            :maxlength="1000"
             :disabled="cancellingBooked"
           />
           <text class="reason-counter">{{ cancelLeaveReason.length }}/1000</text>
@@ -469,6 +478,8 @@ interface TimeSlotOpt {
   endTime: string
   label: string
   past: boolean
+  tooSoon?: boolean
+  unavailableReason?: string
   counselorOccupied: boolean
   allRoomsFull?: boolean
   rooms: RoomOpt[]
@@ -499,6 +510,8 @@ interface ProxyTimeSlotOpt {
   label: string
   selectable: boolean
   past?: boolean
+  tooSoon?: boolean
+  unavailableReason?: string
   counselorOccupied?: boolean
   existingAvailableScheduleId?: number | null
   startTime: string
@@ -527,6 +540,7 @@ interface CalendarSlot {
   leaveReason?: string
   leaveSubmittedAt?: string
   leaveStatus?: string
+  leaveScreenshotUrl?: string
 }
 
 type ViewMode = 'list' | 'calendar'
@@ -645,6 +659,7 @@ const leaveDetailPatient = ref('')
 const leaveDetailReason = ref('')
 const leaveDetailSubmittedAt = ref('')
 const leaveDetailStatusLabel = ref('')
+const leaveDetailScreenshotUrl = ref('')
 const cancelBookedTip = ref('')
 const showCancelBooked = ref(false)
 const cancelBookedSlot = ref<CalendarSlot | null>(null)
@@ -744,7 +759,14 @@ const openLeaveDetail = (slot: CalendarSlot) => {
   leaveDetailReason.value = slot.leaveReason || '—'
   leaveDetailSubmittedAt.value = formatDateTime(slot.leaveSubmittedAt)
   leaveDetailStatusLabel.value = leaveStatusText(slot.leaveStatus)
+  leaveDetailScreenshotUrl.value = slot.leaveScreenshotUrl || ''
   showLeaveDetail.value = true
+}
+
+const previewLeaveDetailScreenshot = () => {
+  if (!leaveDetailScreenshotUrl.value) return
+  const url = fixImageUrl(leaveDetailScreenshotUrl.value)
+  uni.previewImage({ current: url, urls: [url] })
 }
 
 const onSlotTap = (slot: CalendarSlot) => {
@@ -1028,7 +1050,7 @@ const loadSlotOptions = async () => {
     timeSlotOptions.value = res.code === 0 && res.data ? res.data.slots || [] : []
     if (form.value.slotKey) {
       const still = timeSlotOptions.value.find(t => t.key === form.value.slotKey)
-      if (!still || still.past || still.allRoomsFull || still.counselorOccupied) {
+      if (!still || still.tooSoon || still.allRoomsFull || still.counselorOccupied) {
         form.value.slotKey = ''
         form.value.roomId = NO_PREF
       }
@@ -1064,8 +1086,8 @@ const selectNoPref = () => {
 }
 
 const selectTimeSlot = (ts: TimeSlotOpt) => {
-  if (ts.past) {
-    uni.showToast({ title: '该时段已开始或已过', icon: 'none' })
+  if (ts.tooSoon) {
+    uni.showToast({ title: ts.unavailableReason || '开始时间须至少晚于当前中国时间90分钟', icon: 'none' })
     return
   }
   if (ts.allRoomsFull) {
@@ -1080,6 +1102,12 @@ const selectTimeSlot = (ts: TimeSlotOpt) => {
   form.value.startTime = ts.startTime
   form.value.endTime = ts.endTime
   form.value.roomId = NO_PREF
+}
+
+const scheduleSlotChipHint = (ts: TimeSlotOpt) => {
+  if (ts.tooSoon) return '（不足90分钟）'
+  if (ts.counselorOccupied) return '（已排期）'
+  return ''
 }
 
 const selectRoom = (room: RoomOpt) => {
@@ -1156,6 +1184,7 @@ const loadProxySlotOptions = async () => {
 }
 
 const proxySlotChipHint = (ts: ProxyTimeSlotOpt) => {
+  if (ts.tooSoon) return '（不足90分钟）'
   if (ts.past) return '（已过）'
   if (ts.counselorOccupied && !ts.existingAvailableScheduleId) return '（已预约）'
   if (ts.existingAvailableScheduleId) return '（可约）'
@@ -1197,7 +1226,12 @@ const onProxyDateChange = async (e: { detail: { value: string } }) => {
 }
 
 const selectProxyTimeSlot = (ts: ProxyTimeSlotOpt) => {
-  if (!ts.selectable) return
+  if (!ts.selectable) {
+    if (ts.unavailableReason) {
+      uni.showToast({ title: ts.unavailableReason, icon: 'none' })
+    }
+    return
+  }
   proxyForm.value.slotKey = ts.key
   proxyForm.value.startTime = ts.startTime
   proxyForm.value.endTime = ts.endTime
@@ -1581,6 +1615,9 @@ defineExpose({ refresh, focusScheduleId, applyListFilter, getUnrecordedCount })
 .detail-label { display: block; font-size: 24rpx; color: #9CA3AF; margin-bottom: 8rpx; }
 .detail-value { display: block; font-size: 28rpx; color: #374151; line-height: 1.6; }
 .detail-reason { white-space: pre-wrap; }
+.leave-detail-screenshot {
+  width: 100%; height: 320rpx; border-radius: 12rpx; background: #F3F4F6;
+}
 .detail-close { margin-top: 16rpx; width: 100%; }
 .cancel-booked-card {
   width: 100%; max-width: 640rpx; background: #fff;

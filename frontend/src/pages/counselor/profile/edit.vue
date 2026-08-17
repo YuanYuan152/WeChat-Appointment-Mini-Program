@@ -36,7 +36,7 @@
         </view>
         <view class="info-row">
           <text class="label">培训经历</text>
-          <text class="value">{{ profile.career || '—' }}</text>
+          <text class="value">{{ profile.trainingExperience || profile.career || '—' }}</text>
         </view>
         <view class="info-row">
           <text class="label">咨询方式</text>
@@ -84,6 +84,7 @@ interface CounselorProfileView {
   specialty?: string
   introduce?: string
   career?: string
+  trainingExperience?: string
   qualification?: string
   targetGroup?: string
   mode?: string

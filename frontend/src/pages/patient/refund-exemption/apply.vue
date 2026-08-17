@@ -29,23 +29,43 @@
           class="textarea"
           v-model="form.reason"
           placeholder="请详细说明无法前来咨询的原因，便于人工审核"
-          maxlength="1000"
+          :maxlength="1000"
         />
         <text class="counter">{{ form.reason.length }}/1000</text>
       </view>
+
+      <view class="form-item">
+        <text class="label">申请凭证（必填）</text>
+        <view v-if="screenshotUrl" class="screenshot-preview">
+          <image
+            class="screenshot-image"
+            :src="screenshotPreviewUrl"
+            mode="aspectFit"
+            @tap="previewScreenshot"
+          />
+          <button class="repick-btn" :disabled="uploading" @tap="pickScreenshot">
+            {{ uploading ? '上传中...' : '更换图片' }}
+          </button>
+        </view>
+        <view v-else class="screenshot-upload" @tap="pickScreenshot">
+          <text class="screenshot-upload-text">{{ uploading ? '上传中...' : '+ 上传图片凭证' }}</text>
+          <text class="screenshot-upload-tip">支持 JPG、PNG、GIF、WebP，最多 1 张</text>
+        </view>
+      </view>
     </view>
 
-    <button class="submit-btn" :loading="submitting" :disabled="submitting" @tap="submit">
+    <button class="submit-btn" :loading="submitting" :disabled="submitting || uploading" @tap="submit">
       提交申请
     </button>
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
+import { fixImageUrl } from '@/utils/image'
 
 interface ConsultationItem {
   id: number
@@ -61,7 +81,36 @@ const slotText = ref('')
 const orderAmountYuan = ref('')
 
 const form = ref({ amountYuan: '', reason: '' })
+const screenshotUrl = ref('')
+const uploading = ref(false)
 const submitting = ref(false)
+const screenshotPreviewUrl = computed(() => fixImageUrl(screenshotUrl.value))
+
+const pickScreenshot = () => {
+  if (uploading.value) return
+  uni.chooseImage({
+    count: 1,
+    success: async (res) => {
+      uploading.value = true
+      try {
+        const uploadRes = await httpV2.upload(API_ENDPOINTS.upload.file, res.tempFilePaths[0], 'file')
+        if (uploadRes.code === 0 && uploadRes.data?.url) {
+          screenshotUrl.value = uploadRes.data.url
+        } else {
+          uni.showToast({ title: uploadRes.msg || '上传失败', icon: 'none' })
+        }
+      } finally {
+        uploading.value = false
+      }
+    },
+  })
+}
+
+const previewScreenshot = () => {
+  if (screenshotPreviewUrl.value) {
+    uni.previewImage({ current: screenshotPreviewUrl.value, urls: [screenshotPreviewUrl.value] })
+  }
+}
 
 const formatSlotRange = (start?: string, end?: string) => {
   if (!start) return ''
@@ -140,12 +189,17 @@ const submit = async () => {
     uni.showToast({ title: '请填写无法前来咨询的原因', icon: 'none' })
     return
   }
+  if (!screenshotUrl.value) {
+    uni.showToast({ title: '请上传退款申请凭证', icon: 'none' })
+    return
+  }
 
   submitting.value = true
   try {
     const res = await httpV2.post(API_ENDPOINTS.patient.refundExemption(consultationId.value), {
       amount: Math.round(amountYuan * 100),
       reason,
+      screenshot_url: screenshotUrl.value,
     })
     if (res.code === 0) {
       uni.showToast({ title: '申请已提交，请等待审核', icon: 'success', duration: 2000 })
@@ -265,6 +319,56 @@ const submit = async () => {
   font-size: 22rpx;
   color: #9CA3AF;
   margin-top: 8rpx;
+}
+
+.screenshot-upload {
+  min-height: 220rpx;
+  border: 2rpx dashed #D1D5DB;
+  border-radius: 16rpx;
+  background: #F9FAFB;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+}
+
+.screenshot-upload-text {
+  color: #0D9488;
+  font-size: 28rpx;
+  font-weight: 600;
+}
+
+.screenshot-upload-tip {
+  color: #9CA3AF;
+  font-size: 22rpx;
+}
+
+.screenshot-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.screenshot-image {
+  width: 100%;
+  height: 360rpx;
+  border-radius: 16rpx;
+  background: #F3F4F6;
+}
+
+.repick-btn {
+  width: 100%;
+  height: 72rpx;
+  line-height: 72rpx;
+  border-radius: 12rpx;
+  background: #ECFDF5;
+  color: #0D9488;
+  font-size: 26rpx;
+}
+
+.repick-btn::after {
+  border: none;
 }
 
 .submit-btn {

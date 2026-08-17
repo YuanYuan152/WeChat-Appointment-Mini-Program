@@ -5,16 +5,9 @@ from sqlalchemy.orm import Session
 
 from models import AppAccount, AppRoleBinding
 from role_active import get_account_role, set_account_role
+from user_role_meta import PATIENT_SOURCES
 
-DEFAULT_PATIENT_SOURCE = "MINI_PROGRAM"
-
-PATIENT_SOURCES = {
-    "MINI_PROGRAM": "小程序注册",
-    "CHARITY_VISITOR": "公益来访",
-    "CHARITY_PROJECT_1": "公益项目1",
-    "CHARITY_PROJECT_2": "公益项目2",
-    "HOSPITAL": "医院",
-}
+DEFAULT_PATIENT_SOURCE = "PROFESSIONAL"
 
 
 def patient_source_label(code: Optional[str]) -> Optional[str]:

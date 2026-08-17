@@ -1005,6 +1005,8 @@ class CounselorSafetyTests(BackendServiceTestCase):
         log = self.db.query(AppScheduleCancelLog).one()
         self.assertEqual(log.LeaveRequestId, leave_id)
         self.assertEqual(log.ScreenshotUrl, "/static/leave.png")
+        calendar_item = _calendar_items_for_schedules(self.db, [schedule], counselor.Id)[0]
+        self.assertEqual(calendar_item.leaveScreenshotUrl, "/static/leave.png")
 
     def test_rejected_leave_records_review_and_preserves_original_reason(self):
         schedule = AppSchedule(

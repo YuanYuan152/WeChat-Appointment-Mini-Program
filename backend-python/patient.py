@@ -317,6 +317,7 @@ class ConsultationOut(BaseModel):
     exemptionStatus: Optional[str] = None
     exemptionRejectReason: Optional[str] = None
     exemptionId: Optional[int] = None
+    exemptionScreenshotUrl: Optional[str] = None
     orderStatus: Optional[str] = None
     cancelSummary: Optional[str] = None
     hasFeedback: bool = False
@@ -350,7 +351,7 @@ class CancelConsultationOut(BaseModel):
 class RefundExemptionCreate(BaseModel):
     amount: int
     reason: str
-    screenshot_url: Optional[str] = None
+    screenshot_url: str = Field(..., min_length=1, max_length=500)
 
 
 class RefundExemptionOut(BaseModel):
@@ -482,6 +483,7 @@ def get_my_consultations(
                 else None
             ),
             exemptionId=exemption.Id if exemption else None,
+            exemptionScreenshotUrl=exemption.ScreenshotUrl if exemption else None,
             orderStatus=order_status,
             cancelSummary=cancel_summary,
             hasFeedback=bool(feedback),
@@ -690,6 +692,7 @@ def submit_refund_exemption(
             patient_id=current_account.Id,
             amount=body.amount,
             reason=body.reason or "",
+            screenshot_url=body.screenshot_url,
             pending=pending,
         )
     except ValueError as e:
@@ -700,7 +703,7 @@ def submit_refund_exemption(
         AccountId=current_account.Id,
         Amount=body.amount,
         Reason=(body.reason or "").strip(),
-        ScreenshotUrl=body.screenshot_url,
+        ScreenshotUrl=body.screenshot_url.strip(),
         Status="PENDING",
     )
     db.add(exemption)

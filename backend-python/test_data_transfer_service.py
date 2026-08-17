@@ -85,16 +85,32 @@ class DataTransferServiceTests(unittest.TestCase):
         return account
 
     def test_templates_use_the_shared_column_definitions(self):
+        sheet_names = {
+            "visitors": "来访用户表",
+            "counselors": "咨询师用户表",
+            "orders": "咨询订单表",
+        }
         for kind, columns in KIND_COLUMNS.items():
             workbook = load_workbook(BytesIO(template_bytes(kind)))
             headers = [cell.value for cell in workbook.active[1]]
             self.assertEqual(headers, [column.header for column in columns])
+            self.assertEqual(workbook.active.title, sheet_names[kind])
+        self.assertIn("来访类别【必填】", [column.header for column in KIND_COLUMNS["visitors"]])
+        self.assertIn("来访来源", [column.header for column in KIND_COLUMNS["visitors"]])
+        self.assertIn("咨询师姓名【必填】", [column.header for column in KIND_COLUMNS["counselors"]])
+        self.assertIn("咨询师性别", [column.header for column in KIND_COLUMNS["counselors"]])
+        self.assertIn("来访姓名【必填】", [column.header for column in KIND_COLUMNS["orders"]])
+        self.assertIn("咨询状态【必填】", [column.header for column in KIND_COLUMNS["orders"]])
+        self.assertTrue(
+            next(column for column in KIND_COLUMNS["orders"] if column.key == "order_status").required
+        )
+        self.assertNotIn("主观记录", [column.header for column in KIND_COLUMNS["orders"]])
 
     def test_validation_collects_errors_from_every_sheet_without_writes(self):
         content = workbook_bytes(
             "visitors",
-            [["123", "", "", "", "", "", "未知来源", ""]],
-            second_sheet_rows=[["", "", "", "", "", "", "", "仅备注"]],
+            [["123", "", "", "", "", "", "未知来源", "", ""]],
+            second_sheet_rows=[["", "", "", "", "", "", "", "", "仅备注"]],
         )
         result = import_workbook("visitors", content, self.db, 99)
 
@@ -105,6 +121,19 @@ class DataTransferServiceTests(unittest.TestCase):
             self.db.query(AppRoleBinding).filter(AppRoleBinding.RoleType == "Patient").count(),
             0,
         )
+
+    def test_visitor_import_rejects_non_whitelisted_source_detail(self):
+        result = import_workbook(
+            "visitors",
+            workbook_bytes(
+                "visitors",
+                [["13800000001", "来访甲", "", "", "", "", "正价", "医院转介", ""]],
+            ),
+            self.db,
+            99,
+        )
+        self.assertEqual(result["importedCount"], 0)
+        self.assertTrue(any("仅支持" in error["message"] for error in result["errors"]))
 
     def test_visitor_and_counselor_import_create_profiles_prices_and_remarks(self):
         visitor_result = import_workbook(
@@ -118,7 +147,8 @@ class DataTransferServiceTests(unittest.TestCase):
                     "已签约",
                     "",
                     "",
-                    "小程序注册",
+                    "正价",
+                    "医院转出",
                     "来访备注",
                 ]],
             ),
@@ -129,7 +159,7 @@ class DataTransferServiceTests(unittest.TestCase):
             "counselors",
             workbook_bytes(
                 "counselors",
-                [["13800000002", "咨询师甲", "专业咨询师", 688.5, "咨询师备注"]],
+                [["13800000002", "咨询师甲", "女", "专业咨询师", 688.5, "咨询师备注"]],
             ),
             self.db,
             99,
@@ -145,7 +175,9 @@ class DataTransferServiceTests(unittest.TestCase):
             .one()
         )
         self.assertTrue(visitor.IsContractSigned)
-        self.assertEqual(visitor.PatientSource, "MINI_PROGRAM")
+        self.assertEqual(visitor.PatientSource, "PROFESSIONAL")
+        self.assertEqual(visitor.PatientSourceDetail, "医院转出")
+        self.assertEqual(counselor.Gender, "女")
         self.assertEqual(profile.Billing, 68850)
         self.assertEqual(
             self.db.query(AppStaffAccountRemark)
@@ -179,15 +211,10 @@ class DataTransferServiceTests(unittest.TestCase):
                     "小甲",
                     counselor.Mobile,
                     "咨询师甲",
-                    ORDER_STATUSES[2],
+                    ORDER_STATUSES[1],
                     datetime(2026, 8, 12, 14, 0),
                     "视频",
                     "线上",
-                    "主观",
-                    "",
-                    "",
-                    "",
-                    "",
                 ]],
             ),
             self.db,
@@ -199,14 +226,13 @@ class DataTransferServiceTests(unittest.TestCase):
         order = self.db.query(AppOrder).one()
         schedule = self.db.query(AppSchedule).one()
         consultation = self.db.query(AppConsultation).one()
-        record = self.db.query(AppCaseRecord).one()
         self.assertEqual(order.TotalFee, 70000)
         self.assertEqual(schedule.EndTime - schedule.StartTime, consultation.EndTime - consultation.StartTime)
         self.assertEqual(consultation.EndTime - consultation.StartTime, datetime(2026, 8, 12, 15, 0) - datetime(2026, 8, 12, 14, 0))
         self.assertEqual(consultation.Status, "DONE")
-        self.assertEqual(record.Subjective, "主观")
+        self.assertEqual(self.db.query(AppCaseRecord).count(), 0)
 
-    def test_order_without_code_rejects_duplicate_and_risk_text_alone_is_not_a_record(self):
+    def test_order_without_code_rejects_duplicate_and_imports_refund_status(self):
         patient = self.add_role_account(1, "13800000001", "Patient", "来访甲")
         counselor = self.add_role_account(2, "13800000002", "Counselor", "咨询师甲")
         self.db.add(
@@ -229,11 +255,6 @@ class DataTransferServiceTests(unittest.TestCase):
             datetime(2026, 8, 12, 14, 0),
             "视频",
             "线上",
-            "",
-            "",
-            "",
-            "",
-            "",
         ]
 
         first = import_workbook(
@@ -251,18 +272,25 @@ class DataTransferServiceTests(unittest.TestCase):
         self.assertEqual(self.db.query(AppConsultation).count(), 1)
         self.assertEqual(self.db.query(AppSchedule).count(), 1)
 
-        risk_only_row = list(base_row)
-        risk_only_row[5] = ORDER_STATUSES[2]
-        risk_only_row[6] = datetime(2026, 8, 13, 14, 0)
-        risk_only_row[13] = "普通文本"
-        invalid = import_workbook(
-            "orders", workbook_bytes("orders", [risk_only_row]), self.db, 99
+        refunded_row = list(base_row)
+        refunded_row[5] = ORDER_STATUSES[2]
+        refunded_row[6] = datetime(2026, 8, 13, 14, 0)
+        refunded = import_workbook(
+            "orders", workbook_bytes("orders", [refunded_row]), self.db, 99
         )
-        self.assertEqual(invalid["importedCount"], 0)
-        self.assertTrue(
-            any("主观、客观、评估或计划" in error["message"] for error in invalid["errors"])
+        self.assertEqual(refunded["importedCount"], 1)
+        imported_refund = self.db.query(AppOrder).order_by(AppOrder.Id.desc()).first()
+        self.assertEqual(imported_refund.Status, "REFUNDED")
+        cancelled_row = list(base_row)
+        cancelled_row[5] = ORDER_STATUSES[3]
+        cancelled_row[6] = datetime(2026, 8, 14, 14, 0)
+        cancelled = import_workbook(
+            "orders", workbook_bytes("orders", [cancelled_row]), self.db, 99
         )
-        self.assertEqual(self.db.query(AppOrder).count(), 1)
+        self.assertEqual(cancelled["importedCount"], 1)
+        imported_cancel = self.db.query(AppOrder).order_by(AppOrder.Id.desc()).first()
+        self.assertEqual(imported_cancel.Status, "CANCELLED")
+        self.assertEqual(self.db.query(AppOrder).count(), 3)
 
     def test_visitor_partial_success_duplicate_and_statistics(self):
         self.db.add(
@@ -278,11 +306,11 @@ class DataTransferServiceTests(unittest.TestCase):
         content = workbook_bytes(
             "visitors",
             [
-                ["13800000001", "甲", "", "", "", "", "小程序注册", ""],
-                ["13800000001", "重复甲", "", "", "", "", "小程序注册", ""],
-                ["13800000010", "已删除账号", "", "", "", "", "小程序注册", ""],
-                ["13800000003", "丙", "", "", "", "", "未知来源", ""],
-                ["13800000004", "丁", "", "", "", "", "小程序注册", ""],
+                ["13800000001", "甲", "", "", "", "", "正价", "", ""],
+                ["13800000001", "重复甲", "", "", "", "", "正价", "", ""],
+                ["13800000010", "已删除账号", "", "", "", "", "正价", "", ""],
+                ["13800000003", "丙", "", "", "", "", "未知来源", "", ""],
+                ["13800000004", "丁", "", "", "", "", "正价", "", ""],
             ],
         )
 
@@ -307,9 +335,9 @@ class DataTransferServiceTests(unittest.TestCase):
         content = workbook_bytes(
             "visitors",
             [
-                ["13800000001", "甲", "", "", "", "", "小程序注册", ""],
-                ["13800000002", "乙", "", "", "", "", "小程序注册", ""],
-                ["13800000003", "丙", "", "", "", "", "小程序注册", ""],
+                ["13800000001", "甲", "", "", "", "", "正价", "", ""],
+                ["13800000002", "乙", "", "", "", "", "正价", "", ""],
+                ["13800000003", "丙", "", "", "", "", "正价", "", ""],
             ],
         )
         from data_transfer_service import _apply_visitor
@@ -369,18 +397,13 @@ class DataTransferServiceTests(unittest.TestCase):
                 [[
                     "NEW-CODE",
                     patient.Mobile,
-                    "",
+                    "来访甲",
                     counselor.Mobile,
                     "",
                     ORDER_STATUSES[0],
                     datetime(2026, 8, 12, 14, 0),
                     "视频",
                     "线上",
-                    "",
-                    "",
-                    "",
-                    "",
-                    "",
                 ]],
             ),
             self.db,
@@ -462,10 +485,11 @@ class DataTransferServiceTests(unittest.TestCase):
             data_only=True,
         )
         values = list(workbook.active.values)
-        self.assertEqual(len(values), 3)
+        self.assertEqual(len(values), 4)
         self.assertEqual(values[1][5], ORDER_STATUSES[0])
-        self.assertEqual(values[2][0], "ORDER-EXPORT")
-        self.assertEqual(values[2][5], ORDER_STATUSES[1])
+        self.assertEqual(values[2][5], ORDER_STATUSES[3])
+        self.assertEqual(values[3][0], "ORDER-EXPORT")
+        self.assertEqual(values[3][5], ORDER_STATUSES[1])
 
 
 if __name__ == "__main__":

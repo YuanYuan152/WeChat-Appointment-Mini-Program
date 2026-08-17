@@ -30,7 +30,7 @@ const KIND_CONFIG: Record<
   { label: string; description: string; rules: string[]; filename: string }
 > = {
   visitors: {
-    label: "来访用户信息表",
+    label: "来访用户表",
     description: "批量维护来访者基础资料。",
     rules: [
       "请先下载最新模板，保持工作表名称和表头不变。",
@@ -38,10 +38,10 @@ const KIND_CONFIG: Record<
       "来访手机号与数据库或同一文件中已成功导入的手机号重复时，该行不会导入。",
       "错误行或重复行仅拒绝该行，其他合格行会继续导入；请根据下方工作表、单元格和问题修正后重试。",
     ],
-    filename: "来访用户信息表",
+    filename: "来访用户表",
   },
   counselors: {
-    label: "咨询师用户信息表",
+    label: "咨询师用户表",
     description: "批量维护咨询师账号及资料。",
     rules: [
       "请使用本页下载的最新模板，不要删除或重命名工作表及表头。",
@@ -49,10 +49,10 @@ const KIND_CONFIG: Record<
       "咨询师手机号与数据库或同一文件中已成功导入的手机号重复时，该行不会导入。",
       "错误行或重复行仅拒绝该行，其他合格行会继续导入；请根据下方工作表、单元格和问题修正后重试。",
     ],
-    filename: "咨询师用户信息表",
+    filename: "咨询师用户表",
   },
   orders: {
-    label: "咨询订单信息表",
+    label: "咨询订单表",
     description: "批量维护预约及订单数据。",
     rules: [
       "请使用最新订单模板，并保持工作表名称、表头和日期时间格式不变。",
@@ -60,7 +60,7 @@ const KIND_CONFIG: Record<
       "来访电话、咨询师电话与咨询时间三项和数据库或同一文件中的订单重复时，该行不会导入。",
       "错误行或重复行仅拒绝该行，其他合格行会继续导入；订单导出必须选择预约开始日期范围。",
     ],
-    filename: "咨询订单信息表",
+    filename: "咨询订单表",
   },
 };
 
@@ -532,7 +532,7 @@ function DataImportContent() {
               {!hasType || !config
                 ? "请先选择导入&导出类型，再下载并导出对应表格。"
                 : activeKind === "orders"
-                  ? "按预约开始日期范围导出咨询订单信息表，开始和结束日期均包含在范围内。"
+                  ? "按预约开始日期范围导出咨询订单表，开始和结束日期均包含在范围内。"
                   : `下载并导出当前系统中的全部${config.label}。`}
             </p>
             {activeKind === "orders" && (

@@ -9,7 +9,8 @@ import { getCounselorAvatarFileError } from "@/lib/counselor-avatar";
 import { uploadImage } from "@/services/uploads";
 import type { AdminCounselorIntroProfile, AdminCounselorIntroUpdatePayload } from "@/types/api";
 
-const MODE_OPTIONS = ["线上", "线下", "线上/线下"];
+const GENDER_OPTIONS = ["男", "女"];
+const MODE_OPTIONS = ["视频咨询", "面询", "视频咨询/面询"];
 
 type CounselorIntroDraft = {
   name: string;
@@ -17,7 +18,8 @@ type CounselorIntroDraft = {
   title: string;
   workYears: string;
   consultHours: string;
-  career: string;
+  trainingExperience: string;
+  gender: string;
   mode: string;
   field: string;
   targetGroup: string;
@@ -32,6 +34,18 @@ function asText(value?: string | number | null) {
   return value == null ? "" : String(value);
 }
 
+function normalizeModeLabel(mode?: string | null) {
+  const raw = (mode || "").trim();
+  if (!raw) return "视频咨询/面询";
+  if (MODE_OPTIONS.includes(raw)) return raw;
+  const hasOnline = /线上|在线|视频|video|online/i.test(raw);
+  const hasOffline = /线下|面询|面对面|offline/i.test(raw);
+  if (hasOnline && hasOffline) return "视频咨询/面询";
+  if (hasOnline) return "视频咨询";
+  if (hasOffline) return "面询";
+  return "视频咨询/面询";
+}
+
 function toDraft(profile: AdminCounselorIntroProfile): CounselorIntroDraft {
   return {
     name: asText(profile.name),
@@ -39,8 +53,9 @@ function toDraft(profile: AdminCounselorIntroProfile): CounselorIntroDraft {
     title: asText(profile.title),
     workYears: asText(profile.workYears),
     consultHours: asText(profile.consultHours),
-    career: asText(profile.career),
-    mode: profile.mode || "线上/线下",
+    trainingExperience: asText(profile.trainingExperience),
+    gender: profile.gender === "男" || profile.gender === "女" ? profile.gender : "",
+    mode: normalizeModeLabel(profile.mode),
     field: asText(profile.field),
     targetGroup: asText(profile.targetGroup),
     specialty: asText(profile.specialty),
@@ -245,7 +260,8 @@ export function CounselorIntroEditor({
         title: nullableText(draft.title),
         workYears,
         consultHours,
-        career: nullableText(draft.career),
+        trainingExperience: nullableText(draft.trainingExperience),
+        gender: draft.gender.trim() || "",
         mode: nullableText(draft.mode),
         field: nullableText(draft.field),
         targetGroup: nullableText(draft.targetGroup),
@@ -344,13 +360,19 @@ export function CounselorIntroEditor({
               onChange={(event) => updateDraft("consultHours", event.target.value)}
             />
           </QueryField>
-          <QueryField label="培训经历（段数）">
-            <input
-              className={queryControlClass}
-              placeholder="如 4"
-              value={draft.career}
-              onChange={(event) => updateDraft("career", event.target.value)}
-            />
+          <QueryField label="性别">
+            <select
+              className={`${queryControlClass} appearance-auto`}
+              value={draft.gender}
+              onChange={(event) => updateDraft("gender", event.target.value)}
+            >
+              <option value="">未设置</option>
+              {GENDER_OPTIONS.map((gender) => (
+                <option key={gender} value={gender}>
+                  {gender}
+                </option>
+              ))}
+            </select>
           </QueryField>
           <QueryField label="咨询方式">
             <select
@@ -407,6 +429,19 @@ export function CounselorIntroEditor({
               value={draft.qualification}
               onChange={(event) => updateDraft("qualification", event.target.value)}
             />
+          </QueryField>
+          <QueryField className="sm:col-span-2" label="培训经历">
+            <textarea
+              className={`${queryControlClass} h-32 resize-y py-3`}
+              placeholder="每段经历建议单独一行"
+              value={draft.trainingExperience}
+              onChange={(event) => updateDraft("trainingExperience", event.target.value)}
+            />
+            {!draft.trainingExperience && profile.career ? (
+              <div className="mt-2 text-xs text-[var(--lxxl-muted)]">
+                旧字段只读回退：{profile.career}
+              </div>
+            ) : null}
           </QueryField>
         </div>
       </section>

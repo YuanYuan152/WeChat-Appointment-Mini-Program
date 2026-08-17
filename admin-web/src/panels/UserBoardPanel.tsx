@@ -21,6 +21,10 @@ import {
 } from "@/components/ui";
 import type { UserBoardFilters } from "@/types/app";
 import { patientContractTag } from "@/lib/patientContract";
+import {
+  PATIENT_SOURCE_DETAIL_OPTIONS,
+  PATIENT_SOURCE_OPTIONS,
+} from "@/config/userRoleMeta";
 
 export interface UserProxyBookingTarget {
   patientId: number;
@@ -47,6 +51,8 @@ export function UserBoardPanel({
   onBindCounselor,
   remarkSaving,
   onSaveRemark,
+  sourceSaving,
+  onSaveSource,
   contractDownloading,
   onDownloadContract,
 }: {
@@ -68,6 +74,12 @@ export function UserBoardPanel({
   onBindCounselor?: (patientId: number, counselorId: number | null) => Promise<void>;
   remarkSaving: boolean;
   onSaveRemark: (accountId: number, remark: string) => Promise<string>;
+  sourceSaving: boolean;
+  onSaveSource: (
+    accountId: number,
+    patientSource: string,
+    patientSourceDetail: string,
+  ) => Promise<void>;
   contractDownloading: boolean;
   onDownloadContract: (accountId: number) => Promise<void>;
 }) {
@@ -97,6 +109,8 @@ export function UserBoardPanel({
               onSearchCounselors={onSearchCounselors}
               remarkSaving={remarkSaving}
               onSaveRemark={onSaveRemark}
+              sourceSaving={sourceSaving}
+              onSaveSource={onSaveSource}
               contractDownloading={contractDownloading}
               onDownloadContract={onDownloadContract}
             />
@@ -249,6 +263,8 @@ function UserDetailPanel({
   onBindCounselor,
   remarkSaving,
   onSaveRemark,
+  sourceSaving,
+  onSaveSource,
   contractDownloading,
   onDownloadContract,
 }: {
@@ -259,6 +275,12 @@ function UserDetailPanel({
   onBindCounselor?: (patientId: number, counselorId: number | null) => Promise<void>;
   remarkSaving: boolean;
   onSaveRemark: (accountId: number, remark: string) => Promise<string>;
+  sourceSaving: boolean;
+  onSaveSource: (
+    accountId: number,
+    patientSource: string,
+    patientSourceDetail: string,
+  ) => Promise<void>;
   contractDownloading: boolean;
   onDownloadContract: (accountId: number) => Promise<void>;
 }) {
@@ -271,6 +293,12 @@ function UserDetailPanel({
   const [bindError, setBindError] = useState("");
   const [bindPrompt, setBindPrompt] = useState("");
   const [continueProxyAfterBind, setContinueProxyAfterBind] = useState(false);
+  const [patientSourceDraft, setPatientSourceDraft] = useState(
+    detail.profile.patientSource || "PROFESSIONAL",
+  );
+  const [sourceDetailDraft, setSourceDetailDraft] = useState(
+    detail.profile.patientSourceDetail || "",
+  );
   const bindSearchSeq = useRef(0);
   const canProxyBooking = detail.profile.isVisitor === true;
   const canEditStaffRemark = detail.profile.isVisitor === true;
@@ -375,6 +403,50 @@ function UserDetailPanel({
       </div>
       <div className="mt-1 text-sm text-[var(--lxxl-muted)]">
         {detail.profile.mobile || "-"} · {detail.profile.gender || "性别未填"} · 来访者
+      </div>
+      <div className="mt-4 rounded-xl border border-[var(--lxxl-border)] bg-white p-4">
+        <div className="text-sm font-semibold">来访信息</div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <label className="block text-xs text-[var(--lxxl-muted)]">
+            来访类型
+            <select
+              className={`${queryControlClass} mt-1`}
+              value={patientSourceDraft}
+              onChange={(event) => setPatientSourceDraft(event.target.value)}
+            >
+              {PATIENT_SOURCE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+          <label className="block text-xs text-[var(--lxxl-muted)]">
+            来访来源
+            <select
+              className={`${queryControlClass} mt-1`}
+              value={sourceDetailDraft}
+              onChange={(event) => setSourceDetailDraft(event.target.value)}
+            >
+              <option value="">请选择</option>
+              {PATIENT_SOURCE_DETAIL_OPTIONS.map((option) => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className="mt-3">
+          <QueryButton
+            disabled={sourceSaving || !patientSourceDraft}
+            onClick={() => {
+              void onSaveSource(
+                detail.profile.id,
+                patientSourceDraft,
+                sourceDetailDraft,
+              ).catch(() => undefined);
+            }}
+          >
+            {sourceSaving ? "保存中..." : "保存来访信息"}
+          </QueryButton>
+        </div>
       </div>
       {canEditStaffRemark && (
         <StaffRemarkEditor

@@ -211,6 +211,7 @@ export const API_ENDPOINTS = {
     consultationRecordRevisions: (id: number | string) => `/api/mini/admin/consultation-records/records/${id}/revisions`,
     patients: '/api/mini/admin/patients',
     patientDetail: (id: number | string) => `/api/mini/admin/patients/${id}`,
+    patientSource: (id: number | string) => `/api/mini/admin/boards/patients/${id}/source`,
     patientBoundCounselor: (id: number | string) => `/api/mini/admin/patients/${id}/bound-counselor`,
     counselors: '/api/mini/admin/counselors',
     counselorDetail: (id: number | string) => `/api/mini/admin/counselors/${id}`,

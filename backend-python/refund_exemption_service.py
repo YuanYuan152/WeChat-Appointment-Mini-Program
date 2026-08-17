@@ -2,6 +2,7 @@
 import json
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
+from urllib.parse import unquote, urlsplit
 
 from sqlalchemy.orm import Session
 
@@ -48,6 +49,7 @@ def validate_exemption_submission(
     patient_id: int,
     amount: int,
     reason: str,
+    screenshot_url: str,
     pending: Optional[AppRefundExemption],
 ) -> None:
     if consultation.PatientId != patient_id:
@@ -60,8 +62,37 @@ def validate_exemption_submission(
         raise ValueError("请填写申请原因")
     if amount <= 0:
         raise ValueError("申请金额须大于 0")
+    validate_uploaded_screenshot_url(screenshot_url)
     if pending:
         raise ValueError("该预约已有待审核的退款申请")
+
+
+def validate_uploaded_screenshot_url(screenshot_url: str) -> str:
+    """仅接受统一上传 API 生成的图片地址。"""
+    value = (screenshot_url or "").strip()
+    if not value:
+        raise ValueError("请上传退款申请凭证")
+    if len(value) > 500:
+        raise ValueError("退款申请凭证地址过长")
+
+    parsed = urlsplit(value)
+    if parsed.scheme and parsed.scheme.lower() not in ("http", "https"):
+        raise ValueError("退款申请凭证地址无效")
+    if (parsed.scheme and not parsed.netloc) or (not parsed.scheme and parsed.netloc):
+        raise ValueError("退款申请凭证地址无效")
+    if parsed.query or parsed.fragment:
+        raise ValueError("退款申请凭证地址无效")
+
+    path = unquote(parsed.path)
+    if (
+        not path.startswith("/static/uploads/")
+        or path == "/static/uploads/"
+        or "\\" in path
+        or "\x00" in path
+        or any(part in ("", ".", "..") for part in path[len("/static/uploads/"):].split("/"))
+    ):
+        raise ValueError("请使用上传接口返回的退款申请凭证地址")
+    return value
 
 
 def _admin_account_ids(db: Session) -> List[int]:
@@ -106,6 +137,7 @@ def notify_admins_new_exemption(
         "counselorName": counselor_name,
         "amountYuan": amount_yuan,
         "reason": exemption.Reason,
+        "screenshotUrl": exemption.ScreenshotUrl,
         "exemptionId": exemption.Id,
         "consultationId": exemption.ConsultationId,
         "status": "PENDING",
