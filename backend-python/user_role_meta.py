@@ -15,6 +15,11 @@ LEGACY_PATIENT_SOURCE_ALIASES = {
     "CHARITY_PROJECT_1": "CHARITY",
     "CHARITY_PROJECT_2": "CHARITY",
 }
+
+# 库内原始来源码（含历史别名），供 SQL PatientSource.in_(...) 判断公益来访
+CHARITY_PATIENT_SOURCES = frozenset(
+    {"CHARITY", *(code for code, norm in LEGACY_PATIENT_SOURCE_ALIASES.items() if norm == "CHARITY")}
+)
 PATIENT_SOURCE_DETAILS = (
     "小红书",
     "大众点评",
