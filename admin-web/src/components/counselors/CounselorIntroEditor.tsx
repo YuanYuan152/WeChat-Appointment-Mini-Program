@@ -409,9 +409,10 @@ export function CounselorIntroEditor({
               onChange={(event) => updateDraft("targetGroup", event.target.value)}
             />
           </QueryField>
-          <QueryField className="sm:col-span-2" label="擅长方向">
+          <QueryField className="sm:col-span-2" label="咨询流派">
             <textarea
               className={`${queryControlClass} h-28 resize-y py-3`}
+              placeholder="如精神分析、认知行为等"
               value={draft.specialty}
               onChange={(event) => updateDraft("specialty", event.target.value)}
             />
@@ -433,7 +434,7 @@ export function CounselorIntroEditor({
           <QueryField className="sm:col-span-2" label="受训背景">
             <textarea
               className={`${queryControlClass} h-32 resize-y py-3`}
-              placeholder="每段经历建议单独一行"
+              placeholder="直接填写受训背景，一段或多段均可"
               value={draft.trainingExperience}
               onChange={(event) => updateDraft("trainingExperience", event.target.value)}
             />

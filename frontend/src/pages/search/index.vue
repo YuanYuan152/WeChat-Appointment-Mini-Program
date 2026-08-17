@@ -18,7 +18,7 @@
 
     <view v-else-if="!searched" class="tips-card">
       <text class="tips-title">你可以搜索</text>
-      <text class="tips-item">咨询师姓名、擅长方向、心理知识、活动主题</text>
+      <text class="tips-item">咨询师姓名、咨询流派、心理知识、活动主题</text>
       <view v-if="history.length" class="history-block">
         <view class="history-head">
           <text class="history-title">最近搜索</text>

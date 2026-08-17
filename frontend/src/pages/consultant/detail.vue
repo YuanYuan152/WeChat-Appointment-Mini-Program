@@ -55,12 +55,12 @@
 
       <!-- 悬浮数据卡片：从业年限 | 咨询时数 -->
       <view class="stats-card">
-        <view class="stat-item" @click="scrollToElement('#professional-experience')">
+        <view class="stat-item">
           <text class="stat-value">{{ doctor.workYears }}<text class="stat-unit">年</text></text>
           <text class="stat-label">从业年限</text>
         </view>
         <view class="stat-divider"></view>
-        <view class="stat-item" @click="scrollToElement('#professional-experience')">
+        <view class="stat-item">
           <text class="stat-value">{{ doctor.consultHours }}<text class="stat-unit">h+</text></text>
           <text class="stat-label">咨询时数</text>
         </view>
@@ -92,9 +92,9 @@
             <text class="block-text">{{ doctor.qualification }}</text>
           </view>
 
-          <view class="info-block" id="professional-experience">
-            <text class="block-title">专业经验</text>
-            <text class="block-text">从业 {{ doctor.workYears }} 年 · 累计咨询 {{ doctor.consultHours }} 小时+</text>
+          <view v-if="specialtyText" class="info-block" id="consultation-approach">
+            <text class="block-title">咨询流派</text>
+            <text class="block-text pre-wrap">{{ specialtyText }}</text>
           </view>
           
           <view class="info-block">
@@ -737,6 +737,8 @@ const trainingExperienceText = computed(() =>
   (doctor.value.joiner || '').trim()
 )
 
+const specialtyText = computed(() => (doctor.value.specialty || '').trim())
+
 // 获取路由参数
 const getRouteParams = () => {
   const pages = getCurrentPages()
@@ -750,7 +752,7 @@ const mapDoctorDetail = (item: any): Doctor => {
   return {
     id: Number(item.id || 0),
     name: item.name || '咨询师',
-    specialty: item.specialty || item.field || '心理咨询',
+    specialty: item.specialty || '',
     experience: Number(item.workYears || 0),
     price: Math.round(Number(item.billing || 0) / 100) || item.price || 500,
     needsNegotiation,

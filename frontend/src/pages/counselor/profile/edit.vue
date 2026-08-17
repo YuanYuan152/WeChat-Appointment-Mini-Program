@@ -53,7 +53,7 @@
       </view>
 
       <view class="info-card">
-        <text class="section-title">擅长方向</text>
+        <text class="section-title">咨询流派</text>
         <text class="section-text">{{ profile.specialty || '—' }}</text>
       </view>
 

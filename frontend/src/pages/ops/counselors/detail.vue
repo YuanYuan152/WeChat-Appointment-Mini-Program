@@ -109,8 +109,8 @@
             <input class="input" v-model="form.targetGroup" placeholder="逗号分隔" />
           </view>
           <view class="form-item">
-            <text class="label">擅长方向</text>
-            <textarea class="textarea" v-model="form.specialty" />
+            <text class="label">咨询流派</text>
+            <textarea class="textarea" v-model="form.specialty" placeholder="如精神分析、认知行为等" />
           </view>
           <view class="form-item">
             <text class="label">简介</text>
@@ -125,7 +125,7 @@
             <textarea
               class="textarea"
               v-model="form.trainingExperience"
-              placeholder="每段经历建议单独一行"
+              placeholder="直接填写受训背景，一段或多段均可"
             />
             <text v-if="!form.trainingExperience && detail.career" class="readonly-fallback">
               旧字段只读回退：{{ detail.career }}
