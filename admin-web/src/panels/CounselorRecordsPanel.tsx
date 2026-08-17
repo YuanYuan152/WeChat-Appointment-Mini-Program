@@ -464,7 +464,6 @@ function RecordFormFields({
         ))}
       </div>
 
-      <PhotoSection readonly={readonly} urls={form.photoUrls} />
       {(form.revisions || []).length > 0 && <RevisionHistory revisions={form.revisions || []} />}
 
       <RiskAssessmentFormSection
@@ -691,50 +690,6 @@ function riskLevelToneClass(choice: RiskChoice) {
   if (choice === "A" || choice === "B") return "bg-[#FFF1ED] text-[#A13F37]";
   if (choice === "C") return "bg-[#FFF6DE] text-[#8A6A1E]";
   return "bg-[#EAF4EE] text-[#2F4D42]";
-}
-
-function PhotoSection({ urls, readonly }: { urls: string[]; readonly: boolean }) {
-  const visibleUrls = urls.filter(Boolean);
-  return (
-    <section className="rounded-xl bg-[#FAF8F4] p-4">
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <h4 className="text-sm font-semibold">相关照片</h4>
-          <p className="mt-1 text-xs text-[var(--lxxl-muted)]">可上传咨询相关照片，最多 9 张。</p>
-        </div>
-        <span className="text-xs text-[var(--lxxl-muted)]">{visibleUrls.length}/9</span>
-      </div>
-      {visibleUrls.length === 0 && readonly ? (
-        <p className="mt-4 text-sm text-[var(--lxxl-muted)]">暂无相关照片</p>
-      ) : (
-        <div className="mt-4 grid grid-cols-3 gap-3 sm:grid-cols-4">
-          {visibleUrls.map((url) => {
-            const src = normalizePhotoUrl(url);
-            return (
-              <a
-                key={url}
-                className="group relative block aspect-square overflow-hidden rounded-lg border border-[var(--lxxl-border)] bg-white"
-                href={src}
-                rel="noreferrer"
-                target="_blank"
-              >
-                <img
-                  alt="咨询相关照片"
-                  className="h-full w-full object-cover transition group-hover:scale-105"
-                  src={src}
-                />
-              </a>
-            );
-          })}
-          {!readonly && visibleUrls.length < 9 && (
-            <div className="flex aspect-square items-center justify-center rounded-lg border border-dashed border-[#D6D0C8] bg-white text-2xl text-[var(--lxxl-muted)]">
-              +
-            </div>
-          )}
-        </div>
-      )}
-    </section>
-  );
 }
 
 function RevisionHistory({ revisions }: { revisions: CounselorCaseRecordRevision[] }) {
