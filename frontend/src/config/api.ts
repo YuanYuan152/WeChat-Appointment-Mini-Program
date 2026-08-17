@@ -181,6 +181,8 @@ export const API_ENDPOINTS = {
     rooms: '/api/mini/ops/rooms',
     roomsStatus: '/api/mini/ops/rooms/status',
     roomDetail: (id: number | string) => `/api/mini/ops/rooms/${id}`,
+    updateRoom: (id: number | string) => `/api/mini/ops/rooms/${id}`,
+    deleteRoom: (id: number | string) => `/api/mini/ops/rooms/${id}`,
     roomSlotStatuses: (id: number | string) => `/api/mini/ops/rooms/${id}/slot-statuses`,
     scheduleRoomOptions: (scheduleId: number | string) => `/api/mini/ops/schedules/${scheduleId}/room-options`,
     changeScheduleRoom: (scheduleId: number | string) => `/api/mini/ops/schedules/${scheduleId}/room`,

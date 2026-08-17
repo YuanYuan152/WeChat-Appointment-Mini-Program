@@ -35,7 +35,7 @@ CONSULTATION_ROOMS: dict[str, List[dict[str, str]]] = {
 
 
 def get_consultation_rooms(db: Optional[Session], center_id: str) -> List[dict[str, str]]:
-    """合并静态默认咨询室与数据库配置；数据库记录可覆盖同编号默认房间。"""
+    """合并静态默认咨询室与数据库配置；数据库记录可覆盖或删除默认房间。"""
     if is_video_center(center_id):
         return []
     defaults = [{**room, "status": "AVAILABLE"} for room in CONSULTATION_ROOMS.get(center_id, [])]
@@ -52,6 +52,11 @@ def get_consultation_rooms(db: Optional[Session], center_id: str) -> List[dict[s
             merged: dict[str, dict] = {room["id"]: room for room in defaults}
             ordered_codes = [room["id"] for room in defaults]
             for r in rows:
+                if r.Status == "DELETED":
+                    merged.pop(r.RoomCode, None)
+                    if r.RoomCode in ordered_codes:
+                        ordered_codes.remove(r.RoomCode)
+                    continue
                 if r.RoomCode not in ordered_codes:
                     ordered_codes.append(r.RoomCode)
                 merged[r.RoomCode] = {
@@ -128,6 +133,22 @@ def center_display_name(center_id: Optional[str]) -> Optional[str]:
 def room_display_name(center_id: Optional[str], room_id: Optional[str], db: Optional[Session] = None) -> Optional[str]:
     if not center_id or not room_id:
         return None
+    if db is not None:
+        try:
+            from models import AppConsultationRoom
+
+            row = (
+                db.query(AppConsultationRoom)
+                .filter(
+                    AppConsultationRoom.CenterId == center_id,
+                    AppConsultationRoom.RoomCode == room_id,
+                )
+                .first()
+            )
+            if row:
+                return row.Name
+        except Exception:
+            pass
     for room in get_consultation_rooms(db, center_id):
         if room["id"] == room_id:
             return room["name"]

@@ -53,7 +53,7 @@
         </view>
       </view>
 
-      <!-- 悬浮数据卡片：从业年限 | 咨询时数 | 培训经历（4段） -->
+      <!-- 悬浮数据卡片：从业年限 | 咨询时数 -->
       <view class="stats-card">
         <view class="stat-item" @click="scrollToElement('#professional-experience')">
           <text class="stat-value">{{ doctor.workYears }}<text class="stat-unit">年</text></text>
@@ -63,11 +63,6 @@
         <view class="stat-item" @click="scrollToElement('#professional-experience')">
           <text class="stat-value">{{ doctor.consultHours }}<text class="stat-unit">h+</text></text>
           <text class="stat-label">咨询时数</text>
-        </view>
-        <view class="stat-divider"></view>
-        <view class="stat-item" @click="scrollToElement('#training-experience')">
-          <text class="stat-value">{{ trainingCount }}<text class="stat-unit">段</text></text>
-          <text class="stat-label">培训经历</text>
         </view>
       </view>
 
@@ -103,19 +98,19 @@
           </view>
           
           <view class="info-block">
-            <text class="block-title">专业领域</text>
+            <text class="block-title">咨询领域</text>
             <view class="tag-cloud">
               <text v-for="field in doctorFields" :key="field" class="cloud-tag">{{ field }}</text>
             </view>
           </view>
 
           <view v-if="trainingExperienceText" class="info-block" id="training-experience">
-            <text class="block-title">培训经历</text>
+            <text class="block-title">受训背景</text>
             <text class="block-text pre-wrap">{{ trainingExperienceText }}</text>
           </view>
           
           <view class="info-block">
-            <text class="block-title">服务人群</text>
+            <text class="block-title">擅长人群</text>
             <view class="tag-cloud">
               <text v-for="group in doctorTargetGroups" :key="group" class="cloud-tag alt">{{ group }}</text>
             </view>
@@ -533,7 +528,6 @@ interface Doctor {
   career: string
   joiner: string
   trainingExperience: string
-  trainingCount: number
   qualification: string
   field: string
   targetGroup: string
@@ -569,7 +563,6 @@ const doctor = ref<Doctor>({
   career: '',
   joiner: '',
   trainingExperience: '',
-  trainingCount: 0,
   qualification: '',
   field: '',
   targetGroup: '',
@@ -738,40 +731,11 @@ const doctorTargetGroups = computed(() => {
   return doctor.value.targetGroup ? doctor.value.targetGroup.split(',').map(g => g.trim()) : []
 })
 
-const parseTrainingSegments = (raw?: string): string[] => {
-  const text = raw?.trim()
-  if (!text) return []
-
-  let parts = text.split(/\n+/).map(p => p.trim()).filter(Boolean)
-  if (parts.length <= 1) {
-    parts = text.split(/[;；|｜]/).map(p => p.trim()).filter(Boolean)
-  }
-  if (parts.length <= 1) {
-    parts = text.split(/[。！？.!?]+/).map(p => p.trim()).filter(p => p.length > 1)
-  }
-  if (parts.length <= 1) {
-    parts = [text]
-  }
-  return parts
-}
-
 const trainingExperienceText = computed(() =>
   (doctor.value.trainingExperience || '').trim() ||
   (doctor.value.career || '').trim() ||
   (doctor.value.joiner || '').trim()
 )
-
-const trainingCount = computed(() => {
-  if (doctor.value.trainingCount != null && doctor.value.trainingCount > 0) {
-    return doctor.value.trainingCount
-  }
-  const merged = trainingExperienceText.value
-  if (!merged) return 0
-  if (/^\d+$/.test(merged)) return Number(merged)
-  const match = merged.match(/(\d+)\s*段/)
-  if (match) return Number(match[1])
-  return parseTrainingSegments(merged).length
-})
 
 // 获取路由参数
 const getRouteParams = () => {
@@ -800,7 +764,6 @@ const mapDoctorDetail = (item: any): Doctor => {
     career: item.career || '',
     joiner: item.joiner || '',
     trainingExperience: item.trainingExperience || '',
-    trainingCount: Number(item.trainingCount ?? item.trainingSegments ?? 0) || 0,
     qualification: item.qualification || '暂无资质信息',
     field: item.field || item.specialty || '',
     targetGroup: item.targetGroup || '成人,青少年,亲子家庭',

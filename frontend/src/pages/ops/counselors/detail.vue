@@ -101,11 +101,11 @@
             </picker>
           </view>
           <view class="form-item">
-            <text class="label">专业领域</text>
+            <text class="label">咨询领域</text>
             <input class="input" v-model="form.field" placeholder="逗号分隔" />
           </view>
           <view class="form-item">
-            <text class="label">服务人群</text>
+            <text class="label">擅长人群</text>
             <input class="input" v-model="form.targetGroup" placeholder="逗号分隔" />
           </view>
           <view class="form-item">
@@ -121,7 +121,7 @@
             <textarea class="textarea" v-model="form.qualification" />
           </view>
           <view class="form-item">
-            <text class="label">培训经历</text>
+            <text class="label">受训背景</text>
             <textarea
               class="textarea"
               v-model="form.trainingExperience"

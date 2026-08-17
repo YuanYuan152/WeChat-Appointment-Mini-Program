@@ -35,7 +35,7 @@
           <text class="value">{{ displayHours(profile.consultHours) }}</text>
         </view>
         <view class="info-row">
-          <text class="label">培训经历</text>
+          <text class="label">受训背景</text>
           <text class="value">{{ profile.trainingExperience || profile.career || '—' }}</text>
         </view>
         <view class="info-row">
@@ -43,11 +43,11 @@
           <text class="value">{{ profile.mode || '—' }}</text>
         </view>
         <view class="info-row">
-          <text class="label">专业领域</text>
+          <text class="label">咨询领域</text>
           <text class="value">{{ profile.field || '—' }}</text>
         </view>
         <view class="info-row">
-          <text class="label">服务人群</text>
+          <text class="label">擅长人群</text>
           <text class="value">{{ profile.targetGroup || '—' }}</text>
         </view>
       </view>

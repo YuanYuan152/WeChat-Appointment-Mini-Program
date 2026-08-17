@@ -242,14 +242,17 @@ const headerPlaceholderPx = ref((_sys.statusBarHeight || 0) + uni.upx2px(88 + 12
 
 const activeFilter = ref<'sort' | 'gender' | 'method' | ''>('')
 const sortOptions = [
+  { label: '不限', value: '' },
   { label: '价格从低到高', value: 'price_asc' },
   { label: '价格从高到低', value: 'price_desc' },
 ]
 const genderOptions = [
+  { label: '不限', value: '' },
   { label: '男咨询师', value: '男' },
   { label: '女咨询师', value: '女' },
 ]
 const methodOptions = [
+  { label: '不限', value: '' },
   { label: '面询', value: 'offline' },
   { label: '视频咨询', value: 'online' },
 ]

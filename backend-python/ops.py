@@ -19,7 +19,7 @@ from datetime import datetime, time, date as date_type, timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.exc import ProgrammingError, OperationalError
 from sqlalchemy.orm import Session
@@ -751,14 +751,14 @@ def ops_counselor_schedule_calendar(
 
 class RoomCreate(BaseModel):
     center_id: str
-    name: str
+    name: str = Field(..., min_length=1, max_length=100)
     room_code: Optional[str] = None
     status: Optional[str] = "AVAILABLE"
     sort_order: Optional[int] = 0
 
 
 class RoomUpdate(BaseModel):
-    name: Optional[str] = None
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
     status: Optional[str] = None
     sort_order: Optional[int] = None
 
@@ -864,7 +864,7 @@ def get_room_detail(
     db: Session = Depends(get_db),
 ):
     row = db.query(AppConsultationRoom).filter(AppConsultationRoom.Id == room_id).first()
-    if not row:
+    if not row or row.Status == "DELETED":
         raise HTTPException(status_code=404, detail="咨询室不存在")
 
     today = china_now().date()
@@ -963,7 +963,7 @@ def save_room_slot_statuses(
     db: Session = Depends(get_db),
 ):
     row = db.query(AppConsultationRoom).filter(AppConsultationRoom.Id == room_id).first()
-    if not row:
+    if not row or row.Status == "DELETED":
         raise HTTPException(status_code=404, detail="咨询室不存在")
     if not body.slots:
         raise HTTPException(status_code=400, detail="请至少提交一个时段状态")
@@ -1140,10 +1140,26 @@ def create_room(
     if body.center_id not in CENTER_NAMES:
         raise HTTPException(status_code=400, detail="无效的预约中心")
 
-    room_code = body.room_code
+    name = body.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="请输入咨询室名称")
+
+    room_code = (body.room_code or "").strip() or None
     if not room_code:
-        existing = get_consultation_rooms(db, body.center_id)
-        room_code = f"{body.center_id}-r{len(existing) + 1}"
+        prefix = f"{body.center_id}-r"
+        existing_codes = {
+            code
+            for (code,) in (
+                db.query(AppConsultationRoom.RoomCode)
+                .filter(AppConsultationRoom.CenterId == body.center_id)
+                .all()
+            )
+        }
+        existing_codes.update(room["id"] for room in get_consultation_rooms(db, body.center_id))
+        room_number = 1
+        while f"{prefix}{room_number}" in existing_codes:
+            room_number += 1
+        room_code = f"{prefix}{room_number}"
 
     dup = (
         db.query(AppConsultationRoom)
@@ -1163,7 +1179,7 @@ def create_room(
     row = AppConsultationRoom(
         CenterId=body.center_id,
         RoomCode=room_code,
-        Name=body.name,
+        Name=name,
         Status=status,
         SortOrder=body.sort_order or 0,
     )
@@ -1187,7 +1203,7 @@ def update_room(
     db: Session = Depends(get_db),
 ):
     row = db.query(AppConsultationRoom).filter(AppConsultationRoom.Id == room_id).first()
-    if not row:
+    if not row or row.Status == "DELETED":
         raise HTTPException(status_code=404, detail="咨询室不存在")
 
     if body.status is not None:
@@ -1202,7 +1218,10 @@ def update_room(
         row.Status = body.status
 
     if body.name is not None:
-        row.Name = body.name
+        name = body.name.strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="请输入咨询室名称")
+        row.Name = name
     if body.sort_order is not None:
         row.SortOrder = body.sort_order
 
@@ -1216,3 +1235,93 @@ def update_room(
         "name": row.Name,
         "status": row.Status,
     }
+
+
+TERMINAL_CONSULTATION_STATUSES = ("DONE", "CANCELLED", "CANCELED")
+
+
+def _note_matches_room(note: Optional[str], center_id: str, room_code: str) -> bool:
+    return parse_center_id(note) == center_id and parse_room_id(note) == room_code
+
+
+def _room_has_unfinished_booking(
+    db: Session,
+    center_id: str,
+    room_code: str,
+) -> bool:
+    """未完成咨询、待支付订单或异常的已预约排期均阻止删除咨询室。"""
+    active_consultations = (
+        db.query(AppConsultation)
+        .filter(~AppConsultation.Status.in_(TERMINAL_CONSULTATION_STATUSES))
+        .all()
+    )
+    active_schedule_ids = {
+        row.ScheduleId for row in active_consultations if row.ScheduleId is not None
+    }
+    schedules_by_id = {
+        row.Id: row
+        for row in (
+            db.query(AppSchedule)
+            .filter(AppSchedule.Id.in_(active_schedule_ids))
+            .all()
+            if active_schedule_ids
+            else []
+        )
+    }
+    for consultation in active_consultations:
+        schedule = schedules_by_id.get(consultation.ScheduleId)
+        if _note_matches_room(consultation.Note, center_id, room_code) or (
+            schedule and _note_matches_room(schedule.Note, center_id, room_code)
+        ):
+            return True
+
+    pending_orders = (
+        db.query(AppOrder)
+        .filter(AppOrder.Status == "PENDING", AppOrder.SlotId.isnot(None))
+        .all()
+    )
+    pending_schedule_ids = {row.SlotId for row in pending_orders if row.SlotId is not None}
+    if pending_schedule_ids:
+        pending_schedules = (
+            db.query(AppSchedule)
+            .filter(AppSchedule.Id.in_(pending_schedule_ids))
+            .all()
+        )
+        if any(_note_matches_room(row.Note, center_id, room_code) for row in pending_schedules):
+            return True
+
+    linked_schedule_ids = {
+        schedule_id
+        for (schedule_id,) in (
+            db.query(AppConsultation.ScheduleId)
+            .filter(AppConsultation.ScheduleId.isnot(None))
+            .all()
+        )
+    }
+    orphan_booked_schedules = db.query(AppSchedule).filter(AppSchedule.Status == "BOOKED").all()
+    return any(
+        row.Id not in linked_schedule_ids
+        and _note_matches_room(row.Note, center_id, room_code)
+        for row in orphan_booked_schedules
+    )
+
+
+@router.delete("/rooms/{room_id}", summary="删除咨询室")
+def delete_room(
+    room_id: int,
+    _ops: AppAccount = Depends(require_ops),
+    db: Session = Depends(get_db),
+):
+    row = db.query(AppConsultationRoom).filter(AppConsultationRoom.Id == room_id).first()
+    if not row or row.Status == "DELETED":
+        raise HTTPException(status_code=404, detail="咨询室不存在")
+    if _room_has_unfinished_booking(db, row.CenterId, row.RoomCode):
+        raise HTTPException(
+            status_code=400,
+            detail="该咨询室存在未完成的咨询订单，暂不能删除",
+        )
+
+    row.Status = "DELETED"
+    row.UpdatedAt = datetime.utcnow()
+    db.commit()
+    return {"msg": "咨询室已删除"}

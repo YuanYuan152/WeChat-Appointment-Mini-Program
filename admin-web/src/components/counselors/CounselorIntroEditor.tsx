@@ -393,7 +393,7 @@ export function CounselorIntroEditor({
       <section>
         <h4 className="text-sm font-semibold">介绍页内容</h4>
         <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <QueryField label="专业领域">
+          <QueryField label="咨询领域">
             <input
               className={queryControlClass}
               placeholder="逗号分隔"
@@ -401,7 +401,7 @@ export function CounselorIntroEditor({
               onChange={(event) => updateDraft("field", event.target.value)}
             />
           </QueryField>
-          <QueryField label="服务人群">
+          <QueryField label="擅长人群">
             <input
               className={queryControlClass}
               placeholder="逗号分隔"
@@ -430,7 +430,7 @@ export function CounselorIntroEditor({
               onChange={(event) => updateDraft("qualification", event.target.value)}
             />
           </QueryField>
-          <QueryField className="sm:col-span-2" label="培训经历">
+          <QueryField className="sm:col-span-2" label="受训背景">
             <textarea
               className={`${queryControlClass} h-32 resize-y py-3`}
               placeholder="每段经历建议单独一行"
