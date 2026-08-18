@@ -149,101 +149,116 @@
     </view>
     </template>
 
-    <!-- 新建排期 -->
-    <view v-if="showAdd" class="modal-overlay" @touchmove.stop.prevent>
-      <view class="modal-card" @tap.stop @touchmove.stop.prevent>
-        <text class="modal-title">新建排期</text>
-        <text class="modal-sub">{{ addModalSub }}</text>
+    <!-- 新建排期：真机 view overflow 无法滚动，且 touchmove.prevent 会把下滑吃掉 -->
+    <root-portal v-if="showAdd">
+      <view class="modal-overlay" @touchmove.stop.prevent>
+        <view class="modal-card sheet-modal-card" @tap.stop>
+          <scroll-view
+            class="sheet-modal-scroll"
+            scroll-y
+            enhanced
+            :show-scrollbar="true"
+            :enable-flex="true"
+            @touchmove.stop
+          >
+            <view class="sheet-modal-content">
+              <text class="modal-title">新建排期</text>
+              <text class="modal-sub">{{ addModalSub }}</text>
 
-        <view class="form-item">
-          <text class="form-label">预约中心</text>
-          <view class="center-row">
-            <view
-              v-for="c in centers"
-              :key="c.id"
-              class="center-chip"
-              :class="{ active: form.centerId === c.id }"
-              @tap="onCenterChange(c.id)"
-            >{{ c.name }}</view>
+              <view class="form-item">
+                <text class="form-label">预约中心</text>
+                <view class="center-row">
+                  <view
+                    v-for="c in centers"
+                    :key="c.id"
+                    class="center-chip"
+                    :class="{ active: form.centerId === c.id }"
+                    @tap="onCenterChange(c.id)"
+                  >{{ c.name }}</view>
+                </view>
+              </view>
+
+              <view class="form-item" @tap.stop>
+                <text class="form-label">日期</text>
+                <picker mode="date" :value="form.date" :start="minDate" :end="maxDate" @change="onDateChange">
+                  <view class="picker-row" hover-class="none">{{ form.date || '选择日期' }}</view>
+                </picker>
+              </view>
+
+              <view class="form-item">
+                <text class="form-label">开始时间</text>
+                <view v-if="slotOptionsLoading" class="picker-row">加载时段...</view>
+                <view v-else class="slot-grid">
+                  <view
+                    v-for="ts in timeSlotOptions"
+                    :key="ts.key"
+                    class="slot-chip"
+                    :class="{
+                      active: form.slotKey === ts.key,
+                      disabled: ts.tooSoon || ts.allRoomsFull || ts.counselorOccupied,
+                    }"
+                    @tap="selectTimeSlot(ts)"
+                  >{{ ts.key }}{{ scheduleSlotChipHint(ts) }}</view>
+                </view>
+                <text class="form-hint">支持整点和半点开始；咨询 50 分钟，随后预留 10 分钟打扫</text>
+              </view>
+
+              <view v-if="selectedTimeSlot" class="duration-card">
+                <text class="duration-title">本次排期</text>
+                <text class="duration-text">{{ bookingDurationText(selectedTimeSlot.startTime) }}</text>
+              </view>
+
+              <view v-if="!isVideoCenterSelected" class="form-item">
+                <text class="form-label">咨询室偏好</text>
+                <view class="center-row">
+                  <view
+                    class="center-chip"
+                    :class="{ active: form.roomId === NO_PREF }"
+                    @tap="selectNoPref"
+                  >无偏好</view>
+                  <view
+                    v-for="room in roomOptionsForSlot"
+                    :key="room.roomId"
+                    class="center-chip"
+                    :class="{
+                      active: form.roomId === room.roomId,
+                      disabled: !room.available,
+                    }"
+                    @tap="selectRoom(room)"
+                  >{{ room.roomName }}{{ roomLabel(room) }}</view>
+                </view>
+              </view>
+
+              <view v-else class="form-item video-center-hint">
+                <text class="form-label">咨询室</text>
+                <text class="video-hint-text">视频咨询无需选择咨询室，预约成功后也不占用线下咨询室。</text>
+              </view>
+            </view>
+          </scroll-view>
+
+          <view class="modal-btns sheet-modal-btns">
+            <button class="modal-btn cancel" @tap.stop="showAdd = false">取消</button>
+            <button class="modal-btn confirm" :disabled="submitting" @tap.stop="submitSlot">
+              {{ submitting ? '保存中...' : '保存排期' }}
+            </button>
           </view>
-        </view>
-
-        <view class="form-item" @tap.stop>
-          <text class="form-label">日期</text>
-          <picker mode="date" :value="form.date" :start="minDate" :end="maxDate" @change="onDateChange">
-            <view class="picker-row" hover-class="none">{{ form.date || '选择日期' }}</view>
-          </picker>
-        </view>
-
-        <view class="form-item">
-          <text class="form-label">开始时间</text>
-          <view v-if="slotOptionsLoading" class="picker-row">加载时段...</view>
-          <view v-else class="slot-grid">
-            <view
-              v-for="ts in timeSlotOptions"
-              :key="ts.key"
-              class="slot-chip"
-              :class="{
-                active: form.slotKey === ts.key,
-                disabled: ts.tooSoon || ts.allRoomsFull || ts.counselorOccupied,
-              }"
-              @tap="selectTimeSlot(ts)"
-            >{{ ts.key }}{{ scheduleSlotChipHint(ts) }}</view>
-          </view>
-          <text class="form-hint">支持整点和半点开始；咨询 50 分钟，随后预留 10 分钟打扫</text>
-        </view>
-
-        <view v-if="selectedTimeSlot" class="duration-card">
-          <text class="duration-title">本次排期</text>
-          <text class="duration-text">{{ bookingDurationText(selectedTimeSlot.startTime) }}</text>
-        </view>
-
-        <view v-if="!isVideoCenterSelected" class="form-item">
-          <text class="form-label">咨询室偏好</text>
-          <view class="center-row">
-            <view
-              class="center-chip"
-              :class="{ active: form.roomId === NO_PREF }"
-              @tap="selectNoPref"
-            >无偏好</view>
-            <view
-              v-for="room in roomOptionsForSlot"
-              :key="room.roomId"
-              class="center-chip"
-              :class="{
-                active: form.roomId === room.roomId,
-                disabled: !room.available,
-              }"
-              @tap="selectRoom(room)"
-            >{{ room.roomName }}{{ roomLabel(room) }}</view>
-          </view>
-        </view>
-
-        <view v-else class="form-item video-center-hint">
-          <text class="form-label">咨询室</text>
-          <text class="video-hint-text">视频咨询无需选择咨询室，预约成功后也不占用线下咨询室。</text>
-        </view>
-
-        <view class="modal-btns">
-          <button class="modal-btn cancel" @tap.stop="showAdd = false">取消</button>
-          <button class="modal-btn confirm" :disabled="submitting" @tap.stop="submitSlot">
-            {{ submitting ? '保存中...' : '保存排期' }}
-          </button>
         </view>
       </view>
-    </view>
+    </root-portal>
 
     <!-- 代理预约 -->
-    <view v-if="showProxy" class="modal-overlay" @touchmove.stop.prevent>
-      <view class="modal-card proxy-modal-card" @tap.stop>
-        <scroll-view
-          class="proxy-modal-scroll"
-          scroll-y
-          enhanced
-          :show-scrollbar="false"
-          @touchmove.stop
-        >
-          <view class="proxy-modal-content">
+    <root-portal v-if="showProxy">
+      <view class="modal-overlay" @touchmove.stop.prevent>
+        <view class="modal-card sheet-modal-card" @tap.stop>
+          <scroll-view
+            class="sheet-modal-scroll"
+            scroll-y
+            enhanced
+            :show-scrollbar="true"
+            :enable-flex="true"
+            @touchmove.stop
+          >
+            <view class="sheet-modal-content">
             <text class="modal-title">代理预约</text>
             <text class="modal-sub">为已签约来访推送待支付订单，{{ proxyOrderPayHint }}</text>
 
@@ -334,16 +349,17 @@
               <text class="video-hint-text">视频咨询无需选择咨询室</text>
             </view>
           </view>
-        </scroll-view>
+          </scroll-view>
 
-        <view class="modal-btns proxy-modal-btns">
-          <button class="modal-btn cancel" @tap.stop="showProxy = false">取消</button>
-          <button class="modal-btn confirm" :disabled="proxySubmitting || !canPushProxyOrder" @tap.stop="submitProxyOrder">
-            {{ proxySubmitting ? '推送中...' : '推送订单' }}
-          </button>
+          <view class="modal-btns sheet-modal-btns">
+            <button class="modal-btn cancel" @tap.stop="showProxy = false">取消</button>
+            <button class="modal-btn confirm" :disabled="proxySubmitting || !canPushProxyOrder" @tap.stop="submitProxyOrder">
+              {{ proxySubmitting ? '推送中...' : '推送订单' }}
+            </button>
+          </view>
         </view>
       </view>
-    </view>
+    </root-portal>
 
     <!-- 请假详情 -->
     <view v-if="showLeaveDetail" class="notice-overlay" @touchmove.stop.prevent>
@@ -1676,14 +1692,23 @@ defineExpose({ refresh, focusScheduleId, applyListFilter, getUnrecordedCount })
 .empty-card { background: #fff; border-radius: 20rpx; padding: 48rpx; text-align: center; }
 .empty-text { font-size: 26rpx; color: #9CA3AF; }
 .modal-overlay {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.45);
-  display: flex; align-items: flex-end; z-index: 100;
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: flex-end;
+  z-index: 1000;
 }
 .modal-card {
   width: 100%; background: #fff; border-radius: 32rpx 32rpx 0 0;
-  padding: 40rpx 32rpx 48rpx; max-height: 85vh; overflow-y: auto;
+  padding: 40rpx 32rpx 48rpx;
 }
-.proxy-modal-card {
+.sheet-modal-card {
   height: 85vh;
   max-height: 85vh;
   display: flex;
@@ -1692,16 +1717,17 @@ defineExpose({ refresh, focusScheduleId, applyListFilter, getUnrecordedCount })
   padding: 0;
   overflow: hidden;
 }
-.proxy-modal-scroll {
+.sheet-modal-scroll {
   flex: 1;
   min-height: 0;
+  height: 0;
   width: 100%;
 }
-.proxy-modal-content {
+.sheet-modal-content {
   padding: 40rpx 32rpx 24rpx;
   box-sizing: border-box;
 }
-.proxy-modal-btns {
+.sheet-modal-btns {
   flex-shrink: 0;
   margin-top: 0;
   padding: 20rpx 32rpx calc(20rpx + env(safe-area-inset-bottom));
