@@ -50,7 +50,7 @@
 import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useUserStore } from '@/store/user'
-import { resolveAccountRole } from '@/constants/roles'
+import { resolveAccountRole, canManageStaffOperationalSettings } from '@/constants/roles'
 import {
   buildProxyOrderTtlHourOptions,
   buildProxyOrderTtlMinuteOptions,
@@ -93,10 +93,10 @@ const syncPickerFromMinutes = (minutes: number) => {
   draftMinutes.value = proxyOrderTtlPickerToMinutes(picked.hour, picked.minute)
 }
 
-const ensureAdmin = () => {
+const ensureStaffSettingsAccess = () => {
   const role = userStore.activeRole || resolveAccountRole(userStore.roles)
-  if (role !== 'Admin') {
-    uni.showToast({ title: '仅管理员可访问', icon: 'none' })
+  if (!canManageStaffOperationalSettings(role)) {
+    uni.showToast({ title: '无权限访问', icon: 'none' })
     setTimeout(() => uni.navigateBack(), 600)
     return false
   }
@@ -104,7 +104,7 @@ const ensureAdmin = () => {
 }
 
 const load = async () => {
-  if (!ensureAdmin()) return
+  if (!ensureStaffSettingsAccess()) return
   loading.value = true
   try {
     const data = await fetchAdminSystemSettings()

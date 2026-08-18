@@ -28,6 +28,11 @@ export function canManageRole(currentRoles: Role[] = [], role: Role) {
   return getManageableRoles(currentRoles).some((option) => option.value === role);
 }
 
+/** 可编辑咨询师介绍页、调整代理预约待支付时限 */
+export function canManageStaffOperationalSettings(roles: Role[] = []) {
+  return roles.some((role) => role === "Admin" || role === "Ops" || role === "Assistant");
+}
+
 export const PATIENT_SOURCE_OPTIONS = [
   { value: "CHARITY", label: "公益" },
   { value: "PROFESSIONAL", label: "正价" },

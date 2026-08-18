@@ -6,6 +6,7 @@ import { fetchCounselorBoard, fetchCounselorBoardDetail, updateStaffRemark } fro
 import { fetchAdminCounselorIntro, updateAdminCounselorIntro } from "@/services/adminCounselors";
 import { AppRoute, useAppRoute } from "@/components/AppRoute";
 import { CounselorBoardPanel } from "@/panels/CounselorBoardPanel";
+import { canManageStaffOperationalSettings } from "@/config/userRoleMeta";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
 import type {
   AdminCounselorIntroProfile,
@@ -23,7 +24,8 @@ export function CounselorBoardScreen() {
 }
 
 function CounselorBoardScreenContent() {
-  const { clearNotice, isAdmin, refreshKey, showNotice } = useAppRoute();
+  const { clearNotice, currentUser, refreshKey, showNotice } = useAppRoute();
+  const canEditIntro = canManageStaffOperationalSettings(currentUser.roles);
   const [data, setData] = useState<ScreenData>({});
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
@@ -153,8 +155,8 @@ function CounselorBoardScreenContent() {
   }, []);
 
   const openIntroEditor = useCallback(async (accountId: number) => {
-    if (!isAdmin) {
-      showNotice("error", "只有管理员可以编辑咨询师介绍页");
+    if (!canEditIntro) {
+      showNotice("error", "当前角色无法编辑咨询师介绍页");
       return;
     }
     const requestSeq = introRequestSeq.current + 1;
@@ -181,7 +183,7 @@ function CounselorBoardScreenContent() {
         setIntroLoading(false);
       }
     }
-  }, [isAdmin, showNotice]);
+  }, [canEditIntro, showNotice]);
 
   const closeIntroEditor = useCallback(() => {
     introRequestSeq.current += 1;
@@ -289,7 +291,7 @@ function CounselorBoardScreenContent() {
       onPageSizeChange={changePageSize}
       onOpen={openCounselorDetail}
       onCloseDetail={closeDetail}
-      canEditIntro={isAdmin}
+      canEditIntro={canEditIntro}
       introProfile={introProfile}
       introLoading={introLoading}
       introSaving={introSaving}

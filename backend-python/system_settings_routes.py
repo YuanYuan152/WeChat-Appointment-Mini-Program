@@ -1,4 +1,4 @@
-"""系统设置 API（读取 / 管理员修改）。"""
+"""系统设置 API（读取 / 工作人员修改）。"""
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -60,11 +60,11 @@ def register_system_settings_routes(
     @admin_router.put(
         "/system-settings/proxy-order-ttl",
         response_model=SystemSettingsOut,
-        summary="调整代理预约待支付时限（管理员）",
+        summary="调整代理预约待支付时限（管理工作台）",
     )
     def update_proxy_order_ttl(
         body: UpdateProxyOrderTtlRequest,
-        admin: AppAccount = Depends(require_admin),
+        admin: AppAccount = Depends(require_staff_workbench),
         db: Session = Depends(get_db),
     ):
         try:

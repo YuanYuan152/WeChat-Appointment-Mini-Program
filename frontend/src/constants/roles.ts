@@ -93,3 +93,8 @@ export function roleLabel(role: string): string {
 export function usesOpsWorkbench(role: string): boolean {
   return (STAFF_OPS_WORKBENCH_ROLES as readonly string[]).includes(role)
 }
+
+/** 可编辑咨询师介绍页、调整代理预约待支付时限等一线运营设置 */
+export function canManageStaffOperationalSettings(role: string): boolean {
+  return usesOpsWorkbench(role)
+}
