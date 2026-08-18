@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     APP_ENV: Literal["development", "test", "production"] = "development"
     APP_VERSION: str = "2.0"
     ALLOW_DEV_LOGIN: bool = True
+    # 部署侧开关（compose 已注入）。true 时即使商户凭证齐全也允许 simulate-pay。
+    ALLOW_SIMULATED_PAYMENT: bool = False
     AUTO_MIGRATE_SCHEMA: bool = True
     CORS_ALLOWED_ORIGINS: str = _DEVELOPMENT_CORS_ORIGINS
     ENABLE_API_DOCS: bool = True
