@@ -326,6 +326,8 @@ interface TimeSlotOption {
   label: string
   selectable: boolean
   past?: boolean
+  tooSoon?: boolean
+  unavailableReason?: string
   counselorOccupied?: boolean
   existingAvailableScheduleId?: number | null
   startTime: string
@@ -497,6 +499,7 @@ const bookingDurationText = (startTime: string) => {
 }
 
 const slotChipHint = (ts: TimeSlotOption) => {
+  if (ts.tooSoon) return '（不足90分钟）'
   if (ts.past) return '（已过）'
   if (ts.counselorOccupied && !ts.existingAvailableScheduleId) return '（已预约）'
   if (ts.existingAvailableScheduleId) return '（可约）'
@@ -674,7 +677,12 @@ const onDateChange = (e: { detail: { value: string } }) => {
 }
 
 const selectTimeSlot = (ts: TimeSlotOption) => {
-  if (!ts.selectable) return
+  if (!ts.selectable) {
+    if (ts.unavailableReason) {
+      uni.showToast({ title: ts.unavailableReason, icon: 'none' })
+    }
+    return
+  }
   form.value.slotKey = ts.key
   form.value.startTime = ts.startTime
   form.value.endTime = ts.endTime

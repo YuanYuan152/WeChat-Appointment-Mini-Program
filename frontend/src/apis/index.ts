@@ -88,19 +88,20 @@ export const doctorApi = {
         specialty?: string
         page?: number
         pageSize?: number
-        /** 仅 VITE_USE_BOOKING_MOCK 时使用，不会发给真实 GetDoctorList */
-        priceRange?: string
         sort?: string
         gender?: string
         consultMethod?: string
     }, config?: Partial<RequestConfig>) => {
-        const { priceRange: _pr, sort: _so, gender: _ge, consultMethod: _cm, ...apiParams } = params || {}
+        const apiParams = params || {}
         return httpV2.get<any>(
             API_ENDPOINTS.common.counselors,
             {
                 keyword: apiParams.keyword,
                 page: apiParams.page || 1,
                 page_size: apiParams.pageSize || 20,
+                sort: apiParams.sort,
+                gender: apiParams.gender,
+                consult_method: apiParams.consultMethod,
             },
             { showLoading: false, ...config },
         ).then((res) => {

@@ -22,6 +22,34 @@
           <text class="value">{{ genderLabel(detail.gender) }}</text>
         </view>
         <view class="info-row">
+          <text class="label">来访类型</text>
+          <picker
+            class="value"
+            :disabled="sourceSaving"
+            :range="patientSourceLabels"
+            :value="patientSourceIndex"
+            @change="changePatientSource"
+          >
+            <view class="picker-value">
+              {{ patientSourceLabel || '请选择来访类型' }} <text class="picker-arrow">▾</text>
+            </view>
+          </picker>
+        </view>
+        <view class="info-row">
+          <text class="label">来访来源</text>
+          <picker
+            class="value"
+            :disabled="sourceSaving"
+            :range="patientSourceDetailOptions"
+            :value="patientSourceDetailIndex"
+            @change="changePatientSourceDetail"
+          >
+            <view class="picker-value">
+              {{ patientSourceDetail || '请选择来访来源' }} <text class="picker-arrow">▾</text>
+            </view>
+          </picker>
+        </view>
+        <view class="info-row">
           <text class="label">是否签约</text>
           <text class="value">{{ isContractSignedLabel(detail.isContractSigned) }}</text>
         </view>
@@ -164,6 +192,10 @@ import ConsultationFeedbackDisplay from '@/components/ConsultationFeedbackDispla
 import StaffRemarkEditor from '@/components/StaffRemarkEditor.vue'
 import PatientContractBadge from '@/components/PatientContractBadge.vue'
 import { boundCounselorLabel, isContractSignedLabel } from '@/utils/patientContract'
+import {
+  PATIENT_SOURCE_DETAIL_OPTIONS,
+  PATIENT_SOURCE_OPTIONS,
+} from '@/constants/userRoleMeta'
 
 interface ConsultationItem {
   consultationId: number
@@ -198,6 +230,9 @@ interface PatientDetail {
   gender?: string
   roleLabel?: string
   typeLabel?: string
+  patientSource?: string
+  patientSourceLabel?: string
+  patientSourceDetail?: string
   isContractSigned?: boolean
   boundCounselorId?: number | null
   boundCounselorName?: string | null
@@ -236,8 +271,22 @@ const bindSaving = ref(false)
 const counselorKeyword = ref('')
 const counselorOptions = ref<CounselorOption[]>([])
 const selectedCounselorId = ref<number | null>(null)
+const sourceSaving = ref(false)
+const patientSource = ref('')
+const patientSourceDetail = ref('')
+const patientSourceLabels = PATIENT_SOURCE_OPTIONS.map(option => option.label)
+const patientSourceDetailOptions = [...PATIENT_SOURCE_DETAIL_OPTIONS]
 
 const activeTabLabel = computed(() => tabs.find(t => t.value === activeTab.value)?.label || '')
+const patientSourceLabel = computed(
+  () => PATIENT_SOURCE_OPTIONS.find(option => option.value === patientSource.value)?.label || '',
+)
+const patientSourceIndex = computed(
+  () => Math.max(0, PATIENT_SOURCE_OPTIONS.findIndex(option => option.value === patientSource.value)),
+)
+const patientSourceDetailIndex = computed(
+  () => Math.max(0, patientSourceDetailOptions.indexOf(patientSourceDetail.value as typeof PATIENT_SOURCE_DETAIL_OPTIONS[number])),
+)
 
 const filteredConsultations = computed(() => {
   if (!detail.value) return []
@@ -297,6 +346,45 @@ const closeBindCounselor = () => {
   showBindModal.value = false
 }
 
+const savePatientSource = async (
+  payload: { patientSource?: string; patientSourceDetail?: string },
+) => {
+  if (!patientIdRef.value || sourceSaving.value) return
+  sourceSaving.value = true
+  try {
+    const res = await httpV2.put(
+      API_ENDPOINTS.admin.patientSource(patientIdRef.value),
+      payload,
+    )
+    if (res.code !== 0) {
+      throw new Error(res.msg || '保存失败')
+    }
+    if (payload.patientSource !== undefined) patientSource.value = payload.patientSource
+    if (payload.patientSourceDetail !== undefined) patientSourceDetail.value = payload.patientSourceDetail
+    if (detail.value) {
+      detail.value.patientSource = patientSource.value
+      detail.value.patientSourceLabel = patientSourceLabel.value
+      detail.value.patientSourceDetail = patientSourceDetail.value
+      detail.value.typeLabel = patientSourceLabel.value
+    }
+    uni.showToast({ title: '来访信息已保存', icon: 'success' })
+  } catch {
+    uni.showToast({ title: '保存失败', icon: 'none' })
+  } finally {
+    sourceSaving.value = false
+  }
+}
+
+const changePatientSource = (event: { detail: { value: string | number } }) => {
+  const option = PATIENT_SOURCE_OPTIONS[Number(event.detail.value)]
+  if (option) void savePatientSource({ patientSource: option.value })
+}
+
+const changePatientSourceDetail = (event: { detail: { value: string | number } }) => {
+  const option = patientSourceDetailOptions[Number(event.detail.value)]
+  if (option) void savePatientSource({ patientSourceDetail: option })
+}
+
 const saveBindCounselor = async (counselorId: number | null) => {
   if (!patientIdRef.value) return
   if (counselorId !== null && !counselorId) {
@@ -342,6 +430,8 @@ onLoad(async (opts) => {
     if (res.code === 0 && res.data) {
       detail.value = res.data
       staffRemark.value = res.data.staffRemark || ''
+      patientSource.value = res.data.patientSource || ''
+      patientSourceDetail.value = res.data.patientSourceDetail || ''
     }
   } finally {
     loading.value = false
@@ -379,6 +469,8 @@ onLoad(async (opts) => {
 .info-row { display: flex; gap: 24rpx; padding: 10rpx 0; }
 .label { font-size: 26rpx; color: #8A8A8A; width: 160rpx; flex-shrink: 0; }
 .value { flex: 1; font-size: 26rpx; color: #2C2C2C; line-height: 1.5; }
+.picker-value { min-height: 39rpx; color: #2C2C2C; }
+.picker-arrow { color: #9CA3AF; margin-left: 8rpx; }
 .feedback-entry {
   display: flex;
   align-items: center;

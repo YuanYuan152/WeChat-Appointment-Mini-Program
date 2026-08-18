@@ -66,6 +66,15 @@
             <text class="reason-label">申请原因</text>
             <text class="reason-text">{{ exemptionDetail.reason }}</text>
           </view>
+          <view v-if="exemptionDetail.screenshotUrl" class="screenshot-box">
+            <text class="reason-label">申请凭证</text>
+            <image
+              class="screenshot"
+              :src="fixImageUrl(exemptionDetail.screenshotUrl)"
+              mode="aspectFit"
+              @tap="previewExemptionScreenshot"
+            />
+          </view>
           <view v-if="exemptionDetail.status === 'REJECTED' && exemptionDetail.rejectReason" class="reject-box">
             <text class="reason-label">拒绝理由</text>
             <text class="reason-text">{{ exemptionDetail.rejectReason }}</text>
@@ -106,7 +115,7 @@
             </view>
             <view v-if="leaveDetail.screenshotUrl" class="screenshot-box">
               <text class="reason-label">沟通截图</text>
-              <image class="screenshot" :src="resolveAssetUrl(leaveDetail.screenshotUrl)" mode="aspectFit" @tap="previewScreenshot" />
+              <image class="screenshot" :src="fixImageUrl(leaveDetail.screenshotUrl)" mode="aspectFit" @tap="previewScreenshot" />
             </view>
             <view v-if="leaveDetail.affectedPatients?.length" class="section-title">涉及预约与来访联系方式</view>
             <view v-for="(patient, idx) in leaveDetail.affectedPatients || []" :key="idx" class="sub-card">
@@ -135,7 +144,8 @@
 import { computed, ref } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { httpV2 } from '@/utils/http'
-import { API_ENDPOINTS, getApiV2Url } from '@/config/api'
+import { API_ENDPOINTS } from '@/config/api'
+import { fixImageUrl } from '@/utils/image'
 
 type ApprovalKind = 'EXEMPTION' | 'LEAVE'
 type CategoryFilter = 'ALL' | ApprovalKind
@@ -147,6 +157,7 @@ interface ExemptionItem {
   counselorName: string
   amount: number
   reason: string
+  screenshotUrl?: string
   status: string
   rejectReason?: string
   consultationStartTime?: string
@@ -233,12 +244,6 @@ const statusLabel = (s: string) => {
   if (s === 'APPROVED') return '已通过'
   if (s === 'REJECTED') return '已拒绝'
   return s
-}
-
-const resolveAssetUrl = (url?: string) => {
-  if (!url) return ''
-  if (url.startsWith('http://') || url.startsWith('https://')) return url
-  return getApiV2Url(url.startsWith('/') ? url : `/${url}`)
 }
 
 const toDisplayItem = (kind: ApprovalKind, raw: ExemptionItem | LeaveItem): DisplayItem => {
@@ -382,7 +387,14 @@ const closeLeaveDetail = () => {
 }
 
 const previewScreenshot = () => {
-  const url = resolveAssetUrl(leaveDetail.value?.screenshotUrl)
+  const url = leaveDetail.value?.screenshotUrl ? fixImageUrl(leaveDetail.value.screenshotUrl) : ''
+  if (url) uni.previewImage({ urls: [url] })
+}
+
+const previewExemptionScreenshot = () => {
+  const url = exemptionDetail.value?.screenshotUrl
+    ? fixImageUrl(exemptionDetail.value.screenshotUrl)
+    : ''
   if (url) uni.previewImage({ urls: [url] })
 }
 

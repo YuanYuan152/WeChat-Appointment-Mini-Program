@@ -77,6 +77,7 @@ from schedule_slots import (
     ROLLING_WINDOW_DAYS,
     active_schedules_at,
     all_slot_bounds_for_date,
+    booking_lead_time_reason,
     counselor_has_slot,
     has_available_room_at_center,
     is_aligned_standard_slot,
@@ -143,6 +144,8 @@ class TimeSlotOption(BaseModel):
     endTime: datetime
     label: str
     past: bool
+    tooSoon: bool = False
+    unavailableReason: Optional[str] = None
     counselorOccupied: bool
     counselorScheduleId: Optional[int] = None
     allRoomsFull: bool = False
@@ -196,6 +199,7 @@ class ScheduleCalendarItem(BaseModel):
     leaveReason: Optional[str] = None
     leaveSubmittedAt: Optional[datetime] = None
     leaveStatus: Optional[str] = None
+    leaveScreenshotUrl: Optional[str] = None
     hasCaseRecord: bool = False
     caseRecordId: Optional[int] = None
 
@@ -368,6 +372,7 @@ class CounselorProfilePayload(BaseModel):
     field: Optional[str] = None
     introduce: Optional[str] = None
     career: Optional[str] = None
+    trainingExperience: Optional[str] = None
     qualification: Optional[str] = None
     targetGroup: Optional[str] = None
     mode: Optional[str] = None
@@ -771,6 +776,21 @@ def _calendar_items_for_schedules(
             active_by_schedule[c.ScheduleId] = c
 
     leave_by_schedule = _leaves_by_schedule(db, schedule_ids, counselor_id)
+    leave_ids = [row.Id for row in leave_by_schedule.values()]
+    screenshot_by_leave_id: dict[int, str] = {}
+    if leave_ids:
+        screenshot_rows = (
+            db.query(AppScheduleCancelLog)
+            .filter(
+                AppScheduleCancelLog.CounselorId == counselor_id,
+                AppScheduleCancelLog.LeaveRequestId.in_(leave_ids),
+            )
+            .order_by(AppScheduleCancelLog.CreatedAt.desc())
+            .all()
+        )
+        for screenshot_row in screenshot_rows:
+            if screenshot_row.LeaveRequestId not in screenshot_by_leave_id:
+                screenshot_by_leave_id[screenshot_row.LeaveRequestId] = screenshot_row.ScreenshotUrl
 
     from proxy_booking_service import pending_proxy_orders_for_schedules
 
@@ -879,6 +899,9 @@ def _calendar_items_for_schedules(
                 leaveReason=leave_row.Reason if leave_row else None,
                 leaveSubmittedAt=leave_row.CreatedAt if leave_row else None,
                 leaveStatus=leave_row.Status if leave_row else None,
+                leaveScreenshotUrl=(
+                    screenshot_by_leave_id.get(leave_row.Id) if leave_row else None
+                ),
                 hasCaseRecord=has_record,
                 caseRecordId=case_record.Id if case_record else None,
             )
@@ -930,6 +953,8 @@ def schedule_slot_options(
         key = start_dt.strftime("%H:%M")
         label = f"{key} – {end_dt.strftime('%H:%M')}"
         past = start_dt <= now
+        unavailable_reason = booking_lead_time_reason(start_dt, now)
+        too_soon = unavailable_reason is not None
         self_row = next(
             (r for r in active_schedules_at(db, start_dt) if r.CounselorId == counselor.Id),
             None,
@@ -947,7 +972,7 @@ def schedule_slot_options(
             if room_ok:
                 usable_room_ids.append(room["id"])
             paid_taken = room["id"] in paid_occupied
-            available = not past and room_ok
+            available = not too_soon and room_ok
             room_opts.append(
                 RoomSlotOption(
                     roomId=room["id"],
@@ -970,6 +995,8 @@ def schedule_slot_options(
                 endTime=end_dt,
                 label=label,
                 past=past,
+                tooSoon=too_soon,
+                unavailableReason=unavailable_reason,
                 counselorOccupied=self_row is not None,
                 counselorScheduleId=self_row.Id if self_row else None,
                 allRoomsFull=all_rooms_full,
@@ -1698,6 +1725,7 @@ def _profile_to_dict(profile: AppCounselorProfile):
         "field": profile.Field,
         "introduce": profile.Introduce,
         "career": profile.Career,
+        "trainingExperience": profile.TrainingExperience,
         "qualification": profile.Qualification,
         "targetGroup": profile.TargetGroup,
         "mode": profile.Mode,

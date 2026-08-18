@@ -53,7 +53,7 @@
         </view>
       </view>
 
-      <!-- 悬浮数据卡片：从业年限 | 咨询时数 | 培训经历（4段） -->
+      <!-- 悬浮数据卡片：从业年限 | 咨询时数 -->
       <view class="stats-card">
         <view class="stat-item">
           <text class="stat-value">{{ doctor.workYears }}<text class="stat-unit">年</text></text>
@@ -63,11 +63,6 @@
         <view class="stat-item">
           <text class="stat-value">{{ doctor.consultHours }}<text class="stat-unit">h+</text></text>
           <text class="stat-label">咨询时数</text>
-        </view>
-        <view class="stat-divider"></view>
-        <view class="stat-item">
-          <text class="stat-value">{{ trainingCount }}<text class="stat-unit">段</text></text>
-          <text class="stat-label">培训经历</text>
         </view>
       </view>
 
@@ -96,16 +91,26 @@
             <text class="block-title">资质</text>
             <text class="block-text">{{ doctor.qualification }}</text>
           </view>
+
+          <view v-if="specialtyText" class="info-block" id="consultation-approach">
+            <text class="block-title">咨询流派</text>
+            <text class="block-text pre-wrap">{{ specialtyText }}</text>
+          </view>
           
           <view class="info-block">
-            <text class="block-title">专业领域</text>
+            <text class="block-title">咨询领域</text>
             <view class="tag-cloud">
               <text v-for="field in doctorFields" :key="field" class="cloud-tag">{{ field }}</text>
             </view>
           </view>
+
+          <view v-if="trainingExperienceText" class="info-block" id="training-experience">
+            <text class="block-title">受训背景</text>
+            <text class="block-text pre-wrap">{{ trainingExperienceText }}</text>
+          </view>
           
           <view class="info-block">
-            <text class="block-title">服务人群</text>
+            <text class="block-title">擅长人群</text>
             <view class="tag-cloud">
               <text v-for="group in doctorTargetGroups" :key="group" class="cloud-tag alt">{{ group }}</text>
             </view>
@@ -451,7 +456,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed, nextTick } from 'vue'
-import { onShow, onLoad } from '@dcloudio/uni-app'
+import { onShow, onLoad, onShareAppMessage } from '@dcloudio/uni-app'
 import { API_V2_CONFIG, API_ENDPOINTS } from '@/config/api'
 import { doctorApi } from '@/apis'
 import { httpV2 } from '@/utils/http'
@@ -522,7 +527,7 @@ interface Doctor {
   profile: string
   career: string
   joiner: string
-  trainingCount: number
+  trainingExperience: string
   qualification: string
   field: string
   targetGroup: string
@@ -557,7 +562,7 @@ const doctor = ref<Doctor>({
   profile: '',
   career: '',
   joiner: '',
-  trainingCount: 0,
+  trainingExperience: '',
   qualification: '',
   field: '',
   targetGroup: '',
@@ -726,34 +731,13 @@ const doctorTargetGroups = computed(() => {
   return doctor.value.targetGroup ? doctor.value.targetGroup.split(',').map(g => g.trim()) : []
 })
 
-const parseTrainingSegments = (raw?: string): string[] => {
-  const text = raw?.trim()
-  if (!text) return []
+const trainingExperienceText = computed(() =>
+  (doctor.value.trainingExperience || '').trim() ||
+  (doctor.value.career || '').trim() ||
+  (doctor.value.joiner || '').trim()
+)
 
-  let parts = text.split(/\n+/).map(p => p.trim()).filter(Boolean)
-  if (parts.length <= 1) {
-    parts = text.split(/[;；|｜]/).map(p => p.trim()).filter(Boolean)
-  }
-  if (parts.length <= 1) {
-    parts = text.split(/[。！？.!?]+/).map(p => p.trim()).filter(p => p.length > 1)
-  }
-  if (parts.length <= 1) {
-    parts = [text]
-  }
-  return parts
-}
-
-const trainingCount = computed(() => {
-  if (doctor.value.trainingCount != null && doctor.value.trainingCount > 0) {
-    return doctor.value.trainingCount
-  }
-  const merged = [doctor.value.career, doctor.value.joiner].filter(Boolean).join('\n').trim()
-  if (!merged) return 0
-  if (/^\d+$/.test(merged)) return Number(merged)
-  const match = merged.match(/(\d+)\s*段/)
-  if (match) return Number(match[1])
-  return parseTrainingSegments(merged).length
-})
+const specialtyText = computed(() => (doctor.value.specialty || '').trim())
 
 // 获取路由参数
 const getRouteParams = () => {
@@ -768,7 +752,7 @@ const mapDoctorDetail = (item: any): Doctor => {
   return {
     id: Number(item.id || 0),
     name: item.name || '咨询师',
-    specialty: item.specialty || item.field || '心理咨询',
+    specialty: item.specialty || '',
     experience: Number(item.workYears || 0),
     price: Math.round(Number(item.billing || 0) / 100) || item.price || 500,
     needsNegotiation,
@@ -781,7 +765,7 @@ const mapDoctorDetail = (item: any): Doctor => {
     profile: item.profile || item.introduce || '暂无简介',
     career: item.career || '',
     joiner: item.joiner || '',
-    trainingCount: Number(item.trainingCount ?? item.trainingSegments ?? 0) || 0,
+    trainingExperience: item.trainingExperience || '',
     qualification: item.qualification || '暂无资质信息',
     field: item.field || item.specialty || '',
     targetGroup: item.targetGroup || '成人,青少年,亲子家庭',
@@ -938,6 +922,32 @@ const updateSectionOffsets = () => {
         })
         resolve()
       })
+    })
+  })
+}
+
+const scrollToElement = (selector: string) => {
+  activeTab.value = 0
+  isClickScrolling.value = true
+  nextTick(() => {
+    const query = uni.createSelectorQuery()
+    query.select(selector).boundingClientRect()
+    query.select('.content-area').boundingClientRect()
+    query.select('.content-area').scrollOffset(() => {})
+    query.exec((res) => {
+      if (res?.[0] && res?.[1] && res?.[2]) {
+        const target = Math.max(
+          0,
+          Math.round((res[2].scrollTop || 0) + res[0].top - res[1].top - STICKY_TAB_OFFSET),
+        )
+        scrollTopBinding.value = target === scrollTopBinding.value ? target + 0.01 : target
+        nextTick(() => {
+          scrollTopBinding.value = target
+        })
+      }
+      setTimeout(() => {
+        isClickScrolling.value = false
+      }, 450)
     })
   })
 }
@@ -1553,6 +1563,16 @@ onLoad((opts) => {
   }
 })
 
+onShareAppMessage(() => {
+  const params = getRouteParams()
+  const id = routeDoctorId.value || doctor.value.id
+  const source = params.source ? `&source=${encodeURIComponent(String(params.source))}` : ''
+  return {
+    title: `${doctor.value.name || '咨询师'}的咨询师主页`,
+    path: `/pages/consultant/detail?id=${encodeURIComponent(String(id))}${source}`,
+  }
+})
+
 onShow(() => {
   if (doctor.value.id) {
     loadFavoriteStatus()
@@ -1806,6 +1826,10 @@ onMounted(() => {
   flex: 1;
 }
 
+.stat-item:active {
+  opacity: 0.7;
+}
+
 .stat-value {
   font-size: 40rpx;
   font-weight: 800;
@@ -2033,6 +2057,11 @@ onMounted(() => {
   font-size: 30rpx;
   color: #4B5563;
   line-height: 1.8;
+}
+
+.pre-wrap {
+  display: block;
+  white-space: pre-wrap;
 }
 
 .quote-text {

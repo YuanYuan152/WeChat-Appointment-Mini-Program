@@ -11,6 +11,8 @@
   EXPIRED（已过期）→ 可见但不可约
   CANCELLED / DONE / ON_LEAVE → 不展示给来访者
 """
+from __future__ import annotations
+
 from typing import Dict, List, Set, Tuple
 
 from sqlalchemy.orm import Session
@@ -28,7 +30,7 @@ from schedule_display import (
 )
 from proxy_booking_service import pending_proxy_orders_for_schedules
 from schedule_meta import parse_center_id
-from schedule_slots import rolling_window_datetime_bounds
+from schedule_slots import booking_lead_time_reason, rolling_window_datetime_bounds
 
 
 def _consultations_by_schedule(
@@ -92,6 +94,7 @@ def schedules_to_booking_time_slots(
         center_id = parse_center_id(s.Note)
         if not center_id:
             continue
+        lead_time_reason = booking_lead_time_reason(s.StartTime)
 
         display = resolve_schedule_display(
             s,
@@ -102,7 +105,10 @@ def schedules_to_booking_time_slots(
             continue
 
         center_ids.add(center_id)
-        if display == DISPLAY_OPEN:
+        if display == DISPLAY_OPEN and lead_time_reason:
+            slot_status = "TOO_SOON"
+            is_bookable = False
+        elif display == DISPLAY_OPEN:
             slot_status = "NEGOTIATION" if needs_negotiation else "AVAILABLE"
             is_bookable = not negotiation
         elif display == DISPLAY_PENDING_PAYMENT:
@@ -130,6 +136,7 @@ def schedules_to_booking_time_slots(
             "numSign": 0 if is_bookable else 1,
             "status": slot_status,
             "isBookable": is_bookable,
+            "unavailableReason": lead_time_reason if display == DISPLAY_OPEN else None,
             "displayStatus": display,
             "startTime": s.StartTime.isoformat(),
             "endTime": s.EndTime.isoformat(),

@@ -10,6 +10,8 @@ from schedule_meta import parse_center_id, parse_room_id
 
 ROLLING_WINDOW_DAYS = 30
 SLOT_DURATION_MINUTES = 50
+MIN_BOOKING_LEAD_MINUTES = 90
+BOOKING_LEAD_TIME_MESSAGE = "开始时间须至少晚于当前中国时间90分钟"
 # 每节咨询 50 分钟，结束后预留 10 分钟打扫；相邻预约因此仍至少间隔 60 分钟。
 CLEANING_DURATION_MINUTES = 10
 OCCUPANCY_DURATION_MINUTES = SLOT_DURATION_MINUTES + CLEANING_DURATION_MINUTES
@@ -77,16 +79,35 @@ def rolling_window_datetime_bounds(
     return start_bound, end_bound
 
 
+def booking_lead_time_reason(
+    start: datetime,
+    now: Optional[datetime] = None,
+) -> Optional[str]:
+    """不足统一提前量时返回置灰/拦截原因；边界 start == now + 90min 可用。"""
+    now = now or china_now()
+    if start < now + timedelta(minutes=MIN_BOOKING_LEAD_MINUTES):
+        return BOOKING_LEAD_TIME_MESSAGE
+    return None
+
+
+def validate_booking_lead_time(
+    start: datetime,
+    now: Optional[datetime] = None,
+) -> None:
+    reason = booking_lead_time_reason(start, now)
+    if reason:
+        raise ValueError(reason)
+
+
 def validate_slot_in_rolling_window(start: datetime, now: Optional[datetime] = None) -> None:
-    """滚动窗口内：今天起未来 N 天内；当天须未开始。"""
+    """滚动窗口内：今天起未来 N 天内，且满足统一最小提前量。"""
     now = now or china_now()
     today = now.date()
     end_date = rolling_window_end(today)
     slot_date = start.date()
     if slot_date < today or slot_date > end_date:
         raise ValueError(f"仅可排未来 {ROLLING_WINDOW_DAYS} 天内（{today.isoformat()} ~ {end_date.isoformat()}）的时段")
-    if start <= now:
-        raise ValueError("该时段已开始或已过，无法排期")
+    validate_booking_lead_time(start, now)
 
 
 def is_aligned_standard_slot(start: datetime, end: datetime) -> bool:

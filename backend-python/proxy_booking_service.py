@@ -36,6 +36,7 @@ from room_slot_status import (
 from schedule_slots import (
     active_schedules_at,
     all_slot_bounds_for_date,
+    booking_lead_time_reason,
     counselor_has_slot,
     has_available_room_at_center,
     is_aligned_standard_slot,
@@ -460,6 +461,8 @@ def build_proxy_slot_options(
         key = start_dt.strftime("%H:%M")
         label = f"{key} – {end_dt.strftime('%H:%M')}"
         past = start_dt <= now
+        unavailable_reason = booking_lead_time_reason(start_dt, now)
+        too_soon = unavailable_reason is not None
         counselor_rows = [
             row
             for row in active_schedules_at(db, start_dt)
@@ -502,7 +505,7 @@ def build_proxy_slot_options(
                 {
                     "roomId": room["id"],
                     "roomName": room["name"],
-                    "available": not past and room_ok and not taken and not counselor_occupied,
+                    "available": not too_soon and room_ok and not taken and not counselor_occupied,
                     "occupiedByOther": taken,
                 }
             )
@@ -514,7 +517,7 @@ def build_proxy_slot_options(
         )
 
         available_slot = (
-            not past
+            not too_soon
             and not counselor_occupied
             and (is_video_center(center_id) or any(r["available"] for r in room_opts))
         )
@@ -526,6 +529,8 @@ def build_proxy_slot_options(
                 "endTime": end_dt.isoformat(),
                 "label": label,
                 "past": past,
+                "tooSoon": too_soon,
+                "unavailableReason": unavailable_reason,
                 "counselorOccupied": counselor_occupied,
                 "counselorScheduleId": self_row.Id if self_row and not is_booked and not pending_on_self else None,
                 "existingAvailableScheduleId": (

@@ -27,6 +27,7 @@ from pricing_service import (
     resolve_price_negotiation_required,
 )
 from user_role_meta import counselor_visible_to_viewer
+from model_compat import optional_model_value
 from counselor_identity_service import (
     legacy_doctor_ids_covered_by_new_system,
     reconcile_existing_counselor_legacy_links,
@@ -228,6 +229,7 @@ def _legacy_doctor_to_dict(row: Dict[str, Any]) -> Dict[str, Any]:
         "faceBilling": float(row.get("FaceBilling") or 0),
         "consultHours": int(row.get("ConsultHours") or 0),
         "workYears": int(row.get("WorkYears") or 0),
+        "mode": row.get("Mode"),
         "_source": "T_Doctor",
     }
 
@@ -249,6 +251,9 @@ def _counselor_profile_dict(
         "specialty": r.Specialty,
         "field": r.Field,
         "introduce": r.Introduce,
+        "trainingExperience": optional_model_value(r, "TrainingExperience"),
+        "career": r.Career,
+        "mode": r.Mode,
         "billing": billing,
         "needsNegotiation": needs_negotiation,
         "priceLabel": price_label,
@@ -262,6 +267,67 @@ def _counselor_profile_dict(
         item["billingLabel"] = "议价"
         item["charityBookingBlocked"] = True
     return item
+
+
+def _normalize_gender_value(value: Optional[str]) -> Optional[str]:
+    """统一账号性别为 男/女，兼容 male/female/M/F 等历史写法。"""
+    raw = (value or "").strip()
+    if not raw:
+        return None
+    lowered = raw.lower()
+    if raw in ("男", "女"):
+        return raw
+    if lowered in ("male", "m", "man", "1"):
+        return "男"
+    if lowered in ("female", "f", "woman", "2"):
+        return "女"
+    return None
+
+
+COUNSELOR_MODE_VIDEO = "视频咨询"
+COUNSELOR_MODE_FACE = "面询"
+COUNSELOR_MODE_BOTH = "视频咨询/面询"
+COUNSELOR_MODE_OPTIONS = (COUNSELOR_MODE_VIDEO, COUNSELOR_MODE_FACE, COUNSELOR_MODE_BOTH)
+
+
+def normalize_counselor_mode(value: Optional[str]) -> Optional[str]:
+    """统一咨询方式为 视频咨询 / 面询 / 视频咨询/面询，兼容线上线下等旧写法。"""
+    raw = (value or "").strip()
+    if not raw:
+        return None
+    if raw in COUNSELOR_MODE_OPTIONS:
+        return raw
+    normalized = raw.lower().replace(" ", "")
+    has_online = any(
+        token in normalized for token in ("线上", "在线", "视频", "video", "online")
+    )
+    has_offline = any(
+        token in normalized for token in ("线下", "面询", "面对面", "offline")
+    )
+    if has_online and has_offline:
+        return COUNSELOR_MODE_BOTH
+    if has_online:
+        return COUNSELOR_MODE_VIDEO
+    if has_offline:
+        return COUNSELOR_MODE_FACE
+    return raw
+
+
+def _mode_supports(mode: Optional[str], requested: Optional[str]) -> bool:
+    """兼容线上/线下、视频/面询及历史组合写法。
+
+    Mode 为空时按默认「线上/线下」处理，避免未填写方式的咨询师被筛空。
+    """
+    if not requested:
+        return True
+    normalized = (mode or "").strip().lower().replace(" ", "")
+    if not normalized:
+        return True
+    if requested == "online":
+        return any(token in normalized for token in ("线上", "在线", "视频", "video", "online"))
+    if requested == "offline":
+        return any(token in normalized for token in ("线下", "面询", "面对面", "offline"))
+    return False
 
 
 def _resolve_counselor_billing_cents(
@@ -319,6 +385,8 @@ def _query_counselor_profiles(
     db: Session,
     keyword: Optional[str] = None,
     patient_account: Optional[AppAccount] = None,
+    gender: Optional[str] = None,
+    consult_method: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """AppCounselorProfile 列表，支持姓名/擅长/领域/简介关键词搜索。"""
     try:
@@ -335,11 +403,22 @@ def _query_counselor_profiles(
                 )
             )
         rows = q.order_by(AppCounselorProfile.WorkYears.desc(), AppCounselorProfile.Id.desc()).all()
+        account_ids = [int(row.AccountId or 0) for row in rows if row.AccountId]
+        genders = {
+            int(account_id): _normalize_gender_value(account_gender)
+            for account_id, account_gender in db.query(AppAccount.Id, AppAccount.Gender)
+            .filter(AppAccount.Id.in_(account_ids))
+            .all()
+        } if account_ids else {}
         result = []
         seen_accounts: set[int] = set()
         for r in rows:
             cid = int(r.AccountId or r.Id or 0)
             if not cid or cid in seen_accounts:
+                continue
+            if gender and genders.get(cid) != gender:
+                continue
+            if not _mode_supports(r.Mode, consult_method):
                 continue
             profile = get_counselor_profile(db, cid)
             if not profile:
@@ -348,7 +427,9 @@ def _query_counselor_profiles(
                 continue
             seen_accounts.add(cid)
             billing_cents = _resolve_counselor_billing_cents(db, cid, patient_account)
-            result.append(_counselor_profile_dict(profile, billing_cents, price_negotiation=False))
+            item = _counselor_profile_dict(profile, billing_cents, price_negotiation=False)
+            item["gender"] = genders.get(cid)
+            result.append(item)
         return result
     except Exception:
         return []
@@ -359,6 +440,9 @@ def common_counselors(
     keyword: Optional[str] = Query(None, description="搜索姓名/擅长"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    sort: Optional[str] = Query(None, description="price_asc|price_desc"),
+    gender: Optional[str] = Query(None, description="男|女"),
+    consult_method: Optional[str] = Query(None, description="online|offline"),
     current_account: Optional[AppAccount] = Depends(get_optional_account),
     db: Session = Depends(get_db),
 ):
@@ -367,7 +451,16 @@ def common_counselors(
         if not keyword or keyword.lower() == "undefined":
             keyword = None
 
-    new_dicts = _query_counselor_profiles(db, keyword, current_account)
+    normalized_gender = _normalize_gender_value(gender)
+    normalized_method = consult_method if consult_method in ("online", "offline") else None
+    normalized_sort = sort if sort in ("price_asc", "price_desc") else None
+    new_dicts = _query_counselor_profiles(
+        db,
+        keyword,
+        current_account,
+        normalized_gender,
+        normalized_method,
+    )
 
     if page == 1:
         try:
@@ -387,7 +480,7 @@ def common_counselors(
         legacy_rows = _safe_legacy_query(
             db,
             f"SELECT TOP 200 ID, name, nickName, topUrl, url, position, Specialty, Field, "
-            f"introduce, Billing, FaceBilling, ConsultHours, WorkYears "
+            f"introduce, Billing, FaceBilling, ConsultHours, WorkYears, Mode "
             f"FROM T_Doctor WHERE {where} ORDER BY IsTop DESC, number ASC",
             **params,
         )
@@ -400,8 +493,21 @@ def common_counselors(
             if item["id"] not in covered_legacy_ids
             and _normalize_counselor_name(item.get("name")) not in new_names
         ]
+        if normalized_gender:
+            # 旧 T_Doctor 无可靠的 AppAccount 性别关联，筛选时不混入无法验证的数据。
+            legacy_items = []
+        elif normalized_method:
+            legacy_items = [
+                item for item in legacy_items
+                if _mode_supports(item.get("mode"), normalized_method)
+            ]
 
     merged = new_dicts + legacy_items
+    if normalized_sort:
+        merged.sort(
+            key=lambda item: float(item.get("billing") or 0),
+            reverse=normalized_sort == "price_desc",
+        )
     total = len(merged)
     start = (page - 1) * page_size
     end = start + page_size
@@ -436,6 +542,7 @@ def common_counselor_detail(
         d.update({
             "career": r.get("Careerexperience"),
             "joiner": r.get("Joinerexperience"),
+            "trainingExperience": None,
             "qualification": r.get("Qualification"),
             "targetGroup": r.get("TargetGroup"),
             "mode": r.get("Mode"),
@@ -472,6 +579,7 @@ def common_counselor_detail(
         "specialty": profile.Specialty or new_rows[0].get("Specialty"),
         "field": profile.Field or new_rows[0].get("Field"),
         "introduce": profile.Introduce or new_rows[0].get("Introduce"),
+        "trainingExperience": optional_model_value(profile, "TrainingExperience"),
         "billing": float(billing_cents),
         "needsNegotiation": False,
         "priceLabel": None,

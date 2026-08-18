@@ -52,7 +52,7 @@ export function RolesPanel({
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
   const [creating, setCreating] = useState(false);
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
-  const [selectedPatientSource, setSelectedPatientSource] = useState<PatientSource>("MINI_PROGRAM");
+  const [selectedPatientSource, setSelectedPatientSource] = useState<PatientSource>("PROFESSIONAL");
   const [selectedCounselorType, setSelectedCounselorType] = useState<CounselorType>("PROFESSIONAL");
   const [keywordInput, setKeywordInput] = useState("");
   const [keyword, setKeyword] = useState("");
@@ -99,7 +99,7 @@ export function RolesPanel({
   const closeEditor = () => {
     setEditingUser(null);
     setSelectedRole(null);
-    setSelectedPatientSource("MINI_PROGRAM");
+    setSelectedPatientSource("PROFESSIONAL");
     setSelectedCounselorType("PROFESSIONAL");
   };
 
@@ -194,7 +194,7 @@ export function RolesPanel({
                   <td className="px-5 py-4">
                     <div>{user.activeRoleLabel || roleLabel(user.activeRole)}</div>
                     {user.patientSourceLabel && (
-                      <div className="mt-1 text-xs text-[var(--lxxl-muted)]">来访来源：{user.patientSourceLabel}</div>
+                      <div className="mt-1 text-xs text-[var(--lxxl-muted)]">来访类别：{user.patientSourceLabel}</div>
                     )}
                     {user.counselorTypeLabel && (
                       <div className="mt-1 text-xs text-[var(--lxxl-muted)]">咨询师类型：{user.counselorTypeLabel}</div>
@@ -267,9 +267,15 @@ function resolveCurrentRole(user: AdminUser): Role | null {
 }
 
 function resolvePatientSource(value?: string | null): PatientSource {
+  if (value === "MINI_PROGRAM") {
+    return "PROFESSIONAL";
+  }
+  if (value?.startsWith("CHARITY_")) {
+    return "CHARITY";
+  }
   return PATIENT_SOURCE_OPTIONS.some((option) => option.value === value)
     ? (value as PatientSource)
-    : "MINI_PROGRAM";
+    : "PROFESSIONAL";
 }
 
 function resolveCounselorType(value?: string | null): CounselorType {

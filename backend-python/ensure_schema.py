@@ -25,6 +25,7 @@ APP_ACCOUNT_COLUMNS = {
     "SubscribeOptInAt": "DATETIME NULL",
     "SubscribeRoleVersion": "NVARCHAR(20) NULL",
     "SubscribePromptTrigger": "NVARCHAR(20) NULL",
+    "PatientSourceDetail": "NVARCHAR(200) NULL",
     "CharityPricingNegotiatedAt": "DATETIME NULL",
     "IsContractSigned": "BIT NOT NULL CONSTRAINT DF_AppAccount_IsContractSigned DEFAULT 0",
     "BoundCounselorId": "INT NULL",
@@ -74,6 +75,7 @@ APP_CASE_RECORD_AMENDMENT_COLUMNS = {
 APP_COUNSELOR_PROFILE_COLUMNS = {
     "TargetGroup": "NVARCHAR(500) NULL",
     "Mode": "NVARCHAR(100) NULL",
+    "TrainingExperience": "NVARCHAR(MAX) NULL",
     "InfoAuthenticityCommittedAt": "DATETIME NULL",
     "InfoAuthenticitySignerName": "NVARCHAR(100) NULL",
     "FaceBilling": "INT NOT NULL CONSTRAINT DF_AppCounselorProfile_FaceBilling DEFAULT 30000",

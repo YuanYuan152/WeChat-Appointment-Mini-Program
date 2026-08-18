@@ -1,4 +1,5 @@
 import { formatDateTime, formatMoneyFromCents, statusLabel } from "@/lib/format";
+import { API_BASE_URL } from "@/lib/api";
 import { formatPatientNameWithContractTag } from "@/lib/patientContract";
 import type { RefundExemption } from "@/types/api";
 import { useEffect, useState } from "react";
@@ -138,7 +139,19 @@ export function RefundsPanel({
                   <td className="px-5 py-4">{item.counselorName}</td>
                   <td className="px-5 py-4">{formatDateTime(item.consultationStartTime)}</td>
                   <td className="px-5 py-4">{formatMoneyFromCents(item.amount)}</td>
-                  <td className="max-w-xs px-5 py-4">{item.reason}</td>
+                  <td className="max-w-xs px-5 py-4">
+                    <div>{item.reason}</div>
+                    {item.screenshotUrl && (
+                      <a
+                        className="mt-2 inline-block text-xs font-medium text-[var(--lxxl-green)] underline-offset-2 hover:underline"
+                        href={resolveAssetUrl(item.screenshotUrl)}
+                        rel="noreferrer"
+                        target="_blank"
+                      >
+                        查看申请图片
+                      </a>
+                    )}
+                  </td>
                   <td className="px-5 py-4">
                     <Badge tone={item.status === "PENDING" ? "gold" : item.status === "APPROVED" ? "green" : "red"}>
                       {statusLabel(item.status)}
@@ -229,4 +242,10 @@ export function RefundsPanel({
       )}
     </section>
   );
+}
+
+function resolveAssetUrl(url: string) {
+  const value = url.trim();
+  if (/^https?:\/\//i.test(value)) return value;
+  return `${API_BASE_URL}${value.startsWith("/") ? value : `/${value}`}`;
 }

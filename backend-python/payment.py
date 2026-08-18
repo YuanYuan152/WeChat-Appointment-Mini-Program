@@ -36,6 +36,7 @@ from pricing_service import (
     resolve_price_negotiation_required,
 )
 from schedule_meta import parse_center_id
+from schedule_slots import validate_booking_lead_time
 from user_role_meta import counselor_visible_to_patient
 from wechat_pay_service import (
     build_jsapi_pay_params,
@@ -141,6 +142,10 @@ def _create_pending_order(
     if not schedule or schedule.Status != "AVAILABLE":
         raise HTTPException(status_code=400, detail="该时段已被预约或不存在")
     try:
+        validate_booking_lead_time(schedule.StartTime)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    try:
         assert_counselor_active_for_booking(db, schedule.CounselorId)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -228,6 +233,10 @@ def _load_payable_order(
         schedule = db.query(AppSchedule).filter(AppSchedule.Id == order.SlotId).first()
         if not schedule or schedule.Status != "AVAILABLE":
             raise HTTPException(status_code=400, detail="预约时段已不可用")
+        try:
+            validate_booking_lead_time(schedule.StartTime)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
     try:
         _assert_order_binding_current(db, account, order)
         if order.SlotId and schedule is not None:

@@ -574,6 +574,9 @@ export interface UserBoardSummary {
   gender?: string | null;
   roles: Role[];
   activeRole?: string | null;
+  patientSource?: string | null;
+  patientSourceLabel?: string | null;
+  patientSourceDetail?: string | null;
   isVisitor?: boolean;
   orderCount: number;
   paidOrderCount: number;
@@ -699,8 +702,10 @@ export interface AdminCounselorIntroProfile {
   field?: string | null;
   introduce?: string | null;
   career?: string | null;
+  trainingExperience?: string | null;
   qualification?: string | null;
   targetGroup?: string | null;
+  gender?: string | null;
   mode?: string | null;
   workYears: number;
   consultHours: number;
@@ -719,9 +724,10 @@ export interface AdminCounselorIntroUpdatePayload {
   specialty?: string | null;
   field?: string | null;
   introduce?: string | null;
-  career?: string | null;
+  trainingExperience?: string | null;
   qualification?: string | null;
   targetGroup?: string | null;
+  gender?: string | null;
   mode?: string | null;
   workYears?: number;
   consultHours?: number;

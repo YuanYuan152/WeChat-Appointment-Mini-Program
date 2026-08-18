@@ -376,6 +376,7 @@ def notify_patient_refund_exemption_pending(
         "status": "PENDING",
         "amountYuan": amount_yuan,
         "reason": exemption.Reason,
+        "screenshotUrl": exemption.ScreenshotUrl,
         "exemptionId": exemption.Id,
         "consultationId": exemption.ConsultationId,
         "counselorName": _counselor_display_name(db, consultation.CounselorId),
@@ -407,6 +408,7 @@ def notify_patient_refund_exemption_result(
             "approved": True,
             "resultText": "您的退款申请已审核通过，预约已取消。",
             "amountYuan": f"{exemption.Amount / 100:.2f}",
+            "screenshotUrl": exemption.ScreenshotUrl,
             "exemptionId": exemption.Id,
             "consultationId": exemption.ConsultationId,
         }
@@ -419,6 +421,7 @@ def notify_patient_refund_exemption_result(
             "approved": False,
             "resultText": "您的退款申请未通过审核，预约与订单维持不变。",
             "rejectReason": reason_text,
+            "screenshotUrl": exemption.ScreenshotUrl,
             "exemptionId": exemption.Id,
             "consultationId": exemption.ConsultationId,
         }

@@ -16,7 +16,7 @@
     </view>
     <view v-if="isCurrentSlot" class="current-slot-tip">当前查看：此刻所属标准时段</view>
 
-    <button class="add-btn" @tap="openAdd">+ 新增咨询室</button>
+    <button class="edit-btn" @tap="openEditor">编辑咨询室</button>
 
     <view v-if="loading" class="empty">加载中...</view>
     <view v-else-if="rooms.length === 0" class="empty">暂无咨询室</view>
@@ -52,32 +52,67 @@
       </view>
     </view>
 
-    <!-- 新增咨询室 -->
-    <view v-if="showAdd" class="modal-overlay" @touchmove.stop.prevent>
+    <!-- 编辑咨询室：新增、重命名或删除 -->
+    <view v-if="showEditor" class="modal-overlay" @touchmove.stop.prevent>
       <view class="modal-card" @tap.stop @touchmove.stop.prevent>
-        <text class="modal-title">新增咨询室</text>
+        <text class="modal-title">编辑咨询室</text>
+        <view class="edit-mode-row">
+          <view
+            class="edit-mode-item"
+            :class="{ active: editMode === 'add' }"
+            @tap="selectEditMode('add')"
+          >新增咨询室</view>
+          <view
+            class="edit-mode-item"
+            :class="{ active: editMode === 'rename' }"
+            @tap="selectEditMode('rename')"
+          >重命名咨询室</view>
+          <view
+            class="edit-mode-item"
+            :class="{ active: editMode === 'delete' }"
+            @tap="selectEditMode('delete')"
+          >删除咨询室</view>
+        </view>
         <view class="form-group">
           <text class="form-label">所属预约中心</text>
           <picker :range="centerLabels" :value="centerIndex" @change="onCenterChange">
             <view class="picker-row">{{ centerLabels[centerIndex] }}</view>
           </picker>
         </view>
-        <view class="form-group form-group--input" @tap.stop>
-          <text class="form-label">咨询室名称 *</text>
+        <view v-if="editMode !== 'add'" class="form-group">
+          <text class="form-label">选择要{{ editMode === 'delete' ? '删除' : '重命名' }}的咨询室</text>
+          <picker
+            v-if="editableRooms.length"
+            :range="editableRoomLabels"
+            :value="roomIndex"
+            @change="onRoomChange"
+          >
+            <view class="picker-row">{{ editableRoomLabels[roomIndex] }}</view>
+          </picker>
+          <view v-else class="empty-room-tip">该中心暂无可{{ editMode === 'delete' ? '删除' : '重命名' }}的咨询室</view>
+        </view>
+        <view v-if="editMode !== 'delete'" class="form-group form-group--input" @tap.stop>
+          <text class="form-label">{{ editMode === 'add' ? '新咨询室名称 *' : '修改后的名称 *' }}</text>
           <input
             class="input input-name"
-            v-model="addForm.name"
+            v-model="editForm.name"
             type="text"
-            maxlength="50"
+            :maxlength="50"
             :adjust-position="true"
             :cursor-spacing="120"
-            placeholder="如：咨询室 D"
+            :placeholder="editMode === 'add' ? '如：咨询室 D' : '请输入新的咨询室名称'"
             placeholder-class="input-ph"
           />
         </view>
         <view class="modal-btns">
-          <button class="btn cancel" @tap.stop="showAdd = false">取消</button>
-          <button class="btn confirm" :loading="saving" @tap.stop="submitAdd">保存</button>
+          <button class="btn cancel" @tap.stop="closeEditor">取消</button>
+          <button
+            class="btn confirm"
+            :class="{ delete: editMode === 'delete' }"
+            :disabled="saving || (editMode !== 'add' && !selectedRoom)"
+            :loading="saving"
+            @tap.stop="submitEditor"
+          >{{ editMode === 'delete' ? '删除' : '保存' }}</button>
         </view>
       </view>
     </view>
@@ -109,19 +144,32 @@ interface RoomSnapshot {
 
 const loading = ref(true)
 const saving = ref(false)
-const showAdd = ref(false)
+const showEditor = ref(false)
+const editMode = ref<'add' | 'rename' | 'delete'>('add')
 const filterDate = ref('')
 const timeSlot = ref('')
 const isCurrentSlot = ref(true)
 const rooms = ref<RoomSnapshot[]>([])
 const slotIndex = ref(0)
 
-const addForm = ref({ name: '' })
-const centerOptions = APPOINTMENT_CENTERS
+const editForm = ref({ name: '' })
+const centerOptions = APPOINTMENT_CENTERS.filter(center => center.id !== 'video')
 const centerLabels = centerOptions.map(c => c.name)
 const centerIndex = ref(0)
+const roomIndex = ref(0)
 
 const slotLabels = computed(() => SLOT_START_TIMES)
+const selectedCenterId = computed(() => centerOptions[centerIndex.value]?.id || '')
+const editableRooms = computed(() =>
+  rooms.value
+    .filter(room => room.centerId === selectedCenterId.value)
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name, 'zh')),
+)
+const editableRoomLabels = computed(() =>
+  editableRooms.value.map(room => `${room.name}（${room.roomCode}）`),
+)
+const selectedRoom = computed(() => editableRooms.value[roomIndex.value] || null)
 
 const groupedCenters = computed(() => {
   const byCenter = new Map<string, RoomSnapshot[]>()
@@ -228,33 +276,111 @@ const goDetail = (room: RoomSnapshot) => {
   uni.navigateTo({ url: `/pages/ops/rooms/detail?id=${room.id}` })
 }
 
-const openAdd = () => {
-  addForm.value = { name: '' }
-  showAdd.value = true
+const syncRenameForm = () => {
+  roomIndex.value = Math.min(roomIndex.value, Math.max(0, editableRooms.value.length - 1))
+  editForm.value.name = selectedRoom.value?.name || ''
+}
+
+const openEditor = () => {
+  editMode.value = 'add'
+  centerIndex.value = 0
+  roomIndex.value = 0
+  editForm.value = { name: '' }
+  showEditor.value = true
+}
+
+const closeEditor = () => {
+  showEditor.value = false
+  editForm.value = { name: '' }
+}
+
+const selectEditMode = (mode: 'add' | 'rename' | 'delete') => {
+  editMode.value = mode
+  roomIndex.value = 0
+  if (mode !== 'add') syncRenameForm()
+  else editForm.value.name = ''
 }
 
 const onCenterChange = (e: any) => {
   centerIndex.value = Number(e.detail.value)
+  roomIndex.value = 0
+  if (editMode.value !== 'add') syncRenameForm()
 }
 
-const submitAdd = async () => {
-  if (!addForm.value.name.trim()) {
+const onRoomChange = (e: any) => {
+  roomIndex.value = Number(e.detail.value)
+  syncRenameForm()
+}
+
+const submitEditor = async () => {
+  const room = selectedRoom.value
+  if (editMode.value === 'delete') {
+    if (!room?.id) {
+      uni.showToast({ title: '请选择要删除的咨询室', icon: 'none' })
+      return
+    }
+    const confirmed = await new Promise<boolean>((resolve) => {
+      uni.showModal({
+        title: '确认删除咨询室',
+        content: `确定删除“${room.name}”吗？存在未完成咨询订单时将无法删除。`,
+        confirmText: '删除',
+        confirmColor: '#DC2626',
+        success: (res) => resolve(!!res.confirm),
+        fail: () => resolve(false),
+      })
+    })
+    if (!confirmed) return
+
+    saving.value = true
+    try {
+      const res = await httpV2.delete(API_ENDPOINTS.ops.deleteRoom(room.id), { showError: false })
+      if (res.code === 0) {
+        closeEditor()
+        await load()
+        uni.showToast({ title: '已删除', icon: 'success' })
+      } else {
+        uni.showToast({ title: res.msg || '删除失败', icon: 'none' })
+      }
+    } catch (e: any) {
+      uni.showToast({ title: e?.message || '删除失败', icon: 'none' })
+    } finally {
+      saving.value = false
+    }
+    return
+  }
+
+  const name = editForm.value.name.trim()
+  if (!name) {
     uni.showToast({ title: '请输入咨询室名称', icon: 'none' })
+    return
+  }
+  if (editMode.value === 'rename' && !room) {
+    uni.showToast({ title: '请选择要重命名的咨询室', icon: 'none' })
     return
   }
   saving.value = true
   try {
-    const res = await httpV2.post(API_ENDPOINTS.ops.rooms, {
-      center_id: centerOptions[centerIndex.value].id,
-      name: addForm.value.name.trim(),
-    })
+    const res = editMode.value === 'add'
+      ? await httpV2.post(API_ENDPOINTS.ops.rooms, {
+          center_id: selectedCenterId.value,
+          name,
+        })
+      : room?.id
+        ? await httpV2.put(API_ENDPOINTS.ops.updateRoom(room.id), { name })
+        : await httpV2.post(API_ENDPOINTS.ops.rooms, {
+            center_id: selectedCenterId.value,
+            room_code: room?.roomCode,
+            name,
+          })
     if (res.code === 0) {
-      showAdd.value = false
+      closeEditor()
       await load()
-      uni.showToast({ title: '已添加', icon: 'success' })
+      uni.showToast({ title: editMode.value === 'add' ? '已添加' : '已重命名', icon: 'success' })
     } else {
-      uni.showToast({ title: res.msg || '添加失败', icon: 'none' })
+      uni.showToast({ title: res.msg || '保存失败', icon: 'none' })
     }
+  } catch (e: any) {
+    uni.showToast({ title: e?.message || '保存失败', icon: 'none' })
   } finally {
     saving.value = false
   }
@@ -298,7 +424,7 @@ onShow(() => {
   margin-bottom: 20rpx; font-size: 24rpx; color: #3D5A4E; text-align: center;
   background: #E8E4DE; border-radius: 12rpx; padding: 12rpx 20rpx;
 }
-.add-btn {
+.edit-btn {
   width: 100%; height: 84rpx; line-height: 84rpx; margin-bottom: 28rpx;
   background: #3D5A4E; color: #fff; border: none; border-radius: 12rpx;
   font-size: 30rpx; font-weight: 600;
@@ -360,6 +486,18 @@ onShow(() => {
   padding: 48rpx 40rpx calc(48rpx + env(safe-area-inset-bottom));
 }
 .modal-title { display: block; font-size: 36rpx; font-weight: 800; margin-bottom: 32rpx; color: #2C2C2C; }
+.edit-mode-row {
+  display: flex; gap: 12rpx; padding: 8rpx; margin-bottom: 28rpx;
+  background: #F0EDE8; border-radius: 16rpx;
+}
+.edit-mode-item {
+  flex: 1; padding: 18rpx 12rpx; border-radius: 12rpx;
+  font-size: 27rpx; color: #6B6560; text-align: center;
+}
+.edit-mode-item.active {
+  background: #fff; color: #3D5A4E; font-weight: 700;
+  box-shadow: 0 4rpx 12rpx rgba(61, 90, 78, 0.1);
+}
 .form-group { margin-bottom: 24rpx; }
 .form-group--input { position: relative; z-index: 2; }
 .form-label { display: block; font-size: 26rpx; color: #8A8A8A; margin-bottom: 10rpx; }
@@ -374,8 +512,13 @@ onShow(() => {
   display: flex; align-items: center; min-height: 88rpx; padding: 20rpx 24rpx;
 }
 .input-ph { font-size: 28rpx; color: #8A8A8A; line-height: 88rpx; }
+.empty-room-tip {
+  min-height: 88rpx; box-sizing: border-box; padding: 24rpx;
+  background: #F7F5F2; border-radius: 16rpx; color: #9CA3AF; font-size: 26rpx;
+}
 .modal-btns { display: flex; gap: 20rpx; margin-top: 32rpx; }
 .btn { flex: 1; height: 84rpx; line-height: 84rpx; border-radius: 12rpx; font-size: 30rpx; border: none; }
 .btn.cancel { background: #F0EDE8; color: #6B6560; }
 .btn.confirm { background: #3D5A4E; color: #fff; }
+.btn.confirm.delete { background: #DC2626; color: #fff; }
 </style>

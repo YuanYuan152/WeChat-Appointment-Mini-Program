@@ -1,14 +1,23 @@
-/** 来访来源（添加来访角色时必选；小程序自主注册默认为 MINI_PROGRAM） */
+/** 对外统一的来访类型；历史值仅用于兼容显示与公益判断。 */
 export const PATIENT_SOURCE_OPTIONS = [
-  { value: 'MINI_PROGRAM', label: '小程序注册' },
-  { value: 'CHARITY_VISITOR', label: '公益来访' },
-  { value: 'CHARITY_PROJECT_1', label: '公益项目1' },
-  { value: 'CHARITY_PROJECT_2', label: '公益项目2' },
+  { value: 'CHARITY', label: '公益' },
+  { value: 'PROFESSIONAL', label: '正价' },
   { value: 'HOSPITAL', label: '医院' },
 ] as const
 
-/** 可查看公益咨询师的来访来源 */
-export const CHARITY_PATIENT_SOURCES = new Set([
+export const PATIENT_SOURCE_DETAIL_OPTIONS = [
+  '小红书',
+  '大众点评',
+  '公众号',
+  '医院转出',
+  '来访推荐',
+  '老来访',
+  '医生推荐',
+  '其他',
+] as const
+
+export const CHARITY_PATIENT_SOURCES = new Set<string>([
+  'CHARITY',
   'CHARITY_VISITOR',
   'CHARITY_PROJECT_1',
   'CHARITY_PROJECT_2',
@@ -25,6 +34,8 @@ export type CounselorType = typeof COUNSELOR_TYPE_OPTIONS[number]['value']
 
 export function patientSourceLabel(code?: string | null): string {
   if (!code) return ''
+  if (code === 'MINI_PROGRAM') return '正价'
+  if (CHARITY_PATIENT_SOURCES.has(code)) return '公益'
   return PATIENT_SOURCE_OPTIONS.find(o => o.value === code)?.label || code
 }
 
@@ -34,5 +45,5 @@ export function counselorTypeLabel(code?: string | null): string {
 }
 
 export function isCharityPatientSource(code?: string | null): boolean {
-  return !!code && CHARITY_PATIENT_SOURCES.has(code as typeof PATIENT_SOURCE_OPTIONS[number]['value'])
+  return !!code && CHARITY_PATIENT_SOURCES.has(code)
 }

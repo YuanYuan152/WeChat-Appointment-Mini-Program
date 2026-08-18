@@ -9,8 +9,9 @@ export interface BookingTimeSlot {
   maxSign: number;
   numSign: number;
   centerId: string;
-  status?: "AVAILABLE" | "BOOKED" | "EXPIRED";
+  status?: "AVAILABLE" | "BOOKED" | "EXPIRED" | "PENDING_PAYMENT" | "TOO_SOON";
   isBookable?: boolean;
+  unavailableReason?: string;
   startTime?: string;
   endTime?: string;
 }
@@ -38,6 +39,9 @@ export function normalizeBookingTimeSlots(raw: unknown[] = []): BookingTimeSlot[
             : slot.status !== "BOOKED" &&
               slot.status !== "EXPIRED" &&
               Number(slot.numSign ?? 0) < Number(slot.maxSign ?? 1),
+        unavailableReason: (slot.unavailableReason ?? slot.unavailable_reason) as
+          | string
+          | undefined,
         startTime: slot.startTime as string | undefined,
         endTime: slot.endTime as string | undefined,
       };
@@ -66,6 +70,7 @@ export function isSlotExpired(slot: BookingTimeSlot): boolean {
 }
 
 export function slotUnavailableLabel(slot: BookingTimeSlot): string {
+  if (slot.unavailableReason) return slot.unavailableReason;
   if (isSlotExpired(slot)) return "已过期";
   if (slot.status === "BOOKED") return "已约满";
   return "已约满";

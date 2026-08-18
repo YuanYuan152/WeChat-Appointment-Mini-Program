@@ -89,8 +89,10 @@
             <input class="input" type="number" v-model.number="form.consultHours" />
           </view>
           <view class="form-item">
-            <text class="label">培训经历（段数）</text>
-            <input class="input" v-model="form.career" placeholder="如 4" />
+            <text class="label">性别</text>
+            <picker :range="genderOptions" :value="genderIndex" @change="onGenderChange">
+              <view class="picker">{{ form.gender || '请选择' }}</view>
+            </picker>
           </view>
           <view class="form-item">
             <text class="label">咨询方式</text>
@@ -99,16 +101,16 @@
             </picker>
           </view>
           <view class="form-item">
-            <text class="label">专业领域</text>
+            <text class="label">咨询领域</text>
             <input class="input" v-model="form.field" placeholder="逗号分隔" />
           </view>
           <view class="form-item">
-            <text class="label">服务人群</text>
+            <text class="label">擅长人群</text>
             <input class="input" v-model="form.targetGroup" placeholder="逗号分隔" />
           </view>
           <view class="form-item">
-            <text class="label">擅长方向</text>
-            <textarea class="textarea" v-model="form.specialty" />
+            <text class="label">咨询流派</text>
+            <textarea class="textarea" v-model="form.specialty" placeholder="如精神分析、认知行为等" />
           </view>
           <view class="form-item">
             <text class="label">简介</text>
@@ -117,6 +119,17 @@
           <view class="form-item">
             <text class="label">资质证书</text>
             <textarea class="textarea" v-model="form.qualification" />
+          </view>
+          <view class="form-item">
+            <text class="label">受训背景</text>
+            <textarea
+              class="textarea"
+              v-model="form.trainingExperience"
+              placeholder="直接填写受训背景，一段或多段均可"
+            />
+            <text v-if="!form.trainingExperience && detail.career" class="readonly-fallback">
+              旧字段只读回退：{{ detail.career }}
+            </text>
           </view>
         </view>
       </view>
@@ -208,7 +221,20 @@ import { API_ENDPOINTS } from '@/config/api'
 import StaffRemarkEditor from '@/components/StaffRemarkEditor.vue'
 import { formatPatientInline } from '@/utils/patientContract'
 
-const modeOptions = ['线上', '线下', '线上/线下']
+const genderOptions = ['男', '女']
+const modeOptions = ['视频咨询', '面询', '视频咨询/面询']
+
+function normalizeModeLabel(mode?: string) {
+  const raw = (mode || '').trim()
+  if (!raw) return '视频咨询/面询'
+  if (modeOptions.includes(raw)) return raw
+  const hasOnline = /线上|在线|视频|video|online/i.test(raw)
+  const hasOffline = /线下|面询|面对面|offline/i.test(raw)
+  if (hasOnline && hasOffline) return '视频咨询/面询'
+  if (hasOnline) return '视频咨询'
+  if (hasOffline) return '面询'
+  return '视频咨询/面询'
+}
 
 type SectionKey = 'profile' | 'schedule' | 'unrecorded' | 'recorded' | 'visitors'
 type TabValue = 'ALL' | SectionKey
@@ -235,8 +261,10 @@ interface CounselorDetail {
   field?: string
   introduce?: string
   career?: string
+  trainingExperience?: string
   qualification?: string
   targetGroup?: string
+  gender?: string
   mode?: string
   workYears: number
   consultHours: number
@@ -248,10 +276,10 @@ interface CounselorDetail {
     missingRecordCount: number
     visitorCount: number
   }
-  visitors: Array<{ patientId: number; patientName: string; mobile?: string; consultationCount: number }>
-  schedules: Array<{ scheduleId: number; startTime?: string; endTime?: string; statusLabel: string; patientName?: string; location?: string }>
-  recordedConsultations: Array<{ consultationId: number; patientName: string; startTime?: string; statusLabel: string }>
-  unrecordedConsultations: Array<{ consultationId: number; patientName: string; startTime?: string; statusLabel: string }>
+  visitors: Array<{ patientId: number; patientName: string; patientContractTag?: string; mobile?: string; consultationCount: number }>
+  schedules: Array<{ scheduleId: number; startTime?: string; endTime?: string; statusLabel: string; patientName?: string; patientContractTag?: string; location?: string }>
+  recordedConsultations: Array<{ consultationId: number; patientName: string; patientContractTag?: string; startTime?: string; statusLabel: string }>
+  unrecordedConsultations: Array<{ consultationId: number; patientName: string; patientContractTag?: string; startTime?: string; statusLabel: string }>
   staffRemark?: string
 }
 
@@ -269,12 +297,18 @@ const form = ref({
   specialty: '',
   field: '',
   introduce: '',
-  career: '',
+  trainingExperience: '',
   qualification: '',
   targetGroup: '',
+  gender: '',
   mode: '',
   workYears: 0,
   consultHours: 0,
+})
+
+const genderIndex = computed(() => {
+  const idx = genderOptions.indexOf(form.value.gender)
+  return idx >= 0 ? idx : 0
 })
 
 const modeIndex = computed(() => {
@@ -295,6 +329,10 @@ const toggleExpand = (key: SectionKey) => {
   expandedSections.value = next
 }
 
+const onGenderChange = (e: any) => {
+  form.value.gender = genderOptions[Number(e.detail.value)] || genderOptions[0]
+}
+
 const onModeChange = (e: any) => {
   form.value.mode = modeOptions[Number(e.detail.value)] || modeOptions[0]
 }
@@ -307,10 +345,11 @@ const applyForm = (data: CounselorDetail) => {
     specialty: data.specialty || '',
     field: data.field || '',
     introduce: data.introduce || '',
-    career: data.career || '',
+    trainingExperience: data.trainingExperience || '',
     qualification: data.qualification || '',
     targetGroup: data.targetGroup || '',
-    mode: data.mode || '线上/线下',
+    gender: data.gender || '',
+    mode: normalizeModeLabel(data.mode),
     workYears: data.workYears || 0,
     consultHours: data.consultHours || 0,
   }
@@ -335,6 +374,14 @@ const load = async () => {
 
 const save = async () => {
   if (!counselorId.value) return
+  if (!form.value.gender) {
+    uni.showToast({ title: '请选择咨询师性别', icon: 'none' })
+    return
+  }
+  if (!form.value.mode) {
+    uni.showToast({ title: '请选择咨询方式', icon: 'none' })
+    return
+  }
   saving.value = true
   try {
     const res = await httpV2.put(
@@ -513,6 +560,13 @@ onMounted(() => {
   box-sizing: border-box;
 }
 .textarea { min-height: 120rpx; line-height: 1.6; }
+.readonly-fallback {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 22rpx;
+  color: #9CA3AF;
+  line-height: 1.5;
+}
 .row-card {
   background: #FAF7F3;
   border-radius: 12rpx;
