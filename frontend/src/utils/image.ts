@@ -23,16 +23,64 @@ const rewriteLegacyLocalImage = (imagePath: string): string => {
 }
 
 /**
+ * FastAPI 上传目录：无论返回相对路径还是带错误域名的绝对 URL，
+ * 都改写到当前 V2 后端，避免 BASE_URL 占位符导致头像无法显示。
+ */
+const toCurrentUploadUrl = (value: string): string | null => {
+  let pathname = value
+  if (value.startsWith('http://') || value.startsWith('https://')) {
+    try {
+      pathname = new URL(value).pathname
+    } catch {
+      return null
+    }
+  }
+  if (pathname.startsWith('/static/uploads/') || pathname.startsWith('/api/static/')) {
+    return `${API_V2_CONFIG.baseURL.replace(/\/$/, '')}${pathname}`
+  }
+  return null
+}
+
+/**
+ * 上传接口返回的地址统一存相对路径，展示时再拼当前后端。
+ */
+export const toStoredUploadPath = (url?: string, filename?: string): string => {
+  if (filename && /^[A-Za-z0-9._-]+$/.test(filename)) {
+    return `/static/uploads/${filename}`
+  }
+  if (!url) return ''
+  if (url.startsWith('/static/uploads/') || url.startsWith('/api/static/')) {
+    return url.split('?')[0]
+  }
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    try {
+      const pathname = new URL(url).pathname
+      if (pathname.startsWith('/static/uploads/') || pathname.startsWith('/api/static/')) {
+        return pathname
+      }
+    } catch {
+      return url
+    }
+  }
+  return url
+}
+
+/**
  * 修复图片URL路径
  * - 本地前端资源 (/static/images-opt/*、/static/*) 直接返回，由小程序本地加载
  * - 旧 /static/images/* 自动映射到 images-opt
  * - FastAPI 上传/静态目录 (/static/uploads/*、/api/static/*) 走 V2 baseURL
  * - 其它绝对路径（如旧 C# 后端 /Uploadfile/*）继续拼 V1 baseURL，保持兼容
- * - 完整 http(s) URL 原样返回
+ * - 完整 http(s) URL 原样返回；其中上传目录会改写到当前 V2 地址
  */
 export const fixImageUrl = (imagePath: string): string => {
   if (!imagePath) {
     return '/static/images-opt/place21.jpg'
+  }
+
+  const uploadUrl = toCurrentUploadUrl(imagePath)
+  if (uploadUrl) {
+    return uploadUrl
   }
 
   if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {

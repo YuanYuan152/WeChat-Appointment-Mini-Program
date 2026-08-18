@@ -8,7 +8,8 @@
           <image 
             :src="userInfo.avatar || '/static/images-opt/default-avatar.jpg'" 
             class="avatar-img" 
-            mode="aspectFill" 
+            mode="aspectFill"
+            @error="onAvatarError"
           />
           <view class="edit-badge">
             <text class="edit-icon">✎</text>
@@ -163,6 +164,7 @@ import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
 import { updateTabBarForRole } from '@/utils/tabBar'
 import { resolveAccountRole, roleLabel } from '@/constants/roles'
+import { fixImageUrl } from '@/utils/image'
 
 interface UserInfo {
   name: string
@@ -255,7 +257,7 @@ const loadUserInfo = async () => {
       ...emptyUserInfo(),
       name: meData.nickname || '',
       phone: meData.mobile || '',
-      avatar: meData.avatarUrl || '',
+      avatar: meData.avatarUrl ? fixImageUrl(meData.avatarUrl) : '',
     }
     userRoles.value = meData.roles || []
     activeRole.value = resolveAccountRole(meData.roles, meData.activeRole)
@@ -457,6 +459,12 @@ const handleAvatarClick = () => {
     return
   }
   navigateTo(getProfileEditUrl())
+}
+
+const onAvatarError = () => {
+  if (userInfo.value.avatar && userInfo.value.avatar !== '/static/images-opt/default-avatar.jpg') {
+    userInfo.value.avatar = '/static/images-opt/default-avatar.jpg'
+  }
 }
 
 const handleUserInfoClick = () => {

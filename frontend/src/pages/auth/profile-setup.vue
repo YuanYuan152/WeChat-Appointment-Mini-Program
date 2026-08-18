@@ -7,7 +7,7 @@
 
     <view class="card">
       <button class="avatar-btn" open-type="chooseAvatar" @chooseavatar="onChooseAvatar">
-        <image class="avatar" :src="avatarUrl || defaultAvatar" mode="aspectFill" />
+        <image class="avatar" :src="avatarDisplay" mode="aspectFill" />
         <text class="avatar-tip">点击选择头像</text>
       </button>
 
@@ -32,7 +32,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { AuthApi } from '@/apis/auth'
 import { isLoggedIn } from '@/utils/auth'
 import { httpV2 } from '@/utils/http'
@@ -43,8 +43,7 @@ import {
   FALLBACK_TEMPLATE_BY_EVENT,
   prefetchSubscribeTmplIds,
 } from '@/utils/subscribeMessage'
-import { MessageApi } from '@/apis/message'
-import { getStoredRole } from '@/utils/session'
+import { fixImageUrl, toStoredUploadPath } from '@/utils/image'
 
 const defaultAvatar = '/static/images-opt/default-avatar.jpg'
 const avatarUrl = ref('')
@@ -53,18 +52,27 @@ const saving = ref(false)
 const prefetchedTmplIds = ref<string[]>([])
 const subscribeKeys = ref<string[]>(ROLE_EVENT_KEYS.Patient)
 
+const avatarDisplay = computed(() => {
+  const value = avatarUrl.value
+  if (!value) return defaultAvatar
+  if (value.startsWith('wxfile://') || value.startsWith('http://tmp') || value.startsWith('tmp://')) {
+    return value
+  }
+  return fixImageUrl(value)
+})
+
 const onChooseAvatar = async (e: any) => {
   const localPath = e?.detail?.avatarUrl
   if (!localPath) return
   avatarUrl.value = localPath
   try {
-    const uploadRes = await httpV2.upload<{ url?: string }>(
+    const uploadRes = await httpV2.upload<{ url?: string; filename?: string }>(
       API_ENDPOINTS.upload.file,
       localPath,
       'file',
     )
-    if (uploadRes.code === 0 && uploadRes.data?.url) {
-      avatarUrl.value = uploadRes.data.url
+    if (uploadRes.code === 0 && (uploadRes.data?.url || uploadRes.data?.filename)) {
+      avatarUrl.value = toStoredUploadPath(uploadRes.data?.url, uploadRes.data?.filename)
     }
   } catch (err) {
     console.warn('avatar upload failed, keep local path', err)

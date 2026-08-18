@@ -5,13 +5,19 @@
     </view>
 
     <view class="form-card">
+      <view class="form-item avatar-item">
+        <text class="label">头像</text>
+        <view class="avatar-row" @tap="pickAvatar">
+          <image class="avatar-preview" :src="avatarDisplay" mode="aspectFill" />
+          <view class="avatar-meta">
+            <text class="avatar-action">从相册选择</text>
+            <text class="avatar-tip">可在圆形框中拖动预览后再保存</text>
+          </view>
+        </view>
+      </view>
       <view class="form-item">
         <text class="label">昵称</text>
         <input class="input" v-model="form.nickname" placeholder="请输入昵称" />
-      </view>
-      <view class="form-item">
-        <text class="label">头像 URL</text>
-        <input class="input" v-model="form.avatarUrl" placeholder="请输入头像链接" />
       </view>
       <view class="form-item">
         <text class="label">真实姓名</text>
@@ -30,14 +36,24 @@
     </view>
 
     <button class="save-btn" :loading="saving" @click="save">保存资料</button>
+
+    <AvatarCropper
+      :visible="cropVisible"
+      :src="cropSrc"
+      @cancel="cropVisible = false"
+      @confirm="onCropConfirm"
+    />
   </view>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import AvatarCropper from '@/components/AvatarCropper.vue'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
+import { fixImageUrl, toStoredUploadPath } from '@/utils/image'
 
+const defaultAvatar = '/static/images-opt/default-avatar.jpg'
 const genderOptions = ['男', '女', '其他']
 const isCounselor = ref(false)
 const form = ref({
@@ -47,7 +63,15 @@ const form = ref({
   gender: '',
   mobile: '',
 })
+const localPreview = ref('')
+const cropVisible = ref(false)
+const cropSrc = ref('')
 const saving = ref(false)
+
+const avatarDisplay = computed(() => {
+  if (localPreview.value) return localPreview.value
+  return form.value.avatarUrl ? fixImageUrl(form.value.avatarUrl) : defaultAvatar
+})
 
 const genderIndex = computed(() => {
   const idx = genderOptions.indexOf(form.value.gender)
@@ -56,6 +80,42 @@ const genderIndex = computed(() => {
 
 const onGenderChange = (e: any) => {
   form.value.gender = genderOptions[Number(e.detail.value)]
+}
+
+const pickAvatar = () => {
+  uni.chooseImage({
+    count: 1,
+    sizeType: ['compressed'],
+    sourceType: ['album'],
+    success: (res) => {
+      const path = res.tempFilePaths?.[0]
+      if (!path) return
+      cropSrc.value = path
+      cropVisible.value = true
+    },
+  })
+}
+
+const onCropConfirm = async (filePath: string) => {
+  cropVisible.value = false
+  localPreview.value = filePath
+  uni.showLoading({ title: '上传中...', mask: true })
+  try {
+    const uploadRes = await httpV2.upload<{ url?: string; filename?: string }>(
+      API_ENDPOINTS.upload.file,
+      filePath,
+      'file',
+    )
+    if (uploadRes.code !== 0 || !(uploadRes.data?.url || uploadRes.data?.filename)) {
+      throw new Error(uploadRes.msg || '头像上传失败')
+    }
+    form.value.avatarUrl = toStoredUploadPath(uploadRes.data?.url, uploadRes.data?.filename)
+    uni.showToast({ title: '头像已更新，请保存资料', icon: 'none' })
+  } catch (err: any) {
+    uni.showToast({ title: err?.message || '头像上传失败', icon: 'none' })
+  } finally {
+    uni.hideLoading()
+  }
 }
 
 const load = async () => {
@@ -69,6 +129,7 @@ const load = async () => {
       gender: res.data.gender || '',
       mobile: res.data.mobile || '',
     }
+    localPreview.value = ''
   }
 }
 
@@ -144,6 +205,38 @@ onMounted(load)
   font-size: 26rpx;
   color: #6B7280;
   margin-bottom: 14rpx;
+}
+
+.avatar-row {
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+}
+
+.avatar-preview {
+  width: 128rpx;
+  height: 128rpx;
+  border-radius: 50%;
+  background: #EDEAE6;
+  flex-shrink: 0;
+}
+
+.avatar-meta {
+  flex: 1;
+}
+
+.avatar-action {
+  display: block;
+  font-size: 30rpx;
+  color: #3D5A4E;
+  font-weight: 600;
+}
+
+.avatar-tip {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: #9CA3AF;
 }
 
 .input,
