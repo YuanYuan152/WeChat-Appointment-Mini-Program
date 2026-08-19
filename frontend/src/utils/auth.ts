@@ -38,15 +38,13 @@ export const isWechatDevtools = (): boolean => {
 }
 
 /**
- * 开发模式开关（isDevMode）：
- * - VITE_DEV_MODE=true / VITE_ENABLE_MOCK_LOGIN=true
- * - 或 Vite DEV 构建
- * 生产包默认 false，登录页只显示微信一键登录。
+ * 是否显示模拟登录 / 开发者入口。
+ * 只认 VITE_ENABLE_MOCK_LOGIN=true，不跟 Vite 的 DEV 模式绑定。
+ * 开发：.env.development 或 .env.development.local 设 true
+ * 生产构建 / 本地测正式登录：不写或设 false（须重启编译）
  */
 export const isDevMode = (): boolean =>
-  import.meta.env.VITE_DEV_MODE === 'true'
-  || import.meta.env.VITE_ENABLE_MOCK_LOGIN === 'true'
-  || import.meta.env.DEV
+  import.meta.env.VITE_ENABLE_MOCK_LOGIN === 'true'
 
 /**
  * 真机调试时若 V2 仍指向 127.0.0.1/localhost，手机访问不到开发机后端，

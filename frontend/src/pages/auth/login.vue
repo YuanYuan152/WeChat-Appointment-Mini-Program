@@ -7,15 +7,13 @@
     </view>
 
     <view class="main-content">
-      <view class="header-section">
-        <view class="logo-container">
-          <text class="logo-icon">💙</text>
+      <view class="center-panel">
+        <view class="header-section">
+          <text class="app-title">连心心理</text>
+          <text class="app-subtitle">专业的心理咨询服务平台</text>
         </view>
-        <text class="app-title">连心心理</text>
-        <text class="app-subtitle">专业的心理咨询服务平台</text>
-      </view>
 
-      <view class="form-container">
+        <view class="form-container">
         <view v-if="devMode" class="dev-entrance">
           <view class="dev-entrance-row" @tap="toggleDevEntrance">
             <text class="dev-entrance-title">开发者入口</text>
@@ -26,7 +24,7 @@
           </text>
         </view>
 
-        <view v-if="!showMockPanel && !wechatReady" class="config-warn">
+        <view v-if="devMode && !showMockPanel && !wechatReady" class="config-warn">
           <text class="config-warn-title">尚未配置真实微信凭证</text>
           <text class="config-warn-text">
             请在 backend-python/.env 填写 WECHAT_APPID / WECHAT_SECRET，并将小程序 AppID 改为同一值后重启后端。
@@ -43,47 +41,51 @@
           }}
         </text>
 
-        <!-- 必须勾选协议 -->
+        <!-- 必须勾选协议：整行作为一个居中块，避免小程序 text 嵌套导致勾选框上移、右偏 -->
         <view class="agree-block">
           <view class="agree-row" @tap="toggleAgreeService">
             <view class="checkbox" :class="{ checked: agreeService }">
               <text v-if="agreeService" class="check-mark">✓</text>
             </view>
-            <text class="agree-text">
-              我已阅读并同意
-              <text class="footer-link" @click.stop="openLegal('agreement')">《用户服务协议》</text>
-            </text>
+            <view class="agree-text">
+              <text>我已阅读并同意</text>
+              <text class="footer-link" @tap.stop="openLegal('agreement')">《用户服务协议》</text>
+            </view>
           </view>
           <view class="agree-row" @tap="toggleAgreePrivacy">
             <view class="checkbox" :class="{ checked: agreePrivacy }">
               <text v-if="agreePrivacy" class="check-mark">✓</text>
             </view>
-            <text class="agree-text">
-              我已阅读并同意
-              <text class="footer-link" @click.stop="openLegal('privacy')">《隐私政策》</text>
-            </text>
+            <view class="agree-text">
+              <text>我已阅读并同意</text>
+              <text class="footer-link" @tap.stop="openLegal('privacy')">《隐私政策》</text>
+            </view>
           </view>
         </view>
 
-        <!-- 正式：手机号快速验证 + wx.login；未勾选协议时禁用 -->
+        <!-- 未勾选：灰色 view，避免微信 button[disabled] 被洗成看不见；勾选后才用真实 button -->
+        <view
+          v-if="!agreementsOk"
+          class="wx-login-btn is-gray"
+          @tap="guardAgreements"
+        >
+          <text class="wx-btn-text">{{ showMockPanel ? loginBtnText : '微信一键登录' }}</text>
+        </view>
         <button
-          v-if="!showMockPanel"
+          v-else-if="!showMockPanel"
           class="wx-login-btn"
-          :class="{ disabled: !agreementsOk }"
           :loading="loading"
-          :disabled="loading || !agreementsOk"
+          :disabled="loading"
           open-type="getPhoneNumber"
           @getphonenumber="handlePhoneRegister"
-          @click="guardAgreements"
         >
           <text class="wx-btn-text">微信一键登录</text>
         </button>
         <button
           v-else
           class="wx-login-btn"
-          :class="{ disabled: !agreementsOk }"
           :loading="loading"
-          :disabled="loading || !agreementsOk"
+          :disabled="loading"
           @click="handleMockLogin"
         >
           <text class="wx-btn-text">{{ loginBtnText }}</text>
@@ -96,7 +98,13 @@
               : '将获取微信身份（openid）与手机号，返回 token 完成注册/登录'
           }}
         </text>
+        </view>
       </view>
+    </view>
+
+    <view class="footer-decoration">
+      <view class="decoration-circle circle-4"></view>
+      <view class="decoration-circle circle-5"></view>
     </view>
 
     <view class="back-btn" @click="goBack">
@@ -320,61 +328,107 @@ onMounted(async () => {
 <style scoped>
 .login-page {
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(180deg, #4A6B5D 0%, #3D5A4E 48%, #2F4A40 100%);
   position: relative;
   overflow: hidden;
 }
 
-.background-decoration { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; }
-.decoration-circle { position: absolute; border-radius: 50%; background: rgba(255,255,255,0.1); }
-.circle-1 { width: 200px; height: 200px; top: -100px; right: -100px; }
-.circle-2 { width: 150px; height: 150px; bottom: -75px; left: -75px; }
-.circle-3 { width: 100px; height: 100px; top: 50%; left: -50px; }
+.background-decoration {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 420rpx;
+  overflow: hidden;
+  pointer-events: none;
+}
+.footer-decoration {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 280rpx;
+  overflow: hidden;
+  pointer-events: none;
+}
+.decoration-circle { position: absolute; border-radius: 50%; background: rgba(255, 255, 255, 0.08); }
+.circle-1 { width: 280rpx; height: 280rpx; top: -80rpx; right: -60rpx; }
+.circle-2 { width: 200rpx; height: 200rpx; bottom: 40rpx; left: -80rpx; }
+.circle-3 { width: 120rpx; height: 120rpx; top: 180rpx; left: 40%; }
+.circle-4 { width: 220rpx; height: 220rpx; bottom: -80rpx; right: -40rpx; }
+.circle-5 { width: 160rpx; height: 160rpx; top: 20rpx; left: -50rpx; }
 
 .main-content {
   position: relative;
   z-index: 10;
-  padding: 100rpx 60rpx 80rpx;
   min-height: 100vh;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(120rpx + env(safe-area-inset-top)) 40rpx calc(120rpx + env(safe-area-inset-bottom));
+}
+
+.center-panel {
+  width: 100%;
+  max-width: 670rpx;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
 }
 
-.header-section { text-align: center; margin-bottom: 80rpx; }
-.logo-container { margin-bottom: 32rpx; }
-.logo-icon { font-size: 120rpx; }
-.app-title { display: block; font-size: 64rpx; font-weight: 700; color: white; margin-bottom: 16rpx; }
-.app-subtitle { display: block; font-size: 32rpx; color: rgba(255,255,255,0.8); }
+.header-section {
+  width: 100%;
+  text-align: center;
+  margin-bottom: 40rpx;
+}
+.app-title {
+  display: block;
+  width: 100%;
+  text-align: center;
+  font-size: 48rpx;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 12rpx;
+}
+.app-subtitle {
+  display: block;
+  width: 100%;
+  text-align: center;
+  font-size: 26rpx;
+  color: rgba(255, 255, 255, 0.78);
+}
 
 .form-container {
   width: 100%;
-  background: rgba(255,255,255,0.95);
-  border-radius: 40rpx;
-  padding: 60rpx;
-  margin-bottom: 48rpx;
-  box-shadow: 0 40rpx 80rpx rgba(0,0,0,0.12);
+  box-sizing: border-box;
+  background: #fff;
+  border-radius: 24rpx;
+  padding: 48rpx 40rpx;
+  box-shadow: 0 8rpx 32rpx rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .dev-entrance {
-  margin-bottom: 32rpx;
+  margin-bottom: 28rpx;
   padding: 24rpx;
   border-radius: 20rpx;
-  background: #F3F4F6;
+  background: #F7F5F2;
 }
 .dev-entrance-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
-.dev-entrance-title { font-size: 28rpx; font-weight: 600; color: #374151; }
-.dev-entrance-toggle { font-size: 24rpx; color: #4F46E5; }
+.dev-entrance-title { font-size: 28rpx; font-weight: 600; color: #2C2C2C; }
+.dev-entrance-toggle { font-size: 24rpx; color: #3D5A4E; }
 .dev-entrance-hint {
   display: block;
   margin-top: 12rpx;
   font-size: 22rpx;
-  color: #6B7280;
+  color: #8A8A8A;
   line-height: 1.5;
 }
 
@@ -382,111 +436,137 @@ onMounted(async () => {
   margin-bottom: 28rpx;
   padding: 24rpx;
   border-radius: 16rpx;
-  background: #FEF3C7;
+  background: #F0EDE8;
 }
 .config-warn-title {
   display: block;
   font-size: 26rpx;
   font-weight: 700;
-  color: #92400E;
+  color: #3D5A4E;
   margin-bottom: 8rpx;
 }
 .config-warn-text {
   display: block;
   font-size: 22rpx;
-  color: #A16207;
+  color: #8A8A8A;
   line-height: 1.5;
 }
 
 .form-desc {
   display: block;
-  font-size: 28rpx;
-  color: #6B7280;
+  width: 100%;
+  font-size: 26rpx;
+  color: #8A8A8A;
   text-align: center;
   margin-bottom: 32rpx;
   line-height: 1.6;
 }
 .form-tip {
   display: block;
+  width: 100%;
   font-size: 22rpx;
-  color: #9CA3AF;
+  color: #8A8A8A;
   text-align: center;
   margin-top: 24rpx;
+  line-height: 1.5;
 }
 
 .agree-block {
-  margin-bottom: 36rpx;
-  padding: 8rpx 4rpx;
+  width: 100%;
+  margin: 0 0 40rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 .agree-row {
   display: flex;
-  align-items: flex-start;
-  gap: 16rpx;
-  margin-bottom: 20rpx;
-}
-.checkbox {
-  width: 36rpx;
-  height: 36rpx;
-  border-radius: 8rpx;
-  border: 2rpx solid #c4c4c4;
-  flex-shrink: 0;
-  margin-top: 4rpx;
-  display: flex;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
+  align-self: center;
+  margin-bottom: 16rpx;
+}
+.checkbox {
+  width: 32rpx;
+  height: 32rpx;
+  box-sizing: border-box;
+  border-radius: 6rpx;
+  border: 2rpx solid #C8C4BC;
+  margin-right: 12rpx;
+  flex-shrink: 0;
   background: #fff;
 }
 .checkbox.checked {
-  background: #07C160;
-  border-color: #07C160;
+  background: #3D5A4E;
+  border-color: #3D5A4E;
 }
 .check-mark {
+  display: block;
+  width: 28rpx;
+  height: 28rpx;
+  line-height: 28rpx;
+  text-align: center;
   color: #fff;
-  font-size: 22rpx;
+  font-size: 20rpx;
   font-weight: 700;
-  line-height: 1;
 }
 .agree-text {
-  flex: 1;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
   font-size: 24rpx;
-  color: #6B7280;
-  line-height: 1.6;
+  color: #8A8A8A;
+  line-height: 1.5;
+}
+.agree-text text {
+  font-size: 24rpx;
+  color: #8A8A8A;
+  line-height: 1.5;
 }
 .footer-link {
-  color: #0D9488;
-  text-decoration: underline;
+  color: #3D5A4E;
 }
 
 .wx-login-btn {
   width: 100%;
   height: 96rpx;
   line-height: 96rpx;
-  background: #07C160;
-  color: white;
-  border-radius: 100rpx;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  background: #3D5A4E;
+  color: #fff;
+  border-radius: 16rpx;
   border: none;
-  font-size: 34rpx;
-  font-weight: 700;
-  box-shadow: 0 16rpx 40rpx rgba(7,193,96,0.35);
+  font-size: 32rpx;
+  font-weight: 600;
+  text-align: center;
 }
-.wx-login-btn.disabled {
-  opacity: 0.45;
-  box-shadow: none;
+.wx-login-btn::after { border: none; }
+.wx-btn-text { color: #fff; font-size: 32rpx; font-weight: 600; }
+
+.wx-login-btn.is-gray {
+  background: #A8A29E;
+  color: #fff;
 }
-.wx-btn-text { color: white; }
+.wx-login-btn.is-gray .wx-btn-text {
+  color: #fff;
+}
 
 .back-btn {
   position: fixed;
-  top: 80rpx;
-  left: 40rpx;
-  width: 80rpx;
-  height: 80rpx;
-  background: rgba(255,255,255,0.2);
+  top: calc(24rpx + env(safe-area-inset-top));
+  left: 32rpx;
+  z-index: 20;
+  width: 72rpx;
+  height: 72rpx;
+  background: rgba(255, 255, 255, 0.2);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  backdrop-filter: blur(10px);
 }
-.back-icon { font-size: 40rpx; color: white; font-weight: bold; }
+.back-icon { font-size: 36rpx; color: #fff; font-weight: 600; }
 </style>

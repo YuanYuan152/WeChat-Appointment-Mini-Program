@@ -128,9 +128,9 @@ onMounted(() => {
 .dev-role-picker {
   margin-bottom: 32rpx;
   padding: 24rpx;
-  background: #F9FAFB;
+  background: #F7F5F2;
   border-radius: 20rpx;
-  border: 2rpx dashed #D1D5DB;
+  border: 2rpx dashed #E8E4DE;
 }
 .dev-role-header {
   display: flex;
@@ -142,11 +142,11 @@ onMounted(() => {
 .dev-role-label {
   font-size: 26rpx;
   font-weight: 700;
-  color: #374151;
+  color: #2C2C2C;
 }
 .dev-role-current {
   font-size: 22rpx;
-  color: #0D9488;
+  color: #3D5A4E;
   font-weight: 600;
   flex-shrink: 0;
 }
@@ -156,7 +156,7 @@ onMounted(() => {
 .dev-role-group-title {
   display: block;
   font-size: 22rpx;
-  color: #9CA3AF;
+  color: #8A8A8A;
   margin-bottom: 10rpx;
 }
 .dev-role-list {
@@ -168,18 +168,18 @@ onMounted(() => {
   padding: 10rpx 24rpx;
   border-radius: 999rpx;
   background: #ffffff;
-  border: 2rpx solid #E5E7EB;
+  border: 2rpx solid #E8E4DE;
 }
 .dev-role-chip.active {
-  background: #ECFDF5;
-  border-color: #0D9488;
+  background: #E8E4DE;
+  border-color: #3D5A4E;
 }
 .dev-role-chip-text {
   font-size: 24rpx;
-  color: #374151;
+  color: #2C2C2C;
 }
 .dev-role-chip.active .dev-role-chip-text {
-  color: #0D9488;
+  color: #3D5A4E;
   font-weight: 600;
 }
 .dev-role-chip.disabled {
@@ -190,7 +190,7 @@ onMounted(() => {
   display: block;
   margin-top: 8rpx;
   font-size: 20rpx;
-  color: #9CA3AF;
+  color: #8A8A8A;
   line-height: 1.5;
 }
 </style>

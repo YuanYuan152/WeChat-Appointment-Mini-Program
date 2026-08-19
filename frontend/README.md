@@ -90,6 +90,18 @@ pnpm run format
 pnpm run clean
 ```
 
+### 登录入口开关（环境变量）
+
+`VITE_ENABLE_MOCK_LOGIN` 控制是否显示「开发者入口」和模拟登录。Vite 会在编译时打进小程序包，**改完必须重新编译**（开发模式重启 `dev:mp-weixin`，生产重新 `build`）。
+
+| 场景 | 怎么设 |
+|------|--------|
+| 本地开发（默认） | `.env.development` 或 `.env.development.local` 设 `VITE_ENABLE_MOCK_LOGIN=true` |
+| 本地测正式登录 | 在 `.env.development.local` 设 `VITE_ENABLE_MOCK_LOGIN=false` 后重启编译 |
+| 生产构建 | 不写或设 `false`（`npm run build` 不会读 `.env.development*`） |
+
+生产包登录页只保留：勾选《用户服务协议》+《隐私政策》→ 微信手机号一键登录。
+
 #### 使用npm
 ```bash
 # 启动H5开发服务器

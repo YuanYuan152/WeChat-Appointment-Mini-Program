@@ -15,7 +15,7 @@
     <view v-else-if="state === 'needLogin'" class="card">
       <text class="title">请先登录</text>
       <text class="desc">登录后将根据您的角色进入对应工作台</text>
-      <DevRolePicker />
+      <DevRolePicker v-if="devMode" />
       <button class="login-btn" @click="goLogin">微信一键登录</button>
     </view>
 
@@ -43,7 +43,7 @@ import { OPS_WORKBENCH_PATH, STAFF_OPS_WORKBENCH_ROLES } from '@/constants/roles
 import { resolveWorkbenchRole } from '@/utils/roleLogin'
 import { updateTabBarForRole } from '@/utils/tabBar'
 import {
-  getDevLoginCode,
+  isDevMode,
   isLoggedIn,
   resolveWxLoginCode,
 } from '@/utils/auth'
@@ -52,6 +52,7 @@ type RouterState = 'loading' | 'needLogin' | 'error' | 'patientBlocked'
 
 const state = ref<RouterState>('loading')
 const errorMsg = ref('')
+const devMode = isDevMode()
 /** 防止 onMounted + onShow 并发重复进工作台 */
 let routing = false
 
@@ -68,11 +69,18 @@ const goConsult = () => uni.switchTab({ url: '/pages/consultant/list' })
 const goRecords = () => uni.switchTab({ url: '/pages/tab-slot/index' })
 
 const goLogin = async () => {
+  if (!devMode) {
+    uni.navigateTo({ url: '/pages/auth/login' })
+    return
+  }
   if (routing) return
   state.value = 'loading'
   routing = true
   try {
-    const code = (await resolveWxLoginCode()) || getDevLoginCode()
+    const code = await resolveWxLoginCode()
+    if (!code) {
+      throw new Error('获取登录凭证失败')
+    }
     await AuthApi.wxLogin(code)
     await routeToWorkbench()
   } catch (e: any) {
