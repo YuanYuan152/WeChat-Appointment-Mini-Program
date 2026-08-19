@@ -101,7 +101,7 @@ class Settings(BaseSettings):
 
     @property
     def dev_login_enabled(self) -> bool:
-        return self.APP_ENV != "production" and self.ALLOW_DEV_LOGIN
+        return self.ALLOW_DEV_LOGIN
 
     @property
     def cors_allowed_origins(self) -> list[str]:
