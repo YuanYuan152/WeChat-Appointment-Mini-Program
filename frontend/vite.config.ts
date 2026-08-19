@@ -10,15 +10,20 @@ import path from 'path'
  */
 function ensureMpWeixinAppMount(): Plugin {
   const ensure = (code: string) => {
-    if (/createApp\(\)\.app\.mount\(["']#app["']\)/.test(code)) return code
-    if (!/function createApp\(/.test(code) && !/exports\.createApp\s*=/.test(code)) return code
-    if (/exports\.createApp\s*=\s*createApp\s*;?/.test(code)) {
+    // 生产构建会把 createApp 压缩成 c 等短名，只要已经 mount 过就不要再插一行。
+    if (/\.app\.mount\(["']#app["']\)/.test(code)) return code
+    const exportMatch = code.match(/exports\.createApp\s*=\s*([A-Za-z_$][\w$]*)\s*;?/)
+    if (exportMatch) {
+      const fnName = exportMatch[1]
       return code.replace(
-        /exports\.createApp\s*=\s*createApp\s*;?/,
-        'createApp().app.mount("#app");\nexports.createApp = createApp;',
+        exportMatch[0],
+        `${fnName}().app.mount("#app");\nexports.createApp = ${fnName};`,
       )
     }
-    return `${code}\ncreateApp().app.mount("#app");\n`
+    if (/function createApp\(/.test(code)) {
+      return `${code}\ncreateApp().app.mount("#app");\n`
+    }
+    return code
   }
 
   return {

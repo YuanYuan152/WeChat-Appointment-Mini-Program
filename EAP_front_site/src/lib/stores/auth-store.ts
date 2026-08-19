@@ -5,11 +5,13 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import {
   fetchMe,
   loginWithCode,
+  loginWithDevCode,
   loginWithPassword,
   registerWithCode,
   registerWithPassword,
   type AuthUser,
 } from "@/lib/api/auth";
+import { clearAccessKeyPassed, isAccessKeyLoginEnabled } from "@/lib/access-key-login";
 
 interface AuthState {
   token: string | null;
@@ -19,6 +21,7 @@ interface AuthState {
   setUser: (user: AuthUser | null) => void;
   loginByCode: (phone: string, code: string) => Promise<void>;
   loginByPassword: (phone: string, password: string) => Promise<void>;
+  loginWithDevCode: (code: string) => Promise<void>;
   registerByCode: (phone: string, code: string, password?: string) => Promise<void>;
   registerByPassword: (phone: string, password: string) => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -50,6 +53,17 @@ export const useAuthStore = create<AuthState>()(
         set({ loading: true });
         try {
           const { token } = await loginWithPassword(phone, password);
+          set({ token });
+          await get().refreshUser();
+        } finally {
+          set({ loading: false });
+        }
+      },
+
+      loginWithDevCode: async (code) => {
+        set({ loading: true });
+        try {
+          const { token } = await loginWithDevCode(code);
           set({ token });
           await get().refreshUser();
         } finally {
@@ -93,7 +107,12 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      logout: () => set({ token: null, user: null }),
+      logout: () => {
+        if (isAccessKeyLoginEnabled()) {
+          clearAccessKeyPassed();
+        }
+        set({ token: null, user: null });
+      },
     }),
     {
       name: "auth-storage",

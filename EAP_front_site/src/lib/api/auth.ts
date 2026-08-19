@@ -87,6 +87,13 @@ export function loginWithPassword(phone: string, password: string) {
   });
 }
 
+export function loginWithDevCode(code: string) {
+  return request<AuthTokenResponse>("/api/mini/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ code }),
+  });
+}
+
 export function fetchMe(token: string) {
   return request<AuthUser>("/api/web/auth/me", {
     headers: { Authorization: `Bearer ${token}` },

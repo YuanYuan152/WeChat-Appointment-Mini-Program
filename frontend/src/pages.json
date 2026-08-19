@@ -72,7 +72,6 @@
                 "navigationBarTextStyle": "white",
                 "navigationStyle": "custom",
                 "enablePullDownRefresh": true,
-                "enableShareAppMessage": true,
                 "backgroundTextStyle": "dark"
             }
         },
@@ -83,7 +82,6 @@
                 "navigationBarBackgroundColor": "#ffffff",
                 "navigationBarTextStyle": "black",
                 "navigationStyle": "custom",
-                "enableShareAppMessage": true,
                 "backgroundColor": "#F7F5F2"
             }
         },

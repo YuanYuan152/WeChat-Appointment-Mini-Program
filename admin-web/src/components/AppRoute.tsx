@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
 import { useEffect } from "react";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { useRouter } from "next/navigation";
@@ -14,12 +14,19 @@ import {
   loginWithDevCode,
 } from "@/lib/api";
 import { roleLabel } from "@/lib/format";
+import {
+  clearAccessKeyPassed,
+  getAccessKeyLoginDevCode,
+  hasAccessKeyPassed,
+  isAccessKeyLoginEnabled,
+} from "@/lib/accessKeyLogin";
 import type { CurrentUser } from "@/types/api";
 
 import { canAccessSection, getDefaultSectionId, sectionPathById, sections } from "@/config/navigation";
 import type { Notice, SectionId } from "@/types/app";
 import { getMessage, roleText } from "@/lib/display";
 import { AppShell } from "./AppShell";
+import { AccessKeyGateScreen } from "./AccessKeyGateScreen";
 import { LoginScreen } from "./LoginScreen";
 import { fetchUnreadMessageCount, MESSAGE_UNREAD_CHANGED_EVENT } from "@/services/messages";
 
@@ -61,6 +68,9 @@ function AppRouteRoot({ sectionId, children }: { sectionId: SectionId; children:
   const [notice, setNotice] = useState<Notice | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [unreadMessageCount, setUnreadMessageCount] = useState<number | null>(null);
+  const [accessKeyPassed, setAccessKeyPassed] = useState(false);
+  const accessKeyLoginEnabled = isAccessKeyLoginEnabled();
+  const autoLoginStartedRef = useRef(false);
 
   const isAdmin = currentUser?.roles.includes("Admin") ?? false;
   const canEnterWeb =
@@ -74,6 +84,10 @@ function AppRouteRoot({ sectionId, children }: { sectionId: SectionId; children:
 
   const clearNotice = useCallback(() => {
     setNotice(null);
+  }, []);
+
+  useEffect(() => {
+    setAccessKeyPassed(hasAccessKeyPassed());
   }, []);
 
   useEffect(() => {
@@ -107,13 +121,18 @@ function AppRouteRoot({ sectionId, children }: { sectionId: SectionId; children:
       setUnreadMessageCount(null);
       setLoading(false);
       setBooting(false);
+      autoLoginStartedRef.current = false;
+      if (accessKeyLoginEnabled) {
+        clearAccessKeyPassed();
+        setAccessKeyPassed(false);
+      }
       clearNotice();
       router.replace("/login");
     };
 
     window.addEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
     return () => window.removeEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
-  }, [clearNotice, router]);
+  }, [accessKeyLoginEnabled, clearNotice, router]);
 
   useEffect(() => {
     async function boot() {
@@ -168,8 +187,29 @@ function AppRouteRoot({ sectionId, children }: { sectionId: SectionId; children:
     }
   };
 
+  useEffect(() => {
+    if (
+      booting
+      || loading
+      || currentUser
+      || !accessKeyLoginEnabled
+      || !accessKeyPassed
+      || autoLoginStartedRef.current
+    ) {
+      return;
+    }
+
+    autoLoginStartedRef.current = true;
+    void handleLogin(getAccessKeyLoginDevCode() as DevLoginCode);
+  }, [accessKeyLoginEnabled, accessKeyPassed, booting, currentUser, loading]);
+
   const handleLogout = () => {
     clearStoredToken();
+    autoLoginStartedRef.current = false;
+    if (accessKeyLoginEnabled) {
+      clearAccessKeyPassed();
+      setAccessKeyPassed(false);
+    }
     setCurrentUser(null);
     setUnreadMessageCount(null);
     clearNotice();
@@ -219,6 +259,23 @@ function AppRouteRoot({ sectionId, children }: { sectionId: SectionId; children:
   }
 
   if (!currentUser || !contextValue) {
+    if (accessKeyLoginEnabled && !accessKeyPassed) {
+      return (
+        <AccessKeyGateScreen
+          notice={notice}
+          onUnlocked={() => setAccessKeyPassed(true)}
+        />
+      );
+    }
+    if (accessKeyLoginEnabled) {
+      return (
+        <main className="grid min-h-screen place-items-center bg-[var(--lxxl-bg)] px-6 text-[var(--lxxl-text)]">
+          <div className="rounded-2xl border border-[var(--lxxl-border)] bg-white px-8 py-6 text-sm text-[var(--lxxl-muted)]">
+            正在以管理员身份登录...
+          </div>
+        </main>
+      );
+    }
     return <LoginScreen loading={loading} notice={notice} onLogin={handleLogin} />;
   }
 
