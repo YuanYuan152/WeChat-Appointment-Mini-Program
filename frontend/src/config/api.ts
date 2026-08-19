@@ -8,6 +8,8 @@
  * 备注：所有新功能（common / message / counselor 工作台 / ops 等）只走 V2。
  */
 
+import { resolveApiV2BaseUrl } from '@/config/apiBase'
+
 // 旧 C# 后端
 export const API_CONFIG = {
   baseURL: import.meta.env.VITE_API_BASE_URL || 'https://www.ji-psy.com',
@@ -17,9 +19,9 @@ export const API_CONFIG = {
   }
 }
 
-// 新 Python FastAPI 后端
+// 新 Python FastAPI 后端（真机访问局域网 HTTP 时会自动切远程 fallback）
 export const API_V2_CONFIG = {
-  baseURL: import.meta.env.VITE_API_V2_BASE_URL || 'http://localhost:8000',
+  baseURL: resolveApiV2BaseUrl(),
   timeout: parseInt(import.meta.env.VITE_API_TIMEOUT || '15000'),
   headers: {
     'Content-Type': 'application/json'

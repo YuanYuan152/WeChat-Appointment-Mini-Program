@@ -4,6 +4,8 @@
 
 import { clearSession, getStoredToken, saveSession } from '@/utils/session'
 
+import { isPrivateLanApiBase, isWechatDevtoolsRuntime, resolveApiV2BaseUrl } from '@/config/apiBase'
+
 /** 开发联调角色（与 backend-python/auth.py DEV_MOCK_CODE_OPENIDS 对齐） */
 export type DevLoginRole =
   | 'patient'
@@ -22,20 +24,13 @@ export type DevLoginRole =
 export const DEV_LOGIN_ROLE_STORAGE_KEY = 'dev_login_role'
 export const DEV_ENTRANCE_OPEN_KEY = 'dev_entrance_open'
 
-const isLocalV2Backend = (): boolean => {
+const isPrivateLanV2Backend = (): boolean => {
   const base = String(import.meta.env.VITE_API_V2_BASE_URL || '').trim()
-  return /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?\/?$/i.test(base)
+  return isPrivateLanApiBase(base)
 }
 
 /** 是否在微信开发者工具内（非真机） */
-export const isWechatDevtools = (): boolean => {
-  try {
-    const info = uni.getSystemInfoSync() as UniApp.GetSystemInfoResult & { platform?: string }
-    return String(info?.platform || '').toLowerCase() === 'devtools'
-  } catch {
-    return false
-  }
-}
+export const isWechatDevtools = isWechatDevtoolsRuntime
 
 /**
  * 是否显示模拟登录 / 开发者入口。
@@ -47,13 +42,21 @@ export const isDevMode = (): boolean =>
   import.meta.env.VITE_ENABLE_MOCK_LOGIN === 'true'
 
 /**
- * 真机调试时若 V2 仍指向 127.0.0.1/localhost，手机访问不到开发机后端，
- * Mock 角色切换与登录都会失败。启动时提示一次。
+ * 真机无法访问电脑上的 HTTP 局域网地址：
+ * - 127.0.0.1 / localhost 只存在于电脑本机
+ * - 公司 Wi‑Fi 常有 AP 隔离，手机访问不到 192.168.x.x
+ * 启动时提示一次，引导改用 HTTPS 远程后端。
  */
 export const warnIfDeviceCannotReachLocalApi = (): void => {
-  if (!isDevMode() || !isLocalV2Backend() || isWechatDevtools()) return
+  if (!isDevMode() || isWechatDevtools() || !isPrivateLanV2Backend()) return
+  const resolved = resolveApiV2BaseUrl()
+  const configured = String(import.meta.env.VITE_API_V2_BASE_URL || '').trim()
+  if (resolved !== configured.replace(/\/$/, '')) {
+    console.info('[MockLogin] 真机已自动切换 V2 后端:', resolved)
+    return
+  }
   const tip =
-    '真机无法访问本机 127.0.0.1。请将 VITE_API_V2_BASE_URL 改为电脑局域网 IP（如 http://192.168.x.x:8000），并确保手机与电脑同网、后端已启动。'
+    '真机无法访问电脑局域网后端。请在 .env.development.local 配置 VITE_API_V2_REMOTE_FALLBACK=https://dev.eap.ji-psy.com，或直接把 VITE_API_V2_BASE_URL 改为该 HTTPS 地址后重启 npm run dev:mp-weixin。'
   console.warn('[MockLogin]', tip)
   uni.showModal({
     title: '真机联调提示',

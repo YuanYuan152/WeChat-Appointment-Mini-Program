@@ -123,7 +123,7 @@
           <view class="doc-card-top">
             <view class="doc-avatar-wrap">
               <image 
-                :src="doctor.avatar || '/static/images-opt/tc59.jpg'" 
+                :src="doctor.avatar" 
                 class="doc-avatar" 
                 mode="aspectFill" 
                 @error="handleImageError"
@@ -210,7 +210,7 @@ import { ref, onMounted, computed } from 'vue'
 import { onShow, onLoad, onReachBottom, onPullDownRefresh, onShareAppMessage } from '@dcloudio/uni-app'
 import { doctorApi } from '@/apis/index'
 import type { Doctor } from '@/types'
-import { fixImageUrl } from '@/utils/image'
+import { resolveCounselorPublicAvatar } from '@/utils/image'
 import ContactUsContent from '@/components/ContactUsContent.vue'
 
 // 咨询师数据接口扩展
@@ -342,7 +342,7 @@ function normalizeConsultant(item: Consultant): Consultant {
   const priceNegotiation = !!(item.priceNegotiation || item.billingLabel === '议价')
   return {
     ...item,
-    avatar: fixImageUrl(item.avatar || '/static/images-opt/tc59.jpg'),
+    avatar: resolveCounselorPublicAvatar(item.avatar),
     title: item.title || '心理咨询师',
     workYears: parseWorkYears(item),
     consultHours: item.consultHours ?? 0,

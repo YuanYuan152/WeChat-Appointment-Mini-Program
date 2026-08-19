@@ -18,6 +18,7 @@ from database import get_db
 from config import settings
 from auth import get_optional_account
 from models import AppAccount, AppBanner, AppActivity, AppArticle, AppCounselorProfile
+from counselor_avatar import resolve_counselor_public_avatar_url
 from booking_availability import counselor_booking_time_slots
 from pricing_service import (
     get_counselor_profile,
@@ -246,7 +247,7 @@ def _counselor_profile_dict(
     item: Dict[str, Any] = {
         "id": int(r.AccountId or r.Id or 0),
         "name": r.Name,
-        "avatarUrl": r.AvatarUrl,
+        "avatarUrl": resolve_counselor_public_avatar_url(r.AvatarUrl),
         "title": r.Title,
         "specialty": r.Specialty,
         "field": r.Field,
@@ -574,7 +575,9 @@ def common_counselor_detail(
     return {
         "id": cid,
         "name": profile.Name or new_rows[0].get("Name"),
-        "avatarUrl": profile.AvatarUrl or new_rows[0].get("AvatarUrl"),
+        "avatarUrl": resolve_counselor_public_avatar_url(
+            profile.AvatarUrl or new_rows[0].get("AvatarUrl")
+        ),
         "title": profile.Title or new_rows[0].get("Title"),
         "specialty": profile.Specialty or new_rows[0].get("Specialty"),
         "field": profile.Field or new_rows[0].get("Field"),

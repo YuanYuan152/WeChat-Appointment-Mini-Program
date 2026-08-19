@@ -16,6 +16,7 @@ from role_active import (
     get_account_role,
     set_account_role,
 )
+from user_avatar import resolve_user_avatar_for_account, uses_visitor_default_avatar
 from patient_registration import ensure_default_patient_registration
 
 router = APIRouter(prefix="/api/mini/auth", tags=["Auth"])
@@ -452,7 +453,7 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
         activeRole=role,
         roles=[role],
         nickname=account.Nickname,
-        avatarUrl=account.AvatarUrl,
+        avatarUrl=resolve_user_avatar_for_account(db, account),
         id=account.Id,
         mobile=account.Mobile,
         isMockAuth=use_mock_login,
@@ -605,7 +606,7 @@ def get_me(
         openId=current_account.OpenId,
         mobile=current_account.Mobile,
         nickname=current_account.Nickname,
-        avatarUrl=current_account.AvatarUrl,
+        avatarUrl=resolve_user_avatar_for_account(db, current_account),
         realName=current_account.RealName,
         gender=current_account.Gender,
         roles=[role],
@@ -625,14 +626,17 @@ def update_me(
 ):
     mapping = {
         "nickname": "Nickname",
-        "avatarUrl": "AvatarUrl",
         "realName": "RealName",
         "gender": "Gender",
     }
+    if not uses_visitor_default_avatar(db, current_account.Id):
+        mapping["avatarUrl"] = "AvatarUrl"
     for src, dst in mapping.items():
         val = getattr(body, src, None)
         if val is not None:
             setattr(current_account, dst, val)
+    if uses_visitor_default_avatar(db, current_account.Id):
+        current_account.AvatarUrl = None
     if body.markProfileCompleted and (
         (body.nickname is not None and str(body.nickname).strip())
         or (current_account.Nickname or "").strip()

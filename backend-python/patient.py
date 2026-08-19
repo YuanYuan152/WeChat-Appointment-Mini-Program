@@ -238,6 +238,7 @@ class RegistrationPayload(BaseModel):
 
 def _profile_out(account: AppAccount, db: Session) -> PatientProfileOut:
     from patient_contract_service import patient_contract_extras
+    from user_avatar import resolve_user_avatar_for_account
 
     contract = patient_contract_extras(db, account)
     return PatientProfileOut(
@@ -245,7 +246,7 @@ def _profile_out(account: AppAccount, db: Session) -> PatientProfileOut:
         openId=account.OpenId,
         mobile=account.Mobile,
         nickname=account.Nickname,
-        avatarUrl=account.AvatarUrl,
+        avatarUrl=resolve_user_avatar_for_account(db, account),
         realName=account.RealName,
         gender=account.Gender,
         birthday=account.Birthday,
@@ -776,7 +777,6 @@ def update_patient_me(
 ):
     mapping = {
         "nickname": "Nickname",
-        "avatarUrl": "AvatarUrl",
         "realName": "RealName",
         "gender": "Gender",
         "birthday": "Birthday",
@@ -784,10 +784,16 @@ def update_patient_me(
         "emergencyRelation": "EmergencyRelation",
         "emergencyPhone": "EmergencyPhone",
     }
+    from user_avatar import uses_visitor_default_avatar
+
+    if not uses_visitor_default_avatar(db, current_account.Id):
+        mapping["avatarUrl"] = "AvatarUrl"
     for src, dst in mapping.items():
         val = getattr(body, src, None)
         if val is not None:
             setattr(current_account, dst, val)
+    if uses_visitor_default_avatar(db, current_account.Id):
+        current_account.AvatarUrl = None
     current_account.UpdatedAt = datetime.utcnow()
     db.commit()
     db.refresh(current_account)

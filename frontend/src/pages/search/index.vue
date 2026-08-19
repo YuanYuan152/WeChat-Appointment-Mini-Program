@@ -49,7 +49,7 @@
           class="counselor-card"
           @tap="goCounselor(item)"
         >
-          <image class="avatar" :src="fixUrl(item.avatarUrl) || defaultAvatar" mode="aspectFill" />
+          <image class="avatar" :src="resolveCounselorPublicAvatar(item.avatarUrl)" mode="aspectFill" />
           <view class="card-main">
             <text class="name">{{ item.name || item.nickname || '咨询师' }}</text>
             <text class="desc">{{ item.specialty || item.field || item.title || '心理咨询' }}</text>
@@ -98,7 +98,7 @@ import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
-import { fixImageUrl } from '@/utils/image'
+import { fixImageUrl, resolveCounselorPublicAvatar, DEFAULT_COUNSELOR_PUBLIC_AVATAR } from '@/utils/image'
 
 interface SearchItem {
   id: number
@@ -126,7 +126,7 @@ const keyword = ref('')
 const searched = ref(false)
 const loading = ref(false)
 const history = ref<string[]>([])
-const defaultAvatar = '/static/images-opt/tc59.jpg'
+const defaultAvatar = DEFAULT_COUNSELOR_PUBLIC_AVATAR
 const result = ref<SearchResult>({
   keyword: '',
   counselors: [],

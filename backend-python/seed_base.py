@@ -60,7 +60,7 @@ def create_account(
     active_role: str,
     real_name: str | None = None,
     gender: str | None = None,
-    avatar_url: str = "/static/images/tc59.png",
+    avatar_url: str = "/static/images-opt/default-avatar.png",
 ) -> AppAccount:
     account = AppAccount(
         OpenId=open_id,

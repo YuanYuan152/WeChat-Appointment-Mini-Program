@@ -74,7 +74,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
-import { fixImageUrl } from '@/utils/image'
+import { fixImageUrl, resolveCounselorPublicAvatar } from '@/utils/image'
 
 interface CounselorProfileView {
   name?: string
@@ -100,7 +100,7 @@ const displayPrice = computed(() => Math.round(Number(profile.value.billing || 0
 
 const avatarSrc = computed(() => {
   const url = profile.value.avatarUrl
-  return url ? fixImageUrl(url) : '/static/images-opt/default-avatar.jpg'
+  return resolveCounselorPublicAvatar(url)
 })
 
 const displayYears = (years?: number) => {

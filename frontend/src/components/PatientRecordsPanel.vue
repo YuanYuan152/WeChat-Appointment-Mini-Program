@@ -60,7 +60,7 @@
 
         <view class="record-header">
 
-          <image class="avatar" :src="r.counselorAvatar || '/static/images-opt/tc59.jpg'" mode="aspectFill" />
+          <image class="avatar" :src="resolveCounselorPublicAvatar(r.counselorAvatar)" mode="aspectFill" />
 
           <view class="meta">
 
@@ -270,6 +270,7 @@ import { API_ENDPOINTS } from '@/config/api'
 import { goalScoreHint, rhythmScoreHint, PATIENT_RECORDS_AFTER_FEEDBACK } from '@/constants/consultationFeedback'
 import FeedbackStarRating from '@/components/FeedbackStarRating.vue'
 import { fetchSystemSettings, formatProxyOrderTtlHint } from '@/utils/systemSettings'
+import { resolveCounselorPublicAvatar } from '@/utils/image'
 
 const proxyOrderTtlMinutes = ref(120)
 const proxyOrderPatientHint = computed(() => formatProxyOrderTtlHint(proxyOrderTtlMinutes.value))

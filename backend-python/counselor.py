@@ -18,6 +18,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import ProgrammingError, OperationalError
 
+from counselor_avatar import DEFAULT_COUNSELOR_PUBLIC_AVATAR
 from case_record_service import (
     apply_case_record_fields,
     case_record_has_content,
@@ -1751,7 +1752,7 @@ def get_profile(
         profile = AppCounselorProfile(
             AccountId=counselor.Id,
             Name=counselor.Nickname,
-            AvatarUrl=counselor.AvatarUrl,
+            AvatarUrl=DEFAULT_COUNSELOR_PUBLIC_AVATAR,
         )
         db.add(profile)
         db.commit()

@@ -34,6 +34,7 @@ from models import (
     AppTask,
 )
 from pricing_service import default_base_price_cents_for_type, upsert_patient_pricing
+from counselor_avatar import DEFAULT_COUNSELOR_PUBLIC_AVATAR
 from case_record_service import encode_photo_urls
 from consultation_feedback import ALLOWED_IMPROVEMENTS, encode_feedback
 from psych_scale import encode_answers
@@ -98,7 +99,7 @@ DEMO_COUNSELORS = [
         "mobile": "13800000001",
         "open_id": "demo-counselor-lixinyi",
         "name": "李心怡",
-        "avatar": "/static/images/zixunshi11.png",
+        "avatar": "/static/images-opt/counselor-avatar.png",
         "title": "国家二级心理咨询师",
         "specialty": "亲子关系｜婚姻情感｜情绪压力",
         "field": "家庭治疗,婚姻情感,情绪压力,亲子关系",
@@ -144,7 +145,7 @@ DEMO_COUNSELORS = [
         "mobile": "13800000003",
         "open_id": "demo-counselor-wangwanqing",
         "name": "王婉清",
-        "avatar": "/static/images/zixunshi11.png",
+        "avatar": "/static/images-opt/counselor-avatar.png",
         "title": "国家二级心理咨询师",
         "specialty": "职场压力｜焦虑抑郁｜睡眠困扰",
         "field": "职场压力,焦虑抑郁,睡眠困扰,个人成长",
@@ -815,7 +816,7 @@ def get_or_create_demo_patient(db: Session, data: dict) -> AppAccount:
         account.OpenId = data["open_id"]
         account.Mobile = data["mobile"]
         account.Nickname = data["nickname"]
-        account.AvatarUrl = data.get("avatar", "/static/images/tc59.png")
+        account.AvatarUrl = data.get("avatar")
         account.ActiveRole = "Patient"
         account.RealName = data["real_name"]
         account.Gender = data["gender"]
@@ -825,7 +826,7 @@ def get_or_create_demo_patient(db: Session, data: dict) -> AppAccount:
         OpenId=data["open_id"],
         Mobile=data["mobile"],
         Nickname=data["nickname"],
-        AvatarUrl=data.get("avatar", "/static/images/tc59.png"),
+        AvatarUrl=data.get("avatar"),
         ActiveRole="Patient",
         RealName=data["real_name"],
         Gender=data["gender"],
@@ -898,10 +899,13 @@ def ensure_role(db: Session, account_id: int, role: str) -> None:
 def ensure_counselor_profile(db: Session, account_id: int, data: dict) -> None:
     row = db.query(AppCounselorProfile).filter(AppCounselorProfile.AccountId == account_id).first()
     if not row:
-        row = AppCounselorProfile(AccountId=account_id)
+        row = AppCounselorProfile(
+            AccountId=account_id,
+            AvatarUrl=DEFAULT_COUNSELOR_PUBLIC_AVATAR,
+        )
         db.add(row)
     row.Name = data["name"]
-    row.AvatarUrl = data["avatar"]
+    row.AvatarUrl = data.get("avatar") or DEFAULT_COUNSELOR_PUBLIC_AVATAR
     row.Title = data["title"]
     row.Specialty = data["specialty"]
     row.Field = data["field"]

@@ -57,9 +57,7 @@ import { computed, onMounted, ref } from 'vue'
 import AvatarCropper from '@/components/AvatarCropper.vue'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
-import { fixImageUrl, toStoredUploadPath } from '@/utils/image'
-
-const defaultAvatar = '/static/images-opt/default-avatar.jpg'
+import { fixImageUrl, toStoredUploadPath, resolveUserAvatar } from '@/utils/image'
 const genderOptions = ['男', '女', '其他']
 const form = ref({
   nickname: '',
@@ -77,7 +75,7 @@ const saving = ref(false)
 
 const avatarDisplay = computed(() => {
   if (localPreview.value) return localPreview.value
-  return form.value.avatarUrl ? fixImageUrl(form.value.avatarUrl) : defaultAvatar
+  return form.value.avatarUrl ? fixImageUrl(form.value.avatarUrl) : resolveUserAvatar('')
 })
 
 const genderIndex = computed(() => {

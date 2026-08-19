@@ -2,14 +2,14 @@ import { http, httpV2 } from '@/utils/http'
 import type { RequestConfig } from '@/utils/http'
 import type { ApiResponse, Banner, Doctor, Activity, LiveStream, Feature, HomeData } from '@/types'
 import { API_ENDPOINTS } from '@/config/api'
-import { fixImageUrl } from '@/utils/image'
+import { fixImageUrl, resolveCounselorPublicAvatar } from '@/utils/image'
 
 const ok = <T>(data: T, msg = '请求成功'): ApiResponse<T> => ({ code: 0, msg, data })
 
 const mapDoctor = (item: any): Doctor & { title?: string; workYears?: number; consultHours?: number; _source?: string } => ({
     id: Number(item.id || item.Id || item.accountId || 0),
     name: item.name || item.Name || item.nickname || '咨询师',
-    avatar: fixImageUrl(item.avatarUrl || item.AvatarUrl || item.avatar || '/static/images-opt/tc59.jpg'),
+    avatar: resolveCounselorPublicAvatar(item.avatarUrl || item.AvatarUrl || item.avatar),
     specialty: item.specialty || item.Specialty || item.field || item.Field || '心理咨询',
     experience: `${item.workYears || item.WorkYears || 0}年经验`,
     rating: item.rating || 5,

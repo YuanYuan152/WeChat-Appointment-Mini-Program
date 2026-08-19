@@ -1,17 +1,26 @@
 <template>
   <view class="page-user-info">
     <view v-if="isCounselor" class="notice-bar">
-      <text class="notice-text">此处仅可修改账号昵称等个人信息；咨询师对外展示资料由平台统一维护</text>
+      <text class="notice-text">此处仅可修改个人中心头像；对外展示头像由咨询助理/管理员在工作台「咨询师管理」中维护</text>
+    </view>
+    <view v-else class="notice-bar">
+      <text class="notice-text">来访个人中心统一使用平台默认头像，不支持自定义上传</text>
     </view>
 
     <view class="form-card">
       <view class="form-item avatar-item">
         <text class="label">头像</text>
-        <view class="avatar-row" @tap="pickAvatar">
+        <view v-if="isCounselor" class="avatar-row" @tap="pickAvatar">
           <image class="avatar-preview" :src="avatarDisplay" mode="aspectFill" />
           <view class="avatar-meta">
             <text class="avatar-action">从相册选择</text>
             <text class="avatar-tip">可在圆形框中拖动预览后再保存</text>
+          </view>
+        </view>
+        <view v-else class="avatar-row avatar-row--readonly">
+          <image class="avatar-preview" :src="avatarDisplay" mode="aspectFill" />
+          <view class="avatar-meta">
+            <text class="avatar-tip">默认来访头像</text>
           </view>
         </view>
       </view>
@@ -51,9 +60,7 @@ import { computed, onMounted, ref } from 'vue'
 import AvatarCropper from '@/components/AvatarCropper.vue'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
-import { fixImageUrl, toStoredUploadPath } from '@/utils/image'
-
-const defaultAvatar = '/static/images-opt/default-avatar.jpg'
+import { fixImageUrl, toStoredUploadPath, resolveUserAvatar } from '@/utils/image'
 const genderOptions = ['男', '女', '其他']
 const isCounselor = ref(false)
 const form = ref({
@@ -69,8 +76,9 @@ const cropSrc = ref('')
 const saving = ref(false)
 
 const avatarDisplay = computed(() => {
-  if (localPreview.value) return localPreview.value
-  return form.value.avatarUrl ? fixImageUrl(form.value.avatarUrl) : defaultAvatar
+  if (isCounselor.value && localPreview.value) return localPreview.value
+  if (isCounselor.value && form.value.avatarUrl) return fixImageUrl(form.value.avatarUrl)
+  return resolveUserAvatar('')
 })
 
 const genderIndex = computed(() => {
@@ -136,11 +144,13 @@ const load = async () => {
 const save = async () => {
   saving.value = true
   try {
-    const payload = {
+    const payload: Record<string, string> = {
       nickname: form.value.nickname,
-      avatarUrl: form.value.avatarUrl,
       realName: form.value.realName,
       gender: form.value.gender,
+    }
+    if (isCounselor.value) {
+      payload.avatarUrl = form.value.avatarUrl
     }
     const res = await httpV2.put(API_ENDPOINTS.auth.updateMe, payload)
     if (res.code === 0) {

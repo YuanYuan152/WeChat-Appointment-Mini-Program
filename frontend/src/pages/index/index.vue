@@ -140,7 +140,7 @@
             :key="doctor.id"
             @tap="navigateTo(`/pages/consultant/detail?id=${doctor.id}`)"
           >
-            <image :src="doctor.avatar || '/static/images-opt/tc59.jpg'" class="doc-avatar" mode="aspectFill" @error="handleImageError" />
+            <image :src="doctor.avatar" class="doc-avatar" mode="aspectFill" @error="handleImageError" />
             <view class="doc-info">
               <view class="doc-head">
                 <text class="doc-name">{{ doctor.name }}</text>
@@ -295,7 +295,7 @@ const loadMockData = () => {
     {
       id: 1,
       name: '沈世琴',
-      avatar: '/static/images-opt/zixunshi11.jpg',
+      avatar: '/static/images-opt/counselor-avatar.png',
       province: '上海',
       specialty: '家庭婚姻 | 亲子关系',
       experience: '9年经验',

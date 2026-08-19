@@ -458,6 +458,7 @@
 import { ref, onMounted, computed, nextTick } from 'vue'
 import { onShow, onLoad, onShareAppMessage } from '@dcloudio/uni-app'
 import { API_V2_CONFIG, API_ENDPOINTS } from '@/config/api'
+import { resolveCounselorPublicAvatar } from '@/utils/image'
 import { doctorApi } from '@/apis'
 import { httpV2 } from '@/utils/http'
 import { isBookingDemoMock, getMockDoctorDetailJson, getMockAppointmentSubmitResponse } from '@/mocks/bookingDemo'
@@ -760,7 +761,7 @@ const mapDoctorDetail = (item: any): Doctor => {
     priceNegotiation,
     billingLabel: item.billingLabel || (priceNegotiation ? '议价' : undefined),
     charityBookingBlocked: !!(item.charityBookingBlocked || priceNegotiation),
-    avatar: item.avatarUrl || item.avatar || '',
+    avatar: resolveCounselorPublicAvatar(item.avatarUrl || item.avatar || ''),
     description: item.introduce || item.description || '暂无介绍',
     profile: item.profile || item.introduce || '暂无简介',
     career: item.career || '',
@@ -1187,9 +1188,9 @@ const getAvatarUrl = (avatar: string) => {
   return getDefaultAvatar()
 }
 
-// 获取默认头像
+// 获取默认头像（对外展示）
 const getDefaultAvatar = () => {
-  return '/static/images-opt/default-doctor.jpg'
+  return resolveCounselorPublicAvatar('')
 }
 
 // 处理图片加载错误

@@ -6,6 +6,8 @@ import { API_V2_CONFIG } from '@/config/api'
 const KEEP_PNG_BASENAMES = new Set([
   'bottom1', 'bottom2', 'bottom3', 'bottom4',
   'tab11', 'tab12', 'sei', 'zyzxs',
+  'counselor-avatar',
+  'default-avatar',
 ])
 
 /**
@@ -65,6 +67,12 @@ export const toStoredUploadPath = (url?: string, filename?: string): string => {
   return url
 }
 
+/** 用户个人中心默认头像（来访者 / 咨询师账号资料页） */
+export const DEFAULT_USER_AVATAR = '/static/images-opt/default-avatar.png'
+
+/** 咨询师对外展示默认头像（首页 / 预约列表 / 详情），与个人中心账号头像分离 */
+export const DEFAULT_COUNSELOR_PUBLIC_AVATAR = '/static/images-opt/counselor-avatar.png'
+
 /**
  * 修复图片URL路径
  * - 本地前端资源 (/static/images-opt/*、/static/*) 直接返回，由小程序本地加载
@@ -108,6 +116,12 @@ export const fixImageUrl = (imagePath: string): string => {
 
   return `${CURRENT_CONFIG.API_BASE_URL}/${imagePath}`
 }
+
+export const resolveUserAvatar = (imagePath?: string | null): string =>
+  fixImageUrl((imagePath || '').trim() || DEFAULT_USER_AVATAR)
+
+export const resolveCounselorPublicAvatar = (imagePath?: string | null): string =>
+  fixImageUrl((imagePath || '').trim() || DEFAULT_COUNSELOR_PUBLIC_AVATAR)
 
 /**
  * 批量修复图片URL数组

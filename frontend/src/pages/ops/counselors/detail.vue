@@ -4,8 +4,8 @@
     <template v-else-if="detail">
       <view class="profile-header">
         <image
-          v-if="detail.avatarUrl"
-          :src="detail.avatarUrl"
+          v-if="detail.avatarUrl || form.avatarUrl"
+          :src="avatarDisplay"
           class="avatar"
           mode="aspectFill"
         />
@@ -73,8 +73,18 @@
             <input class="input" v-model="form.name" />
           </view>
           <view class="form-item">
-            <text class="label">头像 URL</text>
-            <input class="input" v-model="form.avatarUrl" />
+            <text class="label">头像</text>
+            <view class="avatar-edit-row" @tap="pickAvatar">
+              <image
+                class="avatar-edit-preview"
+                :src="avatarDisplay"
+                mode="aspectFill"
+              />
+              <view class="avatar-edit-meta">
+                <text class="avatar-edit-action">{{ uploadingAvatar ? '上传中...' : '从相册选择图片' }}</text>
+                <text class="avatar-edit-tip">上传后点保存，将更新预约展示页头像（与个人中心头像无关）</text>
+              </view>
+            </view>
           </view>
           <view class="form-item">
             <text class="label">职称/头衔</text>
@@ -211,16 +221,26 @@
       >保存资料修改</button>
       <view style="height: 40rpx;"></view>
     </template>
+
+    <AvatarCropper
+      :visible="cropVisible"
+      :src="cropSrc"
+      @cancel="cropVisible = false"
+      @confirm="onCropConfirm"
+    />
   </view>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import AvatarCropper from '@/components/AvatarCropper.vue'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
 import StaffRemarkEditor from '@/components/StaffRemarkEditor.vue'
 import { formatPatientInline } from '@/utils/patientContract'
+import { fixImageUrl, resolveCounselorPublicAvatar, DEFAULT_COUNSELOR_PUBLIC_AVATAR, toStoredUploadPath } from '@/utils/image'
 
+const defaultAvatar = DEFAULT_COUNSELOR_PUBLIC_AVATAR
 const genderOptions = ['男', '女']
 const modeOptions = ['视频咨询', '面询', '视频咨询/面询']
 
@@ -285,6 +305,10 @@ interface CounselorDetail {
 
 const loading = ref(true)
 const saving = ref(false)
+const uploadingAvatar = ref(false)
+const cropVisible = ref(false)
+const cropSrc = ref('')
+const localPreview = ref('')
 const counselorId = ref(0)
 const staffRemark = ref('')
 const detail = ref<CounselorDetail | null>(null)
@@ -316,6 +340,11 @@ const modeIndex = computed(() => {
   return idx >= 0 ? idx : 0
 })
 
+const avatarDisplay = computed(() => {
+  if (localPreview.value) return localPreview.value
+  return resolveCounselorPublicAvatar(form.value.avatarUrl || detail.value?.avatarUrl)
+})
+
 const showSection = (key: SectionKey) =>
   activeTab.value === 'ALL' || activeTab.value === key
 
@@ -337,6 +366,46 @@ const onModeChange = (e: any) => {
   form.value.mode = modeOptions[Number(e.detail.value)] || modeOptions[0]
 }
 
+const pickAvatar = () => {
+  if (uploadingAvatar.value) return
+  uni.chooseImage({
+    count: 1,
+    sizeType: ['compressed'],
+    sourceType: ['album'],
+    success: (res) => {
+      const path = res.tempFilePaths?.[0]
+      if (!path) return
+      cropSrc.value = path
+      cropVisible.value = true
+    },
+  })
+}
+
+const onCropConfirm = async (filePath: string) => {
+  cropVisible.value = false
+  localPreview.value = filePath
+  uploadingAvatar.value = true
+  uni.showLoading({ title: '上传中...', mask: true })
+  try {
+    const uploadRes = await httpV2.upload<{ url?: string; filename?: string }>(
+      API_ENDPOINTS.upload.file,
+      filePath,
+      'file',
+    )
+    if (uploadRes.code !== 0 || !(uploadRes.data?.url || uploadRes.data?.filename)) {
+      throw new Error(uploadRes.msg || '头像上传失败')
+    }
+    form.value.avatarUrl = toStoredUploadPath(uploadRes.data?.url, uploadRes.data?.filename)
+    uni.showToast({ title: '头像已上传，请保存资料', icon: 'none' })
+  } catch (err: any) {
+    localPreview.value = ''
+    uni.showToast({ title: err?.message || '头像上传失败', icon: 'none' })
+  } finally {
+    uploadingAvatar.value = false
+    uni.hideLoading()
+  }
+}
+
 const applyForm = (data: CounselorDetail) => {
   form.value = {
     name: data.name || '',
@@ -353,6 +422,7 @@ const applyForm = (data: CounselorDetail) => {
     workYears: data.workYears || 0,
     consultHours: data.consultHours || 0,
   }
+  localPreview.value = ''
 }
 
 const load = async () => {
@@ -475,6 +545,35 @@ onMounted(() => {
   flex-shrink: 0;
 }
 .profile-title { display: block; margin-top: 6rpx; font-size: 24rpx; color: #9CA3AF; }
+.avatar-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+  padding: 8rpx 0;
+}
+.avatar-edit-preview {
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 50%;
+  background: #E8E4DE;
+  flex-shrink: 0;
+}
+.avatar-edit-meta {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+.avatar-edit-action {
+  font-size: 28rpx;
+  color: #3D5A4E;
+  font-weight: 600;
+}
+.avatar-edit-tip {
+  font-size: 22rpx;
+  color: #9CA3AF;
+  line-height: 1.4;
+}
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

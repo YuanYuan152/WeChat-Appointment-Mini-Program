@@ -71,6 +71,7 @@ from user_role_meta import (
     validate_patient_source,
 )
 from common import _normalize_gender_value, normalize_counselor_mode
+from counselor_avatar import DEFAULT_COUNSELOR_PUBLIC_AVATAR, resolve_counselor_public_avatar_url
 from account_deletion_service import hard_delete_account
 from counselor_identity_service import (
     apply_legacy_doctor_to_profile,
@@ -346,6 +347,7 @@ def _ensure_counselor_profile(
         profile = AppCounselorProfile(
             AccountId=account.Id,
             Name=display_name,
+            AvatarUrl=DEFAULT_COUNSELOR_PUBLIC_AVATAR,
             CounselorType=counselor_type,
             Billing=default_base_price_cents_for_type(counselor_type),
             IsActive=True,
@@ -1950,7 +1952,7 @@ def _admin_profile_dict(profile: Optional[AppCounselorProfile], counselor_id: in
     return {
         "counselorId": counselor_id,
         "name": (profile.Name if profile else None) or (acc.Nickname if acc else None) or "",
-        "avatarUrl": (profile.AvatarUrl if profile else None) or (acc.AvatarUrl if acc else None),
+        "avatarUrl": resolve_counselor_public_avatar_url(profile.AvatarUrl if profile else None),
         "title": profile.Title if profile else None,
         "specialty": profile.Specialty if profile else None,
         "field": profile.Field if profile else None,
@@ -2226,7 +2228,7 @@ def list_admin_counselors(
                 counselorId=cid,
                 name=name,
                 title=prof.Title if prof else None,
-                avatarUrl=prof.AvatarUrl if prof else (acc.AvatarUrl if acc else None),
+                avatarUrl=resolve_counselor_public_avatar_url(prof.AvatarUrl if prof else None),
                 **_admin_counselor_meta(prof),
                 activeBookingCount=stats.activeBookingCount,
                 cancelledCount=stats.cancelledCount,
@@ -2395,6 +2397,7 @@ def update_admin_counselor(
     if not profile:
         profile = AppCounselorProfile(
             AccountId=counselor_id,
+            AvatarUrl=DEFAULT_COUNSELOR_PUBLIC_AVATAR,
             Billing=60000,
             FaceBilling=30000,
         )

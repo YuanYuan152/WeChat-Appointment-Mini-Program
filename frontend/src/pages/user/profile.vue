@@ -6,7 +6,7 @@
       <view class="user-card">
         <view class="avatar-wrap" @click="handleAvatarClick">
           <image 
-            :src="userInfo.avatar || '/static/images-opt/default-avatar.jpg'" 
+            :src="resolveUserAvatar(userInfo.avatar)" 
             class="avatar-img" 
             mode="aspectFill"
             @error="onAvatarError"
@@ -164,7 +164,7 @@ import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
 import { updateTabBarForRole } from '@/utils/tabBar'
 import { resolveAccountRole, roleLabel } from '@/constants/roles'
-import { fixImageUrl } from '@/utils/image'
+import { fixImageUrl, resolveUserAvatar, DEFAULT_USER_AVATAR } from '@/utils/image'
 
 interface UserInfo {
   name: string
@@ -257,7 +257,7 @@ const loadUserInfo = async () => {
       ...emptyUserInfo(),
       name: meData.nickname || '',
       phone: meData.mobile || '',
-      avatar: meData.avatarUrl ? fixImageUrl(meData.avatarUrl) : '',
+      avatar: resolveUserAvatar(meData.avatarUrl),
     }
     userRoles.value = meData.roles || []
     activeRole.value = resolveAccountRole(meData.roles, meData.activeRole)
@@ -462,9 +462,7 @@ const handleAvatarClick = () => {
 }
 
 const onAvatarError = () => {
-  if (userInfo.value.avatar && userInfo.value.avatar !== '/static/images-opt/default-avatar.jpg') {
-    userInfo.value.avatar = '/static/images-opt/default-avatar.jpg'
-  }
+  userInfo.value.avatar = DEFAULT_USER_AVATAR
 }
 
 const handleUserInfoClick = () => {

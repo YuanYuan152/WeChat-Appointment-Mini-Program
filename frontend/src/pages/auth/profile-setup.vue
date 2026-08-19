@@ -2,14 +2,14 @@
   <view class="setup-page">
     <view class="hero">
       <text class="title">完善个人资料</text>
-      <text class="desc">设置头像和昵称后保存，将由微信官方弹出消息授权</text>
+      <text class="desc">设置昵称后保存，将由微信官方弹出消息授权</text>
     </view>
 
     <view class="card">
-      <button class="avatar-btn" open-type="chooseAvatar" @chooseavatar="onChooseAvatar">
+      <view class="avatar-preview-wrap">
         <image class="avatar" :src="avatarDisplay" mode="aspectFill" />
-        <text class="avatar-tip">点击选择头像</text>
-      </button>
+        <text class="avatar-tip">默认来访头像</text>
+      </view>
 
       <view class="field">
         <text class="label">昵称</text>
@@ -34,50 +34,22 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { AuthApi } from '@/apis/auth'
+import { MessageApi } from '@/apis/message'
 import { isLoggedIn } from '@/utils/auth'
-import { httpV2 } from '@/utils/http'
-import { API_ENDPOINTS } from '@/config/api'
 import { applyRoleAfterLogin, navigateToRoleHome } from '@/utils/roleLogin'
+import { getStoredRole } from '@/utils/session'
 import {
   ROLE_EVENT_KEYS,
   FALLBACK_TEMPLATE_BY_EVENT,
   prefetchSubscribeTmplIds,
 } from '@/utils/subscribeMessage'
-import { fixImageUrl, toStoredUploadPath } from '@/utils/image'
-
-const defaultAvatar = '/static/images-opt/default-avatar.jpg'
-const avatarUrl = ref('')
+import { resolveUserAvatar } from '@/utils/image'
 const nickname = ref('')
 const saving = ref(false)
 const prefetchedTmplIds = ref<string[]>([])
 const subscribeKeys = ref<string[]>(ROLE_EVENT_KEYS.Patient)
 
-const avatarDisplay = computed(() => {
-  const value = avatarUrl.value
-  if (!value) return defaultAvatar
-  if (value.startsWith('wxfile://') || value.startsWith('http://tmp') || value.startsWith('tmp://')) {
-    return value
-  }
-  return fixImageUrl(value)
-})
-
-const onChooseAvatar = async (e: any) => {
-  const localPath = e?.detail?.avatarUrl
-  if (!localPath) return
-  avatarUrl.value = localPath
-  try {
-    const uploadRes = await httpV2.upload<{ url?: string; filename?: string }>(
-      API_ENDPOINTS.upload.file,
-      localPath,
-      'file',
-    )
-    if (uploadRes.code === 0 && (uploadRes.data?.url || uploadRes.data?.filename)) {
-      avatarUrl.value = toStoredUploadPath(uploadRes.data?.url, uploadRes.data?.filename)
-    }
-  } catch (err) {
-    console.warn('avatar upload failed, keep local path', err)
-  }
-}
+const avatarDisplay = computed(() => resolveUserAvatar(''))
 
 const onNicknameInput = (e: any) => {
   nickname.value = String(e?.detail?.value || '')
@@ -125,14 +97,17 @@ const handleSave = () => {
     try {
       await AuthApi.updateMe({
         nickname: name,
-        avatarUrl: avatarUrl.value || undefined,
         markProfileCompleted: true,
       })
-      await MessageApi.saveSubscribePreference({
-        accepted: Object.values(results).some((v) => v === 'accept'),
-        results,
-        event_keys: keys,
-      })
+      try {
+        await MessageApi.saveSubscribePreference({
+          accepted: Object.values(results).some((v) => v === 'accept'),
+          results,
+          event_keys: keys,
+        })
+      } catch (prefErr) {
+        console.warn('[profile-setup] saveSubscribePreference failed', prefErr)
+      }
     } catch (err: any) {
       uni.showToast({ title: err?.message || '保存失败', icon: 'none' })
       saving.value = false
@@ -173,7 +148,6 @@ onMounted(async () => {
   try {
     const me = await AuthApi.getMe()
     nickname.value = me.nickname || ''
-    avatarUrl.value = me.avatarUrl || ''
     const role = me.activeRole || me.roles?.[0] || getStoredRole() || 'Patient'
     subscribeKeys.value = ROLE_EVENT_KEYS[role] || ROLE_EVENT_KEYS.Patient
     prefetchedTmplIds.value = await prefetchSubscribeTmplIds(subscribeKeys.value)
@@ -215,17 +189,12 @@ onMounted(async () => {
   padding: 48rpx 36rpx;
   box-shadow: 0 8rpx 32rpx rgba(0, 0, 0, 0.04);
 }
-.avatar-btn {
+.avatar-preview-wrap {
   display: flex;
   flex-direction: column;
   align-items: center;
-  background: transparent;
-  border: none;
-  padding: 0;
   margin-bottom: 40rpx;
-  line-height: 1.4;
 }
-.avatar-btn::after { border: none; }
 .avatar {
   width: 160rpx;
   height: 160rpx;

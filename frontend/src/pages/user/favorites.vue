@@ -66,6 +66,7 @@ import { onShow } from '@dcloudio/uni-app'
 import { API_ENDPOINTS } from '@/config/api'
 import { httpV2 } from '@/utils/http'
 import { isLoggedIn as checkIsLoggedIn } from '@/utils/auth'
+import { resolveCounselorPublicAvatar } from '@/utils/image'
 
 interface FavoriteItem {
   counselorId: number
@@ -83,11 +84,7 @@ const loading = ref(true)
 const isLoggedIn = ref(false)
 const favorites = ref<FavoriteItem[]>([])
 
-const getAvatarUrl = (avatar?: string) => {
-  if (!avatar) return '/static/images-opt/tc59.jpg'
-  if (avatar.startsWith('http')) return avatar
-  return avatar
-}
+const getAvatarUrl = (avatar?: string) => resolveCounselorPublicAvatar(avatar)
 
 const formatPrice = (billing?: number) => {
   if (!billing) return 500

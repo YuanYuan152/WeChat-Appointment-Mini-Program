@@ -133,7 +133,7 @@ import { onShow } from '@dcloudio/uni-app'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
 import { openCounselorCaseRecord } from '@/utils/case-record'
-import { fixImageUrl } from '@/utils/image'
+import { fixImageUrl, resolveUserAvatar, DEFAULT_USER_AVATAR } from '@/utils/image'
 
 interface ProfileHeader {
   name: string
@@ -185,7 +185,7 @@ const showFilter = ref(false)
 const periodFilter = ref<PeriodFilter>('month')
 const profileHeader = ref<ProfileHeader>({
   name: '',
-  avatar: '/static/images-opt/default-avatar.jpg',
+  avatar: DEFAULT_USER_AVATAR,
   title: '',
   phone: '',
   meta: '',
@@ -250,7 +250,7 @@ const loadProfileHeader = async () => {
     if (profile?.workYears) metaParts.push(`从业 ${profile.workYears} 年`)
     profileHeader.value = {
       name: profile?.name || me?.nickname || '咨询师',
-      avatar: avatarRaw ? fixImageUrl(avatarRaw) : '/static/images-opt/default-avatar.jpg',
+      avatar: avatarRaw ? fixImageUrl(avatarRaw) : resolveUserAvatar(''),
       title: profile?.title || '咨询师',
       phone: me?.mobile || '',
       meta: metaParts.join(' · '),

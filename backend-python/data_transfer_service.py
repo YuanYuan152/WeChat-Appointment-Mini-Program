@@ -25,6 +25,7 @@ from models import (
     AppSchedule,
 )
 from pricing_service import default_base_price_cents_for_type
+from counselor_avatar import DEFAULT_COUNSELOR_PUBLIC_AVATAR
 from schedule_meta import parse_center_id, schedule_note
 from staff_remark_service import get_staff_remarks_map, set_staff_remark
 from user_role_meta import (
@@ -545,6 +546,7 @@ def _apply_counselor(value: dict[str, Any], db: Session, actor_id: int) -> None:
         AppCounselorProfile(
             AccountId=account.Id,
             Name=value["name"] or account.RealName or account.Nickname,
+            AvatarUrl=DEFAULT_COUNSELOR_PUBLIC_AVATAR,
             CounselorType=counselor_type,
             Billing=(
                 value["billing_cents"]
