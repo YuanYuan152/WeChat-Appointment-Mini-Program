@@ -11,7 +11,7 @@ export interface AssessmentHubEntry {
 
 /** 测评站基础地址，与 front_site 部署域名一致 */
 export const ASSESSMENT_WEB_BASE = (
-  import.meta.env.VITE_ASSESSMENT_WEB_URL || 'http://124.221.56.121'
+  import.meta.env.VITE_ASSESSMENT_WEB_URL || 'https://eap.ji-psy.com'
 ).replace(/\/$/, '')
 
 /** 心理测评页三个入口：测评报告 / 专业测评 / 趣味测评 */

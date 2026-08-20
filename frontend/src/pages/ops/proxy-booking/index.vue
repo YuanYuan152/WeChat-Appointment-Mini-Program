@@ -48,8 +48,8 @@
 
     <template v-else>
       <view class="mode-switch">
-        <view class="mode-chip" :class="{ active: viewMode === 'list' }" @tap="viewMode = 'list'">普通模式</view>
         <view class="mode-chip" :class="{ active: viewMode === 'calendar' }" @tap="switchCalendar">日历模式</view>
+        <view class="mode-chip" :class="{ active: viewMode === 'list' }" @tap="viewMode = 'list'">普通模式</view>
       </view>
 
       <view class="legend-card">
@@ -353,7 +353,7 @@ const selectedPatient = ref<PersonItem | null>(null)
 const selectedCounselor = ref<PersonItem | null>(null)
 const showPatientDropdown = ref(false)
 const loading = ref(false)
-const viewMode = ref<'list' | 'calendar'>('list')
+const viewMode = ref<'list' | 'calendar'>('calendar')
 const calendarMonth = ref(formatDateLocal().slice(0, 7))
 const selectedCalendarDate = ref(formatDateLocal())
 const monthSlots = ref<CalendarSlot[]>([])
@@ -512,7 +512,8 @@ const syncBoundCounselor = (p: PersonItem) => {
       id: p.boundCounselorId,
       name: p.boundCounselorName,
     }
-    loadSchedules()
+    if (viewMode.value === 'calendar') void loadMonthSlots()
+    else void loadSchedules()
   } else {
     selectedCounselor.value = null
     slots.value = []
@@ -750,8 +751,9 @@ const submitProxyOrder = () => {
 }
 
 watch(canShowSchedule, (ok) => {
-  if (ok && selectedCounselor.value && slots.value.length === 0 && !loading.value) {
-    loadSchedules()
+  if (ok && selectedCounselor.value && !loading.value) {
+    if (viewMode.value === 'calendar') void loadMonthSlots()
+    else if (slots.value.length === 0) void loadSchedules()
   }
 })
 

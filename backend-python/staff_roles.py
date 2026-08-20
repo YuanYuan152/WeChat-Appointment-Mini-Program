@@ -1,7 +1,8 @@
 """管理工作台角色与角色赋权层级。
 
 咨询助理 < 咨询主任 < 管理员（权限依次升高）。
-高级别可为低级别账号新建、删除、赋权；低级别不可操作高级别；同级之间不可互相操作。
+高级别可为低级别账号新建、删除、赋权；低级别不可操作高级别。
+同级之间：助理/主任不可互操作；管理员可增删改其他管理员（不可删自己）。
 来访、咨询师等非管理工作台角色，三者均可赋权与管理。
 测试员（Tester）仅管理员可赋权；其它管理工作台角色不可将账号设为测试员。
 Tester 可被强制物理删除（含业务数据），其它角色仍受咨询/订单保护。
@@ -42,6 +43,9 @@ def can_actor_assign_role(actor_role: str, target_role: str) -> bool:
         return actor_role == "Admin"
     if not is_staff_management_role(target_role):
         return True
+    # 管理员可新建/赋权其他管理员
+    if actor_role == "Admin" and target_role == "Admin":
+        return True
     return staff_role_rank(actor_role) > staff_role_rank(target_role)
 
 
@@ -50,6 +54,9 @@ def can_actor_manage_user(actor_role: str, user_role: str) -> bool:
     if actor_role not in STAFF_WORKBENCH_ROLES:
         return False
     if not is_staff_management_role(user_role):
+        return True
+    # 管理员可修改/删除其他管理员（删除本人由接口另行拦截）
+    if actor_role == "Admin" and user_role == "Admin":
         return True
     return staff_role_rank(actor_role) > staff_role_rank(user_role)
 

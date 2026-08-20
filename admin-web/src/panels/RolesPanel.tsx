@@ -1,11 +1,13 @@
 import { type FormEvent, useMemo, useState } from "react";
 
 import {
+  canActorManageUser,
   COUNSELOR_TYPE_OPTIONS,
   type CounselorType,
   getManageableRoles,
   PATIENT_SOURCE_OPTIONS,
   type PatientSource,
+  resolveHighestStaffRole,
 } from "@/config/userRoleMeta";
 import { roleLabel } from "@/lib/format";
 import { formatPatientNameWithContractTag } from "@/lib/patientContract";
@@ -28,6 +30,7 @@ import {
 
 export function RolesPanel({
   users,
+  currentUserId,
   currentUserRoles,
   listLoading,
   page,
@@ -37,8 +40,10 @@ export function RolesPanel({
   onPageSizeChange,
   onCreateUser,
   onUpdateRole,
+  onDeleteUser,
 }: {
   users?: AdminUser[];
+  currentUserId: number;
   currentUserRoles: Role[];
   listLoading?: boolean;
   page: number;
@@ -48,6 +53,7 @@ export function RolesPanel({
   onPageSizeChange: (pageSize: number) => void;
   onCreateUser: (payload: CreateUserByMobilePayload) => Promise<void>;
   onUpdateRole: (userId: number, role: Role, payload?: BindUserRolePayload) => void;
+  onDeleteUser: (userId: number) => Promise<void>;
 }) {
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
   const [creating, setCreating] = useState(false);
@@ -56,7 +62,9 @@ export function RolesPanel({
   const [selectedCounselorType, setSelectedCounselorType] = useState<CounselorType>("PROFESSIONAL");
   const [keywordInput, setKeywordInput] = useState("");
   const [keyword, setKeyword] = useState("");
+  const [deletingUserId, setDeletingUserId] = useState<number | null>(null);
   const allUsers = useMemo(() => users || [], [users]);
+  const actorRole = useMemo(() => resolveHighestStaffRole(currentUserRoles), [currentUserRoles]);
   const manageableRoleOptions = useMemo(() => getManageableRoles(currentUserRoles), [currentUserRoles]);
   const filteredUsers = useMemo(() => {
     const normalizedKeyword = keyword.trim().toLowerCase();
@@ -123,6 +131,46 @@ export function RolesPanel({
     closeEditor();
   };
 
+  const canManageTarget = (user: AdminUser) => {
+    if (!actorRole) {
+      return false;
+    }
+    const targetRole = resolveCurrentRole(user);
+    if (!targetRole) {
+      return false;
+    }
+    return canActorManageUser(actorRole, targetRole);
+  };
+
+  const requestDelete = async (user: AdminUser) => {
+    if (user.id === currentUserId) {
+      window.alert("不能删除当前登录账号");
+      return;
+    }
+    if (!canManageTarget(user)) {
+      return;
+    }
+
+    const name = getName(user) || user.mobile || `用户 ${user.id}`;
+    const targetRole = resolveCurrentRole(user);
+    const isTester = targetRole === "Tester";
+    const confirmed = window.confirm(
+      isTester
+        ? `确定永久删除测试员「${name}」吗？\n\n将级联删除其咨询、订单、个案等全部业务数据及账号本身，且不可恢复。`
+        : `确定永久删除「${name}」吗？\n\n该操作不可恢复。若该用户存在咨询记录或已支付订单，将无法删除。`,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setDeletingUserId(user.id);
+    try {
+      await onDeleteUser(user.id);
+    } finally {
+      setDeletingUserId(null);
+    }
+  };
+
   return (
     <section className="rounded-xl border border-[var(--lxxl-border)] bg-white">
       <form className="px-6 py-5 sm:px-7 lg:px-8" onSubmit={submitQuery}>
@@ -130,7 +178,7 @@ export function RolesPanel({
           <div>
             <h2 className="text-xl font-semibold tracking-normal">用户与角色</h2>
             <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">
-              管理员可按手机号创建账号并绑定角色；已有账号会复用原数据。每个账号仅保留一个角色。
+              管理员可按手机号创建、修改与删除账号；可新增其他管理员。测试员可强制级联删除；普通用户若有咨询/已支付订单则无法删除。
             </p>
           </div>
           <button
@@ -185,10 +233,14 @@ export function RolesPanel({
                   </td>
                 </tr>
               ) : (
-                items.map((user) => (
+                items.map((user) => {
+                  const manageable = canManageTarget(user);
+                  const isSelf = user.id === currentUserId;
+                  return (
                 <tr key={user.id} className="border-t border-[var(--lxxl-border)] align-top">
                   <td className="px-5 py-4">
                     {formatPatientNameWithContractTag(getName(user), user.contractTag)}
+                    {isSelf ? <span className="ml-2 text-xs text-[var(--lxxl-muted)]">（当前账号）</span> : null}
                   </td>
                   <td className="px-5 py-4">{user.mobile || "-"}</td>
                   <td className="px-5 py-4">
@@ -214,12 +266,29 @@ export function RolesPanel({
                     </div>
                   </td>
                   <td className="px-5 py-4">
-                    <TableActionButton onClick={() => openEditor(user)}>
-                      修改
-                    </TableActionButton>
+                    <div className="flex flex-wrap gap-2">
+                      {manageable ? (
+                        <TableActionButton onClick={() => openEditor(user)}>
+                          修改
+                        </TableActionButton>
+                      ) : null}
+                      {manageable && !isSelf ? (
+                        <TableActionButton
+                          tone="danger"
+                          disabled={deletingUserId === user.id || listLoading}
+                          onClick={() => void requestDelete(user)}
+                        >
+                          {deletingUserId === user.id ? "删除中..." : "删除"}
+                        </TableActionButton>
+                      ) : null}
+                      {!manageable && !isSelf ? (
+                        <span className="text-xs text-[var(--lxxl-muted)]">无权操作</span>
+                      ) : null}
+                    </div>
                   </td>
                 </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>

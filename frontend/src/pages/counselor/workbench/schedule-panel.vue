@@ -10,14 +10,14 @@
     <view class="mode-switch">
       <view
         class="mode-chip"
-        :class="{ active: viewMode === 'list' }"
-        @tap="switchViewMode('list')"
-      >普通模式</view>
-      <view
-        class="mode-chip"
         :class="{ active: viewMode === 'calendar' }"
         @tap="switchViewMode('calendar')"
       >日历模式</view>
+      <view
+        class="mode-chip"
+        :class="{ active: viewMode === 'list' }"
+        @tap="switchViewMode('list')"
+      >普通模式</view>
     </view>
 
     <view class="legend-card">
@@ -627,7 +627,7 @@ const showCancelAction = (slot: CalendarSlot) => {
 const cancelActionLabel = (slot: CalendarSlot) => (isBookedSlot(slot) ? '请假' : '取消排期')
 
 const loading = ref(true)
-const viewMode = ref<ViewMode>('list')
+const viewMode = ref<ViewMode>('calendar')
 const showListFilter = ref(false)
 const listTimeFilter = ref<ListTimeFilter>('all')
 const listStatusFilter = ref<ListStatusFilter>('ALL')
@@ -1461,7 +1461,8 @@ const submitSlot = () => {
 }
 
 onMounted(() => {
-  loadCalendar()
+  if (!selectedCalendarDate.value) selectedCalendarDate.value = formatDateLocal()
+  void loadMonthCalendar()
   void refreshSubscribeHint()
   fetchSystemSettings().then(data => {
     proxyOrderTtlMinutes.value = data.proxyOrderTtlMinutes

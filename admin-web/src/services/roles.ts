@@ -34,6 +34,12 @@ export function bindUserRole(userId: number, role: Role, payload: BindUserRolePa
   });
 }
 
+export function deleteUser(userId: number) {
+  return apiRequest<{ message?: string; deletedUserId?: number }>(`/api/mini/admin/users/${userId}`, {
+    method: "DELETE",
+  });
+}
+
 export function unbindUserRole(userId: number, role: Role) {
   return apiRequest(`/api/mini/admin/users/${userId}/roles/${role}`, {
     method: "DELETE",

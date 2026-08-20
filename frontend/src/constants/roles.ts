@@ -34,6 +34,8 @@ export function canActorAssignRole(actorRole: string, targetRole: string): boole
   // 测试员仅管理员可赋权
   if (targetRole === 'Tester') return actorRole === 'Admin'
   if (!isStaffManagementRole(targetRole)) return true
+  // 管理员可新建/赋权其他管理员
+  if (actorRole === 'Admin' && targetRole === 'Admin') return true
   return staffRoleRank(actorRole) > staffRoleRank(targetRole)
 }
 
@@ -41,6 +43,8 @@ export function canActorAssignRole(actorRole: string, targetRole: string): boole
 export function canActorManageUser(actorRole: string, userRole: string): boolean {
   if (!(STAFF_OPS_WORKBENCH_ROLES as readonly string[]).includes(actorRole)) return false
   if (!isStaffManagementRole(userRole)) return true
+  // 管理员可修改/删除其他管理员
+  if (actorRole === 'Admin' && userRole === 'Admin') return true
   return staffRoleRank(actorRole) > staffRoleRank(userRole)
 }
 

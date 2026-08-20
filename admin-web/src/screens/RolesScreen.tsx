@@ -7,6 +7,7 @@ import type { Role } from "@/types/api";
 import {
   bindUserRole,
   createUserByMobile,
+  deleteUser,
   fetchAdminUsers,
   type BindUserRolePayload,
   type CreateUserByMobilePayload,
@@ -83,9 +84,26 @@ function RolesScreenContent() {
     }
   };
 
+  const removeUser = async (userId: number) => {
+    setListLoading(true);
+    clearNotice();
+    try {
+      const result = await deleteUser(userId);
+      const adminUsers = await fetchAdminUsers();
+      setData((prev) => ({ ...prev, adminUsers }));
+      showNotice("success", result.message || "用户已永久删除");
+    } catch (error) {
+      showNotice("error", error instanceof Error ? error.message : "删除失败");
+      throw error;
+    } finally {
+      setListLoading(false);
+    }
+  };
+
   return (
     <RolesPanel
       users={data.adminUsers}
+      currentUserId={currentUser.id}
       currentUserRoles={currentUser.roles}
       listLoading={listLoading}
       page={page}
@@ -98,6 +116,7 @@ function RolesScreenContent() {
       }}
       onCreateUser={createUser}
       onUpdateRole={updateRole}
+      onDeleteUser={removeUser}
     />
   );
 }

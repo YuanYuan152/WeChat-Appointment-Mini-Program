@@ -108,6 +108,15 @@ const resolveUrl = (opts?: Record<string, string | undefined>) => {
       raw = ''
     }
   }
+  // 丢弃历史错误地址（旧 IP / HTTP），避免缓存导致仍打开旧测评站
+  if (raw && (/124\.221\.56\.121/i.test(raw) || /^http:\/\//i.test(raw))) {
+    raw = ''
+    try {
+      uni.removeStorageSync(STORAGE_URL_KEY)
+    } catch {
+      /* ignore */
+    }
+  }
   let title = ''
   if (opts?.title) {
     try {

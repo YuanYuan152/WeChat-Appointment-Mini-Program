@@ -8,8 +8,8 @@
     </view>
 
     <view class="mode-switch">
-      <view class="mode-chip" :class="{ active: viewMode === 'list' }" @tap="switchViewMode('list')">普通模式</view>
       <view class="mode-chip" :class="{ active: viewMode === 'calendar' }" @tap="switchViewMode('calendar')">日历模式</view>
+      <view class="mode-chip" :class="{ active: viewMode === 'list' }" @tap="switchViewMode('list')">普通模式</view>
     </view>
 
     <view class="legend-card">
@@ -218,7 +218,7 @@ const counselorName = ref('咨询师')
 const initialDate = ref('')
 
 const loading = ref(true)
-const viewMode = ref<ViewMode>('list')
+const viewMode = ref<ViewMode>('calendar')
 const showListFilter = ref(false)
 const listTimeFilter = ref<ListTimeFilter>('all')
 const listStatusFilter = ref<ListStatusFilter>('ALL')

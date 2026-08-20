@@ -9,6 +9,14 @@ export const CREATABLE_ROLE_OPTIONS: Array<{ value: Role; label: string }> = [
   { value: "Admin", label: "管理员" },
 ];
 
+const STAFF_WORKBENCH_ROLES: Role[] = ["Assistant", "Ops", "Admin"];
+
+const STAFF_ROLE_RANK: Partial<Record<Role, number>> = {
+  Assistant: 1,
+  Ops: 2,
+  Admin: 3,
+};
+
 const ROLE_MANAGEMENT_ALLOWED: Record<Role, Role[]> = {
   Admin: ["Ops", "Assistant", "Counselor", "Patient", "Tester", "Admin"],
   Ops: ["Assistant", "Counselor", "Patient"],
@@ -17,6 +25,54 @@ const ROLE_MANAGEMENT_ALLOWED: Record<Role, Role[]> = {
   Patient: [],
   Tester: [],
 };
+
+export function resolveHighestStaffRole(roles: Role[] = []): Role | null {
+  let best: Role | null = null;
+  let bestRank = 0;
+  roles.forEach((role) => {
+    const rank = STAFF_ROLE_RANK[role] ?? 0;
+    if (rank > bestRank) {
+      bestRank = rank;
+      best = role;
+    }
+  });
+  return best;
+}
+
+function isStaffManagementRole(role: Role | string) {
+  return STAFF_WORKBENCH_ROLES.includes(role as Role);
+}
+
+/** 与后端 staff_roles.can_actor_assign_role 对齐 */
+export function canActorAssignRole(actorRole: Role | string, targetRole: Role | string) {
+  if (!STAFF_WORKBENCH_ROLES.includes(actorRole as Role)) {
+    return false;
+  }
+  if (targetRole === "Tester") {
+    return actorRole === "Admin";
+  }
+  if (!isStaffManagementRole(targetRole)) {
+    return true;
+  }
+  if (actorRole === "Admin" && targetRole === "Admin") {
+    return true;
+  }
+  return (STAFF_ROLE_RANK[actorRole as Role] ?? 0) > (STAFF_ROLE_RANK[targetRole as Role] ?? 0);
+}
+
+/** 与后端 staff_roles.can_actor_manage_user 对齐 */
+export function canActorManageUser(actorRole: Role | string, userRole: Role | string) {
+  if (!STAFF_WORKBENCH_ROLES.includes(actorRole as Role)) {
+    return false;
+  }
+  if (!isStaffManagementRole(userRole)) {
+    return true;
+  }
+  if (actorRole === "Admin" && userRole === "Admin") {
+    return true;
+  }
+  return (STAFF_ROLE_RANK[actorRole as Role] ?? 0) > (STAFF_ROLE_RANK[userRole as Role] ?? 0);
+}
 
 export function getManageableRoles(currentRoles: Role[] = []) {
   const manageable = new Set<Role>();
