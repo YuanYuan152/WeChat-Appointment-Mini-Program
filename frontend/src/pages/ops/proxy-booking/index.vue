@@ -731,7 +731,12 @@ const submitProxyOrder = () => {
         uni.showToast({ title: res.msg || '推送失败', icon: 'none' })
         return
       }
-      uni.showToast({ title: '订单已推送', icon: 'success' })
+      const pushData = res.data as { isFreeOrder?: boolean; totalFee?: number; message?: string } | undefined
+      const free = Boolean(pushData?.isFreeOrder || (pushData?.totalFee != null && pushData.totalFee <= 0))
+      uni.showToast({
+        title: free ? (pushData?.message || '已推送免费单') : '订单已推送',
+        icon: 'success',
+      })
       showAdd.value = false
       await loadSchedules()
       if (viewMode.value === 'calendar') await loadMonthSlots()

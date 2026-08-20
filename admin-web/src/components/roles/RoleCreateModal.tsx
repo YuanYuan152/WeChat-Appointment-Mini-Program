@@ -47,6 +47,9 @@ export function RoleCreateModal({
     if (role === "Assistant") {
       return "咨询助理可进入管理工作台，与咨询主任共享大部分日常运营能力。";
     }
+    if (role === "Tester") {
+      return "测试员仅管理员可创建，用于联调与验收，可被强制清理业务数据后删除。";
+    }
     return "管理员可进入权限管理和全部后台功能。";
   }, [role]);
 

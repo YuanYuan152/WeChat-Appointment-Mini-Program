@@ -31,6 +31,8 @@ export function staffRoleRank(role: string): number {
 /** 操作者是否可将 targetRole 赋给其他账号 */
 export function canActorAssignRole(actorRole: string, targetRole: string): boolean {
   if (!(STAFF_OPS_WORKBENCH_ROLES as readonly string[]).includes(actorRole)) return false
+  // 测试员仅管理员可赋权
+  if (targetRole === 'Tester') return actorRole === 'Admin'
   if (!isStaffManagementRole(targetRole)) return true
   return staffRoleRank(actorRole) > staffRoleRank(targetRole)
 }
@@ -71,7 +73,7 @@ export const ROLE_PRIORITY_LOW_TO_HIGH = [
   'Admin',
 ] as const
 
-/** 测试员：可被管理员强制物理删除（含咨询/订单等业务数据） */
+/** 测试员：仅管理员可赋权；可被管理员强制物理删除（含咨询/订单等业务数据） */
 export const TESTER_ROLE = 'Tester'
 
 /** 单账号唯一角色：优先 activeRole，否则取 roles[0] */

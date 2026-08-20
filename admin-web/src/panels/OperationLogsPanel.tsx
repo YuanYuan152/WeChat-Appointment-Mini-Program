@@ -244,6 +244,7 @@ export function OperationLogsPanel({
               <option value="Ops">咨询主任</option>
               <option value="Counselor">咨询师</option>
               <option value="Patient">来访者</option>
+              <option value="Tester">测试员</option>
             </select>
           </QueryField>
           <QueryField label="操作类型">

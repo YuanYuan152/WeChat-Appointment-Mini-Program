@@ -893,5 +893,8 @@ function slotHint(slot: ProxySlotOption) {
 }
 
 export function proxyOrderSuccessText(result: ProxyPushOrderResult) {
+  if ((result.totalFee ?? 0) <= 0 || result.isFreeOrder) {
+    return `${result.message || "已推送免费单"}`;
+  }
   return `${result.message || "订单已推送"}，金额 ${formatMoneyFromCents(result.totalFee)}`;
 }

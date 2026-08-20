@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 
 import { DetailDrawer } from "@/components/boards/DetailDrawer";
@@ -57,6 +57,8 @@ export function RoomsPanel({
   onSaveRoom,
   onSaveSlotStatuses,
   onAddRoom,
+  onRenameRoom,
+  onDeleteRoom,
   onChangeScheduleRoom,
   onPageChange,
   onPageSizeChange,
@@ -83,11 +85,18 @@ export function RoomsPanel({
     slots: Array<{ startTime: string; status: RoomSlotManualStatus }>,
   ) => Promise<void>;
   onAddRoom: (input: { centerId: string; name: string; roomCode?: string; status: string }) => Promise<boolean>;
+  onRenameRoom: (input: {
+    roomId?: number | null;
+    centerId: string;
+    roomCode?: string;
+    name: string;
+  }) => Promise<boolean>;
+  onDeleteRoom: (roomId: number) => Promise<boolean>;
   onChangeScheduleRoom: (scheduleId: number, roomCode: string) => Promise<void>;
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
 }) {
-  const [createOpen, setCreateOpen] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
   const statusMap = new Map((roomStatus?.rooms || []).map((room) => [`${room.centerId}-${room.roomCode}`, room]));
   const allRooms = rooms || [];
   const { currentPage, items } = getPageItems(allRooms, page, pageSize);
@@ -118,9 +127,9 @@ export function RoomsPanel({
             <button
               className="h-10 rounded-xl bg-[var(--lxxl-green)] px-4 text-sm font-medium text-white transition hover:bg-[var(--lxxl-green-dark)]"
               type="button"
-              onClick={() => setCreateOpen(true)}
+              onClick={() => setEditorOpen(true)}
             >
-              新增咨询室
+              编辑咨询室
             </button>
           </div>
 
@@ -270,15 +279,31 @@ export function RoomsPanel({
         </DetailDrawer>
       )}
 
-      {createOpen && (
-        <CreateRoomModal
+      {editorOpen && (
+        <EditRoomsModal
           actionLoading={actionLoading}
-          onClose={() => setCreateOpen(false)}
-          onSubmit={async (input) => {
+          rooms={allRooms}
+          onClose={() => setEditorOpen(false)}
+          onAdd={async (input) => {
             const ok = await onAddRoom(input);
             if (ok) {
-              setCreateOpen(false);
+              setEditorOpen(false);
             }
+            return ok;
+          }}
+          onRename={async (input) => {
+            const ok = await onRenameRoom(input);
+            if (ok) {
+              setEditorOpen(false);
+            }
+            return ok;
+          }}
+          onDelete={async (roomId) => {
+            const ok = await onDeleteRoom(roomId);
+            if (ok) {
+              setEditorOpen(false);
+            }
+            return ok;
           }}
         />
       )}
@@ -652,19 +677,76 @@ function roomStatusTone(status?: string | null) {
   return "neutral";
 }
 
-function CreateRoomModal({
+function EditRoomsModal({
+  rooms,
   actionLoading,
   onClose,
-  onSubmit,
+  onAdd,
+  onRename,
+  onDelete,
 }: {
+  rooms: Room[];
   actionLoading: boolean;
   onClose: () => void;
-  onSubmit: (input: { centerId: string; name: string; roomCode?: string; status: string }) => Promise<void>;
+  onAdd: (input: { centerId: string; name: string; status: string }) => Promise<boolean>;
+  onRename: (input: {
+    roomId?: number | null;
+    centerId: string;
+    roomCode?: string;
+    name: string;
+  }) => Promise<boolean>;
+  onDelete: (roomId: number) => Promise<boolean>;
 }) {
-  const [centerId, setCenterId] = useState("yangpu");
+  const centerOptions = [
+    { value: "yangpu", label: "杨浦预约中心" },
+    { value: "pudong", label: "浦东预约中心" },
+  ];
+  const [mode, setMode] = useState<"add" | "rename" | "delete">("add");
+  const [centerId, setCenterId] = useState(centerOptions[0]?.value || "yangpu");
+  const [selectedKey, setSelectedKey] = useState("");
   const [name, setName] = useState("");
-  const [roomCode, setRoomCode] = useState("");
-  const [status, setStatus] = useState<RoomEditableStatus>("AVAILABLE");
+
+  const editableRooms = useMemo(
+    () =>
+      rooms
+        .filter((room) => room.centerId === centerId)
+        .slice()
+        .sort((a, b) => a.name.localeCompare(b.name, "zh")),
+    [centerId, rooms],
+  );
+
+  const selectedRoom =
+    editableRooms.find((room) => `${room.centerId}-${room.roomCode}` === selectedKey) ||
+    editableRooms[0] ||
+    null;
+
+  useEffect(() => {
+    if (!editableRooms.length) {
+      setSelectedKey("");
+      if (mode !== "add") {
+        setName("");
+      }
+      return;
+    }
+    const stillValid = editableRooms.some((room) => `${room.centerId}-${room.roomCode}` === selectedKey);
+    if (stillValid) {
+      return;
+    }
+    const nextRoom = editableRooms[0];
+    setSelectedKey(`${nextRoom.centerId}-${nextRoom.roomCode}`);
+    if (mode !== "add") {
+      setName(nextRoom.name);
+    }
+  }, [editableRooms, mode, selectedKey]);
+
+  const selectMode = (nextMode: "add" | "rename" | "delete") => {
+    setMode(nextMode);
+    if (nextMode === "add") {
+      setName("");
+      return;
+    }
+    setName(selectedRoom?.name || "");
+  };
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/30 px-6">
@@ -672,44 +754,139 @@ function CreateRoomModal({
         className="w-full max-w-lg rounded-2xl border border-[var(--lxxl-border)] bg-white p-6 shadow-2xl"
         onSubmit={(event) => {
           event.preventDefault();
-          void onSubmit({ centerId, name: name.trim(), roomCode: roomCode.trim() || undefined, status });
+          void (async () => {
+            if (mode === "delete") {
+              if (!selectedRoom?.id) {
+                return;
+              }
+              const confirmed = window.confirm(
+                `确定删除“${selectedRoom.name}”吗？存在未完成咨询订单时将无法删除。`,
+              );
+              if (!confirmed) {
+                return;
+              }
+              await onDelete(selectedRoom.id);
+              return;
+            }
+
+            const nextName = name.trim();
+            if (!nextName) {
+              return;
+            }
+            if (mode === "add") {
+              await onAdd({ centerId, name: nextName, status: "AVAILABLE" });
+              return;
+            }
+            if (!selectedRoom) {
+              return;
+            }
+            await onRename({
+              roomId: selectedRoom.id,
+              centerId: selectedRoom.centerId,
+              roomCode: selectedRoom.roomCode,
+              name: nextName,
+            });
+          })();
         }}
       >
-        <h3 className="text-lg font-semibold">新增咨询室</h3>
+        <h3 className="text-lg font-semibold">编辑咨询室</h3>
+        <p className="mt-2 text-sm text-[var(--lxxl-muted)]">可新增、重命名或删除咨询室，与小程序管理端一致。</p>
+
+        <div className="mt-5 grid grid-cols-3 gap-2">
+          {(
+            [
+              { value: "add", label: "新增咨询室" },
+              { value: "rename", label: "重命名咨询室" },
+              { value: "delete", label: "删除咨询室" },
+            ] as const
+          ).map((item) => (
+            <button
+              key={item.value}
+              className={`h-10 rounded-xl border px-2 text-sm font-medium transition ${
+                mode === item.value
+                  ? "border-[var(--lxxl-green)] bg-[var(--lxxl-green)] text-white"
+                  : "border-[var(--lxxl-border)] text-[var(--lxxl-muted)] hover:border-[var(--lxxl-green)]"
+              }`}
+              type="button"
+              onClick={() => selectMode(item.value)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+
         <div className="mt-5 grid gap-4">
-          <QueryField label="预约中心">
-            <select className={queryControlClass} value={centerId} onChange={(event) => setCenterId(event.target.value)}>
-              <option value="yangpu">杨浦预约中心</option>
-              <option value="pudong">浦东预约中心</option>
-            </select>
-          </QueryField>
-          <QueryField label="咨询室名称">
-            <input className={queryControlClass} placeholder="例如：咨询室 D" value={name} onChange={(event) => setName(event.target.value)} />
-          </QueryField>
-          <QueryField label="咨询室代码">
-            <input className={queryControlClass} placeholder="可不填，系统自动生成" value={roomCode} onChange={(event) => setRoomCode(event.target.value)} />
-          </QueryField>
-          <QueryField label="初始状态">
+          <QueryField label="所属预约中心">
             <select
               className={queryControlClass}
-              value={status}
-              onChange={(event) => setStatus(event.target.value as RoomEditableStatus)}
+              value={centerId}
+              onChange={(event) => {
+                setCenterId(event.target.value);
+                setSelectedKey("");
+              }}
             >
-              {ROOM_STATUS_OPTIONS.map((item) => (
-                <option key={item} value={item}>
-                  {roomStatusLabel(item)}
+              {centerOptions.map((center) => (
+                <option key={center.value} value={center.value}>
+                  {center.label}
                 </option>
               ))}
             </select>
           </QueryField>
+
+          {mode !== "add" && (
+            <QueryField label={mode === "delete" ? "选择要删除的咨询室" : "选择要重命名的咨询室"}>
+              {editableRooms.length > 0 ? (
+                <select
+                  className={queryControlClass}
+                  value={selectedKey}
+                  onChange={(event) => {
+                    setSelectedKey(event.target.value);
+                    const room = editableRooms.find(
+                      (item) => `${item.centerId}-${item.roomCode}` === event.target.value,
+                    );
+                    setName(room?.name || "");
+                  }}
+                >
+                  {editableRooms.map((room) => (
+                    <option key={`${room.centerId}-${room.roomCode}`} value={`${room.centerId}-${room.roomCode}`}>
+                      {room.name}（{room.roomCode}）
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div className="rounded-xl border border-dashed border-[var(--lxxl-border)] px-4 py-3 text-sm text-[var(--lxxl-muted)]">
+                  该中心暂无可{mode === "delete" ? "删除" : "重命名"}的咨询室
+                </div>
+              )}
+            </QueryField>
+          )}
+
+          {mode !== "delete" && (
+            <QueryField label={mode === "add" ? "新咨询室名称 *" : "修改后的名称 *"}>
+              <input
+                className={queryControlClass}
+                placeholder={mode === "add" ? "如：咨询室 D" : "请输入新的咨询室名称"}
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+              />
+            </QueryField>
+          )}
         </div>
+
         <div className="mt-6 flex justify-start gap-3">
           <button
-            className="h-10 rounded-xl bg-[var(--lxxl-green)] px-4 text-sm font-medium text-white disabled:opacity-50"
+            className={`h-10 rounded-xl px-4 text-sm font-medium text-white disabled:opacity-50 ${
+              mode === "delete" ? "bg-[#A13F37]" : "bg-[var(--lxxl-green)]"
+            }`}
             type="submit"
-            disabled={actionLoading || !name.trim()}
+            disabled={
+              actionLoading ||
+              (mode === "add" && !name.trim()) ||
+              (mode === "rename" && (!selectedRoom || !name.trim())) ||
+              (mode === "delete" && !selectedRoom?.id)
+            }
           >
-            新增
+            {mode === "delete" ? "删除" : "保存"}
           </button>
           <button
             className="h-10 rounded-xl border border-[var(--lxxl-border)] px-4 text-sm font-medium text-[var(--lxxl-muted)]"

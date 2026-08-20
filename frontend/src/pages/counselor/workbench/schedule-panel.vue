@@ -1293,7 +1293,14 @@ const submitProxyOrder = async () => {
       }
       return
     }
-    uni.showToast({ title: '订单已推送', icon: 'success' })
+    uni.showToast({
+      title: (() => {
+        const pushData = res.data as { isFreeOrder?: boolean; totalFee?: number; message?: string } | undefined
+        const free = Boolean(pushData?.isFreeOrder || (pushData?.totalFee != null && pushData.totalFee <= 0))
+        return free ? (pushData?.message || '已推送免费单') : '订单已推送'
+      })(),
+      icon: 'success',
+    })
     showProxy.value = false
     await refresh()
   } catch (e: unknown) {

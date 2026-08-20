@@ -35,9 +35,9 @@
           <text class="label">预约地点</text>
           <text class="value">{{ detail.location }}</text>
         </view>
-        <view v-if="detail.amountYuan" class="detail-row">
+        <view v-if="detail.amountYuan || detail.feeLabel" class="detail-row">
           <text class="label">支付金额</text>
-          <text class="value">¥{{ detail.amountYuan }}</text>
+          <text class="value">{{ formatMessageAmount(detail) }}</text>
         </view>
       </view>
 
@@ -162,9 +162,9 @@
           <text class="label">咨询师</text>
           <text class="value">{{ detail.counselorName }}</text>
         </view>
-        <view v-if="detail.amountYuan" class="detail-row">
+        <view v-if="detail.amountYuan || detail.feeLabel" class="detail-row">
           <text class="label">申请金额</text>
-          <text class="value">¥{{ detail.amountYuan }}</text>
+          <text class="value">{{ formatMessageAmount(detail) }}</text>
         </view>
         <view v-if="detail.reason" class="reason-box">
           <text class="reason-label">申请原因</text>
@@ -392,7 +392,7 @@
         </view>
         <view v-if="detail.totalFeeYuan != null" class="detail-row">
           <text class="label">订单金额</text>
-          <text class="value">¥{{ detail.totalFeeYuan }}</text>
+          <text class="value">{{ detail.feeLabel || (detail.totalFeeYuan === 0 ? '免费' : `¥${detail.totalFeeYuan}`) }}</text>
         </view>
         <button v-if="proxyOrderId" class="review-btn" @click="goProxyOrderPay">去支付</button>
       </view>
@@ -527,9 +527,9 @@
           <text class="label">咨询地点</text>
           <text class="value">{{ detail.location }}</text>
         </view>
-        <view v-if="detail.amountYuan" class="detail-row">
+        <view v-if="detail.amountYuan || detail.feeLabel" class="detail-row">
           <text class="label">订单金额</text>
-          <text class="value">¥{{ detail.amountYuan }}</text>
+          <text class="value">{{ formatMessageAmount(detail) }}</text>
         </view>
         <view v-if="detail.tip" class="tip-box pending">
           <text class="tip-text">{{ detail.tip }}</text>
@@ -583,6 +583,16 @@ const messageId = ref(0)
 const payload = computed(() => parseMessageContent(message.value?.Content))
 const detail = computed(() => (payload.value.detail || {}) as Record<string, any>)
 const relatedType = computed(() => message.value?.RelatedType || '')
+
+const formatMessageAmount = (item: Record<string, any>) => {
+  if (item?.feeLabel) return String(item.feeLabel)
+  if (item?.isFreeOrder) return '免费'
+  const yuan = item?.amountYuan
+  if (yuan == null || yuan === '') return '—'
+  if (String(yuan) === '0' || String(yuan) === '0.00') return '免费'
+  return `¥${yuan}`
+}
+
 /** 待支付预约仅展示中心名，过滤历史消息中可能带有的咨询室后缀 */
 const proxyPendingLocation = computed(() => {
   const raw = String(detail.value.centerName || detail.value.location || '').trim()

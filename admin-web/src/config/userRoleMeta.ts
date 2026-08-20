@@ -5,21 +5,23 @@ export const CREATABLE_ROLE_OPTIONS: Array<{ value: Role; label: string }> = [
   { value: "Assistant", label: "咨询助理" },
   { value: "Ops", label: "咨询主任" },
   { value: "Patient", label: "来访者" },
+  { value: "Tester", label: "测试员" },
   { value: "Admin", label: "管理员" },
 ];
 
 const ROLE_MANAGEMENT_ALLOWED: Record<Role, Role[]> = {
-  Admin: ["Admin", "Ops", "Assistant", "Counselor", "Patient"],
+  Admin: ["Ops", "Assistant", "Counselor", "Patient", "Tester", "Admin"],
   Ops: ["Assistant", "Counselor", "Patient"],
   Assistant: ["Counselor", "Patient"],
   Counselor: [],
   Patient: [],
+  Tester: [],
 };
 
 export function getManageableRoles(currentRoles: Role[] = []) {
   const manageable = new Set<Role>();
   currentRoles.forEach((role) => {
-    ROLE_MANAGEMENT_ALLOWED[role].forEach((item) => manageable.add(item));
+    ROLE_MANAGEMENT_ALLOWED[role]?.forEach((item) => manageable.add(item));
   });
   return CREATABLE_ROLE_OPTIONS.filter((option) => manageable.has(option.value));
 }

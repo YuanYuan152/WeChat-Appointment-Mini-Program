@@ -64,6 +64,12 @@ export function updateRoom(roomId: number, input: { name?: string; status?: stri
   });
 }
 
+export function deleteRoom(roomId: number) {
+  return apiRequest<{ msg?: string }>(`/api/mini/ops/rooms/${roomId}`, {
+    method: "DELETE",
+  });
+}
+
 export function saveRoomSlotStatuses(
   roomId: number,
   slots: Array<{ startTime: string; status: RoomSlotManualStatus }>,

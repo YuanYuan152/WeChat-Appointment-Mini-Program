@@ -1519,6 +1519,10 @@ const confirmPayment = async () => {
     const payload = orderRes.data as any
     const payParams = payload?.pay_params || payload?.payParams
     const orderId = String(payload?.order_id || payParams?.order_id || '')
+    if (payParams?.free || payParams?.already_paid || payParams?.alreadyPaid) {
+      await finishOk(orderId || undefined)
+      return
+    }
     if (!payParams?.appId) {
       uni.showToast({ title: '未获取到支付参数', icon: 'none' })
       return

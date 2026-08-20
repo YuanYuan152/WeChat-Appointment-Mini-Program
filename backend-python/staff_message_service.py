@@ -208,8 +208,9 @@ def notify_staff_new_appointment(
     )
     summary = f"{patient_label} · {ctx['counselorName']} · {time_text}"
     amount_yuan = None
-    if order and order.TotalFee:
-        amount_yuan = f"{order.TotalFee / 100:.2f}"
+    if order is not None:
+        fee_cents = int(order.TotalFee or 0)
+        amount_yuan = "0.00" if fee_cents <= 0 else f"{fee_cents / 100:.2f}"
     detail = {
         "patientName": patient["name"],
         "patientContractTag": patient.get("contractTag") or None,
@@ -221,6 +222,8 @@ def notify_staff_new_appointment(
         "endTime": _format_datetime(ctx["endTime"]),
         "location": ctx["location"],
         "amountYuan": amount_yuan,
+        "feeLabel": ("免费" if amount_yuan == "0.00" else (f"¥{amount_yuan}" if amount_yuan else None)),
+        "isFreeOrder": amount_yuan == "0.00",
         "consultationId": consultation.Id,
     }
     _notify_staff(
@@ -397,8 +400,8 @@ def notify_staff_proxy_order_pushed(
     patient_label = f"{patient_name} {contract_tag}" if contract_tag else patient_name
     summary = f"{patient_label} · {counselor_name} · {time_text} · {location}"
     amount_yuan = None
-    if order.TotalFee:
-        amount_yuan = f"{order.TotalFee / 100:.2f}"
+    fee_cents = int(order.TotalFee or 0)
+    amount_yuan = "0.00" if fee_cents <= 0 else f"{fee_cents / 100:.2f}"
     from system_setting_service import get_proxy_order_ttl_minutes, proxy_order_ttl_staff_tip
 
     ttl_minutes = get_proxy_order_ttl_minutes(db)
@@ -412,6 +415,8 @@ def notify_staff_proxy_order_pushed(
         "location": location,
         "orderId": order.Id,
         "amountYuan": amount_yuan,
+        "feeLabel": "免费" if fee_cents <= 0 else f"¥{amount_yuan}",
+        "isFreeOrder": fee_cents <= 0,
         "proxyOrderTtlMinutes": ttl_minutes,
         "tip": proxy_order_ttl_staff_tip(ttl_minutes),
     }

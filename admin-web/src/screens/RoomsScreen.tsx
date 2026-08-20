@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   changeScheduleRoom,
   createRoom,
+  deleteRoom,
   fetchRoomDetail,
   fetchRoomsData,
   fetchScheduleRoomOptions,
@@ -169,6 +170,58 @@ function RoomsScreenContent() {
     }
   }, [loadData, showNotice]);
 
+  const renameRoom = useCallback(
+    async (input: { roomId?: number | null; centerId: string; roomCode?: string; name: string }) => {
+      setActionLoading(true);
+      try {
+        if (input.roomId) {
+          await updateRoom(input.roomId, { name: input.name });
+        } else {
+          await createRoom({
+            centerId: input.centerId,
+            roomCode: input.roomCode,
+            name: input.name,
+            status: "AVAILABLE",
+          });
+        }
+        showNotice("success", "咨询室已重命名");
+        void loadData();
+        if (selectedRoom?.id && input.roomId && selectedRoom.id === input.roomId) {
+          const detail = await fetchRoomDetail(input.roomId);
+          setSelectedRoom(detail);
+        }
+        return true;
+      } catch (error) {
+        showNotice("error", error instanceof Error ? error.message : "咨询室重命名失败");
+        return false;
+      } finally {
+        setActionLoading(false);
+      }
+    },
+    [loadData, selectedRoom, showNotice],
+  );
+
+  const removeRoom = useCallback(
+    async (roomId: number) => {
+      setActionLoading(true);
+      try {
+        await deleteRoom(roomId);
+        showNotice("success", "咨询室已删除");
+        if (selectedRoom?.id === roomId) {
+          closeDetail();
+        }
+        void loadData();
+        return true;
+      } catch (error) {
+        showNotice("error", error instanceof Error ? error.message : "咨询室删除失败");
+        return false;
+      } finally {
+        setActionLoading(false);
+      }
+    },
+    [closeDetail, loadData, selectedRoom, showNotice],
+  );
+
   const changeRoomForSchedule = useCallback(async (scheduleId: number, roomCode: string) => {
     setActionLoading(true);
     try {
@@ -225,6 +278,8 @@ function RoomsScreenContent() {
       onSaveRoom={saveRoom}
       onSaveSlotStatuses={saveSlotStatuses}
       onAddRoom={addRoom}
+      onRenameRoom={renameRoom}
+      onDeleteRoom={removeRoom}
       onChangeScheduleRoom={changeRoomForSchedule}
       onPageChange={setPage}
       onPageSizeChange={changePageSize}

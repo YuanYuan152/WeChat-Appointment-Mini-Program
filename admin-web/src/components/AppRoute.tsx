@@ -69,6 +69,7 @@ function AppRouteRoot({ sectionId, children }: { sectionId: SectionId; children:
   const [refreshKey, setRefreshKey] = useState(0);
   const [unreadMessageCount, setUnreadMessageCount] = useState<number | null>(null);
   const [accessKeyPassed, setAccessKeyPassed] = useState(false);
+  const [autoLoginError, setAutoLoginError] = useState<string | null>(null);
   const accessKeyLoginEnabled = isAccessKeyLoginEnabled();
   const autoLoginStartedRef = useRef(false);
 
@@ -126,6 +127,7 @@ function AppRouteRoot({ sectionId, children }: { sectionId: SectionId; children:
         clearAccessKeyPassed();
         setAccessKeyPassed(false);
       }
+      setAutoLoginError(null);
       clearNotice();
       router.replace("/login");
     };
@@ -173,6 +175,7 @@ function AppRouteRoot({ sectionId, children }: { sectionId: SectionId; children:
   const handleLogin = async (code: DevLoginCode) => {
     setLoading(true);
     clearNotice();
+    setAutoLoginError(null);
     try {
       await loginWithDevCode(code);
       const me = await fetchCurrentUser();
@@ -181,7 +184,10 @@ function AppRouteRoot({ sectionId, children }: { sectionId: SectionId; children:
       showNotice("success", `已进入${roleLabel(me.activeRole)}`);
       router.replace(sectionPathById[getDefaultSectionId(me.roles)]);
     } catch (error) {
-      showNotice("error", error instanceof Error ? error.message : "登录失败");
+      const message = error instanceof Error ? error.message : "登录失败";
+      setAutoLoginError(message);
+      showNotice("error", message);
+      throw error;
     } finally {
       setLoading(false);
     }
@@ -200,7 +206,9 @@ function AppRouteRoot({ sectionId, children }: { sectionId: SectionId; children:
     }
 
     autoLoginStartedRef.current = true;
-    void handleLogin(getAccessKeyLoginDevCode() as DevLoginCode);
+    void handleLogin(getAccessKeyLoginDevCode() as DevLoginCode).catch(() => {
+      // 错误已在 handleLogin 中展示；需手动点「重试登录」。
+    });
   }, [accessKeyLoginEnabled, accessKeyPassed, booting, currentUser, loading]);
 
   const handleLogout = () => {
@@ -210,6 +218,7 @@ function AppRouteRoot({ sectionId, children }: { sectionId: SectionId; children:
       clearAccessKeyPassed();
       setAccessKeyPassed(false);
     }
+    setAutoLoginError(null);
     setCurrentUser(null);
     setUnreadMessageCount(null);
     clearNotice();
@@ -268,11 +277,45 @@ function AppRouteRoot({ sectionId, children }: { sectionId: SectionId; children:
       );
     }
     if (accessKeyLoginEnabled) {
+      const statusText = loading
+        ? "正在以管理员身份登录..."
+        : autoLoginError || "正在以管理员身份登录...";
       return (
         <main className="grid min-h-screen place-items-center bg-[var(--lxxl-bg)] px-6 text-[var(--lxxl-text)]">
-          <div className="rounded-2xl border border-[var(--lxxl-border)] bg-white px-8 py-6 text-sm text-[var(--lxxl-muted)]">
-            正在以管理员身份登录...
-          </div>
+          <section className="w-full max-w-md rounded-2xl border border-[var(--lxxl-border)] bg-white px-8 py-6">
+            <p className="text-sm text-[var(--lxxl-muted)]">{statusText}</p>
+            {!loading && autoLoginError ? (
+              <div className="mt-5 flex flex-wrap gap-3">
+                <button
+                  className="rounded-xl bg-[var(--lxxl-green)] px-5 py-2 text-sm font-medium text-white disabled:opacity-60"
+                  disabled={loading}
+                  type="button"
+                  onClick={() => {
+                    autoLoginStartedRef.current = true;
+                    void handleLogin(getAccessKeyLoginDevCode() as DevLoginCode).catch(() => {
+                      // 错误已写入 autoLoginError。
+                    });
+                  }}
+                >
+                  重试登录
+                </button>
+                <button
+                  className="rounded-xl border border-[var(--lxxl-border)] px-5 py-2 text-sm text-[var(--lxxl-text)]"
+                  disabled={loading}
+                  type="button"
+                  onClick={() => {
+                    clearAccessKeyPassed();
+                    setAccessKeyPassed(false);
+                    autoLoginStartedRef.current = false;
+                    setAutoLoginError(null);
+                    clearNotice();
+                  }}
+                >
+                  重新输入密钥
+                </button>
+              </div>
+            ) : null}
+          </section>
         </main>
       );
     }

@@ -1,4 +1,4 @@
-export type Role = "Patient" | "Counselor" | "Assistant" | "Ops" | "Admin";
+export type Role = "Patient" | "Counselor" | "Assistant" | "Ops" | "Tester" | "Admin";
 
 export interface LoginResponse {
   token: string;
@@ -998,8 +998,10 @@ export interface ProxyPushOrderResult {
   outTradeNo: string;
   totalFee: number;
   totalFeeYuan: number;
+  isFreeOrder?: boolean;
   expiresAt?: string | null;
   message: string;
+  proxyOrderTtlMinutes?: number;
 }
 
 export interface CounselorCompletedConsultation {

@@ -164,11 +164,19 @@ def request_wechat_refund(
     """
     if order.Status != "PAID":
         return None
+    # 0 元免费单不走微信退款，仅本地关单
+    if int(order.TotalFee or 0) <= 0:
+        return None
     if not is_real_wechat_pay_configured():
         return None
 
     tx = (order.TransactionId or "").strip()
-    if tx.startswith("SIM_") or tx.startswith("DEV_") or tx.startswith("MOCK_"):
+    if (
+        tx.startswith("SIM_")
+        or tx.startswith("DEV_")
+        or tx.startswith("MOCK_")
+        or tx.startswith("FREE_")
+    ):
         return None
 
     client = get_wechat_pay_client()

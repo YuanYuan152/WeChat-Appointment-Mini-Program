@@ -147,7 +147,7 @@ export function getNavigationGroupBySection(sectionId: NavigationSection["id"]) 
   return navigationGroups.find((group) => group.sectionIds.includes(sectionId));
 }
 
-export const roles: Role[] = ["Patient", "Counselor", "Assistant", "Ops", "Admin"];
+export const roles: Role[] = ["Patient", "Counselor", "Assistant", "Ops", "Tester", "Admin"];
 
 export function canAccessSection(section: NavigationSection | undefined, rolesValue: Role[]) {
   if (!section) {

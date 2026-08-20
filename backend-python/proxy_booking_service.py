@@ -737,7 +737,12 @@ def push_proxy_order(
         "outTradeNo": out_trade_no,
         "totalFee": total_fee,
         "totalFeeYuan": total_fee / 100,
+        "isFreeOrder": int(total_fee or 0) <= 0,
         "expiresAt": expires_at.isoformat(),
-        "message": proxy_order_ttl_push_message(ttl_minutes),
+        "message": (
+            "已推送免费单"
+            if int(total_fee or 0) <= 0
+            else proxy_order_ttl_push_message(ttl_minutes)
+        ),
         "proxyOrderTtlMinutes": ttl_minutes,
     }

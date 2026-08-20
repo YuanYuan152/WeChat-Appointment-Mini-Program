@@ -119,7 +119,7 @@
               class="confirm-btn"
               :class="{ disabled: !canSubmitAgreement || submittingAgreement }"
               @tap="submitAgreement"
-            >{{ submittingAgreement ? '提交中...' : '同意协议并继续支付' }}</button>
+            >{{ submittingAgreement ? '提交中...' : (isFreeOrder ? '同意协议并继续确认' : '同意协议并继续支付') }}</button>
           </view>
         </template>
       </template>
@@ -133,8 +133,13 @@
           :style="scrollAreaStyle"
         >
           <view class="amount-box">
-            <text class="amount-currency">¥</text>
-            <text class="amount-value">{{ (order.TotalFee / 100).toFixed(2) }}</text>
+            <template v-if="isFreeOrder">
+              <text class="amount-value">免费</text>
+            </template>
+            <template v-else>
+              <text class="amount-currency">¥</text>
+              <text class="amount-value">{{ (order.TotalFee / 100).toFixed(2) }}</text>
+            </template>
           </view>
 
           <view class="detail-block">
@@ -161,14 +166,14 @@
             </view>
             <view class="detail-row">
               <text class="label">订单状态</text>
-              <text class="value pending">待支付</text>
+              <text class="value pending">{{ isFreeOrder ? '待确认' : '待支付' }}</text>
             </view>
             <view v-if="expireText" class="expire-tip">{{ expireText }}</view>
           </view>
 
           <view class="tips-block">
             <text class="tips-title">温馨提示</text>
-            <text class="tips-line">· 支付成功后预约立即生效；</text>
+            <text class="tips-line">· {{ isFreeOrder ? '确认后预约立即生效；' : '支付成功后预约立即生效；' }}</text>
             <text class="tips-line">· 距咨询开始超过 24 小时可免费取消；</text>
             <text class="tips-line">· 24 小时内取消或爽约，按规定不予退款。</text>
           </view>
@@ -187,7 +192,7 @@
             :class="{ disabled: !agreed || paying }"
             :disabled="!agreed || paying"
             @tap="onConfirm"
-          >{{ paying ? '支付中...' : '确认支付' }}</button>
+          >{{ paying ? (isFreeOrder ? '确认中...' : '支付中...') : (isFreeOrder ? '确认预约' : '确认支付') }}</button>
         </view>
       </template>
     </view>
@@ -245,6 +250,7 @@ import {
   executeOrderPayment,
   expireHintText,
   formatOrderTime,
+  isFreeOrderFee,
 } from '@/utils/orderPayment'
 import {
   DEFAULT_ONBOARDING_EVENT_KEYS,
@@ -304,6 +310,7 @@ const resolveSigCanvasHeight = () => {
 }
 
 const expireText = computed(() => expireHintText(order.value?.ExpiresAt))
+const isFreeOrder = computed(() => isFreeOrderFee(order.value?.TotalFee))
 const emergencyPayload = computed(() => ({
   name: emergencyName.value.trim(),
   relation: emergencyRelation.value.trim(),
@@ -343,9 +350,9 @@ const hasPresetAgreement = computed(() => {
 
 const presetAgreementTip = computed(() => {
   if (hasPresetAgreement.value && order.value?.proxyAgreementLabel) {
-    return `助理已为您选定《${order.value.proxyAgreementLabel}》，请阅读协议并完成电子签名后再支付。`
+    return `助理已为您选定《${order.value.proxyAgreementLabel}》，请阅读协议并完成电子签名后再${isFreeOrderFee(order.value.TotalFee) ? '确认' : '支付'}。`
   }
-  return '您与该咨询师尚未签约，支付前请先选择协议并完成电子签名。'
+  return '您与该咨询师尚未签约，确认前请先选择协议并完成电子签名。'
 })
 
 const effectiveIsAdult = computed(() => {
@@ -355,7 +362,7 @@ const effectiveIsAdult = computed(() => {
 })
 
 const sheetTitle = computed(() =>
-  showAgreementStep.value ? '签署协议' : '确认预约与支付',
+  showAgreementStep.value ? '签署协议' : (isFreeOrder.value ? '确认免费预约' : '确认预约与支付'),
 )
 
 /** 真机：底部绝对定位 + 像素高度字符串（协议约 4/5，支付约 3/4） */
@@ -647,16 +654,27 @@ const onConfirm = () => {
   const runPay = async () => {
     try {
       await subscribePromise
-      const result = await executeOrderPayment(orderId)
+      const result = await executeOrderPayment(orderId, {
+        totalFeeCents: order.value?.TotalFee,
+      })
       if (result.ok) {
-        uni.showToast({ title: '支付成功', icon: 'success' })
+        uni.showToast({
+          title: isFreeOrderFee(order.value?.TotalFee) ? '预约成功' : '支付成功',
+          icon: 'success',
+        })
         emit('paid')
         emit('close')
       } else {
-        uni.showToast({ title: result.msg || '支付失败', icon: 'none' })
+        uni.showToast({
+          title: result.msg || (isFreeOrderFee(order.value?.TotalFee) ? '确认失败' : '支付失败'),
+          icon: 'none',
+        })
       }
     } catch {
-      uni.showToast({ title: '支付失败', icon: 'none' })
+      uni.showToast({
+        title: isFreeOrderFee(order.value?.TotalFee) ? '确认失败' : '支付失败',
+        icon: 'none',
+      })
     } finally {
       paying.value = false
     }

@@ -275,7 +275,24 @@ def _attach_order_agreement_if_needed(
     )
 
 
+def _is_free_order(order: AppOrder) -> bool:
+    return int(order.TotalFee or 0) <= 0
+
+
+def _complete_free_order(db: Session, order: AppOrder) -> dict:
+    """0 元订单直接入账，不调微信支付。"""
+    complete_paid_order(
+        db,
+        order,
+        center_id=_center_id_from_order(order),
+        transaction_id=f"FREE_{order.OutTradeNo}",
+    )
+    return {"free": True, "already_paid": True, "order_id": order.Id}
+
+
 def _resolve_pay_params(order: AppOrder, account: AppAccount, description: str) -> dict:
+    if _is_free_order(order):
+        raise HTTPException(status_code=400, detail="免费单请走免费确认，无需微信支付")
     time_expire = None
     if order.ExpiresAt:
         time_expire = format_wechat_time_expire(order.ExpiresAt)
@@ -353,6 +370,30 @@ def create_order(
     db.commit()
     db.refresh(order)
 
+    if _is_free_order(order):
+        try:
+            _attach_order_agreement_if_needed(
+                db,
+                current_account,
+                order,
+                is_adult=req.is_adult,
+                signature_url=req.signature_url,
+                real_name=req.real_name,
+                emergency_contact=req.emergency_contact,
+                emergency_relation=req.emergency_relation,
+                emergency_phone=req.emergency_phone,
+            )
+            from order_contract_agreement import assert_order_contract_agreement_ready
+
+            assert_order_contract_agreement_ready(db, current_account, order)
+            pay_params = _complete_free_order(db, order)
+        except ValueError as e:
+            db.rollback()
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        db.commit()
+        db.refresh(order)
+        return CreateOrderResponse(out_trade_no=out_trade_no, pay_params=pay_params)
+
     pay_params = _resolve_pay_params(
         order,
         current_account,
@@ -418,6 +459,19 @@ def pay_existing_order(
         raise HTTPException(status_code=400, detail=str(e))
     db.commit()
     db.refresh(order)
+
+    if _is_free_order(order):
+        try:
+            pay_params = _complete_free_order(db, order)
+        except ValueError as e:
+            db.rollback()
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        db.commit()
+        db.refresh(order)
+        return CreateOrderResponse(
+            out_trade_no=order.OutTradeNo,
+            pay_params=pay_params,
+        )
 
     pay_params = _resolve_pay_params(
         order,
@@ -495,9 +549,10 @@ def simulate_pay_existing_order(
     current_account: AppAccount = Depends(get_current_account),
     db: Session = Depends(get_db),
 ):
-    if is_real_wechat_pay_configured():
-        raise HTTPException(status_code=403, detail="已配置真实支付，请使用微信支付流程")
     order = _load_payable_order(db, current_account, req.order_id)
+    # 免费单即使开启真实支付，也允许走本地确认
+    if is_real_wechat_pay_configured() and not _is_free_order(order):
+        raise HTTPException(status_code=403, detail="已配置真实支付，请使用微信支付流程")
     try:
         _attach_order_agreement_if_needed(
             db,
@@ -516,11 +571,12 @@ def simulate_pay_existing_order(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     try:
+        tx_prefix = "FREE_" if _is_free_order(order) else "SIM_"
         complete_paid_order(
             db,
             order,
             center_id=_center_id_from_order(order),
-            transaction_id=f"SIM_{order.OutTradeNo}",
+            transaction_id=f"{tx_prefix}{order.OutTradeNo}",
         )
     except ValueError as e:
         db.rollback()
@@ -529,7 +585,7 @@ def simulate_pay_existing_order(
     db.refresh(order)
     return {
         "code": 0,
-        "msg": "支付成功",
+        "msg": "预约成功" if _is_free_order(order) else "支付成功",
         "data": {"order_id": order.Id, "out_trade_no": order.OutTradeNo, "status": order.Status},
     }
 

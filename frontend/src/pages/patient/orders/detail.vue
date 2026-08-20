@@ -31,7 +31,7 @@
           </view>
           <view class="detail-row">
             <text class="label">金额</text>
-            <text class="value price">¥{{ (order.TotalFee / 100).toFixed(2) }}</text>
+            <text class="value price">{{ formatOrderFeeCents(order.TotalFee) }}</text>
           </view>
           <view class="detail-row">
             <text class="label">创建时间</text>
@@ -47,7 +47,7 @@
         v-if="order.Status === 'PENDING'"
         class="pay-btn"
         @tap="showPaySheet = true"
-      >去支付</button>
+      >{{ isFreeOrderFee(order.TotalFee) ? '去确认' : '去支付' }}</button>
     </template>
 
     <OrderPaymentSheet
@@ -65,7 +65,7 @@ import { onLoad } from '@dcloudio/uni-app'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
 import OrderPaymentSheet from '@/components/OrderPaymentSheet.vue'
-import { type PatientOrder, expireHintText, formatOrderTime } from '@/utils/orderPayment'
+import { type PatientOrder, expireHintText, formatOrderFeeCents, formatOrderTime, isFreeOrderFee } from '@/utils/orderPayment'
 
 const order = ref<PatientOrder | null>(null)
 const loading = ref(true)
@@ -73,7 +73,12 @@ const showPaySheet = ref(false)
 const orderId = ref(0)
 
 const statusLabel = (status: string) => {
-  const map: Record<string, string> = { PENDING: '待支付', PAID: '已支付', CANCELLED: '已取消' }
+  const map: Record<string, string> = {
+    PENDING: '待支付',
+    PAID: '已支付',
+    CANCELLED: '已取消',
+    REFUNDED: '已退款',
+  }
   return map[status] || status
 }
 

@@ -26,6 +26,21 @@ export interface PatientOrder {
 /** 上线真实支付：在 .env 设置 VITE_ENABLE_REAL_PAY=true */
 export const useRealWechatPay = () => import.meta.env.VITE_ENABLE_REAL_PAY === 'true'
 
+export function isFreeOrderFee(cents?: number | null) {
+  return cents != null && !Number.isNaN(Number(cents)) && Number(cents) <= 0
+}
+
+/** 订单金额展示：0 元显示「免费」 */
+export function formatOrderFeeCents(cents?: number | null) {
+  if (cents == null || Number.isNaN(Number(cents))) return '—'
+  if (Number(cents) <= 0) return '免费'
+  return `¥${(Number(cents) / 100).toFixed(2)}`
+}
+
+function isFreePayParams(payParams: any) {
+  return Boolean(payParams?.free || payParams?.already_paid || payParams?.alreadyPaid)
+}
+
 async function syncOrderAfterPay(orderId: number | string): Promise<void> {
   try {
     await httpV2.post(API_ENDPOINTS.payment.syncOrder, { order_id: Number(orderId) })
@@ -34,7 +49,33 @@ async function syncOrderAfterPay(orderId: number | string): Promise<void> {
   }
 }
 
-export async function executeOrderPayment(orderId: number): Promise<{ ok: boolean; msg?: string }> {
+async function confirmFreeOrder(orderId: number): Promise<{ ok: boolean; msg?: string }> {
+  uni.showLoading({ title: '确认中...' })
+  try {
+    const orderRes = await httpV2.post(API_ENDPOINTS.payment.payOrder, { order_id: orderId })
+    uni.hideLoading()
+    if (orderRes.code !== 0 || !orderRes.data) {
+      return { ok: false, msg: orderRes.msg || '确认失败' }
+    }
+    const payParams = (orderRes.data as any)?.pay_params || (orderRes.data as any)?.payParams
+    if (isFreePayParams(payParams)) {
+      return { ok: true }
+    }
+    return { ok: false, msg: orderRes.msg || '免费单确认失败' }
+  } catch (e: any) {
+    uni.hideLoading()
+    return { ok: false, msg: e?.message || '确认失败' }
+  }
+}
+
+export async function executeOrderPayment(
+  orderId: number,
+  options?: { totalFeeCents?: number },
+): Promise<{ ok: boolean; msg?: string }> {
+  if (isFreeOrderFee(options?.totalFeeCents)) {
+    return confirmFreeOrder(orderId)
+  }
+
   if (!useRealWechatPay()) {
     uni.showLoading({ title: '支付中...' })
     try {
@@ -58,6 +99,9 @@ export async function executeOrderPayment(orderId: number): Promise<{ ok: boolea
       return { ok: false, msg: orderRes.msg || '下单失败' }
     }
     const payParams = (orderRes.data as any)?.pay_params || (orderRes.data as any)?.payParams
+    if (isFreePayParams(payParams)) {
+      return { ok: true }
+    }
     if (!payParams?.appId) {
       return { ok: false, msg: '未获取到支付参数' }
     }

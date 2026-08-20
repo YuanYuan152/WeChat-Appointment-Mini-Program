@@ -4,6 +4,9 @@ export function formatMoneyFromCents(value?: number | null) {
   if (value == null || Number.isNaN(value)) {
     return "-";
   }
+  if (value <= 0) {
+    return "免费";
+  }
   return `¥${(value / 100).toLocaleString("zh-CN", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
@@ -83,6 +86,7 @@ export function roleLabel(role?: Role | string | null) {
     Counselor: "咨询师",
     Assistant: "咨询助理",
     Ops: "咨询主任",
+    Tester: "测试员",
     Admin: "管理员",
   };
   return role ? labels[role] || role : "-";

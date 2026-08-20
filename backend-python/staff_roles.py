@@ -2,7 +2,8 @@
 
 咨询助理 < 咨询主任 < 管理员（权限依次升高）。
 高级别可为低级别账号新建、删除、赋权；低级别不可操作高级别；同级之间不可互相操作。
-来访、咨询师、测试员等非管理工作台角色，三者均可赋权与管理。
+来访、咨询师等非管理工作台角色，三者均可赋权与管理。
+测试员（Tester）仅管理员可赋权；其它管理工作台角色不可将账号设为测试员。
 Tester 可被强制物理删除（含业务数据），其它角色仍受咨询/订单保护。
 """
 
@@ -21,6 +22,9 @@ STAFF_ROLE_RANK: dict[str, int] = {
     "Admin": 3,
 }
 
+# 仅管理员可赋权的角色
+ADMIN_ONLY_ASSIGNABLE_ROLES: frozenset[str] = frozenset({"Tester"})
+
 
 def is_staff_management_role(role: str) -> bool:
     return role in STAFF_ROLE_RANK
@@ -34,6 +38,8 @@ def can_actor_assign_role(actor_role: str, target_role: str) -> bool:
     """操作者是否可将 target_role 赋给其他账号。"""
     if actor_role not in STAFF_WORKBENCH_ROLES:
         return False
+    if target_role in ADMIN_ONLY_ASSIGNABLE_ROLES:
+        return actor_role == "Admin"
     if not is_staff_management_role(target_role):
         return True
     return staff_role_rank(actor_role) > staff_role_rank(target_role)
@@ -64,6 +70,8 @@ def role_display_name(role: str) -> str:
 
 
 def role_management_error(actor_role: str, target_role: str, *, action: str) -> str:
+    if target_role in ADMIN_ONLY_ASSIGNABLE_ROLES and action == "赋权":
+        return "仅管理员可将账号设为测试员"
     if is_staff_management_role(target_role):
         actor_rank = staff_role_rank(actor_role)
         target_rank = staff_role_rank(target_role)

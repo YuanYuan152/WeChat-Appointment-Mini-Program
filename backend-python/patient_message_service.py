@@ -485,11 +485,12 @@ def notify_patient_proxy_order_pending(
     center_id = parse_center_id(schedule.Note)
     center_name = center_display_name(center_id) if center_id else "待定"
     time_text = _format_datetime(schedule.StartTime)
-    fee_yuan = int(order.TotalFee or 0) // 100
+    fee_cents = int(order.TotalFee or 0)
+    fee_label = "免费" if fee_cents <= 0 else f"¥{fee_cents // 100}"
     from system_setting_service import get_proxy_order_ttl_minutes, proxy_order_ttl_patient_tip
 
     ttl_minutes = get_proxy_order_ttl_minutes(db)
-    summary = f"{counselor_name} · {time_text} · ¥{fee_yuan}"
+    summary = f"{counselor_name} · {time_text} · {fee_label}"
     detail = {
         "counselorName": counselor_name,
         "startTime": time_text,
@@ -497,7 +498,9 @@ def notify_patient_proxy_order_pending(
         "location": center_name,
         "orderId": order.Id,
         "scheduleId": schedule.Id,
-        "totalFeeYuan": fee_yuan,
+        "totalFeeYuan": fee_cents // 100,
+        "feeLabel": fee_label,
+        "isFreeOrder": fee_cents <= 0,
         "expiresAt": order.ExpiresAt.isoformat() if order.ExpiresAt else None,
         "proxyOrderTtlMinutes": ttl_minutes,
         "tip": proxy_order_ttl_patient_tip(ttl_minutes),

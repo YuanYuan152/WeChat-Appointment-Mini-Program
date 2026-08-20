@@ -14,7 +14,7 @@
         </view>
         <view class="summary-row">
           <text class="summary-label">金额</text>
-          <text class="summary-value price">¥{{ (orderInfo.TotalFee / 100).toFixed(2) }}</text>
+          <text class="summary-value price">{{ formatOrderFeeCents(orderInfo.TotalFee) }}</text>
         </view>
       </view>
 
@@ -30,6 +30,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
+import { formatOrderFeeCents } from '@/utils/orderPayment'
 
 const orderInfo = ref<any>(null)
 const payStatus = ref<'polling' | 'success' | 'pending' | 'failed'>('polling')
