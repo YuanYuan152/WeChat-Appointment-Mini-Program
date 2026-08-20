@@ -206,9 +206,13 @@ STAFF_WORKBENCH_ROLES = {"Assistant", "Ops", "Admin"}
 
 
 def is_preassigned_openid(openid: Optional[str]) -> bool:
-    """后台预创建、尚未用真实微信 openid 登录的账号。"""
+    """后台预创建/导入/官网注册、尚未用真实微信 openid 登录的账号。"""
     o = (openid or "").strip()
-    return o.startswith("admin_invite_")
+    return (
+        o.startswith("admin_invite_")
+        or o.startswith("web_phone_")
+        or o.startswith("import-")
+    )
 
 
 def clear_subscribe_prompt_trigger(account: AppAccount) -> None:

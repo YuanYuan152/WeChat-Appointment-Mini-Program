@@ -140,6 +140,49 @@ class WebAuthStaffInviteTests(unittest.TestCase):
             .count(),
         )
 
+    @patch(
+        "auth.create_access_token",
+        return_value=("replacement-token", datetime.utcnow() + timedelta(hours=2)),
+    )
+    @patch("auth._exchange_wechat_phone_number")
+    @patch("auth._is_wechat_configured", return_value=True)
+    def test_import_account_can_be_claimed_by_wechat_bind(
+        self,
+        _wechat_configured,
+        exchange_phone,
+        _create_token,
+    ):
+        mobile = "13800000005"
+        imported = self.add_account(mobile, "import-patient-abcdef0123456789abcdef01")
+        current = AppAccount(OpenId="wx_openid_import_claim", ActiveRole="Patient", IsActive=True)
+        self.db.add(current)
+        self.db.commit()
+        self.db.refresh(current)
+        self.db.add(
+            AppLoginSession(
+                Id=101,
+                AccountId=current.Id,
+                Token="temporary-token",
+                SessionKey="wechat-session-key",
+                ExpiresAt=datetime.utcnow() + timedelta(hours=1),
+            )
+        )
+        self.db.commit()
+        exchange_phone.return_value = mobile
+
+        result = bind_mobile(
+            BindMobileRequest(phoneCode="wechat-phone-code"),
+            current_account=current,
+            db=self.db,
+        )
+
+        self.db.refresh(imported)
+        self.db.refresh(current)
+        self.assertEqual("replacement-token", result["token"])
+        self.assertEqual(imported.Id, result["id"])
+        self.assertEqual("wx_openid_import_claim", imported.OpenId)
+        self.assertFalse(current.IsActive)
+
 
 if __name__ == "__main__":
     unittest.main()

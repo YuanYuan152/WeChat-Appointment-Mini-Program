@@ -78,6 +78,18 @@ def _is_wechat_configured() -> bool:
     return appid not in _WECHAT_PLACEHOLDER_APPIDS and secret not in _WECHAT_PLACEHOLDER_SECRETS
 
 
+def is_claimable_placeholder_openid(openid: Optional[str], mobile: Optional[str] = None) -> bool:
+    """预建/导入/官网注册占位 openid：尚未绑定真实微信，可被同手机号微信验号认领。"""
+    o = (openid or "").strip()
+    if not o:
+        return False
+    if o.startswith("import-"):
+        return True
+    if mobile:
+        return o in {f"admin_invite_{mobile}", f"web_phone_{mobile}"}
+    return o.startswith("admin_invite_") or o.startswith("web_phone_")
+
+
 def _wechat_http():
     """直连微信 API，忽略系统/环境代理（避免 ProxyError / SSL EOF）。"""
     import requests
@@ -518,11 +530,7 @@ def bind_mobile(
         AppAccount.Id != current_account.Id,
     ).first()
     if existing:
-        placeholder_openids = {
-            f"admin_invite_{mobile}",
-            f"web_phone_{mobile}",
-        }
-        if (existing.OpenId or "") not in placeholder_openids:
+        if not is_claimable_placeholder_openid(existing.OpenId, mobile):
             raise HTTPException(status_code=409, detail="该手机号已被其他微信账号绑定")
         if current_account.Mobile and current_account.Mobile != mobile:
             raise HTTPException(status_code=409, detail="当前微信账号已绑定其他手机号")
