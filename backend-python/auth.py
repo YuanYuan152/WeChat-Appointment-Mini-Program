@@ -57,6 +57,16 @@ DEV_MOCK_CODE_ACTIVE_ROLES = {
     "dev_ops": "Ops",
     "dev_admin": "Admin",
 }
+
+# 管理后台 / EAP 密钥登录使用的固定 code（生产可走正规密钥登录，不依赖 ALLOW_DEV_LOGIN）
+ACCESS_KEY_LOGIN_CODES = frozenset(
+    {
+        "dev_admin",
+        "dev_ops",
+        "dev_assistant",
+        "dev_counselor",
+    }
+)
 DEV_MOCK_CODES = frozenset(DEV_MOCK_CODE_OPENIDS.keys())
 _WECHAT_PLACEHOLDER_APPIDS = frozenset({"", "wx_your_appid_here"})
 _WECHAT_PLACEHOLDER_SECRETS = frozenset({"", "your_wechat_secret_here"})
@@ -333,9 +343,11 @@ def _restore_demo_staff_on_mock_login(
 
 
 def _should_use_mock_login(code: str) -> bool:
-    """Resolve auth mode without silently enabling mock auth in production."""
+    """Resolve auth mode：密钥登录与开发 mock 登录解耦，生产可仅开密钥登录。"""
 
     if code in DEV_MOCK_CODES:
+        if code in ACCESS_KEY_LOGIN_CODES and settings.access_key_login_enabled:
+            return True
         if not settings.dev_login_enabled:
             raise HTTPException(status_code=403, detail="当前环境未启用开发登录")
         return True

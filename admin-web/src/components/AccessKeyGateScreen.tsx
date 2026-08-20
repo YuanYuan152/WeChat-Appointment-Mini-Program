@@ -20,7 +20,7 @@ export function AccessKeyGateScreen({
     event.preventDefault();
     setError("");
     if (!accessKey.trim()) {
-      setError("请输入临时访问密钥");
+      setError("请输入访问密钥");
       return;
     }
     setSubmitting(true);
@@ -41,15 +41,15 @@ export function AccessKeyGateScreen({
       <section className="grid w-full max-w-5xl grid-cols-[1fr_420px] overflow-hidden rounded-2xl border border-[var(--lxxl-border)] bg-white shadow-sm">
         <div className="flex min-h-[420px] flex-col justify-center bg-[var(--lxxl-green)] p-10 text-white">
           <div className="text-sm opacity-75">连心心理</div>
-          <h1 className="mt-5 text-3xl font-semibold">临时访问验证</h1>
+          <h1 className="mt-5 text-3xl font-semibold">管理后台登录</h1>
           <p className="mt-4 max-w-xl text-sm leading-7 text-white/75">
-            当前环境已启用临时密钥登录，验证通过后将自动进入管理员工作台。
+            请使用访问密钥登录。验证通过后将自动进入管理员工作台。
           </p>
         </div>
         <form className="p-8" onSubmit={handleSubmit}>
           <h2 className="text-xl font-semibold">输入访问密钥</h2>
           <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">
-            请输入团队提供的临时密钥后继续。
+            请输入团队提供的访问密钥后继续。
           </p>
           {(notice || error) && (
             <div className="mt-5 rounded-xl border border-[#F0B8B2] bg-[#FFF4F2] px-4 py-3 text-sm text-[#A13F37]">
@@ -57,13 +57,13 @@ export function AccessKeyGateScreen({
             </div>
           )}
           <label className="mt-8 block text-sm font-medium" htmlFor="admin-access-key">
-            临时密钥
+            访问密钥
           </label>
           <input
             autoComplete="off"
             className="mt-2 w-full rounded-xl border border-[var(--lxxl-border)] px-4 py-3 text-sm outline-none ring-[var(--lxxl-green)] focus:ring-2"
             id="admin-access-key"
-            placeholder="请输入临时访问密钥"
+            placeholder="请输入访问密钥"
             type="password"
             value={accessKey}
             onChange={(event) => setAccessKey(event.target.value)}

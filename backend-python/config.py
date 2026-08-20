@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     APP_ENV: Literal["development", "test", "production"] = "development"
     APP_VERSION: str = "2.0"
     ALLOW_DEV_LOGIN: bool = True
+    # 管理后台 / EAP 密钥登录（正式入口，生产可开；与 ALLOW_DEV_LOGIN 解耦）
+    ALLOW_ACCESS_KEY_LOGIN: bool = True
     # 部署侧开关（compose 已注入）。true 时即使商户凭证齐全也允许 simulate-pay。
     ALLOW_SIMULATED_PAYMENT: bool = False
     AUTO_MIGRATE_SCHEMA: bool = True
@@ -102,6 +104,10 @@ class Settings(BaseSettings):
     @property
     def dev_login_enabled(self) -> bool:
         return self.ALLOW_DEV_LOGIN
+
+    @property
+    def access_key_login_enabled(self) -> bool:
+        return self.ALLOW_ACCESS_KEY_LOGIN
 
     @property
     def cors_allowed_origins(self) -> list[str]:
