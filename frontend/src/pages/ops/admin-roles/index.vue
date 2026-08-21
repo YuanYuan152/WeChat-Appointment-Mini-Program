@@ -6,7 +6,7 @@
 
       <text class="title">角色&权限绑定</text>
 
-      <text class="subtitle">每个账号仅一个角色。管理员 &gt; 咨询主任 &gt; 咨询助理；管理员可增删改其他管理员。测试员可强制彻底删除（含咨询/订单）。主任/助理同级不可互相操作</text>
+      <text class="subtitle">每个账号仅一个角色。管理员 &gt; 咨询主任 &gt; 咨询助理；仅密钥登录管理员可增删改其他管理员，且密钥管理员账号本身不可被删除或更换角色。普通管理员同级不可互操作。测试员可强制彻底删除（含咨询/订单）。主任/助理同级不可互相操作</text>
 
     </view>
 
@@ -38,6 +38,7 @@
         <view class="card-head">
           <view class="head-main">
             <text class="name">{{ u.displayName || u.nickname || u.mobile || '未命名用户' }}</text>
+            <text v-if="u.isKeyLoginAdmin" class="meta-line">密钥登录管理员（受保护）</text>
             <text class="uid">
               {{ u.isLegacyOnly ? `旧系统 ID ${u.legacyDoctorId}` : `ID ${u.id}` }}{{ u.mobile ? ' · ' + u.mobile : '' }}
             </text>
@@ -238,7 +239,7 @@ import { API_ENDPOINTS } from '@/config/api'
 
 import { refreshSubscribeHint, tryOfficialRoleSubscribeInGesture } from '@/utils/subscribePrompt'
 
-import { ROLE_OPTIONS, roleLabel, resolveAccountRole, assignableRolesForActor, canActorManageUser, canActorAssignRole, TESTER_ROLE } from '@/constants/roles'
+import { ROLE_OPTIONS, roleLabel, resolveAccountRole, assignableRolesForActor, canActorManageUser, canActorAssignRole, TESTER_ROLE, isKeyLoginAdminOpenId } from '@/constants/roles'
 import {
   COUNSELOR_TYPE_OPTIONS,
   PATIENT_SOURCE_OPTIONS,
@@ -266,6 +267,7 @@ interface AdminUser {
   isLegacyOnly?: boolean
   legacyDoctorId?: number
   staffRemark?: string
+  isKeyLoginAdmin?: boolean
 }
 
 interface AdminUsersResponse {
@@ -281,8 +283,14 @@ const actorRole = computed(() =>
   resolveAccountRole(userStore.roles, userStore.activeRole || userStore.userInfo?.activeRole),
 )
 
+const actorIsKeyLoginAdmin = computed(() =>
+  isKeyLoginAdminOpenId(userStore.userInfo?.openId),
+)
+
 const assignableRoleValues = computed(() =>
-  assignableRolesForActor(actorRole.value, roleValues),
+  assignableRolesForActor(actorRole.value, roleValues, {
+    actorIsKeyLoginAdmin: actorIsKeyLoginAdmin.value,
+  }),
 )
 
 const assignableRoleLabels = computed(() =>
@@ -389,7 +397,10 @@ const load = async (reset = true) => {
 const canManageUser = (user: AdminUser) => {
   const targetRole = userRole(user)
   if (!targetRole) return true
-  return canActorManageUser(actorRole.value, targetRole)
+  return canActorManageUser(actorRole.value, targetRole, {
+    actorIsKeyLoginAdmin: actorIsKeyLoginAdmin.value,
+    targetIsKeyLoginAdmin: !!user.isKeyLoginAdmin,
+  })
 }
 
 const pickerIndex = (uid: number) => {
@@ -616,7 +627,9 @@ const changeRole = async (uid: number) => {
     uni.showToast({ title: '无权管理该账号', icon: 'none' })
     return
   }
-  if (!canActorAssignRole(actorRole.value, role)) {
+  if (!canActorAssignRole(actorRole.value, role, {
+    actorIsKeyLoginAdmin: actorIsKeyLoginAdmin.value,
+  })) {
     uni.showToast({ title: '无权赋权该角色', icon: 'none' })
     return
   }

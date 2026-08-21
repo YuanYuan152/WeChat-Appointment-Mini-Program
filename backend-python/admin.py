@@ -18,6 +18,7 @@ from staff_roles import (
     assignable_roles_for_actor,
     assert_can_assign_role,
     assert_can_manage_user,
+    is_key_login_admin_account,
     staff_workbench_account_ids,
 )
 from models import (
@@ -172,9 +173,15 @@ def get_role_policy(
     db: Session = Depends(get_db),
 ):
     actor_role = get_account_role(db, admin.Id)
-    assignable = assignable_roles_for_actor(actor_role, BINDABLE_ROLE_TYPES)
+    actor_is_key_admin = is_key_login_admin_account(admin)
+    assignable = assignable_roles_for_actor(
+        actor_role,
+        BINDABLE_ROLE_TYPES,
+        actor_is_key_admin=actor_is_key_admin,
+    )
     return {
         "actorRole": actor_role,
+        "actorIsKeyLoginAdmin": actor_is_key_admin,
         "assignableRoles": assignable,
     }
 
@@ -185,14 +192,29 @@ def _actor_role(db: Session, admin: AppAccount) -> str:
 
 def _guard_assign_role(db: Session, admin: AppAccount, target_role: str) -> None:
     try:
-        assert_can_assign_role(_actor_role(db, admin), target_role)
+        assert_can_assign_role(
+            _actor_role(db, admin),
+            target_role,
+            actor_is_key_admin=is_key_login_admin_account(admin),
+        )
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
 
 
-def _guard_manage_user(db: Session, admin: AppAccount, user_role: str) -> None:
+def _guard_manage_user(
+    db: Session,
+    admin: AppAccount,
+    user_role: str,
+    *,
+    target_account: Optional[AppAccount] = None,
+) -> None:
     try:
-        assert_can_manage_user(_actor_role(db, admin), user_role)
+        assert_can_manage_user(
+            _actor_role(db, admin),
+            user_role,
+            actor_is_key_admin=is_key_login_admin_account(admin),
+            target_is_key_admin=is_key_login_admin_account(target_account),
+        )
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
 
@@ -299,6 +321,7 @@ def _user_admin_out(db: Session, account: AppAccount, *, staff_remark: str = "")
             counselor_type_label(counselor_type) if active_role == "Counselor" else None
         ),
         "roles": roles,
+        "isKeyLoginAdmin": is_key_login_admin_account(account),
         "createdAt": getattr(account, "CreatedAt", None),
         "isSelfRegistered": getattr(account, "PatientSource", None) in {
             DEFAULT_PATIENT_SOURCE,
@@ -597,7 +620,7 @@ def create_user_by_mobile(
             raise HTTPException(status_code=400, detail="该手机号对应账号已注销")
         existing_role = get_account_role(db, account.Id)
         if existing_role != body.role:
-            _guard_manage_user(db, admin, existing_role)
+            _guard_manage_user(db, admin, existing_role, target_account=account)
         if body.nickname:
             account.Nickname = body.nickname
         if getattr(account, "AccessRevokedAt", None):
@@ -639,7 +662,7 @@ def bind_user_role(
 
     previous_role = get_account_role(db, user_id)
     new_role = body.role
-    _guard_manage_user(db, admin, previous_role)
+    _guard_manage_user(db, admin, previous_role, target_account=user)
     if previous_role != new_role:
         _guard_assign_role(db, admin, new_role)
 
@@ -729,7 +752,7 @@ def delete_user_account(
         raise HTTPException(status_code=404, detail="用户不存在")
 
     user_role = get_account_role(db, user_id)
-    _guard_manage_user(db, admin, user_role)
+    _guard_manage_user(db, admin, user_role, target_account=account)
 
     try:
         hard_delete_account(db, user_id, purge_business=(user_role == "Tester"))

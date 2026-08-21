@@ -105,6 +105,7 @@ function RolesScreenContent() {
       users={data.adminUsers}
       currentUserId={currentUser.id}
       currentUserRoles={currentUser.roles}
+      currentUserOpenId={currentUser.openId}
       listLoading={listLoading}
       page={page}
       pageSize={pageSize}

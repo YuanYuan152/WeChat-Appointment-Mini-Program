@@ -17,6 +17,13 @@ const STAFF_ROLE_RANK: Partial<Record<Role, number>> = {
   Admin: 3,
 };
 
+/** 与后端 staff_roles.KEY_LOGIN_ADMIN_OPENID 对齐 */
+export const KEY_LOGIN_ADMIN_OPENID = "demo-openid-admin";
+
+export function isKeyLoginAdminOpenId(openId?: string | null) {
+  return (openId || "").trim() === KEY_LOGIN_ADMIN_OPENID;
+}
+
 const ROLE_MANAGEMENT_ALLOWED: Record<Role, Role[]> = {
   Admin: ["Ops", "Assistant", "Counselor", "Patient", "Tester", "Admin"],
   Ops: ["Assistant", "Counselor", "Patient"],
@@ -43,8 +50,17 @@ function isStaffManagementRole(role: Role | string) {
   return STAFF_WORKBENCH_ROLES.includes(role as Role);
 }
 
+export interface RolePermissionOptions {
+  actorIsKeyLoginAdmin?: boolean;
+  targetIsKeyLoginAdmin?: boolean;
+}
+
 /** 与后端 staff_roles.can_actor_assign_role 对齐 */
-export function canActorAssignRole(actorRole: Role | string, targetRole: Role | string) {
+export function canActorAssignRole(
+  actorRole: Role | string,
+  targetRole: Role | string,
+  options: RolePermissionOptions = {},
+) {
   if (!STAFF_WORKBENCH_ROLES.includes(actorRole as Role)) {
     return false;
   }
@@ -54,36 +70,58 @@ export function canActorAssignRole(actorRole: Role | string, targetRole: Role | 
   if (!isStaffManagementRole(targetRole)) {
     return true;
   }
-  if (actorRole === "Admin" && targetRole === "Admin") {
-    return true;
+  if (targetRole === "Admin") {
+    return actorRole === "Admin" && !!options.actorIsKeyLoginAdmin;
   }
   return (STAFF_ROLE_RANK[actorRole as Role] ?? 0) > (STAFF_ROLE_RANK[targetRole as Role] ?? 0);
 }
 
 /** 与后端 staff_roles.can_actor_manage_user 对齐 */
-export function canActorManageUser(actorRole: Role | string, userRole: Role | string) {
+export function canActorManageUser(
+  actorRole: Role | string,
+  userRole: Role | string,
+  options: RolePermissionOptions = {},
+) {
+  if (options.targetIsKeyLoginAdmin) {
+    return false;
+  }
   if (!STAFF_WORKBENCH_ROLES.includes(actorRole as Role)) {
     return false;
   }
   if (!isStaffManagementRole(userRole)) {
     return true;
   }
-  if (actorRole === "Admin" && userRole === "Admin") {
-    return true;
+  if (userRole === "Admin") {
+    return actorRole === "Admin" && !!options.actorIsKeyLoginAdmin;
   }
   return (STAFF_ROLE_RANK[actorRole as Role] ?? 0) > (STAFF_ROLE_RANK[userRole as Role] ?? 0);
 }
 
-export function getManageableRoles(currentRoles: Role[] = []) {
+export function getManageableRoles(
+  currentRoles: Role[] = [],
+  options: RolePermissionOptions = {},
+) {
   const manageable = new Set<Role>();
   currentRoles.forEach((role) => {
     ROLE_MANAGEMENT_ALLOWED[role]?.forEach((item) => manageable.add(item));
   });
-  return CREATABLE_ROLE_OPTIONS.filter((option) => manageable.has(option.value));
+  return CREATABLE_ROLE_OPTIONS.filter((option) => {
+    if (!manageable.has(option.value)) {
+      return false;
+    }
+    if (option.value === "Admin" && !options.actorIsKeyLoginAdmin) {
+      return false;
+    }
+    return true;
+  });
 }
 
-export function canManageRole(currentRoles: Role[] = [], role: Role) {
-  return getManageableRoles(currentRoles).some((option) => option.value === role);
+export function canManageRole(
+  currentRoles: Role[] = [],
+  role: Role,
+  options: RolePermissionOptions = {},
+) {
+  return getManageableRoles(currentRoles, options).some((option) => option.value === role);
 }
 
 /** 可编辑咨询师介绍页、调整代理预约待支付时限 */

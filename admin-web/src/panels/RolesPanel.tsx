@@ -5,6 +5,7 @@ import {
   COUNSELOR_TYPE_OPTIONS,
   type CounselorType,
   getManageableRoles,
+  isKeyLoginAdminOpenId,
   PATIENT_SOURCE_OPTIONS,
   type PatientSource,
   resolveHighestStaffRole,
@@ -32,6 +33,7 @@ export function RolesPanel({
   users,
   currentUserId,
   currentUserRoles,
+  currentUserOpenId,
   listLoading,
   page,
   pageSize,
@@ -45,6 +47,7 @@ export function RolesPanel({
   users?: AdminUser[];
   currentUserId: number;
   currentUserRoles: Role[];
+  currentUserOpenId?: string | null;
   listLoading?: boolean;
   page: number;
   pageSize: number;
@@ -65,7 +68,14 @@ export function RolesPanel({
   const [deletingUserId, setDeletingUserId] = useState<number | null>(null);
   const allUsers = useMemo(() => users || [], [users]);
   const actorRole = useMemo(() => resolveHighestStaffRole(currentUserRoles), [currentUserRoles]);
-  const manageableRoleOptions = useMemo(() => getManageableRoles(currentUserRoles), [currentUserRoles]);
+  const actorIsKeyLoginAdmin = useMemo(
+    () => isKeyLoginAdminOpenId(currentUserOpenId),
+    [currentUserOpenId],
+  );
+  const manageableRoleOptions = useMemo(
+    () => getManageableRoles(currentUserRoles, { actorIsKeyLoginAdmin }),
+    [actorIsKeyLoginAdmin, currentUserRoles],
+  );
   const filteredUsers = useMemo(() => {
     const normalizedKeyword = keyword.trim().toLowerCase();
     if (!normalizedKeyword) {
@@ -139,7 +149,10 @@ export function RolesPanel({
     if (!targetRole) {
       return false;
     }
-    return canActorManageUser(actorRole, targetRole);
+    return canActorManageUser(actorRole, targetRole, {
+      actorIsKeyLoginAdmin,
+      targetIsKeyLoginAdmin: !!user.isKeyLoginAdmin,
+    });
   };
 
   const requestDelete = async (user: AdminUser) => {
@@ -178,7 +191,7 @@ export function RolesPanel({
           <div>
             <h2 className="text-xl font-semibold tracking-normal">用户与角色</h2>
             <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">
-              管理员可按手机号创建、修改与删除账号；可新增其他管理员。测试员可强制级联删除；普通用户若有咨询/已支付订单则无法删除。
+              仅密钥登录管理员可新增、删除或更换其他管理员；该密钥管理员账号本身不可被删除或更换角色。普通管理员同级不可互操作。测试员可强制级联删除；普通用户若有咨询/已支付订单则无法删除。
             </p>
           </div>
           <button
@@ -241,6 +254,9 @@ export function RolesPanel({
                   <td className="px-5 py-4">
                     {formatPatientNameWithContractTag(getName(user), user.contractTag)}
                     {isSelf ? <span className="ml-2 text-xs text-[var(--lxxl-muted)]">（当前账号）</span> : null}
+                    {user.isKeyLoginAdmin ? (
+                      <span className="ml-2 text-xs text-[var(--lxxl-muted)]">（密钥管理员）</span>
+                    ) : null}
                   </td>
                   <td className="px-5 py-4">{user.mobile || "-"}</td>
                   <td className="px-5 py-4">

@@ -20,6 +20,13 @@ export const STAFF_ROLE_RANK: Record<string, number> = {
 
 export const STAFF_MANAGEMENT_ROLES = ['Assistant', 'Ops', 'Admin'] as const
 
+/** 与后端 staff_roles.KEY_LOGIN_ADMIN_OPENID 对齐 */
+export const KEY_LOGIN_ADMIN_OPENID = 'demo-openid-admin'
+
+export function isKeyLoginAdminOpenId(openId?: string | null): boolean {
+  return (openId || '').trim() === KEY_LOGIN_ADMIN_OPENID
+}
+
 export function isStaffManagementRole(role: string): boolean {
   return (STAFF_MANAGEMENT_ROLES as readonly string[]).includes(role)
 }
@@ -28,31 +35,46 @@ export function staffRoleRank(role: string): number {
   return STAFF_ROLE_RANK[role] ?? 0
 }
 
+export interface RolePermissionOptions {
+  actorIsKeyLoginAdmin?: boolean
+  targetIsKeyLoginAdmin?: boolean
+}
+
 /** 操作者是否可将 targetRole 赋给其他账号 */
-export function canActorAssignRole(actorRole: string, targetRole: string): boolean {
+export function canActorAssignRole(
+  actorRole: string,
+  targetRole: string,
+  options: RolePermissionOptions = {},
+): boolean {
   if (!(STAFF_OPS_WORKBENCH_ROLES as readonly string[]).includes(actorRole)) return false
   // 测试员仅管理员可赋权
   if (targetRole === 'Tester') return actorRole === 'Admin'
   if (!isStaffManagementRole(targetRole)) return true
-  // 管理员可新建/赋权其他管理员
-  if (actorRole === 'Admin' && targetRole === 'Admin') return true
+  // 仅密钥登录管理员可新建/赋权其他管理员
+  if (targetRole === 'Admin') return actorRole === 'Admin' && !!options.actorIsKeyLoginAdmin
   return staffRoleRank(actorRole) > staffRoleRank(targetRole)
 }
 
 /** 操作者是否可删除或更换 userRole 对应账号 */
-export function canActorManageUser(actorRole: string, userRole: string): boolean {
+export function canActorManageUser(
+  actorRole: string,
+  userRole: string,
+  options: RolePermissionOptions = {},
+): boolean {
+  if (options.targetIsKeyLoginAdmin) return false
   if (!(STAFF_OPS_WORKBENCH_ROLES as readonly string[]).includes(actorRole)) return false
   if (!isStaffManagementRole(userRole)) return true
-  // 管理员可修改/删除其他管理员
-  if (actorRole === 'Admin' && userRole === 'Admin') return true
+  // 仅密钥登录管理员可修改/删除其他管理员
+  if (userRole === 'Admin') return actorRole === 'Admin' && !!options.actorIsKeyLoginAdmin
   return staffRoleRank(actorRole) > staffRoleRank(userRole)
 }
 
 export function assignableRolesForActor(
   actorRole: string,
   bindableRoles: readonly string[] = ROLE_OPTIONS.map(r => r.value),
+  options: RolePermissionOptions = {},
 ): string[] {
-  return bindableRoles.filter(role => canActorAssignRole(actorRole, role))
+  return bindableRoles.filter(role => canActorAssignRole(actorRole, role, options))
 }
 
 export const OPS_WORKBENCH_PATH = '/pages/ops/index/index'

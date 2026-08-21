@@ -51,7 +51,7 @@ export function RoleCreateModal({
       return "测试员仅管理员可创建，用于联调与验收，可被强制清理业务数据后删除。";
     }
     if (role === "Admin") {
-      return "管理员可进入权限管理和全部后台功能；可由其他管理员新建或调整。";
+      return "仅密钥登录管理员可新建其他管理员账号。";
     }
     return "管理员可进入权限管理和全部后台功能。";
   }, [role]);

@@ -60,6 +60,7 @@ export interface AdminUser {
   counselorTypeLabel?: string | null;
   roles: Role[];
   contractTag?: string | null;
+  isKeyLoginAdmin?: boolean;
   created?: boolean;
   message?: string;
 }
