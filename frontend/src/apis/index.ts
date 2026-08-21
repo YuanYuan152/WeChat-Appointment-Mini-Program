@@ -6,7 +6,13 @@ import { fixImageUrl, resolveCounselorPublicAvatar } from '@/utils/image'
 
 const ok = <T>(data: T, msg = '请求成功'): ApiResponse<T> => ({ code: 0, msg, data })
 
-const mapDoctor = (item: any): Doctor & { title?: string; workYears?: number; consultHours?: number; _source?: string } => ({
+const mapDoctor = (item: any): Doctor & {
+    title?: string
+    workYears?: number
+    consultHours?: number
+    needsNegotiation?: boolean
+    _source?: string
+} => ({
     id: Number(item.id || item.Id || item.accountId || 0),
     name: item.name || item.Name || item.nickname || '咨询师',
     avatar: resolveCounselorPublicAvatar(item.avatarUrl || item.AvatarUrl || item.avatar),
@@ -21,6 +27,7 @@ const mapDoctor = (item: any): Doctor & { title?: string; workYears?: number; co
     title: item.title || item.Title || '心理咨询师',
     workYears: Number(item.workYears || item.WorkYears || 0),
     consultHours: Number(item.consultHours || item.ConsultHours || 0),
+    needsNegotiation: !!(item.needsNegotiation ?? item.needs_negotiation),
     _source: item._source,
 })
 

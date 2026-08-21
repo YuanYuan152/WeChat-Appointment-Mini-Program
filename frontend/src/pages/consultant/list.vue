@@ -116,8 +116,8 @@
       <view class="doctor-list-modern">
         <view 
           class="doc-card" 
-          v-for="doctor in doctors" 
-          :key="doctor.id"
+          v-for="doctor in consultants" 
+          :key="`${doctor._source || 'app'}-${doctor.id}`"
           @click="goToDetail(doctor.id)"
         >
           <view class="doc-card-top">
@@ -178,11 +178,16 @@
           </view>
         </view>
 
-        <!-- 加载状态 -->
+        <!-- 加载状态 / 加载更多 -->
         <view class="loading-state">
-          <text v-if="loading">加载中...</text>
-          <text v-else-if="!hasMore && doctors.length > 0">没有更多了</text>
-          <view v-else-if="doctors.length === 0 && !loading" class="empty-box">
+          <text v-if="loading && consultants.length === 0">加载中...</text>
+          <view v-else-if="hasMore && consultants.length > 0" class="load-more-wrap">
+            <button class="load-more-btn" :disabled="loadingMore" @click="loadMore">
+              {{ loadingMore ? '加载中...' : '加载更多' }}
+            </button>
+          </view>
+          <text v-else-if="!hasMore && consultants.length > 0">没有更多了</text>
+          <view v-else-if="consultants.length === 0 && !loading" class="empty-box">
             <image src="/static/images-opt/place12.jpg" class="empty-img" mode="aspectFit" />
             <text class="empty-text">暂无符合条件的咨询师</text>
           </view>
@@ -230,11 +235,16 @@ interface Consultant extends Omit<Doctor, 'province'> {
   _source?: string
 }
 
+const PAGE_SIZE = 20
+
 // 响应式数据
 const _sys = uni.getSystemInfoSync()
 const consultants = ref<Consultant[]>([])
 const loading = ref(false)
+const loadingMore = ref(false)
 const hasMore = ref(true)
+const currentPage = ref(1)
+const totalCount = ref(0)
 const searchKeyword = ref('')
 const showAssistantContact = ref(false)
 const statusBarPx = ref(_sys.statusBarHeight || 0)
@@ -242,7 +252,7 @@ const headerPlaceholderPx = ref((_sys.statusBarHeight || 0) + uni.upx2px(88 + 12
 
 const activeFilter = ref<'sort' | 'gender' | 'method' | ''>('')
 const sortOptions = [
-  { label: '不限', value: '' },
+  { label: '默认排序', value: '' },
   { label: '价格从低到高', value: 'price_asc' },
   { label: '价格从高到低', value: 'price_desc' },
 ]
@@ -263,7 +273,7 @@ const currentGender = ref('')
 
 const currentSortLabel = computed(() => {
   const hit = sortOptions.find((o) => o.value === currentSort.value)
-  return hit?.label || '价格排序'
+  return hit?.label || '默认排序'
 })
 const currentGenderLabel = computed(() => {
   const hit = genderOptions.find((o) => o.value === currentGender.value)
@@ -281,51 +291,33 @@ const closeFilter = () => {
   activeFilter.value = ''
 }
 const selectSort = (item: { label: string; value: string }) => {
-  currentSort.value = currentSort.value === item.value ? '' : item.value
+  currentSort.value = item.value
   closeFilter()
-  fetchConsultants()
+  fetchConsultants({ reset: true })
 }
 const selectGender = (item: { label: string; value: string }) => {
   currentGender.value = currentGender.value === item.value ? '' : item.value
   closeFilter()
-  fetchConsultants()
+  fetchConsultants({ reset: true })
 }
 const selectMethod = (item: { label: string; value: string }) => {
   currentMethod.value = currentMethod.value === item.value ? '' : item.value
   closeFilter()
-  fetchConsultants()
+  fetchConsultants({ reset: true })
 }
 
 const handleSearch = () => {
-  fetchConsultants()
+  fetchConsultants({ reset: true })
 }
 const clearSearch = () => {
   searchKeyword.value = ''
-  fetchConsultants()
+  fetchConsultants({ reset: true })
 }
 
 function getSpecialties(specialty: string | undefined) {
   if (!specialty) return []
   return specialty.split(/[|｜,，]/).map((s) => s.trim()).filter(Boolean)
 }
-
-// 计算属性：过滤后的咨询师列表
-const filteredConsultants = computed(() => {
-  if (!searchKeyword.value.trim()) {
-    return consultants.value
-  }
-  
-  const keyword = searchKeyword.value.toLowerCase()
-  return consultants.value.filter(consultant => 
-    consultant.name.toLowerCase().includes(keyword) ||
-    (consultant.specialty || '').toLowerCase().includes(keyword) ||
-    consultant.description?.toLowerCase().includes(keyword) ||
-    consultant.province?.toLowerCase().includes(keyword)
-  )
-})
-
-// 与模板中 v-for="doctor in doctors" 对齐
-const doctors = computed(() => filteredConsultants.value)
 
 function parseWorkYears(item: { workYears?: number; experience?: string }) {
   if (item.workYears != null) return item.workYears
@@ -356,15 +348,27 @@ function normalizeConsultant(item: Consultant): Consultant {
   }
 }
 
-// 获取咨询师列表
-const fetchConsultants = async () => {
-  loading.value = true
+const fetchConsultants = async (options: { reset?: boolean; append?: boolean } = {}) => {
+  const reset = options.reset !== false && !options.append
+  const append = !!options.append
+
+  if (append) {
+    if (loading.value || loadingMore.value || !hasMore.value) return
+    loadingMore.value = true
+  } else {
+    loading.value = true
+    currentPage.value = 1
+    hasMore.value = true
+  }
+
+  const page = append ? currentPage.value + 1 : 1
+
   try {
     const response = await doctorApi.getList(
       {
         keyword: searchKeyword.value.trim() || undefined,
-        page: 1,
-        pageSize: 50,
+        page,
+        pageSize: PAGE_SIZE,
         sort: currentSort.value || undefined,
         gender: currentGender.value || undefined,
         consultMethod: currentMethod.value || undefined,
@@ -376,15 +380,39 @@ const fetchConsultants = async () => {
       throw new Error(response.msg || '加载失败')
     }
 
-    const doctorsList = response.data?.list || []
-    consultants.value = doctorsList.map((item) => normalizeConsultant(item))
-    hasMore.value = doctorsList.length >= 50
+    const doctorsList = (response.data?.list || []).map((item) => normalizeConsultant(item))
+    totalCount.value = Number(response.data?.total || 0)
+    currentPage.value = page
+
+    if (append) {
+      const existingKeys = new Set(
+        consultants.value.map((item) => `${item._source || 'app'}-${item.id}`),
+      )
+      const merged = [...consultants.value]
+      doctorsList.forEach((item) => {
+        const key = `${item._source || 'app'}-${item.id}`
+        if (!existingKeys.has(key)) {
+          existingKeys.add(key)
+          merged.push(item)
+        }
+      })
+      consultants.value = merged
+    } else {
+      consultants.value = doctorsList
+    }
+
+    hasMore.value = consultants.value.length < totalCount.value && doctorsList.length > 0
   } catch (error) {
     console.error('获取咨询师列表失败:', error)
-    consultants.value = []
+    if (!append) {
+      consultants.value = []
+      totalCount.value = 0
+      hasMore.value = false
+    }
     uni.showToast({ title: '加载失败，请确认后端已启动', icon: 'none' })
   } finally {
     loading.value = false
+    loadingMore.value = false
   }
 }
 
@@ -395,21 +423,10 @@ function initPageLayout() {
   headerPlaceholderPx.value = sb + uni.upx2px(88 + 124 + 88)
 }
 
-
-
-// 搜索输入处理
-const onSearchInput = () => {
-  // 实时搜索，这里可以根据需要添加防抖
-}
-
-// 加载更多
 const loadMore = () => {
-  if (loading.value || !hasMore.value) return
-  // 这里可以实现分页加载更多
-  hasMore.value = false
+  void fetchConsultants({ append: true })
 }
 
-// 跳转到详情页（模板传入 doctor.id）
 const goToDetail = (id: number | string) => {
   const doctor = consultants.value.find((d) => d.id === id)
   const source = doctor?._source ? `&source=${encodeURIComponent(doctor._source)}` : ''
@@ -426,26 +443,12 @@ const closeAssistantContact = () => {
   showAssistantContact.value = false
 }
 
-// 图片加载错误处理
 const handleImageError = (e: any) => {
-  console.error('图片加载失败:', e)
-  console.log('图片路径:', e.target?.src)
-  console.log('图片元素:', e.target)
-  
-  // 可以在这里设置默认头像
   if (e.target) {
     e.target.src = '/static/images-opt/default-doctor.jpg'
   }
 }
 
-// 图片加载成功处理
-const handleImageLoad = (e: any) => {
-  console.log('图片加载成功:', e.target?.src)
-}
-
-
-
-// 生命周期
 onMounted(() => {
   initPageLayout()
 })
@@ -472,13 +475,13 @@ onShareAppMessage(() => {
 
 onShow(() => {
   initPageLayout()
-  fetchConsultants()
+  fetchConsultants({ reset: true })
 })
 
 onReachBottom(loadMore)
 
 onPullDownRefresh(async () => {
-  await fetchConsultants()
+  await fetchConsultants({ reset: true })
   uni.stopPullDownRefresh()
 })
 </script>
@@ -1026,6 +1029,33 @@ onPullDownRefresh(async () => {
 .loading-state text {
   font-size: 26rpx;
   color: #9CA3AF;
+}
+
+.load-more-wrap {
+  display: flex;
+  justify-content: center;
+  padding: 8rpx 0 16rpx;
+}
+
+.load-more-btn {
+  margin: 0;
+  padding: 0 48rpx;
+  height: 72rpx;
+  line-height: 72rpx;
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #3D5A4E;
+  background: #fff;
+  border: 1rpx solid #D6E0DB;
+  border-radius: 999rpx;
+}
+
+.load-more-btn::after {
+  border: none;
+}
+
+.load-more-btn[disabled] {
+  opacity: 0.6;
 }
 
 .empty-box {

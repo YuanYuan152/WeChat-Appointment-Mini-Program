@@ -140,6 +140,10 @@
           <button class="feedback-btn" @click="goFeedback(r)">去反馈</button>
         </view>
 
+        <view v-if="r.counselorId" class="rebook-row">
+          <button class="rebook-btn" @click.stop="goRebook(r)">再约一单</button>
+        </view>
+
       </view>
 
     </view>
@@ -339,11 +343,13 @@ interface Consultation {
 
 
 
-type RecordTab = 'unfinished' | 'done' | 'feedbacked' | 'cancelled'
+type RecordTab = 'all' | 'unfinished' | 'done' | 'feedbacked' | 'cancelled'
 
 
 
 const tabs: { label: string; value: RecordTab }[] = [
+
+  { label: '全部', value: 'all' },
 
   { label: '未完成', value: 'unfinished' },
 
@@ -361,7 +367,7 @@ const UNFINISHED_STATUSES = new Set(['PENDING', 'CONFIRMED', 'ONGOING', 'PENDING
 
 
 
-const activeTab = ref<RecordTab>('unfinished')
+const activeTab = ref<RecordTab>('all')
 
 const allRecords = ref<Consultation[]>([])
 
@@ -406,6 +412,8 @@ const statusClass = (r: Consultation) => {
 
 
 const emptyText = computed(() => {
+
+  if (activeTab.value === 'all') return '暂无预约记录'
 
   if (activeTab.value === 'cancelled') return '暂无已取消的预约'
 
@@ -483,6 +491,16 @@ const cardClass = (r: Consultation) => {
 
 const filterByTab = (list: Consultation[], tab: RecordTab) => {
 
+  if (tab === 'all') {
+
+    return [...list].sort((a, b) => {
+      const ta = Date.parse(a.startTime || a.createdAt || '') || 0
+      const tb = Date.parse(b.startTime || b.createdAt || '') || 0
+      return tb - ta
+    })
+
+  }
+
   if (tab === 'done') {
 
     return list.filter(r => r.status === 'DONE' && !r.hasFeedback)
@@ -519,6 +537,16 @@ const goPayOrder = (r: Consultation) => {
     return
   }
   uni.navigateTo({ url: '/pages/patient/orders/list' })
+}
+
+const goRebook = (r: Consultation) => {
+  if (!r.counselorId) {
+    uni.showToast({ title: '暂无法跳转到该咨询师', icon: 'none' })
+    return
+  }
+  uni.navigateTo({
+    url: `/pages/consultant/detail?id=${r.counselorId}`,
+  })
 }
 
 const fetchList = async () => {
@@ -816,6 +844,29 @@ defineExpose({ refresh })
 
   display: flex; flex-direction: column; gap: 16rpx; align-items: flex-end;
 
+}
+
+.rebook-row {
+  margin-top: 20rpx;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.rebook-btn {
+  margin: 0;
+  padding: 0 28rpx;
+  height: 60rpx;
+  line-height: 60rpx;
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #3D5A4E;
+  background: #F0EDE8;
+  border: 1rpx solid #D6E0DB;
+  border-radius: 12rpx;
+}
+
+.rebook-btn::after {
+  border: none;
 }
 
 .refund-hint { width: 100%; font-size: 22rpx; color: #9CA3AF; text-align: right; }
