@@ -57,10 +57,14 @@ export function AppShell({
         <section className="flex min-w-0 flex-1 flex-col">
           <header className="sticky top-0 z-10 flex h-16 items-center justify-end border-b border-[var(--lxxl-border)] bg-white/95 px-8 backdrop-blur">
             <div className="flex items-center gap-3 text-sm">
-              <div className="text-right">
+              <button
+                className="text-right transition hover:opacity-80"
+                type="button"
+                onClick={() => onChangeSection("myProfile")}
+              >
                 <div className="font-medium">{getName(currentUser)}</div>
                 <div className="text-xs text-[var(--lxxl-muted)]">{activeRoleText}</div>
-              </div>
+              </button>
               <button
                 className="rounded-xl border border-[var(--lxxl-border)] px-4 py-2"
                 type="button"

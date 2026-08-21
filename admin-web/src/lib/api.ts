@@ -211,3 +211,18 @@ export async function loginWithDevCode(code: DevLoginCode) {
 export function fetchCurrentUser() {
   return apiRequest<CurrentUser>("/api/mini/auth/me");
 }
+
+export interface ProfileUpdatePayload {
+  nickname?: string | null;
+  avatarUrl?: string | null;
+  realName?: string | null;
+  gender?: string | null;
+  markProfileCompleted?: boolean;
+}
+
+export function updateCurrentUser(payload: ProfileUpdatePayload) {
+  return apiRequest<CurrentUser>("/api/mini/auth/me", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}

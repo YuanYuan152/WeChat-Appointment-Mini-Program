@@ -12,6 +12,13 @@ export const sections: NavigationSection[] = [
     allowedRoles: ["Admin", "Ops", "Assistant", "Counselor"],
   },
   {
+    id: "myProfile",
+    label: "我的资料",
+    desc: "编辑昵称、姓名、性别与头像",
+    path: "/my-profile",
+    allowedRoles: ["Admin", "Ops", "Assistant", "Counselor"],
+  },
+  {
     id: "proxyBooking",
     label: "代理预约",
     desc: "代来访推送待支付订单",
@@ -110,7 +117,7 @@ export const sectionPathById = Object.fromEntries(
 ) as Record<NavigationSection["id"], string>;
 
 export const navigationGroups: NavigationGroup[] = [
-  { id: "overview", label: "工作台", sectionIds: ["dashboard", "messages", "proxyBooking"] },
+  { id: "overview", label: "工作台", sectionIds: ["dashboard", "messages", "myProfile", "proxyBooking"] },
   { id: "admin", label: "权限管理", sectionIds: ["roles"] },
   { id: "business", label: "业务处理", sectionIds: ["refunds", "feedback", "caseRecords", "operationLogs", "dataImport"] },
   {

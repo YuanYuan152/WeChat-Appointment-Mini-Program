@@ -37,6 +37,7 @@ import type {
 export type SectionId =
   | "dashboard"
   | "messages"
+  | "myProfile"
   | "roles"
   | "refunds"
   | "feedback"

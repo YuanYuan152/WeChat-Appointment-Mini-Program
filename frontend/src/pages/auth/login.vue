@@ -37,7 +37,7 @@
           {{
             showMockPanel
               ? '测试版请先选择上方角色，再点击下方按钮登录对应演示账号。'
-              : '请先勾选协议，再使用微信一键登录完成注册/登录。'
+              : '请先勾选协议，再使用手机号快捷登录完成注册/登录。'
           }}
         </text>
 
@@ -69,7 +69,7 @@
           class="wx-login-btn is-gray"
           @tap="guardAgreements"
         >
-          <text class="wx-btn-text">{{ showMockPanel ? loginBtnText : '微信一键登录' }}</text>
+          <text class="wx-btn-text">{{ showMockPanel ? loginBtnText : '手机号快捷登录' }}</text>
         </view>
         <button
           v-else-if="!showMockPanel"
@@ -79,7 +79,7 @@
           open-type="getPhoneNumber"
           @getphonenumber="handlePhoneRegister"
         >
-          <text class="wx-btn-text">微信一键登录</text>
+          <text class="wx-btn-text">手机号快捷登录</text>
         </button>
         <button
           v-else
@@ -91,12 +91,8 @@
           <text class="wx-btn-text">{{ loginBtnText }}</text>
         </button>
 
-        <text class="form-tip">
-          {{
-            showMockPanel
-              ? `将以「${loginRoleLabel}」身份登录（对接 seed_demo_data.py）`
-              : '将获取微信身份（openid）与手机号，返回 token 完成注册/登录'
-          }}
+        <text v-if="showMockPanel" class="form-tip">
+          将以「{{ loginRoleLabel }}」身份登录（对接 seed_demo_data.py）
         </text>
         </view>
       </view>
@@ -142,7 +138,7 @@ const loginRoleLabel = ref(
   DEV_LOGIN_ROLES.find(r => r.role === getDevLoginRole())?.label || '来访·小美',
 )
 const loginBtnText = computed(() =>
-  showMockPanel.value ? `模拟登录（${loginRoleLabel.value}）` : '微信一键登录',
+  showMockPanel.value ? `模拟登录（${loginRoleLabel.value}）` : '手机号快捷登录',
 )
 
 const toggleDevEntrance = () => {
@@ -526,7 +522,10 @@ onMounted(async () => {
   line-height: 1.5;
 }
 .footer-link {
-  color: #3D5A4E;
+  color: #5BA3E0;
+}
+.agree-text .footer-link {
+  color: #5BA3E0;
 }
 
 .wx-login-btn {

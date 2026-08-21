@@ -38,6 +38,7 @@ interface AppRouteContextValue {
   showNotice: (type: Notice["type"], text: string) => void;
   clearNotice: () => void;
   requestRefresh: () => void;
+  refreshCurrentUser: () => Promise<CurrentUser>;
   runAction: (action: () => Promise<unknown>, successFallback: string) => Promise<void>;
 }
 
@@ -101,6 +102,12 @@ function AppRouteRoot({ sectionId, children }: { sectionId: SectionId; children:
 
   const requestRefresh = useCallback(() => {
     setRefreshKey((value) => value + 1);
+  }, []);
+
+  const refreshCurrentUser = useCallback(async () => {
+    const me = await fetchCurrentUser();
+    setCurrentUser(me);
+    return me;
   }, []);
 
   const refreshUnreadMessageCount = useCallback(async () => {
@@ -253,9 +260,10 @@ function AppRouteRoot({ sectionId, children }: { sectionId: SectionId; children:
       showNotice,
       clearNotice,
       requestRefresh,
+      refreshCurrentUser,
       runAction,
     };
-  }, [clearNotice, currentUser, isAdmin, refreshKey, requestRefresh, runAction, showNotice]);
+  }, [clearNotice, currentUser, isAdmin, refreshCurrentUser, refreshKey, requestRefresh, runAction, showNotice]);
 
   if (booting) {
     return (
