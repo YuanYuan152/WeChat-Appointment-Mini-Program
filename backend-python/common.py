@@ -17,7 +17,7 @@ from sqlalchemy.exc import OperationalError, ProgrammingError
 from database import get_db
 from config import settings
 from auth import get_optional_account
-from models import AppAccount, AppBanner, AppActivity, AppArticle, AppCounselorProfile
+from models import AppAccount, AppBanner, AppActivity, AppArticle, AppCounselorProfile, AppSchedule
 from counselor_avatar import resolve_counselor_public_avatar_url
 from booking_availability import counselor_booking_time_slots
 from pricing_service import (
@@ -436,12 +436,79 @@ def _query_counselor_profiles(
         return []
 
 
+def _profile_completeness_score(item: Dict[str, Any]) -> int:
+    """资料完整度：已填写关键字段数量（越高越完整）。"""
+    score = 0
+    text_fields = (
+        "name",
+        "avatarUrl",
+        "title",
+        "specialty",
+        "field",
+        "introduce",
+        "career",
+        "trainingExperience",
+        "mode",
+    )
+    for key in text_fields:
+        value = item.get(key)
+        if isinstance(value, str) and value.strip():
+            score += 1
+    if int(item.get("consultHours") or 0) > 0:
+        score += 1
+    if int(item.get("workYears") or 0) > 0:
+        score += 1
+    return score
+
+
+def _counselor_ids_with_available_slots(db: Session, counselor_ids: List[int]) -> set[int]:
+    """未来仍有 AVAILABLE 排期的咨询师 AccountId 集合。"""
+    ids = [int(cid) for cid in counselor_ids if cid]
+    if not ids:
+        return set()
+    now = datetime.utcnow()
+    rows = (
+        db.query(AppSchedule.CounselorId)
+        .filter(
+            AppSchedule.CounselorId.in_(ids),
+            AppSchedule.Status == "AVAILABLE",
+            AppSchedule.StartTime >= now,
+        )
+        .distinct()
+        .all()
+    )
+    return {int(row[0]) for row in rows if row[0]}
+
+
+def _sort_counselor_list(
+    items: List[Dict[str, Any]],
+    *,
+    sort_mode: Optional[str],
+    available_ids: set[int],
+) -> None:
+    """价格为主键；同价再按完整度、咨询时长、从业年限、是否有可约时段。"""
+    price_asc = sort_mode == "price_asc"
+
+    def sort_key(item: Dict[str, Any]):
+        billing = float(item.get("billing") or 0)
+        completeness = _profile_completeness_score(item)
+        hours = int(item.get("consultHours") or 0)
+        years = int(item.get("workYears") or 0)
+        cid = int(item.get("id") or 0)
+        # 新系统 AccountId 才与排期对齐；旧 T_Doctor 无匹配排期时视为无可约
+        has_slot = 1 if item.get("_source") == "AppCounselorProfile" and cid in available_ids else 0
+        price_key = billing if price_asc else -billing
+        return (price_key, -completeness, -hours, -years, -has_slot)
+
+    items.sort(key=sort_key)
+
+
 @router.get("/counselors", summary="咨询师公开列表（双源：AppCounselorProfile + T_Doctor）")
 def common_counselors(
     keyword: Optional[str] = Query(None, description="搜索姓名/擅长"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    sort: Optional[str] = Query(None, description="price_asc|price_desc"),
+    sort: Optional[str] = Query(None, description="price_asc|price_desc；空=默认价格从高到低+次级排序"),
     gender: Optional[str] = Query(None, description="男|女"),
     consult_method: Optional[str] = Query(None, description="online|offline"),
     current_account: Optional[AppAccount] = Depends(get_optional_account),
@@ -504,11 +571,16 @@ def common_counselors(
             ]
 
     merged = new_dicts + legacy_items
-    if normalized_sort:
-        merged.sort(
-            key=lambda item: float(item.get("billing") or 0),
-            reverse=normalized_sort == "price_desc",
-        )
+    available_ids = _counselor_ids_with_available_slots(
+        db,
+        [int(item.get("id") or 0) for item in new_dicts],
+    )
+    # 默认与 price_desc：价格从高到低，同价再按完整度 / 时长 / 年限 / 可约
+    _sort_counselor_list(
+        merged,
+        sort_mode=normalized_sort or "price_desc",
+        available_ids=available_ids,
+    )
     total = len(merged)
     start = (page - 1) * page_size
     end = start + page_size
