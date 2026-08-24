@@ -124,24 +124,34 @@
           <button class="pay-btn" @click="goPayOrder(r)">去支付</button>
         </view>
 
-        <view v-if="r.canCancel" class="record-actions">
-
-          <text class="refund-hint">{{ r.refundEligible ? '距咨询超过24小时，取消可退款' : '距咨询不足24小时，取消不退款' }}</text>
-
-          <button class="cancel-btn" :disabled="cancellingId === r.id" @click="openCancelModal(r)">
-
-            {{ cancellingId === r.id ? '取消中...' : '取消预约' }}
-
-          </button>
-
-        </view>
-
         <view v-else-if="r.status === 'DONE' && !r.hasFeedback" class="record-actions">
           <button class="feedback-btn" @click="goFeedback(r)">去反馈</button>
         </view>
 
-        <view v-if="r.counselorId" class="rebook-row">
-          <button class="rebook-btn" @click.stop="goRebook(r)">再约一单</button>
+        <view v-if="r.canCancel" class="refund-hint-row">
+          <text class="refund-hint">{{ r.refundEligible ? '距咨询超过24小时，取消可退款' : '距咨询不足24小时，取消不退款' }}</text>
+        </view>
+
+        <view
+          v-if="r.canCancel || r.counselorId"
+          class="bottom-actions"
+          :class="{ 'bottom-actions--end': !r.canCancel }"
+        >
+          <button
+            v-if="r.canCancel"
+            class="cancel-btn"
+            :disabled="cancellingId === r.id"
+            @click="openCancelModal(r)"
+          >
+            {{ cancellingId === r.id ? '取消中...' : '取消预约' }}
+          </button>
+          <button
+            v-if="r.counselorId"
+            class="rebook-btn"
+            @click.stop="goRebook(r)"
+          >
+            再约一单
+          </button>
         </view>
 
       </view>
@@ -737,14 +747,26 @@ defineExpose({ refresh })
 
 .page-title { font-size: 40rpx; font-weight: 800; color: #1F2937; }
 
-.filter-bar { display: flex; gap: 16rpx; margin-top: 24rpx; flex-wrap: wrap; }
+.filter-bar {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8rpx;
+  margin-top: 20rpx;
+  width: 100%;
+}
 
 .filter-tab {
-
-  padding: 12rpx 28rpx; border-radius: 100rpx; font-size: 26rpx;
-
-  background: #fff; color: #6B7280; border: 1px solid #E5E7EB;
-
+  flex: 1;
+  min-width: 0;
+  padding: 8rpx 0;
+  border-radius: 100rpx;
+  font-size: 22rpx;
+  line-height: 1.2;
+  text-align: center;
+  background: #fff;
+  color: #6B7280;
+  border: 1px solid #E5E7EB;
+  box-sizing: border-box;
 }
 
 .filter-tab.active { background: #3D5A4E; color: #fff; border-color: #3D5A4E; }
@@ -846,30 +868,57 @@ defineExpose({ refresh })
 
 }
 
-.rebook-row {
+.refund-hint-row {
   margin-top: 20rpx;
-  display: flex;
-  justify-content: flex-end;
+  padding-top: 20rpx;
+  border-top: 1rpx solid #F3F4F6;
 }
 
-.rebook-btn {
+.refund-hint {
+  display: block;
+  width: 100%;
+  font-size: 22rpx;
+  color: #9CA3AF;
+  text-align: right;
+}
+
+.bottom-actions {
+  margin-top: 16rpx;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.bottom-actions--end {
+  justify-content: flex-end;
+  margin-top: 24rpx;
+  padding-top: 24rpx;
+  border-top: 1rpx solid #F3F4F6;
+}
+
+.bottom-actions .cancel-btn,
+.bottom-actions .rebook-btn {
   margin: 0;
   padding: 0 28rpx;
   height: 60rpx;
   line-height: 60rpx;
   font-size: 24rpx;
+  border-radius: 12rpx;
+  flex-shrink: 0;
+}
+
+.rebook-btn {
   font-weight: 600;
   color: #3D5A4E;
   background: #F0EDE8;
   border: 1rpx solid #D6E0DB;
-  border-radius: 12rpx;
 }
 
 .rebook-btn::after {
   border: none;
 }
-
-.refund-hint { width: 100%; font-size: 22rpx; color: #9CA3AF; text-align: right; }
 
 .cancel-btn {
 

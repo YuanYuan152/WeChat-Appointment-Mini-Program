@@ -59,12 +59,14 @@ DEV_MOCK_CODE_ACTIVE_ROLES = {
 }
 
 # 管理后台 / EAP 密钥登录使用的固定 code（生产可走正规密钥登录，不依赖 ALLOW_DEV_LOGIN）
+# EAP 站点使用来访身份（dev_patient），与后台管理员密钥账号分离。
 ACCESS_KEY_LOGIN_CODES = frozenset(
     {
         "dev_admin",
         "dev_ops",
         "dev_assistant",
         "dev_counselor",
+        "dev_patient",
     }
 )
 DEV_MOCK_CODES = frozenset(DEV_MOCK_CODE_OPENIDS.keys())

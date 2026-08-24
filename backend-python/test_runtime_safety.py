@@ -119,14 +119,22 @@ class AuthAndPaymentSafetyTests(unittest.TestCase):
         ):
             self.assertTrue(auth._should_use_mock_login("dev_admin"))
 
-    def test_patient_mock_login_still_requires_dev_login(self):
+    def test_eap_patient_access_key_login_allowed_when_dev_login_disabled(self):
+        with (
+            patch.object(settings, "APP_ENV", "production"),
+            patch.object(settings, "ALLOW_DEV_LOGIN", False),
+            patch.object(settings, "ALLOW_ACCESS_KEY_LOGIN", True),
+        ):
+            self.assertTrue(auth._should_use_mock_login("dev_patient"))
+
+    def test_other_patient_mock_login_still_requires_dev_login(self):
         with (
             patch.object(settings, "APP_ENV", "production"),
             patch.object(settings, "ALLOW_DEV_LOGIN", False),
             patch.object(settings, "ALLOW_ACCESS_KEY_LOGIN", True),
         ):
             with self.assertRaises(HTTPException) as caught:
-                auth._should_use_mock_login("dev_patient")
+                auth._should_use_mock_login("dev_patient_xiaogang")
         self.assertEqual(403, caught.exception.status_code)
 
     def test_missing_wechat_credentials_fail_closed_when_dev_login_is_disabled(self):

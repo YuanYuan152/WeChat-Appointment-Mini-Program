@@ -56,7 +56,7 @@ export function AuthPageShell({
       } catch (err) {
         if (!cancelled) {
           autoLoginStartedRef.current = false;
-          setError(err instanceof Error ? err.message : "管理员自动登录失败");
+          setError(err instanceof Error ? err.message : "来访身份自动登录失败");
         }
       } finally {
         if (!cancelled) {
@@ -80,7 +80,7 @@ export function AuthPageShell({
   return (
     <div className="mx-auto w-full max-w-md rounded-[var(--radius)] border border-border bg-card p-8 text-center shadow-sm">
       <p className="text-sm text-muted-foreground">
-        {autoLoggingIn ? "正在以管理员身份登录..." : "正在进入站点..."}
+        {autoLoggingIn ? "正在以来访身份登录..." : "正在进入站点..."}
       </p>
       {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
     </div>

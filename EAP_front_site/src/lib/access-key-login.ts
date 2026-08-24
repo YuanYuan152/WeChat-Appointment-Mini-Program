@@ -9,8 +9,8 @@ export function getConfiguredAccessKey() {
 }
 
 export function getAccessKeyLoginDevCode() {
-  const code = (process.env.NEXT_PUBLIC_ACCESS_KEY_LOGIN_CODE || "dev_admin").trim();
-  return code || "dev_admin";
+  const code = (process.env.NEXT_PUBLIC_ACCESS_KEY_LOGIN_CODE || "dev_patient").trim();
+  return code || "dev_patient";
 }
 
 export function hasAccessKeyPassed() {

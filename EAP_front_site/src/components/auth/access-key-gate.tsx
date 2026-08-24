@@ -41,7 +41,7 @@ export function AccessKeyGate({ onUnlocked }: { onUnlocked: () => void }) {
         </div>
         <h1 className="font-serif text-3xl font-bold">临时访问验证</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          当前环境已启用临时密钥登录，验证通过后将自动以管理员身份进入。
+          当前环境已启用密钥登录，验证通过后将自动以来访身份进入。
         </p>
       </div>
 
