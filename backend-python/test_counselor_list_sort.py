@@ -1,6 +1,11 @@
 import unittest
 
-from common import _profile_completeness_score, _sort_counselor_list
+from common import (
+    _normalize_gender_value,
+    _profile_completeness_score,
+    _sort_counselor_list,
+    list_public_counselors,
+)
 
 
 class CounselorListSortTests(unittest.TestCase):
@@ -64,6 +69,23 @@ class CounselorListSortTests(unittest.TestCase):
             _profile_completeness_score(items[0]),
             _profile_completeness_score(items[2]),
         )
+
+
+class CommonSearchSafetyTests(unittest.TestCase):
+    def test_normalize_gender_ignores_non_string_query_defaults(self):
+        class FakeQuery:
+            def strip(self):
+                raise AttributeError("Query objects must not be treated as gender")
+
+        self.assertIsNone(_normalize_gender_value(FakeQuery()))
+        self.assertIsNone(_normalize_gender_value(None))
+        self.assertEqual(_normalize_gender_value("female"), "女")
+
+    def test_list_public_counselors_is_callable_without_query_objects(self):
+        self.assertTrue(callable(list_public_counselors))
+        names = list_public_counselors.__code__.co_varnames[:6]
+        self.assertIn("keyword", names)
+        self.assertIn("gender", names)
 
 
 if __name__ == "__main__":

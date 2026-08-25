@@ -272,7 +272,9 @@ def _counselor_profile_dict(
 
 def _normalize_gender_value(value: Optional[str]) -> Optional[str]:
     """统一账号性别为 男/女，兼容 male/female/M/F 等历史写法。"""
-    raw = (value or "").strip()
+    if not isinstance(value, str):
+        return None
+    raw = value.strip()
     if not raw:
         return None
     lowered = raw.lower()
@@ -503,22 +505,26 @@ def _sort_counselor_list(
     items.sort(key=sort_key)
 
 
-@router.get("/counselors", summary="咨询师公开列表（双源：AppCounselorProfile + T_Doctor）")
-def common_counselors(
-    keyword: Optional[str] = Query(None, description="搜索姓名/擅长"),
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
-    sort: Optional[str] = Query(None, description="price_asc|price_desc；空=默认价格从高到低+次级排序"),
-    gender: Optional[str] = Query(None, description="男|女"),
-    consult_method: Optional[str] = Query(None, description="online|offline"),
-    current_account: Optional[AppAccount] = Depends(get_optional_account),
-    db: Session = Depends(get_db),
-):
+def list_public_counselors(
+    db: Session,
+    *,
+    keyword: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 20,
+    sort: Optional[str] = None,
+    gender: Optional[str] = None,
+    consult_method: Optional[str] = None,
+    current_account: Optional[AppAccount] = None,
+    reconcile_legacy: bool = True,
+) -> Dict[str, Any]:
+    """咨询师公开列表/搜索共用实现，避免搜索接口直接调用 FastAPI 路由导致 Query 默认值泄漏。"""
     if keyword is not None:
-        keyword = keyword.strip()
+        keyword = str(keyword).strip()
         if not keyword or keyword.lower() == "undefined":
             keyword = None
 
+    page = max(int(page or 1), 1)
+    page_size = min(max(int(page_size or 20), 1), 100)
     normalized_gender = _normalize_gender_value(gender)
     normalized_method = consult_method if consult_method in ("online", "offline") else None
     normalized_sort = sort if sort in ("price_asc", "price_desc") else None
@@ -530,7 +536,7 @@ def common_counselors(
         normalized_method,
     )
 
-    if page == 1:
+    if reconcile_legacy and page == 1:
         try:
             reconcile_existing_counselor_legacy_links(db)
             db.commit()
@@ -590,6 +596,29 @@ def common_counselors(
         "pageSize": page_size,
         "items": merged[start:end],
     }
+
+
+@router.get("/counselors", summary="咨询师公开列表（双源：AppCounselorProfile + T_Doctor）")
+def common_counselors(
+    keyword: Optional[str] = Query(None, description="搜索姓名/擅长"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    sort: Optional[str] = Query(None, description="price_asc|price_desc；空=默认价格从高到低+次级排序"),
+    gender: Optional[str] = Query(None, description="男|女"),
+    consult_method: Optional[str] = Query(None, description="online|offline"),
+    current_account: Optional[AppAccount] = Depends(get_optional_account),
+    db: Session = Depends(get_db),
+):
+    return list_public_counselors(
+        db,
+        keyword=keyword,
+        page=page,
+        page_size=page_size,
+        sort=sort,
+        gender=gender,
+        consult_method=consult_method,
+        current_account=current_account,
+    )
 
 
 @router.get("/counselors/{cid}", summary="咨询师详情")
@@ -722,17 +751,24 @@ def common_counselor_time_slots(
 def common_search(
     q: str = Query(..., min_length=1, description="搜索关键词"),
     type: Optional[str] = Query(None, description="counselor / article / activity，留空返回全部"),
+    current_account: Optional[AppAccount] = Depends(get_optional_account),
     db: Session = Depends(get_db),
 ):
-    kw = f"%{q}%"
-    result: Dict[str, Any] = {"keyword": q, "counselors": [], "articles": [], "activities": []}
+    keyword = (q or "").strip()
+    kw = f"%{keyword}%"
+    result: Dict[str, Any] = {"keyword": keyword, "counselors": [], "articles": [], "activities": []}
 
-    if type in (None, "counselor"):
-        result["counselors"] = common_counselors(
-            keyword=q.strip(), page=1, page_size=20, db=db, current_account=None
+    if type in (None, "", "counselor"):
+        result["counselors"] = list_public_counselors(
+            db,
+            keyword=keyword,
+            page=1,
+            page_size=20,
+            current_account=current_account,
+            reconcile_legacy=False,
         )["items"]
 
-    if type in (None, "article"):
+    if type in (None, "", "article"):
         rows = (
             db.query(AppArticle)
             .filter(
@@ -744,8 +780,28 @@ def common_search(
             .all()
         )
         result["articles"] = [_article_to_dict(a) for a in rows]
+        if not settings.SKIP_LEGACY_QUERIES:
+            seen_titles = {(item.get("title") or "").strip() for item in result["articles"]}
+            legacy_rows = _safe_legacy_query(
+                db,
+                "SELECT TOP 20 ID, Title, Source, Profile, url, IsTop, Views, CreateTime "
+                "FROM T_Content WHERE IsShow = 1 AND IsDelete = 0 "
+                "AND (Title LIKE :kw OR Profile LIKE :kw) "
+                "ORDER BY IsTop DESC, CreateTime DESC",
+                kw=kw,
+            )
+            for row in legacy_rows:
+                item = _legacy_content_to_dict(row)
+                title = (item.get("title") or "").strip()
+                if title and title in seen_titles:
+                    continue
+                if title:
+                    seen_titles.add(title)
+                result["articles"].append(item)
+                if len(result["articles"]) >= 10:
+                    break
 
-    if type in (None, "activity"):
+    if type in (None, "", "activity"):
         rows = (
             db.query(AppActivity)
             .filter(
