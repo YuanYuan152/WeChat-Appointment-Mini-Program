@@ -62,7 +62,7 @@ def seed(db):
         active_role="Counselor",
         real_name=LI_XINYI["name"],
         gender="女",
-        avatar_url="/static/images-opt/counselor-avatar.png",
+        avatar_url="/static/images/counselor-avatar.png",
     )
     bind_role(db, counselor.Id, "Counselor")
 
@@ -70,7 +70,7 @@ def seed(db):
         AppCounselorProfile(
             AccountId=counselor.Id,
             Name=LI_XINYI["name"],
-            AvatarUrl="/static/images-opt/counselor-avatar.png",
+            AvatarUrl="/static/images/counselor-avatar.png",
             Title="国家二级心理咨询师",
             Specialty="情绪压力管理",
             Field="家庭治疗,认知行为疗法",

@@ -70,13 +70,18 @@ export const toStoredUploadPath = (url?: string, filename?: string): string => {
 /** 用户个人中心默认头像（来访者 / 咨询师账号资料页） */
 export const DEFAULT_USER_AVATAR = '/static/images-opt/default-avatar.png'
 
-/** 咨询师对外展示默认头像（首页 / 预约列表 / 详情），与个人中心账号头像分离 */
-export const DEFAULT_COUNSELOR_PUBLIC_AVATAR = '/static/images-opt/counselor-avatar.png'
+/** 咨询师对外展示默认头像（首页 / 预约列表 / 详情），与个人中心账号头像分离；后端可公开访问 */
+export const DEFAULT_COUNSELOR_PUBLIC_AVATAR = '/static/images/counselor-avatar.png'
+
+const LEGACY_DEFAULT_COUNSELOR_AVATARS = new Set([
+  '/static/images-opt/counselor-avatar.png',
+  '/static/images-opt/counselor-avatar.jpg',
+])
 
 /**
  * 修复图片URL路径
  * - 本地前端资源 (/static/images-opt/*、/static/*) 直接返回，由小程序本地加载
- * - 旧 /static/images/* 自动映射到 images-opt
+ * - 旧 /static/images/* 自动映射到 images-opt（咨询师默认头像除外，走后端公开路径）
  * - FastAPI 上传/静态目录 (/static/uploads/*、/api/static/*) 走 V2 baseURL
  * - 其它绝对路径（如旧 C# 后端 /Uploadfile/*）继续拼 V1 baseURL，保持兼容
  * - 完整 http(s) URL 原样返回；其中上传目录会改写到当前 V2 地址
@@ -100,6 +105,14 @@ export const fixImageUrl = (imagePath: string): string => {
     return `${API_V2_CONFIG.baseURL}${imagePath}`
   }
 
+  // 咨询师默认头像：固定走后端可公开访问路径，不映射到本地 images-opt
+  if (
+    imagePath === DEFAULT_COUNSELOR_PUBLIC_AVATAR ||
+    LEGACY_DEFAULT_COUNSELOR_AVATARS.has(imagePath)
+  ) {
+    return `${API_V2_CONFIG.baseURL.replace(/\/$/, '')}${DEFAULT_COUNSELOR_PUBLIC_AVATAR}`
+  }
+
   // 旧 images 目录已删除，映射到压缩目录
   if (imagePath.startsWith('/static/images/') && !imagePath.startsWith('/static/images-opt/')) {
     return rewriteLegacyLocalImage(imagePath)
@@ -120,8 +133,13 @@ export const fixImageUrl = (imagePath: string): string => {
 export const resolveUserAvatar = (imagePath?: string | null): string =>
   fixImageUrl((imagePath || '').trim() || DEFAULT_USER_AVATAR)
 
-export const resolveCounselorPublicAvatar = (imagePath?: string | null): string =>
-  fixImageUrl((imagePath || '').trim() || DEFAULT_COUNSELOR_PUBLIC_AVATAR)
+export const resolveCounselorPublicAvatar = (imagePath?: string | null): string => {
+  const trimmed = (imagePath || '').trim()
+  if (!trimmed || LEGACY_DEFAULT_COUNSELOR_AVATARS.has(trimmed)) {
+    return fixImageUrl(DEFAULT_COUNSELOR_PUBLIC_AVATAR)
+  }
+  return fixImageUrl(trimmed)
+}
 
 /**
  * 批量修复图片URL数组

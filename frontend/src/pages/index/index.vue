@@ -295,7 +295,7 @@ const loadMockData = () => {
     {
       id: 1,
       name: '沈世琴',
-      avatar: '/static/images-opt/counselor-avatar.png',
+      avatar: '/static/images/counselor-avatar.png',
       province: '上海',
       specialty: '家庭婚姻 | 亲子关系',
       experience: '9年经验',
