@@ -19,6 +19,7 @@ from config import settings
 from auth import get_optional_account
 from models import AppAccount, AppBanner, AppActivity, AppArticle, AppCounselorProfile, AppSchedule
 from counselor_avatar import resolve_counselor_public_avatar_url
+from counselor_work_years import display_work_years, display_work_years_label
 from booking_availability import counselor_booking_time_slots
 from pricing_service import (
     get_counselor_profile,
@@ -229,7 +230,8 @@ def _legacy_doctor_to_dict(row: Dict[str, Any]) -> Dict[str, Any]:
         "billing": float(row.get("Billing") or 0),
         "faceBilling": float(row.get("FaceBilling") or 0),
         "consultHours": int(row.get("ConsultHours") or 0),
-        "workYears": int(row.get("WorkYears") or 0),
+        "workYears": display_work_years(row.get("WorkYears")),
+        "workYearsLabel": display_work_years_label(row.get("WorkYears")),
         "mode": row.get("Mode"),
         "_source": "T_Doctor",
     }
@@ -269,7 +271,8 @@ def _counselor_profile_dict(
         "needsNegotiation": needs_negotiation,
         "priceLabel": price_label,
         "consultHours": int(r.ConsultHours or 0),
-        "workYears": int(r.WorkYears or 0),
+        "workYears": display_work_years(r.WorkYears),
+        "workYearsLabel": display_work_years_label(r.WorkYears),
         "isPinned": bool(optional_model_value(r, "IsPinned") or False),
         "listSortRank": int(optional_model_value(r, "ListSortRank") or 0),
         "isPublicVisible": _profile_is_public_visible(r),
@@ -519,7 +522,7 @@ def _sort_counselor_list(
         billing = float(item.get("billing") or 0)
         completeness = _profile_completeness_score(item)
         hours = int(item.get("consultHours") or 0)
-        years = int(item.get("workYears") or 0)
+        years = display_work_years(item.get("workYears"))
         cid = int(item.get("id") or 0)
         # 新系统 AccountId 才与排期对齐；旧 T_Doctor 无匹配排期时视为无可约
         has_slot = 1 if item.get("_source") == "AppCounselorProfile" and cid in available_ids else 0
@@ -719,7 +722,8 @@ def common_counselor_detail(
         "canSelfBook": can_self_book,
         "faceBilling": float(int(new_rows[0].get("FaceBilling") or 30000)),
         "consultHours": int(new_rows[0].get("ConsultHours") or 0),
-        "workYears": int(new_rows[0].get("WorkYears") or 0),
+        "workYears": display_work_years(new_rows[0].get("WorkYears") or profile.WorkYears),
+        "workYearsLabel": display_work_years_label(new_rows[0].get("WorkYears") or profile.WorkYears),
         "career": new_rows[0].get("Career"),
         "qualification": new_rows[0].get("Qualification"),
         "targetGroup": new_rows[0].get("TargetGroup"),

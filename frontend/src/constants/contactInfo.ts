@@ -19,7 +19,7 @@ export interface AssistantContact {
 export const CONTACT_CENTERS: ContactCenter[] = [
   {
     id: 'yangpu',
-    name: '杨浦预约咨询中心',
+    name: '杨浦咨询中心',
     address: '上海市杨浦区国康路46号同济科技大厦',
   },
   {

@@ -47,7 +47,7 @@
               </text>
             </view>
             <view class="hero-tags">
-              <text class="hero-tag secondary">从业{{ doctor.workYears }}年</text>
+              <text class="hero-tag secondary">从业{{ doctor.workYears }}年+</text>
             </view>
           </view>
         </view>
@@ -56,7 +56,7 @@
       <!-- 悬浮数据卡片：从业年限 | 咨询时数 -->
       <view class="stats-card">
         <view class="stat-item">
-          <text class="stat-value">{{ doctor.workYears }}<text class="stat-unit">年</text></text>
+          <text class="stat-value">{{ doctor.workYears }}<text class="stat-unit">年+</text></text>
           <text class="stat-label">从业年限</text>
         </view>
         <view class="stat-divider"></view>
@@ -88,7 +88,7 @@
           </view>
           
           <view class="info-block">
-            <text class="block-title">资质</text>
+            <text class="block-title">从业资质</text>
             <text class="block-text">{{ doctor.qualification }}</text>
           </view>
 

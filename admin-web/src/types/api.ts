@@ -709,6 +709,7 @@ export interface AdminCounselorIntroProfile {
   gender?: string | null;
   mode?: string | null;
   workYears: number;
+  workYearsDisplay?: number;
   consultHours: number;
   billingYuan?: number | null;
   faceBillingYuan?: number | null;

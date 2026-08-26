@@ -13,6 +13,7 @@ import {
   privacyAgreementIntro,
   privacyAgreementSections,
 } from "@/lib/assessment/privacy-content";
+import { ASSISTANT_CONTACT } from "@/lib/booking/contact-info";
 
 interface PrivacyAgreementDialogProps {
   open: boolean;
@@ -58,7 +59,7 @@ export function PrivacyAgreementDialog({
             </div>
           ))}
           <p className="mt-2 text-xs">
-            如有疑问，请联系：hello@lianxinpsy.com · 400-888-9999
+            如有疑问，请联系咨询助理电话：{ASSISTANT_CONTACT.phone}
           </p>
         </div>
 

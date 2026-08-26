@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import ProgrammingError, OperationalError
 
 from counselor_avatar import DEFAULT_COUNSELOR_PUBLIC_AVATAR
+from counselor_work_years import display_work_years, work_start_year_for_admin
 from case_record_service import (
     apply_case_record_fields,
     case_record_has_content,
@@ -1732,7 +1733,8 @@ def _profile_to_dict(profile: AppCounselorProfile):
         "mode": profile.Mode,
         "billing": profile.Billing,
         "consultHours": profile.ConsultHours,
-        "workYears": profile.WorkYears,
+        "workYears": work_start_year_for_admin(profile.WorkYears),
+        "workYearsDisplay": display_work_years(profile.WorkYears),
         "isActive": profile.IsActive,
         "infoAuthenticityCommitted": bool(profile.InfoAuthenticityCommittedAt),
         "infoAuthenticityCommittedAt": profile.InfoAuthenticityCommittedAt,

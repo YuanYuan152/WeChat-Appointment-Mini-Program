@@ -15,6 +15,7 @@ from datetime import datetime
 from typing import List, Optional
 
 from auth import get_current_account, AppAccount
+from counselor_work_years import display_work_years
 from consultation_cancel import (
     can_visitor_cancel,
     cancel_consultation_for_visitor,
@@ -921,7 +922,7 @@ def _favorite_counselor_out(db: Session, counselor_id: int, created_at: datetime
         avatarUrl=avatar,
         specialty=profile.Specialty if profile else None,
         billing=int(profile.Billing or 0) if profile else None,
-        workYears=int(profile.WorkYears or 0) if profile else None,
+        workYears=display_work_years(profile.WorkYears) if profile else None,
         consultHours=int(profile.ConsultHours or 0) if profile else None,
         createdAt=created_at,
     )

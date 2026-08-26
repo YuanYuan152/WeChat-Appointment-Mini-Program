@@ -406,7 +406,7 @@ export function CounselorDetailClient({ counselorId, source }: CounselorDetailCl
         </div>
         <div className="grid grid-cols-3 divide-x divide-border border-t border-border text-center">
           <div className="py-4">
-            <div className="text-lg font-semibold">{counselor.workYears}年</div>
+            <div className="text-lg font-semibold">{counselor.workYears}年+</div>
             <div className="text-xs text-muted-foreground">从业年限</div>
           </div>
           <div className="py-4">

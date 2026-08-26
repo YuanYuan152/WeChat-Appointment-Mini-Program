@@ -238,6 +238,7 @@ const loadProfileHeader = async () => {
         field?: string
         introduce?: string
         workYears?: number
+        workYearsDisplay?: number
         consultHours?: number
       }>(API_ENDPOINTS.counselor.profile, undefined, silent),
     ])
@@ -247,7 +248,8 @@ const loadProfileHeader = async () => {
     const metaParts: string[] = []
     if (profile?.field) metaParts.push(profile.field)
     if (profile?.specialty) metaParts.push(profile.specialty)
-    if (profile?.workYears) metaParts.push(`从业 ${profile.workYears} 年`)
+    if (profile?.workYearsDisplay) metaParts.push(`从业 ${profile.workYearsDisplay} 年+`)
+    else if (profile?.workYears) metaParts.push(`从业时间 ${profile.workYears}`)
     profileHeader.value = {
       name: profile?.name || me?.nickname || '咨询师',
       avatar: avatarRaw ? fixImageUrl(avatarRaw) : resolveUserAvatar(''),

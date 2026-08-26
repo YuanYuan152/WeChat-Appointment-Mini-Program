@@ -34,7 +34,7 @@
               <text class="doc-title">{{ item.title || '心理咨询师' }}</text>
             </view>
             <view class="doc-stats">
-              <text class="stat-text">从业{{ item.workYears || 0 }}年</text>
+              <text class="stat-text">从业{{ item.workYears || 0 }}年+</text>
               <text class="stat-dot">·</text>
               <text class="stat-text">{{ item.consultHours || 0 }}小时+</text>
             </view>

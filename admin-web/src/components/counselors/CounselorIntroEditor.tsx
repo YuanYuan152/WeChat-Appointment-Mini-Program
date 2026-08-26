@@ -223,7 +223,12 @@ export function CounselorIntroEditor({
       nextErrors.name = "请填写咨询师姓名";
     }
     if (Number.isNaN(workYears)) {
-      nextErrors.workYears = "从业年限需为数字";
+      nextErrors.workYears = "从业时间需为年份数字";
+    } else if (workYears > 0) {
+      const currentYear = new Date().getFullYear();
+      if (workYears < 1950 || workYears > currentYear) {
+        nextErrors.workYears = `从业时间需为 1950–${currentYear} 年之间的年份`;
+      }
     }
     if (Number.isNaN(consultHours)) {
       nextErrors.consultHours = "咨询时数需为数字";
@@ -344,13 +349,23 @@ export function CounselorIntroEditor({
               onChange={(event) => updateDraft("title", event.target.value)}
             />
           </QueryField>
-          <QueryField error={errors.workYears} label="从业年限">
+          <QueryField
+            error={errors.workYears}
+            label="从业时间"
+          >
             <input
               className={queryControlClass}
               inputMode="numeric"
+              placeholder="从业开始年份，如 2015"
               value={draft.workYears}
               onChange={(event) => updateDraft("workYears", event.target.value)}
             />
+            <p className="mt-2 text-xs leading-5 text-[var(--lxxl-muted)]">
+              填写开始从业的年份；来访端将显示「当前年 − 该年份」并自动加「年+」。
+              {profile.workYearsDisplay != null && profile.workYearsDisplay > 0
+                ? ` 当前约 ${profile.workYearsDisplay} 年+`
+                : ""}
+            </p>
           </QueryField>
           <QueryField error={errors.consultHours} label="咨询时数">
             <input
@@ -424,7 +439,7 @@ export function CounselorIntroEditor({
               onChange={(event) => updateDraft("introduce", event.target.value)}
             />
           </QueryField>
-          <QueryField className="sm:col-span-2" label="资质证书">
+          <QueryField className="sm:col-span-2" label="从业资质">
             <textarea
               className={`${queryControlClass} h-28 resize-y py-3`}
               value={draft.qualification}

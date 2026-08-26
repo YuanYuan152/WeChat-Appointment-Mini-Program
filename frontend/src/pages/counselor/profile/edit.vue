@@ -27,8 +27,12 @@
           <text class="value">￥{{ displayPrice }} / 次</text>
         </view>
         <view class="info-row">
+          <text class="label">从业时间</text>
+          <text class="value">{{ displayStartYear(profile.workYears) }}</text>
+        </view>
+        <view class="info-row">
           <text class="label">从业年限</text>
-          <text class="value">{{ displayYears(profile.workYears) }}</text>
+          <text class="value">{{ displayYears(profile.workYearsDisplay ?? profile.workYears) }}</text>
         </view>
         <view class="info-row">
           <text class="label">咨询时数</text>
@@ -63,7 +67,7 @@
       </view>
 
       <view class="info-card">
-        <text class="section-title">资质证书</text>
+        <text class="section-title">从业资质</text>
         <text class="section-text">{{ profile.qualification || '—' }}</text>
       </view>
     </template>
@@ -91,6 +95,7 @@ interface CounselorProfileView {
   billing?: number
   consultHours?: number
   workYears?: number
+  workYearsDisplay?: number
 }
 
 const profileLoaded = ref(false)
@@ -103,9 +108,14 @@ const avatarSrc = computed(() => {
   return resolveCounselorPublicAvatar(url)
 })
 
+const displayStartYear = (year?: number) => {
+  if (!year) return '—'
+  return `${year} 年`
+}
+
 const displayYears = (years?: number) => {
-  if (!years) return '—'
-  return `${years} 年`
+  if (years == null || Number(years) <= 0) return '—'
+  return `${years}年+`
 }
 
 const displayHours = (hours?: number) => {

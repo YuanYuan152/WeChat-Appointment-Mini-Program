@@ -17,7 +17,7 @@ const mapDoctor = (item: any): Doctor & {
     name: item.name || item.Name || item.nickname || '咨询师',
     avatar: resolveCounselorPublicAvatar(item.avatarUrl || item.AvatarUrl || item.avatar),
     specialty: item.specialty || item.Specialty || item.field || item.Field || '心理咨询',
-    experience: `${item.workYears || item.WorkYears || 0}年经验`,
+    experience: `${item.workYears || item.WorkYears || 0}年+`,
     rating: item.rating || 5,
     province: item.province || item.Province || item.city || item.City || '线下/线上',
     description: item.introduce || item.Introduce || item.description || '暂无介绍',

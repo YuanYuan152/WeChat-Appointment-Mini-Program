@@ -45,7 +45,7 @@ export function CounselorCard({ counselor, index = 0 }: CounselorCardProps) {
               </p>
             </div>
             <div className="text-right text-sm text-muted-foreground">
-              <div>从业 {counselor.workYears} 年</div>
+              <div>从业 {counselor.workYears} 年+</div>
               <div>{counselor.consultHours}h+ 咨询</div>
             </div>
           </div>

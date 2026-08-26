@@ -78,6 +78,11 @@ from common import (
     _sort_counselor_list,
     normalize_counselor_mode,
 )
+from counselor_work_years import (
+    display_work_years,
+    validate_work_start_year,
+    work_start_year_for_admin,
+)
 from counselor_avatar import DEFAULT_COUNSELOR_PUBLIC_AVATAR, resolve_counselor_public_avatar_url
 from account_deletion_service import hard_delete_account
 from counselor_identity_service import (
@@ -1992,7 +1997,8 @@ def _admin_profile_dict(profile: Optional[AppCounselorProfile], counselor_id: in
         "targetGroup": profile.TargetGroup if profile else None,
         "gender": _normalize_gender_value(acc.Gender if acc else None),
         "mode": normalize_counselor_mode(profile.Mode if profile else None),
-        "workYears": int(profile.WorkYears or 0) if profile else 0,
+        "workYears": work_start_year_for_admin(profile.WorkYears if profile else 0),
+        "workYearsDisplay": display_work_years(profile.WorkYears if profile else 0),
         "consultHours": int(profile.ConsultHours or 0) if profile else 0,
         "billing": billing,
         "faceBilling": face_billing,
@@ -2082,6 +2088,7 @@ class AdminCounselorDetailOut(BaseModel):
     gender: Optional[str] = None
     mode: Optional[str] = None
     workYears: int = 0
+    workYearsDisplay: int = 0
     consultHours: int = 0
     billing: int = 60000
     faceBilling: int = 30000
@@ -2616,7 +2623,6 @@ def update_admin_counselor(
         "trainingExperience": "TrainingExperience",
         "qualification": "Qualification",
         "targetGroup": "TargetGroup",
-        "workYears": "WorkYears",
         "consultHours": "ConsultHours",
         "isActive": "IsActive",
     }
@@ -2624,6 +2630,15 @@ def update_admin_counselor(
         val = getattr(body, src, None)
         if val is not None:
             setattr(profile, dst, val)
+    if body.workYears is not None:
+        try:
+            raw_year = int(body.workYears)
+            profile.WorkYears = 0 if raw_year == 0 else validate_work_start_year(raw_year)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=str(exc) if isinstance(exc, ValueError) else "从业时间需为年份数字",
+            ) from exc
     if body.mode is not None:
         normalized_mode = normalize_counselor_mode(body.mode)
         if not normalized_mode:

@@ -91,8 +91,14 @@
             <input class="input" v-model="form.title" />
           </view>
           <view class="form-item">
-            <text class="label">从业年限</text>
-            <input class="input" type="number" v-model.number="form.workYears" />
+            <text class="label">从业时间</text>
+            <input
+              class="input"
+              type="number"
+              v-model.number="form.workYears"
+              placeholder="从业开始年份，如 2015"
+            />
+            <text class="readonly-fallback">来访端将按「当前年 − 该年份」显示为从业年限并自动加「年+」</text>
           </view>
           <view class="form-item">
             <text class="label">咨询时数</text>
@@ -127,7 +133,7 @@
             <textarea class="textarea" v-model="form.introduce" />
           </view>
           <view class="form-item">
-            <text class="label">资质证书</text>
+            <text class="label">从业资质</text>
             <textarea class="textarea" v-model="form.qualification" />
           </view>
           <view class="form-item">

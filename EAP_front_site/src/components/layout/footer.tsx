@@ -1,7 +1,11 @@
 import Link from "next/link";
-import { Heart, Phone, Mail } from "lucide-react";
+import Image from "next/image";
+import { Heart, Phone } from "lucide-react";
+import { ASSISTANT_CONTACT } from "@/lib/booking/contact-info";
 
 export function Footer() {
+  const assistant = ASSISTANT_CONTACT;
+
   return (
     <footer className="mt-auto border-t border-border bg-card/50">
       <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
@@ -30,13 +34,29 @@ export function Footer() {
 
           <div>
             <h4 className="mb-4 font-serif font-semibold">联系我们</h4>
-            <div className="flex flex-col gap-2 text-sm text-muted-foreground">
-              <span className="flex items-center gap-2">
-                <Phone className="h-4 w-4" /> 400-888-9999
-              </span>
-              <span className="flex items-center gap-2">
-                <Mail className="h-4 w-4" /> hello@lianxinpsy.com
-              </span>
+            <div className="flex flex-col gap-4 text-sm text-muted-foreground">
+              <a
+                href={`tel:${assistant.phoneDial}`}
+                className="flex items-center gap-2 transition-colors hover:text-primary"
+              >
+                <Phone className="h-4 w-4 shrink-0" />
+                {assistant.phone}
+              </a>
+              <div className="flex items-start gap-3">
+                <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-lg border border-border bg-muted">
+                  <Image
+                    src={assistant.qrcodeSrc}
+                    alt="咨询助理微信二维码"
+                    width={96}
+                    height={96}
+                    className="object-contain"
+                  />
+                </div>
+                <div className="min-w-0 pt-1">
+                  <p className="font-medium text-foreground">微信扫码联系助理</p>
+                  <p className="mt-1 text-xs leading-5">{assistant.hint}</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>

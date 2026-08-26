@@ -138,7 +138,7 @@
               </view>
               
               <view class="doc-stats">
-                <text class="stat-text">从业{{ doctor.workYears || 0 }}年</text>
+                <text class="stat-text">从业{{ doctor.workYears || 0 }}年+</text>
                 <text class="stat-dot">·</text>
                 <text class="stat-text">{{ doctor.consultHours || 1000 }}小时+</text>
                 <text class="stat-dot">·</text>
