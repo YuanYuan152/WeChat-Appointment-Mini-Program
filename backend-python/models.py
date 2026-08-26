@@ -443,6 +443,11 @@ class AppCounselorProfile(Base):
     InfoAuthenticitySignerName = Column(Unicode(100), nullable=True)
     CounselorType = Column(String(50), nullable=True)
     IsActive = Column(Boolean, nullable=False, default=True)
+    # 小程序公开列表人工排序：置顶优先，再按 ListSortRank 升序（越小越靠前）；0=未配置，回退价格次级排序
+    IsPinned = Column(Boolean, nullable=False, default=False)
+    ListSortRank = Column(Integer, nullable=False, default=0)
+    # 仅控制来访端展示/搜索；False 时管理端与角色绑定仍可见。与 IsActive（停用/退休）分离。
+    IsPublicVisible = Column(Boolean, nullable=False, default=True)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
     UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
 

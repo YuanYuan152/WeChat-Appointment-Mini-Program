@@ -11,6 +11,7 @@ import type {
 
 import { DetailDrawer } from "@/components/boards/DetailDrawer";
 import { StaffRemarkEditor } from "@/components/boards/StaffRemarkEditor";
+import { CounselorDisplayOrderSection } from "@/components/counselors/CounselorDisplayOrderSection";
 import { CounselorIntroEditor } from "@/components/counselors/CounselorIntroEditor";
 import {
   Badge,
@@ -48,6 +49,7 @@ export function CounselorBoardPanel({
   onSaveIntro,
   remarkSaving,
   onSaveRemark,
+  onNotice,
 }: {
   records?: PagedResult<CounselorBoardSummary>;
   listLoading: boolean;
@@ -71,9 +73,11 @@ export function CounselorBoardPanel({
   onSaveIntro: (payload: AdminCounselorIntroUpdatePayload) => Promise<void>;
   remarkSaving: boolean;
   onSaveRemark: (accountId: number, remark: string) => Promise<string>;
+  onNotice: (tone: "success" | "error", message: string) => void;
 }) {
   return (
-    <>
+    <div className="space-y-5">
+      <CounselorDisplayOrderSection enabled={canEditIntro} onNotice={onNotice} />
       <CounselorBoardListSection
         keyword={keyword}
         listLoading={listLoading}
@@ -126,7 +130,7 @@ export function CounselorBoardPanel({
           ) : null}
         </DetailDrawer>
       )}
-    </>
+    </div>
   );
 }
 

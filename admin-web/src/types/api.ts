@@ -735,6 +735,30 @@ export interface AdminCounselorIntroUpdatePayload {
   isActive?: boolean;
 }
 
+export interface CounselorDisplayOrderItem {
+  counselorId: number;
+  name: string;
+  avatarUrl?: string | null;
+  title?: string | null;
+  billingYuan: number;
+  isPinned: boolean;
+  isPublicVisible: boolean;
+  listSortRank: number;
+}
+
+export interface CounselorDisplayOrderResult {
+  items: CounselorDisplayOrderItem[];
+}
+
+export interface CounselorDisplayOrderSavePayload {
+  items: Array<{
+    counselorId: number;
+    isPinned: boolean;
+    isPublicVisible: boolean;
+    listSortRank: number;
+  }>;
+}
+
 export interface CounselorBoardDetail {
   profile: CounselorBoardSummary;
   visitors: Array<{

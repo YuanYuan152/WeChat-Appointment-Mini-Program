@@ -82,6 +82,9 @@ APP_COUNSELOR_PROFILE_COLUMNS = {
     "DefaultShareMode": "NVARCHAR(20) NULL",
     "DefaultRevenueShareCents": "INT NULL",
     "DefaultRevenueSharePercent": "INT NULL",
+    "IsPinned": "BIT NOT NULL CONSTRAINT DF_AppCounselorProfile_IsPinned DEFAULT 0",
+    "ListSortRank": "INT NOT NULL CONSTRAINT DF_AppCounselorProfile_ListSortRank DEFAULT 0",
+    "IsPublicVisible": "BIT NOT NULL CONSTRAINT DF_AppCounselorProfile_IsPublicVisible DEFAULT 1",
 }
 
 APP_COUNSELOR_PATIENT_PRICING_COLUMNS = {

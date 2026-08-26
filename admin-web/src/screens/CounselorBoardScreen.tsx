@@ -301,6 +301,7 @@ function CounselorBoardScreenContent() {
       onSaveIntro={saveIntro}
       remarkSaving={remarkSavingAccountId === selectedCounselorBoard?.profile.id}
       onSaveRemark={saveStaffRemark}
+      onNotice={showNotice}
     />
   );
 }

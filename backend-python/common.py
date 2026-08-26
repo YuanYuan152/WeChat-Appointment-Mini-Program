@@ -235,6 +235,16 @@ def _legacy_doctor_to_dict(row: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _profile_is_public_visible(profile: Optional[AppCounselorProfile]) -> bool:
+    """来访端是否展示该咨询师；缺列/None 视为可见。"""
+    if profile is None:
+        return False
+    value = optional_model_value(profile, "IsPublicVisible")
+    if value is None:
+        return True
+    return bool(value)
+
+
 def _counselor_profile_dict(
     r: AppCounselorProfile,
     billing_cents: Optional[int] = None,
@@ -260,6 +270,9 @@ def _counselor_profile_dict(
         "priceLabel": price_label,
         "consultHours": int(r.ConsultHours or 0),
         "workYears": int(r.WorkYears or 0),
+        "isPinned": bool(optional_model_value(r, "IsPinned") or False),
+        "listSortRank": int(optional_model_value(r, "ListSortRank") or 0),
+        "isPublicVisible": _profile_is_public_visible(r),
         "province": "线下/线上",
         "_source": "AppCounselorProfile",
     }
@@ -419,12 +432,16 @@ def _query_counselor_profiles(
             cid = int(r.AccountId or r.Id or 0)
             if not cid or cid in seen_accounts:
                 continue
+            if not _profile_is_public_visible(r):
+                continue
             if gender and genders.get(cid) != gender:
                 continue
             if not _mode_supports(r.Mode, consult_method):
                 continue
             profile = get_counselor_profile(db, cid)
             if not profile:
+                continue
+            if not _profile_is_public_visible(profile):
                 continue
             if not _counselor_visible_to_viewer(profile.CounselorType, patient_account, db):
                 continue
@@ -488,10 +505,17 @@ def _sort_counselor_list(
     sort_mode: Optional[str],
     available_ids: set[int],
 ) -> None:
-    """价格为主键；同价再按完整度、咨询时长、从业年限、是否有可约时段。"""
+    """置顶优先 → 人工 ListSortRank（>0 升序）→ 价格为主键 → 完整度/时长/年限/可约。"""
     price_asc = sort_mode == "price_asc"
+    unset_rank = 10**9
 
     def sort_key(item: Dict[str, Any]):
+        pinned = 1 if item.get("isPinned") else 0
+        try:
+            raw_rank = int(item.get("listSortRank") or 0)
+        except (TypeError, ValueError):
+            raw_rank = 0
+        rank = raw_rank if raw_rank > 0 else unset_rank
         billing = float(item.get("billing") or 0)
         completeness = _profile_completeness_score(item)
         hours = int(item.get("consultHours") or 0)
@@ -500,7 +524,7 @@ def _sort_counselor_list(
         # 新系统 AccountId 才与排期对齐；旧 T_Doctor 无匹配排期时视为无可约
         has_slot = 1 if item.get("_source") == "AppCounselorProfile" and cid in available_ids else 0
         price_key = billing if price_asc else -billing
-        return (price_key, -completeness, -hours, -years, -has_slot)
+        return (-pinned, rank, price_key, -completeness, -hours, -years, -has_slot)
 
     items.sort(key=sort_key)
 
@@ -662,6 +686,8 @@ def common_counselor_detail(
     profile = get_counselor_profile(db, cid)
     if not profile or not _counselor_visible_to_viewer(profile.CounselorType, current_account, db):
         raise HTTPException(status_code=404, detail="咨询师不存在")
+    if not _profile_is_public_visible(profile):
+        raise HTTPException(status_code=404, detail="咨询师不存在或未对外开放")
 
     billing_cents = _resolve_counselor_billing_cents(db, cid, current_account)
     from patient_contract_service import patient_can_self_book_counselor
@@ -719,6 +745,8 @@ def common_counselor_time_slots(
     profile = get_counselor_profile(db, cid)
     if not profile or not _counselor_visible_to_viewer(profile.CounselorType, current_account, db):
         raise HTTPException(status_code=404, detail="咨询师不存在或未开通排班")
+    if not _profile_is_public_visible(profile):
+        raise HTTPException(status_code=404, detail="咨询师不存在或未对外开放")
     billing_cents = _resolve_counselor_billing_cents(db, cid, current_account)
     from patient_contract_service import patient_can_self_book_counselor
 

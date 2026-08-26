@@ -71,7 +71,13 @@ from user_role_meta import (
     validate_counselor_type,
     validate_patient_source,
 )
-from common import _normalize_gender_value, normalize_counselor_mode
+from common import (
+    _counselor_ids_with_available_slots,
+    _normalize_gender_value,
+    _profile_is_public_visible,
+    _sort_counselor_list,
+    normalize_counselor_mode,
+)
 from counselor_avatar import DEFAULT_COUNSELOR_PUBLIC_AVATAR, resolve_counselor_public_avatar_url
 from account_deletion_service import hard_delete_account
 from counselor_identity_service import (
@@ -2266,6 +2272,172 @@ def list_admin_counselors(
         )
     result.sort(key=lambda x: x.name)
     return result
+
+
+class CounselorDisplayOrderItemOut(BaseModel):
+    counselorId: int
+    name: str
+    avatarUrl: Optional[str] = None
+    title: Optional[str] = None
+    billingYuan: int = 0
+    isPinned: bool = False
+    isPublicVisible: bool = True
+    listSortRank: int = 0
+
+
+class CounselorDisplayOrderItemIn(BaseModel):
+    counselorId: int
+    isPinned: bool = False
+    isPublicVisible: bool = True
+    listSortRank: int = Field(0, ge=0, le=100000)
+
+
+class CounselorDisplayOrderSavePayload(BaseModel):
+    items: List[CounselorDisplayOrderItemIn] = Field(default_factory=list)
+
+
+def _build_counselor_display_order_items(db: Session) -> List[dict]:
+    """管理工作台排序模块：含已隐藏咨询师，顺序与来访端公开列表算法一致。"""
+    counselor_ids = _admin_counselor_ids(db)
+    if not counselor_ids:
+        return []
+
+    profiles = (
+        db.query(AppCounselorProfile)
+        .filter(
+            AppCounselorProfile.AccountId.in_(counselor_ids),
+            AppCounselorProfile.IsActive == True,
+        )
+        .all()
+    )
+    accounts = {
+        a.Id: a
+        for a in db.query(AppAccount).filter(AppAccount.Id.in_(counselor_ids)).all()
+    }
+    sort_items: List[dict] = []
+    for profile in profiles:
+        cid = int(profile.AccountId or 0)
+        if not cid:
+            continue
+        acc = accounts.get(cid)
+        billing = int(profile.Billing or 0) or 60000
+        sort_items.append(
+            {
+                "id": cid,
+                "counselorId": cid,
+                "name": (profile.Name or (acc.RealName if acc else None) or (acc.Nickname if acc else None) or f"咨询师{cid}"),
+                "avatarUrl": resolve_counselor_public_avatar_url(profile.AvatarUrl),
+                "title": profile.Title,
+                "billing": float(billing),
+                "billingYuan": billing // 100,
+                "consultHours": int(profile.ConsultHours or 0),
+                "workYears": int(profile.WorkYears or 0),
+                "introduce": profile.Introduce,
+                "specialty": profile.Specialty,
+                "field": profile.Field,
+                "career": profile.Career,
+                "trainingExperience": getattr(profile, "TrainingExperience", None),
+                "mode": profile.Mode,
+                "avatarUrlRaw": profile.AvatarUrl,
+                "isPinned": bool(getattr(profile, "IsPinned", False) or False),
+                "listSortRank": int(getattr(profile, "ListSortRank", 0) or 0),
+                "isPublicVisible": _profile_is_public_visible(profile),
+                "_source": "AppCounselorProfile",
+            }
+        )
+
+    available_ids = _counselor_ids_with_available_slots(
+        db, [int(item["id"]) for item in sort_items]
+    )
+    _sort_counselor_list(sort_items, sort_mode="price_desc", available_ids=available_ids)
+    return sort_items
+
+
+@router.get(
+    "/counselors/display-order",
+    summary="咨询师公开展示排序（含隐藏，供管理工作台调整）",
+)
+def get_counselor_display_order(
+    _staff: AppAccount = Depends(require_staff_workbench),
+    db: Session = Depends(get_db),
+):
+    items = _build_counselor_display_order_items(db)
+    return {
+        "items": [
+            CounselorDisplayOrderItemOut(
+                counselorId=int(item["counselorId"]),
+                name=str(item.get("name") or ""),
+                avatarUrl=item.get("avatarUrl"),
+                title=item.get("title"),
+                billingYuan=int(item.get("billingYuan") or 0),
+                isPinned=bool(item.get("isPinned")),
+                isPublicVisible=bool(item.get("isPublicVisible", True)),
+                listSortRank=int(item.get("listSortRank") or 0),
+            ).model_dump()
+            for item in items
+        ]
+    }
+
+
+@router.put(
+    "/counselors/display-order",
+    summary="保存咨询师公开展示排序与隐藏状态",
+)
+def save_counselor_display_order(
+    body: CounselorDisplayOrderSavePayload,
+    _staff: AppAccount = Depends(require_staff_workbench),
+    db: Session = Depends(get_db),
+):
+    allowed_ids = set(_admin_counselor_ids(db))
+    if not body.items:
+        raise HTTPException(status_code=400, detail="排序列表不能为空")
+
+    seen: set[int] = set()
+    normalized: List[CounselorDisplayOrderItemIn] = []
+    for raw in body.items:
+        cid = int(raw.counselorId)
+        if cid not in allowed_ids:
+            raise HTTPException(status_code=400, detail=f"咨询师不存在或不属于可管理范围: {cid}")
+        if cid in seen:
+            raise HTTPException(status_code=400, detail=f"咨询师重复: {cid}")
+        seen.add(cid)
+        normalized.append(raw)
+
+    profiles = {
+        int(p.AccountId): p
+        for p in db.query(AppCounselorProfile)
+        .filter(AppCounselorProfile.AccountId.in_(list(seen)))
+        .all()
+    }
+    missing = [cid for cid in seen if cid not in profiles]
+    if missing:
+        raise HTTPException(status_code=400, detail=f"咨询师资料不存在: {missing[0]}")
+
+    now = datetime.utcnow()
+    for index, item in enumerate(normalized, start=1):
+        profile = profiles[int(item.counselorId)]
+        profile.IsPinned = bool(item.isPinned)
+        profile.IsPublicVisible = bool(item.isPublicVisible)
+        profile.ListSortRank = index
+        profile.UpdatedAt = now
+
+    db.commit()
+    items = _build_counselor_display_order_items(db)
+    return {
+        "items": [
+            CounselorDisplayOrderItemOut(
+                counselorId=int(item["counselorId"]),
+                name=str(item.get("name") or ""),
+                avatarUrl=item.get("avatarUrl"),
+                title=item.get("title"),
+                billingYuan=int(item.get("billingYuan") or 0),
+                isPinned=bool(item.get("isPinned")),
+                isPublicVisible=bool(item.get("isPublicVisible", True)),
+                listSortRank=int(item.get("listSortRank") or 0),
+            ).model_dump()
+            for item in items
+        ]
+    }
 
 
 @router.get(
