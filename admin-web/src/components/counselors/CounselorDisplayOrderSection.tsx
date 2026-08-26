@@ -5,6 +5,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchCounselorDisplayOrder, saveCounselorDisplayOrder } from "@/services/adminCounselors";
 import type { CounselorDisplayOrderItem } from "@/types/api";
 import { Badge, EmptyState, TableActionButton } from "@/components/ui";
+import { API_BASE_URL } from "@/lib/api";
+import {
+  DEFAULT_COUNSELOR_PUBLIC_AVATAR,
+  resolveCounselorAvatarPreviewUrl,
+} from "@/lib/counselor-avatar";
 
 function cloneItems(items: CounselorDisplayOrderItem[]) {
   return items.map((item) => ({ ...item }));
@@ -178,18 +183,22 @@ export function CounselorDisplayOrderSection({
                       <td className="px-4 py-3 text-[var(--lxxl-muted)]">{index + 1}</td>
                       <td className="px-4 py-3">
                         <div className="flex min-w-0 items-center gap-3">
-                          {item.avatarUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              alt=""
-                              className="h-9 w-9 shrink-0 rounded-full object-cover"
-                              src={item.avatarUrl}
-                            />
-                          ) : (
-                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#E8EFEA] text-xs text-[var(--lxxl-green)]">
-                              {(item.name || "?").slice(0, 1)}
-                            </div>
-                          )}
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            alt=""
+                            className="h-9 w-9 shrink-0 rounded-full bg-[#E8EFEA] object-cover"
+                            src={resolveCounselorAvatarPreviewUrl(item.avatarUrl, API_BASE_URL)}
+                            onError={(event) => {
+                              const target = event.currentTarget;
+                              const fallback = resolveCounselorAvatarPreviewUrl(
+                                DEFAULT_COUNSELOR_PUBLIC_AVATAR,
+                                API_BASE_URL,
+                              );
+                              if (target.src !== fallback) {
+                                target.src = fallback;
+                              }
+                            }}
+                          />
                           <div className="min-w-0">
                             <div className="truncate font-medium text-[var(--lxxl-text)]">{item.name}</div>
                             <div className="truncate text-xs text-[var(--lxxl-muted)]">
