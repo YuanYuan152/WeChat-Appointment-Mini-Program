@@ -1,7 +1,7 @@
 <template>
   <view class="page-guide">
     <view class="page-header">
-      <text class="page-title">了解咨询</text>
+      <text class="page-title">关于咨询</text>
       <text class="page-desc">帮助您全面了解心理咨询的方方面面</text>
     </view>
 
@@ -13,14 +13,11 @@
         @click="openGuide(item.id)"
       >
         <view class="guide-icon-wrap">
-          <text class="guide-icon">{{ iconFor(item.id) }}</text>
+          <text class="guide-icon">📖</text>
         </view>
         <view class="guide-body">
-          <view class="guide-top">
-            <text class="guide-tag">{{ item.tag }}</text>
-          </view>
           <text class="guide-title">{{ item.title }}</text>
-          <text class="guide-summary">{{ item.summary }}</text>
+          <text class="guide-summary">{{ item.summary || '' }}</text>
         </view>
         <text class="guide-arrow">›</text>
       </view>
@@ -35,25 +32,24 @@
 </template>
 
 <script setup lang="ts">
-import { CONSULTATION_GUIDE_CARDS } from '@/constants/siteContent'
+import { onMounted, ref } from 'vue'
+import {
+  fallbackGuideItems,
+  fetchPublicSiteContent,
+  type SiteGuideItemPayload,
+} from '@/utils/siteContentApi'
 
-const cards = CONSULTATION_GUIDE_CARDS
+const cards = ref<SiteGuideItemPayload[]>(fallbackGuideItems())
 
-const ICON_MAP: Record<string, string> = {
-  'guide-what': '💡',
-  'guide-process': '📋',
-  'guide-who': '👤',
-  'guide-methods': '💻',
-  'guide-fee': '💰',
-  'guide-privacy': '🔒',
-  'guide-first': '✅',
-  'guide-faq': '❓',
-}
+onMounted(async () => {
+  const payload = await fetchPublicSiteContent()
+  if (payload?.guideItems?.length) {
+    cards.value = payload.guideItems
+  }
+})
 
-const iconFor = (id: string) => ICON_MAP[id] || '📖'
-
-const openGuide = (id: string) => {
-  uni.navigateTo({ url: `/pages/content/detail?key=${id}` })
+const openGuide = (id: number) => {
+  uni.navigateTo({ url: `/pages/content/detail?id=${id}` })
 }
 
 const goBooking = () => {
@@ -125,19 +121,6 @@ const goBooking = () => {
 .guide-body {
   flex: 1;
   min-width: 0;
-}
-
-.guide-top {
-  margin-bottom: 8rpx;
-}
-
-.guide-tag {
-  font-size: 20rpx;
-  color: #0D9488;
-  background: #F0FDFA;
-  padding: 4rpx 12rpx;
-  border-radius: 999rpx;
-  font-weight: 600;
 }
 
 .guide-title {

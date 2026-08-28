@@ -1,5 +1,6 @@
 <template>
   <view class="workbench-shell">
+    <StaffWorkbenchNavBar title="咨询师工作台" theme="green" />
     <view class="segment-wrap">
       <view class="segment-track">
         <view class="segment-thumb" :class="{ right: activeTab === 'dashboard' }" />
@@ -28,6 +29,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
+import StaffWorkbenchNavBar from '@/components/StaffWorkbenchNavBar.vue'
 import SchedulePanel from './schedule-panel.vue'
 import DashboardPanel from './dashboard-panel.vue'
 
@@ -101,9 +103,6 @@ onShow(async () => {
 
 .segment-wrap {
   padding: 24rpx 32rpx 0;
-  position: sticky;
-  top: 0;
-  z-index: 20;
   background: #F7F5F2;
 }
 

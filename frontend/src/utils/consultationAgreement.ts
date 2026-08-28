@@ -1,14 +1,23 @@
-/** 签署用心理咨询协议：同心理咨询协议 / “扬帆计划”心理咨询服务协议 */
+/** 签署用心理咨询协议：同心理咨询协议 / “扬帆计划” / 启航咨询协议 */
+
+export type ConsultationAgreementType = 'TONGXIN' | 'YANGFAN' | 'QIHANG'
 
 export const TONGXIN_AGREEMENT_TITLE = '同心理咨询协议'
 /** 选择入口展示用短名 */
 export const YANGFAN_AGREEMENT_TITLE = '“扬帆计划”协议'
+export const QIHANG_AGREEMENT_TITLE = '启航咨询协议'
 /** 协议正文标题（完整名） */
 export const YANGFAN_AGREEMENT_FULL_TITLE = '“扬帆计划”心理咨询服务协议'
 
-/** true=同心理咨询协议，false=扬帆计划协议（沿用历史 isAdult/ProxyAgreementIsAdult 字段） */
+/** @deprecated 沿用 isAdult：true=同心理，false=扬帆 */
 export function agreementTitleByFlag(isTongxin: boolean): string {
   return isTongxin ? TONGXIN_AGREEMENT_TITLE : YANGFAN_AGREEMENT_TITLE
+}
+
+export function agreementTitleByType(type: ConsultationAgreementType): string {
+  if (type === 'TONGXIN') return TONGXIN_AGREEMENT_TITLE
+  if (type === 'QIHANG') return QIHANG_AGREEMENT_TITLE
+  return YANGFAN_AGREEMENT_TITLE
 }
 
 export interface AgreementEmergencyContact {
@@ -170,6 +179,144 @@ const YANGFAN_AGREEMENT_TEMPLATE = `“扬帆计划”心理咨询服务协议
 
 _________________________________`
 
+const QIHANG_AGREEMENT_TEMPLATE = `启航咨询协议
+
+重要提示：
+
+本服务协议是您与上海连心心理咨询有限公司（以下或简称“本公司”）之间就心理咨询服务等相关事宜所订立的协议，具有法律效力。您（以下或简称“来访者”）在使用本公司提供的各项服务（以下简称“本服务”）之前，请您务必审慎阅读、充分理解各条款内容，特别是免除或限制责任的条款。免除或限制责任的条款将以粗体标识，请重点阅读。
+
+如来访者对协议内容有任何疑问，请不要进行后续操作。
+
+若来访者为未成年人，应由来访者的监护人阅读本协议并向来访者解释说明。来访者的监护人需与来访者一同签署本协议。
+
+甲方（来访者）：【来访者姓名】
+乙方（咨询机构）：上海连心心理咨询有限公司
+
+第一条 服务目的
+
+甲方主动寻求心理咨询与治疗的专业帮助，乙方从事专业心理咨询工作，乙方运用专业的咨询技术与方法帮助甲方，为甲方提供咨询。
+
+第二条 服务内容
+
+参与本项目的咨询师为受训中的实习心理咨询师，在督导师的督导下以公益价格独立接待个案。参与本项目的来访者，需本人申请，经过评估筛选，符合要求方能参与本项目。符合要求的来访者将获得30次或为期一年的低价公益咨询（满足其一即算期满）。
+
+乙方指定咨询师【咨询师姓名】为甲方提供咨询服务，甲方对此予以认可并接受。双方应遵循本合同的约定，以实现相关服务的提供。
+
+第三条 服务时间及与预约
+
+1. 服务时长20分钟起，具体服务时间可由甲方与咨询师预约确定。
+
+2. 甲方应至少提前48小时预约咨询服务。甲方需要变更预约（包括咨询时间、咨询方式、取消预约等），需要在预约服务开始前至少24小时提出。
+
+3. 若甲方未在前述约定期限内提出变更服务的，即使甲方缺席预约咨询服务，乙方仍按照预约服务时长收取服务费用,除非双方另行协商一致。
+
+4. 若甲方迟到，乙方提供的咨询服务仍在原定时间开始及结束，除非双方另行协商一致。若乙方咨询师迟到，咨询服务时间顺延。
+
+第四条 服务费用及支付
+
+1. 本协议项下心理咨询服务的收费标准：免费评估测量。第1-30次咨询：100元/50分钟（大写：人民币壹佰元/伍拾分钟）；第31次或超过1年：按标准收费。具体计费方式为：每次咨询以50分钟为一节，超过50分钟以10分钟为时间单位计费。
+
+2. 咨询的计时方式为：自乙方咨询师进入咨询室/线上会议室，至结束咨询离开咨询室/线上会议室。
+
+3. 甲方最迟应于咨询开始前24小时支付相应的咨询费用。
+
+第五条 甲方权利义务
+
+1. 甲方确认，在接受乙方提供的服务时甲方具备完全民事权利能力。若甲方系未成年人，保证在接受乙方提供的服务前已取得监护人的同意。
+
+2. 甲方在咨询期间不得有自杀、严重自伤行为。如有此类想法，甲方或者甲方监护人应当及时告知，寻求乙方帮助。
+
+3. 甲方必须遵守中华人民共和国相关法律法规的规定，不得有违法犯罪行为，不得将乙方提供的服务用于任何违法或不正当或不道德的活动。
+
+4. 甲方应提供真实、正确、完整及最新的资料，特别是紧急联系人与紧急联系电话。
+您的紧急联系人姓名：【紧急联系人姓名】
+与您的关系：【紧急联系人关系】
+联系电话：【紧急联系人电话】
+
+5. 甲方有义务提供与心理咨询有关的真实资料，有义务提供专业医疗机构作出的精神疾病相关诊断，不得隐瞒精神病史，有义务按照乙方要求到专业医疗机构进行精神疾病鉴别诊断，在精神科医生指导下通过心理咨询进行辅助治疗。
+
+6. 甲方有权更换本协议内指定的咨询师。
+
+7. 甲方应当根据本协议的约定按时足额向乙方支付相应的服务费用。如甲方迟延支付或者未支付乙方相应的服务费用，乙方有权拒绝提供本协议约定的相关服务。
+
+8. 甲方不得对心理咨询会谈进行录音录像。为保障服务质量，提升专业胜任力，甲方需同意乙方对心理咨询会谈进行录音，录音仅限于乙方咨询师督导情况下使用，遵循保密协议。咨询师需要和甲方另签知情同意协议。
+
+第六条 乙方权利义务
+
+1. 乙方承诺向甲方提供心理咨询服务的工作人员系取得相应资质的咨询师。未经甲方同意，乙方不得更换本协议内指定的咨询师。
+
+2. 乙方及乙方咨询师应遵守职业道德，遵守国家有关法律法规。
+
+3. 乙方及乙方咨询师应严格遵守保密原则。
+
+4. 乙方及乙方咨询师本着对甲方负责的态度，有权提出转介、中止或终止咨询服务。
+
+5. 乙方有权按照本协议的约定向甲方收取相应的服务费用。
+
+6. 为保障服务质量，提升专业胜任力，乙方有权对甲方心理咨询会谈进行录音，录音仅限于乙方咨询师督导情况下使用，遵循保密协议。咨询师需要和甲方另签知情同意协议。
+
+第七条 免责条款
+
+1. 在咨询过程中，甲方因自身原因而突发疾病或意外死亡，或因自身原因造成情绪失控而发生自伤、自残、自杀等后果，乙方及乙方咨询师尽可能采取措施控制事态发展，防止事态恶化，必要时与相关部门取得联系。由此造成的损害后果，乙方不承担责任。
+
+2. 甲方在咨询期间不得有自杀与严重自伤行为。甲方仅有轻微自杀自伤意念前来咨询时，乙方会尽量为甲方提供帮助，必要时提供转介途径，终止咨询。如甲方最终选择自杀或对自己、对他人造成伤害的，责任及后果由甲方全部承担，乙方不承担责任。
+
+3. 乙方提供的心理咨询服务不属于疾病诊断或治疗活动，不属于开展诊疗活动，不属于医疗机构。若甲方对本条款不同意或不理解，请立即停止后续操作，乙方将立即终止服务。
+
+4. 甲方理解并同意，心理咨询的效果取决于甲方与咨询师双方配合作用的结果。无论乙方提供何种咨询方式，乙方并不保证甲方接受乙方的咨询服务后一定能达到某种效果。
+
+5. 甲方理解并同意：若接受乙方咨询服务后达不到甲方心理预期的心理咨询效果，不属于服务质量问题，甲方不应以此为由要求乙方退款，且乙方不承担任何责任。
+
+6. 甲方在接受乙方提供的咨询服务前，应提供与其心理状态有关的真实资料；若甲方故意隐瞒、虚构资料而造成的不良后果由甲方自身承担。
+
+7. 为保障甲方权益，甲方应在乙方提供的咨询服务范围内接受服务，任何未经乙方知晓并同意私下与咨询师达成的交易而产生纠纷与乙方无关。
+
+第八条 保密条款
+
+1. 乙方将采取合理的安全手段保护甲方提供的个人信息，除下述信息披露条款外，在未得到甲方许可之前，乙方不会将甲方的任何个人信息提供给任何第三方：
+
+（1）经甲方事先同意，向第三方披露；
+
+（2）如甲方出现自杀、严重自伤或伤害他人行为或风险，必要时乙方会与相关部门取得联系并提供甲方的相关个人信息；
+
+（3）如甲方违反中国有关法律法规，行政或司法机构依法要求调查时，乙方会依法向行政或司法机构披露；
+
+（4）乙方在研讨会、课堂或学术作品中引用经过修饰的案例材料，在引用时，乙方将删除所有能够识别出个人的信息，以保证甲方的匿名身份；
+
+（5）为维护甲方合法权益等其他必要情况。
+
+2. 乙方不允许任何第三方以任何手段收集、编辑、出售或无偿传播甲方的个人信息。
+
+3. 咨询服务的终止不影响本保密条款的效力，本条款始终有效。
+
+第九条 知识产权
+
+1. 乙方提供的服务中包含的任何文件或资料均受版权、商标和/或其它财产所有权法律的保护，乙方享有上述知识产权，但相关权利人依照法律规定应享有的权利除外。
+
+2. 未经权利人书面同意，甲方均不得将上述资料以及乙方提供咨询服务的过程在任何媒体直接或间接发布、播放、出于播放或发布目的而改写或再发行, 或者被用于其他任何商业目的。所有以上资料或资料的任何部分仅可作为私人和非商业用途保存。
+
+3. 甲方违反本条约定的，乙方有权要求甲方赔偿乙方全部经济损失。
+
+第十条 服务的终止
+
+经提前任何一方均可单方面提出终止服务。
+
+第十一条 法律适用及争议解决
+
+1. 本协议的订立、效力、解释、履行及争议的解决均适用中华人民共和国法律。
+2. 在本协议履行过程中发生争议，可以通过协商解决；协商不成，双方同意将争议提交至乙方所在地人民法院起诉解决。
+3. 在争议期间，本协议不涉及争议部分的条款仍须履行。
+
+第十二条 合同的效力
+
+1. 本合同自双方签字盖章之日起生效。
+
+2. 本协议未经协议各方一致同意，任何一方无权单方变更、解除本协议。
+
+3. 本协议的有效性不因部分条款的无效而受影响，部分条款无效，不影响其他条款的有效和履行。
+
+4. 本协议壹式贰份，双方各执壹份，具有同等法律效力。`
+
 export function buildTongxinConsultationAgreement(
   counselorName: string,
   priceYuan: number,
@@ -186,6 +333,48 @@ export function buildYangfanConsultationAgreement(
   patientName?: string | null,
 ): string {
   return fillPlaceholders(YANGFAN_AGREEMENT_TEMPLATE, counselorName, priceYuan, emergency, patientName)
+}
+
+export function buildQihangConsultationAgreement(
+  counselorName: string,
+  priceYuan = 100,
+  emergency?: Partial<AgreementEmergencyContact> | null,
+  patientName?: string | null,
+): string {
+  return fillPlaceholders(QIHANG_AGREEMENT_TEMPLATE, counselorName, priceYuan, emergency, patientName)
+}
+
+export function buildAgreementByType(
+  type: ConsultationAgreementType,
+  counselorName: string,
+  priceYuan: number,
+  emergency?: Partial<AgreementEmergencyContact> | null,
+  patientName?: string | null,
+): string {
+  if (type === 'TONGXIN') {
+    return buildTongxinConsultationAgreement(counselorName, priceYuan, emergency, patientName)
+  }
+  if (type === 'QIHANG') {
+    return buildQihangConsultationAgreement(counselorName, priceYuan, emergency, patientName)
+  }
+  return buildYangfanConsultationAgreement(counselorName, priceYuan, emergency, patientName)
+}
+
+export function agreementTypeFromLegacyIsAdult(isAdult: boolean): ConsultationAgreementType {
+  return isAdult ? 'TONGXIN' : 'YANGFAN'
+}
+
+export function resolveProxyAgreementType(order: {
+  proxyAgreementType?: string | null
+  proxyAgreementIsAdult?: boolean | null
+}): ConsultationAgreementType | null {
+  const raw = (order.proxyAgreementType || '').trim().toUpperCase()
+  if (raw === 'TONGXIN' || raw === 'YANGFAN' || raw === 'QIHANG') {
+    return raw as ConsultationAgreementType
+  }
+  if (order.proxyAgreementIsAdult === true) return 'TONGXIN'
+  if (order.proxyAgreementIsAdult === false) return 'YANGFAN'
+  return null
 }
 
 /** @deprecated 兼容旧调用：成年协议 → 同心理咨询协议 */

@@ -10,13 +10,17 @@ import {
   type PatientSource,
   resolveHighestStaffRole,
 } from "@/config/userRoleMeta";
+import {
+  subtypeSelectOptionsForRoleGroup,
+  type RoleGroupValue,
+} from "@/config/roleGroupFilter";
 import { roleLabel } from "@/lib/format";
 import { formatPatientNameWithContractTag } from "@/lib/patientContract";
 import type { AdminUser, Role } from "@/types/api";
 
 import { getName } from "@/lib/display";
 import { getPageItems } from "@/lib/pagination";
-import type { BindUserRolePayload, CreateUserByMobilePayload } from "@/services/roles";
+import type { BindUserRolePayload, CreateUserByMobilePayload, FetchAdminUsersParams } from "@/services/roles";
 import { RoleCreateModal } from "@/components/roles/RoleCreateModal";
 import { RoleEditModal } from "@/components/roles/RoleEditModal";
 import {
@@ -43,6 +47,7 @@ export function RolesPanel({
   onCreateUser,
   onUpdateRole,
   onDeleteUser,
+  onQuery,
 }: {
   users?: AdminUser[];
   currentUserId: number;
@@ -57,6 +62,7 @@ export function RolesPanel({
   onCreateUser: (payload: CreateUserByMobilePayload) => Promise<void>;
   onUpdateRole: (userId: number, role: Role, payload?: BindUserRolePayload) => void;
   onDeleteUser: (userId: number) => Promise<void>;
+  onQuery: (params: FetchAdminUsersParams) => void;
 }) {
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
   const [creating, setCreating] = useState(false);
@@ -64,9 +70,14 @@ export function RolesPanel({
   const [selectedPatientSource, setSelectedPatientSource] = useState<PatientSource>("PROFESSIONAL");
   const [selectedCounselorType, setSelectedCounselorType] = useState<CounselorType>("PROFESSIONAL");
   const [keywordInput, setKeywordInput] = useState("");
-  const [keyword, setKeyword] = useState("");
+  const [roleGroupInput, setRoleGroupInput] = useState<RoleGroupValue>("");
+  const [subtypeInput, setSubtypeInput] = useState("");
   const [deletingUserId, setDeletingUserId] = useState<number | null>(null);
   const allUsers = useMemo(() => users || [], [users]);
+  const subtypeOptions = useMemo(
+    () => subtypeSelectOptionsForRoleGroup(roleGroupInput),
+    [roleGroupInput],
+  );
   const actorRole = useMemo(() => resolveHighestStaffRole(currentUserRoles), [currentUserRoles]);
   const actorIsKeyLoginAdmin = useMemo(
     () => isKeyLoginAdminOpenId(currentUserOpenId),
@@ -76,29 +87,24 @@ export function RolesPanel({
     () => getManageableRoles(currentUserRoles, { actorIsKeyLoginAdmin }),
     [actorIsKeyLoginAdmin, currentUserRoles],
   );
-  const filteredUsers = useMemo(() => {
-    const normalizedKeyword = keyword.trim().toLowerCase();
-    if (!normalizedKeyword) {
-      return allUsers;
-    }
-    return allUsers.filter((user) => {
-      const name = getName(user).toLowerCase();
-      const mobile = user.mobile?.toLowerCase() || "";
-      const contractTag = user.contractTag?.toLowerCase() || "";
-      return name.includes(normalizedKeyword) || mobile.includes(normalizedKeyword) || contractTag.includes(normalizedKeyword);
-    });
-  }, [allUsers, keyword]);
+  const filteredUsers = allUsers;
   const { currentPage, items } = getPageItems(filteredUsers, page, pageSize);
 
   const submitQuery = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setKeyword(keywordInput.trim());
+    onQuery({
+      keyword: keywordInput.trim() || undefined,
+      role_group: roleGroupInput || undefined,
+      subtype: subtypeInput || undefined,
+    });
     onPageChange(1);
   };
 
   const resetQuery = () => {
     setKeywordInput("");
-    setKeyword("");
+    setRoleGroupInput("");
+    setSubtypeInput("");
+    onQuery({});
     onPageChange(1);
   };
 
@@ -211,6 +217,41 @@ export function RolesPanel({
               onChange={(event) => setKeywordInput(event.target.value)}
               placeholder="请输入姓名或电话"
             />
+          </QueryField>
+          <QueryField label="角色分组">
+            <select
+              className={`${queryControlClass} appearance-auto`}
+              value={roleGroupInput}
+              onChange={(event) => {
+                const nextGroup = event.target.value as RoleGroupValue;
+                setRoleGroupInput(nextGroup);
+                setSubtypeInput("");
+              }}
+            >
+              {ROLE_GROUP_OPTIONS.map((option) => (
+                <option key={option.value || "all"} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </QueryField>
+          <QueryField label="具体类型">
+            <select
+              className={`${queryControlClass} appearance-auto`}
+              value={subtypeInput}
+              disabled={subtypeOptions.length === 0}
+              onChange={(event) => setSubtypeInput(event.target.value)}
+            >
+              {subtypeOptions.length === 0 ? (
+                <option value="">请先选择咨询师或来访</option>
+              ) : (
+                subtypeOptions.map((option) => (
+                  <option key={option.value || "all"} value={option.value}>
+                    {option.label}
+                  </option>
+                ))
+              )}
+            </select>
           </QueryField>
         </div>
         <div className="mt-4 flex flex-wrap gap-3">

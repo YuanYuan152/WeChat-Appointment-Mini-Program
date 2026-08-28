@@ -1,7 +1,6 @@
 <template>
   <view class="page-ops-home">
     <view class="hero-card">
-      <text class="hero-title">管理工作台</text>
       <text class="hero-subtitle">咨询助理、咨询主任、管理员共用；管理排期、咨询室与用户</text>
     </view>
 
@@ -109,12 +108,11 @@ const navigate = (path: string) => {
 .hero-card {
   background: linear-gradient(135deg, #3D5A4E, #2F4A40);
   border-radius: 24rpx;
-  padding: 44rpx 36rpx;
+  padding: 36rpx;
   margin-bottom: 28rpx;
   box-shadow: 0 8rpx 32rpx rgba(61, 90, 78, 0.15);
 }
-.hero-title { display: block; font-size: 40rpx; font-weight: 600; color: #fff; letter-spacing: 2rpx; }
-.hero-subtitle { display: block; margin-top: 12rpx; font-size: 26rpx; color: rgba(255,255,255,0.8); line-height: 1.6; }
+.hero-subtitle { display: block; font-size: 26rpx; color: rgba(255,255,255,0.9); line-height: 1.6; }
 
 .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20rpx; }
 .grid-item {

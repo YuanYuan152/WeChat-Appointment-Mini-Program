@@ -9,7 +9,9 @@ export interface ContentListItem {
   meta?: string | null;
   date?: string | null;
   summary?: string | null;
+  body?: string | null;
   imageUrl?: string | null;
+  pageKey?: string;
 }
 
 export function ContentList({
@@ -18,6 +20,9 @@ export function ContentList({
   total,
   page,
   pageSize,
+  createLabel = "新增",
+  allowDelete = true,
+  hideImageColumn = false,
   onCreateClick,
   onEdit,
   onDelete,
@@ -29,6 +34,9 @@ export function ContentList({
   total: number;
   page?: number;
   pageSize?: number;
+  createLabel?: string;
+  allowDelete?: boolean;
+  hideImageColumn?: boolean;
   onCreateClick: () => void;
   onEdit: (item: ContentListItem) => void;
   onDelete: (id: number) => void;
@@ -46,7 +54,7 @@ export function ContentList({
             type="button"
             onClick={onCreateClick}
           >
-            新增
+            {createLabel}
           </button>
         }
       />
@@ -57,10 +65,10 @@ export function ContentList({
         <div className="overflow-hidden">
           <table className="w-full table-fixed border-collapse text-sm">
             <colgroup>
-              <col className="w-[24%]" />
+              <col className={hideImageColumn ? "w-[28%]" : "w-[24%]"} />
               <col className="w-[11%]" />
-              <col className="w-[21%]" />
-              <col className="w-[14%]" />
+              <col className={hideImageColumn ? "w-[33%]" : "w-[21%]"} />
+              {!hideImageColumn && <col className="w-[14%]" />}
               <col className="w-[14%]" />
               <col className="w-[16%]" />
             </colgroup>
@@ -69,8 +77,8 @@ export function ContentList({
                 <th className="px-5 py-3 font-medium">标题</th>
                 <th className="px-5 py-3 font-medium">状态/类型</th>
                 <th className="px-5 py-3 font-medium">摘要</th>
-                <th className="px-5 py-3 font-medium">图片</th>
-                <th className="px-5 py-3 font-medium">创建时间</th>
+                {!hideImageColumn && <th className="px-5 py-3 font-medium">图片</th>}
+                <th className="px-5 py-3 font-medium">更新时间</th>
                 <th className="px-6 py-3 text-right font-medium">操作</th>
               </tr>
             </thead>
@@ -89,18 +97,20 @@ export function ContentList({
                   <td className="px-5 py-4 text-[var(--lxxl-muted)]">
                     <div className="line-clamp-2">{item.summary || "-"}</div>
                   </td>
-                  <td className="px-5 py-4">
-                    <ContentImageThumbnail imageUrl={item.imageUrl} title={item.title} />
-                  </td>
+                  {!hideImageColumn && (
+                    <td className="px-5 py-4">
+                      <ContentImageThumbnail imageUrl={item.imageUrl} title={item.title} />
+                    </td>
+                  )}
                   <td className="whitespace-nowrap px-5 py-4 text-[var(--lxxl-muted)]">{formatDate(item.date)}</td>
                   <td className="px-6 py-4 text-right">
                     <div className="inline-flex justify-end gap-4 whitespace-nowrap">
-                      <TableActionButton onClick={() => onEdit(item)}>
-                        修改
-                      </TableActionButton>
-                      <TableActionButton tone="danger" onClick={() => onDelete(item.id)}>
-                        删除
-                      </TableActionButton>
+                      <TableActionButton onClick={() => onEdit(item)}>修改</TableActionButton>
+                      {allowDelete ? (
+                        <TableActionButton tone="danger" onClick={() => onDelete(item.id)}>
+                          删除
+                        </TableActionButton>
+                      ) : null}
                     </div>
                   </td>
                 </tr>

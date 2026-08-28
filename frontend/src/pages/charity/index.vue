@@ -1,5 +1,5 @@
 <template>
-  <view class="page-about">
+  <view class="page-charity">
     <view class="hero-card">
       <text class="hero-title">{{ content.title }}</text>
       <text v-if="content.subtitle" class="hero-subtitle">{{ content.subtitle }}</text>
@@ -12,6 +12,15 @@
         class="info-paragraph"
       >{{ p }}</text>
     </view>
+
+    <view class="action-row">
+      <view class="action-btn" @click="goContact">
+        <text class="action-text">咨询助理</text>
+      </view>
+      <view class="action-btn outline" @click="goBooking">
+        <text class="action-text">预约咨询</text>
+      </view>
+    </view>
   </view>
 </template>
 
@@ -19,20 +28,28 @@
 import { onMounted, ref } from 'vue'
 import {
   fetchPublicSiteContent,
-  fallbackBrandContent,
+  fallbackCharityContent,
   resolvePageContent,
 } from '@/utils/siteContentApi'
 
-const content = ref(fallbackBrandContent())
+const content = ref(fallbackCharityContent())
 
 onMounted(async () => {
   const payload = await fetchPublicSiteContent()
-  content.value = resolvePageContent(payload?.pages, 'brand', fallbackBrandContent())
+  content.value = resolvePageContent(payload?.pages, 'charity', fallbackCharityContent())
 })
+
+const goContact = () => {
+  uni.navigateTo({ url: '/pages/contact/index' })
+}
+
+const goBooking = () => {
+  uni.navigateTo({ url: '/pages/consultant/list' })
+}
 </script>
 
 <style scoped>
-.page-about {
+.page-charity {
   min-height: 100vh;
   background: #F7F5F2;
   padding: 32rpx;
@@ -67,6 +84,7 @@ onMounted(async () => {
   border-radius: 24rpx;
   padding: 40rpx 32rpx;
   box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.03);
+  margin-bottom: 32rpx;
 }
 
 .info-paragraph {
@@ -79,5 +97,33 @@ onMounted(async () => {
 
 .info-paragraph:last-child {
   margin-bottom: 0;
+}
+
+.action-row {
+  display: flex;
+  gap: 20rpx;
+}
+
+.action-btn {
+  flex: 1;
+  text-align: center;
+  background: #3D5A4E;
+  border-radius: 16rpx;
+  padding: 24rpx 0;
+}
+
+.action-btn.outline {
+  background: #F0EDE8;
+  border: 1rpx solid #E8E4DE;
+}
+
+.action-text {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #fff;
+}
+
+.action-btn.outline .action-text {
+  color: #3D5A4E;
 }
 </style>

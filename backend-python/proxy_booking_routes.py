@@ -49,7 +49,11 @@ class ProxyPushOrderRequest(BaseModel):
     schedule_id: Optional[int] = None
     agreement_is_adult: Optional[bool] = Field(
         None,
-        description="未签约来访必填：true=同心理咨询协议，false=“扬帆计划”协议",
+        description="未签约来访必填（兼容）：true=同心理咨询协议，false=“扬帆计划”协议",
+    )
+    agreement_type: Optional[str] = Field(
+        None,
+        description="未签约来访必填：TONGXIN / YANGFAN / QIHANG",
     )
 
 
@@ -178,6 +182,7 @@ def proxy_push_order(
             room_id=body.room_id,
             existing_schedule_id=body.schedule_id,
             agreement_is_adult=body.agreement_is_adult,
+            agreement_type=body.agreement_type,
         )
         db.commit()
         return result

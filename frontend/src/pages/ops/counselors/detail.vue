@@ -247,7 +247,10 @@ import { formatPatientInline } from '@/utils/patientContract'
 import { fixImageUrl, resolveCounselorPublicAvatar, DEFAULT_COUNSELOR_PUBLIC_AVATAR, toStoredUploadPath } from '@/utils/image'
 
 const defaultAvatar = DEFAULT_COUNSELOR_PUBLIC_AVATAR
-const genderOptions = ['男', '女']
+// 保留一个真正的未选择项，避免表单为空时 picker 内部却默认选中“男”。
+// 微信小程序中再次确认当前第 0 项不会稳定触发 change，之前会导致界面像是
+// 选了“男”，但 form.gender 仍为空，最终无法保存。
+const genderOptions = ['请选择', '男', '女']
 const modeOptions = ['视频咨询', '面询', '视频咨询/面询']
 
 function normalizeModeLabel(mode?: string) {
@@ -365,7 +368,8 @@ const toggleExpand = (key: SectionKey) => {
 }
 
 const onGenderChange = (e: any) => {
-  form.value.gender = genderOptions[Number(e.detail.value)] || genderOptions[0]
+  const selected = genderOptions[Number(e.detail.value)]
+  form.value.gender = selected === '男' || selected === '女' ? selected : ''
 }
 
 const onModeChange = (e: any) => {

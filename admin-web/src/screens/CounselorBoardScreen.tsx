@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { fetchCounselorBoard, fetchCounselorBoardDetail, updateStaffRemark } from "@/services/boards";
+import { fetchCounselorBoard, fetchCounselorBoardDetail, updateStaffRemark, type CounselorBoardFilters } from "@/services/boards";
 import { fetchAdminCounselorIntro, updateAdminCounselorIntro } from "@/services/adminCounselors";
 import { AppRoute, useAppRoute } from "@/components/AppRoute";
 import { CounselorBoardPanel } from "@/panels/CounselorBoardPanel";
@@ -32,6 +32,8 @@ function CounselorBoardScreenContent() {
   const [listLoading, setListLoading] = useState(false);
   const [keyword, setKeyword] = useState("");
   const [draftKeyword, setDraftKeyword] = useState("");
+  const [visibility, setVisibility] = useState<CounselorBoardFilters["visibility"]>("");
+  const [draftVisibility, setDraftVisibility] = useState<CounselorBoardFilters["visibility"]>("");
   const [selectedCounselorBoard, setSelectedCounselorBoard] = useState<CounselorBoardDetail>();
   const [detailLoading, setDetailLoading] = useState(false);
   const [remarkSavingAccountId, setRemarkSavingAccountId] = useState<number>();
@@ -52,10 +54,10 @@ function CounselorBoardScreenContent() {
     setListLoading(true);
     clearNotice();
     try {
-      const counselorBoard = await fetchCounselorBoard(keyword, {
-        page,
-        pageSize,
-      });
+      const counselorBoard = await fetchCounselorBoard(
+        { keyword, visibility: visibility || undefined },
+        { page, pageSize },
+      );
       if (listRequestSeq.current !== requestSeq) {
         return false;
       }
@@ -71,7 +73,7 @@ function CounselorBoardScreenContent() {
         setListLoading(false);
       }
     }
-  }, [clearNotice, keyword, page, pageSize, showNotice]);
+  }, [clearNotice, keyword, page, pageSize, showNotice, visibility]);
 
   useEffect(() => {
     void loadData();
@@ -122,32 +124,28 @@ function CounselorBoardScreenContent() {
 
   const search = useCallback(() => {
     closeDetail();
-    if (page === 1) {
-      if (keyword === draftKeyword) {
-        void loadData();
-      } else {
-        setKeyword(draftKeyword);
-      }
+    const nextVisibility = draftVisibility || "";
+    if (page === 1 && keyword === draftKeyword && visibility === nextVisibility) {
+      void loadData();
       return;
     }
     setPage(1);
     setKeyword(draftKeyword);
-  }, [closeDetail, draftKeyword, keyword, loadData, page]);
+    setVisibility(nextVisibility);
+  }, [closeDetail, draftKeyword, draftVisibility, keyword, loadData, page, visibility]);
 
   const resetKeyword = useCallback(() => {
     setDraftKeyword("");
+    setDraftVisibility("");
     closeDetail();
-    if (page === 1) {
-      if (!keyword) {
-        void loadData();
-      } else {
-        setKeyword("");
-      }
+    if (page === 1 && !keyword && !visibility) {
+      void loadData();
       return;
     }
     setPage(1);
     setKeyword("");
-  }, [closeDetail, keyword, loadData, page]);
+    setVisibility("");
+  }, [closeDetail, keyword, loadData, page, visibility]);
 
   const changePageSize = useCallback((nextPageSize: number) => {
     setPage(1);
@@ -285,6 +283,8 @@ function CounselorBoardScreenContent() {
       detailLoading={detailLoading}
       keyword={draftKeyword}
       setKeyword={updateKeyword}
+      visibility={draftVisibility}
+      setVisibility={setDraftVisibility}
       onSearch={search}
       onReset={resetKeyword}
       onPageChange={setPage}

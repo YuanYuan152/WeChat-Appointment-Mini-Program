@@ -20,6 +20,7 @@ export interface PatientOrder {
   contractAgreementSigned?: boolean
   isProxyOrder?: boolean
   proxyAgreementIsAdult?: boolean | null
+  proxyAgreementType?: string | null
   proxyAgreementLabel?: string | null
 }
 

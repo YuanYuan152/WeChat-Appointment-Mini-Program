@@ -65,7 +65,7 @@ import { ref, onMounted } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { API_ENDPOINTS } from '@/config/api'
 import { httpV2 } from '@/utils/http'
-import { isLoggedIn as checkIsLoggedIn } from '@/utils/auth'
+import { isLoggedIn as checkIsLoggedIn, goToLogin as authGoToLogin } from '@/utils/auth'
 import { resolveCounselorPublicAvatar } from '@/utils/image'
 
 interface FavoriteItem {
@@ -102,6 +102,7 @@ const loadFavorites = async () => {
   if (!isLoggedIn.value) {
     favorites.value = []
     loading.value = false
+    authGoToLogin('/pages/user/favorites')
     return
   }
   try {
@@ -136,7 +137,7 @@ const goDetail = (id?: number) => {
 }
 
 const goLogin = () => {
-  uni.navigateTo({ url: '/pages/auth/login' })
+  authGoToLogin('/pages/user/favorites')
 }
 
 const goConsultants = () => {

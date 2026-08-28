@@ -82,7 +82,8 @@ export interface ScreenData {
   adminUsers?: AdminUser[];
   banners?: Banner[];
   activities?: Activity[];
-  articles?: PagedResult<Article>;
+  sitePages?: SitePage[];
+  siteGuideItems?: SiteGuideItem[];
   schedules?: ScheduleOverview;
   rooms?: Room[];
   roomStatus?: RoomStatusSnapshot;
@@ -139,13 +140,21 @@ export interface PaginationParams {
   pageSize: number;
 }
 
-export type ContentKind = "banner" | "activity" | "article";
+export type ContentKind =
+  | "banner"
+  | "activity"
+  | "brand"
+  | "consultation_guide"
+  | "charity"
+  | "contact";
 
 export interface ContentDraft {
   kind: ContentKind;
   title: string;
+  body: string;
   summary: string;
   imageUrl: string;
+  pageKey?: string;
 }
 
 export interface SummaryRow {

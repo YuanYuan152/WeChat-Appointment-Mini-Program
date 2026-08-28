@@ -228,21 +228,94 @@ export const handleRequireLogin = (
   redirectUrl?: string
 ): void => {
   if (isLoggedIn()) {
-    // 已登录，直接执行操作
     action()
-  } else {
-    // 未登录，显示登录提示
-    uni.showModal({
-      title: '需要登录',
-      content: '此功能需要登录后才能使用，是否立即登录？',
-      success: (res) => {
-        if (res.confirm) {
-          // 跳转到登录页面，不传递跳转地址，登录后返回原页面
-          uni.navigateTo({ url: '/pages/auth/login' })
-        }
-      }
-    })
+    return
   }
+  goToLogin(redirectUrl || getCurrentPagePath())
+}
+
+const TAB_PAGE_PREFIXES = [
+  '/pages/index/index',
+  '/pages/consultant/list',
+  '/pages/tab-slot/index',
+  '/pages/user/profile',
+]
+
+/** 当前页完整路径（含 query），用于登录后回跳 */
+export const getCurrentPagePath = (): string => {
+  try {
+    const pages = getCurrentPages()
+    const current = pages[pages.length - 1] as {
+      route?: string
+      options?: Record<string, string | undefined>
+      $page?: { fullPath?: string }
+    } | undefined
+    if (!current) return ''
+    const fullPath = current.$page?.fullPath
+    if (fullPath) {
+      return fullPath.startsWith('/') ? fullPath : `/${fullPath}`
+    }
+    const route = current.route ? `/${current.route}` : ''
+    if (!route) return ''
+    const options = current.options || {}
+    const query = Object.keys(options)
+      .filter((key) => options[key] != null && options[key] !== '')
+      .map((key) => `${encodeURIComponent(key)}=${encodeURIComponent(String(options[key]))}`)
+      .join('&')
+    return query ? `${route}?${query}` : route
+  } catch {
+    return ''
+  }
+}
+
+export const isTabPagePath = (url?: string): boolean => {
+  if (!url) return false
+  const path = url.split('?')[0]
+  const normalized = path.startsWith('/') ? path : `/${path}`
+  return TAB_PAGE_PREFIXES.some((prefix) => normalized === prefix)
+}
+
+let authRedirectLockUntil = 0
+
+const isAlreadyOnLoginPage = (): boolean => {
+  const path = getCurrentPagePath()
+  return path.includes('/pages/auth/login')
+}
+
+/**
+ * 未登录或鉴权失败时跳转登录页（防抖，避免并发 401 连开多个登录页）。
+ * 不弹「未提供有效的 Authorization」类错误，直接引导登录。
+ */
+export const redirectToLoginForAuth = (redirectUrl?: string): void => {
+  const now = Date.now()
+  if (now < authRedirectLockUntil) return
+  if (isAlreadyOnLoginPage()) return
+  authRedirectLockUntil = now + 1600
+
+  const target = redirectUrl || getCurrentPagePath()
+  if (target && !target.includes('/pages/auth/login')) {
+    try {
+      uni.setStorageSync('redirectAfterLogin', target)
+    } catch {
+      /* ignore */
+    }
+  }
+
+  uni.navigateTo({
+    url: '/pages/auth/login',
+    fail: () => {
+      uni.reLaunch({ url: '/pages/auth/login' })
+    },
+  })
+}
+
+/**
+ * 页面进入时校验登录；未登录则跳转登录并返回 false。
+ */
+export const ensureLoggedInOrRedirect = (redirectUrl?: string): boolean => {
+  if (isLoggedIn()) return true
+  redirectToLoginForAuth(redirectUrl || getCurrentPagePath())
+  return false
 }
 
 /**
@@ -250,8 +323,14 @@ export const handleRequireLogin = (
  * @param redirectUrl 登录成功后跳转的页面
  */
 export const goToLogin = (redirectUrl?: string): void => {
-  const url = redirectUrl ? `/pages/auth/login?redirect=${encodeURIComponent(redirectUrl)}` : '/pages/auth/login'
-  uni.navigateTo({ url })
+  if (redirectUrl) {
+    try {
+      uni.setStorageSync('redirectAfterLogin', redirectUrl)
+    } catch {
+      /* ignore */
+    }
+  }
+  redirectToLoginForAuth(redirectUrl)
 }
 
 /**
@@ -288,4 +367,4 @@ export const checkLoginAndRedirect = (redirectUrl?: string): void => {
   if (!isLoggedIn()) {
     goToLogin(redirectUrl)
   }
-} 
+}

@@ -52,6 +52,7 @@ import { onLoad, onShow } from '@dcloudio/uni-app'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
 import OrderPaymentSheet from '@/components/OrderPaymentSheet.vue'
+import { ensureLoggedInOrRedirect } from '@/utils/auth'
 import { type PatientOrder, expireHintText, formatOrderFeeCents, formatOrderTime, isFreeOrderFee } from '@/utils/orderPayment'
 
 const orders = ref<PatientOrder[]>([])
@@ -138,6 +139,10 @@ onLoad((opts) => {
 })
 
 onShow(() => {
+  if (!ensureLoggedInOrRedirect('/pages/patient/orders/list')) {
+    loading.value = false
+    return
+  }
   // 已有列表时静默刷新，避免整页白屏闪烁
   loadOrders({ silent: orders.value.length > 0 })
 })

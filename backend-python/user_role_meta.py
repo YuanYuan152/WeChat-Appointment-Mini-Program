@@ -36,6 +36,15 @@ COUNSELOR_TYPES = {
     "PROFESSIONAL": "专业咨询师",
 }
 
+# 角色&权限绑定列表：一级角色分组
+ADMIN_ROLE_GROUPS = {
+    "counselor": frozenset({"Counselor"}),
+    "patient": frozenset({"Patient"}),
+    "staff": frozenset({"Assistant", "Ops", "Admin", "Tester"}),
+}
+
+VALID_ADMIN_ROLE_GROUPS = frozenset(ADMIN_ROLE_GROUPS.keys())
+
 # 心理咨询列表/详情：以下角色可见全部咨询师（含公益）
 COUNSELOR_DIRECTORY_FULL_VISIBILITY_ROLES = frozenset({
     "Counselor",
@@ -111,3 +120,23 @@ def validate_counselor_type(code: Optional[str]) -> str:
     if code not in COUNSELOR_TYPES:
         raise ValueError("请选择咨询师类型")
     return code
+
+
+def normalize_admin_user_list_filters(
+    role_group: Optional[str],
+    subtype: Optional[str],
+) -> tuple[Optional[str], Optional[str]]:
+    """校验并规范化用户列表的角色分组 / 二级类型筛选参数。"""
+    group = (role_group or "").strip().lower() or None
+    sub = (subtype or "").strip().upper() or None
+    if group and group not in VALID_ADMIN_ROLE_GROUPS:
+        raise ValueError("无效的角色分组")
+    if sub and not group:
+        raise ValueError("请先选择角色分组")
+    if sub and group == "staff":
+        raise ValueError("后台管理者不支持二级类型筛选")
+    if sub and group == "counselor" and sub not in COUNSELOR_TYPES:
+        raise ValueError("无效的咨询师类型")
+    if sub and group == "patient" and sub not in PATIENT_SOURCES:
+        raise ValueError("无效的来访类型")
+    return group, sub

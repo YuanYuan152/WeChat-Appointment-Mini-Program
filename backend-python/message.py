@@ -6,7 +6,7 @@ import os
 from datetime import datetime
 from typing import List, Optional
 
-from app_time import china_now
+from app_time import china_now, utc_to_china
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -118,9 +118,29 @@ def create_message(
         Content=content,
         RelatedType=related_type,
         RelatedId=related_id,
+        # 系统操作时间统一以 UTC 落库，API 返回时再转换为中国标准时间。
+        # 不依赖数据库服务器的本地时区，避免部署环境变化导致消息时间漂移。
+        CreatedAt=datetime.utcnow(),
     )
     db.add(msg)
     return msg
+
+
+def _message_response(msg: AppMessage, db: Session) -> dict:
+    """统一消息 API 的时间出口为 Asia/Shanghai（UTC+8）。"""
+    enriched = enrich_message(msg, db)
+    return {
+        "Id": enriched.Id,
+        "AccountId": enriched.AccountId,
+        "Type": enriched.Type,
+        "Title": enriched.Title,
+        "Content": enriched.Content,
+        "RelatedType": enriched.RelatedType,
+        "RelatedId": enriched.RelatedId,
+        "IsRead": enriched.IsRead,
+        "CreatedAt": utc_to_china(enriched.CreatedAt),
+        "ReadAt": utc_to_china(enriched.ReadAt),
+    }
 
 
 def log_subscribe_event(
@@ -174,7 +194,7 @@ def list_messages(
         )
     query = apply_message_search(query, q)
     rows = query.order_by(AppMessage.CreatedAt.desc()).limit(100).all()
-    return [enrich_message(m, db) for m in rows]
+    return [_message_response(m, db) for m in rows]
 
 
 @router.get("/unread-count", summary="未读消息数")
@@ -216,7 +236,7 @@ def mark_read(
     msg.ReadAt = datetime.utcnow()
     db.commit()
     db.refresh(msg)
-    return enrich_message(msg, db)
+    return _message_response(msg, db)
 
 
 @router.get("/templates", summary="按 event_key 列表返回需要前端请求授权的订阅消息模板 ID")
@@ -346,7 +366,7 @@ def get_message(
     )
     if not msg:
         raise HTTPException(status_code=404, detail="消息不存在")
-    return enrich_message(msg, db)
+    return _message_response(msg, db)
 
 
 @router.post("/subscribe", summary="记录订阅消息授权与发送日志（mock 可替换真实模板）")
@@ -538,7 +558,7 @@ def create_system_message(
     )
     db.commit()
     db.refresh(msg)
-    return msg
+    return _message_response(msg, db)
 
 
 @router.post("/remind-tasks", summary="创建预约提醒任务")

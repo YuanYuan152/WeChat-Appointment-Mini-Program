@@ -105,6 +105,8 @@ export const API_ENDPOINTS = {
     counselorTimeSlots: (id: number | string) => `/api/mini/common/counselors/${id}/time-slots`,
     search: '/api/mini/common/search',
     systemSettings: '/api/mini/common/system-settings',
+    siteContent: '/api/mini/common/site-content',
+    siteGuideItem: (id: number | string) => `/api/mini/common/site-guide-items/${id}`,
   },
 
   // 患者
@@ -219,6 +221,8 @@ export const API_ENDPOINTS = {
     patientBoundCounselor: (id: number | string) => `/api/mini/admin/patients/${id}/bound-counselor`,
     counselors: '/api/mini/admin/counselors',
     counselorDetail: (id: number | string) => `/api/mini/admin/counselors/${id}`,
+    counselorPublicVisibility: (id: number | string) =>
+      `/api/mini/admin/counselors/${id}/public-visibility`,
     staffRemark: (accountId: number | string) => `/api/mini/admin/accounts/${accountId}/staff-remark`,
     consultationFeedbacks: '/api/mini/admin/consultation-feedbacks',
     pricingCounselors: '/api/mini/admin/pricing/counselors',

@@ -27,8 +27,9 @@
           <text class="age-title">选择签署协议</text>
           <text class="age-desc">请选择需要签署的心理咨询协议</text>
           <view class="age-btns">
-            <button class="age-btn fill" @tap="confirmAge(true)">{{ tongxinAgreementTitle }}</button>
-            <button class="age-btn outline" @tap="confirmAge(false)">{{ yangfanAgreementTitle }}</button>
+            <button class="age-btn fill" @tap="confirmAgreementType('TONGXIN')">{{ tongxinAgreementTitle }}</button>
+            <button class="age-btn outline" @tap="confirmAgreementType('YANGFAN')">{{ yangfanAgreementTitle }}</button>
+            <button class="age-btn outline" @tap="confirmAgreementType('QIHANG')">{{ qihangAgreementTitle }}</button>
           </view>
         </view>
 
@@ -237,12 +238,14 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
 import {
+  type ConsultationAgreementType,
   TONGXIN_AGREEMENT_TITLE,
   YANGFAN_AGREEMENT_TITLE,
-  buildTongxinConsultationAgreement,
-  buildYangfanConsultationAgreement,
+  QIHANG_AGREEMENT_TITLE,
+  buildAgreementByType,
   currentAgreementDate,
   normalizeAgreementPhone,
+  resolveProxyAgreementType,
   validateAgreementEmergencyContact,
 } from '@/utils/consultationAgreement'
 import {
@@ -259,6 +262,7 @@ import {
 
 const tongxinAgreementTitle = TONGXIN_AGREEMENT_TITLE
 const yangfanAgreementTitle = YANGFAN_AGREEMENT_TITLE
+const qihangAgreementTitle = QIHANG_AGREEMENT_TITLE
 
 const props = defineProps<{
   visible: boolean
@@ -278,7 +282,7 @@ const agreed = ref(false)
 const submittingAgreement = ref(false)
 
 const showAgeConfirm = ref(true)
-const intakeIsAdult = ref<boolean | null>(null)
+const intakeAgreementType = ref<ConsultationAgreementType | null>(null)
 const agreementText = ref('')
 const agreementDate = ref('')
 const hasSignature = ref(false)
@@ -322,13 +326,13 @@ const realNameError = computed(() =>
 )
 const canSubmitAgreement = computed(() =>
   hasSignature.value
-  && effectiveIsAdult.value !== null
+  && effectiveAgreementType.value !== null
   && !realNameError.value
   && !emergencyError.value,
 )
 const agreementSubmitHint = computed(() => {
   if (submittingAgreement.value) return ''
-  if (effectiveIsAdult.value === null) {
+  if (effectiveAgreementType.value === null) {
     return hasPresetAgreement.value ? '请先完成签名' : '请先选择协议并完成签名'
   }
   if (realNameError.value) return realNameError.value
@@ -343,10 +347,9 @@ const showAgreementStep = computed(() =>
   ),
 )
 
-const hasPresetAgreement = computed(() => {
-  const preset = order.value?.proxyAgreementIsAdult
-  return preset === true || preset === false
-})
+const hasPresetAgreement = computed(() =>
+  Boolean(order.value && resolveProxyAgreementType(order.value)),
+)
 
 const presetAgreementTip = computed(() => {
   if (hasPresetAgreement.value && order.value?.proxyAgreementLabel) {
@@ -355,10 +358,10 @@ const presetAgreementTip = computed(() => {
   return '您与该咨询师尚未签约，确认前请先选择协议并完成电子签名。'
 })
 
-const effectiveIsAdult = computed(() => {
-  if (intakeIsAdult.value !== null) return intakeIsAdult.value
-  const preset = order.value?.proxyAgreementIsAdult
-  return preset === true || preset === false ? preset : null
+const effectiveAgreementType = computed((): ConsultationAgreementType | null => {
+  if (intakeAgreementType.value) return intakeAgreementType.value
+  if (order.value) return resolveProxyAgreementType(order.value)
+  return null
 })
 
 const sheetTitle = computed(() =>
@@ -391,7 +394,7 @@ const scrollAreaStyle = computed(() => {
 
 const resetAgreementState = () => {
   showAgeConfirm.value = true
-  intakeIsAdult.value = null
+  intakeAgreementType.value = null
   agreementText.value = ''
   agreementDate.value = ''
   hasSignature.value = false
@@ -409,12 +412,16 @@ const resetAgreementState = () => {
 }
 
 const rebuildAgreementText = () => {
-  if (!order.value || effectiveIsAdult.value === null) return
+  if (!order.value || !effectiveAgreementType.value) return
   const counselorName = order.value.counselorName || '咨询师'
   const priceYuan = Math.round((order.value.TotalFee || 0) / 100)
-  agreementText.value = effectiveIsAdult.value
-    ? buildTongxinConsultationAgreement(counselorName, priceYuan, emergencyPayload.value, realName.value)
-    : buildYangfanConsultationAgreement(counselorName, priceYuan, emergencyPayload.value, realName.value)
+  agreementText.value = buildAgreementByType(
+    effectiveAgreementType.value,
+    counselorName,
+    priceYuan,
+    emergencyPayload.value,
+    realName.value,
+  )
   agreementDate.value = currentAgreementDate()
 }
 
@@ -440,9 +447,10 @@ const prefillEmergencyContact = async () => {
 }
 
 const applyPresetAgreementIfNeeded = () => {
-  const preset = order.value?.proxyAgreementIsAdult
-  if (preset !== true && preset !== false) return false
-  intakeIsAdult.value = preset
+  if (!order.value) return false
+  const preset = resolveProxyAgreementType(order.value)
+  if (!preset) return false
+  intakeAgreementType.value = preset
   showAgeConfirm.value = false
   rebuildAgreementText()
   prefillEmergencyContact()
@@ -518,9 +526,9 @@ watch(showAgreementStep, () => {
   if (props.visible) refreshWindowHeight()
 })
 
-const confirmAge = (isAdult: boolean) => {
+const confirmAgreementType = (type: ConsultationAgreementType) => {
   if (!order.value) return
-  intakeIsAdult.value = isAdult
+  intakeAgreementType.value = type
   showAgeConfirm.value = false
   rebuildAgreementText()
   prefillEmergencyContact()
@@ -589,7 +597,7 @@ const confirmSignature = () => {
 
 const submitAgreement = async () => {
   if (submittingAgreement.value) return
-  if (!order.value || !hasSignature.value || effectiveIsAdult.value === null) {
+  if (!order.value || !hasSignature.value || !effectiveAgreementType.value) {
     uni.showToast({
       title: agreementSubmitHint.value || (hasPresetAgreement.value ? '请先完成签名' : '请先选择协议并完成签名'),
       icon: 'none',
@@ -615,7 +623,7 @@ const submitAgreement = async () => {
     }
     const res = await httpV2.post<PatientOrder>(API_ENDPOINTS.payment.attachOrderAgreement, {
       order_id: order.value.Id,
-      is_adult: effectiveIsAdult.value,
+      agreement_type: effectiveAgreementType.value,
       signature_url: uploadRes.data.url,
       real_name: hasStoredRealName.value ? undefined : realName.value.trim(),
       emergency_contact: emergencyPayload.value.name,
@@ -840,10 +848,12 @@ const onConfirm = () => {
 }
 .age-btns {
   display: flex;
+  flex-wrap: wrap;
   gap: 20rpx;
 }
 .age-btn {
-  flex: 1;
+  flex: 1 1 calc(50% - 10rpx);
+  min-width: 240rpx;
   height: 80rpx;
   line-height: 80rpx;
   border-radius: 100rpx;

@@ -235,7 +235,16 @@
         {
             "path": "pages/about/index",
             "style": {
-                "navigationBarTitleText": "联系我们",
+                "navigationBarTitleText": "品牌介绍",
+                "navigationBarBackgroundColor": "#ffffff",
+                "navigationBarTextStyle": "black",
+                "backgroundColor": "#F7F5F2"
+            }
+        },
+        {
+            "path": "pages/charity/index",
+            "style": {
+                "navigationBarTitleText": "公益咨询",
                 "navigationBarBackgroundColor": "#ffffff",
                 "navigationBarTextStyle": "black",
                 "backgroundColor": "#F7F5F2"
@@ -357,7 +366,7 @@
                 {
                     "path": "index/index",
                     "style": {
-                        "navigationBarTitleText": "运营工作台",
+                        "navigationBarTitleText": "管理工作台",
                         "navigationBarBackgroundColor": "#ffffff",
                         "navigationBarTextStyle": "black",
                         "backgroundColor": "#F7F5F2"
@@ -558,7 +567,8 @@
                     "style": {
                         "navigationBarTitleText": "助理工作台",
                         "navigationBarBackgroundColor": "#3D5A4E",
-                        "navigationBarTextStyle": "white"
+                        "navigationBarTextStyle": "white",
+                        "navigationStyle": "custom"
                     }
                 },
                 {
@@ -634,7 +644,7 @@
                 {
                     "path": "guide",
                     "style": {
-                        "navigationBarTitleText": "了解咨询",
+                        "navigationBarTitleText": "关于咨询",
                         "navigationBarBackgroundColor": "#ffffff",
                         "navigationBarTextStyle": "black"
                     }
@@ -664,7 +674,8 @@
                     "style": {
                         "navigationBarTitleText": "咨询师工作台",
                         "navigationBarBackgroundColor": "#3D5A4E",
-                        "navigationBarTextStyle": "white"
+                        "navigationBarTextStyle": "white",
+                        "navigationStyle": "custom"
                     }
                 },
                 {

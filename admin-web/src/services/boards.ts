@@ -12,6 +12,11 @@ import type {
 
 import type { PaginationParams, UserBoardFilters } from "@/types/app";
 
+export type CounselorBoardFilters = {
+  keyword?: string;
+  visibility?: "" | "visible" | "hidden";
+};
+
 /** 与小程序管理端共用 /api/mini/admin；看板走 /boards/*，避免与 /patients/{id} 冲突。 */
 const PATIENT_BOARD = "/api/mini/admin/boards/patients";
 const COUNSELOR_BOARD = "/api/mini/admin/boards/counselors";
@@ -72,13 +77,16 @@ export function updateStaffRemark(accountId: number, remark: string) {
   });
 }
 
-export function fetchCounselorBoard(keyword: string, pagination: PaginationParams) {
+export function fetchCounselorBoard(filters: CounselorBoardFilters, pagination: PaginationParams) {
   const params = new URLSearchParams({
     page: String(pagination.page),
     page_size: String(pagination.pageSize),
   });
-  if (keyword) {
-    params.set("keyword", keyword);
+  if (filters.keyword) {
+    params.set("keyword", filters.keyword);
+  }
+  if (filters.visibility) {
+    params.set("visibility", filters.visibility);
   }
 
   return apiRequest<PagedResult<CounselorBoardSummary>>(`${COUNSELOR_BOARD}?${params.toString()}`);

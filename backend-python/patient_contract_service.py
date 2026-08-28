@@ -342,7 +342,10 @@ def current_patient_contract_order(
             AppOrder.Status == "PAID",
             AppOrder.PaidAt.isnot(None),
             AppOrder.PaidAt >= account.BoundCounselorChangedAt,
-            AppOrder.IntakeIsAdult.isnot(None),
+            or_(
+                AppOrder.IntakeIsAdult.isnot(None),
+                AppOrder.IntakeAgreementType.isnot(None),
+            ),
             AppOrder.IntakeSignatureUrl.isnot(None),
             AppConsultation.PatientId == int(account.Id),
             AppConsultation.CounselorId == int(account.BoundCounselorId),
@@ -419,6 +422,10 @@ def patient_contract_material(
         return None
 
     is_tongxin = bool(order.IntakeIsAdult)
+    from consultation_agreement_types import agreement_type_label, resolve_intake_agreement_type
+
+    intake_type = resolve_intake_agreement_type(order) or ("TONGXIN" if is_tongxin else "YANGFAN")
+    type_label = agreement_type_label(intake_type) or ("同心理咨询协议" if is_tongxin else "“扬帆计划”协议")
     signature_download_path = signature_download_url
     signed_at = order.PaidAt
     account_signed_at = getattr(account, "IntakeAgreementSignedAt", None)
@@ -430,9 +437,9 @@ def patient_contract_material(
     ):
         signed_at = account_signed_at
     return {
-        "agreementType": "TONGXIN" if is_tongxin else "YANGFAN",
-        "agreementTypeLabel": "同心理咨询协议" if is_tongxin else "“扬帆计划”协议",
-        "isTongxin": is_tongxin,
+        "agreementType": intake_type,
+        "agreementTypeLabel": type_label,
+        "isTongxin": intake_type == "TONGXIN",
         "signedAt": signed_at,
         "orderId": order.Id,
         "patientName": _base_patient_name(account),

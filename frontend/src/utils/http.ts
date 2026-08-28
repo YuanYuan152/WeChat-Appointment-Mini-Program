@@ -3,6 +3,7 @@
  */
 
 import { API_CONFIG, API_V2_CONFIG, getApiUrl } from '@/config/api'
+import { clearToken, redirectToLoginForAuth } from '@/utils/auth'
 
 // 响应数据类型定义
 export interface ApiResponse<T = any> {
@@ -48,6 +49,25 @@ function endLoading() {
       /* ignore: toast can't be found */
     }
   }
+}
+
+function isUnauthorizedMessage(message: string): boolean {
+  const text = (message || '').toLowerCase()
+  return (
+    text.includes('authorization') ||
+    text.includes('未提供有效') ||
+    text.includes('token 已过期') ||
+    text.includes('token已过期') ||
+    text.includes('token 无效') ||
+    text.includes('token无效') ||
+    text.includes('请重新登录') ||
+    text.includes('未登录')
+  )
+}
+
+function shouldRedirectForAuth(statusCode: number, code: number, message: string): boolean {
+  if (statusCode === 401 || code === 401) return true
+  return isUnauthorizedMessage(message)
 }
 
 // HTTP请求类
@@ -159,6 +179,23 @@ class HttpRequest {
     })
   }
 
+  private handleUnauthorized(message: string): ApiResponse {
+    try {
+      if (uni.getStorageSync('token')) {
+        clearToken()
+      }
+    } catch {
+      /* ignore */
+    }
+    redirectToLoginForAuth()
+    return {
+      code: 401,
+      msg: message || '请先登录',
+      data: undefined,
+      url: undefined,
+    }
+  }
+
   private handleResponse<T = any>(response: any, showError: boolean): ApiResponse<T> {
     const { statusCode, data: rawData } = response
     const data = this.parseResponseBody(rawData)
@@ -175,7 +212,12 @@ class HttpRequest {
             data: Object.prototype.hasOwnProperty.call(data, 'data') ? data.data : data,
             url: data.url
           }
-          if (result.code !== 0) this.showErrorToast(result.msg, showError)
+          if (result.code !== 0) {
+            if (shouldRedirectForAuth(statusCode, result.code, result.msg)) {
+              return this.handleUnauthorized(result.msg) as ApiResponse<T>
+            }
+            this.showErrorToast(result.msg, showError)
+          }
           return result
         }
         // 处理后端返回的 {code, msg, data} 格式（confirm-dev 等）
@@ -187,7 +229,12 @@ class HttpRequest {
             data: Object.prototype.hasOwnProperty.call(data, 'data') ? data.data : data,
             url: data.url
           }
-          if (result.code !== 0) this.showErrorToast(result.msg, showError)
+          if (result.code !== 0) {
+            if (shouldRedirectForAuth(statusCode, result.code, result.msg)) {
+              return this.handleUnauthorized(result.msg) as ApiResponse<T>
+            }
+            this.showErrorToast(result.msg, showError)
+          }
           return result
         }
         // 其他格式，直接返回
@@ -212,6 +259,9 @@ class HttpRequest {
         ? data.code
         : statusCode
       const message = this.extractErrorMessage(statusCode, data)
+      if (shouldRedirectForAuth(statusCode, code, message)) {
+        return this.handleUnauthorized(message) as ApiResponse<T>
+      }
       this.showErrorToast(message, showError)
       return {
         code,

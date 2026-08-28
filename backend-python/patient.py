@@ -82,6 +82,7 @@ class OrderOut(BaseModel):
     contractAgreementSigned: bool = False
     isProxyOrder: bool = False
     proxyAgreementIsAdult: Optional[bool] = None
+    proxyAgreementType: Optional[str] = None
     proxyAgreementLabel: Optional[str] = None
 
     class Config:
@@ -99,17 +100,21 @@ def _order_contract_fields(
     )
 
     needs = bool(account and needs_contract_agreement_for_order(db, account, order))
+    from consultation_agreement_types import agreement_type_label, resolve_proxy_agreement_type
+
+    preset_type = resolve_proxy_agreement_type(order)
     preset = getattr(order, "ProxyAgreementIsAdult", None)
-    preset_label = None
-    if preset is True:
+    preset_label = agreement_type_label(preset_type)
+    if not preset_label and preset is True:
         preset_label = "同心理咨询协议"
-    elif preset is False:
+    elif not preset_label and preset is False:
         preset_label = "“扬帆计划”协议"
     return {
         "needsContractAgreement": needs,
         "contractAgreementSigned": order_has_contract_agreement(order),
         "isProxyOrder": (order.Description or "").startswith("proxy:"),
         "proxyAgreementIsAdult": preset,
+        "proxyAgreementType": preset_type,
         "proxyAgreementLabel": preset_label,
     }
 

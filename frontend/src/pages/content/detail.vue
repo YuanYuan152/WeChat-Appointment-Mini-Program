@@ -1,19 +1,18 @@
 <template>
   <view class="page-content-detail">
-    <view v-if="detail" class="detail-wrap">
+    <view v-if="loading" class="empty-wrap">
+      <text class="empty-text">加载中...</text>
+    </view>
+    <view v-else-if="detail" class="detail-wrap">
       <view class="detail-header">
         <text class="detail-title">{{ detail.title }}</text>
-        <text v-if="detail.subtitle" class="detail-subtitle">{{ detail.subtitle }}</text>
       </view>
       <view class="detail-body">
-        <view v-for="(section, idx) in detail.sections" :key="idx" class="section-block">
-          <text v-if="section.heading" class="section-heading">{{ section.heading }}</text>
-          <text
-            v-for="(p, pIdx) in section.paragraphs"
-            :key="pIdx"
-            class="paragraph"
-          >{{ p }}</text>
-        </view>
+        <text
+          v-for="(p, pIdx) in detail.paragraphs"
+          :key="pIdx"
+          class="paragraph"
+        >{{ p }}</text>
       </view>
     </view>
     <view v-else class="empty-wrap">
@@ -23,19 +22,48 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { CONTENT_DETAILS, type ContentDetail } from '@/constants/siteContent'
+import { ref } from 'vue'
+import { onLoad } from '@dcloudio/uni-app'
+import { CONTENT_DETAILS } from '@/constants/siteContent'
+import {
+  bodyToParagraphs,
+  fetchSiteGuideItem,
+} from '@/utils/siteContentApi'
 
-const detail = ref<ContentDetail | null>(null)
+const loading = ref(true)
+const detail = ref<{ title: string; paragraphs: string[] } | null>(null)
 
-onMounted(() => {
-  const pages = getCurrentPages()
-  const current = pages[pages.length - 1] as any
-  const key = current?.options?.key || ''
-  detail.value = CONTENT_DETAILS[key] || null
-  if (detail.value?.title) {
-    uni.setNavigationBarTitle({ title: detail.value.title })
+onLoad(async (options) => {
+  loading.value = true
+  detail.value = null
+
+  const rawId = options?.id
+  const guideId = rawId ? Number(rawId) : 0
+  const legacyKey = (options?.key || '').trim()
+
+  if (guideId > 0) {
+    const remote = await fetchSiteGuideItem(guideId)
+    if (remote?.title) {
+      detail.value = {
+        title: remote.title,
+        paragraphs: bodyToParagraphs(remote.body || remote.summary || ''),
+      }
+      uni.setNavigationBarTitle({ title: remote.title })
+      loading.value = false
+      return
+    }
   }
+
+  if (legacyKey && CONTENT_DETAILS[legacyKey]) {
+    const legacy = CONTENT_DETAILS[legacyKey]
+    detail.value = {
+      title: legacy.title,
+      paragraphs: legacy.sections.flatMap((section) => section.paragraphs),
+    }
+    uni.setNavigationBarTitle({ title: legacy.title })
+  }
+
+  loading.value = false
 })
 </script>
 
@@ -65,30 +93,6 @@ onMounted(() => {
   font-weight: 800;
   color: #1F2937;
   line-height: 1.4;
-}
-
-.detail-subtitle {
-  display: block;
-  margin-top: 12rpx;
-  font-size: 26rpx;
-  color: #0D9488;
-  font-weight: 600;
-}
-
-.section-block {
-  margin-bottom: 32rpx;
-}
-
-.section-block:last-child {
-  margin-bottom: 0;
-}
-
-.section-heading {
-  display: block;
-  font-size: 30rpx;
-  font-weight: 700;
-  color: #0D9488;
-  margin-bottom: 16rpx;
 }
 
 .paragraph {

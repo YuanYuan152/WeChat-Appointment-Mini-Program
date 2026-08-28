@@ -1,7 +1,24 @@
 import type { Dispatch, FormEvent, SetStateAction } from "react";
 
-import { getContentKindLabel } from "@/components/content/ContentTabs";
+import { ContentImageUpload } from "@/components/content/ContentImageUpload";
+import { getContentKindLabel, isSitePageKind } from "@/components/content/ContentTabs";
 import type { ContentDraft, ContentKind } from "@/types/app";
+
+function canSubmitDraft(activeKind: ContentKind, draft: ContentDraft) {
+  if (activeKind === "banner") {
+    return draft.title.trim() && draft.imageUrl.trim();
+  }
+  if (activeKind === "activity") {
+    return draft.title.trim();
+  }
+  if (isSitePageKind(activeKind)) {
+    return draft.body.trim();
+  }
+  if (activeKind === "consultation_guide") {
+    return draft.title.trim() && draft.body.trim();
+  }
+  return false;
+}
 
 export function ContentCreateModal({
   open,
@@ -25,8 +42,14 @@ export function ContentCreateModal({
   }
 
   const title = getContentKindLabel(activeKind);
-  const actionText = mode === "edit" ? "修改" : "新建";
-  const canSubmit = draft.title.trim() && (activeKind !== "banner" || draft.imageUrl.trim());
+  const actionText = mode === "edit" ? "保存" : isSitePageKind(activeKind) ? "保存" : "新建";
+  const canSubmit = canSubmitDraft(activeKind, draft);
+  const showTitleField = activeKind === "banner" || activeKind === "activity" || activeKind === "consultation_guide";
+  const titleLabel = activeKind === "consultation_guide" ? "主题" : "标题";
+  const bodyLabel = activeKind === "consultation_guide" ? "正文" : "正文";
+  const showBodyField =
+    activeKind === "activity" || isSitePageKind(activeKind) || activeKind === "consultation_guide";
+  const showImageField = activeKind === "banner" || activeKind === "activity";
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -47,48 +70,66 @@ export function ContentCreateModal({
         aria-label={`${actionText}${title}`}
       >
         <div className="border-b border-[var(--lxxl-border)] px-6 py-5">
-          <h3 className="text-lg font-semibold">{actionText}{title}</h3>
+          <h3 className="text-lg font-semibold">
+            {actionText}
+            {title}
+          </h3>
           <p className="mt-1 text-sm text-[var(--lxxl-muted)]">
-            {mode === "edit" ? "保存后会更新当前内容。" : "填写后会创建到当前内容类型下。"}
+            {mode === "edit" ? "保存后会同步到小程序前端。" : "保存后会创建并同步到小程序前端。"}
           </p>
         </div>
 
-        <div className="space-y-4 px-6 py-5">
-          <label className="block">
-            <span className="text-sm font-medium">
-              标题 <span className="text-[#B94A48]">*</span>
-            </span>
-            <input
-              className="mt-2 h-11 w-full rounded-xl border border-[var(--lxxl-border)] px-3 text-sm outline-none transition focus:border-[var(--lxxl-green)]"
-              placeholder="请输入标题"
-              value={draft.title}
-              onChange={(event) => setDraft((prev) => ({ ...prev, title: event.target.value }))}
-            />
-          </label>
-
-          {activeKind !== "banner" && (
+        <div className="max-h-[60vh] space-y-4 overflow-y-auto px-6 py-5">
+          {showTitleField && (
             <label className="block">
-              <span className="text-sm font-medium">摘要/正文</span>
-              <textarea
-                className="mt-2 min-h-28 w-full resize-y rounded-xl border border-[var(--lxxl-border)] px-3 py-3 text-sm outline-none transition focus:border-[var(--lxxl-green)]"
-                placeholder="请输入摘要或正文"
-                value={draft.summary}
-                onChange={(event) => setDraft((prev) => ({ ...prev, summary: event.target.value }))}
+              <span className="text-sm font-medium">
+                {titleLabel} <span className="text-[#B94A48]">*</span>
+              </span>
+              <input
+                className="mt-2 h-11 w-full rounded-xl border border-[var(--lxxl-border)] px-3 text-sm outline-none transition focus:border-[var(--lxxl-green)]"
+                placeholder={activeKind === "consultation_guide" ? "请输入主题" : "请输入标题"}
+                value={draft.title}
+                onChange={(event) => setDraft((prev) => ({ ...prev, title: event.target.value }))}
               />
             </label>
           )}
 
-          <label className="block">
-            <span className="text-sm font-medium">
-              图片地址{activeKind === "banner" && <span className="ml-1 text-[#B94A48]">*</span>}
-            </span>
-            <input
-              className="mt-2 h-11 w-full rounded-xl border border-[var(--lxxl-border)] px-3 text-sm outline-none transition focus:border-[var(--lxxl-green)]"
-              placeholder={activeKind === "banner" ? "请输入 Banner 图片地址" : "请输入图片地址"}
+          {showBodyField && (
+            <label className="block">
+              <span className="text-sm font-medium">
+                {bodyLabel}
+                {(isSitePageKind(activeKind) || activeKind === "consultation_guide") && (
+                  <span className="ml-1 text-[#B94A48]">*</span>
+                )}
+              </span>
+              <textarea
+                className="mt-2 min-h-40 w-full resize-y rounded-xl border border-[var(--lxxl-border)] px-3 py-3 text-sm outline-none transition focus:border-[var(--lxxl-green)]"
+                placeholder={
+                  activeKind === "activity"
+                    ? "请输入活动正文"
+                    : "请输入正文，段落之间可用空行分隔"
+                }
+                value={isSitePageKind(activeKind) || activeKind === "consultation_guide" ? draft.body : draft.summary}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  if (isSitePageKind(activeKind) || activeKind === "consultation_guide") {
+                    setDraft((prev) => ({ ...prev, body: value }));
+                  } else {
+                    setDraft((prev) => ({ ...prev, summary: value }));
+                  }
+                }}
+              />
+            </label>
+          )}
+
+          {showImageField && (
+            <ContentImageUpload
+              label={activeKind === "banner" ? "Banner 图片" : "封面图片"}
+              required={activeKind === "banner"}
               value={draft.imageUrl}
-              onChange={(event) => setDraft((prev) => ({ ...prev, imageUrl: event.target.value }))}
+              onChange={(url) => setDraft((prev) => ({ ...prev, imageUrl: url }))}
             />
-          </label>
+          )}
         </div>
 
         <div className="flex justify-end gap-3 border-t border-[var(--lxxl-border)] px-6 py-4">

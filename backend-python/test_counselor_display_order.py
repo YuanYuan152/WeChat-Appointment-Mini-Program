@@ -6,8 +6,10 @@ from sqlalchemy.orm import sessionmaker
 from admin import (
     CounselorDisplayOrderSavePayload,
     CounselorDisplayOrderItemIn,
+    CounselorPublicVisibilityPayload,
     get_counselor_display_order,
     save_counselor_display_order,
+    set_counselor_public_visibility,
 )
 from common import _profile_is_public_visible, _sort_counselor_list, list_public_counselors
 from database import Base
@@ -148,6 +150,35 @@ class CounselorDisplayOrderTests(unittest.TestCase):
         self.assertFalse(p30.IsPublicVisible)
         public = list_public_counselors(self.db, reconcile_legacy=False)
         self.assertNotIn(30, [int(item["id"]) for item in public["items"]])
+
+    def test_set_counselor_public_visibility_endpoint(self):
+        result = set_counselor_public_visibility(
+            counselor_id=10,
+            body=CounselorPublicVisibilityPayload(isPublicVisible=False),
+            _admin=self.staff,
+            db=self.db,
+        )
+        self.assertFalse(result["isPublicVisible"])
+
+        profile = (
+            self.db.query(AppCounselorProfile)
+            .filter(AppCounselorProfile.AccountId == 10)
+            .first()
+        )
+        self.assertFalse(profile.IsPublicVisible)
+
+        public = list_public_counselors(self.db, reconcile_legacy=False)
+        self.assertNotIn(10, [int(row["id"]) for row in public["items"]])
+
+        restored = set_counselor_public_visibility(
+            counselor_id=10,
+            body=CounselorPublicVisibilityPayload(isPublicVisible=True),
+            _admin=self.staff,
+            db=self.db,
+        )
+        self.assertTrue(restored["isPublicVisible"])
+        self.db.refresh(profile)
+        self.assertTrue(profile.IsPublicVisible)
 
 
 if __name__ == "__main__":

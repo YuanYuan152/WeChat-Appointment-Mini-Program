@@ -34,7 +34,24 @@ export async function applyRoleAfterLogin(me: UserInfo): Promise<string> {
 export function navigateToRoleHome(activeRole: string, redirectUrl?: string) {
   if (redirectUrl) {
     uni.removeStorageSync('redirectAfterLogin')
-    uni.redirectTo({ url: redirectUrl })
+    const pathOnly = redirectUrl.split('?')[0]
+    const normalized = pathOnly.startsWith('/') ? pathOnly : `/${pathOnly}`
+    const tabPages = [
+      '/pages/index/index',
+      '/pages/consultant/list',
+      '/pages/tab-slot/index',
+      '/pages/user/profile',
+    ]
+    if (tabPages.includes(normalized)) {
+      uni.switchTab({ url: normalized })
+      return
+    }
+    uni.redirectTo({
+      url: redirectUrl.startsWith('/') ? redirectUrl : `/${redirectUrl}`,
+      fail: () => {
+        uni.reLaunch({ url: redirectUrl.startsWith('/') ? redirectUrl : `/${redirectUrl}` })
+      },
+    })
     return
   }
 

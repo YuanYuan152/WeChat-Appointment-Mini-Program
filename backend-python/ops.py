@@ -285,6 +285,145 @@ def delete_banner(
 
 
 # ---------------------------------------------------------------------------
+# 站点文案 — 品牌介绍 / 关于咨询 / 公益咨询 / 联系我们
+# ---------------------------------------------------------------------------
+
+class SitePageOut(BaseModel):
+    id: int
+    pageKey: str
+    title: str
+    body: str
+    updatedAt: Optional[datetime] = None
+
+
+class SitePageUpsert(BaseModel):
+    body: str
+    title: Optional[str] = None
+
+
+class SiteGuideItemOut(BaseModel):
+    id: int
+    title: str
+    body: str = ""
+    summary: Optional[str] = None
+    sortOrder: int = 0
+    isActive: bool = True
+    updatedAt: Optional[datetime] = None
+
+
+class SiteGuideItemCreate(BaseModel):
+    title: str
+    body: str
+    sort_order: Optional[int] = None
+
+
+class SiteGuideItemUpdate(BaseModel):
+    title: Optional[str] = None
+    body: Optional[str] = None
+    sort_order: Optional[int] = None
+    is_active: Optional[bool] = None
+
+
+@router.get("/site-pages/manage", response_model=List[SitePageOut], summary="站点固定页管理列表")
+def list_site_pages_manage(
+    _ops: AppAccount = Depends(require_ops),
+    db: Session = Depends(get_db),
+):
+    from site_content_service import list_site_pages_manage as _list
+
+    return _list(db)
+
+
+@router.put("/site-pages/{page_key}", response_model=SitePageOut, summary="更新站点固定页正文")
+def upsert_site_page(
+    page_key: str,
+    body: SitePageUpsert,
+    account: AppAccount = Depends(require_ops),
+    db: Session = Depends(get_db),
+):
+    from site_content_service import upsert_site_page as _upsert
+
+    try:
+        row = _upsert(
+            db,
+            page_key,
+            body=body.body,
+            title=body.title,
+            account_id=int(account.Id),
+        )
+        db.commit()
+        return row
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/site-guide-items/manage", response_model=List[SiteGuideItemOut], summary="关于咨询条目管理列表")
+def list_site_guide_items_manage(
+    _ops: AppAccount = Depends(require_ops),
+    db: Session = Depends(get_db),
+):
+    from site_content_service import list_site_guide_items_manage as _list
+
+    return _list(db)
+
+
+@router.post("/site-guide-items", response_model=SiteGuideItemOut, summary="新增关于咨询条目")
+def create_site_guide_item(
+    body: SiteGuideItemCreate,
+    _ops: AppAccount = Depends(require_ops),
+    db: Session = Depends(get_db),
+):
+    from site_content_service import create_site_guide_item as _create
+
+    try:
+        row = _create(db, title=body.title, body=body.body, sort_order=body.sort_order)
+        db.commit()
+        return row
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.put("/site-guide-items/{item_id}", response_model=SiteGuideItemOut, summary="更新关于咨询条目")
+def update_site_guide_item(
+    item_id: int,
+    body: SiteGuideItemUpdate,
+    _ops: AppAccount = Depends(require_ops),
+    db: Session = Depends(get_db),
+):
+    from site_content_service import update_site_guide_item as _update
+
+    try:
+        row = _update(
+            db,
+            item_id,
+            title=body.title,
+            body=body.body,
+            sort_order=body.sort_order,
+            is_active=body.is_active,
+        )
+        db.commit()
+        return row
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.delete("/site-guide-items/{item_id}", summary="删除关于咨询条目")
+def delete_site_guide_item(
+    item_id: int,
+    _ops: AppAccount = Depends(require_ops),
+    db: Session = Depends(get_db),
+):
+    from site_content_service import delete_site_guide_item as _delete
+
+    try:
+        _delete(db, item_id)
+        db.commit()
+        return {"msg": "已删除"}
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+# ---------------------------------------------------------------------------
 # 活动/公告 — 公开读取
 # ---------------------------------------------------------------------------
 
@@ -302,6 +441,18 @@ def list_activities_public(
         r for r in rows
         if (r.StartAt is None or r.StartAt <= now) and (r.EndAt is None or r.EndAt >= now)
     ]
+
+
+@router.get("/activities/manage", response_model=List[ActivityOut], summary="活动/公告管理列表（含停用）")
+def list_activities_manage(
+    _ops: AppAccount = Depends(require_ops),
+    db: Session = Depends(get_db),
+):
+    return (
+        db.query(AppActivity)
+        .order_by(AppActivity.SortOrder.asc(), AppActivity.CreatedAt.desc())
+        .all()
+    )
 
 
 # ---------------------------------------------------------------------------

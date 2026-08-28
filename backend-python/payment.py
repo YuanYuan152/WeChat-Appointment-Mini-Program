@@ -76,6 +76,7 @@ class ConfirmDevPaymentRequest(BaseModel):
 class PayExistingOrderRequest(BaseModel):
     order_id: int
     is_adult: Optional[bool] = None
+    agreement_type: Optional[str] = None
     signature_url: Optional[str] = None
     real_name: Optional[str] = None
     emergency_contact: Optional[str] = None
@@ -85,7 +86,8 @@ class PayExistingOrderRequest(BaseModel):
 
 class AttachOrderAgreementRequest(BaseModel):
     order_id: int
-    is_adult: bool
+    is_adult: Optional[bool] = None
+    agreement_type: Optional[str] = None
     signature_url: str
     real_name: Optional[str] = None
     emergency_contact: str
@@ -195,6 +197,7 @@ def _create_pending_order(
             account,
             order,
             is_adult=req.is_adult,
+            agreement_type=req.agreement_type,
             signature_url=req.signature_url,
             real_name=req.real_name,
             emergency_contact=req.emergency_contact,
@@ -253,8 +256,9 @@ def _attach_order_agreement_if_needed(
     account: AppAccount,
     order: AppOrder,
     *,
-    is_adult: Optional[bool],
-    signature_url: Optional[str],
+    is_adult: Optional[bool] = None,
+    agreement_type: Optional[str] = None,
+    signature_url: Optional[str] = None,
     real_name: Optional[str] = None,
     emergency_contact: Optional[str] = None,
     emergency_relation: Optional[str] = None,
@@ -267,6 +271,7 @@ def _attach_order_agreement_if_needed(
         account,
         order,
         is_adult=is_adult,
+        agreement_type=agreement_type,
         signature_url=signature_url,
         real_name=real_name,
         emergency_contact=emergency_contact,
@@ -418,6 +423,7 @@ def attach_order_agreement(
             current_account,
             order,
             is_adult=req.is_adult,
+            agreement_type=req.agreement_type,
             signature_url=req.signature_url,
             real_name=req.real_name,
             emergency_contact=req.emergency_contact,
@@ -446,6 +452,7 @@ def pay_existing_order(
             current_account,
             order,
             is_adult=req.is_adult,
+            agreement_type=req.agreement_type,
             signature_url=req.signature_url,
             real_name=req.real_name,
             emergency_contact=req.emergency_contact,
@@ -559,6 +566,7 @@ def simulate_pay_existing_order(
             current_account,
             order,
             is_adult=req.is_adult,
+            agreement_type=req.agreement_type,
             signature_url=req.signature_url,
             real_name=req.real_name,
             emergency_contact=req.emergency_contact,

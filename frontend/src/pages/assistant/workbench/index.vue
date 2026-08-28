@@ -1,5 +1,6 @@
 <template>
   <view class="page-assistant">
+    <StaffWorkbenchNavBar title="助理工作台" theme="green" />
     <view class="header-card">
       <text class="greeting">助理工作台</text>
       <text class="date-text">{{ today }}</text>
@@ -64,6 +65,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import StaffWorkbenchNavBar from '@/components/StaffWorkbenchNavBar.vue'
 import { httpV2 } from '@/utils/http'
 
 interface Task { Id: number; Title: string; Priority: string; Status: string; DueAt?: string }

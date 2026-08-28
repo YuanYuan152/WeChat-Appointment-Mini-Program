@@ -3,11 +3,25 @@ import type { ContentKind } from "@/types/app";
 export const CONTENT_TABS: Array<{ kind: ContentKind; label: string }> = [
   { kind: "banner", label: "Banner" },
   { kind: "activity", label: "活动公告" },
-  { kind: "article", label: "文章" },
+  { kind: "brand", label: "品牌介绍" },
+  { kind: "consultation_guide", label: "关于咨询" },
+  { kind: "charity", label: "公益咨询" },
+  { kind: "contact", label: "联系我们" },
 ];
 
 export function getContentKindLabel(kind: ContentKind) {
   return CONTENT_TABS.find((tab) => tab.kind === kind)?.label ?? "内容";
+}
+
+export function isSitePageKind(kind: ContentKind) {
+  return kind === "brand" || kind === "charity" || kind === "contact";
+}
+
+export function sitePageKeyForKind(kind: ContentKind): string | null {
+  if (kind === "brand") return "brand";
+  if (kind === "charity") return "charity";
+  if (kind === "contact") return "contact";
+  return null;
 }
 
 export function ContentTabs({
@@ -26,7 +40,7 @@ export function ContentTabs({
           return (
             <button
               key={tab.kind}
-              className={`rounded-t-xl border px-6 py-3 text-sm font-medium transition ${
+              className={`rounded-t-xl border px-5 py-3 text-sm font-medium transition ${
                 isActive
                   ? "border-[var(--lxxl-border)] border-b-white bg-white text-[var(--lxxl-green)]"
                   : "border-transparent bg-[#FAF8F4] text-[var(--lxxl-muted)] hover:text-[var(--lxxl-text)]"

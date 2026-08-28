@@ -556,6 +556,7 @@ def push_proxy_order(
     room_id: Optional[str] = None,
     existing_schedule_id: Optional[int] = None,
     agreement_is_adult: Optional[bool] = None,
+    agreement_type: Optional[str] = None,
     notify_target_counselor: bool = True,
 ) -> Dict[str, Any]:
     from system_setting_service import get_proxy_order_ttl_minutes, proxy_order_ttl_push_message
@@ -601,11 +602,21 @@ def push_proxy_order(
     from order_contract_agreement import is_signed_with_counselor
 
     needs_agreement = not is_signed_with_counselor(db, patient, counselor_id)
+    from consultation_agreement_types import (
+        legacy_is_adult_for_agreement_type,
+        resolve_push_agreement_type,
+    )
+
+    resolved_agreement_type: Optional[str] = None
     if needs_agreement:
-        if agreement_is_adult is None:
+        resolved_agreement_type = resolve_push_agreement_type(
+            agreement_type=agreement_type,
+            agreement_is_adult=agreement_is_adult,
+        )
+        if not resolved_agreement_type:
             raise ValueError("未签约来访需选择推送的签约协议类型")
-    elif agreement_is_adult is not None:
-        agreement_is_adult = None
+    elif agreement_is_adult is not None or agreement_type:
+        resolved_agreement_type = None
 
     from charity_milestone_service import assert_charity_patient_can_book_charity
     from fastapi import HTTPException
@@ -714,7 +725,12 @@ def push_proxy_order(
         Description=f"proxy:{staff_account_id}|center:{center_id}|{schedule_mode}",
         ExpiresAt=expires_at,
         ProxyCreatedByAccountId=staff_account_id,
-        ProxyAgreementIsAdult=agreement_is_adult if needs_agreement else None,
+        ProxyAgreementIsAdult=(
+            legacy_is_adult_for_agreement_type(resolved_agreement_type)
+            if needs_agreement
+            else None
+        ),
+        ProxyAgreementType=resolved_agreement_type if needs_agreement else None,
     )
     db.add(order)
     db.flush()

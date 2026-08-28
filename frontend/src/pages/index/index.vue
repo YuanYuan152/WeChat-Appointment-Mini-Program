@@ -5,8 +5,8 @@
       <image class="hero-bg" src="/static/images-opt/slide11.jpg" mode="aspectFill" />
       <view class="hero-mask" />
       <view class="hero-content">
-        <text class="hero-brand">连心心理</text>
-        <text class="hero-sub">专业 · 温暖 · 可信</text>
+        <text class="hero-brand">同心理</text>
+        <text class="hero-sub">专业.温暖的心理服务平台</text>
       </view>
     </view>
 
@@ -60,21 +60,21 @@
 
     <!-- 快捷入口 -->
     <view class="quick-row">
-      <view class="quick-item" @tap="navigateTo('/pages/highlights/index')">
-        <view class="quick-icon"><text class="quick-symbol">精</text></view>
-        <text class="quick-label">往期精华</text>
+      <view class="quick-item" @tap="navigateTo('/pages/about/index')">
+        <view class="quick-icon"><text class="quick-symbol">品</text></view>
+        <text class="quick-label">品牌介绍</text>
       </view>
       <view class="quick-item" @tap="navigateTo('/pages/consultation/guide')">
         <view class="quick-icon"><text class="quick-symbol">询</text></view>
-        <text class="quick-label">了解咨询</text>
+        <text class="quick-label">关于咨询</text>
+      </view>
+      <view class="quick-item" @tap="navigateTo('/pages/charity/index')">
+        <view class="quick-icon"><text class="quick-symbol">益</text></view>
+        <text class="quick-label">公益咨询</text>
       </view>
       <view class="quick-item" @tap="navigateTo('/pages/contact/index')">
         <view class="quick-icon"><text class="quick-symbol">联</text></view>
         <text class="quick-label">联系我们</text>
-      </view>
-      <view class="quick-item" @tap="navigateTo('/pages/jixinli/index')">
-        <view class="quick-icon"><text class="quick-symbol">济</text></view>
-        <text class="quick-label">济心理</text>
       </view>
     </view>
 
@@ -157,15 +157,15 @@
       </scroll-view>
     </view>
 
-    <!-- 活动招募 / 直播预告 -->
+    <!-- 直播预告 / 活动招募 -->
     <view class="section-block">
       <view class="section-head">
         <text class="section-title">最新动态</text>
       </view>
 
       <view class="seg-tabs">
-        <view class="seg-item" :class="{ active: activeTab === 'activity' }" @tap="switchTab('activity')">活动招募</view>
         <view class="seg-item" :class="{ active: activeTab === 'live' }" @tap="switchTab('live')">直播预告</view>
+        <view class="seg-item" :class="{ active: activeTab === 'activity' }" @tap="switchTab('activity')">活动招募</view>
       </view>
 
       <view class="activity-content">
@@ -215,7 +215,7 @@ import { handleRequireLogin } from '@/utils/auth'
 
 // 响应式数据
 const searchKeyword = ref('')
-const activeTab = ref('activity')
+const activeTab = ref('live')
 const banners = ref<Banner[]>([])
 const doctors = ref<Doctor[]>([])
 const activities = ref<Activity[]>([])

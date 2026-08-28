@@ -6,7 +6,12 @@ import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
 import { ContentCreateModal } from "@/components/content/ContentCreateModal";
 import { ContentList } from "@/components/content/ContentList";
 import type { ContentListItem } from "@/components/content/ContentList";
-import { ContentTabs, getContentKindLabel } from "@/components/content/ContentTabs";
+import {
+  ContentTabs,
+  getContentKindLabel,
+  isSitePageKind,
+  sitePageKeyForKind,
+} from "@/components/content/ContentTabs";
 import { getPageItems } from "@/lib/pagination";
 
 export function ContentPanel({
@@ -16,10 +21,6 @@ export function ContentPanel({
   setDraft,
   activeKind,
   setActiveKind,
-  articlePage,
-  articlePageSize,
-  onArticlePageChange,
-  onArticlePageSizeChange,
   onCreate,
   onUpdate,
   onDelete,
@@ -30,10 +31,6 @@ export function ContentPanel({
   setDraft: Dispatch<SetStateAction<ContentDraft>>;
   activeKind: ContentKind;
   setActiveKind: (kind: ContentKind) => void;
-  articlePage: number;
-  articlePageSize: number;
-  onArticlePageChange: (page: number) => void;
-  onArticlePageSizeChange: (pageSize: number) => void;
   onCreate: () => Promise<void> | void;
   onUpdate: (id: number) => Promise<void> | void;
   onDelete: (kind: ContentKind, id: number) => void;
@@ -43,13 +40,38 @@ export function ContentPanel({
   const [localPage, setLocalPage] = useState(1);
   const [localPageSize, setLocalPageSize] = useState(DEFAULT_PAGE_SIZE);
   const activeItems = getContentItems(data, activeKind);
-  const articleTotal = activeKind === "article" ? data.articles?.total : undefined;
-  const articleCurrentPage = activeKind === "article" ? data.articles?.page ?? articlePage : undefined;
-  const articleCurrentPageSize = activeKind === "article" ? data.articles?.pageSize ?? articlePageSize : undefined;
   const localPageData = getPageItems(activeItems, localPage, localPageSize);
-  const visibleItems = activeKind === "article" ? activeItems : localPageData.items;
-  const resetDraft = () => setDraft({ kind: activeKind, title: "", summary: "", imageUrl: "" });
+  const visibleItems = localPageData.items;
+  const allowDelete = activeKind === "banner" || activeKind === "activity" || activeKind === "consultation_guide";
+  const hideImageColumn = isSitePageKind(activeKind) || activeKind === "consultation_guide";
+  const createLabel = isSitePageKind(activeKind)
+    ? activeItems.length > 0
+      ? "编辑正文"
+      : "填写正文"
+    : "新增";
+  const resetDraft = () =>
+    setDraft({ kind: activeKind, title: "", body: "", summary: "", imageUrl: "", pageKey: sitePageKeyForKind(activeKind) || undefined });
   const editing = editingId != null;
+
+  const openCreate = () => {
+    if (isSitePageKind(activeKind) && activeItems.length > 0) {
+      const item = activeItems[0];
+      setEditingId(item.id);
+      setDraft({
+        kind: activeKind,
+        title: item.title,
+        body: item.body || item.summary || "",
+        summary: "",
+        imageUrl: "",
+        pageKey: sitePageKeyForKind(activeKind) || undefined,
+      });
+      setCreateOpen(true);
+      return;
+    }
+    setEditingId(null);
+    resetDraft();
+    setCreateOpen(true);
+  };
 
   return (
     <section className="overflow-hidden rounded-xl border border-[var(--lxxl-border)] bg-white">
@@ -70,34 +92,31 @@ export function ContentPanel({
         <ContentList
           title={getContentKindLabel(activeKind)}
           items={visibleItems}
-          total={articleTotal ?? activeItems.length}
-          page={articleCurrentPage ?? localPageData.currentPage}
-          pageSize={articleCurrentPageSize ?? localPageSize}
-          onCreateClick={() => {
-            setEditingId(null);
-            resetDraft();
-            setCreateOpen(true);
-          }}
+          total={activeItems.length}
+          page={localPageData.currentPage}
+          pageSize={localPageSize}
+          createLabel={createLabel}
+          allowDelete={allowDelete}
+          hideImageColumn={hideImageColumn}
+          onCreateClick={openCreate}
           onEdit={(item) => {
             setEditingId(item.id);
             setDraft({
               kind: activeKind,
               title: item.title,
-              summary: item.summary || "",
+              body: item.body || "",
+              summary: item.summary || item.body || "",
               imageUrl: item.imageUrl || "",
+              pageKey: item.pageKey,
             });
             setCreateOpen(true);
           }}
           onDelete={(id) => onDelete(activeKind, id)}
-          onPageChange={activeKind === "article" ? onArticlePageChange : setLocalPage}
-          onPageSizeChange={
-            activeKind === "article"
-              ? onArticlePageSizeChange
-              : (nextPageSize) => {
-                  setLocalPage(1);
-                  setLocalPageSize(nextPageSize);
-                }
-          }
+          onPageChange={setLocalPage}
+          onPageSizeChange={(nextPageSize) => {
+            setLocalPage(1);
+            setLocalPageSize(nextPageSize);
+          }}
         />
       </div>
 
@@ -147,12 +166,32 @@ function getContentItems(data: ScreenData, kind: ContentKind): ContentListItem[]
     }));
   }
 
-  return (data.articles?.items || []).map((item) => ({
+  if (kind === "brand" || kind === "charity" || kind === "contact") {
+    return (data.sitePages || []).map((item) => ({
+      id: item.id,
+      title: item.title,
+      meta: "已发布",
+      date: item.updatedAt,
+      summary: previewText(item.body),
+      body: item.body,
+      pageKey: item.pageKey,
+    }));
+  }
+
+  return (data.siteGuideItems || []).map((item) => ({
     id: item.id,
     title: item.title,
-    meta: item.category || "文章",
-    date: item.createdAt,
-    summary: item.summary,
-    imageUrl: item.coverUrl,
+    meta: item.isActive ? "启用" : "停用",
+    date: item.updatedAt,
+    summary: previewText(item.body),
+    body: item.body,
   }));
+}
+
+function previewText(value?: string | null) {
+  const text = (value || "").replace(/\s+/g, " ").trim();
+  if (!text) {
+    return "-";
+  }
+  return text.length > 80 ? `${text.slice(0, 80)}…` : text;
 }

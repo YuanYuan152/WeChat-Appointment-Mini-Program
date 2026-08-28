@@ -223,14 +223,19 @@
               <view class="center-row agreement-row">
                 <view
                   class="center-chip"
-                  :class="{ active: form.agreementIsAdult === true }"
-                  @tap="form.agreementIsAdult = true"
+                  :class="{ active: form.agreementType === 'TONGXIN' }"
+                  @tap="form.agreementType = 'TONGXIN'"
                 >{{ tongxinAgreementTitle }}</view>
                 <view
                   class="center-chip"
-                  :class="{ active: form.agreementIsAdult === false }"
-                  @tap="form.agreementIsAdult = false"
+                  :class="{ active: form.agreementType === 'YANGFAN' }"
+                  @tap="form.agreementType = 'YANGFAN'"
                 >{{ yangfanAgreementTitle }}</view>
+                <view
+                  class="center-chip"
+                  :class="{ active: form.agreementType === 'QIHANG' }"
+                  @tap="form.agreementType = 'QIHANG'"
+                >{{ qihangAgreementTitle }}</view>
               </view>
             </view>
           </view>
@@ -261,10 +266,13 @@ import { refreshSubscribeHint, tryOfficialRoleSubscribeInGesture } from '@/utils
 import {
   TONGXIN_AGREEMENT_TITLE,
   YANGFAN_AGREEMENT_TITLE,
+  QIHANG_AGREEMENT_TITLE,
+  type ConsultationAgreementType,
 } from '@/utils/consultationAgreement'
 
 const tongxinAgreementTitle = TONGXIN_AGREEMENT_TITLE
 const yangfanAgreementTitle = YANGFAN_AGREEMENT_TITLE
+const qihangAgreementTitle = QIHANG_AGREEMENT_TITLE
 
 const proxyOrderTtlMinutes = ref(120)
 const proxyOrderPayHint = computed(() => formatProxyOrderPushHint(proxyOrderTtlMinutes.value))
@@ -375,7 +383,7 @@ const scheduleEmptyHint = computed(() => {
 const canPushOrder = computed(() => {
   if (!form.value.slotKey) return false
   if (!isVideoCenterSelected.value && !form.value.roomId) return false
-  if (!patientContractSigned.value && form.value.agreementIsAdult === null) return false
+  if (!patientContractSigned.value && !form.value.agreementType) return false
   return true
 })
 const isVideoCenterSelected = computed(() => isVideoCenter(form.value.centerId))
@@ -388,7 +396,7 @@ const form = ref({
   startTime: '',
   endTime: '',
   scheduleId: null as number | null,
-  agreementIsAdult: null as boolean | null,
+  agreementType: null as ConsultationAgreementType | null,
 })
 
 let patientSearchTimer: ReturnType<typeof setTimeout> | null = null
@@ -657,7 +665,7 @@ const openAddModal = () => {
     startTime: '',
     endTime: '',
     scheduleId: null,
-    agreementIsAdult: null,
+    agreementType: null,
   }
   showAdd.value = true
   loadSlotOptions()
@@ -706,7 +714,7 @@ const submitProxyOrder = () => {
     uni.showToast({ title: '请选择咨询室', icon: 'none' })
     return
   }
-  if (!patientContractSigned.value && form.value.agreementIsAdult === null) {
+  if (!patientContractSigned.value && !form.value.agreementType) {
     uni.showToast({ title: '请选择签署协议类型', icon: 'none' })
     return
   }
@@ -724,7 +732,7 @@ const submitProxyOrder = () => {
         schedule_id: form.value.scheduleId,
       }
       if (!patientContractSigned.value) {
-        payload.agreement_is_adult = form.value.agreementIsAdult
+        payload.agreement_type = form.value.agreementType
       }
       const res = await httpV2.post(API_ENDPOINTS.admin.proxyBookingPushOrder, payload)
       await subscribeDone

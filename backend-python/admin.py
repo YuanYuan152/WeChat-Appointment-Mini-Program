@@ -64,8 +64,10 @@ from refund_exemption_service import approve_refund_exemption, reject_refund_exe
 from case_record_amendment_service import approve_amendment, reject_amendment
 from case_record_service import snapshot_case_record
 from user_role_meta import (
+    CHARITY_PATIENT_SOURCES,
     counselor_type_label,
     is_charity_patient_source,
+    normalize_admin_user_list_filters,
     normalize_patient_source,
     patient_source_label,
     validate_counselor_type,
@@ -504,20 +506,72 @@ class RejectCaseRecordAmendmentRequest(BaseModel):
     reject_reason: str = Field(..., min_length=1, max_length=1000)
 
 
+def _apply_admin_user_role_group_filters(q, db: Session, role_group: Optional[str], subtype: Optional[str]):
+    if not role_group:
+        return q
+
+    if role_group == "counselor":
+        q = q.filter(AppAccount.ActiveRole == "Counselor")
+        if subtype == "CHARITY":
+            q = q.join(
+                AppCounselorProfile,
+                AppCounselorProfile.AccountId == AppAccount.Id,
+            ).filter(AppCounselorProfile.CounselorType == "CHARITY")
+        elif subtype == "PROFESSIONAL":
+            charity_ids = [
+                row[0]
+                for row in db.query(AppCounselorProfile.AccountId)
+                .filter(AppCounselorProfile.CounselorType == "CHARITY")
+                .all()
+            ]
+            if charity_ids:
+                q = q.filter(not_(AppAccount.Id.in_(charity_ids)))
+    elif role_group == "patient":
+        q = q.filter(AppAccount.ActiveRole == "Patient")
+        if subtype == "CHARITY":
+            q = q.filter(AppAccount.PatientSource.in_(list(CHARITY_PATIENT_SOURCES)))
+        elif subtype == "PROFESSIONAL":
+            q = q.filter(
+                or_(
+                    AppAccount.PatientSource.in_(["PROFESSIONAL", "MINI_PROGRAM"]),
+                    AppAccount.PatientSource.is_(None),
+                )
+            )
+        elif subtype == "HOSPITAL":
+            q = q.filter(AppAccount.PatientSource == "HOSPITAL")
+    elif role_group == "staff":
+        q = q.filter(AppAccount.ActiveRole.in_(["Assistant", "Ops", "Admin", "Tester"]))
+    return q
+
+
 @router.get("/users", summary="管理员用户列表")
 def list_admin_users(
     keyword: Optional[str] = Query(None, description="搜索 ID、手机号、昵称或咨询师姓名"),
+    role_group: Optional[str] = Query(
+        None,
+        description="角色分组：counselor=咨询师，patient=来访，staff=后台管理者",
+    ),
+    subtype: Optional[str] = Query(
+        None,
+        description="二级类型：咨询师 CHARITY/PROFESSIONAL；来访 CHARITY/PROFESSIONAL/HOSPITAL",
+    ),
     page: int = Query(1, ge=1),
     page_size: int = Query(100, ge=1, le=500),
     _admin: AppAccount = Depends(require_staff_workbench),
     db: Session = Depends(get_db),
 ):
+    try:
+        normalized_group, normalized_subtype = normalize_admin_user_list_filters(role_group, subtype)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     kw = (keyword or "").strip()
-    if page == 1 and not kw:
+    if page == 1 and not kw and not normalized_group:
         reconcile_existing_counselor_legacy_links(db)
         db.commit()
 
     q = db.query(AppAccount)
+    q = _apply_admin_user_role_group_filters(q, db, normalized_group, normalized_subtype)
     if kw:
         profile_account_ids = [
             row[0]
@@ -557,7 +611,7 @@ def list_admin_users(
         for u in accounts
     ]
 
-    if page == 1:
+    if page == 1 and (not normalized_group or normalized_group == "counselor") and not normalized_subtype:
         legacy_items = list_legacy_unlinked_doctors(db, kw or None)
         items.extend(legacy_items)
         total += len(legacy_items)
@@ -2028,6 +2082,11 @@ class AdminCounselorSummaryOut(BaseModel):
     billingYuan: int = 600
     faceBillingYuan: int = 300
     staffRemark: str = ""
+    isPublicVisible: bool = True
+
+
+class CounselorPublicVisibilityPayload(BaseModel):
+    isPublicVisible: bool
 
 
 class AdminCounselorVisitorOut(BaseModel):
@@ -2275,10 +2334,43 @@ def list_admin_counselors(
                 billingYuan=billing // 100,
                 faceBillingYuan=face_billing // 100,
                 staffRemark=remarks_map.get(cid, ""),
+                isPublicVisible=_profile_is_public_visible(prof),
             )
         )
     result.sort(key=lambda x: x.name)
     return result
+
+
+@router.put(
+    "/counselors/{counselor_id}/public-visibility",
+    summary="设置咨询师在来访端预约列表的公开可见性",
+)
+def set_counselor_public_visibility(
+    counselor_id: int,
+    body: CounselorPublicVisibilityPayload,
+    _admin: AppAccount = Depends(require_ops_or_admin),
+    db: Session = Depends(get_db),
+):
+    allowed_ids = set(_admin_counselor_ids(db))
+    if counselor_id not in allowed_ids:
+        raise HTTPException(status_code=404, detail="咨询师不存在")
+
+    profile = (
+        db.query(AppCounselorProfile)
+        .filter(AppCounselorProfile.AccountId == counselor_id)
+        .first()
+    )
+    if not profile:
+        raise HTTPException(status_code=404, detail="咨询师资料不存在")
+
+    profile.IsPublicVisible = bool(body.isPublicVisible)
+    profile.UpdatedAt = datetime.utcnow()
+    db.commit()
+
+    return {
+        "counselorId": counselor_id,
+        "isPublicVisible": bool(profile.IsPublicVisible),
+    }
 
 
 class CounselorDisplayOrderItemOut(BaseModel):

@@ -4,6 +4,12 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
+from consultation_agreement_types import (
+    legacy_is_adult_for_agreement_type,
+    normalize_agreement_type,
+    resolve_intake_agreement_type,
+    resolve_proxy_agreement_type,
+)
 from models import AppAccount, AppOrder, AppSchedule
 
 
@@ -83,7 +89,11 @@ def is_signed_with_counselor(
 
 def order_has_contract_agreement(order: AppOrder) -> bool:
     url = (getattr(order, "IntakeSignatureUrl", None) or "").strip()
-    return bool(url) and getattr(order, "IntakeIsAdult", None) is not None
+    if not url:
+        return False
+    if resolve_intake_agreement_type(order):
+        return True
+    return getattr(order, "IntakeIsAdult", None) is not None
 
 
 def needs_contract_agreement_for_order(
@@ -102,8 +112,9 @@ def attach_contract_agreement_to_order(
     account: AppAccount,
     order: AppOrder,
     *,
-    is_adult: Optional[bool],
-    signature_url: Optional[str],
+    is_adult: Optional[bool] = None,
+    agreement_type: Optional[str] = None,
+    signature_url: Optional[str] = None,
     real_name: Optional[str] = None,
     emergency_contact: Optional[str] = None,
     emergency_relation: Optional[str] = None,
@@ -113,15 +124,25 @@ def attach_contract_agreement_to_order(
         return
     if order_has_contract_agreement(order):
         return
-    preset = getattr(order, "ProxyAgreementIsAdult", None)
-    if preset is not None:
-        if is_adult is not None and bool(is_adult) != bool(preset):
+
+    preset_type = resolve_proxy_agreement_type(order)
+    submitted_type: Optional[str] = None
+    if agreement_type:
+        submitted_type = normalize_agreement_type(agreement_type)
+    elif is_adult is not None:
+        submitted_type = "TONGXIN" if is_adult else "YANGFAN"
+
+    if preset_type:
+        if submitted_type and submitted_type != preset_type:
             raise ValueError("协议类型与助理推送的订单不一致，请刷新订单后重试")
-        effective_adult = bool(preset)
+        effective_type = preset_type
+    elif submitted_type:
+        effective_type = submitted_type
     else:
-        effective_adult = is_adult
+        raise ValueError("请先选择并签署心理咨询协议")
+
     url = (signature_url or "").strip()
-    if effective_adult is None or not url:
+    if not url:
         raise ValueError("请先签署心理咨询协议")
     apply_real_name_to_account(account, real_name=real_name)
     apply_emergency_contact_to_account(
@@ -130,7 +151,8 @@ def attach_contract_agreement_to_order(
         emergency_relation=emergency_relation,
         emergency_phone=emergency_phone,
     )
-    order.IntakeIsAdult = effective_adult
+    order.IntakeAgreementType = effective_type
+    order.IntakeIsAdult = legacy_is_adult_for_agreement_type(effective_type)
     order.IntakeSignatureUrl = url
     db.flush()
 

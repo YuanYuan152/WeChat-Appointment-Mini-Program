@@ -35,6 +35,8 @@ from patient_contract_service import (
 )
 from schedule_meta import center_display_name, parse_center_id, parse_room_id, room_display_name
 from staff_remark_service import get_staff_remark, get_staff_remarks_map
+from pricing_service import get_counselor_profile
+from common import _profile_is_public_visible
 from user_role_meta import (
     normalize_patient_source,
     patient_source_label,
@@ -180,11 +182,13 @@ def _counselor_summary(
     completed = [c for c in consultations if c.Status == "DONE"]
     cancelled = [c for c in consultations if c.Status in ("CANCELLED", "CANCELED")]
     recorded_consultation_ids = {r.ConsultationId for r in records}
+    profile = get_counselor_profile(db, account.Id)
     return {
         "id": account.Id,
         "name": _account_name(account),
         "mobile": account.Mobile,
         "activeRole": account.ActiveRole,
+        "isPublicVisible": _profile_is_public_visible(profile),
         "consultationCount": len(consultations),
         "completedConsultationCount": len(completed),
         "cancelledConsultationCount": len(cancelled),
@@ -455,11 +459,19 @@ def register_admin_board_routes(
     @router.get("/boards/counselors", summary="咨询师管理看板列表")
     def counselor_board_list(
         keyword: Optional[str] = Query(None, description="姓名/昵称/手机号"),
+        visibility: Optional[str] = Query(
+            None,
+            description="展示状态：visible=展示中，hidden=已隐藏",
+        ),
         page: int = Query(1, ge=1),
         page_size: int = Query(20, ge=1, le=100),
         _staff: AppAccount = Depends(require_staff_workbench),
         db: Session = Depends(get_db),
     ):
+        visibility_norm = (visibility or "").strip().lower()
+        if visibility_norm and visibility_norm not in {"visible", "hidden"}:
+            raise HTTPException(status_code=400, detail="无效的展示状态筛选")
+
         counselor_ids = counselor_account_ids(db)
         accounts = _accounts_by_id(db, set(counselor_ids))
         staff_remarks = get_staff_remarks_map(db, [cid for cid in counselor_ids if cid in accounts])
@@ -475,6 +487,10 @@ def register_admin_board_routes(
                 for item in items
                 if keyword_norm in " ".join(str(v or "") for v in [item["name"], item["mobile"]]).lower()
             ]
+        if visibility_norm == "visible":
+            items = [item for item in items if item.get("isPublicVisible")]
+        elif visibility_norm == "hidden":
+            items = [item for item in items if not item.get("isPublicVisible")]
         items.sort(key=lambda item: (-item["consultationCount"], item["name"]))
         return _paginate(items, page, page_size)
 

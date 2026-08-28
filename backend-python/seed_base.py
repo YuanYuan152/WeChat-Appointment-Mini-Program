@@ -36,6 +36,8 @@ APP_TABLES_DELETE_ORDER = [
     "AppLoginSession",
     "AppRoleBinding",
     "AppBanner",
+    "AppSitePage",
+    "AppSiteGuideItem",
     "AppActivity",
     "AppArticle",
     "AppSubscribeTemplate",

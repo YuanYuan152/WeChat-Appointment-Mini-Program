@@ -38,6 +38,8 @@ APP_ORDER_COLUMNS = {
     "ExpiresAt": "DATETIME NULL",
     "ProxyCreatedByAccountId": "INT NULL",
     "ProxyAgreementIsAdult": "BIT NULL",
+    "ProxyAgreementType": "NVARCHAR(20) NULL",
+    "IntakeAgreementType": "NVARCHAR(20) NULL",
 }
 
 APP_REFUND_EXEMPTION_COLUMNS = {

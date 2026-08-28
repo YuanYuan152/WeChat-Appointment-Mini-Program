@@ -2,6 +2,7 @@ import unittest
 
 from user_role_meta import (
     is_charity_patient_source,
+    normalize_admin_user_list_filters,
     normalize_patient_source,
     patient_source_label,
     validate_patient_source,
@@ -32,6 +33,27 @@ class PatientSourceMetaTests(unittest.TestCase):
         self.assertIsNone(validate_patient_source_detail(""))
         with self.assertRaises(ValueError):
             validate_patient_source_detail("医院转介")
+
+
+class AdminUserListFilterTests(unittest.TestCase):
+    def test_normalize_admin_user_list_filters(self):
+        self.assertEqual(normalize_admin_user_list_filters(None, None), (None, None))
+        self.assertEqual(normalize_admin_user_list_filters("counselor", None), ("counselor", None))
+        self.assertEqual(
+            normalize_admin_user_list_filters("patient", "charity"),
+            ("patient", "CHARITY"),
+        )
+        self.assertEqual(
+            normalize_admin_user_list_filters("counselor", "professional"),
+            ("counselor", "PROFESSIONAL"),
+        )
+
+        with self.assertRaises(ValueError):
+            normalize_admin_user_list_filters("invalid", None)
+        with self.assertRaises(ValueError):
+            normalize_admin_user_list_filters(None, "CHARITY")
+        with self.assertRaises(ValueError):
+            normalize_admin_user_list_filters("staff", "PROFESSIONAL")
 
 
 if __name__ == "__main__":

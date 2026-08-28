@@ -13,6 +13,7 @@ import { DetailDrawer } from "@/components/boards/DetailDrawer";
 import { StaffRemarkEditor } from "@/components/boards/StaffRemarkEditor";
 import { CounselorDisplayOrderSection } from "@/components/counselors/CounselorDisplayOrderSection";
 import { CounselorIntroEditor } from "@/components/counselors/CounselorIntroEditor";
+import type { CounselorBoardFilters } from "@/services/boards";
 import {
   Badge,
   CollapsibleSection,
@@ -33,6 +34,8 @@ export function CounselorBoardPanel({
   detailLoading,
   keyword,
   setKeyword,
+  visibility,
+  setVisibility,
   onSearch,
   onReset,
   onPageChange,
@@ -57,6 +60,8 @@ export function CounselorBoardPanel({
   detailLoading: boolean;
   keyword: string;
   setKeyword: (value: string) => void;
+  visibility: CounselorBoardFilters["visibility"];
+  setVisibility: (value: CounselorBoardFilters["visibility"]) => void;
   onSearch: () => void;
   onReset: () => void;
   onPageChange: (page: number) => void;
@@ -90,6 +95,8 @@ export function CounselorBoardPanel({
         onOpenIntroEditor={onOpenIntroEditor}
         records={records}
         setKeyword={setKeyword}
+        visibility={visibility}
+        setVisibility={setVisibility}
       />
       {(detailLoading || selected) && (
         <DetailDrawer title="咨询师详情" onClose={onCloseDetail}>
@@ -139,6 +146,8 @@ const CounselorBoardListSection = memo(function CounselorBoardListSection({
   listLoading,
   keyword,
   setKeyword,
+  visibility,
+  setVisibility,
   onSearch,
   onReset,
   onPageChange,
@@ -151,6 +160,8 @@ const CounselorBoardListSection = memo(function CounselorBoardListSection({
   listLoading: boolean;
   keyword: string;
   setKeyword: (value: string) => void;
+  visibility: CounselorBoardFilters["visibility"];
+  setVisibility: (value: CounselorBoardFilters["visibility"]) => void;
   onSearch: () => void;
   onReset: () => void;
   onPageChange: (page: number) => void;
@@ -183,6 +194,19 @@ const CounselorBoardListSection = memo(function CounselorBoardListSection({
               value={keyword}
               onChange={(event) => setKeyword(event.target.value)}
             />
+          </QueryField>
+          <QueryField label="展示状态">
+            <select
+              className={`${queryControlClass} appearance-auto`}
+              value={visibility ?? ""}
+              onChange={(event) =>
+                setVisibility(event.target.value as CounselorBoardFilters["visibility"])
+              }
+            >
+              <option value="">全部</option>
+              <option value="visible">展示中</option>
+              <option value="hidden">已隐藏</option>
+            </select>
           </QueryField>
         </div>
 
@@ -228,31 +252,46 @@ const CounselorBoardListSection = memo(function CounselorBoardListSection({
                 </tr>
               </thead>
               <tbody>
-                {records.items.map((record) => (
+                {records.items.map((record) => {
+                  const hidden = record.isPublicVisible === false;
+                  return (
                   <tr
                     key={record.id}
-                    className="border-t border-[var(--lxxl-border)] transition hover:bg-[#FAF8F4]"
+                    className={`border-t border-[var(--lxxl-border)] transition ${
+                      hidden
+                        ? "bg-[#F0EFEC] text-[#9A9690]"
+                        : "hover:bg-[#FAF8F4]"
+                    }`}
                   >
                     <td className="px-5 py-4">
-                      <div className="truncate font-semibold" title={record.name}>
-                        {record.name}
+                      <div className="flex min-w-0 items-center gap-2">
+                        <div
+                          className={`truncate font-semibold ${hidden ? "text-[#9A9690]" : ""}`}
+                          title={record.name}
+                        >
+                          {record.name}
+                        </div>
+                        {hidden ? <Badge tone="neutral">已隐藏</Badge> : null}
                       </div>
                       {record.staffRemark && (
                         <div
-                          className="mt-1 truncate text-xs font-normal text-[#8A6438]"
+                          className={`mt-1 truncate text-xs font-normal ${
+                            hidden ? "text-[#B0ACA6]" : "text-[#8A6438]"
+                          }`}
                           title={`内部备注：${record.staffRemark}`}
                         >
                           内部备注：{record.staffRemark}
                         </div>
                       )}
                     </td>
-                    <td className="px-5 py-4 text-[var(--lxxl-muted)]">
+                    <td className={`px-5 py-4 ${hidden ? "text-[#B0ACA6]" : "text-[var(--lxxl-muted)]"}`}>
                       <div className="truncate" title={record.mobile || "-"}>
                         {record.mobile || "-"}
                       </div>
                     </td>
                     <td className="px-5 py-4">
                       <RatioMetric
+                        muted={hidden}
                         part={record.completedConsultationCount}
                         partLabel="已完成"
                         total={record.consultationCount}
@@ -260,12 +299,15 @@ const CounselorBoardListSection = memo(function CounselorBoardListSection({
                       />
                     </td>
                     <td className="px-5 py-4">
-                      <SingleMetric hint="取消来源未区分" value={record.cancelledConsultationCount} />
+                      <SingleMetric hint="取消来源未区分" muted={hidden} value={record.cancelledConsultationCount} />
                     </td>
                     <td className="px-5 py-4">
                       <div className="space-y-2">
-                        <div className="text-xs text-[var(--lxxl-muted)]">
-                          已有 <span className="text-base font-semibold text-[var(--lxxl-text)]">{record.caseRecordCount}</span>
+                        <div className={`text-xs ${hidden ? "text-[#B0ACA6]" : "text-[var(--lxxl-muted)]"}`}>
+                          已有{" "}
+                          <span className={`text-base font-semibold ${hidden ? "text-[#9A9690]" : "text-[var(--lxxl-text)]"}`}>
+                            {record.caseRecordCount}
+                          </span>
                         </div>
                         <Badge tone={record.missingRecordCount > 0 ? "gold" : "green"}>
                           待补 {record.missingRecordCount}
@@ -273,7 +315,7 @@ const CounselorBoardListSection = memo(function CounselorBoardListSection({
                       </div>
                     </td>
                     <td className="px-5 py-4">
-                      <SingleMetric hint="累计申请" value={record.leaveRequestCount} />
+                      <SingleMetric hint="累计申请" muted={hidden} value={record.leaveRequestCount} />
                     </td>
                     <td className="px-5 py-4 text-right">
                       <div className="flex flex-wrap justify-end gap-3">
@@ -288,7 +330,8 @@ const CounselorBoardListSection = memo(function CounselorBoardListSection({
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -320,21 +363,24 @@ function RatioMetric({
   totalLabel,
   part,
   partLabel,
+  muted = false,
 }: {
   total: number;
   totalLabel: string;
   part: number;
   partLabel: string;
+  muted?: boolean;
 }) {
   const ratio = total > 0 ? Math.min(100, Math.max(0, (part / total) * 100)) : 0;
   return (
     <div className="min-w-0">
       <div className="flex items-baseline gap-1.5">
-        <span className="text-base font-semibold text-[var(--lxxl-text)]">{total}</span>
-        <span className="text-xs text-[var(--lxxl-muted)]">{totalLabel}</span>
+        <span className={`text-base font-semibold ${muted ? "text-[#9A9690]" : "text-[var(--lxxl-text)]"}`}>{total}</span>
+        <span className={`text-xs ${muted ? "text-[#B0ACA6]" : "text-[var(--lxxl-muted)]"}`}>{totalLabel}</span>
       </div>
-      <div className="mt-1 text-xs text-[var(--lxxl-muted)]">
-        {partLabel} <span className="font-medium text-[var(--lxxl-text)]">{part}</span>
+      <div className={`mt-1 text-xs ${muted ? "text-[#B0ACA6]" : "text-[var(--lxxl-muted)]"}`}>
+        {partLabel}{" "}
+        <span className={`font-medium ${muted ? "text-[#9A9690]" : "text-[var(--lxxl-text)]"}`}>{part}</span>
       </div>
       <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#EDE9E2]">
         <div className="h-full rounded-full bg-[var(--lxxl-green)]" style={{ width: `${ratio}%` }} />
@@ -343,11 +389,11 @@ function RatioMetric({
   );
 }
 
-function SingleMetric({ value, hint }: { value: number; hint: string }) {
+function SingleMetric({ value, hint, muted = false }: { value: number; hint: string; muted?: boolean }) {
   return (
     <div>
-      <div className="text-base font-semibold text-[var(--lxxl-text)]">{value}</div>
-      <div className="mt-1 text-xs text-[var(--lxxl-muted)]">{hint}</div>
+      <div className={`text-base font-semibold ${muted ? "text-[#9A9690]" : "text-[var(--lxxl-text)]"}`}>{value}</div>
+      <div className={`mt-1 text-xs ${muted ? "text-[#B0ACA6]" : "text-[var(--lxxl-muted)]"}`}>{hint}</div>
     </div>
   );
 }

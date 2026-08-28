@@ -29,6 +29,34 @@
       <view class="add-btn" @tap="openAddModal">+ 添加用户</view>
     </view>
 
+    <view class="filter-row">
+      <picker
+        class="filter-picker-wrap"
+        :range="roleGroupLabels"
+        :value="roleGroupIndex"
+        @change="onRoleGroupChange"
+      >
+        <view class="filter-picker">
+          <text class="filter-label">角色</text>
+          <text class="filter-value">{{ roleGroupLabels[roleGroupIndex] || '全部角色' }}</text>
+          <text class="filter-arrow">▾</text>
+        </view>
+      </picker>
+      <picker
+        v-if="subtypeSelectOptions.length"
+        class="filter-picker-wrap"
+        :range="subtypeLabels"
+        :value="subtypeIndex"
+        @change="onSubtypeChange"
+      >
+        <view class="filter-picker">
+          <text class="filter-label">类型</text>
+          <text class="filter-value">{{ subtypeLabels[subtypeIndex] || '全部类型' }}</text>
+          <text class="filter-arrow">▾</text>
+        </view>
+      </picker>
+    </view>
+
     <view v-if="loading" class="empty">加载中...</view>
     <view v-else-if="users.length === 0" class="empty">
       {{ keyword.trim() ? '未找到匹配用户' : '暂无用户数据' }}
@@ -246,6 +274,11 @@ import {
   counselorTypeLabel,
   isCharityPatientSource,
 } from '@/constants/userRoleMeta'
+import {
+  ROLE_GROUP_OPTIONS,
+  subtypeSelectOptionsForRoleGroup,
+  type RoleGroupValue,
+} from '@/constants/roleGroupFilter'
 import { useUserStore } from '@/store/user'
 import StaffRemarkEditor from '@/components/StaffRemarkEditor.vue'
 
@@ -309,11 +342,33 @@ const users = ref<AdminUser[]>([])
 const loading = ref(false)
 const loadingMore = ref(false)
 const keyword = ref('')
+const roleGroupIndex = ref(0)
+const subtypeIndex = ref(0)
 const total = ref(0)
 const page = ref(1)
 const pageSize = 100
 
 const hasMore = computed(() => users.value.length < total.value)
+
+const roleGroupLabels = ROLE_GROUP_OPTIONS.map(o => o.label)
+const selectedRoleGroup = computed<RoleGroupValue>(() => ROLE_GROUP_OPTIONS[roleGroupIndex.value]?.value ?? '')
+const subtypeSelectOptions = computed(() => subtypeSelectOptionsForRoleGroup(selectedRoleGroup.value))
+const subtypeLabels = computed(() => subtypeSelectOptions.value.map(o => o.label))
+const selectedSubtype = computed(() => {
+  const option = subtypeSelectOptions.value[subtypeIndex.value]
+  return option?.value || ''
+})
+
+const onRoleGroupChange = (event: { detail: { value: string | number } }) => {
+  roleGroupIndex.value = Number(event.detail.value)
+  subtypeIndex.value = 0
+  reloadUsers()
+}
+
+const onSubtypeChange = (event: { detail: { value: string | number } }) => {
+  subtypeIndex.value = Number(event.detail.value)
+  reloadUsers()
+}
 
 const selected = reactive<Record<number, string>>({})
 
@@ -365,6 +420,8 @@ const load = async (reset = true) => {
     }
     const q = keyword.value.trim()
     if (q) params.keyword = q
+    if (selectedRoleGroup.value) params.role_group = selectedRoleGroup.value
+    if (selectedSubtype.value) params.subtype = selectedSubtype.value
 
     const res = await httpV2.get<AdminUsersResponse>(
       API_ENDPOINTS.admin.users,
@@ -805,6 +862,46 @@ onShow(() => {
   font-size: 28rpx;
   font-weight: 600;
   white-space: nowrap;
+}
+
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+  margin-bottom: 24rpx;
+}
+
+.filter-picker-wrap {
+  flex: 1;
+  min-width: 280rpx;
+}
+
+.filter-picker {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 20rpx 24rpx;
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.03);
+}
+
+.filter-label {
+  font-size: 24rpx;
+  color: #8A8A8A;
+  flex-shrink: 0;
+}
+
+.filter-value {
+  flex: 1;
+  font-size: 28rpx;
+  color: #2C2C2C;
+  font-weight: 600;
+}
+
+.filter-arrow {
+  font-size: 24rpx;
+  color: #8A8A8A;
 }
 
 .load-more {

@@ -1,15 +1,37 @@
 <template>
   <view class="page-contact">
     <view class="hero-card">
-      <text class="hero-title">联系我们</text>
-      <text class="hero-subtitle">上海连心心理咨询有限公司</text>
+      <text class="hero-title">{{ intro.title }}</text>
+      <text class="hero-subtitle">{{ intro.subtitle }}</text>
     </view>
+
+    <view v-if="intro.paragraphs.length" class="intro-card">
+      <text
+        v-for="(p, pIdx) in intro.paragraphs"
+        :key="pIdx"
+        class="intro-paragraph"
+      >{{ p }}</text>
+    </view>
+
     <ContactUsContent />
   </view>
 </template>
 
 <script setup lang="ts">
+import { onMounted, ref } from 'vue'
 import ContactUsContent from '@/components/ContactUsContent.vue'
+import {
+  fetchPublicSiteContent,
+  fallbackContactIntro,
+  resolvePageContent,
+} from '@/utils/siteContentApi'
+
+const intro = ref(fallbackContactIntro())
+
+onMounted(async () => {
+  const payload = await fetchPublicSiteContent()
+  intro.value = resolvePageContent(payload?.pages, 'contact', fallbackContactIntro())
+})
 </script>
 
 <style scoped>
@@ -39,5 +61,25 @@ import ContactUsContent from '@/components/ContactUsContent.vue'
   margin-top: 12rpx;
   font-size: 28rpx;
   color: rgba(255, 255, 255, 0.88);
+}
+
+.intro-card {
+  background: #fff;
+  border-radius: 24rpx;
+  padding: 32rpx 28rpx;
+  margin-bottom: 24rpx;
+  box-shadow: 0 4rpx 16rpx rgba(15, 23, 42, 0.04);
+}
+
+.intro-paragraph {
+  display: block;
+  font-size: 28rpx;
+  color: #6B6560;
+  line-height: 1.85;
+  margin-bottom: 16rpx;
+}
+
+.intro-paragraph:last-child {
+  margin-bottom: 0;
 }
 </style>

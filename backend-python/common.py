@@ -85,6 +85,23 @@ def common_banners(db: Session = Depends(get_db)):
     ]
 
 
+@router.get("/site-content", summary="站点文案（品牌/公益/联系/关于咨询）")
+def common_site_content(db: Session = Depends(get_db)):
+    from site_content_service import public_site_content
+
+    return public_site_content(db)
+
+
+@router.get("/site-guide-items/{item_id}", summary="关于咨询条目详情")
+def common_site_guide_item(item_id: int, db: Session = Depends(get_db)):
+    from site_content_service import public_site_guide_item
+
+    row = public_site_guide_item(db, item_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="内容不存在或已下架")
+    return row
+
+
 # ===========================================================================
 # Article
 # ===========================================================================

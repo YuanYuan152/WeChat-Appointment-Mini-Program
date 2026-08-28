@@ -11,6 +11,7 @@ import {
   fetchAdminUsers,
   type BindUserRolePayload,
   type CreateUserByMobilePayload,
+  type FetchAdminUsersParams,
 } from "@/services/roles";
 import { AppRoute, useAppRoute } from "@/components/AppRoute";
 import { RolesPanel } from "@/panels/RolesPanel";
@@ -33,23 +34,28 @@ function RolesScreenContent() {
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [listLoading, setListLoading] = useState(false);
   const [createLoading, setCreateLoading] = useState(false);
+  const [queryParams, setQueryParams] = useState<FetchAdminUsersParams>({});
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (params: FetchAdminUsersParams = queryParams) => {
     setListLoading(true);
     clearNotice();
     try {
-      const adminUsers = await fetchAdminUsers();
+      const adminUsers = await fetchAdminUsers({
+        ...params,
+        page: 1,
+        page_size: 500,
+      });
       setData((prev) => ({ ...prev, adminUsers }));
     } catch (error) {
       showNotice("error", error instanceof Error ? error.message : "用户与角色加载失败");
     } finally {
       setListLoading(false);
     }
-  }, [clearNotice, showNotice]);
+  }, [clearNotice, queryParams, showNotice]);
 
   useEffect(() => {
-    void loadData();
-  }, [loadData, refreshKey]);
+    void loadData(queryParams);
+  }, [loadData, queryParams, refreshKey]);
 
   const updateRole = (userId: number, role: Role, payload: BindUserRolePayload = {}) => {
     async function runUpdate() {
@@ -57,7 +63,7 @@ function RolesScreenContent() {
       clearNotice();
       try {
         await bindUserRole(userId, role, payload);
-        const adminUsers = await fetchAdminUsers();
+        const adminUsers = await fetchAdminUsers({ ...queryParams, page: 1, page_size: 500 });
         setData((prev) => ({ ...prev, adminUsers }));
         showNotice("success", "角色已更新");
       } catch (error) {
@@ -75,7 +81,7 @@ function RolesScreenContent() {
     clearNotice();
     try {
       const result = await createUserByMobile(payload);
-      const adminUsers = await fetchAdminUsers();
+      const adminUsers = await fetchAdminUsers({ ...queryParams, page: 1, page_size: 500 });
       setData((prev) => ({ ...prev, adminUsers }));
       setPage(1);
       showNotice("success", getMessage(result, result.created ? "用户已添加" : "已绑定角色"));
@@ -89,7 +95,7 @@ function RolesScreenContent() {
     clearNotice();
     try {
       const result = await deleteUser(userId);
-      const adminUsers = await fetchAdminUsers();
+      const adminUsers = await fetchAdminUsers({ ...queryParams, page: 1, page_size: 500 });
       setData((prev) => ({ ...prev, adminUsers }));
       showNotice("success", result.message || "用户已永久删除");
     } catch (error) {
@@ -118,6 +124,7 @@ function RolesScreenContent() {
       onCreateUser={createUser}
       onUpdateRole={updateRole}
       onDeleteUser={removeUser}
+      onQuery={(params) => setQueryParams(params)}
     />
   );
 }

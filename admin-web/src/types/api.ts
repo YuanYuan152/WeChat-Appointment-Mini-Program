@@ -282,6 +282,24 @@ export interface Activity {
   CreatedAt?: string | null;
 }
 
+export interface SitePage {
+  id: number;
+  pageKey: string;
+  title: string;
+  body: string;
+  updatedAt?: string | null;
+}
+
+export interface SiteGuideItem {
+  id: number;
+  title: string;
+  body: string;
+  summary?: string | null;
+  sortOrder: number;
+  isActive: boolean;
+  updatedAt?: string | null;
+}
+
 export interface Article {
   id: number;
   title: string;
@@ -687,6 +705,7 @@ export interface CounselorBoardSummary {
   leaveRequestCount: number;
   latestScheduleAt?: string | null;
   staffRemark: string;
+  isPublicVisible: boolean;
 }
 
 export interface StaffRemarkUpdateResult {

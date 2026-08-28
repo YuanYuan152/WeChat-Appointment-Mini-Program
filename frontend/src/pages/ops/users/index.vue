@@ -76,6 +76,7 @@
           v-for="item in counselors"
           :key="item.counselorId"
           class="card"
+          :class="{ 'card-hidden': item.isPublicVisible === false }"
           @tap="openCounselorDetail(item.counselorId)"
         >
           <view class="card-head">
@@ -90,13 +91,25 @@
               <view class="name-block">
                 <view class="name-row">
                   <text class="name">{{ item.name }}</text>
+                  <text
+                    v-if="item.isPublicVisible === false"
+                    class="hidden-badge"
+                    @tap.stop="toggleCounselorVisibility(item, true)"
+                  >已隐藏</text>
                   <text v-if="item.typeLabel" class="type-badge">{{ item.typeLabel }}</text>
                   <text v-if="item.staffRemark" class="remark-badge">{{ item.staffRemark }}</text>
                 </view>
                 <text v-if="item.title" class="sub">{{ item.title }}</text>
               </view>
             </view>
-            <text class="arrow">›</text>
+            <view class="card-actions" @tap.stop>
+              <view
+                v-if="item.isPublicVisible !== false"
+                class="action-btn hide-btn"
+                :class="{ disabled: visibilitySavingId === item.counselorId }"
+                @tap="toggleCounselorVisibility(item, false)"
+              >隐藏</view>
+            </view>
           </view>
           <text v-if="item.missingRecordCount > 0" class="warn-tag solo">未填记录 {{ item.missingRecordCount }}</text>
         </view>
@@ -145,6 +158,7 @@ interface CounselorSummary {
   billingYuan: number
   faceBillingYuan: number
   staffRemark?: string
+  isPublicVisible?: boolean
 }
 
 const activeTab = ref<'patients' | 'counselors'>('patients')
@@ -154,6 +168,7 @@ const patientLoading = ref(false)
 const counselorLoading = ref(false)
 const patients = ref<PatientSummary[]>([])
 const counselors = ref<CounselorSummary[]>([])
+const visibilitySavingId = ref(0)
 
 const loadPatients = async () => {
   patientLoading.value = true
@@ -185,6 +200,38 @@ const openPatientDetail = (patientId: number) => {
 
 const openCounselorDetail = (counselorId: number) => {
   uni.navigateTo({ url: `/pages/ops/counselors/detail?counselorId=${counselorId}` })
+}
+
+const toggleCounselorVisibility = (item: CounselorSummary, visible: boolean) => {
+  if (visibilitySavingId.value === item.counselorId) return
+  uni.showModal({
+    title: visible ? '恢复显示' : '隐藏咨询师',
+    content: visible
+      ? `确定将「${item.name}」恢复到预约咨询列表中展示吗？`
+      : `确定将「${item.name}」从预约咨询列表中隐藏吗？隐藏后来访端将无法搜索和预约该咨询师。`,
+    success: async (res) => {
+      if (!res.confirm) return
+      const actionText = visible ? '恢复显示' : '隐藏'
+      visibilitySavingId.value = item.counselorId
+      try {
+        const result = await httpV2.put<{ counselorId: number; isPublicVisible: boolean }>(
+          API_ENDPOINTS.admin.counselorPublicVisibility(item.counselorId),
+          { isPublicVisible: visible },
+        )
+        if (result.code !== 0) {
+          uni.showToast({ title: result.msg || `${actionText}失败`, icon: 'none' })
+          return
+        }
+        item.isPublicVisible = result.data?.isPublicVisible ?? visible
+        uni.showToast({
+          title: visible ? '已恢复显示' : '已隐藏',
+          icon: 'success',
+        })
+      } finally {
+        visibilitySavingId.value = 0
+      }
+    },
+  })
 }
 
 const refresh = () => {
@@ -248,7 +295,33 @@ onShow(refresh)
   box-shadow: 0 4rpx 20rpx rgba(0,0,0,0.03);
 }
 .card:active { opacity: 0.92; }
+.card-hidden { background: #F3F1EE; }
+.card-hidden .name,
+.card-hidden .sub { color: #9A9690; }
 .card-head { display: flex; justify-content: space-between; align-items: center; gap: 16rpx; }
+.card-actions { flex-shrink: 0; }
+.action-btn {
+  padding: 10rpx 22rpx;
+  border-radius: 100rpx;
+  font-size: 24rpx;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.hide-btn {
+  color: #6B6560;
+  background: #F0EDE8;
+  border: 1rpx solid #E0DCD6;
+}
+.hide-btn.disabled { opacity: 0.5; }
+.hidden-badge {
+  font-size: 22rpx;
+  color: #8A8680;
+  background: #E8E4DE;
+  padding: 4rpx 14rpx;
+  border-radius: 100rpx;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
 .name-row {
   display: flex;
   align-items: center;

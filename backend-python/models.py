@@ -107,6 +107,8 @@ class AppOrder(Base):
     ExpiresAt = Column(DateTime, nullable=True)
     ProxyCreatedByAccountId = Column(Integer, nullable=True)
     ProxyAgreementIsAdult = Column(Boolean, nullable=True)
+    ProxyAgreementType = Column(String(20), nullable=True)
+    IntakeAgreementType = Column(String(20), nullable=True)
     UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
 
 
@@ -241,6 +243,32 @@ class AppBanner(Base):
     IsActive = Column(Boolean, nullable=False, default=True)
     StartAt = Column(DateTime, nullable=True)
     EndAt = Column(DateTime, nullable=True)
+    CreatedAt = Column(DateTime, default=func.now(), nullable=False)
+    UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
+
+
+class AppSitePage(Base):
+    """首页站点固定页：品牌介绍 / 公益咨询 / 联系我们。"""
+    __tablename__ = "AppSitePage"
+
+    Id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    PageKey = Column(String(30), nullable=False, unique=True, index=True)
+    Title = Column(Unicode(200), nullable=True)
+    Body = Column(UnicodeText, nullable=True)
+    UpdatedByAccountId = Column(Integer, nullable=True)
+    CreatedAt = Column(DateTime, default=func.now(), nullable=False)
+    UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
+
+
+class AppSiteGuideItem(Base):
+    """关于咨询：主题 + 正文条目。"""
+    __tablename__ = "AppSiteGuideItem"
+
+    Id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    Title = Column(Unicode(200), nullable=False)
+    Body = Column(UnicodeText, nullable=True)
+    SortOrder = Column(Integer, nullable=False, default=0)
+    IsActive = Column(Boolean, nullable=False, default=True)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
     UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
 
