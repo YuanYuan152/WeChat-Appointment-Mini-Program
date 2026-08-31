@@ -92,13 +92,6 @@
             <text class="menu-arrow">›</text>
           </view>
         </view>
-        <view class="menu-item" @click="navigateTo('/pages/user/wallet')">
-          <view class="menu-icon-wrap bg-orange-light">
-            <text class="menu-icon text-orange">💰</text>
-          </view>
-          <text class="menu-text">我的钱包</text>
-          <text class="menu-arrow">›</text>
-        </view>
         <view v-if="isCounselor" class="menu-item" @click="goCounselorDashboard">
           <view class="menu-icon-wrap bg-teal-light">
             <text class="menu-icon text-teal">📊</text>
@@ -780,8 +773,6 @@ const handleDeleteAccount = () => {
 .bg-blue-light { background: #EFF6FF; }
 .text-blue { color: #3B82F6; }
 
-.bg-orange-light { background: #FFF7ED; }
-.text-orange { color: #F59E0B; }
 
 .bg-green-light { background: #ECFDF5; }
 .text-green { color: #10B981; }
