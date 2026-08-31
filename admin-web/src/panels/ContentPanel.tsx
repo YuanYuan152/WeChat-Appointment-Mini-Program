@@ -43,14 +43,30 @@ export function ContentPanel({
   const localPageData = getPageItems(activeItems, localPage, localPageSize);
   const visibleItems = localPageData.items;
   const allowDelete = activeKind === "banner" || activeKind === "activity" || activeKind === "consultation_guide";
-  const hideImageColumn = isSitePageKind(activeKind) || activeKind === "consultation_guide";
-  const createLabel = isSitePageKind(activeKind)
-    ? activeItems.length > 0
-      ? "编辑正文"
-      : "填写正文"
-    : "新增";
+  const hideImageColumn =
+    activeKind === "brand" || activeKind === "charity" || activeKind === "consultation_guide";
+  const createLabel =
+    activeKind === "home_cover"
+      ? activeItems.length > 0
+        ? "编辑封面"
+        : "设置封面"
+      : isSitePageKind(activeKind)
+        ? activeItems.length > 0
+          ? "编辑正文"
+          : "填写正文"
+        : "新增";
   const resetDraft = () =>
-    setDraft({ kind: activeKind, title: "", body: "", summary: "", imageUrl: "", pageKey: sitePageKeyForKind(activeKind) || undefined });
+    setDraft({
+      kind: activeKind,
+      title: "",
+      body: "",
+      summary: "",
+      imageUrl: "",
+      assistantQrcodeUrl: "",
+      coverImageUrl: "",
+      coverCrop: { x: 0, y: 0, width: 1, height: 1 },
+      pageKey: sitePageKeyForKind(activeKind) || undefined,
+    });
   const editing = editingId != null;
 
   const openCreate = () => {
@@ -62,7 +78,10 @@ export function ContentPanel({
         title: item.title,
         body: item.body || item.summary || "",
         summary: "",
-        imageUrl: "",
+        imageUrl: item.imageUrl || "",
+        assistantQrcodeUrl: item.assistantQrcodeUrl || "",
+        coverImageUrl: item.coverImageUrl || "",
+        coverCrop: item.coverCrop || { x: 0, y: 0, width: 1, height: 1 },
         pageKey: sitePageKeyForKind(activeKind) || undefined,
       });
       setCreateOpen(true);
@@ -107,6 +126,9 @@ export function ContentPanel({
               body: item.body || "",
               summary: item.summary || item.body || "",
               imageUrl: item.imageUrl || "",
+              assistantQrcodeUrl: item.assistantQrcodeUrl || "",
+              coverImageUrl: item.coverImageUrl || "",
+              coverCrop: item.coverCrop || { x: 0, y: 0, width: 1, height: 1 },
               pageKey: item.pageKey,
             });
             setCreateOpen(true);
@@ -166,6 +188,21 @@ function getContentItems(data: ScreenData, kind: ContentKind): ContentListItem[]
     }));
   }
 
+  if (kind === "home_cover") {
+    return (data.sitePages || []).map((item) => ({
+      id: item.id,
+      title: item.title || "首页封面",
+      meta: "已发布",
+      date: item.updatedAt,
+      summary: previewText(item.body),
+      body: item.body,
+      pageKey: item.pageKey,
+      imageUrl: item.coverImageUrl || undefined,
+      coverImageUrl: item.coverImageUrl || undefined,
+      coverCrop: item.coverCrop || undefined,
+    }));
+  }
+
   if (kind === "brand" || kind === "charity" || kind === "contact") {
     return (data.sitePages || []).map((item) => ({
       id: item.id,
@@ -175,6 +212,8 @@ function getContentItems(data: ScreenData, kind: ContentKind): ContentListItem[]
       summary: previewText(item.body),
       body: item.body,
       pageKey: item.pageKey,
+      imageUrl: kind === "contact" ? item.assistantQrcodeUrl || undefined : undefined,
+      assistantQrcodeUrl: item.assistantQrcodeUrl || undefined,
     }));
   }
 

@@ -15,7 +15,7 @@ export async function fetchContentData(kind: ContentKind, _articlePagination: Pa
     return { activities };
   }
 
-  if (kind === "brand" || kind === "charity" || kind === "contact") {
+  if (kind === "brand" || kind === "charity" || kind === "contact" || kind === "home_cover") {
     const sitePages = await apiRequest<SitePage[]>("/api/mini/ops/site-pages/manage");
     const pageKey = sitePageKeyForKind(kind);
     return { sitePages: sitePages.filter((page) => page.pageKey === pageKey) };
@@ -60,6 +60,25 @@ export function createContent(draft: ContentDraft) {
     });
   }
 
+  if (draft.kind === "home_cover") {
+    const pageKey = sitePageKeyForKind(draft.kind);
+    if (!pageKey) {
+      throw new Error("无效的站点页类型");
+    }
+    if (!draft.coverImageUrl.trim()) {
+      throw new Error("请上传首页封面图片");
+    }
+    return apiRequest(`/api/mini/ops/site-pages/${pageKey}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        title: draft.title.trim() || "同心理",
+        body: draft.body.trim() || "专业.温暖的心理服务平台",
+        cover_image_url: draft.coverImageUrl.trim(),
+        cover_crop: draft.coverCrop,
+      }),
+    });
+  }
+
   if (draft.kind === "brand" || draft.kind === "charity" || draft.kind === "contact") {
     const pageKey = sitePageKeyForKind(draft.kind);
     if (!pageKey) {
@@ -70,7 +89,12 @@ export function createContent(draft: ContentDraft) {
     }
     return apiRequest(`/api/mini/ops/site-pages/${pageKey}`, {
       method: "PUT",
-      body: JSON.stringify({ body: draft.body }),
+      body: JSON.stringify({
+        body: draft.body,
+        ...(draft.kind === "contact"
+          ? { assistant_qrcode_url: draft.assistantQrcodeUrl.trim() || null }
+          : {}),
+      }),
     });
   }
 
@@ -123,6 +147,25 @@ export function updateContent(kind: ContentKind, id: number, draft: ContentDraft
     });
   }
 
+  if (kind === "home_cover") {
+    const pageKey = sitePageKeyForKind(kind);
+    if (!pageKey) {
+      throw new Error("无效的站点页类型");
+    }
+    if (!draft.coverImageUrl.trim()) {
+      throw new Error("请上传首页封面图片");
+    }
+    return apiRequest(`/api/mini/ops/site-pages/${pageKey}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        title: draft.title.trim() || "同心理",
+        body: draft.body.trim() || "专业.温暖的心理服务平台",
+        cover_image_url: draft.coverImageUrl.trim(),
+        cover_crop: draft.coverCrop,
+      }),
+    });
+  }
+
   if (kind === "brand" || kind === "charity" || kind === "contact") {
     const pageKey = sitePageKeyForKind(kind);
     if (!pageKey) {
@@ -133,7 +176,12 @@ export function updateContent(kind: ContentKind, id: number, draft: ContentDraft
     }
     return apiRequest(`/api/mini/ops/site-pages/${pageKey}`, {
       method: "PUT",
-      body: JSON.stringify({ body: draft.body }),
+      body: JSON.stringify({
+        body: draft.body,
+        ...(kind === "contact"
+          ? { assistant_qrcode_url: draft.assistantQrcodeUrl.trim() || null }
+          : {}),
+      }),
     });
   }
 

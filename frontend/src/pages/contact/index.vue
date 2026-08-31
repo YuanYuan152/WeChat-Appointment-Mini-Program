@@ -13,7 +13,7 @@
       >{{ p }}</text>
     </view>
 
-    <ContactUsContent />
+    <ContactUsContent :qrcode-src="assistantQrcodeSrc" />
   </view>
 </template>
 
@@ -27,10 +27,12 @@ import {
 } from '@/utils/siteContentApi'
 
 const intro = ref(fallbackContactIntro())
+const assistantQrcodeSrc = ref('')
 
 onMounted(async () => {
   const payload = await fetchPublicSiteContent()
   intro.value = resolvePageContent(payload?.pages, 'contact', fallbackContactIntro())
+  assistantQrcodeSrc.value = payload?.pages?.contact?.assistantQrcodeUrl?.trim() || ''
 })
 </script>
 

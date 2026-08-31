@@ -1,6 +1,7 @@
-"""站点静态页文案：品牌介绍 / 关于咨询条目 / 公益咨询 / 联系我们。"""
+"""站点静态页文案：品牌介绍 / 关于咨询条目 / 公益咨询 / 联系我们 / 首页封面。"""
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -8,12 +9,16 @@ from sqlalchemy.orm import Session
 
 from models import AppSiteGuideItem, AppSitePage
 
-SITE_PAGE_KEYS = frozenset({"brand", "charity", "contact"})
+SITE_PAGE_KEYS = frozenset({"brand", "charity", "contact", "home"})
 SITE_PAGE_LABELS = {
     "brand": "品牌介绍",
     "charity": "公益咨询",
     "contact": "联系我们",
+    "home": "首页封面",
 }
+
+DEFAULT_HOME_COVER = "/static/images-opt/slide11.jpg"
+DEFAULT_HOME_CROP = {"x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0}
 
 DEFAULT_PAGE_BODIES: Dict[str, str] = {
     "brand": (
@@ -32,6 +37,7 @@ DEFAULT_PAGE_BODIES: Dict[str, str] = {
         "欢迎通过下方咨询中心地址、助理微信或电话与我们取得联系。\n\n"
         "咨询助理工作时间为工作日 9:00–18:00，我们会在工作时间内尽快回复您的留言。"
     ),
+    "home": "专业.温暖的心理服务平台",
 }
 
 DEFAULT_GUIDE_ITEMS: List[Dict[str, str]] = [
@@ -54,14 +60,50 @@ DEFAULT_GUIDE_ITEMS: List[Dict[str, str]] = [
 ]
 
 
+def _parse_cover_crop(raw: Optional[str]) -> Dict[str, float]:
+    if not raw:
+        return dict(DEFAULT_HOME_CROP)
+    try:
+        data = json.loads(raw)
+        if not isinstance(data, dict):
+            return dict(DEFAULT_HOME_CROP)
+        x = float(data.get("x", 0))
+        y = float(data.get("y", 0))
+        width = float(data.get("width", 1))
+        height = float(data.get("height", 1))
+        if width <= 0 or height <= 0:
+            return dict(DEFAULT_HOME_CROP)
+        return {
+            "x": max(0.0, min(1.0, x)),
+            "y": max(0.0, min(1.0, y)),
+            "width": max(0.01, min(1.0, width)),
+            "height": max(0.01, min(1.0, height)),
+        }
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return dict(DEFAULT_HOME_CROP)
+
+
+def _serialize_cover_crop(crop: Optional[Dict[str, Any]]) -> Optional[str]:
+    if not crop:
+        return None
+    normalized = _parse_cover_crop(json.dumps(crop))
+    return json.dumps(normalized, separators=(",", ":"))
+
+
 def _page_to_dict(row: AppSitePage) -> Dict[str, Any]:
-    return {
+    out: Dict[str, Any] = {
         "id": row.Id,
         "pageKey": row.PageKey,
         "title": row.Title or SITE_PAGE_LABELS.get(row.PageKey, row.PageKey),
         "body": row.Body or "",
         "updatedAt": row.UpdatedAt or row.CreatedAt,
     }
+    if row.PageKey == "contact":
+        out["assistantQrcodeUrl"] = row.AssistantQrcodeUrl or None
+    if row.PageKey == "home":
+        out["coverImageUrl"] = row.CoverImageUrl or None
+        out["coverCrop"] = _parse_cover_crop(row.CoverCropJson)
+    return out
 
 
 def _guide_to_dict(row: AppSiteGuideItem, *, include_body: bool = False) -> Dict[str, Any]:
@@ -87,13 +129,15 @@ def ensure_default_site_content(db: Session) -> None:
         exists = db.query(AppSitePage.Id).filter(AppSitePage.PageKey == key).first()
         if exists:
             continue
-        db.add(
-            AppSitePage(
-                PageKey=key,
-                Title=SITE_PAGE_LABELS[key],
-                Body=DEFAULT_PAGE_BODIES.get(key, ""),
-            )
+        row = AppSitePage(
+            PageKey=key,
+            Title=SITE_PAGE_LABELS[key],
+            Body=DEFAULT_PAGE_BODIES.get(key, ""),
         )
+        if key == "home":
+            row.CoverImageUrl = DEFAULT_HOME_COVER
+            row.CoverCropJson = _serialize_cover_crop(DEFAULT_HOME_CROP)
+        db.add(row)
     if not db.query(AppSiteGuideItem.Id).first():
         for idx, item in enumerate(DEFAULT_GUIDE_ITEMS):
             db.add(
@@ -121,19 +165,39 @@ def upsert_site_page(
     body: str,
     title: Optional[str] = None,
     account_id: Optional[int] = None,
+    assistant_qrcode_url: Optional[str] = None,
+    update_assistant_qrcode: bool = False,
+    cover_image_url: Optional[str] = None,
+    cover_crop: Optional[Dict[str, Any]] = None,
+    update_cover: bool = False,
 ) -> Dict[str, Any]:
     key = (page_key or "").strip().lower()
     if key not in SITE_PAGE_KEYS:
         raise ValueError("无效的站点页类型")
-    text = (body or "").strip()
-    if not text:
-        raise ValueError("请填写正文")
     row = db.query(AppSitePage).filter(AppSitePage.PageKey == key).first()
     if not row:
         row = AppSitePage(PageKey=key)
         db.add(row)
-    row.Title = (title or SITE_PAGE_LABELS[key]).strip() or SITE_PAGE_LABELS[key]
-    row.Body = text
+
+    if key == "home":
+        text = (body or "").strip() or DEFAULT_PAGE_BODIES["home"]
+        row.Body = text
+        row.Title = (title or "同心理").strip() or "同心理"
+        if update_cover:
+            image = (cover_image_url or "").strip()
+            if not image:
+                raise ValueError("请上传首页封面图片")
+            row.CoverImageUrl = image
+            row.CoverCropJson = _serialize_cover_crop(cover_crop or DEFAULT_HOME_CROP)
+    else:
+        text = (body or "").strip()
+        if not text:
+            raise ValueError("请填写正文")
+        row.Title = (title or SITE_PAGE_LABELS[key]).strip() or SITE_PAGE_LABELS[key]
+        row.Body = text
+        if key == "contact" and update_assistant_qrcode:
+            row.AssistantQrcodeUrl = (assistant_qrcode_url or "").strip() or None
+
     row.UpdatedByAccountId = account_id
     row.UpdatedAt = datetime.utcnow()
     db.flush()

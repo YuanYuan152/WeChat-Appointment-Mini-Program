@@ -1,5 +1,6 @@
 import type { Dispatch, FormEvent, SetStateAction } from "react";
 
+import { ContentCoverCropUpload } from "@/components/content/ContentCoverCropUpload";
 import { ContentImageUpload } from "@/components/content/ContentImageUpload";
 import { getContentKindLabel, isSitePageKind } from "@/components/content/ContentTabs";
 import type { ContentDraft, ContentKind } from "@/types/app";
@@ -11,7 +12,10 @@ function canSubmitDraft(activeKind: ContentKind, draft: ContentDraft) {
   if (activeKind === "activity") {
     return draft.title.trim();
   }
-  if (isSitePageKind(activeKind)) {
+  if (activeKind === "home_cover") {
+    return draft.coverImageUrl.trim();
+  }
+  if (activeKind === "brand" || activeKind === "charity" || activeKind === "contact") {
     return draft.body.trim();
   }
   if (activeKind === "consultation_guide") {
@@ -44,12 +48,24 @@ export function ContentCreateModal({
   const title = getContentKindLabel(activeKind);
   const actionText = mode === "edit" ? "保存" : isSitePageKind(activeKind) ? "保存" : "新建";
   const canSubmit = canSubmitDraft(activeKind, draft);
-  const showTitleField = activeKind === "banner" || activeKind === "activity" || activeKind === "consultation_guide";
-  const titleLabel = activeKind === "consultation_guide" ? "主题" : "标题";
-  const bodyLabel = activeKind === "consultation_guide" ? "正文" : "正文";
+  const showTitleField =
+    activeKind === "banner" ||
+    activeKind === "activity" ||
+    activeKind === "consultation_guide" ||
+    activeKind === "home_cover";
+  const titleLabel =
+    activeKind === "consultation_guide" ? "主题" : activeKind === "home_cover" ? "品牌标题" : "标题";
+  const bodyLabel = activeKind === "consultation_guide" ? "正文" : activeKind === "home_cover" ? "副标题" : "正文";
   const showBodyField =
-    activeKind === "activity" || isSitePageKind(activeKind) || activeKind === "consultation_guide";
+    activeKind === "activity" ||
+    activeKind === "home_cover" ||
+    activeKind === "brand" ||
+    activeKind === "charity" ||
+    activeKind === "contact" ||
+    activeKind === "consultation_guide";
   const showImageField = activeKind === "banner" || activeKind === "activity";
+  const showAssistantQrcodeField = activeKind === "contact";
+  const showHomeCoverField = activeKind === "home_cover";
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -83,11 +99,12 @@ export function ContentCreateModal({
           {showTitleField && (
             <label className="block">
               <span className="text-sm font-medium">
-                {titleLabel} <span className="text-[#B94A48]">*</span>
+                {titleLabel}
+                {activeKind !== "home_cover" && <span className="ml-1 text-[#B94A48]">*</span>}
               </span>
               <input
                 className="mt-2 h-11 w-full rounded-xl border border-[var(--lxxl-border)] px-3 text-sm outline-none transition focus:border-[var(--lxxl-green)]"
-                placeholder={activeKind === "consultation_guide" ? "请输入主题" : "请输入标题"}
+                placeholder={activeKind === "home_cover" ? "同心理" : activeKind === "consultation_guide" ? "请输入主题" : "请输入标题"}
                 value={draft.title}
                 onChange={(event) => setDraft((prev) => ({ ...prev, title: event.target.value }))}
               />
@@ -98,21 +115,44 @@ export function ContentCreateModal({
             <label className="block">
               <span className="text-sm font-medium">
                 {bodyLabel}
-                {(isSitePageKind(activeKind) || activeKind === "consultation_guide") && (
-                  <span className="ml-1 text-[#B94A48]">*</span>
-                )}
+                {(activeKind === "brand" ||
+                  activeKind === "charity" ||
+                  activeKind === "contact" ||
+                  activeKind === "consultation_guide") && <span className="ml-1 text-[#B94A48]">*</span>}
               </span>
               <textarea
-                className="mt-2 min-h-40 w-full resize-y rounded-xl border border-[var(--lxxl-border)] px-3 py-3 text-sm outline-none transition focus:border-[var(--lxxl-green)]"
+                className={
+                  activeKind === "home_cover"
+                    ? "mt-2 min-h-20 w-full resize-y rounded-xl border border-[var(--lxxl-border)] px-3 py-3 text-sm outline-none transition focus:border-[var(--lxxl-green)]"
+                    : "mt-2 min-h-40 w-full resize-y rounded-xl border border-[var(--lxxl-border)] px-3 py-3 text-sm outline-none transition focus:border-[var(--lxxl-green)]"
+                }
                 placeholder={
                   activeKind === "activity"
                     ? "请输入活动正文"
-                    : "请输入正文，段落之间可用空行分隔"
+                    : activeKind === "home_cover"
+                      ? "专业.温暖的心理服务平台"
+                      : "请输入正文，段落之间可用空行分隔"
                 }
-                value={isSitePageKind(activeKind) || activeKind === "consultation_guide" ? draft.body : draft.summary}
+                value={
+                  activeKind === "activity"
+                    ? draft.summary
+                    : activeKind === "brand" ||
+                        activeKind === "charity" ||
+                        activeKind === "contact" ||
+                        activeKind === "home_cover" ||
+                        activeKind === "consultation_guide"
+                      ? draft.body
+                      : draft.summary
+                }
                 onChange={(event) => {
                   const value = event.target.value;
-                  if (isSitePageKind(activeKind) || activeKind === "consultation_guide") {
+                  if (
+                    activeKind === "brand" ||
+                    activeKind === "charity" ||
+                    activeKind === "contact" ||
+                    activeKind === "home_cover" ||
+                    activeKind === "consultation_guide"
+                  ) {
                     setDraft((prev) => ({ ...prev, body: value }));
                   } else {
                     setDraft((prev) => ({ ...prev, summary: value }));
@@ -120,6 +160,28 @@ export function ContentCreateModal({
                 }}
               />
             </label>
+          )}
+
+          {showHomeCoverField && (
+            <ContentCoverCropUpload
+              crop={draft.coverCrop}
+              imageUrl={draft.coverImageUrl}
+              onChange={({ imageUrl, crop }) =>
+                setDraft((prev) => ({
+                  ...prev,
+                  coverImageUrl: imageUrl,
+                  coverCrop: crop,
+                }))
+              }
+            />
+          )}
+
+          {showAssistantQrcodeField && (
+            <ContentImageUpload
+              label="助理微信二维码"
+              value={draft.assistantQrcodeUrl}
+              onChange={(url) => setDraft((prev) => ({ ...prev, assistantQrcodeUrl: url }))}
+            />
           )}
 
           {showImageField && (

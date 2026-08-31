@@ -17,7 +17,16 @@ export function ContentScreen() {
 }
 
 function emptyDraft(kind: ContentKind): ContentDraft {
-  return { kind, title: "", body: "", summary: "", imageUrl: "" };
+  return {
+    kind,
+    title: "",
+    body: "",
+    summary: "",
+    imageUrl: "",
+    assistantQrcodeUrl: "",
+    coverImageUrl: "",
+    coverCrop: { x: 0, y: 0, width: 1, height: 1 },
+  };
 }
 
 function ContentScreenContent() {

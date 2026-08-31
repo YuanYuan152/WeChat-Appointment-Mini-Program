@@ -2,12 +2,14 @@
   <view class="staff-nav-root">
     <view class="staff-nav" :class="theme" :style="navWrapStyle">
       <view class="staff-nav-content" :style="contentStyle">
-        <view class="staff-nav-back-area" @tap="onBack">
-          <text class="staff-nav-back-icon">‹</text>
-          <text class="staff-nav-back-text">返回</text>
+        <view class="staff-nav-side staff-nav-side-left" :style="sideStyle">
+          <view class="staff-nav-back-area" @tap="onBack">
+            <text class="staff-nav-back-icon">‹</text>
+            <text class="staff-nav-back-text">返回</text>
+          </view>
         </view>
-        <text class="staff-nav-title">{{ title }}</text>
-        <view class="staff-nav-side" :style="{ width: capsuleWidthPx + 'px' }" />
+        <text class="staff-nav-title" :style="titleStyle">{{ title }}</text>
+        <view class="staff-nav-side staff-nav-side-right" :style="sideStyle" />
       </view>
     </view>
     <view class="staff-nav-placeholder" :style="{ height: navHeightPx + 'px' }" />
@@ -36,9 +38,10 @@ function resolveNavMetrics() {
     if (menuButton?.height && menuButton?.top) {
       const navBarHeight = menuButton.height + (menuButton.top - (sys.statusBarHeight || 0)) * 2
       const capsuleWidth = windowWidth - menuButton.left + uni.upx2px(8)
+      const backSlotMin = uni.upx2px(120)
       return {
         navBarHeight,
-        capsuleWidth: Math.max(capsuleWidth, uni.upx2px(80)),
+        sideWidth: Math.max(capsuleWidth, backSlotMin),
       }
     }
   } catch {
@@ -46,13 +49,13 @@ function resolveNavMetrics() {
   }
   return {
     navBarHeight: uni.upx2px(88),
-    capsuleWidth: uni.upx2px(80),
+    sideWidth: uni.upx2px(120),
   }
 }
 
 const navMetrics = resolveNavMetrics()
 const navBarPx = navMetrics.navBarHeight
-const capsuleWidthPx = ref(navMetrics.capsuleWidth)
+const sideWidthPx = ref(navMetrics.sideWidth)
 const navHeightPx = computed(() => statusBarPx.value + navBarPx)
 
 const navWrapStyle = computed(() => ({
@@ -61,6 +64,14 @@ const navWrapStyle = computed(() => ({
 
 const contentStyle = computed(() => ({
   height: `${navBarPx}px`,
+}))
+
+const sideStyle = computed(() => ({
+  width: `${sideWidthPx.value}px`,
+}))
+
+const titleStyle = computed(() => ({
+  maxWidth: `calc(100% - ${sideWidthPx.value * 2}px)`,
 }))
 
 const onBack = () => navigateBackOrHome()
@@ -88,18 +99,33 @@ defineExpose({ navHeightPx })
 }
 
 .staff-nav-content {
+  position: relative;
   display: flex;
   align-items: center;
-  padding: 0 16rpx 0 8rpx;
+  justify-content: space-between;
   box-sizing: border-box;
+}
+
+.staff-nav-side {
+  flex-shrink: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+
+.staff-nav-side-left {
+  justify-content: flex-start;
+}
+
+.staff-nav-side-right {
+  justify-content: flex-end;
 }
 
 .staff-nav-back-area {
   display: flex;
   align-items: center;
-  min-width: 120rpx;
   height: 64rpx;
-  padding: 0 16rpx 0 8rpx;
+  padding: 0 8rpx 0 12rpx;
   flex-shrink: 0;
 }
 
@@ -129,17 +155,17 @@ defineExpose({ navHeightPx })
 }
 
 .staff-nav-title {
-  flex: 1;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
   text-align: center;
-  font-size: 34rpx;
-  font-weight: 600;
+  font-size: 17px;
+  font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.staff-nav-side {
-  flex-shrink: 0;
+  pointer-events: none;
 }
 
 .staff-nav-placeholder {

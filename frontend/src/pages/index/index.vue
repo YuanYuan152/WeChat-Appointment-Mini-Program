@@ -2,11 +2,19 @@
   <view class="page-index">
     <!-- 顶部氛围大图 -->
     <view class="hero-wrap">
-      <image class="hero-bg" src="/static/images-opt/slide11.jpg" mode="aspectFill" />
+      <view class="hero-bg-frame">
+        <image
+          class="hero-bg"
+          :src="heroCoverSrc"
+          mode="scaleToFill"
+          :style="heroImageStyle"
+          @load="onHeroImageLoad"
+        />
+      </view>
       <view class="hero-mask" />
       <view class="hero-content">
-        <text class="hero-brand">同心理</text>
-        <text class="hero-sub">专业.温暖的心理服务平台</text>
+        <text class="hero-brand">{{ heroBrand }}</text>
+        <text class="hero-sub">{{ heroSub }}</text>
       </view>
     </view>
 
@@ -75,36 +83,6 @@
       <view class="quick-item" @tap="navigateTo('/pages/contact/index')">
         <view class="quick-icon"><text class="quick-symbol">联</text></view>
         <text class="quick-label">联系我们</text>
-      </view>
-    </view>
-
-    <!-- 轮播推荐 -->
-    <view class="section-block" v-if="banners.length">
-      <view class="section-head">
-        <text class="section-title">精选推荐</text>
-      </view>
-      <view class="banner-section">
-        <swiper
-          class="banner-swiper"
-          :indicator-dots="true"
-          indicator-color="rgba(61,90,78,0.2)"
-          indicator-active-color="#3D5A4E"
-          :autoplay="true"
-          :interval="4000"
-          :duration="500"
-          circular
-        >
-          <swiper-item v-for="banner in banners" :key="banner.id" @tap="handleBannerClick(banner)">
-            <view class="banner-item">
-              <image :src="banner.image" class="banner-image" mode="aspectFill" />
-              <view class="banner-overlay">
-                <button class="banner-btn" @tap.stop="handleBannerAction(banner)">
-                  {{ banner.buttonText }}
-                </button>
-              </view>
-            </view>
-          </swiper-item>
-        </swiper>
       </view>
     </view>
 
@@ -208,18 +186,27 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import type { Banner, Doctor, Activity, LiveStream } from '@/types'
+import type { Doctor, Activity, LiveStream } from '@/types'
 import { homeApi } from '@/apis'
-import { fixArrayImageUrls } from '@/utils/image'
+import { fixArrayImageUrls, fixImageUrl } from '@/utils/image'
 import { handleRequireLogin } from '@/utils/auth'
+import { fetchPublicSiteContent } from '@/utils/siteContentApi'
+import { buildHeroCoverImageStyle, normalizeCoverCrop } from '@/utils/coverCrop'
+
+const DEFAULT_HERO_COVER = '/static/images-opt/slide11.jpg'
 
 // 响应式数据
 const searchKeyword = ref('')
 const activeTab = ref('live')
-const banners = ref<Banner[]>([])
 const doctors = ref<Doctor[]>([])
 const activities = ref<Activity[]>([])
 const liveStreams = ref<LiveStream[]>([])
+const heroCoverSrc = ref(DEFAULT_HERO_COVER)
+const heroBrand = ref('同心理')
+const heroSub = ref('专业.温暖的心理服务平台')
+const heroCoverCrop = ref(normalizeCoverCrop())
+const heroImageStyle = ref<Record<string, string>>({})
+const heroNaturalSize = ref({ width: 0, height: 0 })
 
 // 搜索相关状态
 const showSuggestions = ref(false)
@@ -238,19 +225,63 @@ const handleImageLoad = (e: any) => {
 
 // 生命周期
 onMounted(() => {
-  // 加载页面数据
   loadPageData()
-  
-  // 加载搜索历史
+  loadHomeCover()
   searchHistory.value = getSearchHistory()
 })
+
+const loadHomeCover = async () => {
+  const payload = await fetchPublicSiteContent()
+  const home = payload?.pages?.home
+  if (home?.coverImageUrl?.trim()) {
+    heroCoverSrc.value = fixImageUrl(home.coverImageUrl.trim())
+  }
+  if (home?.title?.trim()) {
+    heroBrand.value = home.title.trim()
+  }
+  if (home?.body?.trim()) {
+    heroSub.value = home.body.trim()
+  }
+  if (home?.coverCrop) {
+    heroCoverCrop.value = normalizeCoverCrop(home.coverCrop)
+  }
+}
+
+const updateHeroImageLayout = () => {
+  if (heroNaturalSize.value.width <= 0 || heroNaturalSize.value.height <= 0) {
+    return
+  }
+  uni.createSelectorQuery()
+    .select('.hero-wrap')
+    .boundingClientRect((rect) => {
+      if (!rect || Array.isArray(rect)) {
+        return
+      }
+      heroImageStyle.value = buildHeroCoverImageStyle(
+        heroCoverCrop.value,
+        heroNaturalSize.value.width,
+        heroNaturalSize.value.height,
+        rect.width,
+        rect.height,
+      )
+    })
+    .exec()
+}
+
+const onHeroImageLoad = (e: any) => {
+  const width = Number(e.detail?.width || 0)
+  const height = Number(e.detail?.height || 0)
+  if (width > 0 && height > 0) {
+    heroNaturalSize.value = { width, height }
+    updateHeroImageLayout()
+  }
+}
 
 // 加载页面数据
 const loadPageData = async () => {
   try {
     const payload = await homeApi.getIndexData()
     if (payload.code === 0 && payload.data) {
-      banners.value = fixArrayImageUrls(payload.data.banners || [], ['image'])
       doctors.value = fixArrayImageUrls(payload.data.doctors || [], ['avatar'])
       activities.value = fixArrayImageUrls(payload.data.activities || [], ['image'])
       liveStreams.value = fixArrayImageUrls(payload.data.liveStreams || [], ['image'])
@@ -274,23 +305,6 @@ const loadPageData = async () => {
 
 // 加载模拟数据
 const loadMockData = () => {
-  banners.value = [
-    {
-      id: 1,
-      title: '防疫新知识',
-      image: '/static/images-opt/slide11.jpg',
-      buttonText: '预约讲座',
-      date: ''
-    },
-    {
-      id: 2,
-      title: '心理健康讲座',
-      image: '/static/images-opt/slide11.jpg',
-      buttonText: '预约讲座',
-      date: ''
-    }
-  ]
-  
   doctors.value = [
     {
       id: 1,
@@ -465,18 +479,6 @@ const selectSuggestionItem = (keyword: string) => {
   goSearchPage(keyword)
 }
 
-// 轮播图点击
-const handleBannerClick = (banner: Banner) => {
-  // 轮播图点击处理，可以根据需要添加跳转逻辑
-  console.log('轮播图点击:', banner)
-}
-
-// 轮播图按钮点击
-const handleBannerAction = (banner: Banner) => {
-  // TODO: 处理轮播图按钮点击
-  console.log('轮播图按钮点击:', banner)
-}
-
 // 切换标签页
 const switchTab = (tab: string) => {
   activeTab.value = tab
@@ -550,7 +552,17 @@ const navigateTo = (url: string) => {
   height: 420rpx;
   overflow: hidden;
 }
-.hero-bg { width: 100%; height: 100%; }
+.hero-bg-frame {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+.hero-bg {
+  position: absolute;
+  left: 0;
+  top: 0;
+  max-width: none;
+}
 .hero-mask {
   position: absolute; inset: 0;
   background: linear-gradient(to bottom, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.35) 100%);
@@ -665,22 +677,6 @@ const navigateTo = (url: string) => {
 }
 .section-title { font-size: 34rpx; font-weight: 600; color: #2C2C2C; letter-spacing: 1rpx; }
 .section-more { font-size: 26rpx; color: #8A8A8A; }
-
-/* 轮播 */
-.banner-swiper { height: 280rpx; border-radius: 20rpx; overflow: hidden; }
-.banner-item { width: 100%; height: 100%; position: relative; border-radius: 20rpx; overflow: hidden; }
-.banner-image { width: 100%; height: 100%; background: #E8E4DE; }
-.banner-overlay {
-  position: absolute; bottom: 0; left: 0; right: 0;
-  padding: 24rpx 28rpx;
-  background: linear-gradient(transparent, rgba(0,0,0,0.4));
-  display: flex; justify-content: flex-end;
-}
-.banner-btn {
-  background: #3D5A4E; color: #fff; font-size: 24rpx;
-  padding: 0 28rpx; height: 52rpx; line-height: 52rpx;
-  border-radius: 8rpx; margin: 0; border: none;
-}
 
 /* 服务卡片 */
 .service-list { display: flex; flex-direction: column; gap: 16rpx; }

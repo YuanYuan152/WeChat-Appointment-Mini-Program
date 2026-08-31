@@ -16,7 +16,7 @@
 """
 
 from datetime import datetime, time, date as date_type, timedelta
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -293,12 +293,25 @@ class SitePageOut(BaseModel):
     pageKey: str
     title: str
     body: str
+    assistantQrcodeUrl: Optional[str] = None
+    coverImageUrl: Optional[str] = None
+    coverCrop: Optional[Dict[str, float]] = None
     updatedAt: Optional[datetime] = None
 
 
+class CoverCropIn(BaseModel):
+    x: float = 0.0
+    y: float = 0.0
+    width: float = 1.0
+    height: float = 1.0
+
+
 class SitePageUpsert(BaseModel):
-    body: str
+    body: str = ""
     title: Optional[str] = None
+    assistant_qrcode_url: Optional[str] = None
+    cover_image_url: Optional[str] = None
+    cover_crop: Optional[CoverCropIn] = None
 
 
 class SiteGuideItemOut(BaseModel):
@@ -350,6 +363,11 @@ def upsert_site_page(
             body=body.body,
             title=body.title,
             account_id=int(account.Id),
+            assistant_qrcode_url=body.assistant_qrcode_url,
+            update_assistant_qrcode=body.assistant_qrcode_url is not None,
+            cover_image_url=body.cover_image_url,
+            cover_crop=body.cover_crop.model_dump() if body.cover_crop else None,
+            update_cover=body.cover_image_url is not None or body.cover_crop is not None,
         )
         db.commit()
         return row

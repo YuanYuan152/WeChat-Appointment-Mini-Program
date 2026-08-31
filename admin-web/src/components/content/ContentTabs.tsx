@@ -1,6 +1,7 @@
 import type { ContentKind } from "@/types/app";
 
 export const CONTENT_TABS: Array<{ kind: ContentKind; label: string }> = [
+  { kind: "home_cover", label: "首页封面" },
   { kind: "banner", label: "Banner" },
   { kind: "activity", label: "活动公告" },
   { kind: "brand", label: "品牌介绍" },
@@ -14,10 +15,11 @@ export function getContentKindLabel(kind: ContentKind) {
 }
 
 export function isSitePageKind(kind: ContentKind) {
-  return kind === "brand" || kind === "charity" || kind === "contact";
+  return kind === "brand" || kind === "charity" || kind === "contact" || kind === "home_cover";
 }
 
 export function sitePageKeyForKind(kind: ContentKind): string | null {
+  if (kind === "home_cover") return "home";
   if (kind === "brand") return "brand";
   if (kind === "charity") return "charity";
   if (kind === "contact") return "contact";

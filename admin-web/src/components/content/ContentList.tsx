@@ -11,6 +11,14 @@ export interface ContentListItem {
   summary?: string | null;
   body?: string | null;
   imageUrl?: string | null;
+  assistantQrcodeUrl?: string | null;
+  coverImageUrl?: string | null;
+  coverCrop?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null;
   pageKey?: string;
 }
 

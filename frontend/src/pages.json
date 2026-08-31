@@ -367,9 +367,10 @@
                     "path": "index/index",
                     "style": {
                         "navigationBarTitleText": "管理工作台",
-                        "navigationBarBackgroundColor": "#ffffff",
-                        "navigationBarTextStyle": "black",
-                        "backgroundColor": "#F7F5F2"
+                        "navigationBarBackgroundColor": "#3D5A4E",
+                        "navigationBarTextStyle": "white",
+                        "backgroundColor": "#F7F5F2",
+                        "navigationStyle": "custom"
                     }
                 },
                 {

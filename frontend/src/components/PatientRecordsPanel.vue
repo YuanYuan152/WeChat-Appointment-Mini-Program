@@ -124,18 +124,14 @@
           <button class="pay-btn" @click="goPayOrder(r)">去支付</button>
         </view>
 
-        <view v-else-if="r.status === 'DONE' && !r.hasFeedback" class="record-actions">
-          <button class="feedback-btn" @click="goFeedback(r)">去反馈</button>
-        </view>
-
         <view v-if="r.canCancel" class="refund-hint-row">
           <text class="refund-hint">{{ r.refundEligible ? '距咨询超过24小时，取消可退款' : '距咨询不足24小时，取消不退款' }}</text>
         </view>
 
         <view
-          v-if="r.canCancel || r.counselorId"
+          v-if="r.canCancel || r.counselorId || (r.status === 'DONE' && !r.hasFeedback)"
           class="bottom-actions"
-          :class="{ 'bottom-actions--end': !r.canCancel }"
+          :class="{ 'bottom-actions--end': !r.canCancel && !(r.status === 'DONE' && !r.hasFeedback) }"
         >
           <button
             v-if="r.canCancel"
@@ -145,6 +141,14 @@
           >
             {{ cancellingId === r.id ? '取消中...' : '取消预约' }}
           </button>
+          <button
+            v-else-if="r.status === 'DONE' && !r.hasFeedback"
+            class="feedback-btn"
+            @click="goFeedback(r)"
+          >
+            去反馈
+          </button>
+
           <button
             v-if="r.counselorId"
             class="rebook-btn"
@@ -899,6 +903,7 @@ defineExpose({ refresh })
 }
 
 .bottom-actions .cancel-btn,
+.bottom-actions .feedback-btn,
 .bottom-actions .rebook-btn {
   margin: 0;
   padding: 0 28rpx;
@@ -922,11 +927,9 @@ defineExpose({ refresh })
 
 .cancel-btn {
 
-  margin: 0; padding: 0 32rpx; height: 64rpx; line-height: 64rpx;
-
   font-size: 26rpx; color: #DC2626; background: #FEF2F2;
 
-  border: 1rpx solid #FECACA; border-radius: 12rpx;
+  border: 1rpx solid #FECACA;
 
 }
 
@@ -977,17 +980,13 @@ defineExpose({ refresh })
 }
 .feedback-line:last-child { margin-bottom: 0; }
 
-.feedback-btn {
-  margin: 0;
-  padding: 0 32rpx;
-  height: 64rpx;
-  line-height: 64rpx;
-  font-size: 26rpx;
+.bottom-actions .feedback-btn {
+  font-weight: 600;
   color: #fff;
   background: #3D5A4E;
   border: none;
-  border-radius: 12rpx;
 }
+
 .feedback-btn::after { border: none; }
 
 

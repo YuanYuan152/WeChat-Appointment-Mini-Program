@@ -1,5 +1,6 @@
 <template>
   <view class="page-ops-home">
+    <StaffWorkbenchNavBar title="管理工作台" theme="green" />
     <view class="hero-card">
       <text class="hero-subtitle">咨询助理、咨询主任、管理员共用；管理排期、咨询室与用户</text>
     </view>
@@ -28,6 +29,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
+import StaffWorkbenchNavBar from '@/components/StaffWorkbenchNavBar.vue'
 import { useUserStore } from '@/store/user'
 import { resolveAccountRole, canManageStaffOperationalSettings } from '@/constants/roles'
 import { getToken } from '@/utils/auth'

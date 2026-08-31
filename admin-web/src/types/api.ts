@@ -287,6 +287,14 @@ export interface SitePage {
   pageKey: string;
   title: string;
   body: string;
+  assistantQrcodeUrl?: string | null;
+  coverImageUrl?: string | null;
+  coverCrop?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null;
   updatedAt?: string | null;
 }
 

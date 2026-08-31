@@ -40,14 +40,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { ASSISTANT_CONTACT, CONTACT_CENTERS, type ContactCenter } from '@/constants/contactInfo'
+import { fetchPublicSiteContent } from '@/utils/siteContentApi'
+import { fixImageUrl } from '@/utils/image'
 
 const props = withDefaults(
   defineProps<{
     showCenters?: boolean
     compact?: boolean
     centers?: ContactCenter[]
+    qrcodeSrc?: string
   }>(),
   {
     showCenters: true,
@@ -58,7 +61,27 @@ const props = withDefaults(
 
 const assistant = ASSISTANT_CONTACT
 const qrLoadFailed = ref(false)
-const qrSrc = computed(() => assistant.qrcodeSrc)
+const remoteQrcodeSrc = ref('')
+
+onMounted(async () => {
+  if (props.qrcodeSrc?.trim()) {
+    return
+  }
+  const payload = await fetchPublicSiteContent()
+  const url = payload?.pages?.contact?.assistantQrcodeUrl
+  if (url?.trim()) {
+    remoteQrcodeSrc.value = url.trim()
+  }
+})
+
+const qrSrc = computed(() => {
+  const raw = props.qrcodeSrc?.trim() || remoteQrcodeSrc.value || assistant.qrcodeSrc
+  return fixImageUrl(raw)
+})
+
+watch(qrSrc, () => {
+  qrLoadFailed.value = false
+})
 
 const callAssistant = () => {
   uni.makePhoneCall({ phoneNumber: assistant.phoneDial })

@@ -93,6 +93,12 @@ APP_COUNSELOR_PATIENT_PRICING_COLUMNS = {
     "CharityNegotiatedAt": "DATETIME NULL",
 }
 
+APP_SITE_PAGE_COLUMNS = {
+    "AssistantQrcodeUrl": "NVARCHAR(500) NULL",
+    "CoverImageUrl": "NVARCHAR(500) NULL",
+    "CoverCropJson": "NVARCHAR(500) NULL",
+}
+
 
 # 这些表只能通过 migrate_assessment_tables.py 的目标库确认流程创建，不能在
 # FastAPI 启动或通用 init_db 中静默落库。
@@ -328,6 +334,23 @@ def ensure_counselor_patient_pricing_columns():
             print(f"[OK] Added AppCounselorPatientPricing.{name}")
 
 
+def ensure_app_site_page_columns():
+    inspector = inspect(engine)
+    if not inspector.has_table("AppSitePage"):
+        return
+
+    existing = {column["name"] for column in inspector.get_columns("AppSitePage")}
+    missing = [(name, ddl) for name, ddl in APP_SITE_PAGE_COLUMNS.items() if name not in existing]
+    if not missing:
+        print("[OK] AppSitePage columns already complete")
+        return
+
+    with engine.begin() as conn:
+        for name, ddl in missing:
+            conn.execute(text(f"ALTER TABLE [dbo].[AppSitePage] ADD [{name}] {ddl}"))
+            print(f"[OK] Added AppSitePage.{name}")
+
+
 def print_summary():
     inspector = inspect(engine)
     tables = [name for name in inspector.get_table_names() if name.startswith("App")]
@@ -352,6 +375,7 @@ def main():
     ensure_schedule_cancel_log_columns()
     ensure_counselor_profile_columns()
     ensure_counselor_patient_pricing_columns()
+    ensure_app_site_page_columns()
     from database import SessionLocal
     from charity_milestone_service import backfill_charity_negotiation_state
     db = SessionLocal()
