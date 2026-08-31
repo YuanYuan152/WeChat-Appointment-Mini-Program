@@ -43,6 +43,7 @@ export type SectionId =
   | "roles"
   | "refunds"
   | "feedback"
+  | "systemFeedback"
   | "content"
   | "assessments"
   | "assessmentReports"
@@ -81,6 +82,7 @@ export interface ScreenData {
   messages?: MessageItem[];
   refunds?: RefundExemption[];
   feedbacks?: FeedbackItem[];
+  systemFeedbacks?: FeedbackItem[];
   adminUsers?: AdminUser[];
   banners?: Banner[];
   activities?: Activity[];

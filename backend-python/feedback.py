@@ -41,7 +41,7 @@ def require_ops_or_admin(
 ) -> AppAccount:
     binding = db.query(AppRoleBinding).filter(
         AppRoleBinding.AccountId == current_account.Id,
-        AppRoleBinding.RoleType.in_(["Ops", "Admin"]),
+        AppRoleBinding.RoleType.in_(["Ops", "Admin", "Assistant"]),
     ).first()
     if not binding:
         raise HTTPException(status_code=403, detail="无运营/管理员权限")

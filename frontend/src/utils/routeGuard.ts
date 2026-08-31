@@ -31,7 +31,19 @@ export function setupRouteGuard() {
     if (!requiredRoles) return true
 
     if (!getStoredToken()) {
-      uni.navigateTo({ url: `/pages/auth/login?redirect=${encodeURIComponent(url)}` })
+      try {
+        uni.setStorageSync('redirectAfterLogin', url)
+      } catch {
+        /* ignore */
+      }
+      uni.navigateTo({
+        url: `/pages/auth/login?redirect=${encodeURIComponent(url)}`,
+        fail: () => {
+          uni.reLaunch({
+            url: `/pages/auth/login?redirect=${encodeURIComponent(url)}`,
+          })
+        },
+      })
       return false
     }
 

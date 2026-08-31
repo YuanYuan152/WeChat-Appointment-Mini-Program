@@ -111,6 +111,7 @@
 
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
+import { onLoad } from '@dcloudio/uni-app'
 import { AuthApi, type WxLoginResponse } from '@/apis/auth'
 import DevRolePicker from '@/components/DevRolePicker.vue'
 import { applyRoleAfterLogin, navigateToRoleHome } from '@/utils/roleLogin'
@@ -125,6 +126,21 @@ import {
   setDevEntranceOpen,
   type DevLoginRole,
 } from '@/utils/auth'
+
+const rememberRedirect = (raw?: string) => {
+  if (!raw) return
+  try {
+    const url = decodeURIComponent(String(raw)).trim()
+    if (!url || url.includes('/pages/auth/login')) return
+    uni.setStorageSync('redirectAfterLogin', url.startsWith('/') ? url : `/${url}`)
+  } catch {
+    /* ignore */
+  }
+}
+
+onLoad((query) => {
+  rememberRedirect(query?.redirect ? String(query.redirect) : '')
+})
 
 const loading = ref(false)
 const wechatReady = ref(false)

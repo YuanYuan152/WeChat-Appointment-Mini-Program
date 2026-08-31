@@ -40,6 +40,13 @@ export const sections: NavigationSection[] = [
     allowedRoles: ["Admin", "Ops", "Assistant"],
   },
   { id: "feedback", label: "咨询反馈", desc: "查看咨询反馈详情", path: "/feedback", allowedRoles: ["Admin", "Ops", "Assistant"] },
+  {
+    id: "systemFeedback",
+    label: "系统反馈",
+    desc: "小程序意见反馈提交内容",
+    path: "/system-feedback",
+    allowedRoles: ["Admin", "Ops", "Assistant"],
+  },
   { id: "content", label: "内容管理", desc: "Banner / 活动 / 站点文案", path: "/ops-content", allowedRoles: ["Admin", "Ops", "Assistant"] },
   {
     id: "assessments",
@@ -119,7 +126,7 @@ export const sectionPathById = Object.fromEntries(
 export const navigationGroups: NavigationGroup[] = [
   { id: "overview", label: "工作台", sectionIds: ["dashboard", "messages", "myProfile", "proxyBooking"] },
   { id: "admin", label: "权限管理", sectionIds: ["roles"] },
-  { id: "business", label: "业务处理", sectionIds: ["refunds", "feedback", "caseRecords", "operationLogs", "dataImport"] },
+  { id: "business", label: "业务处理", sectionIds: ["refunds", "feedback", "systemFeedback", "caseRecords", "operationLogs", "dataImport"] },
   {
     id: "operation",
     label: "运营配置",

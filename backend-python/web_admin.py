@@ -14,6 +14,7 @@ from urllib.parse import quote
 from xml.etree import ElementTree as ET
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
+from pydantic import BaseModel, Field
 from sqlalchemy import or_
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.orm import Session
@@ -33,6 +34,7 @@ from models import (
     AppConsultationRoom,
     AppConsultationRoomSlot,
     AppCounselorProfile,
+    AppFeedback,
     AppLeaveRequest,
     AppOrder,
     AppRefundExemption,
@@ -1808,3 +1810,92 @@ def counselor_board_detail(
             for r in cancel_logs
         ],
     }
+
+
+class SystemFeedbackOut(BaseModel):
+    id: int
+    accountId: int
+    userName: Optional[str] = None
+    userMobile: Optional[str] = None
+    category: Optional[str] = None
+    content: str
+    contact: Optional[str] = None
+    status: str
+    createdAt: datetime
+
+
+class SystemFeedbackStatusBody(BaseModel):
+    status: str = Field(..., description="OPEN / CLOSED")
+
+
+def _system_feedback_user_name(account: Optional[AppAccount]) -> Optional[str]:
+    if not account:
+        return None
+    return account.RealName or account.Nickname or account.Mobile or "未留姓名用户"
+
+
+@router.get(
+    "/system-feedbacks",
+    summary="系统意见反馈列表（小程序个人中心提交）",
+)
+def list_system_feedbacks(
+    status: Optional[str] = Query(None, description="OPEN / CLOSED / ALL"),
+    _staff: AppAccount = Depends(require_staff_workbench),
+    db: Session = Depends(get_db),
+):
+    q = db.query(AppFeedback).order_by(AppFeedback.CreatedAt.desc())
+    if status and status.upper() != "ALL":
+        q = q.filter(AppFeedback.Status == status.upper())
+    rows = q.limit(500).all()
+    account_ids = [row.AccountId for row in rows]
+    accounts = {
+        account.Id: account
+        for account in db.query(AppAccount).filter(AppAccount.Id.in_(account_ids)).all()
+    } if account_ids else {}
+    return [
+        SystemFeedbackOut(
+            id=row.Id,
+            accountId=row.AccountId,
+            userName=_system_feedback_user_name(accounts.get(row.AccountId)),
+            userMobile=accounts.get(row.AccountId).Mobile if accounts.get(row.AccountId) else None,
+            category=row.Category,
+            content=row.Content,
+            contact=row.Contact,
+            status=row.Status,
+            createdAt=row.CreatedAt,
+        )
+        for row in rows
+    ]
+
+
+@router.patch(
+    "/system-feedbacks/{feedback_id}/status",
+    summary="更新系统意见反馈处理状态",
+)
+def update_system_feedback_status(
+    feedback_id: int,
+    body: SystemFeedbackStatusBody,
+    _staff: AppAccount = Depends(require_staff_workbench),
+    db: Session = Depends(get_db),
+):
+    status = (body.status or "").strip().upper()
+    if status not in {"OPEN", "CLOSED"}:
+        raise HTTPException(status_code=400, detail="状态仅支持 OPEN / CLOSED")
+    row = db.query(AppFeedback).filter(AppFeedback.Id == feedback_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="反馈不存在")
+    row.Status = status
+    db.commit()
+    db.refresh(row)
+    account = db.query(AppAccount).filter(AppAccount.Id == row.AccountId).first()
+    return SystemFeedbackOut(
+        id=row.Id,
+        accountId=row.AccountId,
+        userName=_system_feedback_user_name(account),
+        userMobile=account.Mobile if account else None,
+        category=row.Category,
+        content=row.Content,
+        contact=row.Contact,
+        status=row.Status,
+        createdAt=row.CreatedAt,
+    )
