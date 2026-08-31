@@ -70,22 +70,61 @@ onShow(() => {
 </script>
 
 <style scoped>
-.page-dashboard { min-height: 100vh; background: #F4F6F8; padding: 32rpx; }
-.header {
-  background: linear-gradient(135deg, #7C3AED, #4F46E5);
-  border-radius: 32rpx;
-  padding: 44rpx 36rpx;
-  margin-bottom: 28rpx;
+.page-dashboard {
+  min-height: 100vh;
+  background: #F7F5F2;
+  padding: 32rpx;
+  box-sizing: border-box;
 }
-.title { display: block; color: #fff; font-size: 38rpx; font-weight: 900; }
-.subtitle { display: block; margin-top: 10rpx; color: rgba(255,255,255,.86); font-size: 26rpx; }
-.grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20rpx; }
+
+.header {
+  background: linear-gradient(135deg, #3D5A4E, #2F4A40);
+  border-radius: 24rpx;
+  padding: 40rpx 32rpx;
+  margin-bottom: 24rpx;
+  box-shadow: 0 8rpx 32rpx rgba(61, 90, 78, 0.15);
+}
+
+.title {
+  display: block;
+  font-size: 36rpx;
+  font-weight: 600;
+  color: #fff;
+}
+
+.subtitle {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.82);
+  line-height: 1.5;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20rpx;
+}
+
 .card {
   background: #fff;
-  border-radius: 28rpx;
-  padding: 36rpx 28rpx;
-  box-shadow: 0 4rpx 16rpx rgba(15, 23, 42, 0.06);
+  border-radius: 20rpx;
+  padding: 32rpx 28rpx;
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.03);
 }
-.num { display: block; color: #7C3AED; font-size: 44rpx; font-weight: 900; }
-.label { display: block; margin-top: 10rpx; color: #6B7280; font-size: 26rpx; }
+
+.num {
+  display: block;
+  font-size: 44rpx;
+  font-weight: 700;
+  color: #3D5A4E;
+  line-height: 1.2;
+}
+
+.label {
+  display: block;
+  margin-top: 10rpx;
+  font-size: 26rpx;
+  color: #6B6560;
+}
 </style>
