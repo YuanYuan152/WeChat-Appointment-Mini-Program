@@ -30,6 +30,8 @@ import type {
   Role,
   ScheduleRoomOptions,
   ScheduleOverview,
+  SiteGuideItem,
+  SitePage,
   UserBoardDetail,
   UserBoardSummary,
 } from "@/types/api";

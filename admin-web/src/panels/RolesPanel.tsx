@@ -11,6 +11,7 @@ import {
   resolveHighestStaffRole,
 } from "@/config/userRoleMeta";
 import {
+  ROLE_GROUP_OPTIONS,
   subtypeSelectOptionsForRoleGroup,
   type RoleGroupValue,
 } from "@/config/roleGroupFilter";
