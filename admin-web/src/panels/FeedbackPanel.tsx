@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { DetailDrawer } from "@/components/boards/DetailDrawer";
-import { formatDateTime, statusLabel } from "@/lib/format";
+import { feedbackCategoryLabel, formatDateTime, statusLabel } from "@/lib/format";
 import { formatPatientNameWithContractTag } from "@/lib/patientContract";
 import { getPageItems } from "@/lib/pagination";
 import type { FeedbackItem } from "@/types/api";
@@ -155,7 +155,7 @@ export function FeedbackPanel({
                       </div>
                       <div className="mt-1 text-xs text-[var(--lxxl-muted)]">{item.userMobile || "-"}</div>
                     </td>
-                    <td className="px-5 py-4">{item.category || "其他"}</td>
+                    <td className="px-5 py-4">{feedbackCategoryLabel(item.category)}</td>
                     <td className="max-w-lg px-5 py-4 text-[var(--lxxl-muted)]">{item.content}</td>
                     <td className="px-5 py-4 text-[var(--lxxl-muted)]">{item.contact || "-"}</td>
                     <td className="px-5 py-4">
@@ -195,7 +195,7 @@ export function FeedbackPanel({
             </section>
 
             <section className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <FeedbackDetailItem label="反馈类型" value={selectedFeedback.category || "其他"} />
+              <FeedbackDetailItem label="反馈类型" value={feedbackCategoryLabel(selectedFeedback.category)} />
               <FeedbackDetailItem label="处理状态" value={statusLabel(selectedFeedback.status)} />
               <FeedbackDetailItem label="提交时间" value={formatDateTime(selectedFeedback.createdAt)} />
               <FeedbackDetailItem label="联系方式" value={selectedFeedback.contact || selectedFeedback.userMobile || "-"} />

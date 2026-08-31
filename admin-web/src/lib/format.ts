@@ -1,5 +1,39 @@
 import type { Role } from "@/types/api";
 
+const SHANGHAI_TIME_ZONE = "Asia/Shanghai";
+
+/**
+ * 解析管理端时间字符串。
+ * - 带 Z / 偏移：按绝对时间解析，再格式化为北京时间
+ * - 无时区 naive（FastAPI / SQL Server 常见）：按北京墙钟解释，避免浏览器本地时区漂移
+ */
+function parseAdminDateTime(value: string): Date {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return new Date(Number.NaN);
+  }
+  if (/(?:z|[+-]\d{2}:?\d{2})$/i.test(trimmed)) {
+    return new Date(trimmed);
+  }
+  const normalized = trimmed.includes("T") ? trimmed : trimmed.replace(" ", "T");
+  return new Date(`${normalized}+08:00`);
+}
+
+function formatInShanghai(
+  value: string,
+  options: Intl.DateTimeFormatOptions,
+): string {
+  const date = parseAdminDateTime(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleString("zh-CN", {
+    timeZone: SHANGHAI_TIME_ZONE,
+    hour12: false,
+    ...options,
+  });
+}
+
 export function formatMoneyFromCents(value?: number | null) {
   if (value == null || Number.isNaN(value)) {
     return "-";
@@ -17,11 +51,7 @@ export function formatDateTime(value?: string | null) {
   if (!value) {
     return "-";
   }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-  return date.toLocaleString("zh-CN", {
+  return formatInShanghai(value, {
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
@@ -33,11 +63,7 @@ export function formatFullDateTime(value?: string | null) {
   if (!value) {
     return "-";
   }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-  return date.toLocaleString("zh-CN", {
+  return formatInShanghai(value, {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -46,6 +72,7 @@ export function formatFullDateTime(value?: string | null) {
   });
 }
 
+/** 数据库 UTC naive 时间：补 Z 后再转为北京时间展示（测评完成时间、操作日志等） */
 export function formatUtcFullDateTime(value?: string | null) {
   if (!value) {
     return "-";
@@ -56,7 +83,8 @@ export function formatUtcFullDateTime(value?: string | null) {
     return value;
   }
   return date.toLocaleString("zh-CN", {
-    timeZone: "Asia/Shanghai",
+    timeZone: SHANGHAI_TIME_ZONE,
+    hour12: false,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -69,15 +97,20 @@ export function formatDate(value?: string | null) {
   if (!value) {
     return "-";
   }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-  return date.toLocaleDateString("zh-CN", {
+  return formatInShanghai(value, {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
   });
+}
+
+/** 意见反馈类型：历史 VARCHAR 写入可能变成 ???，统一兜底展示 */
+export function feedbackCategoryLabel(category?: string | null) {
+  const text = (category || "").trim();
+  if (!text || /^[?？\uFFFD]+$/.test(text)) {
+    return "其他";
+  }
+  return text;
 }
 
 export function roleLabel(role?: Role | string | null) {

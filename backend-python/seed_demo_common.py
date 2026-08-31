@@ -1565,10 +1565,11 @@ def ensure_demo_user_feedback(db: Session, patient_map: dict) -> None:
     if not row:
         db.add(AppFeedback(
             AccountId=patient.Id,
-            Category="建议",
+            Category="功能建议",
             Content=content,
             Contact=patient.Mobile,
             Status="OPEN",
+            CreatedAt=china_now(),
         ))
 
 

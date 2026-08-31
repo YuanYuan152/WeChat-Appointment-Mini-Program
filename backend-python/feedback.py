@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app_time import as_china_api_time, china_now
 from auth import get_current_account
 from database import get_db
 from models import AppAccount, AppFeedback, AppRoleBinding
@@ -66,6 +67,8 @@ def submit_feedback(
         Content=body.content.strip(),
         Contact=body.contact.strip() if body.contact else None,
         Status="OPEN",
+        # 操作时间按提交时的北京时间落库，API 再带 +08:00 返回
+        CreatedAt=china_now(),
     )
     db.add(row)
     db.commit()
@@ -76,7 +79,7 @@ def submit_feedback(
         content=row.Content,
         contact=row.Contact,
         status=row.Status,
-        createdAt=row.CreatedAt,
+        createdAt=as_china_api_time(row.CreatedAt),
     )
 
 
@@ -105,7 +108,7 @@ def list_feedback_admin(
             content=row.Content,
             contact=row.Contact,
             status=row.Status,
-            createdAt=row.CreatedAt,
+            createdAt=as_china_api_time(row.CreatedAt),
         )
         for row in rows
     ]

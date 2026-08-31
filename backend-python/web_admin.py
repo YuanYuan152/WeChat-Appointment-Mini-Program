@@ -20,6 +20,7 @@ from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.orm import Session
 
 from auth import get_current_account
+from app_time import as_china_api_time
 from database import get_db
 from model_compat import optional_model_value
 from models import (
@@ -1862,7 +1863,7 @@ def list_system_feedbacks(
             content=row.Content,
             contact=row.Contact,
             status=row.Status,
-            createdAt=row.CreatedAt,
+            createdAt=as_china_api_time(row.CreatedAt),
         )
         for row in rows
     ]
@@ -1897,5 +1898,5 @@ def update_system_feedback_status(
         content=row.Content,
         contact=row.Contact,
         status=row.Status,
-        createdAt=row.CreatedAt,
+        createdAt=as_china_api_time(row.CreatedAt),
     )

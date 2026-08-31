@@ -724,9 +724,10 @@ class AppFeedback(Base):
 
     Id = Column(BigInteger, primary_key=True, index=True, autoincrement=True)
     AccountId = Column(Integer, nullable=False)
-    Category = Column(String(50), nullable=True)
+    # 反馈类型为中文文案（功能建议等），必须 NVARCHAR，避免写入 ??? 乱码
+    Category = Column(Unicode(50), nullable=True)
     Content = Column(UnicodeText, nullable=False)
-    Contact = Column(String(50), nullable=True)
+    Contact = Column(Unicode(50), nullable=True)
     Status = Column(String(20), nullable=False, default="OPEN")
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
 

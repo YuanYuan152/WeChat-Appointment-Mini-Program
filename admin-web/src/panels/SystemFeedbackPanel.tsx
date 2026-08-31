@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { DetailDrawer } from "@/components/boards/DetailDrawer";
-import { formatDateTime, statusLabel } from "@/lib/format";
+import { feedbackCategoryLabel, formatDateTime, statusLabel } from "@/lib/format";
 import { getPageItems } from "@/lib/pagination";
 import type { FeedbackItem } from "@/types/api";
 
@@ -168,7 +168,7 @@ export function SystemFeedbackPanel({
                       <div className="font-medium">{item.userName || "未留姓名用户"}</div>
                       <div className="mt-1 text-xs text-[var(--lxxl-muted)]">{item.userMobile || "-"}</div>
                     </td>
-                    <td className="px-5 py-4">{item.category || "其他"}</td>
+                    <td className="px-5 py-4">{feedbackCategoryLabel(item.category)}</td>
                     <td className="max-w-lg px-5 py-4 text-[var(--lxxl-muted)]">
                       <div className="line-clamp-3 whitespace-pre-wrap">{item.content}</div>
                     </td>
@@ -222,7 +222,7 @@ export function SystemFeedbackPanel({
             </section>
 
             <section className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <FeedbackDetailItem label="反馈类型" value={selectedFeedback.category || "其他"} />
+              <FeedbackDetailItem label="反馈类型" value={feedbackCategoryLabel(selectedFeedback.category)} />
               <FeedbackDetailItem label="处理状态" value={statusLabel(selectedFeedback.status)} />
               <FeedbackDetailItem label="提交时间" value={formatDateTime(selectedFeedback.createdAt)} />
               <FeedbackDetailItem

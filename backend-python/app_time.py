@@ -23,6 +23,19 @@ def utc_to_china(value: Optional[datetime]) -> Optional[datetime]:
     return source.astimezone(CHINA_TIMEZONE)
 
 
+def as_china_api_time(value: Optional[datetime]) -> Optional[datetime]:
+    """导出「已是北京墙钟」的 naive 时间，挂上 +08:00 供前端按北京时间展示。
+
+    适用于 china_now() / SQL Server GETDATE()（服务器在东八区）写入的字段，
+    切勿用于 UTC naive 字段（那些应走 utc_to_china）。
+    """
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=CHINA_TIMEZONE)
+    return value.astimezone(CHINA_TIMEZONE)
+
+
 def hours_until(start_time: Optional[datetime]) -> Optional[float]:
     if not start_time:
         return None
