@@ -14,10 +14,10 @@
     </view>
 
     <view class="action-row">
-      <view class="action-btn" @click="goContact">
+      <view class="action-btn" @tap="goContact">
         <text class="action-text">咨询助理</text>
       </view>
-      <view class="action-btn outline" @click="goBooking">
+      <view class="action-btn outline" @tap="goBooking">
         <text class="action-text">预约咨询</text>
       </view>
     </view>
@@ -40,11 +40,16 @@ onMounted(async () => {
 })
 
 const goContact = () => {
-  uni.navigateTo({ url: '/pages/contact/index' })
+  uni.navigateTo({
+    url: '/pages/contact/index',
+    fail: () => {
+      uni.showToast({ title: '页面打开失败，请稍后重试', icon: 'none' })
+    },
+  })
 }
 
 const goBooking = () => {
-  uni.navigateTo({ url: '/pages/consultant/list' })
+  uni.switchTab({ url: '/pages/consultant/list' })
 }
 </script>
 

@@ -251,6 +251,15 @@
             }
         },
         {
+            "path": "pages/guide/index",
+            "style": {
+                "navigationBarTitleText": "关于咨询",
+                "navigationBarBackgroundColor": "#ffffff",
+                "navigationBarTextStyle": "black",
+                "backgroundColor": "#F4F6F8"
+            }
+        },
+        {
             "path": "pages/contact/index",
             "style": {
                 "navigationBarTitleText": "联系我们",
@@ -638,14 +647,6 @@
                     "path": "agreement/xy2",
                     "style": {
                         "navigationBarTitleText": "信息确认",
-                        "navigationBarBackgroundColor": "#ffffff",
-                        "navigationBarTextStyle": "black"
-                    }
-                },
-                {
-                    "path": "guide",
-                    "style": {
-                        "navigationBarTitleText": "关于咨询",
                         "navigationBarBackgroundColor": "#ffffff",
                         "navigationBarTextStyle": "black"
                     }

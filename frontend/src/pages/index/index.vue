@@ -72,7 +72,7 @@
         <view class="quick-icon"><text class="quick-symbol">品</text></view>
         <text class="quick-label">品牌介绍</text>
       </view>
-      <view class="quick-item" @tap="navigateTo('/pages/consultation/guide')">
+      <view class="quick-item" @tap="navigateTo('/pages/guide/index')">
         <view class="quick-icon"><text class="quick-symbol">询</text></view>
         <text class="quick-label">关于咨询</text>
       </view>
@@ -534,7 +534,13 @@ const navigateTo = (url: string) => {
     uni.switchTab({ url: pathOnly })
     return
   }
-  uni.navigateTo({ url })
+  uni.navigateTo({
+    url,
+    fail: (err) => {
+      console.error('页面跳转失败:', url, err)
+      uni.showToast({ title: '页面打开失败，请重新编译小程序后重试', icon: 'none' })
+    },
+  })
 }
 </script>
 

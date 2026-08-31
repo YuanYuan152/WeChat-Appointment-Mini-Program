@@ -29,6 +29,8 @@ export interface SiteGuideItemPayload {
   summary?: string
   sortOrder?: number
   isActive?: boolean
+  /** 本地兜底文案 key，API 不可用时打开详情用 */
+  legacyKey?: string
 }
 
 export interface PublicSiteContent {
@@ -107,6 +109,7 @@ export function fallbackGuideItems(): SiteGuideItemPayload[] {
     id: index + 1,
     title: item.title,
     summary: item.summary,
+    legacyKey: item.id,
   }))
 }
 

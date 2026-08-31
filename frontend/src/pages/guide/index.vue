@@ -10,7 +10,7 @@
         class="guide-card"
         v-for="item in cards"
         :key="item.id"
-        @click="openGuide(item.id)"
+        @tap="openGuide(item)"
       >
         <view class="guide-icon-wrap">
           <text class="guide-icon">📖</text>
@@ -23,7 +23,7 @@
       </view>
     </view>
 
-    <view class="cta-card" @click="goBooking">
+    <view class="cta-card" @tap="goBooking">
       <text class="cta-title">准备好了？</text>
       <text class="cta-desc">浏览咨询师列表，选择适合您的专业人士</text>
       <view class="cta-btn">立即预约咨询</view>
@@ -48,12 +48,21 @@ onMounted(async () => {
   }
 })
 
-const openGuide = (id: number) => {
-  uni.navigateTo({ url: `/pages/content/detail?id=${id}` })
+const openGuide = (item: SiteGuideItemPayload) => {
+  const params = [`id=${item.id}`]
+  if (item.legacyKey) {
+    params.push(`key=${encodeURIComponent(item.legacyKey)}`)
+  }
+  uni.navigateTo({
+    url: `/pages/content/detail?${params.join('&')}`,
+    fail: () => {
+      uni.showToast({ title: '页面打开失败，请稍后重试', icon: 'none' })
+    },
+  })
 }
 
 const goBooking = () => {
-  uni.navigateTo({ url: '/pages/consultant/list' })
+  uni.switchTab({ url: '/pages/consultant/list' })
 }
 </script>
 

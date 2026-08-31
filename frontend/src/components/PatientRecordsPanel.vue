@@ -119,9 +119,8 @@
           <text v-else-if="r.feedbackContent" class="feedback-text">{{ r.feedbackContent }}</text>
         </view>
 
-        <view v-else-if="r.status === 'PENDING_PAYMENT'" class="record-actions">
+        <view v-else-if="r.status === 'PENDING_PAYMENT'" class="pending-hint-row">
           <text class="pending-hint">助理已为您推送预约，{{ proxyOrderPatientHint }}</text>
-          <button class="pay-btn" @click="goPayOrder(r)">去支付</button>
         </view>
 
         <view v-if="r.canCancel" class="refund-hint-row">
@@ -129,9 +128,14 @@
         </view>
 
         <view
-          v-if="r.canCancel || r.counselorId || (r.status === 'DONE' && !r.hasFeedback)"
+          v-if="r.canCancel || r.counselorId || (r.status === 'DONE' && !r.hasFeedback) || r.status === 'PENDING_PAYMENT'"
           class="bottom-actions"
-          :class="{ 'bottom-actions--end': !r.canCancel && !(r.status === 'DONE' && !r.hasFeedback) }"
+          :class="{
+            'bottom-actions--end':
+              !r.canCancel &&
+              !(r.status === 'DONE' && !r.hasFeedback) &&
+              r.status !== 'PENDING_PAYMENT',
+          }"
         >
           <button
             v-if="r.canCancel"
@@ -140,6 +144,13 @@
             @click="openCancelModal(r)"
           >
             {{ cancellingId === r.id ? '取消中...' : '取消预约' }}
+          </button>
+          <button
+            v-else-if="r.status === 'PENDING_PAYMENT'"
+            class="pay-btn"
+            @click="goPayOrder(r)"
+          >
+            去支付
           </button>
           <button
             v-else-if="r.status === 'DONE' && !r.hasFeedback"
@@ -824,18 +835,12 @@ defineExpose({ refresh })
 
 .status.cancelled { color: #9CA3AF; background: #F3F4F6; }
 .status.pending-payment { color: #9CA3AF; background: #E5E7EB; }
-.pending-hint { display: block; font-size: 22rpx; color: #9CA3AF; margin-bottom: 12rpx; }
-.pay-btn {
-  margin: 0;
-  padding: 0 32rpx;
-  height: 64rpx;
-  line-height: 64rpx;
-  background: #0D9488;
-  color: #fff;
-  border-radius: 999rpx;
-  font-size: 26rpx;
+.pending-hint-row {
+  margin-top: 20rpx;
+  padding-top: 20rpx;
+  border-top: 1rpx solid #F3F4F6;
 }
-.pay-btn::after { border: none; }
+.pending-hint { display: block; font-size: 22rpx; color: #9CA3AF; }
 
 .cancel-summary {
   margin-top: 20rpx; padding: 20rpx 24rpx; border-radius: 16rpx;
@@ -863,14 +868,6 @@ defineExpose({ refresh })
 .exemption-banner.rejected .exemption-title { color: #B91C1C; }
 .exemption-banner.approved .exemption-title { color: #3D5A4E; }
 .exemption-desc { display: block; font-size: 22rpx; color: #6B7280; line-height: 1.6; }
-
-.record-actions {
-
-  margin-top: 24rpx; padding-top: 24rpx; border-top: 1rpx solid #F3F4F6;
-
-  display: flex; flex-direction: column; gap: 16rpx; align-items: flex-end;
-
-}
 
 .refund-hint-row {
   margin-top: 20rpx;
@@ -904,6 +901,7 @@ defineExpose({ refresh })
 
 .bottom-actions .cancel-btn,
 .bottom-actions .feedback-btn,
+.bottom-actions .pay-btn,
 .bottom-actions .rebook-btn {
   margin: 0;
   padding: 0 28rpx;
@@ -913,6 +911,15 @@ defineExpose({ refresh })
   border-radius: 12rpx;
   flex-shrink: 0;
 }
+
+.bottom-actions .pay-btn {
+  font-weight: 600;
+  color: #fff;
+  background: #0D9488;
+  border: none;
+}
+
+.pay-btn::after { border: none; }
 
 .rebook-btn {
   font-weight: 600;
