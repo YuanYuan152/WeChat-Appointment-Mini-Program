@@ -266,7 +266,7 @@ export function CounselorIntroEditor({
         workYears,
         consultHours,
         trainingExperience: nullableText(draft.trainingExperience),
-        gender: draft.gender.trim() || "",
+        gender: nullableText(draft.gender),
         mode: nullableText(draft.mode),
         field: nullableText(draft.field),
         targetGroup: nullableText(draft.targetGroup),

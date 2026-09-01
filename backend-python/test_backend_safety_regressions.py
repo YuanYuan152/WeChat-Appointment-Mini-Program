@@ -444,6 +444,28 @@ class BackendSafetyRegressionTests(unittest.TestCase):
         profile = self.db.query(AppCounselorProfile).filter_by(AccountId=2).one()
         self.assertTrue(profile.IsActive)
 
+    def test_admin_counselor_update_persists_gender_on_account(self):
+        counselor = self.add_counselor()
+        admin = AppAccount(
+            Id=90,
+            Mobile="13800000090",
+            ActiveRole="Admin",
+            IsActive=True,
+        )
+        self.db.add(admin)
+        self.db.add(AppRoleBinding(AccountId=90, RoleType="Admin"))
+        self.db.commit()
+
+        result = update_admin_counselor(
+            counselor.Id,
+            AdminCounselorUpdatePayload(gender="女", name="李咨询"),
+            admin,
+            self.db,
+        )
+        self.assertEqual(result.gender, "女")
+        account = self.db.query(AppAccount).filter_by(Id=counselor.Id).one()
+        self.assertEqual(account.Gender, "女")
+
     def test_hard_delete_preserves_cancelled_order_without_orphan_slot(self):
         self.add_counselor()
         patient = self.add_patient()

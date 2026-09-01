@@ -123,6 +123,43 @@ def ensure_tables():
     Base.metadata.create_all(bind=engine, tables=automatically_created_tables())
 
 
+def _gender_column_needs_unicode_upgrade(inspector, table_name: str) -> bool:
+    if engine.dialect.name != "mssql":
+        return False
+    if not inspector.has_table(table_name):
+        return False
+    for column in inspector.get_columns(table_name):
+        if column["name"] != "Gender":
+            continue
+        type_name = str(column.get("type") or "").upper()
+        return "VARCHAR" in type_name and "NVARCHAR" not in type_name
+    return False
+
+
+def ensure_unicode_gender_columns():
+    """将 Gender 从 VARCHAR 升级为 NVARCHAR，避免「男/女」在 SQL Server 上变成乱码。"""
+    inspector = inspect(engine)
+    upgrades = [
+        ("AppAccount", "NVARCHAR(10) NULL"),
+        ("AppRegistrationForm", "NVARCHAR(10) NULL"),
+    ]
+    pending = [
+        (table_name, ddl)
+        for table_name, ddl in upgrades
+        if _gender_column_needs_unicode_upgrade(inspector, table_name)
+    ]
+    if not pending:
+        print("[OK] Gender columns already use NVARCHAR")
+        return
+
+    with engine.begin() as conn:
+        for table_name, ddl in pending:
+            conn.execute(
+                text(f"ALTER TABLE [dbo].[{table_name}] ALTER COLUMN [Gender] {ddl}")
+            )
+            print(f"[OK] Upgraded {table_name}.Gender to NVARCHAR")
+
+
 def ensure_app_account_columns():
     inspector = inspect(engine)
     if not inspector.has_table("AppAccount"):
@@ -367,6 +404,7 @@ def main():
 
     ensure_tables()
     ensure_app_account_columns()
+    ensure_unicode_gender_columns()
     ensure_subscribe_template_columns()
     ensure_app_order_columns()
     ensure_case_record_columns()
