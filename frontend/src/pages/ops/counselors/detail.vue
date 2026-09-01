@@ -106,9 +106,18 @@
           </view>
           <view class="form-item">
             <text class="label">性别</text>
-            <picker :range="genderOptions" :value="genderIndex" @change="onGenderChange">
-              <view class="picker">{{ form.gender || '请选择' }}</view>
-            </picker>
+            <view class="gender-chips">
+              <view
+                v-for="option in counselorGenderOptions"
+                :key="option"
+                class="gender-chip"
+                :class="{ active: form.gender === option }"
+                @tap="selectGender(option)"
+              >
+                {{ option }}
+              </view>
+            </view>
+            <text v-if="!form.gender" class="readonly-fallback">请选择咨询师性别（用于预约列表筛选）</text>
           </view>
           <view class="form-item">
             <text class="label">咨询方式</text>
@@ -244,13 +253,11 @@ import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
 import StaffRemarkEditor from '@/components/StaffRemarkEditor.vue'
 import { formatPatientInline } from '@/utils/patientContract'
+import { normalizeCounselorGender } from '@/utils/gender'
 import { fixImageUrl, resolveCounselorPublicAvatar, DEFAULT_COUNSELOR_PUBLIC_AVATAR, toStoredUploadPath } from '@/utils/image'
 
 const defaultAvatar = DEFAULT_COUNSELOR_PUBLIC_AVATAR
-// 保留一个真正的未选择项，避免表单为空时 picker 内部却默认选中“男”。
-// 微信小程序中再次确认当前第 0 项不会稳定触发 change，之前会导致界面像是
-// 选了“男”，但 form.gender 仍为空，最终无法保存。
-const genderOptions = ['请选择', '男', '女']
+const counselorGenderOptions: Array<'男' | '女'> = ['男', '女']
 const modeOptions = ['视频咨询', '面询', '视频咨询/面询']
 
 function normalizeModeLabel(mode?: string) {
@@ -339,10 +346,9 @@ const form = ref({
   consultHours: 0,
 })
 
-const genderIndex = computed(() => {
-  const idx = genderOptions.indexOf(form.value.gender)
-  return idx >= 0 ? idx : 0
-})
+const selectGender = (option: '男' | '女') => {
+  form.value.gender = option
+}
 
 const modeIndex = computed(() => {
   const idx = modeOptions.indexOf(form.value.mode)
@@ -365,11 +371,6 @@ const toggleExpand = (key: SectionKey) => {
   if (next.has(key)) next.delete(key)
   else next.add(key)
   expandedSections.value = next
-}
-
-const onGenderChange = (e: any) => {
-  const selected = genderOptions[Number(e.detail.value)]
-  form.value.gender = selected === '男' || selected === '女' ? selected : ''
 }
 
 const onModeChange = (e: any) => {
@@ -427,7 +428,7 @@ const applyForm = (data: CounselorDetail) => {
     trainingExperience: data.trainingExperience || '',
     qualification: data.qualification || '',
     targetGroup: data.targetGroup || '',
-    gender: data.gender || '',
+    gender: normalizeCounselorGender(data.gender),
     mode: normalizeModeLabel(data.mode),
     workYears: data.workYears || 0,
     consultHours: data.consultHours || 0,
@@ -464,9 +465,24 @@ const save = async () => {
   }
   saving.value = true
   try {
+    const payload = {
+      name: form.value.name,
+      avatarUrl: form.value.avatarUrl,
+      title: form.value.title,
+      specialty: form.value.specialty,
+      field: form.value.field,
+      introduce: form.value.introduce,
+      trainingExperience: form.value.trainingExperience,
+      qualification: form.value.qualification,
+      targetGroup: form.value.targetGroup,
+      gender: form.value.gender,
+      mode: form.value.mode,
+      workYears: form.value.workYears,
+      consultHours: form.value.consultHours,
+    }
     const res = await httpV2.put(
       API_ENDPOINTS.admin.counselorDetail(counselorId.value),
-      form.value,
+      payload,
     )
     if (res.code === 0) {
       uni.showToast({ title: '保存成功', icon: 'success' })
@@ -669,6 +685,25 @@ onMounted(() => {
   box-sizing: border-box;
 }
 .textarea { min-height: 120rpx; line-height: 1.6; }
+.gender-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+}
+.gender-chip {
+  min-width: 120rpx;
+  padding: 14rpx 28rpx;
+  border-radius: 999rpx;
+  font-size: 28rpx;
+  color: #6B6560;
+  background: #F0EDE8;
+  text-align: center;
+}
+.gender-chip.active {
+  background: #3D5A4E;
+  color: #fff;
+  font-weight: 600;
+}
 .readonly-fallback {
   display: block;
   margin-top: 10rpx;

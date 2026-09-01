@@ -34,9 +34,17 @@
       </view>
       <view class="form-item">
         <text class="label">性别</text>
-        <picker :range="genderOptions" :value="genderIndex" @change="onGenderChange">
-          <view class="picker">{{ form.gender || '请选择性别' }}</view>
-        </picker>
+        <view class="gender-chips">
+          <view
+            v-for="option in profileGenderOptions"
+            :key="option"
+            class="gender-chip"
+            :class="{ active: form.gender === option }"
+            @tap="selectGender(option)"
+          >
+            {{ option }}
+          </view>
+        </view>
       </view>
       <view class="form-item readonly">
         <text class="label">手机号</text>
@@ -61,7 +69,9 @@ import AvatarCropper from '@/components/AvatarCropper.vue'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
 import { fixImageUrl, toStoredUploadPath, resolveUserAvatar } from '@/utils/image'
-const genderOptions = ['男', '女', '其他']
+import { normalizeProfileGender } from '@/utils/gender'
+
+const profileGenderOptions = ['男', '女', '其他']
 const isCounselor = ref(false)
 const form = ref({
   nickname: '',
@@ -81,13 +91,8 @@ const avatarDisplay = computed(() => {
   return resolveUserAvatar('')
 })
 
-const genderIndex = computed(() => {
-  const idx = genderOptions.indexOf(form.value.gender)
-  return idx >= 0 ? idx : 0
-})
-
-const onGenderChange = (e: any) => {
-  form.value.gender = genderOptions[Number(e.detail.value)]
+const selectGender = (option: string) => {
+  form.value.gender = option
 }
 
 const pickAvatar = () => {
@@ -134,7 +139,7 @@ const load = async () => {
       nickname: res.data.nickname || '',
       avatarUrl: res.data.avatarUrl || '',
       realName: res.data.realName || '',
-      gender: res.data.gender || '',
+      gender: normalizeProfileGender(res.data.gender),
       mobile: res.data.mobile || '',
     }
     localPreview.value = ''
@@ -254,6 +259,28 @@ onMounted(load)
   font-size: 30rpx;
   color: #1F2937;
   min-height: 44rpx;
+}
+
+.gender-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+}
+
+.gender-chip {
+  min-width: 120rpx;
+  padding: 14rpx 28rpx;
+  border-radius: 999rpx;
+  font-size: 28rpx;
+  color: #6B6560;
+  background: #F0EDE8;
+  text-align: center;
+}
+
+.gender-chip.active {
+  background: #3D5A4E;
+  color: #fff;
+  font-weight: 600;
 }
 
 .save-btn {

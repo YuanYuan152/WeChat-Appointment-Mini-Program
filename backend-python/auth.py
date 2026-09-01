@@ -646,6 +646,8 @@ def update_me(
     current_account: AppAccount = Depends(get_current_account),
     db: Session = Depends(get_db),
 ):
+    from common import _normalize_gender_value
+
     mapping = {
         "nickname": "Nickname",
         "realName": "RealName",
@@ -656,7 +658,13 @@ def update_me(
     for src, dst in mapping.items():
         val = getattr(body, src, None)
         if val is not None:
-            setattr(current_account, dst, val)
+            if src == "gender":
+                if isinstance(val, str) and val.strip() == "其他":
+                    current_account.Gender = "其他"
+                else:
+                    current_account.Gender = _normalize_gender_value(val)
+            else:
+                setattr(current_account, dst, val)
     if uses_visitor_default_avatar(db, current_account.Id):
         current_account.AvatarUrl = None
     if body.markProfileCompleted and (
