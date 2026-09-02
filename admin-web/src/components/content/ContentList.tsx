@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { formatDate } from "@/lib/format";
 import { API_BASE_URL } from "@/lib/api";
 
@@ -6,6 +7,7 @@ import { EmptyState, Pagination, PanelHeader, TableActionButton } from "@/compon
 export interface ContentListItem {
   id: number;
   title: string;
+  subtitle?: string | null;
   meta?: string | null;
   date?: string | null;
   summary?: string | null;
@@ -29,6 +31,7 @@ export function ContentList({
   page,
   pageSize,
   createLabel = "新增",
+  headerAction,
   allowDelete = true,
   hideImageColumn = false,
   onCreateClick,
@@ -43,9 +46,10 @@ export function ContentList({
   page?: number;
   pageSize?: number;
   createLabel?: string;
+  headerAction?: ReactNode;
   allowDelete?: boolean;
   hideImageColumn?: boolean;
-  onCreateClick: () => void;
+  onCreateClick?: () => void;
   onEdit: (item: ContentListItem) => void;
   onDelete: (id: number) => void;
   onPageChange?: (page: number) => void;
@@ -57,13 +61,17 @@ export function ContentList({
         title={title}
         description={`共 ${total} 条内容。`}
         action={
-          <button
-            className="rounded-xl bg-[var(--lxxl-green)] px-5 py-2 text-sm font-medium text-white transition hover:bg-[var(--lxxl-green-dark)]"
-            type="button"
-            onClick={onCreateClick}
-          >
-            {createLabel}
-          </button>
+          headerAction ?? (
+            onCreateClick ? (
+              <button
+                className="rounded-xl bg-[var(--lxxl-green)] px-5 py-2 text-sm font-medium text-white transition hover:bg-[var(--lxxl-green-dark)]"
+                type="button"
+                onClick={onCreateClick}
+              >
+                {createLabel}
+              </button>
+            ) : null
+          )
         }
       />
 

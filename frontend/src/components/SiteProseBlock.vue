@@ -1,13 +1,19 @@
 <template>
   <view class="site-prose-block" :class="[`site-prose-block--${tone}`, rootClass]">
-    <view
-      v-for="(paragraph, index) in paragraphs"
-      :key="index"
-      class="site-prose-paragraph site-prose-paragraph--block"
-      :class="paragraphClass"
-    >
-      {{ paragraph }}
-    </view>
+    <template v-for="(paragraph, index) in paragraphs" :key="index">
+      <view
+        v-if="paragraph === ''"
+        class="site-prose-paragraph site-prose-paragraph--block site-prose-paragraph--spacer"
+        :class="paragraphClass"
+      />
+      <text
+        v-else
+        class="site-prose-paragraph site-prose-paragraph--block"
+        :class="paragraphClass"
+      >
+        {{ paragraph }}
+      </text>
+    </template>
   </view>
 </template>
 
@@ -32,13 +38,18 @@ withDefaults(
 @import '@/styles/site-prose.scss';
 
 .site-prose-paragraph--block {
+  display: block;
   font-size: 28rpx;
   line-height: 1.85;
-  margin-bottom: 16rpx;
+  margin-bottom: 32rpx;
 
   &:last-child {
     margin-bottom: 0;
   }
+}
+
+.site-prose-paragraph--block.site-prose-paragraph--spacer {
+  margin-bottom: 16rpx;
 }
 
 .site-prose-block--muted .site-prose-paragraph {

@@ -4,6 +4,23 @@ import type { Activity, Banner, SiteGuideItem, SitePage } from "@/types/api";
 import type { ContentDraft, ContentKind, PaginationParams } from "@/types/app";
 import { sitePageKeyForKind } from "@/components/content/ContentTabs";
 
+function buildSiteSectionPayload(kind: "brand" | "charity" | "contact", draft: ContentDraft) {
+  if (!draft.subtitle.trim()) {
+    throw new Error("请填写副标题");
+  }
+  if (!draft.body.trim()) {
+    throw new Error("请填写正文");
+  }
+
+  return {
+    subtitle: draft.subtitle.trim(),
+    body: draft.body,
+    ...(kind === "contact"
+      ? { assistant_qrcode_url: draft.assistantQrcodeUrl.trim() || null }
+      : {}),
+  };
+}
+
 export async function fetchContentData(kind: ContentKind, _articlePagination: PaginationParams) {
   if (kind === "banner") {
     const banners = await apiRequest<Banner[]>("/api/mini/ops/banners/manage");
@@ -84,17 +101,9 @@ export function createContent(draft: ContentDraft) {
     if (!pageKey) {
       throw new Error("无效的站点页类型");
     }
-    if (!draft.body.trim()) {
-      throw new Error("请填写正文");
-    }
     return apiRequest(`/api/mini/ops/site-pages/${pageKey}`, {
       method: "PUT",
-      body: JSON.stringify({
-        body: draft.body,
-        ...(draft.kind === "contact"
-          ? { assistant_qrcode_url: draft.assistantQrcodeUrl.trim() || null }
-          : {}),
-      }),
+      body: JSON.stringify(buildSiteSectionPayload(draft.kind, draft)),
     });
   }
 
@@ -171,17 +180,9 @@ export function updateContent(kind: ContentKind, id: number, draft: ContentDraft
     if (!pageKey) {
       throw new Error("无效的站点页类型");
     }
-    if (!draft.body.trim()) {
-      throw new Error("请填写正文");
-    }
     return apiRequest(`/api/mini/ops/site-pages/${pageKey}`, {
       method: "PUT",
-      body: JSON.stringify({
-        body: draft.body,
-        ...(kind === "contact"
-          ? { assistant_qrcode_url: draft.assistantQrcodeUrl.trim() || null }
-          : {}),
-      }),
+      body: JSON.stringify(buildSiteSectionPayload(kind, draft)),
     });
   }
 

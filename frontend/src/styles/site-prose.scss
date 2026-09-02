@@ -1,11 +1,17 @@
-/* 站点正文：两端对齐，末行自然左对齐（勿加 justify 占位元素，否则会破坏 text-align-last） */
+/* 站点正文：两端对齐，末行自然左对齐；pre-line 保留 admin 输入的换行 */
 .site-prose-paragraph {
   width: 100%;
   box-sizing: border-box;
+  white-space: pre-line;
   text-align: justify;
   text-align-last: left;
   -webkit-text-align-last: left;
   text-justify: inter-ideograph;
   word-break: normal;
   overflow-wrap: break-word;
+}
+
+.site-prose-paragraph--spacer {
+  min-height: 32rpx;
+  margin-bottom: 0;
 }

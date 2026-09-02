@@ -16,7 +16,7 @@ function canSubmitDraft(activeKind: ContentKind, draft: ContentDraft) {
     return draft.coverImageUrl.trim();
   }
   if (activeKind === "brand" || activeKind === "charity" || activeKind === "contact") {
-    return draft.body.trim();
+    return draft.subtitle.trim() && draft.body.trim();
   }
   if (activeKind === "consultation_guide") {
     return draft.title.trim() && draft.body.trim();
@@ -46,7 +46,10 @@ export function ContentCreateModal({
   }
 
   const title = getContentKindLabel(activeKind);
+  const isSiteSectionPage =
+    activeKind === "brand" || activeKind === "charity" || activeKind === "contact";
   const actionText = mode === "edit" ? "保存" : isSitePageKind(activeKind) ? "保存" : "新建";
+  const modalTitle = mode === "edit" ? `修改${title}` : `${actionText}${title}`;
   const canSubmit = canSubmitDraft(activeKind, draft);
   const showTitleField =
     activeKind === "banner" ||
@@ -56,12 +59,11 @@ export function ContentCreateModal({
   const titleLabel =
     activeKind === "consultation_guide" ? "主题" : activeKind === "home_cover" ? "品牌标题" : "标题";
   const bodyLabel = activeKind === "consultation_guide" ? "正文" : activeKind === "home_cover" ? "副标题" : "正文";
+  const showSubtitleField = isSiteSectionPage;
   const showBodyField =
     activeKind === "activity" ||
     activeKind === "home_cover" ||
-    activeKind === "brand" ||
-    activeKind === "charity" ||
-    activeKind === "contact" ||
+    isSiteSectionPage ||
     activeKind === "consultation_guide";
   const showImageField = activeKind === "banner" || activeKind === "activity";
   const showAssistantQrcodeField = activeKind === "contact";
@@ -83,13 +85,10 @@ export function ContentCreateModal({
         onSubmit={handleSubmit}
         role="dialog"
         aria-modal="true"
-        aria-label={`${actionText}${title}`}
+        aria-label={modalTitle}
       >
         <div className="border-b border-[var(--lxxl-border)] px-6 py-5">
-          <h3 className="text-lg font-semibold">
-            {actionText}
-            {title}
-          </h3>
+          <h3 className="text-lg font-semibold">{modalTitle}</h3>
           <p className="mt-1 text-sm text-[var(--lxxl-muted)]">
             {mode === "edit" ? "保存后会同步到小程序前端。" : "保存后会创建并同步到小程序前端。"}
           </p>
@@ -107,6 +106,21 @@ export function ContentCreateModal({
                 placeholder={activeKind === "home_cover" ? "同心理" : activeKind === "consultation_guide" ? "请输入主题" : "请输入标题"}
                 value={draft.title}
                 onChange={(event) => setDraft((prev) => ({ ...prev, title: event.target.value }))}
+              />
+            </label>
+          )}
+
+          {showSubtitleField && (
+            <label className="block">
+              <span className="text-sm font-medium">
+                副标题
+                <span className="ml-1 text-[#B94A48]">*</span>
+              </span>
+              <input
+                className="mt-2 h-11 w-full rounded-xl border border-[var(--lxxl-border)] px-3 text-sm outline-none transition focus:border-[var(--lxxl-green)]"
+                placeholder="例如：同心理 · 专业.温暖的心理服务平台"
+                value={draft.subtitle}
+                onChange={(event) => setDraft((prev) => ({ ...prev, subtitle: event.target.value }))}
               />
             </label>
           )}
@@ -131,7 +145,7 @@ export function ContentCreateModal({
                     ? "请输入活动正文"
                     : activeKind === "home_cover"
                       ? "专业.温暖的心理服务平台"
-                      : "请输入正文，段落之间可用空行分隔"
+                      : "请输入正文：段内换行按一次回车；段落之间空一行"
                 }
                 value={
                   activeKind === "activity"

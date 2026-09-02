@@ -10,6 +10,7 @@ export interface SitePagePayload {
   id?: number
   pageKey: string
   title: string
+  subtitle?: string | null
   body: string
   assistantQrcodeUrl?: string | null
   coverImageUrl?: string | null
@@ -39,10 +40,40 @@ export interface PublicSiteContent {
 }
 
 export function bodyToParagraphs(body: string): string[] {
-  return (body || '')
-    .split(/\n+/)
-    .map((line) => line.trim())
-    .filter(Boolean)
+  const normalized = (body || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .replace(/\u2028/g, '\n')
+    .replace(/\u2029/g, '\n')
+    .trim()
+  if (!normalized) return []
+
+  const lines = normalized.split('\n')
+  const paragraphs: string[] = []
+  let buffer: string[] = []
+
+  const flushBuffer = () => {
+    if (buffer.length) {
+      paragraphs.push(buffer.join('\n'))
+      buffer = []
+    }
+  }
+
+  for (const line of lines) {
+    if (line.trim() === '') {
+      flushBuffer()
+      paragraphs.push('')
+      continue
+    }
+    buffer.push(line)
+  }
+  flushBuffer()
+
+  while (paragraphs.length && paragraphs[paragraphs.length - 1] === '') {
+    paragraphs.pop()
+  }
+
+  return paragraphs
 }
 
 export async function fetchPublicSiteContent(): Promise<PublicSiteContent | null> {
@@ -122,7 +153,7 @@ export function resolvePageContent(
   if (page?.body?.trim()) {
     return {
       title: page.title || fallback.title,
-      subtitle: fallback.subtitle,
+      subtitle: page.subtitle?.trim() || fallback.subtitle,
       paragraphs: bodyToParagraphs(page.body),
     }
   }

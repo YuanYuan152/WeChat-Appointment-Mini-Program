@@ -20,6 +20,7 @@ function emptyDraft(kind: ContentKind): ContentDraft {
   return {
     kind,
     title: "",
+    subtitle: "",
     body: "",
     summary: "",
     imageUrl: "",
