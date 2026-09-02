@@ -4,13 +4,17 @@
       <text class="block-title">咨询中心地址</text>
       <view v-for="center in centers" :key="center.id" class="center-item">
         <text class="center-name">{{ center.name }}</text>
-        <text class="center-address">{{ center.address }}</text>
+        <view class="center-address site-prose-paragraph">
+          {{ center.address }}
+        </view>
       </view>
     </view>
 
     <view class="block">
       <text class="block-title">助理微信二维码</text>
-      <text v-if="assistant.hint" class="qr-hint">{{ assistant.hint }}</text>
+      <view v-if="assistant.hint" class="qr-hint site-prose-paragraph">
+        {{ assistant.hint }}
+      </view>
       <view class="qr-wrap">
         <image
           class="qr-image"
@@ -92,7 +96,9 @@ const onQrError = () => {
 }
 </script>
 
-<style scoped>
+<style scoped lang="scss">
+@import '@/styles/site-prose.scss';
+
 .contact-us {
   display: flex;
   flex-direction: column;
@@ -141,10 +147,16 @@ const onQrError = () => {
 }
 
 .center-address {
-  display: block;
   font-size: 26rpx;
-  color: #6B6560;
+  color: #6b6560;
   line-height: 1.7;
+}
+
+.qr-hint {
+  font-size: 26rpx;
+  color: #6b6560;
+  line-height: 1.6;
+  margin-bottom: 20rpx;
 }
 
 .phone-row {
@@ -168,14 +180,6 @@ const onQrError = () => {
   font-size: 24rpx;
   color: #0D9488;
   font-weight: 600;
-}
-
-.qr-hint {
-  display: block;
-  font-size: 26rpx;
-  color: #6B6560;
-  line-height: 1.6;
-  margin-bottom: 20rpx;
 }
 
 .qr-wrap {

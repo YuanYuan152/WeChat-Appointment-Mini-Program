@@ -17,7 +17,9 @@
         </view>
         <view class="guide-body">
           <text class="guide-title">{{ item.title }}</text>
-          <text class="guide-summary">{{ item.summary || '' }}</text>
+          <view class="guide-summary site-prose-paragraph">
+            {{ item.summary || '' }}
+          </view>
         </view>
         <text class="guide-arrow">›</text>
       </view>
@@ -66,7 +68,9 @@ const goBooking = () => {
 }
 </script>
 
-<style scoped>
+<style scoped lang="scss">
+@import '@/styles/site-prose.scss';
+
 .page-guide {
   min-height: 100vh;
   background: #F4F6F8;
@@ -141,9 +145,8 @@ const goBooking = () => {
 }
 
 .guide-summary {
-  display: block;
   font-size: 24rpx;
-  color: #6B7280;
+  color: #6b7280;
   line-height: 1.6;
   display: -webkit-box;
   -webkit-box-orient: vertical;
