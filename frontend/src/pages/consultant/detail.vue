@@ -456,7 +456,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed, nextTick } from 'vue'
-import { onShow, onLoad, onShareAppMessage } from '@dcloudio/uni-app'
+import { onShow, onLoad, onShareAppMessage, onBackPress } from '@dcloudio/uni-app'
 import { API_V2_CONFIG, API_ENDPOINTS } from '@/config/api'
 import { resolveCounselorPublicAvatar } from '@/utils/image'
 import { doctorApi } from '@/apis'
@@ -475,6 +475,7 @@ import {
 } from '@/utils/bookingSlots'
 import ContactUsContent from '@/components/ContactUsContent.vue'
 import { isLoggedIn, handleRequireLogin } from '@/utils/auth'
+import { navigateBackOrSwitchTab } from '@/utils/pageBack'
 import {
   TONGXIN_AGREEMENT_TITLE,
   YANGFAN_AGREEMENT_TITLE,
@@ -1154,9 +1155,9 @@ const makeAppointment = async () => {
   showAgeConfirmDialog()
 }
 
-// 返回
+// 返回：分享链接直开时无页面栈，回退到咨询师列表 Tab
 const goBack = () => {
-  uni.navigateBack()
+  navigateBackOrSwitchTab('/pages/consultant/list')
 }
 
 // 主页
@@ -1576,6 +1577,11 @@ onShareAppMessage(() => {
     title: `${doctor.value.name || '咨询师'}的咨询师主页`,
     path: `/pages/consultant/detail?id=${encodeURIComponent(String(id))}${source}`,
   }
+})
+
+onBackPress(() => {
+  goBack()
+  return true
 })
 
 onShow(() => {
