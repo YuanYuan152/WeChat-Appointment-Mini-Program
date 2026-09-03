@@ -10,26 +10,29 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { isOtpComplete, OtpInput } from "@/components/auth/otp-input";
 
-type AuthMode = "code" | "password";
+type LoginMode = "code" | "password";
 
 export function AuthForm({
   type,
   redirectTo,
+  showAccessKeyLink = false,
+  onSwitchToAccessKey,
 }: {
   type: "login" | "register";
   redirectTo?: string;
+  showAccessKeyLink?: boolean;
+  onSwitchToAccessKey?: () => void;
 }) {
   const router = useRouter();
-  const { loginByCode, loginByPassword, registerByCode, registerByPassword, loading } =
-    useAuthStore();
+  const { loginByCode, loginByPassword, registerByCode, loading } = useAuthStore();
 
-  const [mode, setMode] = useState<AuthMode>("code");
+  const [loginMode, setLoginMode] = useState<LoginMode>("code");
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [optionalPassword, setOptionalPassword] = useState("");
   const [countdown, setCountdown] = useState(0);
   const [sendingCode, setSendingCode] = useState(false);
   const [error, setError] = useState("");
@@ -71,19 +74,25 @@ export function AuthForm({
 
     try {
       if (type === "login") {
-        if (mode === "code") {
+        if (loginMode === "code") {
+          if (!isOtpComplete(code)) {
+            setError("请输入 6 位验证码");
+            return;
+          }
           await loginByCode(phone, code);
         } else {
+          if (!password.trim()) {
+            setError("请输入密码");
+            return;
+          }
           await loginByPassword(phone, password);
         }
-      } else if (mode === "code") {
-        if (optionalPassword && optionalPassword !== confirmPassword) {
-          setError("两次输入的密码不一致");
+      } else {
+        if (!isOtpComplete(code)) {
+          setError("请输入 6 位验证码");
           return;
         }
-        await registerByCode(phone, code, optionalPassword || undefined);
-      } else {
-        if (password.length < 6) {
+        if (password.trim().length < 6) {
           setError("密码至少 6 位");
           return;
         }
@@ -91,7 +100,7 @@ export function AuthForm({
           setError("两次输入的密码不一致");
           return;
         }
-        await registerByPassword(phone, password);
+        await registerByCode(phone, code, password.trim());
       }
       router.push(redirectTo || "/");
       router.refresh();
@@ -109,34 +118,42 @@ export function AuthForm({
         <p className="mt-2 text-sm text-muted-foreground">
           {type === "login"
             ? "使用手机号验证码或密码登录连心心理"
-            : "注册后即可同步使用小程序与官网账号"}
+            : "通过短信验证码验证后设置密码完成注册"}
         </p>
       </div>
 
-      <div className="mb-6 flex rounded-full bg-muted p-1">
-        <button
-          type="button"
-          className={cn(
-            "flex flex-1 items-center justify-center gap-2 rounded-full py-2 text-sm transition-colors",
-            mode === "code" ? "bg-card shadow-sm text-primary" : "text-muted-foreground"
-          )}
-          onClick={() => setMode("code")}
-        >
-          <MessageSquare className="h-4 w-4" />
-          验证码{type === "login" ? "登录" : "注册"}
-        </button>
-        <button
-          type="button"
-          className={cn(
-            "flex flex-1 items-center justify-center gap-2 rounded-full py-2 text-sm transition-colors",
-            mode === "password" ? "bg-card shadow-sm text-primary" : "text-muted-foreground"
-          )}
-          onClick={() => setMode("password")}
-        >
-          <KeyRound className="h-4 w-4" />
-          密码{type === "login" ? "登录" : "注册"}
-        </button>
-      </div>
+      {type === "login" ? (
+        <div className="mb-6 flex rounded-full bg-muted p-1">
+          <button
+            type="button"
+            className={cn(
+              "flex flex-1 items-center justify-center gap-2 rounded-full py-2 text-sm transition-colors",
+              loginMode === "code" ? "bg-card shadow-sm text-primary" : "text-muted-foreground"
+            )}
+            onClick={() => {
+              setLoginMode("code");
+              setError("");
+            }}
+          >
+            <MessageSquare className="h-4 w-4" />
+            验证码登录
+          </button>
+          <button
+            type="button"
+            className={cn(
+              "flex flex-1 items-center justify-center gap-2 rounded-full py-2 text-sm transition-colors",
+              loginMode === "password" ? "bg-card shadow-sm text-primary" : "text-muted-foreground"
+            )}
+            onClick={() => {
+              setLoginMode("password");
+              setError("");
+            }}
+          >
+            <KeyRound className="h-4 w-4" />
+            密码登录
+          </button>
+        </div>
+      ) : null}
 
       <form onSubmit={handleSubmit} className="space-y-5 rounded-[var(--radius)] border border-border bg-card p-6 shadow-sm">
         <div>
@@ -148,65 +165,35 @@ export function AuthForm({
               className="pl-10"
               placeholder="请输入手机号"
               value={phone}
-              onChange={(e) => setPhone(e.target.value)}
+              onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 11))}
               maxLength={11}
             />
           </div>
         </div>
 
-        {mode === "code" ? (
-          <>
-            <div>
+        {type === "register" || loginMode === "code" ? (
+          <div>
+            <div className="mb-3 flex items-center justify-between gap-3">
               <Label htmlFor="code">验证码</Label>
-              <div className="mt-1.5 flex gap-2">
-                <Input
-                  id="code"
-                  placeholder="6 位验证码"
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                  maxLength={6}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="shrink-0"
-                  disabled={countdown > 0 || !phone || sendingCode}
-                  onClick={handleSendCode}
-                >
-                  {sendingCode ? "发送中..." : countdown > 0 ? `${countdown}s` : "获取验证码"}
-                </Button>
-              </div>
-              {mockHint && (
-                <p className="mt-2 text-xs text-primary">{mockHint}</p>
-              )}
+              <Button
+                type="button"
+                variant="outline"
+                className="h-8 shrink-0 px-3 text-xs"
+                disabled={countdown > 0 || phone.length !== 11 || sendingCode}
+                onClick={handleSendCode}
+              >
+                {sendingCode ? "发送中..." : countdown > 0 ? `${countdown}s 后重发` : "获取验证码"}
+              </Button>
             </div>
-            {type === "register" && (
-              <div>
-                <Label htmlFor="optionalPassword">设置密码（选填）</Label>
-                <Input
-                  id="optionalPassword"
-                  type="password"
-                  className="mt-1.5"
-                  placeholder="至少 6 位，可稍后在个人中心设置"
-                  value={optionalPassword}
-                  onChange={(e) => setOptionalPassword(e.target.value)}
-                />
-                {optionalPassword && (
-                  <Input
-                    type="password"
-                    className="mt-2"
-                    placeholder="确认密码"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                  />
-                )}
-              </div>
-            )}
-          </>
-        ) : (
+            <OtpInput disabled={loading} value={code} onChange={setCode} />
+            {mockHint ? <p className="mt-2 text-xs text-primary">{mockHint}</p> : null}
+          </div>
+        ) : null}
+
+        {type === "register" ? (
           <>
             <div>
-              <Label htmlFor="password">密码</Label>
+              <Label htmlFor="password">设置密码</Label>
               <Input
                 id="password"
                 type="password"
@@ -216,27 +203,46 @@ export function AuthForm({
                 onChange={(e) => setPassword(e.target.value)}
               />
             </div>
-            {type === "register" && (
-              <div>
-                <Label htmlFor="confirmPassword">确认密码</Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  className="mt-1.5"
-                  placeholder="再次输入密码"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                />
-              </div>
-            )}
+            <div>
+              <Label htmlFor="confirmPassword">确认密码</Label>
+              <Input
+                id="confirmPassword"
+                type="password"
+                className="mt-1.5"
+                placeholder="再次输入密码"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+              />
+            </div>
           </>
-        )}
+        ) : loginMode === "password" ? (
+          <div>
+            <Label htmlFor="password">密码</Label>
+            <Input
+              id="password"
+              type="password"
+              className="mt-1.5"
+              placeholder="请输入密码"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </div>
+        ) : null}
 
         {error && <p className="text-sm text-red-500">{error}</p>}
 
         <Button type="submit" className="w-full" disabled={loading}>
           {loading ? "处理中..." : type === "login" ? "登录" : "注册"}
         </Button>
+        {showAccessKeyLink && onSwitchToAccessKey ? (
+          <button
+            className="w-full text-xs text-muted-foreground opacity-60 transition hover:opacity-100"
+            type="button"
+            onClick={onSwitchToAccessKey}
+          >
+            密钥登录
+          </button>
+        ) : null}
       </form>
 
       <p className="mt-6 text-center text-sm text-muted-foreground">

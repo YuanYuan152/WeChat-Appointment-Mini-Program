@@ -8,7 +8,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-export function AccessKeyGate({ onUnlocked }: { onUnlocked: () => void }) {
+export function AccessKeyGate({
+  onUnlocked,
+  onBackToSms,
+}: {
+  onUnlocked: () => void;
+  onBackToSms?: () => void;
+}) {
   const [accessKey, setAccessKey] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -65,6 +71,15 @@ export function AccessKeyGate({ onUnlocked }: { onUnlocked: () => void }) {
         <Button className="w-full" disabled={submitting} type="submit">
           {submitting ? "验证中..." : "验证并进入"}
         </Button>
+        {onBackToSms ? (
+          <button
+            className="w-full text-xs text-muted-foreground opacity-60 transition hover:opacity-100"
+            type="button"
+            onClick={onBackToSms}
+          >
+            返回短信登录
+          </button>
+        ) : null}
       </form>
     </div>
   );

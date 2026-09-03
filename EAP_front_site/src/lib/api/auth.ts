@@ -59,17 +59,10 @@ export function sendCode(phone: string, purpose: "login" | "register") {
   });
 }
 
-export function registerWithCode(phone: string, code: string, password?: string) {
+export function registerWithCode(phone: string, code: string, password: string) {
   return request<AuthTokenResponse>("/api/web/auth/register", {
     method: "POST",
-    body: JSON.stringify({ phone, code, password: password || undefined }),
-  });
-}
-
-export function registerWithPassword(phone: string, password: string) {
-  return request<AuthTokenResponse>("/api/web/auth/register", {
-    method: "POST",
-    body: JSON.stringify({ phone, password }),
+    body: JSON.stringify({ phone, code, password }),
   });
 }
 

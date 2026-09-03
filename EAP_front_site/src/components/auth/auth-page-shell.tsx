@@ -12,6 +12,8 @@ import {
 } from "@/lib/access-key-login";
 import { useAuthStore } from "@/lib/stores/auth-store";
 
+type LoginMode = "sms" | "access-key";
+
 export function AuthPageShell({
   type,
   redirectTo,
@@ -22,6 +24,7 @@ export function AuthPageShell({
   const router = useRouter();
   const loginWithDevCode = useAuthStore((state) => state.loginWithDevCode);
   const token = useAuthStore((state) => state.token);
+  const [loginMode, setLoginMode] = useState<LoginMode>("sms");
   const [accessKeyPassed, setAccessKeyPassed] = useState(false);
   const [autoLoggingIn, setAutoLoggingIn] = useState(false);
   const [error, setError] = useState("");
@@ -39,7 +42,13 @@ export function AuthPageShell({
   }, [token, redirectTo, router]);
 
   useEffect(() => {
-    if (!isAccessKeyLoginEnabled() || !accessKeyPassed || token || autoLoginStartedRef.current) {
+    if (
+      !isAccessKeyLoginEnabled()
+      || loginMode !== "access-key"
+      || !accessKeyPassed
+      || token
+      || autoLoginStartedRef.current
+    ) {
       return;
     }
     let cancelled = false;
@@ -67,22 +76,54 @@ export function AuthPageShell({
     return () => {
       cancelled = true;
     };
-  }, [accessKeyPassed, loginWithDevCode, redirectTo, router, token]);
+  }, [accessKeyPassed, loginMode, loginWithDevCode, redirectTo, router, token]);
 
-  if (!isAccessKeyLoginEnabled()) {
-    return <AuthForm redirectTo={redirectTo} type={type} />;
+  if (loginMode === "access-key" && isAccessKeyLoginEnabled() && !accessKeyPassed) {
+    return (
+      <AccessKeyGate
+        onBackToSms={() => {
+          setLoginMode("sms");
+          setError("");
+        }}
+        onUnlocked={() => setAccessKeyPassed(true)}
+      />
+    );
   }
 
-  if (!accessKeyPassed) {
-    return <AccessKeyGate onUnlocked={() => setAccessKeyPassed(true)} />;
+  if (loginMode === "access-key" && isAccessKeyLoginEnabled() && accessKeyPassed) {
+    return (
+      <div className="mx-auto w-full max-w-md rounded-[var(--radius)] border border-border bg-card p-8 text-center shadow-sm">
+        <p className="text-sm text-muted-foreground">
+          {autoLoggingIn ? "正在以来访身份登录..." : "正在进入站点..."}
+        </p>
+        {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
+        {error ? (
+          <button
+            className="mt-4 text-xs text-muted-foreground opacity-70 transition hover:opacity-100"
+            type="button"
+            onClick={() => {
+              setLoginMode("sms");
+              setAccessKeyPassed(false);
+              autoLoginStartedRef.current = false;
+              setError("");
+            }}
+          >
+            返回短信登录
+          </button>
+        ) : null}
+      </div>
+    );
   }
 
   return (
-    <div className="mx-auto w-full max-w-md rounded-[var(--radius)] border border-border bg-card p-8 text-center shadow-sm">
-      <p className="text-sm text-muted-foreground">
-        {autoLoggingIn ? "正在以来访身份登录..." : "正在进入站点..."}
-      </p>
-      {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
-    </div>
+    <AuthForm
+      redirectTo={redirectTo}
+      showAccessKeyLink={isAccessKeyLoginEnabled()}
+      type={type}
+      onSwitchToAccessKey={() => {
+        setLoginMode("access-key");
+        setError("");
+      }}
+    />
   );
 }

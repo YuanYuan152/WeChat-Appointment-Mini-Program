@@ -79,11 +79,17 @@ class WebAuthStaffInviteTests(unittest.TestCase):
 
         with self.assertRaises(HTTPException) as raised:
             web_register(
-                RegisterRequest(phone=mobile, code="123456"),
+                RegisterRequest(phone=mobile, code="123456", password="secret1"),
                 db=self.db,
             )
 
         self.assertEqual(409, raised.exception.status_code)
+
+    def test_password_only_register_is_rejected(self):
+        from pydantic import ValidationError
+
+        with self.assertRaises(ValidationError):
+            RegisterRequest(phone="13800000099", password="secret1")  # type: ignore[call-arg]
 
     @patch(
         "auth.create_access_token",

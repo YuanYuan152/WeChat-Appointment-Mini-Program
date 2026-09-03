@@ -40,7 +40,7 @@
             :key="option"
             class="gender-chip"
             :class="{ active: form.gender === option }"
-            @tap="selectGender(option)"
+            @tap.stop="selectGender(option)"
           >
             {{ option }}
           </view>
@@ -92,7 +92,7 @@ const avatarDisplay = computed(() => {
 })
 
 const selectGender = (option: string) => {
-  form.value.gender = option
+  form.value = { ...form.value, gender: option }
 }
 
 const pickAvatar = () => {
@@ -164,6 +164,8 @@ const save = async () => {
     } else {
       uni.showToast({ title: res.msg || '保存失败', icon: 'none' })
     }
+  } catch (err: any) {
+    uni.showToast({ title: err?.message || '保存失败', icon: 'none' })
   } finally {
     saving.value = false
   }

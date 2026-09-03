@@ -34,8 +34,8 @@ class SendCodeRequest(BaseModel):
 
 class RegisterRequest(BaseModel):
     phone: str
-    code: Optional[str] = None
-    password: Optional[str] = None
+    code: str = Field(..., min_length=4, max_length=8)
+    password: str = Field(..., min_length=6, max_length=128)
     nickname: Optional[str] = None
 
 
@@ -113,9 +113,11 @@ def _issue_token(db: Session, account: AppAccount) -> str:
 
 
 def _validate_register_payload(body: RegisterRequest) -> None:
-    if not body.code and not body.password:
-        raise HTTPException(status_code=400, detail="请提供验证码或密码")
-    if body.password is not None and len(body.password) < 6:
+    code = (body.code or "").strip()
+    password = (body.password or "").strip()
+    if not code:
+        raise HTTPException(status_code=400, detail="请填写短信验证码")
+    if len(password) < 6:
         raise HTTPException(status_code=400, detail="密码至少 6 位")
 
 
@@ -136,21 +138,20 @@ def web_send_code(body: SendCodeRequest, db: Session = Depends(get_db)):
     return send_verification_code(db, mobile, body.purpose)
 
 
-@router.post("/register", response_model=AuthTokenResponse, summary="手机号注册")
+@router.post("/register", response_model=AuthTokenResponse, summary="手机号注册（验证码 + 密码）")
 def web_register(body: RegisterRequest, db: Session = Depends(get_db)):
     _validate_register_payload(body)
     mobile = normalize_phone(body.phone)
+    code = body.code.strip()
+    password = body.password.strip()
 
     existing = _find_active_account_by_mobile(db, mobile)
     if existing:
         if not _is_claimable_staff_invite(existing, mobile):
             raise HTTPException(status_code=409, detail="该手机号已注册，请直接登录")
-        if not body.code:
-            raise HTTPException(status_code=400, detail="待激活账号请使用短信验证码完成注册")
-        verify_code(db, mobile, body.code, "register")
+        verify_code(db, mobile, code, "register")
         existing.OpenId = f"web_phone_{mobile}"
-        if body.password:
-            existing.PasswordHash = hash_password(body.password)
+        existing.PasswordHash = hash_password(password)
         if body.nickname:
             existing.Nickname = body.nickname
         _ensure_patient_role(db, existing)
@@ -159,19 +160,15 @@ def web_register(body: RegisterRequest, db: Session = Depends(get_db)):
         token = _issue_token(db, existing)
         return AuthTokenResponse(token=token, is_new_user=True)
 
-    if body.code:
-        verify_code(db, mobile, body.code, "register")
-    elif not body.password:
-        raise HTTPException(status_code=400, detail="首次注册请使用短信验证码")
+    verify_code(db, mobile, code, "register")
 
     account = AppAccount(
         Mobile=mobile,
         OpenId=f"web_phone_{mobile}",
         Nickname=body.nickname or f"用户{mobile[-4:]}",
+        PasswordHash=hash_password(password),
         IsActive=True,
     )
-    if body.password:
-        account.PasswordHash = hash_password(body.password)
 
     db.add(account)
     db.commit()

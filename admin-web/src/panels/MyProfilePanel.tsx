@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { ChangePasswordPanel } from "@/components/ChangePasswordPanel";
 import { PanelHeader, QueryField, queryControlClass } from "@/components/ui";
 import { API_BASE_URL } from "@/lib/api";
 import { roleLabel } from "@/lib/format";
@@ -77,6 +78,8 @@ export function MyProfilePanel({
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarObjectUrl, setAvatarObjectUrl] = useState("");
   const [avatarError, setAvatarError] = useState<string | null>(null);
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [passwordNotice, setPasswordNotice] = useState("");
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const avatarObjectUrlRef = useRef("");
 
@@ -251,7 +254,18 @@ export function MyProfilePanel({
             </QueryField>
           </section>
 
-          <div className="flex justify-end">
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            <button
+              className="rounded-xl border border-[var(--lxxl-border)] px-5 py-2.5 text-sm transition hover:bg-[#FAF8F4] disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={saving || !draft.mobile}
+              type="button"
+              onClick={() => {
+                setPasswordNotice("");
+                setShowChangePassword((open) => !open);
+              }}
+            >
+              {showChangePassword ? "收起修改密码" : "修改密码"}
+            </button>
             <button
               className="rounded-xl bg-[var(--lxxl-green)] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[var(--lxxl-green-dark)] disabled:cursor-not-allowed disabled:opacity-60"
               disabled={saving}
@@ -262,6 +276,25 @@ export function MyProfilePanel({
           </div>
         </form>
       </section>
+
+      {showChangePassword && draft.mobile ? (
+        <section className="overflow-hidden rounded-xl border border-[var(--lxxl-border)] bg-white px-6 py-6">
+          {passwordNotice ? (
+            <div className="mb-5 rounded-xl border border-[#C9E4D4] bg-[#F1FAF4] px-4 py-3 text-sm text-[var(--lxxl-green-dark)]">
+              {passwordNotice}
+            </div>
+          ) : null}
+          <ChangePasswordPanel
+            initialPhone={draft.mobile}
+            lockedPhone
+            mode="change"
+            onSuccess={(message) => {
+              setPasswordNotice(message || "密码已更新");
+              setShowChangePassword(false);
+            }}
+          />
+        </section>
+      ) : null}
     </div>
   );
 }

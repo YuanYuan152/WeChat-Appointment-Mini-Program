@@ -28,6 +28,7 @@ import { getMessage, roleText } from "@/lib/display";
 import { AppShell } from "./AppShell";
 import { AccessKeyGateScreen } from "./AccessKeyGateScreen";
 import { LoginScreen } from "./LoginScreen";
+import { SmsLoginScreen } from "./SmsLoginScreen";
 import { fetchUnreadMessageCount, MESSAGE_UNREAD_CHANGED_EVENT } from "@/services/messages";
 
 interface AppRouteContextValue {
@@ -61,6 +62,8 @@ export function AppRoute({ sectionId, children }: { sectionId: SectionId; childr
   return <AppRouteRoot sectionId={sectionId}>{children}</AppRouteRoot>;
 }
 
+type LoginMode = "sms" | "access-key" | "dev";
+
 function AppRouteRoot({ sectionId, children }: { sectionId: SectionId; children: ReactNode }) {
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
@@ -71,6 +74,7 @@ function AppRouteRoot({ sectionId, children }: { sectionId: SectionId; children:
   const [unreadMessageCount, setUnreadMessageCount] = useState<number | null>(null);
   const [accessKeyPassed, setAccessKeyPassed] = useState(false);
   const [autoLoginError, setAutoLoginError] = useState<string | null>(null);
+  const [loginMode, setLoginMode] = useState<LoginMode>("sms");
   const accessKeyLoginEnabled = isAccessKeyLoginEnabled();
   const autoLoginStartedRef = useRef(false);
 
@@ -134,6 +138,7 @@ function AppRouteRoot({ sectionId, children }: { sectionId: SectionId; children:
         clearAccessKeyPassed();
         setAccessKeyPassed(false);
       }
+      setLoginMode("sms");
       setAutoLoginError(null);
       clearNotice();
       router.replace("/login");
@@ -179,6 +184,13 @@ function AppRouteRoot({ sectionId, children }: { sectionId: SectionId; children:
     };
   }, [refreshUnreadMessageCount]);
 
+  const finishLogin = async (me: CurrentUser) => {
+    setUnreadMessageCount(null);
+    setCurrentUser(me);
+    showNotice("success", `已进入${roleLabel(me.activeRole)}`);
+    router.replace(sectionPathById[getDefaultSectionId(me.roles)]);
+  };
+
   const handleLogin = async (code: DevLoginCode) => {
     setLoading(true);
     clearNotice();
@@ -186,10 +198,7 @@ function AppRouteRoot({ sectionId, children }: { sectionId: SectionId; children:
     try {
       await loginWithDevCode(code);
       const me = await fetchCurrentUser();
-      setUnreadMessageCount(null);
-      setCurrentUser(me);
-      showNotice("success", `已进入${roleLabel(me.activeRole)}`);
-      router.replace(sectionPathById[getDefaultSectionId(me.roles)]);
+      await finishLogin(me);
     } catch (error) {
       const message = error instanceof Error ? error.message : "登录失败";
       setAutoLoginError(message);
@@ -205,6 +214,7 @@ function AppRouteRoot({ sectionId, children }: { sectionId: SectionId; children:
       booting
       || loading
       || currentUser
+      || loginMode !== "access-key"
       || !accessKeyLoginEnabled
       || !accessKeyPassed
       || autoLoginStartedRef.current
@@ -216,7 +226,7 @@ function AppRouteRoot({ sectionId, children }: { sectionId: SectionId; children:
     void handleLogin(getAccessKeyLoginDevCode() as DevLoginCode).catch(() => {
       // 错误已在 handleLogin 中展示；需手动点「重试登录」。
     });
-  }, [accessKeyLoginEnabled, accessKeyPassed, booting, currentUser, loading]);
+  }, [accessKeyLoginEnabled, accessKeyPassed, booting, currentUser, loading, loginMode]);
 
   const handleLogout = () => {
     clearStoredToken();
@@ -225,11 +235,27 @@ function AppRouteRoot({ sectionId, children }: { sectionId: SectionId; children:
       clearAccessKeyPassed();
       setAccessKeyPassed(false);
     }
+    setLoginMode("sms");
     setAutoLoginError(null);
     setCurrentUser(null);
     setUnreadMessageCount(null);
     clearNotice();
     router.replace("/login");
+  };
+
+  const handleSmsLoggedIn = async () => {
+    setLoading(true);
+    clearNotice();
+    try {
+      const me = await fetchCurrentUser();
+      await finishLogin(me);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "登录失败";
+      showNotice("error", message);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
   };
 
   const runAction = useCallback(
@@ -276,15 +302,28 @@ function AppRouteRoot({ sectionId, children }: { sectionId: SectionId; children:
   }
 
   if (!currentUser || !contextValue) {
-    if (accessKeyLoginEnabled && !accessKeyPassed) {
+    if (loginMode === "dev" && !accessKeyLoginEnabled) {
+      return <LoginScreen loading={loading} notice={notice} onLogin={handleLogin} />;
+    }
+
+    if (loginMode === "access-key" && accessKeyLoginEnabled && !accessKeyPassed) {
       return (
         <AccessKeyGateScreen
           notice={notice}
+          onBackToLogin={() => {
+            clearAccessKeyPassed();
+            setAccessKeyPassed(false);
+            autoLoginStartedRef.current = false;
+            setAutoLoginError(null);
+            setLoginMode("sms");
+            clearNotice();
+          }}
           onUnlocked={() => setAccessKeyPassed(true)}
         />
       );
     }
-    if (accessKeyLoginEnabled) {
+
+    if (loginMode === "access-key" && accessKeyLoginEnabled && accessKeyPassed) {
       const statusText = loading
         ? "正在以管理员身份登录..."
         : autoLoginError || "正在以管理员身份登录...";
@@ -292,8 +331,8 @@ function AppRouteRoot({ sectionId, children }: { sectionId: SectionId; children:
         <main className="grid min-h-screen place-items-center bg-[var(--lxxl-bg)] px-6 text-[var(--lxxl-text)]">
           <section className="w-full max-w-md rounded-2xl border border-[var(--lxxl-border)] bg-white px-8 py-6">
             <p className="text-sm text-[var(--lxxl-muted)]">{statusText}</p>
-            {!loading && autoLoginError ? (
-              <div className="mt-5 flex flex-wrap gap-3">
+            <div className="mt-5 flex flex-wrap gap-3">
+              {!loading && autoLoginError ? (
                 <button
                   className="rounded-xl bg-[var(--lxxl-green)] px-5 py-2 text-sm font-medium text-white disabled:opacity-60"
                   disabled={loading}
@@ -307,27 +346,64 @@ function AppRouteRoot({ sectionId, children }: { sectionId: SectionId; children:
                 >
                   重试登录
                 </button>
-                <button
-                  className="rounded-xl border border-[var(--lxxl-border)] px-5 py-2 text-sm text-[var(--lxxl-text)]"
-                  disabled={loading}
-                  type="button"
-                  onClick={() => {
-                    clearAccessKeyPassed();
-                    setAccessKeyPassed(false);
-                    autoLoginStartedRef.current = false;
-                    setAutoLoginError(null);
-                    clearNotice();
-                  }}
-                >
-                  重新输入密钥
-                </button>
-              </div>
-            ) : null}
+              ) : null}
+              <button
+                className="rounded-xl border border-[var(--lxxl-border)] px-5 py-2 text-sm text-[var(--lxxl-text)]"
+                type="button"
+                onClick={() => {
+                  clearAccessKeyPassed();
+                  setAccessKeyPassed(false);
+                  autoLoginStartedRef.current = false;
+                  setAutoLoginError(null);
+                  clearNotice();
+                }}
+              >
+                重新输入密钥
+              </button>
+              <button
+                className="rounded-xl border border-[var(--lxxl-border)] px-5 py-2 text-sm text-[var(--lxxl-text)]"
+                type="button"
+                onClick={() => {
+                  clearAccessKeyPassed();
+                  setAccessKeyPassed(false);
+                  autoLoginStartedRef.current = false;
+                  setAutoLoginError(null);
+                  setLoginMode("sms");
+                  clearNotice();
+                }}
+              >
+                返回验证码 / 密码登录
+              </button>
+            </div>
           </section>
         </main>
       );
     }
-    return <LoginScreen loading={loading} notice={notice} onLogin={handleLogin} />;
+
+    return (
+      <SmsLoginScreen
+        loading={loading}
+        notice={notice}
+        showDevLoginLink={!accessKeyLoginEnabled}
+        onLoggedIn={handleSmsLoggedIn}
+        onSwitchToAccessKey={
+          accessKeyLoginEnabled
+            ? () => {
+                setLoginMode("access-key");
+                clearNotice();
+              }
+            : undefined
+        }
+        onSwitchToDevLogin={
+          !accessKeyLoginEnabled
+            ? () => {
+                setLoginMode("dev");
+                clearNotice();
+              }
+            : undefined
+        }
+      />
+    );
   }
 
   if (!canEnterWeb) {

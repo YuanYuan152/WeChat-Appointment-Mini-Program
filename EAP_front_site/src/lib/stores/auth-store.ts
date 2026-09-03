@@ -8,7 +8,6 @@ import {
   loginWithDevCode,
   loginWithPassword,
   registerWithCode,
-  registerWithPassword,
   type AuthUser,
 } from "@/lib/api/auth";
 import { clearAccessKeyPassed, isAccessKeyLoginEnabled } from "@/lib/access-key-login";
@@ -22,8 +21,7 @@ interface AuthState {
   loginByCode: (phone: string, code: string) => Promise<void>;
   loginByPassword: (phone: string, password: string) => Promise<void>;
   loginWithDevCode: (code: string) => Promise<void>;
-  registerByCode: (phone: string, code: string, password?: string) => Promise<void>;
-  registerByPassword: (phone: string, password: string) => Promise<void>;
+  registerByCode: (phone: string, code: string, password: string) => Promise<void>;
   refreshUser: () => Promise<void>;
   logout: () => void;
 }
@@ -75,17 +73,6 @@ export const useAuthStore = create<AuthState>()(
         set({ loading: true });
         try {
           const { token } = await registerWithCode(phone, code, password);
-          set({ token });
-          await get().refreshUser();
-        } finally {
-          set({ loading: false });
-        }
-      },
-
-      registerByPassword: async (phone, password) => {
-        set({ loading: true });
-        try {
-          const { token } = await registerWithPassword(phone, password);
           set({ token });
           await get().refreshUser();
         } finally {

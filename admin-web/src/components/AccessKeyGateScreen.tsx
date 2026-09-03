@@ -8,9 +8,11 @@ import type { Notice } from "@/types/app";
 export function AccessKeyGateScreen({
   notice,
   onUnlocked,
+  onBackToLogin,
 }: {
   notice: Notice | null;
   onUnlocked: () => void;
+  onBackToLogin?: () => void;
 }) {
   const [accessKey, setAccessKey] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -75,6 +77,15 @@ export function AccessKeyGateScreen({
           >
             {submitting ? "验证中..." : "验证并进入"}
           </button>
+          {onBackToLogin ? (
+            <button
+              className="mt-4 w-full rounded-xl border border-[var(--lxxl-border)] px-4 py-3 text-sm text-[var(--lxxl-text)] transition hover:bg-[#FAF8F4]"
+              type="button"
+              onClick={onBackToLogin}
+            >
+              返回验证码 / 密码登录
+            </button>
+          ) : null}
         </form>
       </section>
     </main>

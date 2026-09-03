@@ -208,6 +208,54 @@ export async function loginWithDevCode(code: DevLoginCode) {
   return result;
 }
 
+export interface SendSmsCodeResponse {
+  message: string;
+  expiresIn: number;
+  mockCode?: string;
+}
+
+export async function sendAdminSmsCode(
+  phone: string,
+  purpose: "login" | "reset_password" = "login",
+) {
+  return apiRequest<SendSmsCodeResponse>("/api/web/admin/auth/send-code", {
+    method: "POST",
+    body: JSON.stringify({ phone, purpose }),
+  });
+}
+
+export async function loginWithSmsCode(phone: string, code: string) {
+  const result = await apiRequest<LoginResponse>("/api/web/admin/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ phone, code }),
+  });
+  setStoredToken(result.token);
+  return result;
+}
+
+export async function loginWithPassword(phone: string, password: string) {
+  const result = await apiRequest<LoginResponse>("/api/web/admin/auth/login-password", {
+    method: "POST",
+    body: JSON.stringify({ phone, password }),
+  });
+  setStoredToken(result.token);
+  return result;
+}
+
+export async function resetAdminPassword(phone: string, code: string, newPassword: string) {
+  return apiRequest<{ message: string }>("/api/web/admin/auth/reset-password", {
+    method: "POST",
+    body: JSON.stringify({ phone, code, newPassword }),
+  });
+}
+
+export async function changeAdminPassword(phone: string, code: string, newPassword: string) {
+  return apiRequest<{ message: string }>("/api/web/admin/auth/change-password", {
+    method: "POST",
+    body: JSON.stringify({ phone, code, newPassword }),
+  });
+}
+
 export function fetchCurrentUser() {
   return apiRequest<CurrentUser>("/api/mini/auth/me");
 }

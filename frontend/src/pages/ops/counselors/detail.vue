@@ -112,7 +112,7 @@
                 :key="option"
                 class="gender-chip"
                 :class="{ active: form.gender === option }"
-                @tap="selectGender(option)"
+                @tap.stop="selectGender(option)"
               >
                 {{ option }}
               </view>
@@ -247,7 +247,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
+import { onLoad } from '@dcloudio/uni-app'
 import AvatarCropper from '@/components/AvatarCropper.vue'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
@@ -347,7 +348,7 @@ const form = ref({
 })
 
 const selectGender = (option: '男' | '女') => {
-  form.value.gender = option
+  form.value = { ...form.value, gender: option }
 }
 
 const modeIndex = computed(() => {
@@ -495,6 +496,8 @@ const save = async () => {
     } else {
       uni.showToast({ title: res.msg || '保存失败', icon: 'none' })
     }
+  } catch (err: any) {
+    uni.showToast({ title: err?.message || '保存失败', icon: 'none' })
   } finally {
     saving.value = false
   }
@@ -507,11 +510,14 @@ const openFullSchedule = () => {
   })
 }
 
-onMounted(() => {
-  const pages = getCurrentPages()
-  const opts = (pages[pages.length - 1] as any).options || {}
-  counselorId.value = Number(opts.counselorId || 0)
-  load()
+onLoad((options) => {
+  counselorId.value = Number(options?.counselorId || 0)
+  if (counselorId.value) {
+    void load()
+  } else {
+    loading.value = false
+    uni.showToast({ title: '咨询师参数无效', icon: 'none' })
+  }
 })
 </script>
 

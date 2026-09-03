@@ -95,11 +95,40 @@ class Settings(BaseSettings):
     # 内部消息/提醒定时任务调用密钥；空值表示仅允许已登录后台工作人员。
     MESSAGE_INTERNAL_TOKEN: str = ""
 
-    # Web SMS (官网注册登录)
+    # Web SMS（官网 / 管理端验证码登录）
     SMS_MOCK: bool = True
     SMS_CODE_LENGTH: int = 6
     SMS_CODE_TTL_MINUTES: int = 5
-    SMS_RESEND_INTERVAL_SECONDS: int = 1
+    SMS_RESEND_INTERVAL_SECONDS: int = 60
+
+    # 腾讯云短信（SMS API 3.0 SendSms）
+    TENCENT_SMS_SECRET_ID: str = ""
+    TENCENT_SMS_SECRET_KEY: str = ""
+    TENCENT_SMS_SDK_APP_ID: str = ""
+    TENCENT_SMS_SIGN_NAME: str = ""
+    TENCENT_SMS_TEMPLATE_ID: str = ""
+    TENCENT_SMS_REGION: str = "ap-guangzhou"
+    # 可选：模板参数 JSON。默认 [code, expire_minutes]；单参数模板可设为 ["{code}"]
+    TENCENT_SMS_TEMPLATE_PARAM_JSON: str = ""
+    # 修改/重置密码专用短信模板（必填于生产；留空时回退到登录模板）
+    TENCENT_SMS_RESET_PASSWORD_TEMPLATE_ID: str = ""
+    TENCENT_SMS_RESET_PASSWORD_TEMPLATE_PARAM_JSON: str = ""
+
+    @property
+    def tencent_sms_base_configured(self) -> bool:
+        return bool(
+            self.TENCENT_SMS_SECRET_ID.strip()
+            and self.TENCENT_SMS_SECRET_KEY.strip()
+            and self.TENCENT_SMS_SDK_APP_ID.strip()
+            and self.TENCENT_SMS_SIGN_NAME.strip()
+        )
+
+    @property
+    def tencent_sms_configured(self) -> bool:
+        return bool(
+            self.tencent_sms_base_configured
+            and self.TENCENT_SMS_TEMPLATE_ID.strip()
+        )
 
     @property
     def dev_login_enabled(self) -> bool:

@@ -24,6 +24,7 @@ from message import router as message_router
 from admin import router as admin_router
 from feedback import router as feedback_router
 from web_admin import router as web_admin_router
+from web_admin_auth import router as web_admin_auth_router
 from web_auth import router as web_auth_router
 from assessment_routes import (
     ensure_assessment_definitions,
@@ -175,6 +176,7 @@ app.include_router(message_router)
 app.include_router(admin_router)
 app.include_router(feedback_router)
 app.include_router(web_admin_router)
+app.include_router(web_admin_auth_router)
 app.include_router(web_auth_router)
 app.include_router(assessment_public_router)
 app.include_router(assessment_report_router)

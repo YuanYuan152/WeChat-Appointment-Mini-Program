@@ -121,11 +121,24 @@ class HttpRequest {
         finalHeaders.Authorization = `Bearer ${token}`
       }
 
+      // 微信小程序 uni.request 不会自动把对象序列化为 JSON，需手动 stringify
+      let requestData: string | Record<string, unknown> | ArrayBuffer | undefined = data
+      const contentType = (finalHeaders['Content-Type'] || finalHeaders['content-type'] || '').toLowerCase()
+      if (
+        requestData &&
+        typeof requestData === 'object' &&
+        !(requestData instanceof ArrayBuffer) &&
+        contentType.includes('application/json') &&
+        (method === 'POST' || method === 'PUT' || method === 'PATCH')
+      ) {
+        requestData = JSON.stringify(requestData)
+      }
+
       // 发送请求
       const response = await uni.request({
         url: fullUrl,
         method,
-        data,
+        data: requestData,
         header: finalHeaders,
         timeout: timeout ?? this.timeout
       })
