@@ -254,6 +254,7 @@ class AppSitePage(Base):
     Id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     PageKey = Column(String(30), nullable=False, unique=True, index=True)
     Title = Column(Unicode(200), nullable=True)
+    Subtitle = Column(Unicode(500), nullable=True)
     Body = Column(UnicodeText, nullable=True)
     AssistantQrcodeUrl = Column(String(500), nullable=True)
     CoverImageUrl = Column(String(500), nullable=True)

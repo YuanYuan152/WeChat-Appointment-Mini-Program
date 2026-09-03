@@ -20,6 +20,12 @@ SITE_PAGE_LABELS = {
 DEFAULT_HOME_COVER = "/static/images-opt/slide11.jpg"
 DEFAULT_HOME_CROP = {"x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0}
 
+DEFAULT_PAGE_SUBTITLES: Dict[str, str] = {
+    "brand": "同心理 · 专业.温暖的心理服务平台",
+    "charity": "低价专业支持 · 督导师全程把关",
+    "contact": "上海连心心理咨询有限公司",
+}
+
 DEFAULT_PAGE_BODIES: Dict[str, str] = {
     "brand": (
         "同心理致力于为来访者提供专业、温暖的心理服务，帮助每一位需要支持的人更好地理解自己、照顾自己。\n\n"
@@ -95,6 +101,7 @@ def _page_to_dict(row: AppSitePage) -> Dict[str, Any]:
         "id": row.Id,
         "pageKey": row.PageKey,
         "title": row.Title or SITE_PAGE_LABELS.get(row.PageKey, row.PageKey),
+        "subtitle": getattr(row, "Subtitle", None) or None,
         "body": row.Body or "",
         "updatedAt": row.UpdatedAt or row.CreatedAt,
     }
@@ -133,6 +140,7 @@ def ensure_default_site_content(db: Session) -> None:
             PageKey=key,
             Title=SITE_PAGE_LABELS[key],
             Body=DEFAULT_PAGE_BODIES.get(key, ""),
+            Subtitle=DEFAULT_PAGE_SUBTITLES.get(key),
         )
         if key == "home":
             row.CoverImageUrl = DEFAULT_HOME_COVER
@@ -162,7 +170,8 @@ def upsert_site_page(
     db: Session,
     page_key: str,
     *,
-    body: str,
+    body: Optional[str] = None,
+    subtitle: Optional[str] = None,
     title: Optional[str] = None,
     account_id: Optional[int] = None,
     assistant_qrcode_url: Optional[str] = None,
@@ -180,6 +189,8 @@ def upsert_site_page(
         db.add(row)
 
     if key == "home":
+        if body is None:
+            raise ValueError("请填写副标题")
         text = (body or "").strip() or DEFAULT_PAGE_BODIES["home"]
         row.Body = text
         row.Title = (title or "同心理").strip() or "同心理"
@@ -190,11 +201,19 @@ def upsert_site_page(
             row.CoverImageUrl = image
             row.CoverCropJson = _serialize_cover_crop(cover_crop or DEFAULT_HOME_CROP)
     else:
-        text = (body or "").strip()
-        if not text:
-            raise ValueError("请填写正文")
-        row.Title = (title or SITE_PAGE_LABELS[key]).strip() or SITE_PAGE_LABELS[key]
-        row.Body = text
+        if body is not None:
+            text = (body or "").strip()
+            if not text:
+                raise ValueError("请填写正文")
+            row.Body = text
+        if subtitle is not None:
+            row.Subtitle = (subtitle or "").strip() or None
+        if title is not None:
+            row.Title = (title or SITE_PAGE_LABELS[key]).strip() or SITE_PAGE_LABELS[key]
+        elif not row.Title:
+            row.Title = SITE_PAGE_LABELS[key]
+        if body is None and subtitle is None and not (row.Body or "").strip():
+            raise ValueError("请填写正文或副标题")
         if key == "contact" and update_assistant_qrcode:
             row.AssistantQrcodeUrl = (assistant_qrcode_url or "").strip() or None
 

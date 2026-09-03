@@ -292,6 +292,7 @@ class SitePageOut(BaseModel):
     id: int
     pageKey: str
     title: str
+    subtitle: Optional[str] = None
     body: str
     assistantQrcodeUrl: Optional[str] = None
     coverImageUrl: Optional[str] = None
@@ -307,7 +308,8 @@ class CoverCropIn(BaseModel):
 
 
 class SitePageUpsert(BaseModel):
-    body: str = ""
+    body: Optional[str] = None
+    subtitle: Optional[str] = None
     title: Optional[str] = None
     assistant_qrcode_url: Optional[str] = None
     cover_image_url: Optional[str] = None
@@ -361,6 +363,7 @@ def upsert_site_page(
             db,
             page_key,
             body=body.body,
+            subtitle=body.subtitle,
             title=body.title,
             account_id=int(account.Id),
             assistant_qrcode_url=body.assistant_qrcode_url,

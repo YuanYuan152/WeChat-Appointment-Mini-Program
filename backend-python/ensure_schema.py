@@ -94,6 +94,7 @@ APP_COUNSELOR_PATIENT_PRICING_COLUMNS = {
 }
 
 APP_SITE_PAGE_COLUMNS = {
+    "Subtitle": "NVARCHAR(500) NULL",
     "AssistantQrcodeUrl": "NVARCHAR(500) NULL",
     "CoverImageUrl": "NVARCHAR(500) NULL",
     "CoverCropJson": "NVARCHAR(500) NULL",

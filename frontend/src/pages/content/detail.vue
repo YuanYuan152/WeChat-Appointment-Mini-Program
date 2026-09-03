@@ -8,11 +8,7 @@
         <text class="detail-title">{{ detail.title }}</text>
       </view>
       <view class="detail-body">
-        <text
-          v-for="(p, pIdx) in detail.paragraphs"
-          :key="pIdx"
-          class="paragraph"
-        >{{ p }}</text>
+        <SiteProseBlock :paragraphs="detail.paragraphs" tone="body" />
       </view>
     </view>
     <view v-else class="empty-wrap">
@@ -24,6 +20,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
+import SiteProseBlock from '@/components/SiteProseBlock.vue'
 import { CONTENT_DETAILS } from '@/constants/siteContent'
 import {
   bodyToParagraphs,
@@ -93,18 +90,6 @@ onLoad(async (options) => {
   font-weight: 800;
   color: #1F2937;
   line-height: 1.4;
-}
-
-.paragraph {
-  display: block;
-  font-size: 28rpx;
-  color: #374151;
-  line-height: 1.85;
-  margin-bottom: 16rpx;
-}
-
-.paragraph:last-child {
-  margin-bottom: 0;
 }
 
 .empty-wrap {

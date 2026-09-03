@@ -6,17 +6,14 @@
     </view>
 
     <view class="info-card">
-      <text
-        v-for="(p, pIdx) in content.paragraphs"
-        :key="pIdx"
-        class="info-paragraph"
-      >{{ p }}</text>
+      <SiteProseBlock :paragraphs="content.paragraphs" />
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import SiteProseBlock from '@/components/SiteProseBlock.vue'
 import {
   fetchPublicSiteContent,
   fallbackBrandContent,
@@ -69,15 +66,4 @@ onMounted(async () => {
   box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.03);
 }
 
-.info-paragraph {
-  display: block;
-  font-size: 28rpx;
-  color: #6B6560;
-  line-height: 1.85;
-  margin-bottom: 16rpx;
-}
-
-.info-paragraph:last-child {
-  margin-bottom: 0;
-}
 </style>

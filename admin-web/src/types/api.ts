@@ -286,6 +286,7 @@ export interface SitePage {
   id: number;
   pageKey: string;
   title: string;
+  subtitle?: string | null;
   body: string;
   assistantQrcodeUrl?: string | null;
   coverImageUrl?: string | null;

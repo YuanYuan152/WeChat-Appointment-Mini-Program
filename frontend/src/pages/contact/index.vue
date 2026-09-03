@@ -6,11 +6,7 @@
     </view>
 
     <view v-if="intro.paragraphs.length" class="intro-card">
-      <text
-        v-for="(p, pIdx) in intro.paragraphs"
-        :key="pIdx"
-        class="intro-paragraph"
-      >{{ p }}</text>
+      <SiteProseBlock :paragraphs="intro.paragraphs" />
     </view>
 
     <ContactUsContent :qrcode-src="assistantQrcodeSrc" />
@@ -20,6 +16,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import ContactUsContent from '@/components/ContactUsContent.vue'
+import SiteProseBlock from '@/components/SiteProseBlock.vue'
 import {
   fetchPublicSiteContent,
   fallbackContactIntro,
@@ -71,17 +68,5 @@ onMounted(async () => {
   padding: 32rpx 28rpx;
   margin-bottom: 24rpx;
   box-shadow: 0 4rpx 16rpx rgba(15, 23, 42, 0.04);
-}
-
-.intro-paragraph {
-  display: block;
-  font-size: 28rpx;
-  color: #6B6560;
-  line-height: 1.85;
-  margin-bottom: 16rpx;
-}
-
-.intro-paragraph:last-child {
-  margin-bottom: 0;
 }
 </style>

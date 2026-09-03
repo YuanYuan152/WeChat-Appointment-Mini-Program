@@ -45,11 +45,16 @@ export function ContentPanel({
   const allowDelete = activeKind === "banner" || activeKind === "activity" || activeKind === "consultation_guide";
   const hideImageColumn =
     activeKind === "brand" || activeKind === "charity" || activeKind === "consultation_guide";
+  const isSiteSectionPage = activeKind === "brand" || activeKind === "charity" || activeKind === "contact";
   const createLabel =
     activeKind === "home_cover"
       ? activeItems.length > 0
         ? "编辑封面"
         : "设置封面"
+      : isSiteSectionPage
+        ? activeItems.length > 0
+          ? "编辑"
+          : "填写内容"
       : isSitePageKind(activeKind)
         ? activeItems.length > 0
           ? "编辑正文"
@@ -59,6 +64,7 @@ export function ContentPanel({
     setDraft({
       kind: activeKind,
       title: "",
+      subtitle: "",
       body: "",
       summary: "",
       imageUrl: "",
@@ -69,13 +75,36 @@ export function ContentPanel({
     });
   const editing = editingId != null;
 
+  const openSiteEditor = (item?: ContentListItem) => {
+    const target = item ?? activeItems[0];
+    setEditingId(target?.id ?? null);
+    setDraft({
+      kind: activeKind,
+      title: target?.title || "",
+      subtitle: target?.subtitle || "",
+      body: target?.body || target?.summary || "",
+      summary: "",
+      imageUrl: target?.imageUrl || "",
+      assistantQrcodeUrl: target?.assistantQrcodeUrl || "",
+      coverImageUrl: target?.coverImageUrl || "",
+      coverCrop: target?.coverCrop || { x: 0, y: 0, width: 1, height: 1 },
+      pageKey: target?.pageKey || sitePageKeyForKind(activeKind) || undefined,
+    });
+    setCreateOpen(true);
+  };
+
   const openCreate = () => {
+    if (isSiteSectionPage) {
+      openSiteEditor();
+      return;
+    }
     if (isSitePageKind(activeKind) && activeItems.length > 0) {
       const item = activeItems[0];
       setEditingId(item.id);
       setDraft({
         kind: activeKind,
         title: item.title,
+        subtitle: item.subtitle || "",
         body: item.body || item.summary || "",
         summary: "",
         imageUrl: item.imageUrl || "",
@@ -119,10 +148,15 @@ export function ContentPanel({
           hideImageColumn={hideImageColumn}
           onCreateClick={openCreate}
           onEdit={(item) => {
+            if (isSiteSectionPage) {
+              openSiteEditor(item);
+              return;
+            }
             setEditingId(item.id);
             setDraft({
               kind: activeKind,
               title: item.title,
+              subtitle: item.subtitle || "",
               body: item.body || "",
               summary: item.summary || item.body || "",
               imageUrl: item.imageUrl || "",
@@ -207,6 +241,7 @@ function getContentItems(data: ScreenData, kind: ContentKind): ContentListItem[]
     return (data.sitePages || []).map((item) => ({
       id: item.id,
       title: item.title,
+      subtitle: item.subtitle,
       meta: "已发布",
       date: item.updatedAt,
       summary: previewText(item.body),

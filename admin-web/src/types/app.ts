@@ -156,6 +156,7 @@ export type ContentKind =
 export interface ContentDraft {
   kind: ContentKind;
   title: string;
+  subtitle: string;
   body: string;
   summary: string;
   imageUrl: string;
