@@ -36,6 +36,33 @@ def as_china_api_time(value: Optional[datetime]) -> Optional[datetime]:
     return value.astimezone(CHINA_TIMEZONE)
 
 
+def format_china_business_time(
+    value: Optional[datetime],
+    fmt: str = "%Y-%m-%d %H:%M",
+    *,
+    empty: str = "时间待定",
+) -> str:
+    """排期/预约等业务时间：库内为北京墙钟 naive，有时区则先转到东八区再格式化。"""
+    if value is None:
+        return empty
+    if value.tzinfo is not None:
+        value = value.astimezone(CHINA_TIMEZONE).replace(tzinfo=None)
+    return value.strftime(fmt)
+
+
+def format_china_system_time(
+    value: Optional[datetime],
+    fmt: str = "%Y-%m-%d %H:%M",
+    *,
+    empty: str = "",
+) -> str:
+    """系统操作时间（UTC naive 落库）：转为北京墙钟后再格式化。"""
+    china = utc_to_china(value)
+    if china is None:
+        return empty
+    return china.strftime(fmt)
+
+
 def hours_until(start_time: Optional[datetime]) -> Optional[float]:
     if not start_time:
         return None

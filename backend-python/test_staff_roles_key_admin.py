@@ -66,6 +66,30 @@ class StaffRolesKeyAdminTests(unittest.TestCase):
         self.assertTrue(can_actor_assign_role("Admin", "Tester", actor_is_key_admin=False))
         assert_can_assign_role("Admin", "Ops", actor_is_key_admin=False)
 
+    def test_admin_only_specialized_web_roles(self):
+        for role in ("ContentOps", "Marketing", "Research"):
+            self.assertTrue(can_actor_assign_role("Admin", role, actor_is_key_admin=False))
+            self.assertFalse(can_actor_assign_role("Ops", role, actor_is_key_admin=False))
+            self.assertFalse(can_actor_assign_role("Assistant", role, actor_is_key_admin=False))
+
+    def test_specialized_role_helpers(self):
+        from staff_roles import (
+            is_assessment_editor_role,
+            is_assessment_viewer_role,
+            is_content_manager_role,
+            is_visitor_ui_role,
+        )
+
+        self.assertTrue(is_content_manager_role("ContentOps"))
+        self.assertTrue(is_content_manager_role("Marketing"))
+        self.assertFalse(is_content_manager_role("Research"))
+        self.assertTrue(is_assessment_editor_role("Research"))
+        self.assertTrue(is_assessment_viewer_role("Research"))
+        self.assertFalse(is_assessment_editor_role("ContentOps"))
+        for role in ("Patient", "ContentOps", "Marketing", "Research"):
+            self.assertTrue(is_visitor_ui_role(role))
+        self.assertFalse(is_visitor_ui_role("Admin"))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -18,6 +18,8 @@ from staff_roles import (
     assignable_roles_for_actor,
     assert_can_assign_role,
     assert_can_manage_user,
+    is_assessment_editor_role,
+    is_assessment_viewer_role,
     is_key_login_admin_account,
     staff_workbench_account_ids,
 )
@@ -154,9 +156,19 @@ def require_assessment_editor(
     current_account: AppAccount = Depends(get_current_account),
     db: Session = Depends(get_db),
 ) -> AppAccount:
-    """量表定义涉及发布版本，仅运营和管理员可编辑。"""
-    if get_account_role(db, current_account.Id) not in {"Ops", "Admin"}:
+    """量表定义涉及发布版本，咨询主任、管理员与科研可编辑。"""
+    if not is_assessment_editor_role(get_account_role(db, current_account.Id)):
         raise HTTPException(status_code=403, detail="无量表配置权限")
+    return current_account
+
+
+def require_assessment_viewer(
+    current_account: AppAccount = Depends(get_current_account),
+    db: Session = Depends(get_db),
+) -> AppAccount:
+    """量表结果：管理工作台与科研可查看。"""
+    if not is_assessment_viewer_role(get_account_role(db, current_account.Id)):
+        raise HTTPException(status_code=403, detail="无量表结果查看权限")
     return current_account
 
 
@@ -176,7 +188,17 @@ class CreateUserByMobileRequest(BaseModel):
 
 
 BINDABLE_ROLE_TYPES = frozenset(
-    {"Counselor", "Assistant", "Ops", "Patient", "Tester", "Admin"}
+    {
+        "Counselor",
+        "Assistant",
+        "Ops",
+        "Patient",
+        "Tester",
+        "Admin",
+        "ContentOps",
+        "Research",
+        "Marketing",
+    }
 )
 
 
@@ -1128,7 +1150,15 @@ def _admin_counselor_name(db: Session, counselor_id: int) -> str:
 
 
 # 来访管理仅展示纯来访者，排除工作人员账号
-_VISITOR_EXCLUDED_ROLES = ("Counselor", "Admin", "Ops", "Assistant")
+_VISITOR_EXCLUDED_ROLES = (
+    "Counselor",
+    "Admin",
+    "Ops",
+    "Assistant",
+    "ContentOps",
+    "Research",
+    "Marketing",
+)
 
 
 def _admin_staff_account_ids(db: Session) -> set[int]:
@@ -3142,13 +3172,13 @@ register_assessment_admin_routes(
 
 register_assessment_report_admin_routes(
     router,
-    require_assessment_viewer=require_staff_workbench,
+    require_assessment_viewer=require_assessment_viewer,
     visitor_patient_ids=_admin_visitor_patient_ids,
 )
 
 register_assessment_share_admin_routes(
     router,
-    require_assessment_viewer=require_staff_workbench,
+    require_assessment_viewer=require_assessment_viewer,
 )
 
 register_system_settings_routes(

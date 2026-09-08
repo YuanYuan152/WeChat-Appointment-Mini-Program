@@ -81,7 +81,37 @@ def _affected_patients(
     schedule: Optional[AppSchedule],
     consultation: Optional[AppConsultation],
     leave_status: Optional[str] = None,
+    pending_order: Optional[AppOrder] = None,
 ) -> List[dict]:
+    if not consultation and pending_order:
+        patient = db.query(AppAccount).filter(AppAccount.Id == pending_order.AccountId).first()
+        from patient_contract_service import patient_contract_extras
+
+        patient_contract_tag = (
+            patient_contract_extras(db, patient).get("contractTag") if patient else None
+        )
+        note = schedule.Note if schedule else None
+        loc = _location(db, note, status=schedule.Status if schedule else "AVAILABLE")
+        if leave_status == "REJECTED":
+            refund_text = "审核未通过，待支付订单不作变更"
+        elif leave_status == "APPROVED":
+            refund_text = "审核已通过，待支付订单已取消"
+        else:
+            refund_text = "审核通过后待支付订单将取消"
+        return [{
+            "consultationId": None,
+            "orderId": pending_order.Id,
+            "orderStatus": pending_order.Status,
+            "patientName": _account_name(db, pending_order.AccountId),
+            "patientContractTag": patient_contract_tag,
+            "patientPhone": patient.Mobile if patient else None,
+            "emergencyContact": patient.EmergencyContact if patient else None,
+            "emergencyPhone": patient.EmergencyPhone if patient else None,
+            "startTime": schedule.StartTime if schedule else None,
+            "endTime": schedule.EndTime if schedule else None,
+            "location": loc,
+            "refundText": refund_text,
+        }]
     if not consultation:
         return []
     patient = db.query(AppAccount).filter(AppAccount.Id == consultation.PatientId).first()
@@ -134,6 +164,28 @@ def build_leave_request_out(db: Session, leave: AppLeaveRequest) -> dict:
         .order_by(AppConsultation.CreatedAt.desc())
         .first()
     )
+    active_consultation = (
+        consultation
+        if consultation and consultation.Status in ("PENDING", "CONFIRMED", "ONGOING")
+        else None
+    )
+    pending_order = None
+    if not active_consultation:
+        from proxy_booking_service import pending_proxy_order_for_schedule
+
+        pending_order = pending_proxy_order_for_schedule(db, leave.ScheduleId)
+        if not pending_order and leave.Status == "APPROVED":
+            # 审核通过后订单已取消，回看详情时用同排期最近一笔已取消代理单展示来访。
+            pending_order = (
+                db.query(AppOrder)
+                .filter(
+                    AppOrder.SlotId == leave.ScheduleId,
+                    AppOrder.Status == "CANCELLED",
+                    AppOrder.Description.like("proxy:%"),
+                )
+                .order_by(AppOrder.Id.desc())
+                .first()
+            )
     cancel_log = (
         db.query(AppScheduleCancelLog)
         .filter(
@@ -160,6 +212,9 @@ def build_leave_request_out(db: Session, leave: AppLeaveRequest) -> dict:
             .first()
         )
     note = schedule.Note if schedule else None
+    display_consultation = active_consultation or (
+        consultation if consultation and not pending_order else None
+    )
     return {
         "id": leave.Id,
         "scheduleId": leave.ScheduleId,
@@ -172,7 +227,13 @@ def build_leave_request_out(db: Session, leave: AppLeaveRequest) -> dict:
         "endTime": schedule.EndTime if schedule else None,
         "location": _location(db, note, status=schedule.Status if schedule else "BOOKED"),
         "screenshotUrl": cancel_log.ScreenshotUrl if cancel_log else None,
-        "affectedPatients": _affected_patients(db, schedule, consultation, leave.Status),
+        "affectedPatients": _affected_patients(
+            db,
+            schedule,
+            display_consultation,
+            leave.Status,
+            pending_order=pending_order if not display_consultation else None,
+        ),
         "createdAt": leave.CreatedAt,
         "reviewedBy": getattr(leave, "ReviewedBy", None),
         "reviewedAt": getattr(leave, "ReviewedAt", None)
@@ -200,9 +261,10 @@ def approve_leave_request(
     )
     if not schedule:
         raise ValueError("关联排期不存在或不属于该咨询师")
-    if schedule.Status != "BOOKED":
-        raise ValueError("关联预约状态已变化，无法通过该请假申请")
 
+    from proxy_booking_service import pending_proxy_order_for_schedule
+
+    pending_proxy_order = pending_proxy_order_for_schedule(db, leave.ScheduleId)
     consultation = (
         db.query(AppConsultation)
         .filter(
@@ -212,6 +274,14 @@ def approve_leave_request(
         )
         .first()
     )
+
+    booked_path = schedule.Status == "BOOKED"
+    pending_payment_path = (
+        schedule.Status == "AVAILABLE" and pending_proxy_order is not None
+    )
+    if not booked_path and not pending_payment_path:
+        raise ValueError("关联预约状态已变化，无法通过该请假申请")
+
     if consultation:
         consultation.Status = "CANCELLED"
         consultation.UpdatedAt = datetime.utcnow()
@@ -235,6 +305,19 @@ def approve_leave_request(
             consultation,
             leave_reason=leave.Reason,
             refunded=refunded,
+        )
+    elif pending_proxy_order:
+        from proxy_booking_service import _cancel_pending_proxy_order
+        from patient_message_service import notify_patient_pending_proxy_leave_approved
+
+        patient_id = pending_proxy_order.AccountId
+        _cancel_pending_proxy_order(db, pending_proxy_order)
+        notify_patient_pending_proxy_leave_approved(
+            db,
+            patient_id=patient_id,
+            schedule=schedule,
+            leave_reason=leave.Reason,
+            order_id=pending_proxy_order.Id,
         )
 
     schedule.Status = "CANCELLED"
@@ -275,6 +358,8 @@ def approve_leave_request(
         leave_request_id=leave.Id,
         consultation=consultation,
     )
+    if pending_payment_path:
+        return "APPROVED", "请假已通过，待支付订单已取消"
     return "APPROVED", "请假已通过，相关预约已取消"
 
 

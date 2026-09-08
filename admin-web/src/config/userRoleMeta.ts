@@ -5,11 +5,21 @@ export const CREATABLE_ROLE_OPTIONS: Array<{ value: Role; label: string }> = [
   { value: "Assistant", label: "咨询助理" },
   { value: "Ops", label: "咨询主任" },
   { value: "Patient", label: "来访者" },
+  { value: "ContentOps", label: "内容运营" },
+  { value: "Marketing", label: "市场" },
+  { value: "Research", label: "科研" },
   { value: "Tester", label: "测试员" },
   { value: "Admin", label: "管理员" },
 ];
 
 const STAFF_WORKBENCH_ROLES: Role[] = ["Assistant", "Ops", "Admin"];
+
+const ADMIN_ONLY_ASSIGNABLE_ROLES: Role[] = [
+  "Tester",
+  "ContentOps",
+  "Research",
+  "Marketing",
+];
 
 const STAFF_ROLE_RANK: Partial<Record<Role, number>> = {
   Assistant: 1,
@@ -25,11 +35,24 @@ export function isKeyLoginAdminOpenId(openId?: string | null) {
 }
 
 const ROLE_MANAGEMENT_ALLOWED: Record<Role, Role[]> = {
-  Admin: ["Ops", "Assistant", "Counselor", "Patient", "Tester", "Admin"],
+  Admin: [
+    "Ops",
+    "Assistant",
+    "Counselor",
+    "Patient",
+    "ContentOps",
+    "Marketing",
+    "Research",
+    "Tester",
+    "Admin",
+  ],
   Ops: ["Assistant", "Counselor", "Patient"],
   Assistant: ["Counselor", "Patient"],
   Counselor: [],
   Patient: [],
+  ContentOps: [],
+  Marketing: [],
+  Research: [],
   Tester: [],
 };
 
@@ -64,7 +87,7 @@ export function canActorAssignRole(
   if (!STAFF_WORKBENCH_ROLES.includes(actorRole as Role)) {
     return false;
   }
-  if (targetRole === "Tester") {
+  if (ADMIN_ONLY_ASSIGNABLE_ROLES.includes(targetRole as Role)) {
     return actorRole === "Admin";
   }
   if (!isStaffManagementRole(targetRole)) {

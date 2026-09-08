@@ -1,4 +1,14 @@
-export type Role = "Patient" | "Counselor" | "Assistant" | "Ops" | "Tester" | "Admin";
+export type Role =
+  | "Patient"
+  | "Counselor"
+  | "Assistant"
+  | "Ops"
+  | "Tester"
+  | "Admin"
+  | "ContentOps"
+  | "Research"
+  | "Marketing";
+
 
 export interface LoginResponse {
   token: string;

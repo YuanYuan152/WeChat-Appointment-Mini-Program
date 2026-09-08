@@ -133,6 +133,7 @@ import {
   sanitizeMessageCategoryForRole,
   type MessageItem,
 } from '@/utils/message'
+import { formatChinaDateTime } from '@/utils/dateTime'
 
 const messages = ref<MessageItem[]>([])
 const unreadCount = ref(0)
@@ -181,7 +182,7 @@ const emptyHint = computed(() => {
   return '预约、请假、取消等通知会在这里显示'
 })
 
-const formatTime = (dt: string) => dt ? dt.slice(0, 16).replace('T', ' ') : ''
+const formatTime = (dt: string) => formatChinaDateTime(dt)
 
 const loadActiveRole = async () => {
   try {

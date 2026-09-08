@@ -121,6 +121,9 @@ export function roleLabel(role?: Role | string | null) {
     Ops: "咨询主任",
     Tester: "测试员",
     Admin: "管理员",
+    ContentOps: "内容运营",
+    Research: "科研",
+    Marketing: "市场",
   };
   return role ? labels[role] || role : "-";
 }

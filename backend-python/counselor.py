@@ -864,7 +864,21 @@ def _calendar_items_for_schedules(
         elif pending_proxy_order:
             display = "PENDING_PAYMENT"
             display_label = DISPLAY_LABELS.get("PENDING_PAYMENT", "待支付")
-            can_cancel, requires_leave, cancel_hint = False, False, None
+            # 待支付代理预约（助理/咨询师推送给来访）与已预约一致，须走请假审核；
+            # 审核通过后订单变为已取消，排期释放。
+            if has_appointment_started(s.StartTime):
+                can_cancel, requires_leave, cancel_hint = (
+                    False,
+                    False,
+                    "咨询已开始或已过开始时间，不可取消",
+                )
+            else:
+                can_cancel, requires_leave, cancel_hint = (
+                    True,
+                    True,
+                    "该时段有来访待支付订单。取消前请与来访者沟通并上传沟通截图。"
+                    "提交后须等待管理工作台审核；审核通过后订单将取消。",
+                )
         else:
             display = resolve_schedule_display(s, c)
             display_label = DISPLAY_LABELS.get(display, display)
@@ -1267,8 +1281,19 @@ def submit_leave_request(
     )
     if has_appointment_started(schedule.StartTime):
         raise HTTPException(status_code=400, detail="咨询已开始或已过开始时间，不可申请请假")
-    if schedule.Status != "BOOKED" and not _active_consultation(consultation):
-        raise HTTPException(status_code=400, detail="仅已预约时段可申请请假")
+
+    from proxy_booking_service import pending_proxy_order_for_schedule
+
+    pending_proxy_order = pending_proxy_order_for_schedule(db, schedule_id)
+    booked_eligible = schedule.Status == "BOOKED" or _active_consultation(consultation)
+    pending_payment_eligible = (
+        pending_proxy_order is not None and schedule.Status == "AVAILABLE"
+    )
+    if not booked_eligible and not pending_payment_eligible:
+        raise HTTPException(
+            status_code=400,
+            detail="仅已预约或待支付代理预约时段可申请请假",
+        )
 
     reason = (body.reason or "").strip()
     if not reason:
@@ -1316,6 +1341,7 @@ def submit_leave_request(
         leave_reason=reason,
         screenshot_url=screenshot,
         consultation=consultation,
+        pending_order=pending_proxy_order if not consultation else None,
     )
     notify_counselor_leave_submitted(
         db,

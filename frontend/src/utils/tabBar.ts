@@ -1,14 +1,15 @@
-import { resolveAccountRole } from '@/constants/roles'
+import { isVisitorUiRole, resolveAccountRole } from '@/constants/roles'
 import { getStoredRole, migrateLegacySession } from '@/utils/session'
 
-/** tabBar 第三项：来访者=预约记录，其他角色=工作台 */
+/** tabBar 第三项：来访者/内容运营/市场/科研=预约记录，其他角色=工作台 */
 export const TAB_SLOT_INDEX = 2
 
 export function resolveTabSlotIsPatient(roleOrRoles?: string | string[]): boolean {
-  if (typeof roleOrRoles === 'string') {
-    return roleOrRoles === 'Patient'
-  }
-  return resolveAccountRole(roleOrRoles) === 'Patient'
+  const role =
+    typeof roleOrRoles === 'string'
+      ? roleOrRoles
+      : resolveAccountRole(roleOrRoles)
+  return isVisitorUiRole(role)
 }
 
 export function readStoredRole(): string {
@@ -35,6 +36,6 @@ export function updateTabBarForRole(roleOrRoles?: string | string[]) {
 
   uni.setTabBarItem({
     index: TAB_SLOT_INDEX,
-    text: role === 'Patient' ? '预约记录' : '工作台',
+    text: isVisitorUiRole(role) ? '预约记录' : '工作台',
   })
 }

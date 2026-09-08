@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
-from app_time import china_now
+from app_time import china_now, format_china_business_time
 from message import create_message
 from models import (
     AppAccount,
@@ -25,9 +25,7 @@ PATIENT_REMIND_MINUTES = 30
 
 
 def _format_datetime(dt: Optional[datetime]) -> str:
-    if not dt:
-        return "时间待定"
-    return dt.strftime("%Y-%m-%d %H:%M")
+    return format_china_business_time(dt)
 
 
 def _message_payload(summary: str, detail: Dict[str, Any]) -> str:
@@ -361,6 +359,41 @@ def notify_patient_counselor_leave_approved(
         content=_message_payload(summary, detail),
         related_type="PATIENT_LEAVE_APPROVED",
         related_id=consultation.Id,
+    )
+
+
+def notify_patient_pending_proxy_leave_approved(
+    db: Session,
+    *,
+    patient_id: int,
+    schedule: AppSchedule,
+    leave_reason: Optional[str] = None,
+    order_id: Optional[int] = None,
+) -> None:
+    """咨询师请假通过后，取消来访待支付代理订单并通知来访。"""
+    counselor_name = _counselor_display_name(db, schedule.CounselorId)
+    time_text = _format_datetime(schedule.StartTime)
+    location = _appointment_location(db, schedule.Note, status=schedule.Status)
+    summary = f"{counselor_name} · {time_text} · {location}"
+    detail = {
+        "counselorName": counselor_name,
+        "startTime": time_text,
+        "endTime": _format_datetime(schedule.EndTime),
+        "location": location,
+        "leaveReason": (leave_reason or "").strip() or None,
+        "refunded": False,
+        "refundText": "订单尚未支付，已直接取消",
+        "orderId": order_id,
+        "tip": "咨询师已请假，您的待支付预约订单已取消，如需改约请联系助理",
+    }
+    _notify_patient(
+        db,
+        patient_id,
+        type_="CONSULTATION",
+        title="咨询师请假，待支付订单已取消",
+        content=_message_payload(summary, detail),
+        related_type="PATIENT_LEAVE_APPROVED",
+        related_id=order_id or schedule.Id,
     )
 
 

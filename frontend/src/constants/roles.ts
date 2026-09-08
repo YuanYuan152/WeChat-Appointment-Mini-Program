@@ -1,6 +1,9 @@
 /** 系统角色中文名（与角色管理、登录选择一致） */
 export const ROLE_LABELS: Record<string, string> = {
   Patient: '来访',
+  ContentOps: '内容运营',
+  Marketing: '市场',
+  Research: '科研',
   Tester: '测试员',
   Counselor: '咨询师',
   Assistant: '咨询助理',
@@ -11,6 +14,11 @@ export const ROLE_LABELS: Record<string, string> = {
 /** 使用运营管理工作台（/pages/ops）的角色 */
 export const STAFF_OPS_WORKBENCH_ROLES = ['Assistant', 'Ops', 'Admin'] as const
 
+/** 小程序展示来访端界面；可登录 Web 受限工作台 */
+export const CONTENT_OPS_ROLES = ['ContentOps', 'Marketing'] as const
+export const RESEARCH_ROLES = ['Research'] as const
+export const VISITOR_UI_ROLES = ['Patient', 'ContentOps', 'Marketing', 'Research'] as const
+
 /** 管理工作台内部层级：数值越大权限越高 */
 export const STAFF_ROLE_RANK: Record<string, number> = {
   Assistant: 1,
@@ -19,6 +27,14 @@ export const STAFF_ROLE_RANK: Record<string, number> = {
 }
 
 export const STAFF_MANAGEMENT_ROLES = ['Assistant', 'Ops', 'Admin'] as const
+
+/** 仅管理员可赋权 */
+export const ADMIN_ONLY_ASSIGNABLE_ROLES = [
+  'Tester',
+  'ContentOps',
+  'Research',
+  'Marketing',
+] as const
 
 /** 与后端 staff_roles.KEY_LOGIN_ADMIN_OPENID 对齐 */
 export const KEY_LOGIN_ADMIN_OPENID = 'demo-openid-admin'
@@ -29,6 +45,10 @@ export function isKeyLoginAdminOpenId(openId?: string | null): boolean {
 
 export function isStaffManagementRole(role: string): boolean {
   return (STAFF_MANAGEMENT_ROLES as readonly string[]).includes(role)
+}
+
+export function isVisitorUiRole(role: string): boolean {
+  return (VISITOR_UI_ROLES as readonly string[]).includes(role)
 }
 
 export function staffRoleRank(role: string): number {
@@ -47,8 +67,9 @@ export function canActorAssignRole(
   options: RolePermissionOptions = {},
 ): boolean {
   if (!(STAFF_OPS_WORKBENCH_ROLES as readonly string[]).includes(actorRole)) return false
-  // 测试员仅管理员可赋权
-  if (targetRole === 'Tester') return actorRole === 'Admin'
+  if ((ADMIN_ONLY_ASSIGNABLE_ROLES as readonly string[]).includes(targetRole)) {
+    return actorRole === 'Admin'
+  }
   if (!isStaffManagementRole(targetRole)) return true
   // 仅密钥登录管理员可新建/赋权其他管理员
   if (targetRole === 'Admin') return actorRole === 'Admin' && !!options.actorIsKeyLoginAdmin
@@ -85,6 +106,9 @@ export const ROLE_OPTIONS = [
   { value: 'Assistant', label: '咨询助理' },
   { value: 'Ops', label: '运营' },
   { value: 'Patient', label: '来访' },
+  { value: 'ContentOps', label: '内容运营' },
+  { value: 'Marketing', label: '市场' },
+  { value: 'Research', label: '科研' },
   { value: 'Tester', label: '测试员' },
   { value: 'Admin', label: '管理员' },
 ] as const
@@ -92,6 +116,9 @@ export const ROLE_OPTIONS = [
 /** @deprecated 单账号单角色，请使用 resolveAccountRole */
 export const ROLE_PRIORITY_LOW_TO_HIGH = [
   'Patient',
+  'ContentOps',
+  'Marketing',
+  'Research',
   'Tester',
   'Counselor',
   'Assistant',

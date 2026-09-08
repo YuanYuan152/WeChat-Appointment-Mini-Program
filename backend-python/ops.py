@@ -27,7 +27,11 @@ from sqlalchemy.orm import Session
 from auth import get_current_account, AppAccount
 from database import get_db
 from role_active import get_account_role
-from staff_roles import STAFF_WORKBENCH_ROLES, account_has_staff_workbench
+from staff_roles import (
+    STAFF_WORKBENCH_ROLES,
+    account_has_staff_workbench,
+    is_content_manager_role,
+)
 from models import (
     AppBanner, AppActivity, AppArticle, AppOrder, AppRoleBinding,
     AppAccount as AccountModel, AppSchedule, AppCounselorProfile,
@@ -69,6 +73,19 @@ def require_ops(
         db, current_account.Id, getattr(current_account, "ActiveRole", None)
     ):
         raise HTTPException(status_code=403, detail="无管理工作台权限")
+    return current_account
+
+
+def require_content_manager(
+    current_account: AppAccount = Depends(get_current_account),
+    db: Session = Depends(get_db),
+) -> AppAccount:
+    """内容管理：管理工作台 + 内容运营/市场。"""
+    role = get_account_role(db, current_account.Id) or getattr(
+        current_account, "ActiveRole", None
+    )
+    if not is_content_manager_role(role or ""):
+        raise HTTPException(status_code=403, detail="无内容管理权限")
     return current_account
 
 
@@ -209,7 +226,7 @@ def list_banners_public(db: Session = Depends(get_db)):
 
 @router.get("/banners/manage", response_model=List[BannerOut], summary="Banner 管理列表（含停用）")
 def list_banners_manage(
-    _ops: AppAccount = Depends(require_ops),
+    _ops: AppAccount = Depends(require_content_manager),
     db: Session = Depends(get_db),
 ):
     return (
@@ -226,7 +243,7 @@ def list_banners_manage(
 @router.post("/banners", response_model=BannerOut, summary="新增 Banner（运营）")
 def create_banner(
     body: BannerCreate,
-    _ops: AppAccount = Depends(require_ops),
+    _ops: AppAccount = Depends(require_content_manager),
     db: Session = Depends(get_db),
 ):
     banner = AppBanner(
@@ -249,7 +266,7 @@ def create_banner(
 def update_banner(
     banner_id: int,
     body: BannerUpdate,
-    _ops: AppAccount = Depends(require_ops),
+    _ops: AppAccount = Depends(require_content_manager),
     db: Session = Depends(get_db),
 ):
     banner = db.query(AppBanner).filter(AppBanner.Id == banner_id).first()
@@ -273,7 +290,7 @@ def update_banner(
 @router.delete("/banners/{banner_id}", summary="删除 Banner（运营）")
 def delete_banner(
     banner_id: int,
-    _ops: AppAccount = Depends(require_ops),
+    _ops: AppAccount = Depends(require_content_manager),
     db: Session = Depends(get_db),
 ):
     banner = db.query(AppBanner).filter(AppBanner.Id == banner_id).first()
@@ -341,7 +358,7 @@ class SiteGuideItemUpdate(BaseModel):
 
 @router.get("/site-pages/manage", response_model=List[SitePageOut], summary="站点固定页管理列表")
 def list_site_pages_manage(
-    _ops: AppAccount = Depends(require_ops),
+    _ops: AppAccount = Depends(require_content_manager),
     db: Session = Depends(get_db),
 ):
     from site_content_service import list_site_pages_manage as _list
@@ -353,7 +370,7 @@ def list_site_pages_manage(
 def upsert_site_page(
     page_key: str,
     body: SitePageUpsert,
-    account: AppAccount = Depends(require_ops),
+    account: AppAccount = Depends(require_content_manager),
     db: Session = Depends(get_db),
 ):
     from site_content_service import upsert_site_page as _upsert
@@ -380,7 +397,7 @@ def upsert_site_page(
 
 @router.get("/site-guide-items/manage", response_model=List[SiteGuideItemOut], summary="关于咨询条目管理列表")
 def list_site_guide_items_manage(
-    _ops: AppAccount = Depends(require_ops),
+    _ops: AppAccount = Depends(require_content_manager),
     db: Session = Depends(get_db),
 ):
     from site_content_service import list_site_guide_items_manage as _list
@@ -391,7 +408,7 @@ def list_site_guide_items_manage(
 @router.post("/site-guide-items", response_model=SiteGuideItemOut, summary="新增关于咨询条目")
 def create_site_guide_item(
     body: SiteGuideItemCreate,
-    _ops: AppAccount = Depends(require_ops),
+    _ops: AppAccount = Depends(require_content_manager),
     db: Session = Depends(get_db),
 ):
     from site_content_service import create_site_guide_item as _create
@@ -408,7 +425,7 @@ def create_site_guide_item(
 def update_site_guide_item(
     item_id: int,
     body: SiteGuideItemUpdate,
-    _ops: AppAccount = Depends(require_ops),
+    _ops: AppAccount = Depends(require_content_manager),
     db: Session = Depends(get_db),
 ):
     from site_content_service import update_site_guide_item as _update
@@ -431,7 +448,7 @@ def update_site_guide_item(
 @router.delete("/site-guide-items/{item_id}", summary="删除关于咨询条目")
 def delete_site_guide_item(
     item_id: int,
-    _ops: AppAccount = Depends(require_ops),
+    _ops: AppAccount = Depends(require_content_manager),
     db: Session = Depends(get_db),
 ):
     from site_content_service import delete_site_guide_item as _delete
@@ -466,7 +483,7 @@ def list_activities_public(
 
 @router.get("/activities/manage", response_model=List[ActivityOut], summary="活动/公告管理列表（含停用）")
 def list_activities_manage(
-    _ops: AppAccount = Depends(require_ops),
+    _ops: AppAccount = Depends(require_content_manager),
     db: Session = Depends(get_db),
 ):
     return (
@@ -483,7 +500,7 @@ def list_activities_manage(
 @router.post("/activities", response_model=ActivityOut, summary="新增活动/公告（运营）")
 def create_activity(
     body: ActivityCreate,
-    _ops: AppAccount = Depends(require_ops),
+    _ops: AppAccount = Depends(require_content_manager),
     db: Session = Depends(get_db),
 ):
     activity = AppActivity(
@@ -510,7 +527,7 @@ def create_activity(
 def update_activity(
     activity_id: int,
     body: ActivityUpdate,
-    _ops: AppAccount = Depends(require_ops),
+    _ops: AppAccount = Depends(require_content_manager),
     db: Session = Depends(get_db),
 ):
     activity = db.query(AppActivity).filter(AppActivity.Id == activity_id).first()
@@ -533,7 +550,7 @@ def update_activity(
 @router.delete("/activities/{activity_id}", summary="删除活动/公告（运营）")
 def delete_activity(
     activity_id: int,
-    _ops: AppAccount = Depends(require_ops),
+    _ops: AppAccount = Depends(require_content_manager),
     db: Session = Depends(get_db),
 ):
     activity = db.query(AppActivity).filter(AppActivity.Id == activity_id).first()
@@ -571,7 +588,7 @@ def _article_dict(a: AppArticle):
 def list_articles(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    _ops: AppAccount = Depends(require_ops),
+    _ops: AppAccount = Depends(require_content_manager),
     db: Session = Depends(get_db),
 ):
     q = db.query(AppArticle)
@@ -588,7 +605,7 @@ def list_articles(
 @router.post("/articles", summary="新增文章")
 def create_article(
     body: ArticlePayload,
-    _ops: AppAccount = Depends(require_ops),
+    _ops: AppAccount = Depends(require_content_manager),
     db: Session = Depends(get_db),
 ):
     article = AppArticle(
@@ -614,7 +631,7 @@ def create_article(
 def update_article(
     article_id: int,
     body: ArticleUpdate,
-    _ops: AppAccount = Depends(require_ops),
+    _ops: AppAccount = Depends(require_content_manager),
     db: Session = Depends(get_db),
 ):
     article = db.query(AppArticle).filter(AppArticle.Id == article_id).first()
@@ -638,7 +655,7 @@ def update_article(
 @router.delete("/articles/{article_id}", summary="删除文章")
 def delete_article(
     article_id: int,
-    _ops: AppAccount = Depends(require_ops),
+    _ops: AppAccount = Depends(require_content_manager),
     db: Session = Depends(get_db),
 ):
     article = db.query(AppArticle).filter(AppArticle.Id == article_id).first()

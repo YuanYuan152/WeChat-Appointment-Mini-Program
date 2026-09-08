@@ -111,7 +111,7 @@ class MessageLeaveEnrichTests(unittest.TestCase):
         self.assertEqual(approved_payload["detail"]["reviewedBy"], 99)
         self.assertEqual(
             approved_payload["detail"]["reviewedAt"],
-            reviewed_at.isoformat(),
+            "2026-07-16T18:30:00+08:00",
         )
         self.assertIn("审核已通过", approved_payload["summary"])
 

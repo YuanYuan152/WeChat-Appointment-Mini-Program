@@ -8,6 +8,9 @@
 来访、咨询师等非管理工作台角色，三者均可赋权与管理。
 测试员（Tester）仅管理员可赋权；其它管理工作台角色不可将账号设为测试员。
 Tester 可被强制物理删除（含业务数据），其它角色仍受咨询/订单保护。
+
+内容运营 / 市场 / 科研：小程序展示来访端界面；可登录 Web 后台进入受限工作台。
+市场与内容运营权限相同。仅管理员可赋权。
 """
 
 from typing import Any, Optional
@@ -18,6 +21,12 @@ from role_active import get_account_role
 
 STAFF_WORKBENCH_ROLES: tuple[str, ...] = ("Assistant", "Ops", "Admin")
 
+# 小程序端与来访相同 UI；可登录 Web 受限工作台
+CONTENT_OPS_ROLES: frozenset[str] = frozenset({"ContentOps", "Marketing"})
+RESEARCH_ROLES: frozenset[str] = frozenset({"Research"})
+WEB_SPECIALIZED_ROLES: frozenset[str] = CONTENT_OPS_ROLES | RESEARCH_ROLES
+VISITOR_UI_ROLES: frozenset[str] = frozenset({"Patient"}) | WEB_SPECIALIZED_ROLES
+
 # 管理工作台内部层级：数值越大权限越高
 STAFF_ROLE_RANK: dict[str, int] = {
     "Assistant": 1,
@@ -26,7 +35,9 @@ STAFF_ROLE_RANK: dict[str, int] = {
 }
 
 # 仅管理员可赋权的角色
-ADMIN_ONLY_ASSIGNABLE_ROLES: frozenset[str] = frozenset({"Tester"})
+ADMIN_ONLY_ASSIGNABLE_ROLES: frozenset[str] = frozenset(
+    {"Tester", "ContentOps", "Research", "Marketing"}
+)
 
 # 密钥登录入口绑定的演示管理员 OpenId（dev_admin）
 KEY_LOGIN_ADMIN_OPENID = "demo-openid-admin"
@@ -46,6 +57,25 @@ def is_key_login_admin_account(account: Any) -> bool:
 
 def is_staff_management_role(role: str) -> bool:
     return role in STAFF_ROLE_RANK
+
+
+def is_content_manager_role(role: str) -> bool:
+    """内容管理模块：管理工作台 + 内容运营/市场。"""
+    return role in STAFF_WORKBENCH_ROLES or role in CONTENT_OPS_ROLES
+
+
+def is_assessment_editor_role(role: str) -> bool:
+    """量表定义编辑：咨询主任、管理员、科研。"""
+    return role in {"Ops", "Admin"} or role in RESEARCH_ROLES
+
+
+def is_assessment_viewer_role(role: str) -> bool:
+    """量表结果查看：管理工作台 + 科研。"""
+    return role in STAFF_WORKBENCH_ROLES or role in RESEARCH_ROLES
+
+
+def is_visitor_ui_role(role: str) -> bool:
+    return role in VISITOR_UI_ROLES
 
 
 def staff_role_rank(role: str) -> int:
@@ -108,6 +138,12 @@ STAFF_ROLE_LABELS: dict[str, str] = {
     "Assistant": "咨询助理",
     "Ops": "咨询主任",
     "Admin": "管理员",
+    "ContentOps": "内容运营",
+    "Research": "科研",
+    "Marketing": "市场",
+    "Tester": "测试员",
+    "Counselor": "咨询师",
+    "Patient": "来访",
 }
 
 
@@ -128,7 +164,8 @@ def role_management_error(
     if target_role == "Admin" and actor_role == "Admin" and not actor_is_key_admin:
         return f"仅密钥登录管理员可对管理员账号{action}"
     if target_role in ADMIN_ONLY_ASSIGNABLE_ROLES and action == "赋权":
-        return "仅管理员可将账号设为测试员"
+        label = role_display_name(target_role)
+        return f"仅管理员可将账号设为「{label}」"
     if is_staff_management_role(target_role):
         actor_rank = staff_role_rank(actor_role)
         target_rank = staff_role_rank(target_role)

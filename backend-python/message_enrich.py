@@ -5,7 +5,7 @@ from typing import Any, Dict, Optional
 
 from sqlalchemy.orm import Session
 
-from app_time import china_now
+from app_time import china_now, format_china_business_time, format_china_system_time
 from model_compat import optional_model_value
 from models import (
     AppAccount,
@@ -194,9 +194,20 @@ def _leave_request_for_message(
 def _iso_datetime(value: Any) -> Optional[str]:
     if value is None:
         return None
-    isoformat = getattr(value, "isoformat", None)
-    if callable(isoformat):
-        return isoformat()
+    if hasattr(value, "strftime"):
+        # 审核等系统时间按 UTC 落库，对外统一北京时间。
+        text = format_china_system_time(value, fmt="%Y-%m-%dT%H:%M:%S+08:00", empty="")
+        return text or None
+    text = str(value).strip()
+    return text or None
+
+
+def _message_datetime(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    if hasattr(value, "strftime"):
+        text = format_china_business_time(value, empty="")
+        return text or None
     text = str(value).strip()
     return text or None
 
@@ -330,16 +341,6 @@ def _sync_patient_appointment_content(
     return _dump_content(payload)
 
 
-def _message_datetime(value: Any) -> Optional[str]:
-    if value is None:
-        return None
-    formatter = getattr(value, "strftime", None)
-    if callable(formatter):
-        return formatter("%Y-%m-%d %H:%M")
-    text = str(value).strip()
-    return text or None
-
-
 def _snapshot_contract_tag(detail: Dict[str, Any]) -> Optional[str]:
     """消息详情中的签约标签快照；空串视为未写入。"""
     raw = detail.get("patientContractTag")
@@ -420,7 +421,14 @@ def _sync_counselor_proxy_order_payload(
             "statusLabel": status_label,
             "resultText": result_text,
             "tip": result_text,
-            "expiresAt": _iso_datetime(order.ExpiresAt),
+            "expiresAt": (
+                format_china_business_time(
+                    order.ExpiresAt,
+                    fmt="%Y-%m-%dT%H:%M:%S+08:00",
+                    empty="",
+                )
+                or None
+            ),
         }
     )
     patient_label = f"{patient_name} {patient_tag}" if patient_tag else patient_name

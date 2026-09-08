@@ -40,7 +40,17 @@ COUNSELOR_TYPES = {
 ADMIN_ROLE_GROUPS = {
     "counselor": frozenset({"Counselor"}),
     "patient": frozenset({"Patient"}),
-    "staff": frozenset({"Assistant", "Ops", "Admin", "Tester"}),
+    "staff": frozenset(
+        {
+            "Assistant",
+            "Ops",
+            "Admin",
+            "Tester",
+            "ContentOps",
+            "Research",
+            "Marketing",
+        }
+    ),
 }
 
 VALID_ADMIN_ROLE_GROUPS = frozenset(ADMIN_ROLE_GROUPS.keys())

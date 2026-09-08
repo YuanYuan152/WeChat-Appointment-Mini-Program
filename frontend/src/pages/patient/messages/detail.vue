@@ -29,7 +29,7 @@
         </view>
         <view class="detail-row">
           <text class="label">预约时间</text>
-          <text class="value">{{ detail.startTime }}<text v-if="detail.endTime"> - {{ formatEndTime(detail.endTime) }}</text></text>
+          <text class="value">{{ formatTime(detail.startTime) }}<text v-if="detail.endTime"> - {{ formatEndTime(detail.endTime) }}</text></text>
         </view>
         <view class="detail-row">
           <text class="label">预约地点</text>
@@ -60,7 +60,7 @@
         </view>
         <view class="detail-row">
           <text class="label">原预约时间</text>
-          <text class="value">{{ detail.startTime }}</text>
+          <text class="value">{{ formatTime(detail.startTime) }}</text>
         </view>
         <view class="detail-row">
           <text class="label">预约地点</text>
@@ -200,7 +200,7 @@
         </view>
         <view v-if="detail.startTime" class="detail-row">
           <text class="label">咨询时段</text>
-          <text class="value">{{ detail.startTime }}</text>
+          <text class="value">{{ formatTime(detail.startTime) }}</text>
         </view>
         <view v-if="detail.submittedAt" class="detail-row">
           <text class="label">提交时间</text>
@@ -289,7 +289,7 @@
         </view>
         <view v-if="detail.reviewedAt" class="detail-row">
           <text class="label">审核时间</text>
-          <text class="value">{{ detail.reviewedAt }}</text>
+          <text class="value">{{ formatTime(detail.reviewedAt) }}</text>
         </view>
         <view v-if="detail.reviewedByName" class="detail-row">
           <text class="label">审核人</text>
@@ -349,7 +349,7 @@
         </view>
         <view v-if="detail.startTime" class="detail-row">
           <text class="label">咨询时段</text>
-          <text class="value">{{ detail.startTime }}</text>
+          <text class="value">{{ formatTime(detail.startTime) }}</text>
         </view>
         <button class="review-btn" @click="goCaseRecordView">查看咨询记录</button>
       </view>
@@ -384,7 +384,7 @@
         </view>
         <view v-if="detail.startTime" class="detail-row">
           <text class="label">预约时间</text>
-          <text class="value">{{ detail.startTime }}<text v-if="detail.endTime"> - {{ formatEndTime(detail.endTime) }}</text></text>
+          <text class="value">{{ formatTime(detail.startTime) }}<text v-if="detail.endTime"> - {{ formatEndTime(detail.endTime) }}</text></text>
         </view>
         <view v-if="proxyPendingLocation" class="detail-row">
           <text class="label">预约中心</text>
@@ -411,7 +411,7 @@
         </view>
         <view v-if="detail.startTime" class="detail-row">
           <text class="label">预约时间</text>
-          <text class="value">{{ detail.startTime }}<text v-if="detail.endTime"> - {{ formatEndTime(detail.endTime) }}</text></text>
+          <text class="value">{{ formatTime(detail.startTime) }}<text v-if="detail.endTime"> - {{ formatEndTime(detail.endTime) }}</text></text>
         </view>
         <view v-if="detail.location" class="detail-row">
           <text class="label">{{ relatedType === 'PATIENT_APPOINTMENT_SUCCESS' ? '预约中心' : '预约地点' }}</text>
@@ -443,7 +443,7 @@
         </view>
         <view class="detail-row">
           <text class="label">{{ (relatedType === 'COUNSELOR_LEAVE_SUBMITTED' || relatedType === 'COUNSELOR_LEAVE_SUCCESS') ? '请假时段' : '咨询时间' }}</text>
-          <text class="value">{{ detail.startTime }}<text v-if="detail.endTime"> - {{ formatEndTime(detail.endTime) }}</text></text>
+          <text class="value">{{ formatTime(detail.startTime) }}<text v-if="detail.endTime"> - {{ formatEndTime(detail.endTime) }}</text></text>
         </view>
         <view class="detail-row">
           <text class="label">咨询地点</text>
@@ -470,7 +470,7 @@
         </view>
         <view class="detail-row">
           <text class="label">请假时段</text>
-          <text class="value">{{ detail.startTime }}<text v-if="detail.endTime"> - {{ formatEndTime(detail.endTime) }}</text></text>
+          <text class="value">{{ formatTime(detail.startTime) }}<text v-if="detail.endTime"> - {{ formatEndTime(detail.endTime) }}</text></text>
         </view>
         <view class="detail-row">
           <text class="label">预约地点</text>
@@ -497,7 +497,7 @@
           </view>
           <view class="detail-row">
             <text class="label">预约时间</text>
-            <text class="value">{{ appt.startTime }}</text>
+            <text class="value">{{ formatTime(String(appt.startTime || '')) }}</text>
           </view>
           <view class="detail-row">
             <text class="label">预约地点</text>
@@ -521,7 +521,7 @@
         </view>
         <view class="detail-row">
           <text class="label">咨询时间</text>
-          <text class="value">{{ detail.startTime }}<text v-if="detail.endTime"> - {{ formatEndTime(detail.endTime) }}</text></text>
+          <text class="value">{{ formatTime(detail.startTime) }}<text v-if="detail.endTime"> - {{ formatEndTime(detail.endTime) }}</text></text>
         </view>
         <view class="detail-row">
           <text class="label">咨询地点</text>
@@ -556,6 +556,7 @@ import { API_ENDPOINTS } from '@/config/api'
 import { COUNSELOR_MESSAGE_TYPES, PATIENT_MESSAGE_TYPES, CASE_RECORD_AMENDMENT_REVIEW_PATH, caseRecordCrisisReportViewPath, isCaseRecordAmendmentPendingMessage, isExemptionPendingMessage, messageDisplayTitle, parseMessageContent, type MessageItem } from '@/utils/message'
 import { RISK_ASSESSMENT_ITEMS } from '@/constants/caseRecordRiskAssessment'
 import { patientNameFromDetail } from '@/utils/patientContract'
+import { formatChinaClock, formatChinaDateTime } from '@/utils/dateTime'
 import { fixImageUrl } from '@/utils/image'
 
 interface RecentCounselorContact {
@@ -738,13 +739,10 @@ const proxyOrderId = computed(() => {
   return id ? Number(id) : 0
 })
 
-const formatTime = (dt?: string) => dt ? dt.slice(0, 16).replace('T', ' ') : ''
+const formatTime = (dt?: string) => formatChinaDateTime(dt)
 
-const formatEndTime = (value?: string) => {
-  if (!value) return ''
-  const text = value.replace('T', ' ')
-  return text.length > 11 ? text.slice(11, 16) : text.slice(0, 16)
-}
+const formatEndTime = (value?: string) => formatChinaClock(value)
+
 
 const markReadIfNeeded = async (item: MessageItem) => {
   if (item.IsRead) return

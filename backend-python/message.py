@@ -6,9 +6,9 @@ import os
 from datetime import datetime
 from typing import List, Optional
 
-from app_time import china_now, utc_to_china
+from app_time import CHINA_TIMEZONE, china_now, utc_to_china
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, field_serializer
 from sqlalchemy.orm import Session
 
 from message_enrich import enrich_message
@@ -69,6 +69,17 @@ class MessageOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+    @field_serializer("CreatedAt", "ReadAt")
+    def _serialize_china_wall_clock(self, value: Optional[datetime]) -> Optional[str]:
+        """API 固定输出北京时间 ISO（带 +08:00），避免前端按 UTC/本地时区误读。"""
+        if value is None:
+            return None
+        china = value if value.tzinfo is not None else utc_to_china(value)
+        if china is None:
+            return None
+        china = china.astimezone(CHINA_TIMEZONE)
+        return china.strftime("%Y-%m-%dT%H:%M:%S+08:00")
 
 
 class SubscribeRequest(BaseModel):

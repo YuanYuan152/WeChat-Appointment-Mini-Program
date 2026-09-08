@@ -24,7 +24,17 @@ PRICE_LABEL_NEGOTIABLE = "需议价"
 MODEL_DEFAULT_BILLING_CENTS = PROFESSIONAL_BASE_CENTS  # ORM 新建档案时的默认值
 MODEL_DEFAULT_FACE_BILLING_CENTS = 30_000  # ORM 新建档案时的默认分成金额
 
-VISITOR_EXCLUDED_ROLES = frozenset({"Counselor", "Assistant", "Ops", "Admin"})
+VISITOR_EXCLUDED_ROLES = frozenset(
+    {
+        "Counselor",
+        "Assistant",
+        "Ops",
+        "Admin",
+        "ContentOps",
+        "Research",
+        "Marketing",
+    }
+)
 
 SHARE_MODE_AMOUNT = "AMOUNT"
 SHARE_MODE_PERCENT = "PERCENT"

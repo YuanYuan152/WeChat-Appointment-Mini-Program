@@ -984,8 +984,105 @@ class CounselorSafetyTests(BackendServiceTestCase):
         self.assertEqual(items[0].patientName, "签约来访")
         self.assertEqual(items[0].patientContractTag, "已签约-【咨询师甲】")
         self.assertIsNone(items[0].consultationId)
+        self.assertTrue(items[0].canCancel)
+        self.assertTrue(items[0].requiresLeave)
+        self.assertIn("待支付", items[0].cancelHint or "")
 
-    def test_proxy_patient_search_matches_visitor_management_scope(self):
+    def test_pending_proxy_leave_submit_and_approve_cancels_order(self):
+        counselor = AppAccount(Id=10, Mobile="13800000010", RealName="咨询师甲", IsActive=True)
+        patient = AppAccount(
+            Id=1,
+            Mobile="13800000001",
+            RealName="签约来访",
+            BoundCounselorId=10,
+            IsContractSigned=True,
+            IsActive=True,
+        )
+        schedule = AppSchedule(
+            Id=221,
+            CounselorId=10,
+            StartTime=datetime(2099, 3, 1, 9, 0),
+            EndTime=datetime(2099, 3, 1, 9, 50),
+            Status="AVAILABLE",
+            Note="center:video",
+        )
+        pending_order = AppOrder(
+            Id=321,
+            AccountId=1,
+            SlotId=221,
+            OutTradeNo="PROXY-LEAVE-321",
+            TotalFee=60_000,
+            Status="PENDING",
+            Description="proxy:10|center:video|schedule:new",
+            ExpiresAt=datetime(2099, 3, 1, 8, 0),
+        )
+        self.db.add_all([counselor, patient, schedule, pending_order])
+        self.db.flush()
+
+        with (
+            patch("staff_message_service.notify_staff_counselor_leave"),
+            patch("counselor_message_service.notify_counselor_leave_submitted"),
+        ):
+            result = submit_leave_request(
+                schedule.Id,
+                LeaveRequestCreate(
+                    reason="临时请假",
+                    communication_screenshot_url="/static/pending-leave.png",
+                ),
+                counselor=counselor,
+                db=self.db,
+            )
+
+        leave_id = result["leaveRequestId"]
+        leave = self.db.query(AppLeaveRequest).filter(AppLeaveRequest.Id == leave_id).one()
+        self.assertEqual(leave.Status, "PENDING")
+        self.assertEqual(pending_order.Status, "PENDING")
+        self.assertEqual(schedule.Status, "AVAILABLE")
+
+        with (
+            patch("wechat_pay_service.close_wechat_order_quietly"),
+            patch("patient_message_service.notify_patient_pending_proxy_leave_approved") as notify_patient,
+            patch("counselor_message_service.notify_counselor_leave_success"),
+        ):
+            status, message = approve_leave_request(self.db, leave, admin_id=88)
+
+        self.assertEqual(status, "APPROVED")
+        self.assertIn("待支付", message)
+        self.assertEqual(leave.Status, "APPROVED")
+        self.assertEqual(pending_order.Status, "CANCELLED")
+        self.assertEqual(schedule.Status, "CANCELLED")
+        notify_patient.assert_called_once()
+        out = build_leave_request_out(self.db, leave)
+        self.assertEqual(len(out["affectedPatients"]), 1)
+        self.assertEqual(out["affectedPatients"][0]["patientName"], "签约来访")
+        self.assertEqual(out["affectedPatients"][0]["orderStatus"], "CANCELLED")
+
+    def test_available_schedule_without_pending_proxy_cannot_submit_leave(self):
+        counselor = AppAccount(Id=10, Mobile="13800000010", IsActive=True)
+        schedule = AppSchedule(
+            Id=222,
+            CounselorId=10,
+            StartTime=datetime(2099, 3, 2, 9, 0),
+            EndTime=datetime(2099, 3, 2, 9, 50),
+            Status="AVAILABLE",
+            Note="center:video",
+        )
+        self.db.add_all([counselor, schedule])
+        self.db.flush()
+
+        with self.assertRaises(HTTPException) as caught:
+            submit_leave_request(
+                schedule.Id,
+                LeaveRequestCreate(
+                    reason="临时请假",
+                    communication_screenshot_url="/static/leave.png",
+                ),
+                counselor=counselor,
+                db=self.db,
+            )
+
+        self.assertEqual(caught.exception.status_code, 400)
+        self.assertIn("待支付", caught.exception.detail)
         legacy_patient = AppAccount(
             Id=1,
             Mobile="13800000001",

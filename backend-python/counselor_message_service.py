@@ -5,7 +5,7 @@ from typing import Any, Dict, Optional
 
 from sqlalchemy.orm import Session
 
-from app_time import china_now
+from app_time import china_now, format_china_business_time
 from message import create_message
 from models import AppAccount, AppConsultation, AppMessage, AppOrder, AppRemindTask, AppSchedule
 from refund_exemption_service import latest_exemptions_by_consultation
@@ -25,9 +25,7 @@ COUNSELOR_DONE_TIP = "咨询已结束，请尽快填写咨询记录以便归档�
 
 
 def _format_datetime(dt: Optional[datetime]) -> str:
-    if not dt:
-        return "时间待定"
-    return dt.strftime("%Y-%m-%d %H:%M")
+    return format_china_business_time(dt)
 
 
 def _patient_contract_tag(db: Session, patient_id: int) -> Optional[str]:

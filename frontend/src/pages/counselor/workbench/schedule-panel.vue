@@ -607,7 +607,11 @@ const isBookedSlot = (slot: CalendarSlot) => {
   if (slot.displayStatus === 'DONE' || slot.displayStatus === 'ON_LEAVE' || slot.displayStatus === 'EXPIRED') {
     return false
   }
-  return slot.displayStatus === 'BOOKED' || !!slot.patientName || !!slot.consultationId
+  // 已预约或待支付代理预约：均走请假（凭证 + 审核），与 requiresLeave 口径一致
+  if (slot.displayStatus === 'BOOKED' || slot.displayStatus === 'PENDING_PAYMENT' || slot.requiresLeave) {
+    return true
+  }
+  return !!slot.patientName || !!slot.consultationId
 }
 
 const hasPendingLeave = (slot: CalendarSlot) => !!slot.leaveRequestId

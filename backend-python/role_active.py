@@ -5,8 +5,12 @@ from sqlalchemy.orm import Session
 
 # 历史多绑定时合并用；正常运行期每账号仅一个角色
 # Tester：测试账号，可被管理员强制物理删除（含咨询/订单等业务数据）
+# ContentOps / Marketing / Research：小程序来访 UI，Web 受限工作台
 ROLE_PRIORITY: Sequence[str] = (
     "Patient",
+    "ContentOps",
+    "Marketing",
+    "Research",
     "Tester",
     "Counselor",
     "Assistant",

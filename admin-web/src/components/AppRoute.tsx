@@ -80,8 +80,16 @@ function AppRouteRoot({ sectionId, children }: { sectionId: SectionId; children:
 
   const isAdmin = currentUser?.roles.includes("Admin") ?? false;
   const canEnterWeb =
-    currentUser?.roles.some((role) => role === "Admin" || role === "Ops" || role === "Assistant" || role === "Counselor") ??
-    false;
+    currentUser?.roles.some(
+      (role) =>
+        role === "Admin" ||
+        role === "Ops" ||
+        role === "Assistant" ||
+        role === "Counselor" ||
+        role === "ContentOps" ||
+        role === "Marketing" ||
+        role === "Research",
+    ) ?? false;
   const section = sections.find((item) => item.id === sectionId);
 
   const showNotice = useCallback((type: Notice["type"], text: string) => {
@@ -412,7 +420,7 @@ function AppRouteRoot({ sectionId, children }: { sectionId: SectionId; children:
         <section className="w-full max-w-lg rounded-2xl border border-[var(--lxxl-border)] bg-white p-8">
           <h1 className="text-xl font-semibold">无法进入 Web 管理端</h1>
           <p className="mt-3 text-sm leading-6 text-[var(--lxxl-muted)]">
-            当前账号是 {roleText(currentUser.roles)}，仅管理员、咨询主任、咨询助理和咨询师角色可以进入。
+            当前账号是 {roleText(currentUser.roles)}，仅管理员、咨询主任、咨询助理、咨询师、内容运营、市场与科研角色可以进入。
           </p>
           <button
             className="mt-6 rounded-xl bg-[var(--lxxl-green)] px-5 py-2 text-sm font-medium text-white"

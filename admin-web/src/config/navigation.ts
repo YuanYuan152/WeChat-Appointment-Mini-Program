@@ -4,13 +4,7 @@ import type { NavigationGroup, NavigationSection } from "@/types/app";
 
 export const sections: NavigationSection[] = [
   { id: "dashboard", label: "总览", desc: "运营数据和待办", path: "/", allowedRoles: ["Admin", "Ops"] },
-  {
-    id: "messages",
-    label: "我的消息",
-    desc: "消息提醒和待处理事项",
-    path: "/messages",
-    allowedRoles: ["Admin", "Ops", "Assistant", "Counselor"],
-  },
+  { id: "messages", label: "我的消息", desc: "消息提醒和待处理事项", path: "/messages", allowedRoles: ["Admin", "Ops", "Assistant", "Counselor"] },
   {
     id: "myProfile",
     label: "我的资料",
@@ -47,20 +41,26 @@ export const sections: NavigationSection[] = [
     path: "/system-feedback",
     allowedRoles: ["Admin", "Ops", "Assistant"],
   },
-  { id: "content", label: "内容管理", desc: "Banner / 活动 / 站点文案", path: "/ops-content", allowedRoles: ["Admin", "Ops", "Assistant"] },
+  {
+    id: "content",
+    label: "内容管理",
+    desc: "Banner / 活动 / 站点文案",
+    path: "/ops-content",
+    allowedRoles: ["Admin", "Ops", "Assistant", "ContentOps", "Marketing"],
+  },
   {
     id: "assessments",
     label: "量表管理",
     desc: "新增、编辑、发布与归档 EAP 量表",
     path: "/assessments",
-    allowedRoles: ["Admin", "Ops"],
+    allowedRoles: ["Admin", "Ops", "Research"],
   },
   {
     id: "assessmentReports",
     label: "量表结果",
     desc: "查看来访者量表填写报告",
     path: "/assessment-reports",
-    allowedRoles: ["Admin", "Ops", "Assistant"],
+    allowedRoles: ["Admin", "Ops", "Assistant", "Research"],
   },
   { id: "schedules", label: "排期情况", desc: "咨询师排期总览", path: "/schedules", allowedRoles: ["Admin", "Ops", "Assistant"] },
   { id: "rooms", label: "咨询室情况", desc: "咨询室状态与占用", path: "/rooms", allowedRoles: ["Admin", "Ops", "Assistant"] },
@@ -161,7 +161,17 @@ export function getNavigationGroupBySection(sectionId: NavigationSection["id"]) 
   return navigationGroups.find((group) => group.sectionIds.includes(sectionId));
 }
 
-export const roles: Role[] = ["Patient", "Counselor", "Assistant", "Ops", "Tester", "Admin"];
+export const roles: Role[] = [
+  "Patient",
+  "Counselor",
+  "Assistant",
+  "Ops",
+  "Tester",
+  "Admin",
+  "ContentOps",
+  "Research",
+  "Marketing",
+];
 
 export function canAccessSection(section: NavigationSection | undefined, rolesValue: Role[]) {
   if (!section) {
@@ -185,6 +195,12 @@ export function getDefaultSectionId(rolesValue: Role[]): NavigationSection["id"]
   }
   if (rolesValue.includes("Counselor")) {
     return "counselorDashboard";
+  }
+  if (rolesValue.some((role) => role === "ContentOps" || role === "Marketing")) {
+    return "content";
+  }
+  if (rolesValue.includes("Research")) {
+    return "assessments";
   }
   return "messages";
 }

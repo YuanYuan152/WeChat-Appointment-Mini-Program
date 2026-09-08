@@ -47,6 +47,12 @@ class MessageTimezoneTests(unittest.TestCase):
         self.assertEqual(result["ReadAt"].strftime("%Y-%m-%d %H:%M"), "2026-08-28 10:15")
         self.assertEqual(result["CreatedAt"].utcoffset(), timedelta(hours=8))
 
+        from message import MessageOut
+
+        serialized = MessageOut.model_validate(result).model_dump(mode="json")
+        self.assertEqual(serialized["CreatedAt"], "2026-08-28T09:30:00+08:00")
+        self.assertEqual(serialized["ReadAt"], "2026-08-28T10:15:00+08:00")
+
     def test_new_message_uses_application_utc_instead_of_database_local_time(self):
         before = datetime.utcnow()
         message = create_message(self.db, 1, "SYSTEM", "系统通知")

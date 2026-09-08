@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
+from app_time import format_china_business_time
 from message import create_message
 from models import (
     AppAccount,
@@ -97,9 +98,7 @@ def _counselor_display_name(db: Session, counselor_id: int) -> str:
 
 
 def _format_datetime(dt: Optional[datetime]) -> str:
-    if not dt:
-        return "时间待定"
-    return dt.strftime("%Y-%m-%d %H:%M")
+    return format_china_business_time(dt)
 
 
 def _appointment_location(
@@ -300,6 +299,7 @@ def notify_staff_counselor_leave(
     leave_reason: str,
     screenshot_url: Optional[str],
     consultation: Optional[AppConsultation] = None,
+    pending_order: Optional[AppOrder] = None,
 ) -> None:
     counselor_name = _counselor_display_name(db, counselor_id)
     time_text = _format_datetime(schedule.StartTime)
@@ -328,6 +328,22 @@ def notify_staff_counselor_leave(
             "location": location,
             "refundText": "款项将原路退回" if refunded else "按规定不予退款",
             "orderStatus": order_status,
+        })
+    elif pending_order:
+        patient = _patient_contact(db, pending_order.AccountId)
+        affected.append({
+            "consultationId": None,
+            "orderId": pending_order.Id,
+            "patientName": patient["name"],
+            "patientContractTag": patient.get("contractTag") or None,
+            "patientPhone": patient["phone"],
+            "emergencyContact": patient["emergencyContact"],
+            "emergencyPhone": patient["emergencyPhone"],
+            "startTime": time_text,
+            "endTime": _format_datetime(schedule.EndTime),
+            "location": location,
+            "refundText": "审核通过后待支付订单将取消",
+            "orderStatus": pending_order.Status,
         })
 
     leave_row = (

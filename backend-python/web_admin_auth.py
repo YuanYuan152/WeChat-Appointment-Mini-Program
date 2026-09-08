@@ -16,7 +16,17 @@ from sms_service import normalize_phone, send_verification_code, verify_code
 
 router = APIRouter(prefix="/api/web/admin/auth", tags=["Web Admin Auth"])
 
-WEB_ADMIN_ROLES = frozenset({"Admin", "Ops", "Assistant", "Counselor"})
+WEB_ADMIN_ROLES = frozenset(
+    {
+        "Admin",
+        "Ops",
+        "Assistant",
+        "Counselor",
+        "ContentOps",
+        "Marketing",
+        "Research",
+    }
+)
 ADMIN_LOGIN_PURPOSE = "admin_login"
 ADMIN_RESET_PASSWORD_PURPOSE = "admin_reset_password"
 MIN_PASSWORD_LENGTH = 6
