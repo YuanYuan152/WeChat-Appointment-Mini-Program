@@ -78,7 +78,7 @@ export function SmsLoginScreen({
     }
     setError("");
     setSuccess("");
-    if (!/^1[3-9]\d{9}$/.test(phone.trim())) {
+    if (!/^1\d{10}$/.test(phone.trim())) {
       setError("请输入有效的手机号");
       return;
     }

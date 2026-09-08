@@ -9,7 +9,7 @@ from common import (
 
 
 class CounselorListSortTests(unittest.TestCase):
-    def test_default_sort_price_then_secondary(self):
+    def test_price_desc_sort_then_secondary(self):
         items = [
             {
                 "id": 1,
@@ -69,6 +69,43 @@ class CounselorListSortTests(unittest.TestCase):
             _profile_completeness_score(items[0]),
             _profile_completeness_score(items[2]),
         )
+
+    def test_default_sort_follows_admin_rank(self):
+        items = [
+            {
+                "id": 1,
+                "billing": 10000,
+                "isPinned": False,
+                "listSortRank": 3,
+                "consultHours": 0,
+                "workYears": 0,
+                "_source": "AppCounselorProfile",
+            },
+            {
+                "id": 2,
+                "billing": 90000,
+                "isPinned": False,
+                "listSortRank": 1,
+                "consultHours": 0,
+                "workYears": 0,
+                "_source": "AppCounselorProfile",
+            },
+            {
+                "id": 3,
+                "billing": 50000,
+                "isPinned": False,
+                "listSortRank": 2,
+                "consultHours": 0,
+                "workYears": 0,
+                "_source": "AppCounselorProfile",
+            },
+        ]
+        _sort_counselor_list(items, sort_mode=None, available_ids=set())
+        self.assertEqual([item["id"] for item in items], [2, 3, 1])
+        _sort_counselor_list(items, sort_mode="price_asc", available_ids=set())
+        self.assertEqual([item["id"] for item in items], [1, 3, 2])
+        _sort_counselor_list(items, sort_mode=None, available_ids=set())
+        self.assertEqual([item["id"] for item in items], [2, 3, 1])
 
 
 class CommonSearchSafetyTests(unittest.TestCase):

@@ -36,7 +36,7 @@ from user_role_meta import (
 )
 
 
-PHONE_RE = re.compile(r"^1[3-9]\d{9}$")
+PHONE_RE = re.compile(r"^1\d{10}$")
 ORDER_STATUSES = (
     "已预约但未咨询",
     "已咨询未填写咨询记录",
@@ -44,6 +44,7 @@ ORDER_STATUSES = (
     "已取消未退款",
 )
 CONSULTATION_MODES = ("线下", "视频")
+INTRO_CONSULTATION_MODES = ("视频咨询", "面询", "视频咨询/面询")
 LOCATIONS = ("杨浦咨询中心", "浦东咨询中心", "线上")
 SIGN_STATUSES = ("已签约", "未签约")
 GENDERS = ("男", "女")
@@ -99,10 +100,43 @@ ORDER_COLUMNS = (
     ColumnDef("地点", "location", choices=LOCATIONS),
 )
 
+COUNSELOR_INTRO_COLUMNS = (
+    ColumnDef("姓名【必填】", "name", True),
+    ColumnDef("电话号码【必填】", "mobile", True),
+    ColumnDef("备注", "remark"),
+    ColumnDef("从业时间【必填】", "work_years", True),
+    ColumnDef("咨询时长【必填】", "consult_hours", True),
+    ColumnDef("性别【必填】", "gender", True, GENDERS),
+    ColumnDef("咨询方式【必填】", "mode", True, INTRO_CONSULTATION_MODES),
+    ColumnDef("咨询领域【不同项用英文逗号隔开】", "field"),
+    ColumnDef("擅长人群【不同项用英文逗号隔开】", "target_group"),
+    ColumnDef("咨询流派", "specialty"),
+    ColumnDef("简介", "introduce"),
+    ColumnDef("从业资质", "qualification"),
+    ColumnDef("受训背景", "training_experience"),
+)
+
+# 用于空缺程度统计与「空才写入」的介绍页内容字段（不含手机号主键）
+COUNSELOR_INTRO_CONTENT_KEYS = (
+    "name",
+    "remark",
+    "work_years",
+    "consult_hours",
+    "gender",
+    "mode",
+    "field",
+    "target_group",
+    "specialty",
+    "introduce",
+    "qualification",
+    "training_experience",
+)
+
 KIND_COLUMNS = {
     "visitors": VISITOR_COLUMNS,
     "counselors": COUNSELOR_COLUMNS,
     "orders": ORDER_COLUMNS,
+    "counselor_intros": COUNSELOR_INTRO_COLUMNS,
 }
 
 
@@ -122,7 +156,18 @@ def _columns(kind: str) -> tuple[ColumnDef, ...]:
     try:
         return KIND_COLUMNS[kind]
     except KeyError as exc:
-        raise ValueError("kind 必须为 visitors、counselors 或 orders") from exc
+        raise ValueError(
+            "kind 必须为 visitors、counselors、orders 或 counselor_intros"
+        ) from exc
+
+
+def _sheet_title(kind: str) -> str:
+    return {
+        "visitors": "来访用户表",
+        "counselors": "咨询师用户表",
+        "orders": "咨询订单表",
+        "counselor_intros": "咨询师介绍页表",
+    }[kind]
 
 
 def _style_sheet(ws, columns: tuple[ColumnDef, ...]) -> None:
@@ -152,11 +197,7 @@ def _workbook_bytes(kind: str, rows: list[list[Any]]) -> bytes:
     columns = _columns(kind)
     workbook = Workbook()
     sheet = workbook.active
-    sheet.title = {
-        "visitors": "来访用户表",
-        "counselors": "咨询师用户表",
-        "orders": "咨询订单表",
-    }[kind]
+    sheet.title = _sheet_title(kind)
     _style_sheet(sheet, columns)
     for row in rows:
         sheet.append(row)
@@ -247,6 +288,13 @@ def _validate_row(
     errors: list[dict[str, str]] = []
     clean = {column.key: _text(row.get(column.key)) for column in columns}
 
+    if kind == "counselor_intros":
+        mode = clean.get("mode") or ""
+        if mode in ("视频", "线上"):
+            clean["mode"] = "视频咨询"
+        elif mode in ("线下", "面询咨询"):
+            clean["mode"] = "面询"
+
     for column in columns:
         cell = _field_cell(columns, column.key, row_number)
         value = clean[column.key]
@@ -259,6 +307,7 @@ def _validate_row(
         "visitors": ("mobile", "bound_counselor_mobile"),
         "counselors": ("mobile",),
         "orders": ("patient_mobile", "counselor_mobile"),
+        "counselor_intros": ("mobile",),
     }[kind]
     for key in phone_keys:
         if not clean[key]:
@@ -306,6 +355,48 @@ def _validate_row(
             clean["billing_cents"] = _parse_price(row.get("billing"))
         except ValueError as exc:
             errors.append(_error(sheet, _field_cell(columns, "billing", row_number), str(exc)))
+
+    elif kind == "counselor_intros":
+        for key, label in (("work_years", "从业时间"), ("consult_hours", "咨询时长")):
+            if not clean[key]:
+                continue
+            try:
+                number = int(float(_text(row.get(key))))
+            except (TypeError, ValueError):
+                errors.append(
+                    _error(sheet, _field_cell(columns, key, row_number), f"{label}须为数字")
+                )
+                continue
+            if key == "work_years":
+                current_year = datetime.utcnow().year
+                if number != 0 and (number < 1950 or number > current_year):
+                    errors.append(
+                        _error(
+                            sheet,
+                            _field_cell(columns, key, row_number),
+                            f"从业时间须为 1950–{current_year} 年之间的年份",
+                        )
+                    )
+                    continue
+            elif number < 0:
+                errors.append(
+                    _error(sheet, _field_cell(columns, key, row_number), f"{label}不能为负数")
+                )
+                continue
+            clean[key] = number
+        mobile = clean["mobile"]
+        if mobile and PHONE_RE.fullmatch(mobile):
+            account = _account_by_mobile(db, mobile)
+            if not account or not _has_role(db, account.Id, "Counselor"):
+                errors.append(
+                    _error(
+                        sheet,
+                        _field_cell(columns, "mobile", row_number),
+                        "未找到该手机号对应的咨询师，请先在咨询师用户表中维护账号",
+                    )
+                )
+            else:
+                clean["account_id"] = account.Id
 
     else:
         status = clean["order_status"] or ORDER_STATUSES[0]
@@ -558,6 +649,174 @@ def _apply_counselor(value: dict[str, Any], db: Session, actor_id: int) -> None:
     set_staff_remark(db, account.Id, value["remark"], actor_id)
 
 
+def _text_empty(value: Any) -> bool:
+    return not _text(value)
+
+
+def _intro_value_empty(key: str, value: Any) -> bool:
+    if key in ("work_years", "consult_hours"):
+        try:
+            return int(value or 0) <= 0
+        except (TypeError, ValueError):
+            return True
+    return _text_empty(value)
+
+
+def _normalize_intro_mode(mode: Optional[str]) -> str:
+    raw = _text(mode)
+    if not raw:
+        return ""
+    if raw in INTRO_CONSULTATION_MODES:
+        return raw
+    if raw in ("视频", "线上"):
+        return "视频咨询"
+    if raw in ("线下", "面询咨询"):
+        return "面询"
+    return raw
+
+
+def _counselor_intro_snapshot(
+    account: AppAccount,
+    profile: Optional[AppCounselorProfile],
+    remark: str,
+) -> dict[str, Any]:
+    training = ""
+    if profile:
+        training = _text(profile.TrainingExperience) or _text(profile.Career)
+    return {
+        "name": _text(profile.Name if profile else None)
+        or _text(account.RealName)
+        or _text(account.Nickname),
+        "mobile": _text(account.Mobile),
+        "remark": _text(remark),
+        "work_years": int(profile.WorkYears or 0) if profile else 0,
+        "consult_hours": int(profile.ConsultHours or 0) if profile else 0,
+        "gender": _text(account.Gender),
+        "mode": _normalize_intro_mode(profile.Mode if profile else None),
+        "field": _text(profile.Field if profile else None),
+        "target_group": _text(profile.TargetGroup if profile else None),
+        "specialty": _text(profile.Specialty if profile else None),
+        "introduce": _text(profile.Introduce if profile else None),
+        "qualification": _text(profile.Qualification if profile else None),
+        "training_experience": training,
+    }
+
+
+def _intro_missing_keys(snapshot: dict[str, Any]) -> list[str]:
+    return [
+        key
+        for key in COUNSELOR_INTRO_CONTENT_KEYS
+        if _intro_value_empty(key, snapshot.get(key))
+    ]
+
+
+def list_counselor_intro_export_candidates(
+    db: Session,
+    keyword: Optional[str] = None,
+) -> list[dict[str, Any]]:
+    accounts = _role_accounts(db, "Counselor")
+    if not accounts:
+        return []
+    account_ids = [account.Id for account in accounts]
+    profiles = {
+        profile.AccountId: profile
+        for profile in db.query(AppCounselorProfile)
+        .filter(AppCounselorProfile.AccountId.in_(account_ids))
+        .all()
+    }
+    remarks = get_staff_remarks_map(db, account_ids)
+    kw = _text(keyword).lower()
+    items: list[dict[str, Any]] = []
+    header_by_key = {column.key: column.header for column in COUNSELOR_INTRO_COLUMNS}
+    for account in accounts:
+        profile = profiles.get(account.Id)
+        snapshot = _counselor_intro_snapshot(account, profile, remarks.get(account.Id, ""))
+        name = snapshot["name"] or snapshot["mobile"] or f"#{account.Id}"
+        if kw and kw not in name.lower() and kw not in snapshot["mobile"].lower():
+            continue
+        missing_keys = _intro_missing_keys(snapshot)
+        items.append(
+            {
+                "accountId": account.Id,
+                "name": name,
+                "mobile": snapshot["mobile"],
+                "missingCount": len(missing_keys),
+                "totalFields": len(COUNSELOR_INTRO_CONTENT_KEYS),
+                "missingFields": [header_by_key[key] for key in missing_keys],
+            }
+        )
+    items.sort(key=lambda item: (-item["missingCount"], item["name"], item["accountId"]))
+    return items
+
+
+def _apply_counselor_intro(value: dict[str, Any], db: Session, actor_id: int) -> None:
+    account = db.query(AppAccount).filter(AppAccount.Id == value["account_id"]).one()
+    profile = (
+        db.query(AppCounselorProfile)
+        .filter(AppCounselorProfile.AccountId == account.Id)
+        .first()
+    )
+    if not profile:
+        profile = AppCounselorProfile(
+            AccountId=account.Id,
+            Name=value.get("name") or account.RealName or account.Nickname,
+            AvatarUrl=DEFAULT_COUNSELOR_PUBLIC_AVATAR,
+            IsActive=True,
+            ConsultHours=0,
+            WorkYears=0,
+        )
+        db.add(profile)
+        db.flush()
+
+    current = _counselor_intro_snapshot(
+        account,
+        profile,
+        get_staff_remarks_map(db, [account.Id]).get(account.Id, ""),
+    )
+
+    if _intro_value_empty("name", current["name"]) and _text(value.get("name")):
+        profile.Name = _text(value["name"])
+        if _text_empty(account.RealName):
+            account.RealName = profile.Name
+    if _intro_value_empty("gender", current["gender"]) and _text(value.get("gender")):
+        account.Gender = _text(value["gender"])
+    if _intro_value_empty("work_years", current["work_years"]) and value.get("work_years") not in (
+        None,
+        "",
+    ):
+        profile.WorkYears = int(value["work_years"])
+    if _intro_value_empty("consult_hours", current["consult_hours"]) and value.get(
+        "consult_hours"
+    ) not in (None, ""):
+        profile.ConsultHours = int(value["consult_hours"])
+    if _intro_value_empty("mode", current["mode"]) and _text(value.get("mode")):
+        profile.Mode = _normalize_intro_mode(value.get("mode"))
+    if _intro_value_empty("field", current["field"]) and _text(value.get("field")):
+        profile.Field = _text(value["field"])
+    if _intro_value_empty("target_group", current["target_group"]) and _text(
+        value.get("target_group")
+    ):
+        profile.TargetGroup = _text(value["target_group"])
+    if _intro_value_empty("specialty", current["specialty"]) and _text(value.get("specialty")):
+        profile.Specialty = _text(value["specialty"])
+    if _intro_value_empty("introduce", current["introduce"]) and _text(value.get("introduce")):
+        profile.Introduce = _text(value["introduce"])
+    if _intro_value_empty("qualification", current["qualification"]) and _text(
+        value.get("qualification")
+    ):
+        profile.Qualification = _text(value["qualification"])
+    if _intro_value_empty("training_experience", current["training_experience"]) and _text(
+        value.get("training_experience")
+    ):
+        profile.TrainingExperience = _text(value["training_experience"])
+    if _intro_value_empty("remark", current["remark"]) and _text(value.get("remark")):
+        set_staff_remark(db, account.Id, _text(value["remark"]), actor_id)
+
+    account.UpdatedAt = datetime.utcnow()
+    if hasattr(profile, "UpdatedAt"):
+        profile.UpdatedAt = datetime.utcnow()
+
+
 def _generated_order_code(value: dict[str, Any]) -> str:
     identity = (
         f"{value['patient_mobile']}|{value['counselor_mobile']}|"
@@ -634,6 +893,9 @@ def _duplicate_errors(
     row_number: int,
     db: Session,
 ) -> list[dict[str, str]]:
+    if kind == "counselor_intros":
+        # 介绍页导入按手机号匹配已有咨询师，仅补空字段，不按新增冲突拒绝。
+        return []
     if kind in ("visitors", "counselors"):
         mobile = value.get("mobile")
         if mobile and PHONE_RE.fullmatch(mobile) and _account_by_mobile(db, mobile):
@@ -745,7 +1007,7 @@ def import_workbook(
         )
         row_errors = list(item["header_errors"]) + row_errors
         key: tuple[Any, ...]
-        if kind in ("visitors", "counselors"):
+        if kind in ("visitors", "counselors", "counselor_intros"):
             key = (clean.get("mobile"),)
         else:
             key = (
@@ -781,6 +1043,8 @@ def import_workbook(
                 _apply_visitor(clean, db, actor_id)
             elif kind == "counselors":
                 _apply_counselor(clean, db, actor_id)
+            elif kind == "counselor_intros":
+                _apply_counselor_intro(clean, db, actor_id)
             else:
                 _apply_order(clean, db)
             db.commit()
@@ -963,12 +1227,68 @@ def _export_orders(
     return rows
 
 
+def _export_counselor_intros(
+    db: Session,
+    counselor_ids: Optional[list[int]] = None,
+) -> list[list[Any]]:
+    if not counselor_ids:
+        raise ValueError("请先勾选需要导出的咨询师")
+    unique_ids: list[int] = []
+    seen: set[int] = set()
+    for counselor_id in counselor_ids:
+        if counselor_id in seen:
+            continue
+        seen.add(counselor_id)
+        unique_ids.append(int(counselor_id))
+
+    accounts = {
+        account.Id: account
+        for account in db.query(AppAccount).filter(AppAccount.Id.in_(unique_ids)).all()
+    }
+    profiles = {
+        profile.AccountId: profile
+        for profile in db.query(AppCounselorProfile)
+        .filter(AppCounselorProfile.AccountId.in_(unique_ids))
+        .all()
+    }
+    remarks = get_staff_remarks_map(db, unique_ids)
+    rows: list[list[Any]] = []
+    for counselor_id in unique_ids:
+        account = accounts.get(counselor_id)
+        if not account or not _has_role(db, counselor_id, "Counselor"):
+            raise ValueError(f"未找到咨询师账号：{counselor_id}")
+        snapshot = _counselor_intro_snapshot(
+            account,
+            profiles.get(counselor_id),
+            remarks.get(counselor_id, ""),
+        )
+        rows.append(
+            [
+                snapshot["name"],
+                snapshot["mobile"],
+                snapshot["remark"],
+                snapshot["work_years"] or "",
+                snapshot["consult_hours"] or "",
+                snapshot["gender"],
+                snapshot["mode"],
+                snapshot["field"],
+                snapshot["target_group"],
+                snapshot["specialty"],
+                snapshot["introduce"],
+                snapshot["qualification"],
+                snapshot["training_experience"],
+            ]
+        )
+    return rows
+
+
 def export_bytes(
     kind: str,
     db: Session,
     *,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
+    counselor_ids: Optional[list[int]] = None,
 ) -> bytes:
     if kind == "visitors":
         rows = _export_visitors(db)
@@ -978,6 +1298,8 @@ def export_bytes(
         if start_date and end_date and start_date > end_date:
             raise ValueError("startDate 不能晚于 endDate")
         rows = _export_orders(db, start_date, end_date)
+    elif kind == "counselor_intros":
+        rows = _export_counselor_intros(db, counselor_ids)
     else:
         _columns(kind)
         raise AssertionError("unreachable")

@@ -75,7 +75,8 @@ APP_CASE_RECORD_AMENDMENT_COLUMNS = {
 }
 
 APP_COUNSELOR_PROFILE_COLUMNS = {
-    "TargetGroup": "NVARCHAR(500) NULL",
+    "Field": "NVARCHAR(MAX) NULL",
+    "TargetGroup": "NVARCHAR(MAX) NULL",
     "Mode": "NVARCHAR(100) NULL",
     "TrainingExperience": "NVARCHAR(MAX) NULL",
     "InfoAuthenticityCommittedAt": "DATETIME NULL",
@@ -339,18 +340,53 @@ def ensure_counselor_profile_columns():
     if not inspector.has_table("AppCounselorProfile"):
         return
 
-    existing = {column["name"] for column in inspector.get_columns("AppCounselorProfile")}
+    existing_columns = {
+        column["name"]: column for column in inspector.get_columns("AppCounselorProfile")
+    }
     missing = [
-        (name, ddl) for name, ddl in APP_COUNSELOR_PROFILE_COLUMNS.items() if name not in existing
+        (name, ddl)
+        for name, ddl in APP_COUNSELOR_PROFILE_COLUMNS.items()
+        if name not in existing_columns
     ]
     if not missing:
         print("[OK] AppCounselorProfile columns already complete")
-        return
+    else:
+        with engine.begin() as conn:
+            for name, ddl in missing:
+                conn.execute(text(f"ALTER TABLE [dbo].[AppCounselorProfile] ADD [{name}] {ddl}"))
+                print(f"[OK] Added AppCounselorProfile.{name}")
 
-    with engine.begin() as conn:
-        for name, ddl in missing:
-            conn.execute(text(f"ALTER TABLE [dbo].[AppCounselorProfile] ADD [{name}] {ddl}"))
-            print(f"[OK] Added AppCounselorProfile.{name}")
+    # 咨询领域 / 擅长人群原先分别为 NVARCHAR(200)/NVARCHAR(500)，扩为 MAX。
+    # SQLAlchemy inspect 对 NVARCHAR(n)/MAX 显示接近，改用 INFORMATION_SCHEMA 长度判断。
+    if engine.dialect.name == "mssql":
+        with engine.begin() as conn:
+            rows = conn.execute(
+                text(
+                    """
+                    SELECT COLUMN_NAME, CHARACTER_MAXIMUM_LENGTH
+                    FROM INFORMATION_SCHEMA.COLUMNS
+                    WHERE TABLE_NAME = 'AppCounselorProfile'
+                      AND COLUMN_NAME IN ('Field', 'TargetGroup')
+                    """
+                )
+            ).fetchall()
+            lengths = {name: max_len for name, max_len in rows}
+            pending_widen = [
+                name
+                for name in ("Field", "TargetGroup")
+                if name in lengths and lengths[name] not in (None, -1)
+            ]
+            if pending_widen:
+                for name in pending_widen:
+                    conn.execute(
+                        text(
+                            f"ALTER TABLE [dbo].[AppCounselorProfile] "
+                            f"ALTER COLUMN [{name}] NVARCHAR(MAX) NULL"
+                        )
+                    )
+                    print(f"[OK] Widened AppCounselorProfile.{name} to NVARCHAR(MAX)")
+            else:
+                print("[OK] AppCounselorProfile Field/TargetGroup already NVARCHAR(MAX)")
 
 
 def ensure_counselor_patient_pricing_columns():

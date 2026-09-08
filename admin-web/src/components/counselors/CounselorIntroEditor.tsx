@@ -408,18 +408,18 @@ export function CounselorIntroEditor({
       <section>
         <h4 className="text-sm font-semibold">介绍页内容</h4>
         <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <QueryField label="咨询领域">
-            <input
-              className={queryControlClass}
-              placeholder="逗号分隔"
+          <QueryField className="sm:col-span-2" label="咨询领域">
+            <textarea
+              className={`${queryControlClass} h-28 resize-y py-3`}
+              placeholder="不同项用英文逗号隔开，可填写较长内容"
               value={draft.field}
               onChange={(event) => updateDraft("field", event.target.value)}
             />
           </QueryField>
-          <QueryField label="擅长人群">
-            <input
-              className={queryControlClass}
-              placeholder="逗号分隔"
+          <QueryField className="sm:col-span-2" label="擅长人群">
+            <textarea
+              className={`${queryControlClass} h-28 resize-y py-3`}
+              placeholder="不同项用英文逗号隔开，可填写较长内容"
               value={draft.targetGroup}
               onChange={(event) => updateDraft("targetGroup", event.target.value)}
             />

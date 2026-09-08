@@ -92,14 +92,28 @@ class CounselorDisplayOrderTests(unittest.TestCase):
         self.db.close()
         self.engine.dispose()
 
-    def test_sort_pin_and_rank_before_price(self):
+    def test_default_sort_uses_pin_and_rank_before_price(self):
         items = [
             {"id": 1, "billing": 90000, "isPinned": False, "listSortRank": 2, "consultHours": 0, "workYears": 0, "_source": "AppCounselorProfile"},
             {"id": 2, "billing": 10000, "isPinned": True, "listSortRank": 9, "consultHours": 0, "workYears": 0, "_source": "AppCounselorProfile"},
             {"id": 3, "billing": 50000, "isPinned": False, "listSortRank": 1, "consultHours": 0, "workYears": 0, "_source": "AppCounselorProfile"},
         ]
-        _sort_counselor_list(items, sort_mode="price_desc", available_ids=set())
+        _sort_counselor_list(items, sort_mode=None, available_ids=set())
         self.assertEqual([i["id"] for i in items], [2, 3, 1])
+
+    def test_price_sort_ignores_pin_and_rank(self):
+        items = [
+            {"id": 1, "billing": 90000, "isPinned": False, "listSortRank": 2, "consultHours": 0, "workYears": 0, "_source": "AppCounselorProfile"},
+            {"id": 2, "billing": 10000, "isPinned": True, "listSortRank": 1, "consultHours": 0, "workYears": 0, "_source": "AppCounselorProfile"},
+            {"id": 3, "billing": 50000, "isPinned": False, "listSortRank": 3, "consultHours": 0, "workYears": 0, "_source": "AppCounselorProfile"},
+        ]
+        _sort_counselor_list(items, sort_mode="price_desc", available_ids=set())
+        self.assertEqual([i["id"] for i in items], [1, 3, 2])
+        _sort_counselor_list(items, sort_mode="price_asc", available_ids=set())
+        self.assertEqual([i["id"] for i in items], [2, 3, 1])
+        # 切回默认应恢复管理端展示序
+        _sort_counselor_list(items, sort_mode=None, available_ids=set())
+        self.assertEqual([i["id"] for i in items], [2, 1, 3])
 
     def test_hidden_excluded_from_public_list_but_kept_in_admin_order(self):
         profile = (

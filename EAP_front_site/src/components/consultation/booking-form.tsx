@@ -20,7 +20,7 @@ import type { Consultant } from "@/lib/api/types";
 
 const bookingSchema = z.object({
   name: z.string().min(2, "请输入姓名"),
-  phone: z.string().regex(/^1[3-9]\d{9}$/, "请输入有效的手机号"),
+  phone: z.string().regex(/^1\d{10}$/, "请输入有效的手机号"),
   date: z.string().min(1, "请选择日期"),
   timeSlot: z.string().min(1, "请选择时段"),
   note: z.string().optional(),

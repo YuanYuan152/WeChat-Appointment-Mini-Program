@@ -738,6 +738,15 @@
                         "navigationBarBackgroundColor": "#ffffff",
                         "navigationBarTextStyle": "black"
                     }
+                },
+                {
+                    "path": "orders/list",
+                    "style": {
+                        "navigationBarTitleText": "我的订单",
+                        "navigationBarBackgroundColor": "#ffffff",
+                        "navigationBarTextStyle": "black",
+                        "backgroundColor": "#F7F5F2"
+                    }
                 }
             ]
         }

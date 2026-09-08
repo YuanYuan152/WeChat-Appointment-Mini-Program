@@ -2448,7 +2448,7 @@ def _build_counselor_display_order_items(db: Session) -> List[dict]:
     available_ids = _counselor_ids_with_available_slots(
         db, [int(item["id"]) for item in sort_items]
     )
-    _sort_counselor_list(sort_items, sort_mode="price_desc", available_ids=available_ids)
+    _sort_counselor_list(sort_items, sort_mode=None, available_ids=available_ids)
     return sort_items
 
 

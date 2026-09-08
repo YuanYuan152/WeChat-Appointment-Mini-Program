@@ -15,14 +15,16 @@ import {
 import {
   downloadDataTransferTemplate,
   exportDataTransfer,
+  fetchCounselorIntroExportCandidates,
   importDataTransfer,
 } from "@/services/imports";
 import type {
+  CounselorIntroExportCandidate,
   DataTransferImportResult,
   DataTransferKind,
 } from "@/types/api";
 
-const KINDS: DataTransferKind[] = ["visitors", "counselors", "orders"];
+const KINDS: DataTransferKind[] = ["visitors", "counselors", "orders", "counselor_intros"];
 const HISTORY_LIMIT = 8;
 
 const KIND_CONFIG: Record<
@@ -62,6 +64,17 @@ const KIND_CONFIG: Record<
     ],
     filename: "咨询订单表",
   },
+  counselor_intros: {
+    label: "咨询师介绍页表",
+    description: "按咨询师勾选导出介绍页资料，填写后导入补全空缺字段。",
+    rules: [
+      "必须先在右侧勾选咨询师并导出，再基于导出文件填写后导入；请勿改动表头。",
+      "表头含姓名、电话、备注、从业时间、咨询时长、性别、咨询方式、咨询领域、擅长人群、咨询流派、简介、从业资质、受训背景；标【必填】列导入时不可为空。",
+      "导入按电话号码匹配已有咨询师；某字段在系统中已有内容时不会覆盖，仅补填当前为空的字段。",
+      "导出列表按介绍页空缺程度从高到低排序，并支持按姓名/手机号搜索。",
+    ],
+    filename: "咨询师介绍页表",
+  },
 };
 
 interface ImportHistoryItem {
@@ -76,9 +89,24 @@ type KindFiles = Record<DataTransferKind, File | null>;
 type KindResults = Record<DataTransferKind, DataTransferImportResult | null>;
 type KindHistory = Record<DataTransferKind, ImportHistoryItem[]>;
 
-const emptyFiles = (): KindFiles => ({ visitors: null, counselors: null, orders: null });
-const emptyResults = (): KindResults => ({ visitors: null, counselors: null, orders: null });
-const emptyHistory = (): KindHistory => ({ visitors: [], counselors: [], orders: [] });
+const emptyFiles = (): KindFiles => ({
+  visitors: null,
+  counselors: null,
+  orders: null,
+  counselor_intros: null,
+});
+const emptyResults = (): KindResults => ({
+  visitors: null,
+  counselors: null,
+  orders: null,
+  counselor_intros: null,
+});
+const emptyHistory = (): KindHistory => ({
+  visitors: [],
+  counselors: [],
+  orders: [],
+  counselor_intros: [],
+});
 
 function historyKey(kind: DataTransferKind) {
   return `lxxl_admin_data_transfer_history_${kind}`;
@@ -227,6 +255,10 @@ function DataImportContent() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [busyAction, setBusyAction] = useState<"template" | "import" | "export" | null>(null);
+  const [introKeyword, setIntroKeyword] = useState("");
+  const [introCandidates, setIntroCandidates] = useState<CounselorIntroExportCandidate[]>([]);
+  const [introSelectedIds, setIntroSelectedIds] = useState<number[]>([]);
+  const [introLoading, setIntroLoading] = useState(false);
 
   const config = activeKind ? KIND_CONFIG[activeKind] : null;
   const file = activeKind ? files[activeKind] : null;
@@ -238,8 +270,40 @@ function DataImportContent() {
       visitors: readHistory("visitors"),
       counselors: readHistory("counselors"),
       orders: readHistory("orders"),
+      counselor_intros: readHistory("counselor_intros"),
     });
   }, []);
+
+  useEffect(() => {
+    if (activeKind !== "counselor_intros") {
+      return;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      setIntroLoading(true);
+      void fetchCounselorIntroExportCandidates(introKeyword)
+        .then((response) => {
+          if (!cancelled) {
+            setIntroCandidates(response.items || []);
+          }
+        })
+        .catch((error) => {
+          if (!cancelled) {
+            showNotice("error", error instanceof Error ? error.message : "加载咨询师列表失败");
+            setIntroCandidates([]);
+          }
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setIntroLoading(false);
+          }
+        });
+    }, 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [activeKind, introKeyword, showNotice]);
 
   const runBusy = async (
     action: "template" | "import" | "export",
@@ -342,12 +406,17 @@ function DataImportContent() {
         return;
       }
     }
+    if (activeKind === "counselor_intros" && introSelectedIds.length === 0) {
+      showNotice("error", "请先勾选需要导出的咨询师");
+      return;
+    }
     try {
       await runBusy("export", async () => {
-        const response = await exportDataTransfer(
-          activeKind,
-          activeKind === "orders" ? { startDate, endDate } : undefined,
-        );
+        const response = await exportDataTransfer(activeKind, {
+          startDate,
+          endDate,
+          counselorIds: introSelectedIds,
+        });
         saveFile(
           response.blob,
           response.filename || `${config.filename}导出_${timestampForFilename()}.xlsx`,
@@ -376,6 +445,32 @@ function DataImportContent() {
     setActiveKind(kind);
     clearNotice();
     if (inputRef.current) inputRef.current.value = "";
+    if (kind === "counselor_intros") {
+      setIntroKeyword("");
+      setIntroSelectedIds([]);
+    }
+  };
+
+  const toggleIntroSelection = (accountId: number) => {
+    setIntroSelectedIds((current) =>
+      current.includes(accountId)
+        ? current.filter((id) => id !== accountId)
+        : [...current, accountId],
+    );
+  };
+
+  const selectAllVisibleIntros = () => {
+    setIntroSelectedIds((current) => {
+      const next = new Set(current);
+      for (const item of introCandidates) {
+        next.add(item.accountId);
+      }
+      return Array.from(next);
+    });
+  };
+
+  const clearIntroSelection = () => {
+    setIntroSelectedIds([]);
   };
 
   return (
@@ -429,7 +524,11 @@ function DataImportContent() {
               disabled={busyAction !== null}
               onClick={handleTemplateDownload}
             >
-              {busyAction === "template" ? "下载中..." : "下载 Excel 模板"}
+              {busyAction === "template"
+                ? "下载中..."
+                : activeKind === "counselor_intros"
+                  ? "下载空表头模板（可选）"
+                  : "下载 Excel 模板"}
             </QueryResetButton>
           </div>
         )}
@@ -442,6 +541,11 @@ function DataImportContent() {
               </span>
               <h3 className="text-sm font-semibold">数据导入</h3>
             </div>
+            {activeKind === "counselor_intros" ? (
+              <p className="mt-3 text-sm font-medium leading-6 text-[#B34B43]">
+                修改非空字段不支持使用批量导入功能，请使用编辑功能。
+              </p>
+            ) : null}
 
             <label className="mt-4 block text-xs font-medium text-[var(--lxxl-muted)]">
               选择导入的文件 <span className="ml-1 text-[#B34B43]">*</span>
@@ -533,7 +637,9 @@ function DataImportContent() {
                 ? "请先选择导入&导出类型，再下载并导出对应表格。"
                 : activeKind === "orders"
                   ? "按预约开始日期范围导出咨询订单表，开始和结束日期均包含在范围内。"
-                  : `下载并导出当前系统中的全部${config.label}。`}
+                  : activeKind === "counselor_intros"
+                    ? "按空缺程度排序勾选咨询师后导出介绍页表；填写完成后再导入补全空字段。"
+                    : `下载并导出当前系统中的全部${config.label}。`}
             </p>
             {activeKind === "orders" && (
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -553,6 +659,84 @@ function DataImportContent() {
                 </QueryField>
               </div>
             )}
+            {activeKind === "counselor_intros" && (
+              <div className="mt-4 space-y-3">
+                <QueryField label="搜索咨询师">
+                  <input
+                    className={queryControlClass}
+                    placeholder="姓名或手机号"
+                    value={introKeyword}
+                    onChange={(event) => setIntroKeyword(event.target.value)}
+                  />
+                </QueryField>
+                <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--lxxl-muted)]">
+                  <span>已选 {introSelectedIds.length} 人</span>
+                  <button
+                    className="text-[var(--lxxl-green)] underline underline-offset-2 disabled:opacity-40"
+                    disabled={introCandidates.length === 0 || busyAction !== null}
+                    type="button"
+                    onClick={selectAllVisibleIntros}
+                  >
+                    全选当前列表
+                  </button>
+                  <button
+                    className="underline underline-offset-2 disabled:opacity-40"
+                    disabled={introSelectedIds.length === 0 || busyAction !== null}
+                    type="button"
+                    onClick={clearIntroSelection}
+                  >
+                    清空勾选
+                  </button>
+                  {introLoading ? <span>列表加载中...</span> : null}
+                </div>
+                <div className="max-h-72 overflow-auto rounded-lg border border-[var(--lxxl-border)] bg-white">
+                  {introCandidates.length === 0 ? (
+                    <p className="px-4 py-6 text-center text-xs text-[var(--lxxl-muted)]">
+                      {introLoading ? "正在加载咨询师..." : "没有匹配的咨询师"}
+                    </p>
+                  ) : (
+                    <ul className="divide-y divide-[var(--lxxl-border)]">
+                      {introCandidates.map((item) => {
+                        const checked = introSelectedIds.includes(item.accountId);
+                        return (
+                          <li key={item.accountId}>
+                            <label className="flex cursor-pointer items-start gap-3 px-3 py-2.5 hover:bg-[#FAF8F4]">
+                              <input
+                                checked={checked}
+                                className="mt-1"
+                                type="checkbox"
+                                onChange={() => toggleIntroSelection(item.accountId)}
+                              />
+                              <span className="min-w-0 flex-1">
+                                <span className="block text-sm font-medium">
+                                  {item.name || "未命名咨询师"}
+                                </span>
+                                <span className="mt-0.5 block text-xs text-[var(--lxxl-muted)]">
+                                  {item.mobile || "无手机号"} · 空缺 {item.missingCount}/
+                                  {item.totalFields}
+                                </span>
+                                {item.missingFields.length > 0 ? (
+                                  <span className="mt-1 block text-[11px] leading-4 text-[var(--lxxl-muted)]">
+                                    缺：{item.missingFields.slice(0, 4).join("、")}
+                                    {item.missingFields.length > 4
+                                      ? ` 等 ${item.missingFields.length} 项`
+                                      : ""}
+                                  </span>
+                                ) : (
+                                  <span className="mt-1 block text-[11px] text-[var(--lxxl-green)]">
+                                    介绍页字段较完整
+                                  </span>
+                                )}
+                              </span>
+                            </label>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            )}
             <QueryButton
               className={`mt-4 w-auto ${!hasType || busyAction !== null ? "cursor-not-allowed opacity-45 hover:bg-[var(--lxxl-green)]" : ""}`}
               disabled={!hasType || busyAction !== null}
@@ -563,7 +747,9 @@ function DataImportContent() {
                 ? "导出中..."
                 : activeKind === "orders"
                   ? "按日期范围导出"
-                  : "下载并导出表格"}
+                  : activeKind === "counselor_intros"
+                    ? "导出已勾选咨询师"
+                    : "下载并导出表格"}
             </QueryButton>
           </div>
         </div>

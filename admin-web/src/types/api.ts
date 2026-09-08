@@ -229,7 +229,16 @@ export interface CompletedOrderImportResult {
   rows: CompletedOrderImportRowResult[];
 }
 
-export type DataTransferKind = "visitors" | "counselors" | "orders";
+export type DataTransferKind = "visitors" | "counselors" | "orders" | "counselor_intros";
+
+export interface CounselorIntroExportCandidate {
+  accountId: number;
+  name: string;
+  mobile: string;
+  missingCount: number;
+  totalFields: number;
+  missingFields: string[];
+}
 
 export interface DataTransferImportError {
   sheet: string;

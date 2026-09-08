@@ -50,7 +50,12 @@ from schedule_meta import schedule_note
 from patient_contract_service import patient_contract_extras
 from staff_remark_service import get_staff_remark, get_staff_remarks_map
 from staff_roles import account_has_staff_workbench, staff_workbench_account_ids
-from data_transfer_service import export_bytes, import_workbook, template_bytes
+from data_transfer_service import (
+    export_bytes,
+    import_workbook,
+    list_counselor_intro_export_candidates,
+    template_bytes,
+)
 
 router = APIRouter(prefix="/api/web/admin", tags=["WebAdmin"])
 
@@ -73,6 +78,7 @@ DATA_TRANSFER_TABLE_NAMES = {
     "visitors": "来访用户表",
     "counselors": "咨询师用户表",
     "orders": "咨询订单表",
+    "counselor_intros": "咨询师介绍页表",
 }
 
 
@@ -101,6 +107,18 @@ def require_staff_workbench(
     ):
         raise HTTPException(status_code=403, detail="无管理工作台权限")
     return current_account
+
+
+@router.get(
+    "/data-transfer/counselor_intros/candidates",
+    summary="咨询师介绍页导出候选列表（按空缺程度排序）",
+)
+def data_transfer_counselor_intro_candidates(
+    keyword: Optional[str] = Query(None),
+    _admin: AppAccount = Depends(require_ops_or_admin),
+    db: Session = Depends(get_db),
+):
+    return {"items": list_counselor_intro_export_candidates(db, keyword=keyword)}
 
 
 @router.get("/data-transfer/{kind}/template", summary="下载数据导入模板")
@@ -144,6 +162,7 @@ def data_transfer_export(
     kind: str,
     start_date: Optional[date] = Query(None, alias="startDate"),
     end_date: Optional[date] = Query(None, alias="endDate"),
+    counselor_ids: Optional[list[int]] = Query(None, alias="counselorIds"),
     _admin: AppAccount = Depends(require_ops_or_admin),
     db: Session = Depends(get_db),
 ):
@@ -153,6 +172,7 @@ def data_transfer_export(
             db,
             start_date=start_date,
             end_date=end_date,
+            counselor_ids=counselor_ids,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -345,7 +365,7 @@ IMPORT_DESCRIPTION_HEADERS = (
     "总时长",
     "合计收入",
 )
-PHONE_PATTERN = re.compile(r"1[3-9]\d{9}")
+PHONE_PATTERN = re.compile(r"1\d{10}")
 
 
 def _strip_value(value: Any) -> str:

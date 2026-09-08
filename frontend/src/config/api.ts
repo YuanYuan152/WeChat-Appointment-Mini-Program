@@ -161,6 +161,7 @@ export const API_ENDPOINTS = {
     proxyBookingPatients: '/api/mini/counselor/proxy-booking/patients',
     proxyBookingSlotOptions: '/api/mini/counselor/proxy-booking/slot-options',
     proxyBookingPushOrder: '/api/mini/counselor/proxy-booking/push-order',
+    orders: '/api/mini/counselor/orders',
   },
 
   // 助理工作台

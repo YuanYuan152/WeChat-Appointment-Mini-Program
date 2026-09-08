@@ -27,7 +27,10 @@ export function formatPatientInline(name?: string, contractTag?: string | null):
   return tag ? `${name} ${tag}` : name
 }
 
-/** 消息/详情 JSON 中的来访者展示名（兼容多种字段名） */
+/** 消息/详情 JSON 中的来访者展示名（兼容多种字段名）
+ * 签约标签必须使用消息 Content 创建时快照（patientContractTag），
+ * 不可按当前绑定关系重新请求或覆盖。
+ */
 export function patientNameFromDetail(detail?: Record<string, unknown> | null): string {
   if (!detail) return ''
   const name = String(detail.patientName || detail.name || '')

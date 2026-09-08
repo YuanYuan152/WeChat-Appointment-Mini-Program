@@ -28,7 +28,7 @@
 
       <!-- 数据统计卡片 -->
       <view class="stats-card">
-        <view class="stat-item" @click="navigateTo('/pages/patient/orders/list')">
+        <view class="stat-item" @click="goMyOrders">
           <view class="stat-num-wrap">
             <text class="stat-num">{{ stats.appointmentCount || 0 }}</text>
             <text v-if="pendingOrderCount > 0" class="stat-badge" />
@@ -58,7 +58,7 @@
           <text class="menu-text">个人信息</text>
           <text class="menu-arrow">›</text>
         </view>
-        <view class="menu-item" @click="goScaleResults">
+        <view v-if="!isCounselor" class="menu-item" @click="goScaleResults">
           <view class="menu-icon-wrap bg-gold-light">
             <text class="menu-icon text-gold">📊</text>
           </view>
@@ -270,8 +270,14 @@ const loadUserInfo = async () => {
 const loadStats = async () => {
   try {
     const silent = { showLoading: false, showError: false }
+    const counselorMode =
+      activeRole.value === 'Counselor' || userRoles.value.includes('Counselor')
     const [ordersRes, consultRes, favRes] = await Promise.all([
-      httpV2.get<any[]>(API_ENDPOINTS.patient.orders, undefined, silent),
+      httpV2.get<any[]>(
+        counselorMode ? API_ENDPOINTS.counselor.orders : API_ENDPOINTS.patient.orders,
+        undefined,
+        silent,
+      ),
       httpV2.get<any[]>(API_ENDPOINTS.patient.consultations, undefined, silent),
       httpV2.get<{ count: number }>(API_ENDPOINTS.patient.favoritesCount, undefined, silent),
     ])
@@ -280,9 +286,11 @@ const loadStats = async () => {
       activityCount: Array.isArray(consultRes.data) ? consultRes.data.length : 0,
       favoriteCount: favRes.code === 0 && favRes.data ? (favRes.data.count || 0) : 0,
     }
-    pendingOrderCount.value = Array.isArray(ordersRes.data)
-      ? ordersRes.data.filter((o: { Status?: string }) => o.Status === 'PENDING').length
-      : 0
+    pendingOrderCount.value = counselorMode
+      ? 0
+      : Array.isArray(ordersRes.data)
+        ? ordersRes.data.filter((o: { Status?: string }) => o.Status === 'PENDING').length
+        : 0
   } catch {
     stats.value = { appointmentCount: 0, activityCount: 0, favoriteCount: 0 }
     pendingOrderCount.value = 0
@@ -410,6 +418,15 @@ const goPersonalInfo = () => {
     () => navigateTo(getProfileEditUrl()),
     getProfileEditUrl()
   )
+}
+
+const goMyOrders = () => {
+  const counselorMode =
+    activeRole.value === 'Counselor' || userRoles.value.includes('Counselor')
+  const url = counselorMode
+    ? '/pages/counselor/orders/list'
+    : '/pages/patient/orders/list'
+  handleRequireLogin(() => navigateTo(url), url)
 }
 
 const navigateTo = (url: string) => {

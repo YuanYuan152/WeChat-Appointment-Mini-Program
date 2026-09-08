@@ -127,29 +127,40 @@
           </view>
           <view class="form-item">
             <text class="label">咨询领域</text>
-            <input class="input" v-model="form.field" placeholder="逗号分隔" />
+            <textarea
+              class="textarea"
+              v-model="form.field"
+              :maxlength="-1"
+              placeholder="不同项用英文逗号隔开，可填写较长内容"
+            />
           </view>
           <view class="form-item">
             <text class="label">擅长人群</text>
-            <input class="input" v-model="form.targetGroup" placeholder="逗号分隔" />
+            <textarea
+              class="textarea"
+              v-model="form.targetGroup"
+              :maxlength="-1"
+              placeholder="不同项用英文逗号隔开，可填写较长内容"
+            />
           </view>
           <view class="form-item">
             <text class="label">咨询流派</text>
-            <textarea class="textarea" v-model="form.specialty" placeholder="如精神分析、认知行为等" />
+            <textarea class="textarea" v-model="form.specialty" :maxlength="-1" placeholder="如精神分析、认知行为等" />
           </view>
           <view class="form-item">
             <text class="label">简介</text>
-            <textarea class="textarea" v-model="form.introduce" />
+            <textarea class="textarea" v-model="form.introduce" :maxlength="-1" />
           </view>
           <view class="form-item">
             <text class="label">从业资质</text>
-            <textarea class="textarea" v-model="form.qualification" />
+            <textarea class="textarea" v-model="form.qualification" :maxlength="-1" />
           </view>
           <view class="form-item">
             <text class="label">受训背景</text>
             <textarea
               class="textarea"
               v-model="form.trainingExperience"
+              :maxlength="-1"
               placeholder="直接填写受训背景，一段或多段均可"
             />
             <text v-if="!form.trainingExperience && detail.career" class="readonly-fallback">

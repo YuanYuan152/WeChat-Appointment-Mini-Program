@@ -58,14 +58,19 @@ def _patient_label(name: Optional[str], tag: Optional[str] = None) -> str:
 
 
 def _patient_detail_fields(ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """来访者姓名与签约标签快照；patientContractTag 始终写入以便历史展示不变。"""
     name = ctx.get("patientName")
-    tag = ctx.get("patientContractTag")
     if not name:
         return {}
-    out: Dict[str, Any] = {"patientName": name}
-    if tag:
-        out["patientContractTag"] = tag
-    return out
+    tag = ctx.get("patientContractTag")
+    if isinstance(tag, str):
+        tag = tag.strip() or None
+    else:
+        tag = None
+    return {
+        "patientName": name,
+        "patientContractTag": tag,
+    }
 
 
 def _appointment_location(

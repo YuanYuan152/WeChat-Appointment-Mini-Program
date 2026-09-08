@@ -499,7 +499,7 @@ class BackendSafetyRegressionTests(unittest.TestCase):
         self.assertIsNotNone(self.db.query(AppSchedule).filter_by(Id=schedule.Id).first())
         self.assertEqual(order.Status, "PAID")
 
-    def test_proxy_order_message_enriches_live_status_and_contract(self):
+    def test_proxy_order_message_enriches_live_status_preserves_contract_snapshot(self):
         self.add_counselor(name="李心怡")
         patient = self.add_patient()
         schedule, order = self.add_schedule_order()
@@ -513,8 +513,8 @@ class BackendSafetyRegressionTests(unittest.TestCase):
                 {
                     "summary": "旧快照",
                     "detail": {
-                        "patientName": "旧名字",
-                        "patientContractTag": None,
+                        "patientName": "来访甲",
+                        "patientContractTag": "已签约-【李心怡】",
                         "location": "视频咨询",
                     },
                 },
@@ -533,6 +533,7 @@ class BackendSafetyRegressionTests(unittest.TestCase):
             pending_payload["detail"]["patientContractTag"],
             "已签约-【李心怡】",
         )
+        self.assertIn("已签约-【李心怡】", pending_payload["summary"])
 
         order.Status = "PAID"
         self.db.commit()
@@ -540,6 +541,10 @@ class BackendSafetyRegressionTests(unittest.TestCase):
         paid_payload = json.loads(paid.Content)
         self.assertEqual(paid.Title, "代理预约已支付")
         self.assertEqual(paid_payload["detail"]["statusLabel"], "已支付")
+        self.assertEqual(
+            paid_payload["detail"]["patientContractTag"],
+            "已签约-【李心怡】",
+        )
 
         order.Status = "CANCELLED"
         patient.BoundCounselorId = None
@@ -549,7 +554,12 @@ class BackendSafetyRegressionTests(unittest.TestCase):
         cancelled_payload = json.loads(cancelled.Content)
         self.assertEqual(cancelled.Title, "代理预约已取消")
         self.assertEqual(cancelled_payload["detail"]["status"], "CANCELLED")
-        self.assertIsNone(cancelled_payload["detail"]["patientContractTag"])
+        # 换绑/解绑后历史消息仍保留发送时的签约快照
+        self.assertEqual(
+            cancelled_payload["detail"]["patientContractTag"],
+            "已签约-【李心怡】",
+        )
+        self.assertIn("已签约-【李心怡】", cancelled_payload["summary"])
 
         order.Status = "PENDING"
         order.ExpiresAt = china_now() - timedelta(minutes=1)
@@ -558,6 +568,42 @@ class BackendSafetyRegressionTests(unittest.TestCase):
         expired_payload = json.loads(expired.Content)
         self.assertEqual(expired.Title, "代理预约已过期")
         self.assertEqual(expired_payload["detail"]["status"], "EXPIRED")
+        self.assertEqual(
+            expired_payload["detail"]["patientContractTag"],
+            "已签约-【李心怡】",
+        )
+
+    def test_proxy_order_message_does_not_backfill_contract_from_live_binding(self):
+        self.add_counselor(name="李心怡")
+        self.add_patient()
+        schedule, order = self.add_schedule_order()
+        self.db.commit()
+        message = AppMessage(
+            Id=7002,
+            AccountId=2,
+            Type="ORDER",
+            Title="代理预约待支付",
+            Content=json.dumps(
+                {
+                    "summary": "旧快照",
+                    "detail": {
+                        "patientName": "来访甲",
+                        "patientContractTag": None,
+                        "location": "视频咨询",
+                    },
+                },
+                ensure_ascii=False,
+            ),
+            RelatedType="COUNSELOR_PROXY_ORDER_PENDING",
+            RelatedId=order.Id,
+            IsRead=False,
+            CreatedAt=datetime.utcnow(),
+        )
+
+        enriched = enrich_message(message, self.db)
+        payload = json.loads(enriched.Content)
+        self.assertIsNone(payload["detail"]["patientContractTag"])
+        self.assertNotIn("已签约", payload["summary"])
 
     def test_counselor_schedule_rejects_globally_disabled_room(self):
         counselor = self.add_counselor()

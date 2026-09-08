@@ -17,7 +17,7 @@ cur.execute(
         [AvatarUrl] NVARCHAR(500) NULL,
         [Title] NVARCHAR(100) NULL,
         [Specialty] NVARCHAR(MAX) NULL,
-        [Field] NVARCHAR(200) NULL,
+        [Field] NVARCHAR(MAX) NULL,
         [Introduce] NVARCHAR(MAX) NULL,
         [Career] NVARCHAR(MAX) NULL,
         [Qualification] NVARCHAR(MAX) NULL,

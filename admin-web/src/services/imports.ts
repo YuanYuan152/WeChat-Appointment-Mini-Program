@@ -1,6 +1,7 @@
 import { apiFileRequest, apiRequest } from "@/lib/api";
 import type {
   CompletedOrderImportResult,
+  CounselorIntroExportCandidate,
   DataTransferImportResult,
   DataTransferKind,
 } from "@/types/api";
@@ -32,16 +33,33 @@ export function importDataTransfer(kind: DataTransferKind, file: File) {
   });
 }
 
+export function fetchCounselorIntroExportCandidates(keyword = "") {
+  const query = keyword.trim()
+    ? `?${new URLSearchParams({ keyword: keyword.trim() }).toString()}`
+    : "";
+  return apiRequest<{ items: CounselorIntroExportCandidate[] }>(
+    `/api/web/admin/data-transfer/counselor_intros/candidates${query}`,
+  );
+}
+
 export function exportDataTransfer(
   kind: DataTransferKind,
-  dateRange?: { startDate: string; endDate: string },
+  options?: {
+    startDate?: string;
+    endDate?: string;
+    counselorIds?: number[];
+  },
 ) {
-  const query =
-    kind === "orders" && dateRange
-      ? `?${new URLSearchParams({
-          startDate: dateRange.startDate,
-          endDate: dateRange.endDate,
-        }).toString()}`
-      : "";
+  const params = new URLSearchParams();
+  if (kind === "orders" && options?.startDate && options?.endDate) {
+    params.set("startDate", options.startDate);
+    params.set("endDate", options.endDate);
+  }
+  if (kind === "counselor_intros") {
+    for (const id of options?.counselorIds || []) {
+      params.append("counselorIds", String(id));
+    }
+  }
+  const query = params.toString() ? `?${params.toString()}` : "";
   return apiFileRequest(`${dataTransferPath(kind, "export")}${query}`);
 }

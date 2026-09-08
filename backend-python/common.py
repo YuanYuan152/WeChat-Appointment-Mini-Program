@@ -525,26 +525,38 @@ def _sort_counselor_list(
     sort_mode: Optional[str],
     available_ids: set[int],
 ) -> None:
-    """置顶优先 → 人工 ListSortRank（>0 升序）→ 价格为主键 → 完整度/时长/年限/可约。"""
+    """咨询师公开列表排序。
+
+    - 默认（sort_mode 空 / default）：置顶 → 人工 ListSortRank → 完整度等次级键
+      （与 Web 后台展示序设置一致；价格仅作同序时的兜底）
+    - price_asc / price_desc：忽略置顶与人工序，按展示价排序，再用次级键打破平价
+    """
+    price_mode = sort_mode in ("price_asc", "price_desc")
     price_asc = sort_mode == "price_asc"
     unset_rank = 10**9
 
+    def secondary(item: Dict[str, Any]):
+        completeness = _profile_completeness_score(item)
+        hours = int(item.get("consultHours") or 0)
+        years = display_work_years(item.get("workYears"))
+        cid = int(item.get("id") or 0)
+        has_slot = 1 if item.get("_source") == "AppCounselorProfile" and cid in available_ids else 0
+        billing = float(item.get("billing") or 0)
+        return (-completeness, -hours, -years, -has_slot, -billing, cid)
+
     def sort_key(item: Dict[str, Any]):
+        billing = float(item.get("billing") or 0)
+        price_key = billing if price_asc else -billing
+        if price_mode:
+            return (price_key,) + secondary(item)
+
         pinned = 1 if item.get("isPinned") else 0
         try:
             raw_rank = int(item.get("listSortRank") or 0)
         except (TypeError, ValueError):
             raw_rank = 0
         rank = raw_rank if raw_rank > 0 else unset_rank
-        billing = float(item.get("billing") or 0)
-        completeness = _profile_completeness_score(item)
-        hours = int(item.get("consultHours") or 0)
-        years = display_work_years(item.get("workYears"))
-        cid = int(item.get("id") or 0)
-        # 新系统 AccountId 才与排期对齐；旧 T_Doctor 无匹配排期时视为无可约
-        has_slot = 1 if item.get("_source") == "AppCounselorProfile" and cid in available_ids else 0
-        price_key = billing if price_asc else -billing
-        return (-pinned, rank, price_key, -completeness, -hours, -years, -has_slot)
+        return (-pinned, rank) + secondary(item)
 
     items.sort(key=sort_key)
 
@@ -625,10 +637,10 @@ def list_public_counselors(
         db,
         [int(item.get("id") or 0) for item in new_dicts],
     )
-    # 默认与 price_desc：价格从高到低，同价再按完整度 / 时长 / 年限 / 可约
+    # 默认：管理端置顶 + ListSortRank；price_*：纯价格序
     _sort_counselor_list(
         merged,
-        sort_mode=normalized_sort or "price_desc",
+        sort_mode=normalized_sort,
         available_ids=available_ids,
     )
     total = len(merged)
@@ -647,7 +659,10 @@ def common_counselors(
     keyword: Optional[str] = Query(None, description="搜索姓名/擅长"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    sort: Optional[str] = Query(None, description="price_asc|price_desc；空=默认价格从高到低+次级排序"),
+    sort: Optional[str] = Query(
+        None,
+        description="price_asc|price_desc；空=Web 后台配置的默认展示序（置顶/排序）",
+    ),
     gender: Optional[str] = Query(None, description="男|女"),
     consult_method: Optional[str] = Query(None, description="online|offline"),
     current_account: Optional[AppAccount] = Depends(get_optional_account),

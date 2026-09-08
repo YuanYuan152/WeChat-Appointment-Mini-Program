@@ -56,7 +56,7 @@ from models import (
     AppOrder,
     AppScheduleCancelLog,
 )
-from app_time import china_now
+from app_time import as_china_api_time, china_now
 from consultation_cancel import has_appointment_started, is_refund_eligible, refund_order_for_counselor_leave
 from schedule_meta import (
     CENTER_NAMES,
@@ -1778,6 +1778,119 @@ def update_profile(
     db: Session = Depends(get_db),
 ):
     raise HTTPException(status_code=403, detail="咨询师资料由平台统一维护，请联系运营更新")
+
+
+class CounselorVisitorOrderOut(BaseModel):
+    id: int
+    visitorName: str
+    paidAt: Optional[datetime] = None
+    startTime: Optional[datetime] = None
+    endTime: Optional[datetime] = None
+    totalFee: int = 0
+    outTradeNo: Optional[str] = None
+    status: str = "PAID"
+
+
+@router.get(
+    "/orders",
+    response_model=List[CounselorVisitorOrderOut],
+    summary="来访对本咨询师的已支付预约订单",
+)
+def list_counselor_visitor_orders(
+    counselor: AppAccount = Depends(require_counselor),
+    db: Session = Depends(get_db),
+):
+    """展示来访预约本咨询师并已付费的订单，不含咨询师本人作为来访预约他人的订单。"""
+    orders_by_id: Dict[int, AppOrder] = {}
+
+    for order in (
+        db.query(AppOrder)
+        .join(AppSchedule, AppOrder.SlotId == AppSchedule.Id)
+        .filter(
+            AppSchedule.CounselorId == counselor.Id,
+            AppOrder.Status == "PAID",
+        )
+        .all()
+    ):
+        orders_by_id[order.Id] = order
+
+    for order in (
+        db.query(AppOrder)
+        .join(AppConsultation, AppConsultation.OrderId == AppOrder.Id)
+        .filter(
+            AppConsultation.CounselorId == counselor.Id,
+            AppOrder.Status == "PAID",
+        )
+        .all()
+    ):
+        orders_by_id[order.Id] = order
+
+    if not orders_by_id:
+        return []
+
+    orders = list(orders_by_id.values())
+    visitor_ids = {int(order.AccountId) for order in orders if order.AccountId}
+    visitors = {
+        account.Id: account
+        for account in db.query(AppAccount).filter(AppAccount.Id.in_(visitor_ids)).all()
+    } if visitor_ids else {}
+
+    slot_ids = {int(order.SlotId) for order in orders if order.SlotId}
+    schedules = {
+        schedule.Id: schedule
+        for schedule in db.query(AppSchedule).filter(AppSchedule.Id.in_(slot_ids)).all()
+    } if slot_ids else {}
+
+    order_ids = list(orders_by_id.keys())
+    consultations = (
+        db.query(AppConsultation)
+        .filter(
+            AppConsultation.CounselorId == counselor.Id,
+            AppConsultation.OrderId.in_(order_ids),
+        )
+        .all()
+    )
+    consultation_by_order = {
+        int(row.OrderId): row for row in consultations if row.OrderId
+    }
+
+    items: List[CounselorVisitorOrderOut] = []
+    for order in orders:
+        visitor = visitors.get(order.AccountId)
+        schedule = schedules.get(order.SlotId) if order.SlotId else None
+        consultation = consultation_by_order.get(order.Id)
+        start_time = (
+            schedule.StartTime
+            if schedule
+            else (consultation.StartTime if consultation else None)
+        )
+        end_time = (
+            schedule.EndTime
+            if schedule
+            else (consultation.EndTime if consultation else None)
+        )
+        items.append(
+            CounselorVisitorOrderOut(
+                id=order.Id,
+                visitorName=_patient_display_name(visitor),
+                paidAt=as_china_api_time(order.PaidAt) if order.PaidAt else None,
+                startTime=as_china_api_time(start_time) if start_time else None,
+                endTime=as_china_api_time(end_time) if end_time else None,
+                totalFee=int(order.TotalFee or 0),
+                outTradeNo=order.OutTradeNo,
+                status=order.Status or "PAID",
+            )
+        )
+
+    items.sort(
+        key=lambda item: (
+            (item.paidAt.replace(tzinfo=None) if item.paidAt else datetime.min),
+            (item.startTime.replace(tzinfo=None) if item.startTime else datetime.min),
+            item.id,
+        ),
+        reverse=True,
+    )
+    return items
 
 
 @router.get("/stats", summary="咨询师统计看板")

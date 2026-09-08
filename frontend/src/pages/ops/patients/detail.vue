@@ -151,7 +151,7 @@
     <view v-if="showBindModal" class="overlay" @touchmove.stop.prevent @tap="closeBindCounselor">
       <view class="modal-card bind-modal" @tap.stop>
         <text class="modal-title">选择签约咨询师</text>
-        <text class="modal-sub">更换绑定后签约状态将变为「否」，须由咨询助理推送预约订单并选择《同心理咨询协议》《“扬帆计划”协议》或《启航咨询协议》，来访支付签署后恢复已签约</text>
+        <text class="modal-sub">更换绑定前须确保来访与原咨询师之间没有未进行咨询的预约单。更换后签约状态将变为「否」，须由咨询助理推送预约订单并选择《同心理咨询协议》《“扬帆计划”协议》或《启航咨询协议》，来访支付签署后恢复已签约</text>
         <input
           v-model="counselorKeyword"
           class="bind-search"

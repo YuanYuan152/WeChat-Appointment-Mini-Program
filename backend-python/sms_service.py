@@ -14,7 +14,7 @@ from app_time import china_now
 from config import settings
 from models import AppSmsVerification
 
-PHONE_PATTERN = re.compile(r"^1[3-9]\d{9}$")
+PHONE_PATTERN = re.compile(r"^1\d{10}$")
 logger = logging.getLogger(__name__)
 
 

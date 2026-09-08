@@ -472,6 +472,84 @@ def patient_display_name(
     return name
 
 
+_ACTIVE_CONSULTATION_STATUSES = ("PENDING", "CONFIRMED", "ONGOING")
+_TERMINAL_CONSULTATION_STATUSES = ("DONE", "CANCELLED", "CANCELED")
+REBIND_BLOCKED_BY_UNFINISHED_APPOINTMENT = (
+    "来访与原绑定咨询师之间仍有未进行咨询的预约单，请先完成咨询、改约、取消或退款后再更换绑定"
+)
+
+
+def patient_has_unfinished_appointments_with_counselor(
+    db: Session,
+    patient_id: int,
+    counselor_id: int,
+) -> bool:
+    """来访与指定咨询师之间是否仍有未进行咨询的预约单。"""
+    patient_id = int(patient_id)
+    counselor_id = int(counselor_id)
+
+    active_consultation = (
+        db.query(AppConsultation.Id)
+        .filter(
+            AppConsultation.PatientId == patient_id,
+            AppConsultation.CounselorId == counselor_id,
+            AppConsultation.Status.in_(_ACTIVE_CONSULTATION_STATUSES),
+        )
+        .first()
+    )
+    if active_consultation:
+        return True
+
+    open_orders = (
+        db.query(AppOrder)
+        .join(AppSchedule, AppSchedule.Id == AppOrder.SlotId)
+        .filter(
+            AppOrder.AccountId == patient_id,
+            AppSchedule.CounselorId == counselor_id,
+            AppOrder.Status.in_(("PENDING", "PAID")),
+        )
+        .all()
+    )
+    if not open_orders:
+        return False
+
+    order_ids = [int(order.Id) for order in open_orders]
+    consultations = (
+        db.query(AppConsultation)
+        .filter(
+            AppConsultation.OrderId.in_(order_ids),
+            AppConsultation.PatientId == patient_id,
+            AppConsultation.CounselorId == counselor_id,
+        )
+        .all()
+    )
+    consultation_by_order = {
+        int(row.OrderId): row for row in consultations if row.OrderId is not None
+    }
+
+    for order in open_orders:
+        if order.Status == "PENDING":
+            return True
+        consultation = consultation_by_order.get(int(order.Id))
+        if consultation is None:
+            return True
+        if consultation.Status not in _TERMINAL_CONSULTATION_STATUSES:
+            return True
+    return False
+
+
+def assert_patient_can_rebind_counselor(
+    db: Session,
+    patient_id: int,
+    previous_counselor_id: int,
+) -> None:
+    """换绑/解绑前：与原咨询师不得仍有未进行咨询的预约单。"""
+    if patient_has_unfinished_appointments_with_counselor(
+        db, patient_id, previous_counselor_id
+    ):
+        raise ValueError(REBIND_BLOCKED_BY_UNFINISHED_APPOINTMENT)
+
+
 def bind_patient_counselor(
     db: Session,
     patient_id: int,
@@ -513,6 +591,9 @@ def bind_patient_counselor(
     old_value = getattr(patient, "BoundCounselorId", None)
     old_id = int(old_value) if old_value else None
     if old_id != new_id:
+        if old_id is not None:
+            assert_patient_can_rebind_counselor(db, patient_id, old_id)
+
         from proxy_booking_service import cancel_pending_proxy_orders_for_patient
 
         cancel_pending_proxy_orders_for_patient(

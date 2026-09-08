@@ -694,7 +694,7 @@ function BindCounselorModal({
         <div className="border-b border-[var(--lxxl-border)] px-6 py-5">
           <h3 className="text-lg font-semibold">选择绑定咨询师</h3>
           <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">
-            绑定咨询师用于限定代理预约对象。首次绑定、更换或解除绑定都会将签约状态重置为未签约；来访完成协议并支付当前绑定咨询师的订单后，才会变为已签约。
+            绑定咨询师用于限定代理预约对象。更换或解除绑定前，须确保来访与原咨询师之间没有未进行咨询的预约单。首次绑定、更换或解除绑定都会将签约状态重置为未签约；来访完成协议并支付当前绑定咨询师的订单后，才会变为已签约。
           </p>
           {prompt && <p className="mt-2 text-sm font-medium text-[#A46A22]">{prompt}</p>}
         </div>
@@ -761,7 +761,7 @@ function BindCounselorModal({
                   : `确认更换为${selectedCounselor?.name || "所选咨询师"}？`}
               </p>
               <p className="mt-1 text-xs leading-5 text-[#8A6438]">
-                换绑或解绑可能取消与原绑定咨询师关联的待支付代理订单，此操作完成后请核对来访的订单与预约记录。
+                换绑或解绑前，须确保来访与原绑定咨询师之间没有未进行咨询的预约单；若仍有待支付、已支付未咨询或进行中的预约，请先完成咨询、改约、取消或退款。
               </p>
               <div className="mt-3 flex flex-wrap gap-3">
                 <QueryButton

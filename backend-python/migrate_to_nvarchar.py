@@ -107,10 +107,11 @@ TARGETS: List[Tuple[str, str, str]] = [
     ("AppCounselorProfile", "Name", "NVARCHAR(100)"),
     ("AppCounselorProfile", "Title", "NVARCHAR(100)"),
     ("AppCounselorProfile", "Specialty", "NVARCHAR(MAX)"),
-    ("AppCounselorProfile", "Field", "NVARCHAR(200)"),
+    ("AppCounselorProfile", "Field", "NVARCHAR(MAX)"),
     ("AppCounselorProfile", "Introduce", "NVARCHAR(MAX)"),
     ("AppCounselorProfile", "Career", "NVARCHAR(MAX)"),
     ("AppCounselorProfile", "Qualification", "NVARCHAR(MAX)"),
+    ("AppCounselorProfile", "TargetGroup", "NVARCHAR(MAX)"),
 
     # AppContactRecord
     ("AppContactRecord", "Content", "NVARCHAR(MAX)"),

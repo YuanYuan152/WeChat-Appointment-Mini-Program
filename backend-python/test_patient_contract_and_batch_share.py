@@ -212,6 +212,15 @@ class PatientContractTests(BackendServiceTestCase):
         self.assertTrue(self.patient.IsContractSigned)
         self.assertEqual(self.patient.BoundCounselorChangedAt, first_changed_at)
 
+        # 仍有与原咨询师的待支付预约时，不允许换绑。
+        with self.assertRaisesRegex(ValueError, "未进行咨询的预约单"):
+            bind_patient_counselor(self.db, self.patient.Id, 20)
+        self.assertEqual(self.patient.BoundCounselorId, 10)
+        self.assertTrue(self.patient.IsContractSigned)
+
+        pending_order.Status = "CANCELLED"
+        self.db.flush()
+
         # Historical payment to counselor B cannot carry the signed state across.
         bind_patient_counselor(self.db, self.patient.Id, 20)
         self.assertEqual(self.patient.BoundCounselorId, 20)
@@ -223,6 +232,23 @@ class PatientContractTests(BackendServiceTestCase):
         self.assertFalse(pricing_row["isContractSigned"])
         self.assertEqual(pricing_row["boundCounselorName"], "咨询师乙")
         self.assertIsNone(pricing_row["contractTag"])
+
+        # 历史已支付但未完成咨询的预约仍阻止解绑；完成后才可解除绑定。
+        with self.assertRaisesRegex(ValueError, "未进行咨询的预约单"):
+            bind_patient_counselor(self.db, self.patient.Id, None)
+        self.db.add(
+            AppConsultation(
+                Id=9001,
+                OrderId=2,
+                PatientId=self.patient.Id,
+                CounselorId=20,
+                ScheduleId=102,
+                Status="DONE",
+                StartTime=datetime(2026, 1, 2, 9, 0),
+                EndTime=datetime(2026, 1, 2, 10, 0),
+            )
+        )
+        self.db.flush()
 
         bind_patient_counselor(self.db, self.patient.Id, None)
         self.assertIsNone(self.patient.BoundCounselorId)
@@ -251,6 +277,38 @@ class PatientContractTests(BackendServiceTestCase):
             self.patient.BoundCounselorChangedAt,
             datetime(2026, 1, 1, 8, 0),
         )
+
+    def test_rebind_blocked_by_unfinished_appointments_with_previous_counselor(self):
+        self.patient.BoundCounselorId = 10
+        self.patient.IsContractSigned = True
+        self.patient.BoundCounselorChangedAt = datetime(2026, 1, 1, 8, 0)
+        self.add_order(30, 101, "PAID", paid_at=datetime(2026, 1, 1, 9, 0))
+        self.db.add(
+            AppConsultation(
+                Id=9010,
+                OrderId=30,
+                PatientId=self.patient.Id,
+                CounselorId=10,
+                ScheduleId=101,
+                Status="CONFIRMED",
+                StartTime=datetime(2026, 1, 1, 9, 0),
+                EndTime=datetime(2026, 1, 1, 10, 0),
+            )
+        )
+        self.db.flush()
+
+        with self.assertRaisesRegex(ValueError, "未进行咨询的预约单"):
+            bind_patient_counselor(self.db, self.patient.Id, 20)
+        self.assertEqual(self.patient.BoundCounselorId, 10)
+        self.assertTrue(self.patient.IsContractSigned)
+
+        consultation = self.db.query(AppConsultation).filter(AppConsultation.Id == 9010).one()
+        consultation.Status = "DONE"
+        self.db.flush()
+
+        bind_patient_counselor(self.db, self.patient.Id, 20)
+        self.assertEqual(self.patient.BoundCounselorId, 20)
+        self.assertFalse(self.patient.IsContractSigned)
 
     def test_binding_change_cancels_mismatched_pending_proxy_orders(self):
         schedule_10 = self.db.query(AppSchedule).filter(AppSchedule.Id == 101).one()
@@ -621,6 +679,12 @@ class PatientContractTests(BackendServiceTestCase):
         self.assertEqual(len(pending_messages), 1)
         self.assertEqual(pending_messages[0].AccountId, 10)
         self.assertEqual(pending_messages[0].Title, "代理预约待支付")
+        created_payload = json.loads(pending_messages[0].Content)
+        self.assertEqual(
+            created_payload["detail"]["patientContractTag"],
+            "已签约-【咨询师甲】",
+        )
+        self.assertIn("已签约-【咨询师甲】", created_payload["summary"])
 
         pending_messages[0].Id = 9001
         self.db.flush()
@@ -641,6 +705,63 @@ class PatientContractTests(BackendServiceTestCase):
             .all()
         )
         self.assertEqual(len(persisted), 1)
+
+    def test_proxy_message_keeps_contract_snapshot_after_rebind_and_resign(self):
+        """创建时写入签约快照；换绑/重新签约后 enrich 不得改写历史标签。"""
+        from message_enrich import enrich_message
+
+        self.patient.BoundCounselorId = 10
+        self.patient.IsContractSigned = True
+        self.patient.BoundCounselorChangedAt = datetime(2026, 1, 1, 8, 0)
+        schedule = self.db.query(AppSchedule).filter(AppSchedule.Id == 101).one()
+        schedule.Note = "center:video"
+        self.add_order(19, schedule.Id, "PENDING")
+        order = self.db.query(AppOrder).filter(AppOrder.Id == 19).one()
+
+        notify_counselor_proxy_order_pending(
+            self.db,
+            counselor_id=10,
+            schedule=schedule,
+            patient_id=self.patient.Id,
+            order=order,
+        )
+        message = next(
+            row
+            for row in self.db.new
+            if isinstance(row, AppMessage)
+            and row.RelatedType == "COUNSELOR_PROXY_ORDER_PENDING"
+            and row.RelatedId == order.Id
+        )
+        message.Id = 9002
+        self.db.flush()
+        original_tag = json.loads(message.Content)["detail"]["patientContractTag"]
+        self.assertEqual(original_tag, "已签约-【咨询师甲】")
+
+        # 先完成与原咨询师的未咨询预约，再换绑并重新签约咨询师乙。
+        order.Status = "CANCELLED"
+        self.db.flush()
+        bind_patient_counselor(self.db, self.patient.Id, 20)
+        self.patient.IsContractSigned = True
+        self.db.flush()
+        self.assertEqual(self.patient.BoundCounselorId, 20)
+
+        order.Status = "PAID"
+        enriched = enrich_message(message, self.db)
+        payload = json.loads(enriched.Content)
+        self.assertEqual(enriched.Title, "代理预约已支付")
+        self.assertEqual(payload["detail"]["status"], "PAID")
+        self.assertEqual(payload["detail"]["patientContractTag"], original_tag)
+        self.assertIn(original_tag, payload["summary"])
+        self.assertNotIn("咨询师乙", payload["detail"].get("patientContractTag") or "")
+
+        bind_patient_counselor(self.db, self.patient.Id, None)
+        self.db.flush()
+        unbound = enrich_message(message, self.db)
+        unbound_payload = json.loads(unbound.Content)
+        self.assertEqual(
+            unbound_payload["detail"]["patientContractTag"],
+            original_tag,
+        )
 
     def test_backfill_only_promotes_payments_after_current_binding(self):
         matching = AppAccount(

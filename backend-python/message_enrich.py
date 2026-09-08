@@ -224,6 +224,8 @@ def _sync_leave_payload(
     payload = _parse_content(content)
     raw_detail = payload.get("detail")
     detail = dict(raw_detail) if isinstance(raw_detail, dict) else {}
+    # 请假状态可更新，但不得改写创建时写入的来访签约标签快照。
+    contract_tag_snapshot = _snapshot_contract_tag(detail)
     detail.update(
         {
             "status": status,
@@ -282,6 +284,7 @@ def _sync_leave_payload(
         detail.pop("rejectReason", None)
         status_text = "待审核"
 
+    detail["patientContractTag"] = contract_tag_snapshot
     payload["summary"] = _leave_summary(detail, status_text)
     payload["detail"] = detail
     return title, _dump_content(payload)
@@ -337,13 +340,24 @@ def _message_datetime(value: Any) -> Optional[str]:
     return text or None
 
 
+def _snapshot_contract_tag(detail: Dict[str, Any]) -> Optional[str]:
+    """消息详情中的签约标签快照；空串视为未写入。"""
+    raw = detail.get("patientContractTag")
+    if raw is None and "contractTag" in detail:
+        raw = detail.get("contractTag")
+    if not isinstance(raw, str):
+        return None
+    text = raw.strip()
+    return text or None
+
+
 def _sync_counselor_proxy_order_payload(
     title: str,
     content: Optional[str],
     order: AppOrder,
     db: Session,
 ) -> tuple[str, str]:
-    """代理预约通知使用订单和当前绑定关系，而不是创建时的状态快照。"""
+    """代理预约通知：订单状态可实时更新，签约标签保留创建时快照。"""
     payload = _parse_content(content)
     raw_detail = payload.get("detail")
     detail = dict(raw_detail) if isinstance(raw_detail, dict) else {}
@@ -358,15 +372,17 @@ def _sync_counselor_proxy_order_payload(
         else None
     )
 
-    from patient_contract_service import patient_contract_extras
-
-    contract = patient_contract_extras(db, patient)
-    patient_name = (
-        (patient.RealName or patient.Nickname or patient.Mobile or "来访者").strip()
-        if patient
-        else str(detail.get("patientName") or "来访者").strip()
-    )
-    patient_tag = contract.get("contractTag")
+    snapshot_name = detail.get("patientName")
+    if isinstance(snapshot_name, str) and snapshot_name.strip():
+        patient_name = snapshot_name.strip()
+    elif patient:
+        patient_name = (
+            patient.RealName or patient.Nickname or patient.Mobile or "来访者"
+        ).strip()
+    else:
+        patient_name = "来访者"
+    # 签约标签必须以消息创建时写入的快照为准，不可随换绑实时变化。
+    patient_tag = _snapshot_contract_tag(detail)
 
     status = (order.Status or "PENDING").upper()
     if status == "PENDING" and order.ExpiresAt and order.ExpiresAt < china_now():
