@@ -147,6 +147,7 @@ class ActivityCreate(BaseModel):
     title: str
     content: Optional[str] = None
     cover_url: Optional[str] = None
+    link_url: Optional[str] = None
     is_active: Optional[bool] = True
     start_at: Optional[datetime] = None
     end_at: Optional[datetime] = None
@@ -158,6 +159,7 @@ class ActivityUpdate(BaseModel):
     title: Optional[str] = None
     content: Optional[str] = None
     cover_url: Optional[str] = None
+    link_url: Optional[str] = None
     is_active: Optional[bool] = None
     start_at: Optional[datetime] = None
     end_at: Optional[datetime] = None
@@ -170,6 +172,7 @@ class ActivityOut(BaseModel):
     Title: str
     Content: Optional[str] = None
     CoverUrl: Optional[str] = None
+    LinkUrl: Optional[str] = None
     IsActive: bool
     StartAt: Optional[datetime] = None
     EndAt: Optional[datetime] = None
@@ -473,12 +476,18 @@ def list_activities_public(
     now = datetime.utcnow()
     q = db.query(AppActivity).filter(AppActivity.IsActive == True)
     if type and type.upper() != "ALL":
-        q = q.filter(AppActivity.Type == type)
+        q = q.filter(AppActivity.Type == type.upper())
     rows = q.order_by(AppActivity.SortOrder.asc(), AppActivity.CreatedAt.desc()).all()
-    return [
-        r for r in rows
-        if (r.StartAt is None or r.StartAt <= now) and (r.EndAt is None or r.EndAt >= now)
-    ]
+    return [r for r in rows if _activity_is_publicly_visible(r, now)]
+
+
+def _activity_is_publicly_visible(row: AppActivity, now: datetime) -> bool:
+    """活动/公告公开可见性。直播预告允许尚未到开播时间。"""
+    if row.EndAt is not None and row.EndAt < now:
+        return False
+    if (row.Type or "").upper() == "LIVE":
+        return True
+    return row.StartAt is None or row.StartAt <= now
 
 
 @router.get("/activities/manage", response_model=List[ActivityOut], summary="活动/公告管理列表（含停用）")
@@ -504,10 +513,11 @@ def create_activity(
     db: Session = Depends(get_db),
 ):
     activity = AppActivity(
-        Type=body.type or "NOTICE",
+        Type=(body.type or "NOTICE").upper(),
         Title=body.title,
         Content=body.content,
         CoverUrl=body.cover_url,
+        LinkUrl=(body.link_url or "").strip() or None,
         IsActive=body.is_active if body.is_active is not None else True,
         StartAt=body.start_at,
         EndAt=body.end_at,
@@ -535,11 +545,16 @@ def update_activity(
         raise HTTPException(status_code=404, detail="活动不存在")
     mapping = {
         "type": "Type", "title": "Title", "content": "Content", "cover_url": "CoverUrl",
+        "link_url": "LinkUrl",
         "is_active": "IsActive", "start_at": "StartAt", "end_at": "EndAt", "sort_order": "SortOrder",
     }
     for src, dst in mapping.items():
         val = getattr(body, src, None)
         if val is not None:
+            if src == "type" and isinstance(val, str):
+                val = val.upper()
+            if src == "link_url" and isinstance(val, str):
+                val = val.strip() or None
             setattr(activity, dst, val)
     activity.UpdatedAt = datetime.utcnow()
     db.commit()

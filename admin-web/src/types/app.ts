@@ -147,6 +147,7 @@ export interface PaginationParams {
 export type ContentKind =
   | "banner"
   | "activity"
+  | "live"
   | "home_cover"
   | "brand"
   | "consultation_guide"
@@ -162,6 +163,7 @@ export interface ContentDraft {
   imageUrl: string;
   assistantQrcodeUrl: string;
   coverImageUrl: string;
+  liveUrl: string;
   coverCrop: {
     x: number;
     y: number;

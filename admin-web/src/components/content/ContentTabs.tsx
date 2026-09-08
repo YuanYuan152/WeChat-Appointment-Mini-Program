@@ -4,6 +4,7 @@ export const CONTENT_TABS: Array<{ kind: ContentKind; label: string }> = [
   { kind: "home_cover", label: "首页封面" },
   { kind: "banner", label: "Banner" },
   { kind: "activity", label: "活动公告" },
+  { kind: "live", label: "直播预告" },
   { kind: "brand", label: "品牌介绍" },
   { kind: "consultation_guide", label: "关于咨询" },
   { kind: "charity", label: "公益咨询" },

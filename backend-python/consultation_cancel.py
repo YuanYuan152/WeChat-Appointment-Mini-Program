@@ -111,14 +111,37 @@ def cancel_consultation_for_visitor(
 
     cancel_consultation_auto_done_tasks(db, consultation.Id)
 
+    # 关闭关联已支付订单：优先 OrderId，同时兜底同排期同来访的 PAID 单，
+    # 避免缺 OrderId 时不退款取消后仍留下 PAID 单阻断换绑/解绑。
+    paid_orders = []
+    seen_order_ids: set[int] = set()
     if consultation.OrderId:
         order = db.query(AppOrder).filter(AppOrder.Id == consultation.OrderId).first()
         if order and order.Status == "PAID":
-            if refund:
-                _refund_paid_order(order, reason="用户取消预约退款")
-            else:
-                order.Status = "CANCELLED"
-                order.UpdatedAt = datetime.utcnow()
+            paid_orders.append(order)
+            seen_order_ids.add(int(order.Id))
+    if consultation.ScheduleId:
+        for order in (
+            db.query(AppOrder)
+            .filter(
+                AppOrder.SlotId == consultation.ScheduleId,
+                AppOrder.AccountId == consultation.PatientId,
+                AppOrder.Status == "PAID",
+            )
+            .all()
+        ):
+            if int(order.Id) in seen_order_ids:
+                continue
+            paid_orders.append(order)
+            seen_order_ids.add(int(order.Id))
+
+    for order in paid_orders:
+        if refund:
+            _refund_paid_order(order, reason="用户取消预约退款")
+        else:
+            # 不退款：预约取消但款项不退；本地关单避免仍被当成未完成预约
+            order.Status = "CANCELLED"
+            order.UpdatedAt = datetime.utcnow()
 
     if consultation.ScheduleId:
         schedule = db.query(AppSchedule).filter(AppSchedule.Id == consultation.ScheduleId).first()

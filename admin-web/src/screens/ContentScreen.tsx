@@ -26,6 +26,7 @@ function emptyDraft(kind: ContentKind): ContentDraft {
     imageUrl: "",
     assistantQrcodeUrl: "",
     coverImageUrl: "",
+    liveUrl: "",
     coverCrop: { x: 0, y: 0, width: 1, height: 1 },
   };
 }

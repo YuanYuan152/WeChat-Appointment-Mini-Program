@@ -21,15 +21,42 @@ function buildSiteSectionPayload(kind: "brand" | "charity" | "contact", draft: C
   };
 }
 
+function activityTypeForKind(kind: ContentKind) {
+  return kind === "live" ? "LIVE" : "NOTICE";
+}
+
+function buildActivityPayload(draft: ContentDraft) {
+  if (!draft.title.trim()) {
+    throw new Error("请输入标题");
+  }
+  const content = (draft.summary || draft.body || "").trim();
+  const coverUrl = draft.imageUrl.trim();
+  if (draft.kind === "live" && !content && !coverUrl) {
+    throw new Error("请填写文字内容或上传封面图片");
+  }
+  return {
+    title: draft.title.trim(),
+    content: content || undefined,
+    cover_url: coverUrl || undefined,
+    link_url: draft.kind === "live" ? draft.liveUrl.trim() : undefined,
+    type: activityTypeForKind(draft.kind),
+    is_active: true,
+  };
+}
+
 export async function fetchContentData(kind: ContentKind, _articlePagination: PaginationParams) {
   if (kind === "banner") {
     const banners = await apiRequest<Banner[]>("/api/mini/ops/banners/manage");
     return { banners };
   }
 
-  if (kind === "activity") {
+  if (kind === "activity" || kind === "live") {
     const activities = await apiRequest<Activity[]>("/api/mini/ops/activities/manage");
-    return { activities };
+    const filtered =
+      kind === "live"
+        ? activities.filter((item) => (item.Type || "").toUpperCase() === "LIVE")
+        : activities.filter((item) => (item.Type || "").toUpperCase() !== "LIVE");
+    return { activities: filtered };
   }
 
   if (kind === "brand" || kind === "charity" || kind === "contact" || kind === "home_cover") {
@@ -61,19 +88,10 @@ export function createContent(draft: ContentDraft) {
     });
   }
 
-  if (draft.kind === "activity") {
-    if (!draft.title.trim()) {
-      throw new Error("请输入标题");
-    }
+  if (draft.kind === "activity" || draft.kind === "live") {
     return apiRequest("/api/mini/ops/activities", {
       method: "POST",
-      body: JSON.stringify({
-        title: draft.title,
-        content: draft.summary || draft.body,
-        cover_url: draft.imageUrl || undefined,
-        type: "NOTICE",
-        is_active: true,
-      }),
+      body: JSON.stringify(buildActivityPayload(draft)),
     });
   }
 
@@ -140,19 +158,10 @@ export function updateContent(kind: ContentKind, id: number, draft: ContentDraft
     });
   }
 
-  if (kind === "activity") {
-    if (!draft.title.trim()) {
-      throw new Error("请输入标题");
-    }
+  if (kind === "activity" || kind === "live") {
     return apiRequest(`/api/mini/ops/activities/${id}`, {
       method: "PUT",
-      body: JSON.stringify({
-        title: draft.title,
-        content: draft.summary || draft.body,
-        cover_url: draft.imageUrl || undefined,
-        type: "NOTICE",
-        is_active: true,
-      }),
+      body: JSON.stringify(buildActivityPayload({ ...draft, kind })),
     });
   }
 
@@ -205,7 +214,7 @@ export function deleteContent(kind: ContentKind, id: number) {
   if (kind === "banner") {
     return apiRequest(`/api/mini/ops/banners/${id}`, { method: "DELETE" });
   }
-  if (kind === "activity") {
+  if (kind === "activity" || kind === "live") {
     return apiRequest(`/api/mini/ops/activities/${id}`, { method: "DELETE" });
   }
   if (kind === "consultation_guide") {

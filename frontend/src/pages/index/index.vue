@@ -169,8 +169,8 @@
               <text class="act-title">{{ live.title }}</text>
               <text class="act-desc">{{ live.description }}</text>
               <view class="act-foot">
-                <text class="act-time">{{ live.time || '即将开始' }}</text>
-                <view class="act-btn outline" @tap.stop="handleJoinLive(live)">预约直播</view>
+                <text class="act-time">{{ live.link ? '点击进入直播' : (live.time || '敬请期待') }}</text>
+                <view class="act-btn outline" @tap.stop="handleJoinLive(live)">{{ live.link ? '进入直播' : '预约直播' }}</view>
               </view>
             </view>
           </view>
@@ -498,14 +498,30 @@ const handleJoinActivity = (activity: Activity) => {
 
 // 直播点击
 const handleLiveClick = (live: LiveStream) => {
-  // TODO: 处理直播点击
-  console.log('直播点击:', live)
+  openLiveLink(live)
 }
 
 // 加入直播
 const handleJoinLive = (live: LiveStream) => {
-  // TODO: 处理加入直播
-  console.log('加入直播:', live)
+  openLiveLink(live)
+}
+
+const openLiveLink = (live: LiveStream) => {
+  const link = (live.link || '').trim()
+  if (!link) {
+    uni.showToast({ title: '暂未配置直播链接', icon: 'none' })
+    return
+  }
+  const url = `/pages/test/webview?url=${encodeURIComponent(link)}&title=${encodeURIComponent(live.title || '直播')}`
+  uni.navigateTo({
+    url,
+    fail: () => {
+      uni.setClipboardData({
+        data: link,
+        success: () => uni.showToast({ title: '链接已复制', icon: 'none' }),
+      })
+    },
+  })
 }
 
 // tabBar 页面必须用 switchTab，不能用 navigateTo（否则 H5/小程序点击无反应）

@@ -310,6 +310,99 @@ class PatientContractTests(BackendServiceTestCase):
         self.assertEqual(self.patient.BoundCounselorId, 20)
         self.assertFalse(self.patient.IsContractSigned)
 
+    def test_rebind_allowed_after_no_refund_cancel(self):
+        """不退款取消后视为已结束，允许更换咨询师。"""
+        self.patient.BoundCounselorId = 10
+        self.patient.IsContractSigned = True
+        self.patient.BoundCounselorChangedAt = datetime(2026, 1, 1, 8, 0)
+        schedule = self.db.query(AppSchedule).filter(AppSchedule.Id == 101).one()
+        schedule.Status = "BOOKED"
+        schedule.StartTime = datetime(2099, 6, 1, 9, 0)
+        schedule.EndTime = datetime(2099, 6, 1, 10, 0)
+        self.add_order(40, 101, "PAID", paid_at=datetime(2026, 1, 1, 9, 0))
+        order = self.db.query(AppOrder).filter(AppOrder.Id == 40).one()
+        consultation = AppConsultation(
+            Id=9020,
+            OrderId=order.Id,
+            PatientId=self.patient.Id,
+            CounselorId=10,
+            ScheduleId=101,
+            Status="CONFIRMED",
+            StartTime=schedule.StartTime,
+            EndTime=schedule.EndTime,
+        )
+        self.db.add(consultation)
+        self.db.flush()
+
+        from consultation_cancel import cancel_consultation_for_visitor
+
+        refunded, _ = cancel_consultation_for_visitor(
+            self.db, consultation, patient_id=self.patient.Id
+        )
+        self.assertFalse(refunded)
+        self.assertEqual(consultation.Status, "CANCELLED")
+        self.assertEqual(order.Status, "CANCELLED")
+
+        bind_patient_counselor(self.db, self.patient.Id, 20)
+        self.assertEqual(self.patient.BoundCounselorId, 20)
+        self.assertFalse(self.patient.IsContractSigned)
+
+    def test_rebind_allowed_when_paid_order_linked_only_by_schedule_after_cancel(self):
+        """咨询单缺 OrderId、仅靠排期关联时，不退款取消后也应可换绑。"""
+        self.patient.BoundCounselorId = 10
+        self.patient.IsContractSigned = True
+        self.patient.BoundCounselorChangedAt = datetime(2026, 1, 1, 8, 0)
+        schedule = self.db.query(AppSchedule).filter(AppSchedule.Id == 101).one()
+        schedule.Status = "BOOKED"
+        schedule.StartTime = datetime(2099, 6, 2, 9, 0)
+        schedule.EndTime = datetime(2099, 6, 2, 10, 0)
+        self.add_order(41, 101, "PAID", paid_at=datetime(2026, 1, 1, 9, 0))
+        order = self.db.query(AppOrder).filter(AppOrder.Id == 41).one()
+        consultation = AppConsultation(
+            Id=9021,
+            OrderId=None,
+            PatientId=self.patient.Id,
+            CounselorId=10,
+            ScheduleId=101,
+            Status="CONFIRMED",
+            StartTime=schedule.StartTime,
+            EndTime=schedule.EndTime,
+        )
+        self.db.add(consultation)
+        self.db.flush()
+
+        from consultation_cancel import cancel_consultation_for_visitor
+
+        cancel_consultation_for_visitor(self.db, consultation, patient_id=self.patient.Id)
+        self.assertEqual(consultation.Status, "CANCELLED")
+        self.assertEqual(order.Status, "CANCELLED")
+
+        bind_patient_counselor(self.db, self.patient.Id, None)
+        self.assertIsNone(self.patient.BoundCounselorId)
+
+    def test_rebind_allowed_for_paid_order_with_cancelled_consultation_on_schedule(self):
+        """历史数据：订单仍为 PAID、咨询已取消时，应按已结束预约允许换绑。"""
+        self.patient.BoundCounselorId = 10
+        self.patient.IsContractSigned = True
+        self.patient.BoundCounselorChangedAt = datetime(2026, 1, 1, 8, 0)
+        self.add_order(42, 101, "PAID", paid_at=datetime(2026, 1, 1, 9, 0))
+        self.db.add(
+            AppConsultation(
+                Id=9022,
+                OrderId=None,
+                PatientId=self.patient.Id,
+                CounselorId=10,
+                ScheduleId=101,
+                Status="CANCELLED",
+                StartTime=datetime(2026, 1, 1, 9, 0),
+                EndTime=datetime(2026, 1, 1, 10, 0),
+            )
+        )
+        self.db.flush()
+
+        bind_patient_counselor(self.db, self.patient.Id, 20)
+        self.assertEqual(self.patient.BoundCounselorId, 20)
+
     def test_binding_change_cancels_mismatched_pending_proxy_orders(self):
         schedule_10 = self.db.query(AppSchedule).filter(AppSchedule.Id == 101).one()
         schedule_20 = self.db.query(AppSchedule).filter(AppSchedule.Id == 102).one()

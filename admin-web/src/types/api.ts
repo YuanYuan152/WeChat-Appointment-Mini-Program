@@ -294,6 +294,7 @@ export interface Activity {
   Title: string;
   Content?: string | null;
   CoverUrl?: string | null;
+  LinkUrl?: string | null;
   IsActive: boolean;
   StartAt?: string | null;
   EndAt?: string | null;

@@ -15,6 +15,8 @@ export interface ContentListItem {
   imageUrl?: string | null;
   assistantQrcodeUrl?: string | null;
   coverImageUrl?: string | null;
+  startAt?: string | null;
+  liveUrl?: string | null;
   coverCrop?: {
     x: number;
     y: number;

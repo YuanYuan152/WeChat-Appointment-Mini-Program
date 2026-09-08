@@ -425,6 +425,28 @@ def ensure_app_site_page_columns():
             print(f"[OK] Added AppSitePage.{name}")
 
 
+APP_ACTIVITY_COLUMNS = {
+    "LinkUrl": "NVARCHAR(500) NULL",
+}
+
+
+def ensure_app_activity_columns():
+    inspector = inspect(engine)
+    if not inspector.has_table("AppActivity"):
+        return
+
+    existing = {column["name"] for column in inspector.get_columns("AppActivity")}
+    missing = [(name, ddl) for name, ddl in APP_ACTIVITY_COLUMNS.items() if name not in existing]
+    if not missing:
+        print("[OK] AppActivity columns already complete")
+        return
+
+    with engine.begin() as conn:
+        for name, ddl in missing:
+            conn.execute(text(f"ALTER TABLE [dbo].[AppActivity] ADD [{name}] {ddl}"))
+            print(f"[OK] Added AppActivity.{name}")
+
+
 def print_summary():
     inspector = inspect(engine)
     tables = [name for name in inspector.get_table_names() if name.startswith("App")]
@@ -451,6 +473,7 @@ def main():
     ensure_counselor_profile_columns()
     ensure_counselor_patient_pricing_columns()
     ensure_app_site_page_columns()
+    ensure_app_activity_columns()
     from database import SessionLocal
     from charity_milestone_service import backfill_charity_negotiation_state
     db = SessionLocal()

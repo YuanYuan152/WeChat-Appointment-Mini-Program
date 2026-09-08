@@ -135,6 +135,7 @@ export interface LiveStream {
   description: string
   image: string
   time: string
+  link?: string
   status?: string
 }
 

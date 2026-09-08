@@ -40,6 +40,21 @@ const mapActivity = (item: any): Activity => ({
     status: item.IsActive === false || item.isActive === false ? '已结束' : '进行中',
 })
 
+const mapLiveStream = (item: any): LiveStream => {
+    const link = String(item.linkUrl || item.LinkUrl || item.link || '').trim()
+    return {
+        id: Number(item.id || item.Id || 0),
+        title: item.title || item.Title || '直播预告',
+        description: item.summary || item.Content || item.content || '',
+        image: fixImageUrl(item.coverUrl || item.CoverUrl || item.image || '/static/images-opt/huodong11.jpg'),
+        time: link ? '点击进入直播' : '',
+        link: link || undefined,
+        status: '预告',
+    }
+}
+
+const isLiveActivity = (item: any) => String(item?.Type || item?.type || '').toUpperCase() === 'LIVE'
+
 const mapBanner = (item: any): Banner => ({
     id: Number(item.id || item.Id || 0),
     title: item.title || item.Title || '',
@@ -52,17 +67,22 @@ const mapBanner = (item: any): Banner => ({
 export const homeApi = {
     getIndexData: async () => {
         // 单项失败不拖垮整页；真机连不上 V2 时至少能出空列表而不是整页白屏
-        const [bannerRes, doctorRes, activityRes] = await Promise.all([
+        const [bannerRes, doctorRes, activityRes, liveRes] = await Promise.all([
             httpV2.get<any[]>(API_ENDPOINTS.common.banners, undefined, { showError: false }).catch(() => ({ code: -1, data: [] as any[] })),
             httpV2.get<any>(API_ENDPOINTS.common.counselors, { page: 1, page_size: 8 }, { showError: false }).catch(() => ({ code: -1, data: { items: [] } })),
             httpV2.get<any[]>(API_ENDPOINTS.ops.activities, undefined, { showError: false }).catch(() => ({ code: -1, data: [] as any[] })),
+            httpV2.get<any[]>(API_ENDPOINTS.ops.activities, { type: 'LIVE' }, { showError: false }).catch(() => ({ code: -1, data: [] as any[] })),
         ])
+        const activityRows = (activityRes.data || []).filter((item) => !isLiveActivity(item))
+        const liveRows = (liveRes.data || []).length
+            ? liveRes.data || []
+            : (activityRes.data || []).filter(isLiveActivity)
         const data: HomeData = {
             banners: (bannerRes.data || []).map(mapBanner),
             features: [],
             doctors: ((doctorRes.data as any)?.items || []).map(mapDoctor),
-            activities: (activityRes.data || []).map(mapActivity),
-            liveStreams: [],
+            activities: activityRows.map(mapActivity),
+            liveStreams: liveRows.map(mapLiveStream),
         }
         return ok(data)
     },
@@ -79,11 +99,12 @@ export const homeApi = {
 
     getActivities: async () => {
         const res = await httpV2.get<any[]>(API_ENDPOINTS.ops.activities)
-        return ok((res.data || []).map(mapActivity))
+        return ok((res.data || []).filter((item) => !isLiveActivity(item)).map(mapActivity))
     },
 
-    getLiveStreams: () => {
-        return http.get<ApiResponse<LiveStream[]>>(API_ENDPOINTS.HOME.LIVE_STREAMS)
+    getLiveStreams: async () => {
+        const res = await httpV2.get<any[]>(API_ENDPOINTS.ops.activities, { type: 'LIVE' })
+        return ok((res.data || []).map(mapLiveStream))
     }
 }
 
@@ -150,7 +171,9 @@ export const doctorApi = {
 // 活动相关API
 export const activityApi = {
     getList: (params?: { page?: number; pageSize?: number }) => {
-        return httpV2.get<any[]>(API_ENDPOINTS.ops.activities, params).then((res) => ok((res.data || []).map(mapActivity)))
+        return httpV2.get<any[]>(API_ENDPOINTS.ops.activities, params).then((res) =>
+            ok((res.data || []).filter((item) => !isLiveActivity(item)).map(mapActivity)),
+        )
     },
 
     getDetail: (id: string | number) => {
@@ -164,12 +187,16 @@ export const activityApi = {
 
 // 直播相关API
 export const liveApi = {
-    getList: (params?: { page?: number; pageSize?: number }) => {
-        return http.get<ApiResponse<LiveStream[]>>(API_ENDPOINTS.LIVE_STREAMS.LIST, { params })
+    getList: async (_params?: { page?: number; pageSize?: number }) => {
+        const res = await httpV2.get<any[]>(API_ENDPOINTS.ops.activities, { type: 'LIVE' })
+        return ok((res.data || []).map(mapLiveStream))
     },
 
     getDetail: (id: string | number) => {
-        return http.get<ApiResponse<LiveStream>>(API_ENDPOINTS.LIVE_STREAMS.DETAIL.replace(':id', String(id)))
+        return httpV2.get<any[]>(API_ENDPOINTS.ops.activities, { type: 'LIVE' }).then((res) => {
+            const item = (res.data || []).find((row) => Number(row.Id || row.id) === Number(id))
+            return ok(item ? mapLiveStream(item) : (null as any))
+        })
     },
 
     reserve: (id: string | number) => {

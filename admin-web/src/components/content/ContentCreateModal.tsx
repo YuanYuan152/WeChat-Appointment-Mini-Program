@@ -10,7 +10,12 @@ function canSubmitDraft(activeKind: ContentKind, draft: ContentDraft) {
     return draft.title.trim() && draft.imageUrl.trim();
   }
   if (activeKind === "activity") {
-    return draft.title.trim();
+    return Boolean(draft.title.trim());
+  }
+  if (activeKind === "live") {
+    return Boolean(
+      draft.title.trim() && (draft.summary.trim() || draft.body.trim() || draft.imageUrl.trim()),
+    );
   }
   if (activeKind === "home_cover") {
     return draft.coverImageUrl.trim();
@@ -54,18 +59,29 @@ export function ContentCreateModal({
   const showTitleField =
     activeKind === "banner" ||
     activeKind === "activity" ||
+    activeKind === "live" ||
     activeKind === "consultation_guide" ||
     activeKind === "home_cover";
   const titleLabel =
     activeKind === "consultation_guide" ? "主题" : activeKind === "home_cover" ? "品牌标题" : "标题";
-  const bodyLabel = activeKind === "consultation_guide" ? "正文" : activeKind === "home_cover" ? "副标题" : "正文";
+  const bodyLabel =
+    activeKind === "consultation_guide"
+      ? "正文"
+      : activeKind === "home_cover"
+        ? "副标题"
+        : activeKind === "live"
+          ? "预告文字"
+          : "正文";
   const showSubtitleField = isSiteSectionPage;
   const showBodyField =
     activeKind === "activity" ||
+    activeKind === "live" ||
     activeKind === "home_cover" ||
     isSiteSectionPage ||
     activeKind === "consultation_guide";
-  const showImageField = activeKind === "banner" || activeKind === "activity";
+  const showImageField =
+    activeKind === "banner" || activeKind === "activity" || activeKind === "live";
+  const showLiveUrlField = activeKind === "live";
   const showAssistantQrcodeField = activeKind === "contact";
   const showHomeCoverField = activeKind === "home_cover";
 
@@ -90,7 +106,11 @@ export function ContentCreateModal({
         <div className="border-b border-[var(--lxxl-border)] px-6 py-5">
           <h3 className="text-lg font-semibold">{modalTitle}</h3>
           <p className="mt-1 text-sm text-[var(--lxxl-muted)]">
-            {mode === "edit" ? "保存后会同步到小程序前端。" : "保存后会创建并同步到小程序前端。"}
+            {activeKind === "live"
+              ? "保存后会展示在小程序首页「最新动态 → 直播预告」。可填写文字、封面图片与直播链接。"
+              : mode === "edit"
+                ? "保存后会同步到小程序前端。"
+                : "保存后会创建并同步到小程序前端。"}
           </p>
         </div>
 
@@ -103,7 +123,15 @@ export function ContentCreateModal({
               </span>
               <input
                 className="mt-2 h-11 w-full rounded-xl border border-[var(--lxxl-border)] px-3 text-sm outline-none transition focus:border-[var(--lxxl-green)]"
-                placeholder={activeKind === "home_cover" ? "同心理" : activeKind === "consultation_guide" ? "请输入主题" : "请输入标题"}
+                placeholder={
+                  activeKind === "home_cover"
+                    ? "同心理"
+                    : activeKind === "consultation_guide"
+                      ? "请输入主题"
+                      : activeKind === "live"
+                        ? "请输入直播预告标题"
+                        : "请输入标题"
+                }
                 value={draft.title}
                 onChange={(event) => setDraft((prev) => ({ ...prev, title: event.target.value }))}
               />
@@ -141,14 +169,16 @@ export function ContentCreateModal({
                     : "mt-2 min-h-40 w-full resize-y rounded-xl border border-[var(--lxxl-border)] px-3 py-3 text-sm outline-none transition focus:border-[var(--lxxl-green)]"
                 }
                 placeholder={
-                  activeKind === "activity"
-                    ? "请输入活动正文"
-                    : activeKind === "home_cover"
-                      ? "专业.温暖的心理服务平台"
-                      : "请输入正文：段内换行按一次回车；段落之间空一行"
+                  activeKind === "live"
+                    ? "请输入直播预告文字（可与封面图片二选一或同时填写）"
+                    : activeKind === "activity"
+                      ? "请输入活动正文"
+                      : activeKind === "home_cover"
+                        ? "专业.温暖的心理服务平台"
+                        : "请输入正文：段内换行按一次回车；段落之间空一行"
                 }
                 value={
-                  activeKind === "activity"
+                  activeKind === "activity" || activeKind === "live"
                     ? draft.summary
                     : activeKind === "brand" ||
                         activeKind === "charity" ||
@@ -172,6 +202,19 @@ export function ContentCreateModal({
                     setDraft((prev) => ({ ...prev, summary: value }));
                   }
                 }}
+              />
+            </label>
+          )}
+
+          {showLiveUrlField && (
+            <label className="block">
+              <span className="text-sm font-medium">直播链接</span>
+              <input
+                className="mt-2 h-11 w-full rounded-xl border border-[var(--lxxl-border)] px-3 text-sm outline-none transition focus:border-[var(--lxxl-green)]"
+                type="url"
+                placeholder="请输入直播链接，例如 https://..."
+                value={draft.liveUrl}
+                onChange={(event) => setDraft((prev) => ({ ...prev, liveUrl: event.target.value }))}
               />
             </label>
           )}
@@ -200,7 +243,13 @@ export function ContentCreateModal({
 
           {showImageField && (
             <ContentImageUpload
-              label={activeKind === "banner" ? "Banner 图片" : "封面图片"}
+              label={
+                activeKind === "banner"
+                  ? "Banner 图片"
+                  : activeKind === "live"
+                    ? "封面图片（可选）"
+                    : "封面图片"
+              }
               required={activeKind === "banner"}
               value={draft.imageUrl}
               onChange={(url) => setDraft((prev) => ({ ...prev, imageUrl: url }))}

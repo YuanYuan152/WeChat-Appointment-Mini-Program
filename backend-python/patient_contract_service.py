@@ -1,7 +1,7 @@
 """来访者签约状态与绑定咨询师。"""
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from urllib.parse import unquote, urlsplit
 
 from sqlalchemy import or_, text
@@ -129,16 +129,39 @@ def retire_counselor_booking_relationships(
         )
         .first()
     )
-    future_paid_order = (
-        db.query(AppOrder.Id)
+    future_paid_orders = (
+        db.query(AppOrder)
         .join(AppSchedule, AppSchedule.Id == AppOrder.SlotId)
         .filter(
             AppSchedule.CounselorId == counselor_id,
             AppSchedule.EndTime >= business_now,
             AppOrder.Status == "PAID",
         )
-        .first()
+        .all()
     )
+    blocking_paid = False
+    for order in future_paid_orders:
+        related = (
+            db.query(AppConsultation)
+            .filter(
+                or_(
+                    AppConsultation.OrderId == order.Id,
+                    AppConsultation.ScheduleId == order.SlotId,
+                ),
+                AppConsultation.CounselorId == counselor_id,
+            )
+            .all()
+        )
+        if not related:
+            blocking_paid = True
+            break
+        if any(row.Status in _ACTIVE_CONSULTATION_STATUSES for row in related):
+            blocking_paid = True
+            break
+        if all(row.Status in _TERMINAL_CONSULTATION_STATUSES for row in related):
+            continue
+        blocking_paid = True
+        break
     future_consultation = (
         db.query(AppConsultation.Id)
         .filter(
@@ -147,11 +170,11 @@ def retire_counselor_booking_relationships(
                 AppConsultation.EndTime >= business_now,
                 AppConsultation.StartTime >= business_now,
             ),
-            AppConsultation.Status.in_(("PENDING", "CONFIRMED", "ONGOING")),
+            AppConsultation.Status.in_(_ACTIVE_CONSULTATION_STATUSES),
         )
         .first()
     )
-    if future_booked_schedule or future_paid_order or future_consultation:
+    if future_booked_schedule or blocking_paid or future_consultation:
         raise ValueError(
             "该咨询师仍有未完成的预约，请先完成改约、取消及退款处理后再停用或更换角色"
         )
@@ -479,12 +502,54 @@ REBIND_BLOCKED_BY_UNFINISHED_APPOINTMENT = (
 )
 
 
+def _consultations_related_to_order(
+    db: Session,
+    order: AppOrder,
+    *,
+    patient_id: int,
+    counselor_id: int,
+) -> List[AppConsultation]:
+    """按订单号或排期关联咨询单；不退款取消后可能仅排期能对上。"""
+    rows: List[AppConsultation] = []
+    seen: set[int] = set()
+    if order.Id is not None:
+        for row in (
+            db.query(AppConsultation)
+            .filter(
+                AppConsultation.OrderId == int(order.Id),
+                AppConsultation.PatientId == patient_id,
+                AppConsultation.CounselorId == counselor_id,
+            )
+            .all()
+        ):
+            if row.Id not in seen:
+                seen.add(row.Id)
+                rows.append(row)
+    if order.SlotId:
+        for row in (
+            db.query(AppConsultation)
+            .filter(
+                AppConsultation.ScheduleId == int(order.SlotId),
+                AppConsultation.PatientId == patient_id,
+                AppConsultation.CounselorId == counselor_id,
+            )
+            .all()
+        ):
+            if row.Id not in seen:
+                seen.add(row.Id)
+                rows.append(row)
+    return rows
+
+
 def patient_has_unfinished_appointments_with_counselor(
     db: Session,
     patient_id: int,
     counselor_id: int,
 ) -> bool:
-    """来访与指定咨询师之间是否仍有未进行咨询的预约单。"""
+    """来访与指定咨询师之间是否仍有未进行咨询的预约单。
+
+    已取消（含不退款取消）或已完成的咨询单不拦截换绑/解绑。
+    """
     patient_id = int(patient_id)
     counselor_id = int(counselor_id)
 
@@ -513,28 +578,21 @@ def patient_has_unfinished_appointments_with_counselor(
     if not open_orders:
         return False
 
-    order_ids = [int(order.Id) for order in open_orders]
-    consultations = (
-        db.query(AppConsultation)
-        .filter(
-            AppConsultation.OrderId.in_(order_ids),
-            AppConsultation.PatientId == patient_id,
-            AppConsultation.CounselorId == counselor_id,
-        )
-        .all()
-    )
-    consultation_by_order = {
-        int(row.OrderId): row for row in consultations if row.OrderId is not None
-    }
-
     for order in open_orders:
         if order.Status == "PENDING":
             return True
-        consultation = consultation_by_order.get(int(order.Id))
-        if consultation is None:
+        related = _consultations_related_to_order(
+            db, order, patient_id=patient_id, counselor_id=counselor_id
+        )
+        if not related:
+            # 已支付但尚未生成咨询单（支付回调延迟等）仍视为未完成
             return True
-        if consultation.Status not in _TERMINAL_CONSULTATION_STATUSES:
+        if any(row.Status in _ACTIVE_CONSULTATION_STATUSES for row in related):
             return True
+        # 全部为 DONE/CANCELLED（含不退款取消）则不再拦截
+        if all(row.Status in _TERMINAL_CONSULTATION_STATUSES for row in related):
+            continue
+        return True
     return False
 
 

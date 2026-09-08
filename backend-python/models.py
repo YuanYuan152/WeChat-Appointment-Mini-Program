@@ -285,6 +285,7 @@ class AppActivity(Base):
     Title = Column(Unicode(200), nullable=False)
     Content = Column(UnicodeText, nullable=True)
     CoverUrl = Column(String(500), nullable=True)
+    LinkUrl = Column(String(500), nullable=True)
     IsActive = Column(Boolean, nullable=False, default=True)
     StartAt = Column(DateTime, nullable=True)
     EndAt = Column(DateTime, nullable=True)

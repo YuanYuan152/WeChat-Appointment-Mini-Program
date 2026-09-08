@@ -42,7 +42,11 @@ export function ContentPanel({
   const activeItems = getContentItems(data, activeKind);
   const localPageData = getPageItems(activeItems, localPage, localPageSize);
   const visibleItems = localPageData.items;
-  const allowDelete = activeKind === "banner" || activeKind === "activity" || activeKind === "consultation_guide";
+  const allowDelete =
+    activeKind === "banner" ||
+    activeKind === "activity" ||
+    activeKind === "live" ||
+    activeKind === "consultation_guide";
   const hideImageColumn =
     activeKind === "brand" || activeKind === "charity" || activeKind === "consultation_guide";
   const isSiteSectionPage = activeKind === "brand" || activeKind === "charity" || activeKind === "contact";
@@ -70,6 +74,7 @@ export function ContentPanel({
       imageUrl: "",
       assistantQrcodeUrl: "",
       coverImageUrl: "",
+      liveUrl: "",
       coverCrop: { x: 0, y: 0, width: 1, height: 1 },
       pageKey: sitePageKeyForKind(activeKind) || undefined,
     });
@@ -87,6 +92,7 @@ export function ContentPanel({
       imageUrl: target?.imageUrl || "",
       assistantQrcodeUrl: target?.assistantQrcodeUrl || "",
       coverImageUrl: target?.coverImageUrl || "",
+      liveUrl: "",
       coverCrop: target?.coverCrop || { x: 0, y: 0, width: 1, height: 1 },
       pageKey: target?.pageKey || sitePageKeyForKind(activeKind) || undefined,
     });
@@ -110,6 +116,7 @@ export function ContentPanel({
         imageUrl: item.imageUrl || "",
         assistantQrcodeUrl: item.assistantQrcodeUrl || "",
         coverImageUrl: item.coverImageUrl || "",
+        liveUrl: item.liveUrl || "",
         coverCrop: item.coverCrop || { x: 0, y: 0, width: 1, height: 1 },
         pageKey: sitePageKeyForKind(activeKind) || undefined,
       });
@@ -162,6 +169,7 @@ export function ContentPanel({
               imageUrl: item.imageUrl || "",
               assistantQrcodeUrl: item.assistantQrcodeUrl || "",
               coverImageUrl: item.coverImageUrl || "",
+              liveUrl: item.liveUrl || "",
               coverCrop: item.coverCrop || { x: 0, y: 0, width: 1, height: 1 },
               pageKey: item.pageKey,
             });
@@ -211,14 +219,15 @@ function getContentItems(data: ScreenData, kind: ContentKind): ContentListItem[]
     }));
   }
 
-  if (kind === "activity") {
+  if (kind === "activity" || kind === "live") {
     return (data.activities || []).map((item) => ({
       id: item.Id,
       title: item.Title,
-      meta: item.Type,
+      meta: kind === "live" ? (item.LinkUrl ? "已配置链接" : "直播预告") : item.Type,
       date: item.CreatedAt,
       summary: item.Content,
       imageUrl: item.CoverUrl,
+      liveUrl: item.LinkUrl,
     }));
   }
 
