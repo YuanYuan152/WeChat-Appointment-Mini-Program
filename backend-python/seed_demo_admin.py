@@ -26,7 +26,7 @@ ROLE_USERS = [
     ("13800000030", "demo-openid-admin-patient", "纯患者用户", "Patient"),
     ("13800000031", "demo-openid-admin-counselor", "咨询师用户", "Counselor"),
     ("13800000032", "demo-openid-admin-assistant", "助理用户", "Assistant"),
-    ("13800000033", "demo-openid-admin-ops", "运营用户", "Ops"),
+    ("13800000033", "demo-openid-admin-ops", "咨询主任用户", "Ops"),
 ]
 
 

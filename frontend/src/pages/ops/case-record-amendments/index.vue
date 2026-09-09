@@ -249,7 +249,7 @@ const load = async () => {
       items.value = res.data
     } else {
       items.value = []
-      const msg = res.msg || (res.code === 403 ? '请使用管理员或运营账号登录' : '加载失败')
+      const msg = res.msg || (res.code === 403 ? '请使用管理员或咨询主任账号登录' : '加载失败')
       uni.showToast({ title: msg, icon: 'none', duration: 2500 })
     }
   } catch (err: any) {

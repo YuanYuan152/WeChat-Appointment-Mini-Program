@@ -474,6 +474,15 @@ def _restore_account_on_role_bind(db: Session, user: AppAccount, role: str) -> N
         _restore_counselor_on_rebind(db, user)
 
 
+def _clear_patient_role_artifacts(user: AppAccount) -> None:
+    """离开来访角色时清理来访专属字段，避免列表/看板仍按来访识别。"""
+    user.PatientSource = None
+    if hasattr(user, "PatientSourceDetail"):
+        user.PatientSourceDetail = None
+    user.BoundCounselorId = None
+    user.BoundCounselorChangedAt = None
+
+
 class RefundExemptionAdminOut(BaseModel):
     id: int
     consultationId: int
@@ -688,6 +697,7 @@ def create_user_by_mobile(
                         detail=f"旧系统已有同名咨询师，请使用其手机号 {legacy_tel} 添加，勿重复创建",
                     )
     created = False
+    previous_role: Optional[str] = None
     if not account:
         openid = f"admin_invite_{mobile}"
         if db.query(AppAccount).filter(AppAccount.OpenId == openid).first():
@@ -705,13 +715,23 @@ def create_user_by_mobile(
     else:
         if not account.IsActive:
             raise HTTPException(status_code=400, detail="该手机号对应账号已注销")
-        existing_role = get_account_role(db, account.Id)
-        if existing_role != body.role:
-            _guard_manage_user(db, admin, existing_role, target_account=account)
+        previous_role = get_account_role(db, account.Id)
+        if previous_role != body.role:
+            _guard_manage_user(db, admin, previous_role, target_account=account)
         if body.nickname:
             account.Nickname = body.nickname
         if getattr(account, "AccessRevokedAt", None):
             account.AccessRevokedAt = None
+
+    if previous_role == "Counselor" and body.role != "Counselor":
+        try:
+            retire_counselor_booking_relationships(db, account.Id)
+            _set_counselor_profile_active(db, account.Id, False)
+        except ValueError as exc:
+            db.rollback()
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if previous_role == "Patient" and body.role != "Patient":
+        _clear_patient_role_artifacts(account)
 
     if patient_source:
         account.PatientSource = patient_source
@@ -722,6 +742,12 @@ def create_user_by_mobile(
         _ensure_counselor_profile(db, account, counselor_type)
     elif body.role == "Counselor":
         _restore_counselor_on_rebind(db, account)
+    if previous_role and previous_role != body.role:
+        db.add(AppRoleSwitchLog(
+            AccountId=account.Id,
+            FromRole=previous_role,
+            ToRole=body.role,
+        ))
     invalidate_user_sessions(db, account.Id)
     account.UpdatedAt = datetime.utcnow()
     db.commit()
@@ -787,8 +813,12 @@ def bind_user_role(
         except ValueError as exc:
             db.rollback()
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if previous_role == "Patient" and new_role != "Patient":
+        _clear_patient_role_artifacts(user)
 
     set_account_role(db, user_id, new_role, body.target_id)
+    # 显式回写，避免列表按 ActiveRole 筛选时仍看到旧的来访
+    user.ActiveRole = new_role
     _restore_account_on_role_bind(db, user, new_role)
     if new_role == "Counselor":
         _ensure_counselor_profile(db, user, counselor_type or "PROFESSIONAL")

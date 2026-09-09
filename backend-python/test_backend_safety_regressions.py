@@ -419,6 +419,44 @@ class BackendSafetyRegressionTests(unittest.TestCase):
         self.assertEqual(schedule.Status, "CANCELLED")
         self.assertEqual(order.Status, "CANCELLED")
 
+    def test_patient_role_change_clears_visitor_artifacts(self):
+        self.add_counselor()
+        patient = self.add_patient()
+        patient.PatientSource = "PROFESSIONAL"
+        patient.PatientSourceDetail = "医院转介"
+        self.db.commit()
+        admin = AppAccount(
+            Id=90,
+            Mobile="13800000090",
+            ActiveRole="Admin",
+            IsActive=True,
+        )
+        self.db.add(admin)
+        self.db.add(AppRoleBinding(AccountId=90, RoleType="Admin"))
+        self.db.commit()
+
+        with patch(
+            "admin.AppRoleSwitchLog",
+            side_effect=lambda **values: AppRoleSwitchLog(Id=8002, **values),
+        ):
+            result = bind_user_role(
+                1,
+                BindRoleRequest(role="Assistant"),
+                admin,
+                self.db,
+            )
+
+        self.db.refresh(patient)
+        self.assertEqual(result["message"], "角色已更换，用户重新登录后生效")
+        self.assertEqual(get_account_role(self.db, 1), "Assistant")
+        self.assertEqual(patient.ActiveRole, "Assistant")
+        self.assertIsNone(patient.PatientSource)
+        self.assertIsNone(patient.PatientSourceDetail)
+        self.assertIsNone(patient.BoundCounselorId)
+        self.assertIsNone(patient.BoundCounselorChangedAt)
+        binding = self.db.query(AppRoleBinding).filter_by(AccountId=1).one()
+        self.assertEqual(binding.RoleType, "Assistant")
+
     def test_admin_deactivation_rejects_future_booked_appointment(self):
         counselor = self.add_counselor()
         self.add_patient()

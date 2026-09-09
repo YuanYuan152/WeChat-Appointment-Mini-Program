@@ -192,7 +192,7 @@ DEMO_COUNSELORS = [
 
 DEMO_STAFF_ACCOUNTS = [
     {"mobile": "13800000004", "open_id": "demo-openid-assistant", "name": "演示助理", "role": "Assistant"},
-    {"mobile": "13800000005", "open_id": "demo-openid-ops", "name": "演示运营", "role": "Ops"},
+    {"mobile": "13800000005", "open_id": "demo-openid-ops", "name": "演示咨询主任", "role": "Ops"},
     {"mobile": "13800000006", "open_id": "demo-openid-admin", "name": "演示管理员", "role": "Admin"},
 ]
 

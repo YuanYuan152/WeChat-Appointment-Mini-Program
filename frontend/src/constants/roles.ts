@@ -7,7 +7,7 @@ export const ROLE_LABELS: Record<string, string> = {
   Tester: '测试员',
   Counselor: '咨询师',
   Assistant: '咨询助理',
-  Ops: '运营',
+  Ops: '咨询主任',
   Admin: '管理员',
 }
 
@@ -104,7 +104,7 @@ export const OPS_WORKBENCH_PATH = '/pages/ops/index/index'
 export const ROLE_OPTIONS = [
   { value: 'Counselor', label: '咨询师' },
   { value: 'Assistant', label: '咨询助理' },
-  { value: 'Ops', label: '运营' },
+  { value: 'Ops', label: '咨询主任' },
   { value: 'Patient', label: '来访' },
   { value: 'ContentOps', label: '内容运营' },
   { value: 'Marketing', label: '市场' },

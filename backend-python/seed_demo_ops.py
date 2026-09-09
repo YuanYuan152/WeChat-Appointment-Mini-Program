@@ -1,12 +1,12 @@
 """
-运营角色演示数据注入（隔离测试，会清空所有 App 表）。
+咨询主任角色演示数据注入（隔离测试，会清空所有 App 表）。
 
 推荐日常使用: python seed_demo_data.py
 
 用法: python seed_demo_ops.py
 
 写入:
-  - 运营账号 demo-openid-ops（13800000005，与 auth.py 对齐）
+  - 咨询主任账号 demo-openid-ops（13800000005，与 auth.py 对齐）
   - 示例用户（13800000020+，避免与来访者/咨询师手机号冲突）
   - Banner / 活动 / 文章等运营管理数据
 """
@@ -20,7 +20,7 @@ from models import AppActivity, AppArticle, AppBanner, AppSubscribeTemplate
 OPS = {
     "mobile": "13800000005",
     "open_id": "demo-openid-ops",
-    "nickname": "演示运营",
+    "nickname": "演示咨询主任",
 }
 
 # 独立手机号段，不与 dev 主账号冲突
