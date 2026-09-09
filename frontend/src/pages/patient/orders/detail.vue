@@ -34,8 +34,8 @@
             <text class="value price">{{ formatOrderFeeCents(order.TotalFee) }}</text>
           </view>
           <view class="detail-row">
-            <text class="label">创建时间</text>
-            <text class="value">{{ formatTime(order.CreatedAt) }}</text>
+            <text class="label">{{ orderTimeLabel(order) }}</text>
+            <text class="value">{{ formatTime(orderDisplayTime(order)) }}</text>
           </view>
           <view v-if="order.ExpiresAt && order.Status === 'PENDING'" class="expire-row">
             {{ expireHintText(order.ExpiresAt) }}
@@ -65,7 +65,7 @@ import { onLoad } from '@dcloudio/uni-app'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
 import OrderPaymentSheet from '@/components/OrderPaymentSheet.vue'
-import { type PatientOrder, expireHintText, formatOrderFeeCents, formatOrderTime, isFreeOrderFee } from '@/utils/orderPayment'
+import { type PatientOrder, expireHintText, formatOrderFeeCents, formatOrderTime, isFreeOrderFee, orderDisplayTime } from '@/utils/orderPayment'
 
 const order = ref<PatientOrder | null>(null)
 const loading = ref(true)
@@ -80,6 +80,13 @@ const statusLabel = (status: string) => {
     REFUNDED: '已退款',
   }
   return map[status] || status
+}
+
+const orderTimeLabel = (item: PatientOrder) => {
+  if ((item.Status === 'PAID' || item.Status === 'REFUNDED') && item.PaidAt) {
+    return '支付时间'
+  }
+  return '创建时间'
 }
 
 const formatTime = (s: string) => (s ? s.replace('T', ' ').slice(0, 19) : '')

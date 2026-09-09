@@ -152,7 +152,7 @@
         </view>
         <view class="detail-row">
           <text class="label">审核状态</text>
-          <text class="value pending-text">待审核</text>
+          <text class="value pending-text">正在审核</text>
         </view>
         <view v-if="detail.patientName" class="detail-row">
           <text class="label">来访者</text>
@@ -709,13 +709,17 @@ const amendmentPendingTip = computed(() => {
 const exemptionPendingTip = computed(() => {
   const text = detail.value.resultText as string | undefined
   if (text && text.includes('您的')) return text
+  // 来访消息详情：展示审核中，不引导去管理端工作台
+  if (message.value?.Type && PATIENT_MESSAGE_TYPES.has(message.value.Type)) {
+    return '您的退款申请正在审核中，审核完成前不可取消预约；结果将在此通知。'
+  }
   return '待审核：请在工作台「审批管理」中处理对应退款申请'
 })
 const exemptionStatusLabel = computed(() => {
-  if (isExemptionPending.value) return '待审核'
+  if (isExemptionPending.value) return '正在审核'
   if (detail.value.status === 'APPROVED' || detail.value.approved === true) return '已通过'
   if (detail.value.status === 'REJECTED' || detail.value.approved === false) return '未通过'
-  return '待审核'
+  return '正在审核'
 })
 const exemptionResultClass = computed(() => {
   if (exemptionStatusLabel.value === '已通过') return 'highlight'

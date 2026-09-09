@@ -79,8 +79,8 @@
         <view v-if="r.note && !isCenterNote(r.note)" class="note">{{ r.note }}</view>
 
         <view v-if="r.exemptionStatus === 'PENDING'" class="exemption-banner pending">
-          <text class="exemption-title">退款申请审核中</text>
-          <text class="exemption-desc">管理员审核通过后将取消预约并退款；审核前预约与订单维持不变</text>
+          <text class="exemption-title">正在审核</text>
+          <text class="exemption-desc">退款申请审核中，请耐心等待；审核完成前不可取消预约或再次申请</text>
         </view>
         <view v-else-if="r.exemptionStatus === 'REJECTED'" class="exemption-banner rejected">
           <text class="exemption-title">退款申请未通过</text>
@@ -123,22 +123,22 @@
           <text class="pending-hint">助理已为您推送预约，{{ proxyOrderPatientHint }}</text>
         </view>
 
-        <view v-if="r.canCancel" class="refund-hint-row">
+        <view v-if="r.canCancel && r.exemptionStatus !== 'PENDING'" class="refund-hint-row">
           <text class="refund-hint">{{ r.refundEligible ? '距咨询超过24小时，取消可退款' : '距咨询不足24小时，取消不退款' }}</text>
         </view>
 
         <view
-          v-if="r.canCancel || r.counselorId || (r.status === 'DONE' && !r.hasFeedback) || r.status === 'PENDING_PAYMENT'"
+          v-if="(r.canCancel && r.exemptionStatus !== 'PENDING') || r.counselorId || (r.status === 'DONE' && !r.hasFeedback) || r.status === 'PENDING_PAYMENT'"
           class="bottom-actions"
           :class="{
             'bottom-actions--end':
-              !r.canCancel &&
+              !(r.canCancel && r.exemptionStatus !== 'PENDING') &&
               !(r.status === 'DONE' && !r.hasFeedback) &&
               r.status !== 'PENDING_PAYMENT',
           }"
         >
           <button
-            v-if="r.canCancel"
+            v-if="r.canCancel && r.exemptionStatus !== 'PENDING'"
             class="cancel-btn"
             :disabled="cancellingId === r.id"
             @click="openCancelModal(r)"
@@ -257,7 +257,7 @@
 
             <button class="cancel-action-btn exempt" :disabled="cancelTarget?.exemptionStatus === 'PENDING'" @tap="goExemption">
 
-              {{ cancelTarget?.exemptionStatus === 'PENDING' ? '审核中' : '申请退款' }}
+              {{ cancelTarget?.exemptionStatus === 'PENDING' ? '正在审核' : '申请退款' }}
 
             </button>
 
@@ -267,13 +267,17 @@
 
             class="cancel-action-btn confirm"
 
-            :disabled="cancellingId === cancelTarget?.id"
+            :disabled="cancellingId === cancelTarget?.id || cancelTarget?.exemptionStatus === 'PENDING'"
 
             @tap="confirmCancel"
 
           >
 
-            {{ cancellingId === cancelTarget?.id ? '取消中...' : '确认取消' }}
+            {{
+              cancelTarget?.exemptionStatus === 'PENDING'
+                ? '正在审核，不可取消'
+                : (cancellingId === cancelTarget?.id ? '取消中...' : '确认取消')
+            }}
 
           </button>
 
@@ -410,6 +414,8 @@ const cancelTarget = ref<Consultation | null>(null)
 
 const statusLabel = (r: Consultation) => {
 
+  if (r.exemptionStatus === 'PENDING') return '正在审核'
+
   if (r.status === 'PENDING_PAYMENT') return '待支付'
 
   if (r.status === 'DONE' && r.hasFeedback) return '已反馈'
@@ -425,6 +431,8 @@ const statusLabel = (r: Consultation) => {
 }
 
 const statusClass = (r: Consultation) => {
+
+  if (r.exemptionStatus === 'PENDING') return 'exemption-pending'
 
   if (r.status === 'PENDING_PAYMENT') return 'pending-payment'
 
@@ -637,11 +645,12 @@ const switchTab = (v: RecordTab) => {
 
 
 const openCancelModal = (r: Consultation) => {
-
+  if (r.exemptionStatus === 'PENDING') {
+    uni.showToast({ title: '退款申请正在审核中，暂不可操作', icon: 'none' })
+    return
+  }
   cancelTarget.value = r
-
   showCancelModal.value = true
-
 }
 
 
@@ -660,7 +669,7 @@ const goExemption = () => {
   const r = cancelTarget.value
   if (!r) return
   if (r.exemptionStatus === 'PENDING') {
-    uni.showToast({ title: '已有待审核的退款申请', icon: 'none' })
+    uni.showToast({ title: '退款申请正在审核中，请耐心等待', icon: 'none' })
     return
   }
   if (r.refundEligible) {
@@ -702,7 +711,10 @@ const confirmCancel = async () => {
 
   if (!r || cancellingId.value) return
 
-
+  if (r.exemptionStatus === 'PENDING') {
+    uni.showToast({ title: '退款申请正在审核中，暂不可取消', icon: 'none' })
+    return
+  }
 
   cancellingId.value = r.id
 
@@ -835,6 +847,7 @@ defineExpose({ refresh })
 
 .status.cancelled { color: #9CA3AF; background: #F3F4F6; }
 .status.pending-payment { color: #9CA3AF; background: #E5E7EB; }
+.status.exemption-pending { color: #B45309; background: #FEF3C7; }
 .pending-hint-row {
   margin-top: 20rpx;
   padding-top: 20rpx;

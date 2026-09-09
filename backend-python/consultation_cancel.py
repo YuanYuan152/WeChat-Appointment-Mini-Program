@@ -103,6 +103,20 @@ def cancel_consultation_for_visitor(
     if not can_visitor_cancel(consultation.Status):
         raise ValueError("当前状态不可取消")
 
+    if not force_refund:
+        from models import AppRefundExemption
+
+        pending = (
+            db.query(AppRefundExemption)
+            .filter(
+                AppRefundExemption.ConsultationId == consultation.Id,
+                AppRefundExemption.Status == "PENDING",
+            )
+            .first()
+        )
+        if pending:
+            raise ValueError("退款申请正在审核中，请等待审核结果")
+
     refund = force_refund or is_refund_eligible(consultation.StartTime)
     consultation.Status = "CANCELLED"
     consultation.UpdatedAt = datetime.utcnow()

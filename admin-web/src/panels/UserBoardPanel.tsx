@@ -26,6 +26,9 @@ import {
   PATIENT_SOURCE_OPTIONS,
 } from "@/config/userRoleMeta";
 
+const visitorMoney = (value?: number | null) =>
+  formatMoneyFromCents(value, { zeroAsFree: false, unit: "yuan" });
+
 export interface UserProxyBookingTarget {
   patientId: number;
   patientName: string;
@@ -159,10 +162,10 @@ const UserBoardListSection = memo(function UserBoardListSection({
         </div>
 
         <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <QueryField label="姓名/昵称">
+          <QueryField label="姓名/昵称/备注">
             <input
               className={queryControlClass}
-              placeholder="请输入"
+              placeholder="姓名、昵称、手机号或备注"
               value={filters.keyword}
               onChange={(event) => setFilters((prev) => ({ ...prev, keyword: event.target.value }))}
             />
@@ -197,7 +200,7 @@ const UserBoardListSection = memo(function UserBoardListSection({
                 <tr>
                   <th className="px-5 py-3 font-medium">来访者</th>
                   <th className="px-5 py-3 font-medium">手机</th>
-                  <th className="px-5 py-3 font-medium">订单/金额</th>
+                  <th className="px-5 py-3 font-medium">订单/成交金额</th>
                   <th className="px-5 py-3 font-medium">预约</th>
                   <th className="px-5 py-3 font-medium">退款/豁免</th>
                   <th className="px-5 py-3 font-medium">操作</th>
@@ -223,7 +226,7 @@ const UserBoardListSection = memo(function UserBoardListSection({
                     </td>
                     <td className="px-5 py-4">{user.mobile || "-"}</td>
                     <td className="px-5 py-4">
-                      {user.orderCount} / {formatMoneyFromCents(user.paidAmount)}
+                      {user.orderCount} / {visitorMoney(user.paidAmount)}
                     </td>
                     <td className="px-5 py-4">
                       总 {user.consultationCount}，完成 {user.completedConsultationCount}，取消{" "}
@@ -483,14 +486,6 @@ function UserDetailPanel({
       )}
       {canProxyBooking && onProxyBooking && (
         <div className="mt-4 flex flex-col items-start gap-3">
-          <QueryButton className="w-28" onClick={requestProxyBooking}>
-            代理预约
-          </QueryButton>
-          {!detail.profile.boundCounselorId && (
-            <p className="text-xs leading-5 text-[#A46A22]">
-              代理预约前需先绑定咨询师；点击“代理预约”或“再约一单”将先打开绑定窗口。
-            </p>
-          )}
           {onSearchCounselors && onBindCounselor && (
             <QueryResetButton
               className="w-40"
@@ -498,6 +493,14 @@ function UserDetailPanel({
             >
               {detail.profile.boundCounselorId ? "更换绑定咨询师" : "绑定咨询师"}
             </QueryResetButton>
+          )}
+          <QueryButton className="w-28" onClick={requestProxyBooking}>
+            代理预约
+          </QueryButton>
+          {!detail.profile.boundCounselorId && (
+            <p className="text-xs leading-5 text-[#A46A22]">
+              代理预约前需先绑定咨询师；点击“代理预约”或“再约一单”将先打开绑定窗口。
+            </p>
           )}
         </div>
       )}
@@ -513,8 +516,8 @@ function UserDetailPanel({
       )}
       <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
         <MiniStat label="订单" value={detail.profile.orderCount} />
-        <MiniStat label="已付金额" value={formatMoneyFromCents(detail.profile.paidAmount)} />
-        <MiniStat label="退款金额" value={formatMoneyFromCents(detail.profile.refundAmount)} />
+        <MiniStat label="已付金额" value={visitorMoney(detail.profile.paidAmount)} />
+        <MiniStat label="退款金额" value={visitorMoney(detail.profile.refundAmount)} />
         <MiniStat label="预约总数" value={detail.profile.consultationCount} />
         <MiniStat label="完成预约" value={detail.profile.completedConsultationCount} />
         <MiniStat label="取消预约" value={detail.profile.cancelledConsultationCount} />
@@ -539,7 +542,7 @@ function UserDetailPanel({
           (item) => (
             <DetailCard
               key={`order-${item.id}`}
-              title={`${formatMoneyFromCents(item.totalFee)} · ${statusLabel(item.status)}`}
+              title={`${visitorMoney(item.totalFee)} · ${statusLabel(item.status)}`}
               rows={[
                 ["创建时间", formatDateTime(item.createdAt)],
                 ...(item.paidAt ? ([["支付时间", formatDateTime(item.paidAt)]] as Array<[string, string]>) : []),
@@ -558,7 +561,7 @@ function UserDetailPanel({
           (item) => (
             <DetailCard
               key={`payment-${item.id}`}
-              title={`${formatMoneyFromCents(item.amount)} · ${statusLabel(item.status)}`}
+              title={`${visitorMoney(item.amount)} · ${statusLabel(item.status)}`}
               rows={[["支付时间", formatDateTime(item.paidAt)]]}
             />
           ),
@@ -570,7 +573,7 @@ function UserDetailPanel({
           (item) => (
             <DetailCard
               key={`refund-${item.id}`}
-              title={`${formatMoneyFromCents(item.amount)} · ${statusLabel(item.status)}`}
+              title={`${visitorMoney(item.amount)} · ${statusLabel(item.status)}`}
               rows={[["更新时间", formatDateTime(item.updatedAt)]]}
             />
           ),
@@ -582,7 +585,7 @@ function UserDetailPanel({
           (item) => (
             <DetailCard
               key={`exemption-${item.id}`}
-              title={`${formatMoneyFromCents(item.amount)} · ${statusLabel(item.status)}`}
+              title={`${visitorMoney(item.amount)} · ${statusLabel(item.status)}`}
               rows={[
                 ["提交时间", formatDateTime(item.createdAt)],
                 ...(item.reviewedAt ? ([["审核时间", formatDateTime(item.reviewedAt)]] as Array<[string, string]>) : []),

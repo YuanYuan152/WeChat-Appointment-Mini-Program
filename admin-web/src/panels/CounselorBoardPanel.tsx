@@ -187,10 +187,10 @@ const CounselorBoardListSection = memo(function CounselorBoardListSection({
         </div>
 
         <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <QueryField label="姓名/电话">
+          <QueryField label="姓名/电话/备注">
             <input
               className={queryControlClass}
-              placeholder="请输入"
+              placeholder="姓名、电话或备注"
               value={keyword}
               onChange={(event) => setKeyword(event.target.value)}
             />

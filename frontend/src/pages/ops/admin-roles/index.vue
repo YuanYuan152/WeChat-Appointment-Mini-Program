@@ -120,7 +120,7 @@
               <text class="picker-arrow">▾</text>
             </view>
           </picker>
-          <view class="bind-btn" @tap="changeRole(u.id)">{{ bindActionLabel(u.id) }}</view>
+          <view class="bind-btn" @tap="changeRole(u.id)">更换类型</view>
         </view>
         <text v-else-if="userRole(u)" class="readonly-hint">当前账号超出您的赋权范围，无法更换角色</text>
         </template>
@@ -397,10 +397,7 @@ const loadMore = () => {
   load(false)
 }
 
-let loadSeq = 0
-
 const load = async (reset = true) => {
-  const seq = ++loadSeq
   if (reset) {
     page.value = 1
     loading.value = true
@@ -432,9 +429,6 @@ const load = async (reset = true) => {
       { showLoading: false },
     )
 
-    // 丢弃过期响应，避免订阅弹窗触发 onShow 把换角色后的列表盖回旧数据
-    if (seq !== loadSeq) return
-
     if (res.code === 0 && res.data) {
       total.value = res.data.total || 0
       const next = res.data.items || []
@@ -446,17 +440,14 @@ const load = async (reset = true) => {
       uni.showToast({ title: res.msg || '加载失败', icon: 'none' })
     }
   } catch {
-    if (seq !== loadSeq) return
     if (reset) {
       users.value = []
       total.value = 0
     }
     uni.showToast({ title: '加载失败', icon: 'none' })
   } finally {
-    if (seq === loadSeq) {
-      loading.value = false
-      loadingMore.value = false
-    }
+    loading.value = false
+    loadingMore.value = false
   }
 }
 
@@ -649,14 +640,12 @@ const submitAddUser = () => {
 
       if (res.code === 0) {
         showAddModal.value = false
-        if (res.data && !res.data.created) {
-          revealUserAfterRoleChange(res.data)
-        } else if (res.data?.mobile) {
-          keyword.value = res.data.mobile
-        }
         await load(true)
         const msg = res.data?.message || (res.data?.created ? '用户已添加' : '已绑定角色')
         uni.showToast({ title: msg, icon: 'success' })
+        if (res.data?.mobile) {
+          keyword.value = res.data.mobile
+        }
       } else {
         uni.showToast({ title: res.msg || '添加失败', icon: 'none' })
       }
@@ -679,28 +668,6 @@ const selectRole = (uid: number, idx: number) => {
 
 
 const ROLES_WITH_TYPE = new Set(['Patient', 'Counselor'])
-
-const bindActionLabel = (uid: number) => {
-  const user = users.value.find(u => u.id === uid)
-  const current = user ? userRole(user) : ''
-  const next = selected[uid] || current
-  if (current && next && current !== next) return '更换角色'
-  if (ROLES_WITH_TYPE.has(next || '')) return '更新类型'
-  return '更换角色'
-}
-
-const revealUserAfterRoleChange = (user?: AdminUser) => {
-  // 筛在「来访」等分组时，换到其它角色后会被滤掉，看起来像没生效
-  if (selectedRoleGroup.value) {
-    roleGroupIndex.value = 0
-    subtypeIndex.value = 0
-  }
-  if (user?.mobile) {
-    keyword.value = user.mobile
-  } else if (user?.id) {
-    keyword.value = String(user.id)
-  }
-}
 
 const changeRole = async (uid: number) => {
   // 手势内先官方订阅（待审核模板）；后续确认框不再承载订阅
@@ -759,15 +726,8 @@ const changeRole = async (uid: number) => {
 
   if (res.code === 0) {
     delete selected[uid]
-    const roleChanged = !!current && current !== role
-    if (roleChanged) {
-      revealUserAfterRoleChange(user)
-    }
     await load(true)
-    const toastMsg = roleChanged
-      ? `已更换为${roleLabel(role)}，请对方重新登录`
-      : ((res.data as { message?: string })?.message || res.msg || '已更新')
-    uni.showToast({ title: toastMsg, icon: 'success' })
+    uni.showToast({ title: (res.data as { message?: string })?.message || res.msg || '已更换', icon: 'success' })
   } else {
     uni.showToast({ title: res.msg || res.data?.message || '更换失败', icon: 'none' })
   }
@@ -798,6 +758,7 @@ const deleteUser = (user: AdminUser) => {
 }
 
 onMounted(() => {
+  void load(true)
   void refreshSubscribeHint()
 })
 

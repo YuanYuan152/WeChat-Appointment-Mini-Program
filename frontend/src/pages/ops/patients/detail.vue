@@ -69,10 +69,10 @@
           <text class="feedback-entry-count">{{ detail.feedbackCount }} 条</text>
           <text class="feedback-entry-arrow">查看 ›</text>
         </view>
-        <button class="proxy-btn" @tap="goProxyBooking">代理预约</button>
         <button class="bind-btn" @tap="openBindCounselor">
           {{ detail.boundCounselorId ? '更换签约咨询师' : '绑定签约咨询师' }}
         </button>
+        <button class="proxy-btn" @tap="goProxyBooking">代理预约</button>
       </view>
 
       <view class="filter-bar">

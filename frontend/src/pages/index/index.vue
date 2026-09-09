@@ -24,7 +24,7 @@
         <view class="search-divider" />
         <input
           class="search-input"
-          placeholder="搜索咨询师、文章、活动"
+          placeholder="搜索咨询师"
           placeholder-class="search-placeholder"
           v-model="searchKeyword"
           confirm-type="search"

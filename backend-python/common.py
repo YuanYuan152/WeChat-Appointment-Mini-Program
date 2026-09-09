@@ -424,7 +424,7 @@ def _query_counselor_profiles(
     gender: Optional[str] = None,
     consult_method: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
-    """AppCounselorProfile 列表，支持姓名/擅长/领域/简介关键词搜索。"""
+    """AppCounselorProfile 列表，支持姓名/资质/流派/领域/擅长人群/简介关键词搜索。"""
     try:
         q = db.query(AppCounselorProfile).filter(AppCounselorProfile.IsActive == True)
         if keyword:
@@ -434,6 +434,8 @@ def _query_counselor_profiles(
                     AppCounselorProfile.Name.like(kw),
                     AppCounselorProfile.Specialty.like(kw),
                     AppCounselorProfile.Field.like(kw),
+                    AppCounselorProfile.Qualification.like(kw),
+                    AppCounselorProfile.TargetGroup.like(kw),
                     AppCounselorProfile.Introduce.like(kw),
                     AppCounselorProfile.Title.like(kw),
                 )
@@ -604,7 +606,10 @@ def list_public_counselors(
         where = "isDelete = 0 AND IsShow = 1"
         params: Dict[str, Any] = {}
         if keyword:
-            where += " AND (name LIKE :kw OR Specialty LIKE :kw OR Field LIKE :kw OR introduce LIKE :kw)"
+            where += (
+                " AND (name LIKE :kw OR Specialty LIKE :kw OR Field LIKE :kw"
+                " OR Qualification LIKE :kw OR TargetGroup LIKE :kw OR introduce LIKE :kw)"
+            )
             params["kw"] = f"%{keyword.strip()}%"
 
         legacy_rows = _safe_legacy_query(

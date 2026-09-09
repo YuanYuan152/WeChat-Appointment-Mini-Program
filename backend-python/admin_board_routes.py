@@ -11,7 +11,7 @@ from typing import Any, Callable, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import or_
+from sqlalchemy import exists, or_
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -25,6 +25,7 @@ from models import (
     AppRoleBinding,
     AppSchedule,
     AppScheduleCancelLog,
+    AppStaffAccountRemark,
 )
 from patient_contract_service import (
     batch_patient_contract_extras,
@@ -217,7 +218,7 @@ def register_admin_board_routes(
 
     @router.get("/boards/patients", summary="来访管理看板列表")
     def patient_board_list(
-        keyword: Optional[str] = Query(None, description="姓名/昵称/手机号"),
+        keyword: Optional[str] = Query(None, description="姓名/昵称/手机号/备注"),
         gender: Optional[str] = Query(None),
         mobile: Optional[str] = Query(None),
         page: int = Query(1, ge=1),
@@ -231,11 +232,16 @@ def register_admin_board_routes(
         query = db.query(AppAccount).filter(AppAccount.Id.in_(visitor_ids))
         if keyword:
             like = f"%{keyword}%"
+            remark_match = exists().where(
+                AppStaffAccountRemark.AccountId == AppAccount.Id,
+                AppStaffAccountRemark.Remark.like(like),
+            )
             query = query.filter(
                 or_(
                     AppAccount.Nickname.like(like),
                     AppAccount.RealName.like(like),
                     AppAccount.Mobile.like(like),
+                    remark_match,
                 )
             )
         if gender:
@@ -458,7 +464,7 @@ def register_admin_board_routes(
 
     @router.get("/boards/counselors", summary="咨询师管理看板列表")
     def counselor_board_list(
-        keyword: Optional[str] = Query(None, description="姓名/昵称/手机号"),
+        keyword: Optional[str] = Query(None, description="姓名/手机号/备注"),
         visibility: Optional[str] = Query(
             None,
             description="展示状态：visible=展示中，hidden=已隐藏",
@@ -485,7 +491,11 @@ def register_admin_board_routes(
             items = [
                 item
                 for item in items
-                if keyword_norm in " ".join(str(v or "") for v in [item["name"], item["mobile"]]).lower()
+                if keyword_norm
+                in " ".join(
+                    str(v or "")
+                    for v in [item.get("name"), item.get("mobile"), item.get("staffRemark")]
+                ).lower()
             ]
         if visibility_norm == "visible":
             items = [item for item in items if item.get("isPublicVisible")]

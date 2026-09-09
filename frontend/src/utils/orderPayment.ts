@@ -8,6 +8,7 @@ export interface PatientOrder {
   Description?: string
   TotalFee: number
   CreatedAt: string
+  PaidAt?: string | null
   ExpiresAt?: string
   counselorId?: number
   counselorName?: string
@@ -22,6 +23,19 @@ export interface PatientOrder {
   proxyAgreementIsAdult?: boolean | null
   proxyAgreementType?: string | null
   proxyAgreementLabel?: string | null
+}
+
+/** 列表/详情展示用时间：已支付（含已退款）优先支付时间 */
+export function orderDisplayTime(order: Pick<PatientOrder, 'Status' | 'CreatedAt' | 'PaidAt'>) {
+  if ((order.Status === 'PAID' || order.Status === 'REFUNDED') && order.PaidAt) {
+    return order.PaidAt
+  }
+  return order.CreatedAt
+}
+
+export function formatOrderClock(value?: string | null) {
+  if (!value) return ''
+  return String(value).replace('T', ' ').slice(0, 19)
 }
 
 /** 上线真实支付：在 .env 设置 VITE_ENABLE_REAL_PAY=true */

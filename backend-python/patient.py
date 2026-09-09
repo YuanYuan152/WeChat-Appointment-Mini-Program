@@ -462,6 +462,10 @@ def get_my_consultations(
             else:
                 cancel_summary = "预约已取消，按规定不予退款"
         exemption = exemption_map.get(r.Id)
+        if exemption and exemption.Status == "PENDING":
+            # 退款审核中：来访可见状态，但不可取消/再申请操作
+            cancelable = False
+            refund_ok = False
         feedback = feedback_map.get(r.Id)
         fb_detail = feedback_detail(feedback.Content) if feedback else None
 

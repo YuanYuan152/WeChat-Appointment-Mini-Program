@@ -15,7 +15,7 @@
           <image src="/static/images-opt/seI.png" class="search-icon" mode="aspectFit" />
           <input 
             class="search-input" 
-            placeholder="搜索咨询师姓名、专业"
+            placeholder="搜索咨询师姓名、资质、流派、领域、人群"
             placeholder-class="search-placeholder"
             v-model="searchKeyword"
             @confirm="handleSearch"

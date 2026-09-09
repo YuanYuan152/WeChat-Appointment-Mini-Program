@@ -23,7 +23,7 @@
           待签署：{{ order.proxyAgreementLabel }}
         </view>
         <view class="order-footer">
-          <text class="order-time">{{ formatTime(order.CreatedAt) }}</text>
+          <text class="order-time">{{ formatTime(orderDisplayTime(order)) }}</text>
           <text v-if="order.ExpiresAt && order.Status === 'PENDING'" class="order-expire">
             {{ expireHint(order.ExpiresAt) }}
           </text>
@@ -53,7 +53,7 @@ import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
 import OrderPaymentSheet from '@/components/OrderPaymentSheet.vue'
 import { ensureLoggedInOrRedirect } from '@/utils/auth'
-import { type PatientOrder, expireHintText, formatOrderFeeCents, formatOrderTime, isFreeOrderFee } from '@/utils/orderPayment'
+import { type PatientOrder, expireHintText, formatOrderFeeCents, formatOrderTime, isFreeOrderFee, orderDisplayTime } from '@/utils/orderPayment'
 
 const orders = ref<PatientOrder[]>([])
 const loading = ref(true)

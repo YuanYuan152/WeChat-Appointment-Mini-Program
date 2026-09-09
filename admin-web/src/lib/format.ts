@@ -34,17 +34,26 @@ function formatInShanghai(
   });
 }
 
-export function formatMoneyFromCents(value?: number | null) {
+export function formatMoneyFromCents(
+  value?: number | null,
+  options?: { zeroAsFree?: boolean; unit?: "symbol" | "yuan" },
+) {
   if (value == null || Number.isNaN(value)) {
     return "-";
   }
+  const unit = options?.unit ?? "symbol";
   if (value <= 0) {
+    // 默认「免费」；来访成交金额等场景传 zeroAsFree: false 显示「0元」
+    if (options?.zeroAsFree === false || unit === "yuan") {
+      return "0元";
+    }
     return "免费";
   }
-  return `¥${(value / 100).toLocaleString("zh-CN", {
+  const amount = (value / 100).toLocaleString("zh-CN", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  })}`;
+  });
+  return unit === "yuan" ? `${amount}元` : `¥${amount}`;
 }
 
 export function formatDateTime(value?: string | null) {

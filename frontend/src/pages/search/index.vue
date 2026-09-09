@@ -5,7 +5,7 @@
         class="search-input"
         v-model.trim="keyword"
         confirm-type="search"
-        placeholder="搜索咨询师、文章、活动"
+        placeholder="搜索咨询师"
         placeholder-class="input-ph"
         @confirm="doSearch"
       />
@@ -18,7 +18,7 @@
 
     <view v-else-if="!searched" class="tips-card">
       <text class="tips-title">你可以搜索</text>
-      <text class="tips-item">咨询师姓名、咨询流派、心理知识、活动主题</text>
+      <text class="tips-item">咨询师姓名、从业资质、咨询流派、咨询领域、擅长人群</text>
       <view v-if="history.length" class="history-block">
         <view class="history-head">
           <text class="history-title">最近搜索</text>
