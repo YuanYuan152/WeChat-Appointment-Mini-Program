@@ -19,9 +19,11 @@ export const API_CONFIG = {
   }
 }
 
-// 新 Python FastAPI 后端（真机访问局域网 HTTP 时会自动切远程 fallback）
+// 新 Python FastAPI 后端（baseURL 每次读取，避免真机/开发者工具初始化时机不一致）
 export const API_V2_CONFIG = {
-  baseURL: resolveApiV2BaseUrl(),
+  get baseURL() {
+    return resolveApiV2BaseUrl()
+  },
   timeout: parseInt(import.meta.env.VITE_API_TIMEOUT || '15000'),
   headers: {
     'Content-Type': 'application/json'

@@ -55,14 +55,7 @@ export const warnIfDeviceCannotReachLocalApi = (): void => {
     console.info('[MockLogin] 真机已自动切换 V2 后端:', resolved)
     return
   }
-  const tip =
-    '真机无法访问电脑局域网后端。请在 .env.development.local 配置 VITE_API_V2_REMOTE_FALLBACK=https://dev.eap.ji-psy.com，或直接把 VITE_API_V2_BASE_URL 改为该 HTTPS 地址后重启 npm run dev:mp-weixin。'
-  console.warn('[MockLogin]', tip)
-  uni.showModal({
-    title: '真机联调提示',
-    content: tip,
-    showCancel: false,
-  })
+  console.info('[MockLogin] 真机使用局域网后端:', resolved)
 }
 
 /** 测试/开发联调：登录页「开发者入口」展开后可用模拟登录 */

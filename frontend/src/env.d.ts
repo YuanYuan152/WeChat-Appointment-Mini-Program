@@ -5,6 +5,8 @@ interface ImportMetaEnv {
   readonly VITE_API_V2_BASE_URL: string
   /** 真机访问不到局域网 HTTP 时的 HTTPS 远程后端 */
   readonly VITE_API_V2_REMOTE_FALLBACK: string
+  /** true：真机也强制使用 VITE_API_V2_BASE_URL 局域网地址（需同 Wi‑Fi） */
+  readonly VITE_ALLOW_DEVICE_LAN_API: string
   readonly VITE_DEV_LOGIN_ROLE: string
   /** true：显示开发者入口与模拟登录；生产构建务必 false 或不写 */
   readonly VITE_ENABLE_MOCK_LOGIN: string

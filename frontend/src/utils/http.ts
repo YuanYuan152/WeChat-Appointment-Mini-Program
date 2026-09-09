@@ -3,6 +3,7 @@
  */
 
 import { API_CONFIG, API_V2_CONFIG, getApiUrl } from '@/config/api'
+import { resolveApiV2BaseUrl } from '@/config/apiBase'
 import { clearToken, redirectToLoginForAuth } from '@/utils/auth'
 
 // 响应数据类型定义
@@ -72,15 +73,20 @@ function shouldRedirectForAuth(statusCode: number, code: number, message: string
 
 // HTTP请求类
 class HttpRequest {
-  private baseURL: string
+  private readonly useV2: boolean
   private timeout: number
   private defaultHeaders: Record<string, string>
 
-  constructor(config?: typeof API_CONFIG) {
+  constructor(config?: typeof API_CONFIG, options?: { useV2?: boolean }) {
     const c = config || API_CONFIG
-    this.baseURL = c.baseURL
+    this.useV2 = Boolean(options?.useV2)
     this.timeout = c.timeout
     this.defaultHeaders = c.headers
+  }
+
+  private get baseURL(): string {
+    if (this.useV2) return resolveApiV2BaseUrl()
+    return API_CONFIG.baseURL
   }
 
   /**
@@ -412,7 +418,7 @@ class HttpRequest {
 export const http = new HttpRequest()
 
 // 创建新 Python 后端 HTTP 实例（认证/支付/上传等新接口使用）
-export const httpV2 = new HttpRequest(API_V2_CONFIG)
+export const httpV2 = new HttpRequest(API_V2_CONFIG, { useV2: true })
 
 // 导出常用方法
 export const { get, post, put, delete: del } = http
