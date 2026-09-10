@@ -1,5 +1,6 @@
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
+import { formatChinaDateTime } from '@/utils/dateTime'
 
 export interface PatientOrder {
   Id: number
@@ -33,9 +34,9 @@ export function orderDisplayTime(order: Pick<PatientOrder, 'Status' | 'CreatedAt
   return order.CreatedAt
 }
 
+/** 订单付款/创建时间：统一按北京时间展示 */
 export function formatOrderClock(value?: string | null) {
-  if (!value) return ''
-  return String(value).replace('T', ' ').slice(0, 19)
+  return formatChinaDateTime(value)
 }
 
 /** 上线真实支付：在 .env 设置 VITE_ENABLE_REAL_PAY=true */

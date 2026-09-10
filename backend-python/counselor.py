@@ -56,7 +56,7 @@ from models import (
     AppOrder,
     AppScheduleCancelLog,
 )
-from app_time import as_china_api_time, china_now
+from app_time import as_china_api_time, china_now, utc_to_china
 from consultation_cancel import has_appointment_started, is_refund_eligible, refund_order_for_counselor_leave
 from schedule_meta import (
     CENTER_NAMES,
@@ -1899,7 +1899,7 @@ def list_counselor_visitor_orders(
             CounselorVisitorOrderOut(
                 id=order.Id,
                 visitorName=_patient_display_name(visitor),
-                paidAt=as_china_api_time(order.PaidAt) if order.PaidAt else None,
+                paidAt=utc_to_china(order.PaidAt) if order.PaidAt else None,
                 startTime=as_china_api_time(start_time) if start_time else None,
                 endTime=as_china_api_time(end_time) if end_time else None,
                 totalFee=int(order.TotalFee or 0),

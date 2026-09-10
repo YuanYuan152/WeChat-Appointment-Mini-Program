@@ -35,7 +35,7 @@
           </view>
           <view class="detail-row">
             <text class="label">{{ orderTimeLabel(order) }}</text>
-            <text class="value">{{ formatTime(orderDisplayTime(order)) }}</text>
+            <text class="value">{{ formatOrderClock(orderDisplayTime(order)) }}</text>
           </view>
           <view v-if="order.ExpiresAt && order.Status === 'PENDING'" class="expire-row">
             {{ expireHintText(order.ExpiresAt) }}
@@ -65,7 +65,7 @@ import { onLoad } from '@dcloudio/uni-app'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
 import OrderPaymentSheet from '@/components/OrderPaymentSheet.vue'
-import { type PatientOrder, expireHintText, formatOrderFeeCents, formatOrderTime, isFreeOrderFee, orderDisplayTime } from '@/utils/orderPayment'
+import { type PatientOrder, expireHintText, formatOrderFeeCents, formatOrderTime, isFreeOrderFee, orderDisplayTime, formatOrderClock } from '@/utils/orderPayment'
 
 const order = ref<PatientOrder | null>(null)
 const loading = ref(true)
@@ -88,8 +88,6 @@ const orderTimeLabel = (item: PatientOrder) => {
   }
   return '创建时间'
 }
-
-const formatTime = (s: string) => (s ? s.replace('T', ' ').slice(0, 19) : '')
 
 const loadOrder = async () => {
   if (!orderId.value) return

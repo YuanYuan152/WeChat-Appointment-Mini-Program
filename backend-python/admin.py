@@ -37,6 +37,7 @@ from models import (
     AppRoleBinding,
     AppRoleSwitchLog,
     AppSchedule,
+    AppStaffAccountRemark,
 )
 from consultation_feedback import feedback_detail, feedback_summary
 from app_time import china_now
@@ -1789,7 +1790,7 @@ register_admin_board_routes(
     summary="来访者列表（含预约统计与联系方式）",
 )
 def list_admin_patients(
-    keyword: Optional[str] = Query(None, description="姓名或手机号搜索"),
+    keyword: Optional[str] = Query(None, description="姓名/昵称/手机号/备注搜索"),
     limit: int = Query(200, ge=1, le=500),
     _admin: AppAccount = Depends(require_ops_or_admin),
     db: Session = Depends(get_db),
@@ -1803,10 +1804,17 @@ def list_admin_patients(
         kw = keyword.strip()
         if kw:
             like = f"%{kw}%"
+            remark_match = exists().where(
+                AppStaffAccountRemark.AccountId == AppAccount.Id,
+                AppStaffAccountRemark.Remark.like(like),
+            )
             q = q.filter(
-                (AppAccount.RealName.like(like))
-                | (AppAccount.Nickname.like(like))
-                | (AppAccount.Mobile.like(like))
+                or_(
+                    AppAccount.RealName.like(like),
+                    AppAccount.Nickname.like(like),
+                    AppAccount.Mobile.like(like),
+                    remark_match,
+                )
             )
     accounts = q.order_by(AppAccount.UpdatedAt.desc(), AppAccount.Id.desc()).limit(limit).all()
     if not accounts:
@@ -2262,7 +2270,7 @@ def _admin_counselor_stats(
     summary="咨询师管理列表",
 )
 def list_admin_counselors(
-    keyword: Optional[str] = Query(None, description="姓名搜索"),
+    keyword: Optional[str] = Query(None, description="姓名/昵称/备注搜索"),
     _admin: AppAccount = Depends(require_ops_or_admin),
     db: Session = Depends(get_db),
 ):
@@ -2280,6 +2288,7 @@ def list_admin_counselors(
         a.Id: a
         for a in db.query(AppAccount).filter(AppAccount.Id.in_(counselor_ids)).all()
     }
+    remarks_map = get_staff_remarks_map(db, counselor_ids)
 
     if keyword:
         kw = keyword.strip().lower()
@@ -2294,7 +2303,9 @@ def list_admin_counselors(
                     or (acc.RealName if acc else None)
                     or ""
                 ).lower()
-                if kw in name:
+                remark = (remarks_map.get(cid) or "").lower()
+                mobile = ((acc.Mobile if acc else None) or "").lower()
+                if kw in name or kw in remark or (mobile and kw in mobile):
                     filtered.append(cid)
             counselor_ids = filtered
 
@@ -2325,8 +2336,6 @@ def list_admin_counselors(
     schedules_by_counselor: dict[int, list] = {}
     for s in schedules:
         schedules_by_counselor.setdefault(s.CounselorId, []).append(s)
-
-    remarks_map = get_staff_remarks_map(db, counselor_ids)
 
     result: List[AdminCounselorSummaryOut] = []
     for cid in counselor_ids:

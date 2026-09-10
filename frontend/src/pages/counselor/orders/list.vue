@@ -37,6 +37,7 @@ import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
 import { ensureLoggedInOrRedirect } from '@/utils/auth'
 import { formatOrderTime } from '@/utils/orderPayment'
+import { formatChinaDateTime } from '@/utils/dateTime'
 
 interface CounselorVisitorOrder {
   id: number
@@ -52,10 +53,7 @@ interface CounselorVisitorOrder {
 const orders = ref<CounselorVisitorOrder[]>([])
 const loading = ref(true)
 
-const formatTime = (value?: string | null) => {
-  if (!value) return ''
-  return String(value).replace('T', ' ').slice(0, 19)
-}
+const formatTime = (value?: string | null) => formatChinaDateTime(value)
 
 const formatAppointment = (start?: string | null, end?: string | null) => {
   if (start) {

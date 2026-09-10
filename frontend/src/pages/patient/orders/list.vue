@@ -23,7 +23,7 @@
           待签署：{{ order.proxyAgreementLabel }}
         </view>
         <view class="order-footer">
-          <text class="order-time">{{ formatTime(orderDisplayTime(order)) }}</text>
+          <text class="order-time">{{ formatOrderClock(orderDisplayTime(order)) }}</text>
           <text v-if="order.ExpiresAt && order.Status === 'PENDING'" class="order-expire">
             {{ expireHint(order.ExpiresAt) }}
           </text>
@@ -53,7 +53,7 @@ import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
 import OrderPaymentSheet from '@/components/OrderPaymentSheet.vue'
 import { ensureLoggedInOrRedirect } from '@/utils/auth'
-import { type PatientOrder, expireHintText, formatOrderFeeCents, formatOrderTime, isFreeOrderFee, orderDisplayTime } from '@/utils/orderPayment'
+import { type PatientOrder, expireHintText, formatOrderFeeCents, formatOrderTime, isFreeOrderFee, orderDisplayTime, formatOrderClock } from '@/utils/orderPayment'
 
 const orders = ref<PatientOrder[]>([])
 const loading = ref(true)
@@ -70,11 +70,6 @@ const statusLabel = (status: string) => {
     REFUNDED: '已退款',
   }
   return map[status] || status
-}
-
-const formatTime = (s: string) => {
-  if (!s) return ''
-  return s.replace('T', ' ').slice(0, 19)
 }
 
 const expireHint = (expiresAt: string) => expireHintText(expiresAt)

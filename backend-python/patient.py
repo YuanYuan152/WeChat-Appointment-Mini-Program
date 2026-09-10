@@ -55,7 +55,7 @@ from refund_exemption_service import (
 )
 from schedule_meta import center_display_name, parse_center_id
 from intake_agreement import needs_intake_agreement
-from app_time import china_now
+from app_time import china_now, utc_to_china
 
 router = APIRouter(prefix="/api/mini/patient", tags=["Patient"])
 
@@ -129,6 +129,9 @@ def _build_order_out(
         account = db.query(AppAccount).filter(AppAccount.Id == order.AccountId).first()
 
     base = OrderOut.model_validate(order)
+    # PaidAt 以 UTC naive 落库，导出时转为北京时间供小程序展示
+    if order.PaidAt is not None:
+        base = base.model_copy(update={"PaidAt": utc_to_china(order.PaidAt)})
     contract_fields = _order_contract_fields(db, account, order)
     if not order.SlotId:
         return base.model_copy(update=contract_fields)

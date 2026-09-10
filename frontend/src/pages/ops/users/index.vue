@@ -26,7 +26,7 @@
         <input
           class="search-input"
           v-model="patientKeyword"
-          placeholder="搜索姓名或手机号"
+          placeholder="搜索姓名、手机号或备注"
           confirm-type="search"
           @confirm="loadPatients"
         />
@@ -62,7 +62,7 @@
         <input
           class="search-input"
           v-model="counselorKeyword"
-          placeholder="搜索咨询师姓名"
+          placeholder="搜索姓名或备注"
           confirm-type="search"
           @confirm="loadCounselors"
         />
