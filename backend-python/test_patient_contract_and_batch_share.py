@@ -686,6 +686,80 @@ class PatientContractTests(BackendServiceTestCase):
         self.assertEqual(result["totalFee"], 60_001)
         self.assertEqual(result["totalFeeYuan"], 600.01)
 
+    def test_proxy_free_experience_order_only_overrides_current_order_price(self):
+        self.patient.BoundCounselorId = 10
+        self.patient.IsContractSigned = True
+        self.db.add(AppAccount(Id=99, Mobile="13800000099", IsActive=True))
+        self.db.add(AppRoleBinding(AccountId=99, RoleType="Assistant"))
+        self.db.flush()
+
+        with (
+            patch("proxy_booking_service.validate_slot_in_rolling_window"),
+            patch(
+                "proxy_booking_service.resolve_display_price_cents",
+                side_effect=AssertionError("免费体验单不应读取定价"),
+            ),
+            patch("proxy_booking_notify.notify_proxy_order_created"),
+            patch("system_setting_service.get_proxy_order_ttl_minutes", return_value=30),
+        ):
+            result = push_proxy_order(
+                self.db,
+                staff_account_id=99,
+                patient_id=self.patient.Id,
+                counselor_id=10,
+                center_id="video",
+                start_time=datetime(2099, 12, 2, 9, 0),
+                end_time=datetime(2099, 12, 2, 9, 50),
+                is_free_experience_order=True,
+                free_order_reason=" 首次体验 ",
+            )
+
+        order = self.db.query(AppOrder).filter(AppOrder.Id == result["orderId"]).one()
+        self.assertEqual(order.TotalFee, 0)
+        self.assertTrue(order.ProxyIsFreeExperience)
+        self.assertEqual(order.ProxyFreeExperienceReason, "首次体验")
+        self.assertTrue(result["isFreeOrder"])
+        self.assertTrue(result["isFreeExperienceOrder"])
+
+    def test_proxy_free_experience_order_requires_reason_and_allowed_role(self):
+        self.patient.BoundCounselorId = 10
+        self.patient.IsContractSigned = True
+        self.db.add_all(
+            [
+                AppAccount(Id=98, Mobile="13800000098", IsActive=True),
+                AppRoleBinding(AccountId=98, RoleType="Admin"),
+                AppAccount(Id=97, Mobile="13800000097", IsActive=True),
+                AppRoleBinding(AccountId=97, RoleType="Ops"),
+            ]
+        )
+        self.db.flush()
+
+        with self.assertRaisesRegex(ValueError, "理由不能为空"):
+            push_proxy_order(
+                self.db,
+                staff_account_id=98,
+                patient_id=self.patient.Id,
+                counselor_id=10,
+                center_id="video",
+                start_time=datetime(2099, 12, 3, 9, 0),
+                end_time=datetime(2099, 12, 3, 9, 50),
+                is_free_experience_order=True,
+                free_order_reason="  ",
+            )
+
+        with self.assertRaisesRegex(ValueError, "仅管理员和咨询助理"):
+            push_proxy_order(
+                self.db,
+                staff_account_id=97,
+                patient_id=self.patient.Id,
+                counselor_id=10,
+                center_id="video",
+                start_time=datetime(2099, 12, 3, 9, 0),
+                end_time=datetime(2099, 12, 3, 9, 50),
+                is_free_experience_order=True,
+                free_order_reason="主任申请",
+            )
+
     def test_staff_proxy_push_notifies_target_counselor(self):
         schedule = self.db.query(AppSchedule).filter(AppSchedule.Id == 101).one()
         self.add_order(16, schedule.Id, "PENDING")

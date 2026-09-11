@@ -44,6 +44,8 @@ export interface AgentBookingDraft {
   slotKey: string;
   roomId: string;
   agreementIsAdult: boolean | null;
+  isFreeExperienceOrder: boolean;
+  freeOrderReason: string;
 }
 
 export function AgentBookingPanel({
@@ -56,6 +58,7 @@ export function AgentBookingPanel({
   slotError,
   patientStatusLoading,
   patientStatusError,
+  canPushFreeExperienceOrder,
   query,
   draft,
   page,
@@ -83,6 +86,7 @@ export function AgentBookingPanel({
   slotError?: string | null;
   patientStatusLoading: boolean;
   patientStatusError?: string | null;
+  canPushFreeExperienceOrder: boolean;
   query: AgentBookingQuery;
   draft: AgentBookingDraft;
   page: number;
@@ -332,6 +336,7 @@ export function AgentBookingPanel({
 
       {createOpen && (
         <ProxyBookingModal
+          canPushFreeExperienceOrder={canPushFreeExperienceOrder}
           counselor={counselor}
           draft={draft}
           patient={patient}
@@ -578,6 +583,7 @@ function ScheduleCalendarView({ rows }: { rows: ProxyScheduleCalendarItem[] }) {
 }
 
 function ProxyBookingModal({
+  canPushFreeExperienceOrder,
   patient,
   counselor,
   draft,
@@ -594,6 +600,7 @@ function ProxyBookingModal({
   onRefreshPatient,
   onClose,
 }: {
+  canPushFreeExperienceOrder: boolean;
   patient?: ProxyPersonOption;
   counselor?: ProxyPersonOption;
   draft: AgentBookingDraft;
@@ -621,6 +628,7 @@ function ProxyBookingModal({
       selectedSlot.selectable &&
       !selectedSlot.past &&
       !selectedSlot.counselorOccupied &&
+      (!draft.isFreeExperienceOrder || Boolean(draft.freeOrderReason.trim())) &&
       (patient?.isContractSigned || draft.agreementIsAdult !== null) &&
       (!needsRoom || (selectedRoom?.available && !selectedRoom.occupiedByOther)),
   );
@@ -818,6 +826,51 @@ function ProxyBookingModal({
                     : ""}
                   。
                 </div>
+              )}
+            </div>
+          )}
+
+          {canPushFreeExperienceOrder && (
+            <div className="mt-5 rounded-xl border border-[var(--lxxl-border)] bg-[#FAF8F4] p-4">
+              <label className="flex cursor-pointer items-start justify-between gap-4">
+                <span>
+                  <span className="block text-sm font-medium">是否免费体验单</span>
+                  <span className="mt-1 block text-xs leading-5 text-[var(--lxxl-muted)]">
+                    仅本次订单为 0 元，不影响咨询师或来访定价设置。
+                  </span>
+                </span>
+                <input
+                  checked={draft.isFreeExperienceOrder}
+                  className="mt-1 h-4 w-4 accent-[var(--lxxl-green)]"
+                  type="checkbox"
+                  onChange={(event) => {
+                    if (!event.target.checked) {
+                      setDraft((prev) => ({
+                        ...prev,
+                        isFreeExperienceOrder: false,
+                        freeOrderReason: "",
+                      }));
+                      return;
+                    }
+                    const confirmed = window.confirm("是否将本次代理预约推送为 0 元免费体验订单？");
+                    if (confirmed) {
+                      setDraft((prev) => ({ ...prev, isFreeExperienceOrder: true }));
+                    }
+                  }}
+                />
+              </label>
+              {draft.isFreeExperienceOrder && (
+                <QueryField className="mt-4" label="免费订单推送理由" required>
+                  <textarea
+                    className={`${queryControlClass} min-h-24 resize-y`}
+                    maxLength={500}
+                    placeholder="请输入免费订单推送理由"
+                    value={draft.freeOrderReason}
+                    onChange={(event) =>
+                      setDraft((prev) => ({ ...prev, freeOrderReason: event.target.value }))
+                    }
+                  />
+                </QueryField>
               )}
             </div>
           )}

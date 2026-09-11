@@ -56,6 +56,8 @@ export function pushProxyOrder(input: {
   roomId?: string;
   scheduleId?: number;
   agreementIsAdult?: boolean;
+  isFreeExperienceOrder?: boolean;
+  freeOrderReason?: string;
 }) {
   return apiRequest<ProxyPushOrderResult>(`${BASE_PATH}/push-order`, {
     method: "POST",
@@ -68,6 +70,8 @@ export function pushProxyOrder(input: {
       room_id: input.roomId || undefined,
       schedule_id: input.scheduleId || undefined,
       agreement_is_adult: input.agreementIsAdult,
+      is_free_experience_order: input.isFreeExperienceOrder || false,
+      free_order_reason: input.freeOrderReason || undefined,
     }),
   });
 }

@@ -157,6 +157,7 @@
               <text class="label">预约中心</text>
               <text class="value">{{ order.centerName }}</text>
             </view>
+            <CenterAddressRow :center-id="order.centerId" as-detail-row />
           </view>
 
           <view class="detail-block">
@@ -255,6 +256,7 @@ import {
   formatOrderTime,
   isFreeOrderFee,
 } from '@/utils/orderPayment'
+import CenterAddressRow from '@/components/CenterAddressRow.vue'
 import {
   DEFAULT_ONBOARDING_EVENT_KEYS,
   requestOfficialSubscribeInGesture,

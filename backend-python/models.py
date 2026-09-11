@@ -108,6 +108,8 @@ class AppOrder(Base):
     ProxyCreatedByAccountId = Column(Integer, nullable=True)
     ProxyAgreementIsAdult = Column(Boolean, nullable=True)
     ProxyAgreementType = Column(String(20), nullable=True)
+    ProxyIsFreeExperience = Column(Boolean, nullable=False, default=False)
+    ProxyFreeExperienceReason = Column(Unicode(500), nullable=True)
     IntakeAgreementType = Column(String(20), nullable=True)
     UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
 

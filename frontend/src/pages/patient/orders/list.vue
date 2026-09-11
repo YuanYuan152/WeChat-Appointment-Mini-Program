@@ -19,6 +19,10 @@
           <text class="order-desc">{{ orderSummary(order) }}</text>
           <text class="order-price">{{ formatOrderFeeCents(order.TotalFee) }}</text>
         </view>
+        <view v-if="orderCenterAddress(order)" class="order-address-row" @click.stop>
+          <text class="order-address">{{ orderCenterAddress(order) }}</text>
+          <text class="order-copy" @click.stop="copyAddress(order)">复制</text>
+        </view>
         <view v-if="order.proxyAgreementLabel && order.Status === 'PENDING'" class="agreement-hint">
           待签署：{{ order.proxyAgreementLabel }}
         </view>
@@ -54,6 +58,7 @@ import { API_ENDPOINTS } from '@/config/api'
 import OrderPaymentSheet from '@/components/OrderPaymentSheet.vue'
 import { ensureLoggedInOrRedirect } from '@/utils/auth'
 import { type PatientOrder, expireHintText, formatOrderFeeCents, formatOrderTime, isFreeOrderFee, orderDisplayTime, formatOrderClock } from '@/utils/orderPayment'
+import { copyContactCenterAddress, getContactCenterAddress } from '@/constants/contactInfo'
 
 const orders = ref<PatientOrder[]>([])
 const loading = ref(true)
@@ -74,9 +79,16 @@ const statusLabel = (status: string) => {
 
 const expireHint = (expiresAt: string) => expireHintText(expiresAt)
 
+const orderCenterAddress = (order: PatientOrder) => getContactCenterAddress(order.centerId)
+
+const copyAddress = (order: PatientOrder) => {
+  copyContactCenterAddress(orderCenterAddress(order))
+}
+
 const orderSummary = (order: PatientOrder) => {
   if (order.counselorName && order.startTime) {
-    return `${order.counselorName} · ${formatOrderTime(order.startTime, order.endTime)}`
+    const center = order.centerName ? ` · ${order.centerName}` : ''
+    return `${order.counselorName} · ${formatOrderTime(order.startTime, order.endTime)}${center}`
   }
   return order.Description || '心理咨询预约'
 }
@@ -162,6 +174,26 @@ onShow(() => {
 .order-status.paid { color: #10B981; }
 .order-status.cancelled { color: #9CA3AF; }
 .order-body { display: flex; justify-content: space-between; margin-bottom: 12rpx; gap: 16rpx; }
+.order-address-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 16rpx;
+  margin-bottom: 12rpx;
+}
+.order-address {
+  flex: 1;
+  min-width: 0;
+  font-size: 24rpx;
+  line-height: 1.5;
+  color: #6B7280;
+  word-break: break-all;
+}
+.order-copy {
+  flex-shrink: 0;
+  font-size: 24rpx;
+  color: #0D9488;
+  line-height: 1.5;
+}
 .agreement-hint {
   font-size: 24rpx;
   color: #B45309;

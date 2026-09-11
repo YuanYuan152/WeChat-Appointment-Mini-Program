@@ -200,6 +200,7 @@ export const API_ENDPOINTS = {
     rolePolicy: '/api/mini/admin/role-policy',
     users: '/api/mini/admin/users',
     createUserByMobile: '/api/mini/admin/users/by-mobile',
+    cleanupShellUsers: '/api/mini/admin/users/cleanup-shells',
     deleteUser: (uid: number | string) => `/api/mini/admin/users/${uid}`,
     bindRole: (uid: number | string) => `/api/mini/admin/users/${uid}/roles`,
     refundExemptions: '/api/mini/admin/refund-exemptions',

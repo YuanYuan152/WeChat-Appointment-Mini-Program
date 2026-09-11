@@ -35,6 +35,8 @@ const INITIAL_DRAFT = (): AgentBookingDraft => ({
   slotKey: "",
   roomId: "",
   agreementIsAdult: null,
+  isFreeExperienceOrder: false,
+  freeOrderReason: "",
 });
 
 export function AgentBookingScreen() {
@@ -46,7 +48,9 @@ export function AgentBookingScreen() {
 }
 
 function AgentBookingScreenContent() {
-  const { clearNotice, refreshKey, showNotice } = useAppRoute();
+  const { clearNotice, currentUser, refreshKey, showNotice } = useAppRoute();
+  const activeRole = currentUser.activeRole || currentUser.roles[0];
+  const canPushFreeExperienceOrder = activeRole === "Admin" || activeRole === "Assistant";
   const [data, setData] = useState<ScreenData>({});
   const [patient, setPatientState] = useState<ProxyPersonOption>();
   const [counselor, setCounselorState] = useState<ProxyPersonOption>();
@@ -425,6 +429,8 @@ function AgentBookingScreenContent() {
             : draft.agreementIsAdult === null
               ? undefined
               : draft.agreementIsAdult,
+          isFreeExperienceOrder: draft.isFreeExperienceOrder,
+          freeOrderReason: draft.isFreeExperienceOrder ? draft.freeOrderReason.trim() : undefined,
         });
         const successText = proxyOrderSuccessText(result);
         showNotice("success", successText);
@@ -444,7 +450,17 @@ function AgentBookingScreenContent() {
         return undefined;
       }
     },
-    [activeQuery, clearNotice, draft.agreementIsAdult, draft.centerId, loadCalendar, refreshPatientContract, showNotice],
+    [
+      activeQuery,
+      clearNotice,
+      draft.agreementIsAdult,
+      draft.centerId,
+      draft.freeOrderReason,
+      draft.isFreeExperienceOrder,
+      loadCalendar,
+      refreshPatientContract,
+      showNotice,
+    ],
   );
 
   const refreshCurrentPatient = useCallback(
@@ -459,6 +475,7 @@ function AgentBookingScreenContent() {
 
   return (
     <AgentBookingPanel
+      canPushFreeExperienceOrder={canPushFreeExperienceOrder}
       calendar={data.proxyScheduleCalendar}
       counselor={counselor}
       draft={draft}

@@ -69,6 +69,7 @@
             <text class="time">{{ formatSlotRange(r.startTime, r.endTime) }}</text>
 
             <text v-if="r.centerName" class="center">{{ r.centerName }}</text>
+            <CenterAddressRow :center-id="r.centerId" compact />
 
           </view>
 
@@ -232,6 +233,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { httpV2 } from '@/utils/http'
 
 import { API_ENDPOINTS } from '@/config/api'
+import CenterAddressRow from '@/components/CenterAddressRow.vue'
 
 
 

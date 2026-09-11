@@ -89,7 +89,7 @@ from counselor_work_years import (
     work_start_year_for_admin,
 )
 from counselor_avatar import DEFAULT_COUNSELOR_PUBLIC_AVATAR, resolve_counselor_public_avatar_url
-from account_deletion_service import hard_delete_account
+from account_deletion_service import cleanup_shell_accounts, hard_delete_account
 from counselor_identity_service import (
     apply_legacy_doctor_to_profile,
     dedupe_counselor_profiles,
@@ -818,6 +818,25 @@ def unbind_user_role(
         status_code=400,
         detail="单账号仅支持一个角色，请通过「更换角色」修改权限，不支持单独解绑",
     )
+
+
+@router.post("/users/cleanup-shells", summary="清理无手机号的壳用户")
+def cleanup_shell_users(
+    admin: AppAccount = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """仅清理无手机号且使用系统默认昵称的账号；有核心业务数据的账号跳过。"""
+    result = cleanup_shell_accounts(db, exclude_account_ids={int(admin.Id)})
+    db.commit()
+    deleted_count = int(result["deletedCount"])
+    skipped_count = int(result["skippedCount"])
+    message = f"已清理 {deleted_count} 个壳用户"
+    if skipped_count:
+        message += f"，另有 {skipped_count} 个账号因存在业务数据已跳过"
+    return {
+        **result,
+        "message": message,
+    }
 
 
 @router.delete("/users/{user_id}", summary="删除用户（物理删除账号）")

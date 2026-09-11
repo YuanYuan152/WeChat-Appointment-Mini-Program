@@ -557,15 +557,26 @@ def push_proxy_order(
     existing_schedule_id: Optional[int] = None,
     agreement_is_adult: Optional[bool] = None,
     agreement_type: Optional[str] = None,
+    is_free_experience_order: bool = False,
+    free_order_reason: Optional[str] = None,
     notify_target_counselor: bool = True,
 ) -> Dict[str, Any]:
     from system_setting_service import get_proxy_order_ttl_minutes, proxy_order_ttl_push_message
+    from role_active import get_account_role
 
     expire_pending_proxy_orders(db)
     from patient_contract_service import acquire_patient_contract_lock
 
     acquire_patient_contract_lock(db, patient_id)
     ttl_minutes = get_proxy_order_ttl_minutes(db)
+    normalized_free_order_reason = (free_order_reason or "").strip()
+    if is_free_experience_order:
+        if get_account_role(db, staff_account_id) not in {"Admin", "Assistant"}:
+            raise ValueError("仅管理员和咨询助理可推送免费体验单")
+        if not normalized_free_order_reason:
+            raise ValueError("免费订单推送理由不能为空")
+    else:
+        normalized_free_order_reason = ""
 
     patient = db.query(AppAccount).filter(AppAccount.Id == patient_id, AppAccount.IsActive == True).first()
     if not patient:
@@ -712,7 +723,11 @@ def push_proxy_order(
         db.add(schedule)
         db.flush()
 
-    total_fee = resolve_display_price_cents(db, patient_id, counselor_id)
+    total_fee = (
+        0
+        if is_free_experience_order
+        else resolve_display_price_cents(db, patient_id, counselor_id)
+    )
     out_trade_no = f"PROXY{int(time.time())}{random.randint(1000, 9999)}"
     expires_at = _now() + timedelta(minutes=ttl_minutes)
     schedule_mode = PROXY_SCHEDULE_EXISTING if existing_schedule_id else PROXY_SCHEDULE_NEW
@@ -731,6 +746,8 @@ def push_proxy_order(
             else None
         ),
         ProxyAgreementType=resolved_agreement_type if needs_agreement else None,
+        ProxyIsFreeExperience=is_free_experience_order,
+        ProxyFreeExperienceReason=normalized_free_order_reason or None,
     )
     db.add(order)
     db.flush()
@@ -754,6 +771,7 @@ def push_proxy_order(
         "totalFee": total_fee,
         "totalFeeYuan": total_fee / 100,
         "isFreeOrder": int(total_fee or 0) <= 0,
+        "isFreeExperienceOrder": bool(is_free_experience_order),
         "expiresAt": expires_at.isoformat(),
         "message": (
             "已推送免费单"

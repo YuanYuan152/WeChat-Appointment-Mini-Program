@@ -8,7 +8,7 @@ from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from account_deletion_service import hard_delete_account
+from account_deletion_service import cleanup_shell_accounts, hard_delete_account
 from admin import (
     AdminCounselorUpdatePayload,
     BindRoleRequest,
@@ -498,6 +498,54 @@ class BackendSafetyRegressionTests(unittest.TestCase):
         self.assertIsNotNone(self.db.query(AppAccount).filter_by(Id=2).first())
         self.assertIsNotNone(self.db.query(AppSchedule).filter_by(Id=schedule.Id).first())
         self.assertEqual(order.Status, "PAID")
+
+    def test_cleanup_shell_accounts_only_deletes_matching_mobileless_users(self):
+        shell_named = AppAccount(
+            Id=81,
+            OpenId="merged_account_81",
+            Nickname="用户1234",
+            ActiveRole="Patient",
+            IsActive=False,
+        )
+        shell_unnamed = AppAccount(
+            Id=82,
+            OpenId="wx_abandoned_82",
+            ActiveRole="Patient",
+            IsActive=True,
+        )
+        keep_named = AppAccount(
+            Id=83,
+            OpenId="wx_named_83",
+            Nickname="正常昵称",
+            ActiveRole="Patient",
+            IsActive=True,
+        )
+        keep_mobile = AppAccount(
+            Id=84,
+            OpenId="wx_mobile_84",
+            Mobile="13800000084",
+            Nickname="用户0084",
+            ActiveRole="Patient",
+            IsActive=True,
+        )
+        self.db.add_all([shell_named, shell_unnamed, keep_named, keep_mobile])
+        self.db.add_all([
+            AppRoleBinding(AccountId=81, RoleType="Patient"),
+            AppRoleBinding(AccountId=82, RoleType="Patient"),
+            AppRoleBinding(AccountId=83, RoleType="Patient"),
+            AppRoleBinding(AccountId=84, RoleType="Patient"),
+        ])
+        self.db.commit()
+
+        result = cleanup_shell_accounts(self.db)
+        self.db.commit()
+
+        self.assertEqual(result["deletedCount"], 2)
+        self.assertEqual(result["deletedUserIds"], [81, 82])
+        self.assertIsNone(self.db.query(AppAccount).filter_by(Id=81).first())
+        self.assertIsNone(self.db.query(AppAccount).filter_by(Id=82).first())
+        self.assertIsNotNone(self.db.query(AppAccount).filter_by(Id=83).first())
+        self.assertIsNotNone(self.db.query(AppAccount).filter_by(Id=84).first())
 
     def test_proxy_order_message_enriches_live_status_preserves_contract_snapshot(self):
         self.add_counselor(name="李心怡")

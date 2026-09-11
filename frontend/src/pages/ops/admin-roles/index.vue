@@ -27,6 +27,14 @@
       </view>
       <view class="search-btn" @tap="reloadUsers">搜索</view>
       <view class="add-btn" @tap="openAddModal">+ 添加用户</view>
+      <view
+        v-if="actorRole === 'Admin'"
+        class="cleanup-btn"
+        :class="{ disabled: cleaningShellUsers }"
+        @tap="cleanupShellUsers"
+      >
+        {{ cleaningShellUsers ? '清理中...' : '清除壳用户' }}
+      </view>
     </view>
 
     <view class="filter-row">
@@ -375,6 +383,7 @@ const selected = reactive<Record<number, string>>({})
 const showAddModal = ref(false)
 
 const adding = ref(false)
+const cleaningShellUsers = ref(false)
 
 const addForm = reactive({
   mobile: '',
@@ -757,6 +766,40 @@ const deleteUser = (user: AdminUser) => {
   })
 }
 
+const cleanupShellUsers = () => {
+  if (cleaningShellUsers.value) return
+  uni.showModal({
+    title: '确认清除壳用户',
+    content:
+      '将永久删除所有无手机号，且昵称为“用户+数字”、昵称为“未留姓名用户”或姓名为空的壳账号。有咨询、订单或个案数据的账号会自动跳过。该操作不可恢复。',
+    confirmText: '确认清理',
+    confirmColor: '#B91C1C',
+    success: async (modal) => {
+      if (!modal.confirm) return
+      cleaningShellUsers.value = true
+      try {
+        const res = await httpV2.post<{
+          message?: string
+          deletedCount?: number
+          skippedCount?: number
+        }>(API_ENDPOINTS.admin.cleanupShellUsers)
+        if (res.code !== 0) {
+          uni.showToast({ title: res.msg || '清理失败', icon: 'none' })
+          return
+        }
+        await load(true)
+        uni.showModal({
+          title: '清理完成',
+          content: res.data?.message || '壳用户已清理',
+          showCancel: false,
+        })
+      } finally {
+        cleaningShellUsers.value = false
+      }
+    },
+  })
+}
+
 onMounted(() => {
   void load(true)
   void refreshSubscribeHint()
@@ -862,6 +905,24 @@ onShow(() => {
   font-size: 28rpx;
   font-weight: 600;
   white-space: nowrap;
+}
+
+.cleanup-btn {
+  flex-shrink: 0;
+  box-sizing: border-box;
+  height: 88rpx;
+  line-height: 88rpx;
+  padding: 0 28rpx;
+  background: #FEE2E2;
+  color: #B91C1C;
+  border-radius: 16rpx;
+  font-size: 28rpx;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.cleanup-btn.disabled {
+  opacity: 0.55;
 }
 
 .filter-row {

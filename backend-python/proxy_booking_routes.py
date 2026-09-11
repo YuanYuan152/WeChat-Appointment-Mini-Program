@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app_time import china_now
 from auth import get_current_account, AppAccount
+from role_active import get_account_role
 from staff_roles import account_has_staff_workbench
 from counselor import _calendar_items_for_schedules
 from database import get_db
@@ -55,6 +56,8 @@ class ProxyPushOrderRequest(BaseModel):
         None,
         description="未签约来访必填：TONGXIN / YANGFAN / QIHANG",
     )
+    is_free_experience_order: bool = False
+    free_order_reason: Optional[str] = Field(None, max_length=500)
 
 
 class ScheduleCalendarOut(BaseModel):
@@ -170,6 +173,11 @@ def proxy_push_order(
     staff: AppAccount = Depends(require_staff_workbench),
     db: Session = Depends(get_db),
 ):
+    if body.is_free_experience_order:
+        if get_account_role(db, staff.Id) not in {"Admin", "Assistant"}:
+            raise HTTPException(status_code=403, detail="仅管理员和咨询助理可推送免费体验单")
+        if not (body.free_order_reason or "").strip():
+            raise HTTPException(status_code=400, detail="免费订单推送理由不能为空")
     try:
         result = push_proxy_order(
             db,
@@ -183,6 +191,8 @@ def proxy_push_order(
             existing_schedule_id=body.schedule_id,
             agreement_is_adult=body.agreement_is_adult,
             agreement_type=body.agreement_type,
+            is_free_experience_order=body.is_free_experience_order,
+            free_order_reason=body.free_order_reason,
         )
         db.commit()
         return result

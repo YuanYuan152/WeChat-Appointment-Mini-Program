@@ -39,6 +39,8 @@ APP_ORDER_COLUMNS = {
     "ProxyCreatedByAccountId": "INT NULL",
     "ProxyAgreementIsAdult": "BIT NULL",
     "ProxyAgreementType": "NVARCHAR(20) NULL",
+    "ProxyIsFreeExperience": "BIT NOT NULL CONSTRAINT DF_AppOrder_ProxyIsFreeExperience DEFAULT 0",
+    "ProxyFreeExperienceReason": "NVARCHAR(500) NULL",
     "IntakeAgreementType": "NVARCHAR(20) NULL",
 }
 

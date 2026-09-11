@@ -16,6 +16,7 @@ from role_active import (
     get_account_role,
     set_account_role,
 )
+from account_deletion_service import hard_delete_account
 from user_avatar import resolve_user_avatar_for_account, uses_visitor_default_avatar
 from patient_registration import ensure_default_patient_registration
 
@@ -549,18 +550,21 @@ def bind_mobile(
         )
         session_key = current_session.SessionKey if current_session else None
 
-        # 先释放当前临时账号的微信身份，再写入预建账号。
-        current_account.OpenId = f"merged_account_{current_account.Id}"
-        current_account.IsActive = False
-        current_account.DeletedAt = datetime.utcnow()
-        current_account.UpdatedAt = datetime.utcnow()
-        db.query(AppLoginSession).filter(
-            AppLoginSession.AccountId == current_account.Id
-        ).delete(synchronize_session=False)
+        # 先保存微信身份并物理删除当前临时账号，再写入预建账号，避免留下
+        # merged_account_*、无手机号的壳用户。
+        current_unionid = current_account.UnionId
+        try:
+            hard_delete_account(db, current_account.Id)
+        except ValueError as exc:
+            db.rollback()
+            raise HTTPException(
+                status_code=409,
+                detail=f"临时登录账号存在关联数据，无法完成预注册账号认领：{exc}",
+            ) from exc
 
         existing.OpenId = current_openid
-        if current_account.UnionId and not existing.UnionId:
-            existing.UnionId = current_account.UnionId
+        if current_unionid and not existing.UnionId:
+            existing.UnionId = current_unionid
         existing.UpdatedAt = datetime.utcnow()
 
         token, expire = create_access_token(

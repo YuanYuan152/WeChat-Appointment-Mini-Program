@@ -69,6 +69,7 @@
             <text class="time">{{ formatSlotRange(r.startTime, r.endTime) }}</text>
 
             <text v-if="r.centerName" class="center">{{ r.centerName }}</text>
+            <CenterAddressRow :center-id="r.centerId" compact />
 
           </view>
 
@@ -217,6 +218,20 @@
 
           </view>
 
+          <view v-if="cancelTargetCenterAddress" class="cancel-row cancel-address-row">
+
+            <text class="cancel-label">中心地址</text>
+
+            <view class="cancel-address-body">
+
+              <text class="cancel-value">{{ cancelTargetCenterAddress }}</text>
+
+              <text class="copy-link" @tap.stop="copyCancelAddress">复制</text>
+
+            </view>
+
+          </view>
+
           <view class="cancel-row">
 
             <text class="cancel-label">是否全额退款</text>
@@ -302,8 +317,10 @@ import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
 import { goalScoreHint, rhythmScoreHint, PATIENT_RECORDS_AFTER_FEEDBACK } from '@/constants/consultationFeedback'
 import FeedbackStarRating from '@/components/FeedbackStarRating.vue'
+import CenterAddressRow from '@/components/CenterAddressRow.vue'
 import { fetchSystemSettings, formatProxyOrderTtlHint } from '@/utils/systemSettings'
 import { resolveCounselorPublicAvatar } from '@/utils/image'
+import { copyContactCenterAddress, getContactCenterAddress } from '@/constants/contactInfo'
 
 const proxyOrderTtlMinutes = ref(120)
 const proxyOrderPatientHint = computed(() => formatProxyOrderTtlHint(proxyOrderTtlMinutes.value))
@@ -409,6 +426,14 @@ const cancellingId = ref<number | null>(null)
 const showCancelModal = ref(false)
 
 const cancelTarget = ref<Consultation | null>(null)
+
+const cancelTargetCenterAddress = computed(() =>
+  getContactCenterAddress(cancelTarget.value?.centerId),
+)
+
+const copyCancelAddress = () => {
+  copyContactCenterAddress(cancelTargetCenterAddress.value)
+}
 
 
 
@@ -1072,6 +1097,27 @@ defineExpose({ refresh })
 .cancel-label { font-size: 28rpx; color: #6B7280; font-weight: 500; flex-shrink: 0; }
 
 .cancel-value { font-size: 28rpx; color: #1F2937; font-weight: 600; text-align: right; flex: 1; line-height: 1.5; }
+
+.cancel-address-row {
+  align-items: flex-start;
+}
+
+.cancel-address-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 16rpx;
+  flex: 1;
+  min-width: 0;
+  justify-content: flex-end;
+}
+
+.copy-link {
+  flex-shrink: 0;
+  font-size: 26rpx;
+  color: #0D9488;
+  line-height: 1.5;
+  padding-top: 2rpx;
+}
 
 .cancel-value.highlight { color: #3D5A4E; }
 

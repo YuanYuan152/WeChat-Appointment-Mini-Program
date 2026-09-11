@@ -1073,6 +1073,7 @@ export interface ProxyPushOrderResult {
   totalFee: number;
   totalFeeYuan: number;
   isFreeOrder?: boolean;
+  isFreeExperienceOrder?: boolean;
   expiresAt?: string | null;
   message: string;
   proxyOrderTtlMinutes?: number;

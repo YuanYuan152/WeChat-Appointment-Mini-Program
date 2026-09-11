@@ -15,14 +15,7 @@ from web_auth import RegisterRequest, SendCodeRequest, web_register, web_send_co
 class WebAuthStaffInviteTests(unittest.TestCase):
     def setUp(self):
         self.engine = create_engine("sqlite:///:memory:")
-        Base.metadata.create_all(
-            self.engine,
-            tables=[
-                AppAccount.__table__,
-                AppRoleBinding.__table__,
-                AppLoginSession.__table__,
-            ],
-        )
+        Base.metadata.create_all(self.engine)
         self.db = sessionmaker(bind=self.engine, autoflush=False)()
 
     def tearDown(self):
@@ -128,11 +121,10 @@ class WebAuthStaffInviteTests(unittest.TestCase):
         )
 
         self.db.refresh(invited)
-        self.db.refresh(current)
         self.assertEqual("replacement-token", result["token"])
         self.assertEqual(invited.Id, result["id"])
         self.assertEqual("wx_openid_new", invited.OpenId)
-        self.assertFalse(current.IsActive)
+        self.assertIsNone(self.db.query(AppAccount).filter(AppAccount.Id == current.Id).first())
         self.assertEqual(
             0,
             self.db.query(AppLoginSession)
@@ -183,11 +175,10 @@ class WebAuthStaffInviteTests(unittest.TestCase):
         )
 
         self.db.refresh(imported)
-        self.db.refresh(current)
         self.assertEqual("replacement-token", result["token"])
         self.assertEqual(imported.Id, result["id"])
         self.assertEqual("wx_openid_import_claim", imported.OpenId)
-        self.assertFalse(current.IsActive)
+        self.assertIsNone(self.db.query(AppAccount).filter(AppAccount.Id == current.Id).first())
 
 
 if __name__ == "__main__":

@@ -29,6 +29,30 @@ export const CONTACT_CENTERS: ContactCenter[] = [
   },
 ]
 
+export const CONTACT_CENTER_ADDRESS_MAP: Record<string, string> = Object.fromEntries(
+  CONTACT_CENTERS.map((c) => [c.id, c.address]),
+)
+
+/** 物理咨询中心地址（视频咨询无实体地址） */
+export function getContactCenterAddress(centerId?: string | null): string {
+  const id = (centerId || '').trim()
+  if (!id) return ''
+  return CONTACT_CENTER_ADDRESS_MAP[id] || ''
+}
+
+export function copyContactCenterAddress(address: string) {
+  const text = (address || '').trim()
+  if (!text) {
+    uni.showToast({ title: '暂无地址可复制', icon: 'none' })
+    return
+  }
+  uni.setClipboardData({
+    data: text,
+    success: () => uni.showToast({ title: '地址已复制', icon: 'success' }),
+    fail: () => uni.showToast({ title: '复制失败', icon: 'none' }),
+  })
+}
+
 export const ASSISTANT_CONTACT: AssistantContact = {
   name: '咨询助理',
   phone: '15316025286',

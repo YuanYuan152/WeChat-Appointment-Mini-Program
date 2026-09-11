@@ -238,6 +238,29 @@
                 >{{ qihangAgreementTitle }}</view>
               </view>
             </view>
+
+            <view v-if="canPushFreeExperienceOrder" class="form-item">
+              <view class="free-order-row">
+                <view>
+                  <text class="form-label">是否免费体验单</text>
+                  <text class="form-hint">仅本次订单为 0 元，不影响定价设置</text>
+                </view>
+                <switch
+                  color="#3D5A4E"
+                  :checked="form.isFreeExperienceOrder"
+                  @change="onFreeExperienceChange"
+                />
+              </view>
+              <view v-if="form.isFreeExperienceOrder" class="free-reason-wrap">
+                <text class="form-label">免费订单推送理由 <text class="required">*</text></text>
+                <textarea
+                  v-model="form.freeOrderReason"
+                  class="free-reason-input"
+                  :maxlength="500"
+                  placeholder="请输入免费订单推送理由"
+                />
+              </view>
+            </view>
           </view>
         </scroll-view>
 
@@ -263,6 +286,8 @@ import { formatDateLocal, ROLLING_WINDOW_DAYS, addDays } from '@/constants/sched
 import { formatPatientInline } from '@/utils/patientContract'
 import { fetchSystemSettings, formatProxyOrderPushHint } from '@/utils/systemSettings'
 import { refreshSubscribeHint, tryOfficialRoleSubscribeInGesture } from '@/utils/subscribePrompt'
+import { useUserStore } from '@/store/user'
+import { resolveAccountRole } from '@/constants/roles'
 import {
   TONGXIN_AGREEMENT_TITLE,
   YANGFAN_AGREEMENT_TITLE,
@@ -273,6 +298,11 @@ import {
 const tongxinAgreementTitle = TONGXIN_AGREEMENT_TITLE
 const yangfanAgreementTitle = YANGFAN_AGREEMENT_TITLE
 const qihangAgreementTitle = QIHANG_AGREEMENT_TITLE
+const userStore = useUserStore()
+const canPushFreeExperienceOrder = computed(() => {
+  const role = userStore.activeRole || resolveAccountRole(userStore.roles)
+  return role === 'Admin' || role === 'Assistant'
+})
 
 const proxyOrderTtlMinutes = ref(120)
 const proxyOrderPayHint = computed(() => formatProxyOrderPushHint(proxyOrderTtlMinutes.value))
@@ -384,6 +414,7 @@ const canPushOrder = computed(() => {
   if (!form.value.slotKey) return false
   if (!isVideoCenterSelected.value && !form.value.roomId) return false
   if (!patientContractSigned.value && !form.value.agreementType) return false
+  if (form.value.isFreeExperienceOrder && !form.value.freeOrderReason.trim()) return false
   return true
 })
 const isVideoCenterSelected = computed(() => isVideoCenter(form.value.centerId))
@@ -397,6 +428,8 @@ const form = ref({
   endTime: '',
   scheduleId: null as number | null,
   agreementType: null as ConsultationAgreementType | null,
+  isFreeExperienceOrder: false,
+  freeOrderReason: '',
 })
 
 let patientSearchTimer: ReturnType<typeof setTimeout> | null = null
@@ -666,6 +699,8 @@ const openAddModal = () => {
     endTime: '',
     scheduleId: null,
     agreementType: null,
+    isFreeExperienceOrder: false,
+    freeOrderReason: '',
   }
   showAdd.value = true
   loadSlotOptions()
@@ -704,6 +739,23 @@ const selectRoom = (room: RoomOption) => {
   form.value.roomId = room.roomId
 }
 
+const onFreeExperienceChange = (e: { detail: { value: boolean } }) => {
+  if (!e.detail.value) {
+    form.value.isFreeExperienceOrder = false
+    form.value.freeOrderReason = ''
+    return
+  }
+  uni.showModal({
+    title: '推送免费订单',
+    content: '是否将本次代理预约推送为 0 元免费体验订单？',
+    confirmText: '确认推送',
+    success: ({ confirm }) => {
+      form.value.isFreeExperienceOrder = confirm
+      if (!confirm) form.value.freeOrderReason = ''
+    },
+  })
+}
+
 const submitProxyOrder = () => {
   if (!selectedPatient.value || !selectedCounselor.value) return
   if (!form.value.slotKey) {
@@ -718,6 +770,10 @@ const submitProxyOrder = () => {
     uni.showToast({ title: '请选择签署协议类型', icon: 'none' })
     return
   }
+  if (form.value.isFreeExperienceOrder && !form.value.freeOrderReason.trim()) {
+    uni.showToast({ title: '请填写免费订单推送理由', icon: 'none' })
+    return
+  }
   const subscribeDone = tryOfficialRoleSubscribeInGesture('workbench')
   submitting.value = true
   void (async () => {
@@ -730,6 +786,10 @@ const submitProxyOrder = () => {
         end_time: form.value.endTime,
         room_id: isVideoCenterSelected.value ? null : form.value.roomId,
         schedule_id: form.value.scheduleId,
+        is_free_experience_order: form.value.isFreeExperienceOrder,
+        free_order_reason: form.value.isFreeExperienceOrder
+          ? form.value.freeOrderReason.trim()
+          : undefined,
       }
       if (!patientContractSigned.value) {
         payload.agreement_type = form.value.agreementType
@@ -1107,6 +1167,32 @@ onLoad(async (opts) => {
   font-size: 26rpx;
   color: #6B6560;
   margin-bottom: 12rpx;
+}
+
+.free-order-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24rpx;
+}
+
+.free-order-row .form-label,
+.free-order-row .form-hint {
+  display: block;
+}
+
+.free-reason-wrap {
+  margin-top: 20rpx;
+}
+
+.free-reason-input {
+  width: 100%;
+  min-height: 144rpx;
+  padding: 20rpx;
+  box-sizing: border-box;
+  border-radius: 12rpx;
+  background: #F9FAFB;
+  font-size: 26rpx;
 }
 
 .center-row {

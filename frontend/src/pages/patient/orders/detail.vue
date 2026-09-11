@@ -21,6 +21,7 @@
             <text class="label">预约中心</text>
             <text class="value">{{ order.centerName }}</text>
           </view>
+          <CenterAddressRow :center-id="order.centerId" as-detail-row />
         </view>
 
         <view class="section">
@@ -65,6 +66,7 @@ import { onLoad } from '@dcloudio/uni-app'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
 import OrderPaymentSheet from '@/components/OrderPaymentSheet.vue'
+import CenterAddressRow from '@/components/CenterAddressRow.vue'
 import { type PatientOrder, expireHintText, formatOrderFeeCents, formatOrderTime, isFreeOrderFee, orderDisplayTime, formatOrderClock } from '@/utils/orderPayment'
 
 const order = ref<PatientOrder | null>(null)

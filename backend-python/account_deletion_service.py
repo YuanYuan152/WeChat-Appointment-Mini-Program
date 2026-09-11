@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import re
 from typing import Optional
 
 from sqlalchemy import inspect as sa_inspect, or_
@@ -290,6 +291,7 @@ def hard_delete_account(
     account_id: int,
     *,
     purge_business: bool = False,
+    _assessment_table_presence: Optional[tuple[bool, bool]] = None,
 ) -> None:
     """物理删除账号及可安全移除的附属数据。
 
@@ -305,6 +307,14 @@ def hard_delete_account(
     account = db.query(AppAccount).filter(AppAccount.Id == account_id).first()
     if not account:
         raise ValueError("用户不存在")
+
+    # 表结构探测可能使用独立事务；必须在任何删除语句之前完成，避免部分驱动
+    # 在探测时回滚当前事务中已经执行的批量删除。
+    if _assessment_table_presence is None:
+        assessment_report_exists = _orm_table_exists(db, AppAssessmentReport)
+        assessment_audit_log_exists = _orm_table_exists(db, AppAssessmentAuditLog)
+    else:
+        assessment_report_exists, assessment_audit_log_exists = _assessment_table_presence
 
     from patient_contract_service import retire_counselor_booking_relationships
 
@@ -397,11 +407,11 @@ def hard_delete_account(
         synchronize_session=False
     )
     # EAP 测评表由 ensure_schema 创建；未建表时跳过，避免 42S02 导致整次删除回滚
-    if _orm_table_exists(db, AppAssessmentReport):
+    if assessment_report_exists:
         db.query(AppAssessmentReport).filter(AppAssessmentReport.AccountId == account_id).delete(
             synchronize_session=False
         )
-    if _orm_table_exists(db, AppAssessmentAuditLog):
+    if assessment_audit_log_exists:
         db.query(AppAssessmentAuditLog).filter(
             AppAssessmentAuditLog.ActorAccountId == account_id
         ).update(
@@ -444,3 +454,65 @@ def hard_delete_account(
 
     db.delete(account)
     db.flush()
+
+
+def is_shell_account(account: AppAccount) -> bool:
+    """识别登录/认领流程遗留的无手机号壳账号。
+
+    “未留姓名用户”在部分列表中是空姓名账号的展示兜底，并不一定实际写入
+    Nickname，因此这里同时识别空昵称且空真实姓名的账号。
+    """
+    if (getattr(account, "Mobile", None) or "").strip():
+        return False
+    nickname = (getattr(account, "Nickname", None) or "").strip()
+    real_name = (getattr(account, "RealName", None) or "").strip()
+    return (
+        nickname == "未留姓名用户"
+        or bool(re.fullmatch(r"用户\d+", nickname))
+        or (not nickname and not real_name)
+    )
+
+
+def cleanup_shell_accounts(
+    db: Session,
+    *,
+    exclude_account_ids: Optional[set[int]] = None,
+) -> dict:
+    """物理删除符合命名规则的无手机号壳账号。
+
+    逐个走 hard_delete_account，若账号已有核心业务数据则跳过，避免批量清理
+    误删咨询、订单或个案历史。
+    """
+    excluded = exclude_account_ids or set()
+    candidates = (
+        db.query(AppAccount)
+        .filter(or_(AppAccount.Mobile.is_(None), AppAccount.Mobile == ""))
+        .order_by(AppAccount.Id.asc())
+        .all()
+    )
+    # 批量删除前只探测一次，避免每轮表探测影响上一轮尚未提交的删除事务。
+    assessment_table_presence = (
+        _orm_table_exists(db, AppAssessmentReport),
+        _orm_table_exists(db, AppAssessmentAuditLog),
+    )
+    deleted_ids: list[int] = []
+    skipped_ids: list[int] = []
+    for account in candidates:
+        account_id = int(account.Id)
+        if account_id in excluded or not is_shell_account(account):
+            continue
+        try:
+            hard_delete_account(
+                db,
+                account_id,
+                _assessment_table_presence=assessment_table_presence,
+            )
+            deleted_ids.append(account_id)
+        except ValueError:
+            skipped_ids.append(account_id)
+    return {
+        "deletedCount": len(deleted_ids),
+        "deletedUserIds": deleted_ids,
+        "skippedCount": len(skipped_ids),
+        "skippedUserIds": skipped_ids,
+    }
