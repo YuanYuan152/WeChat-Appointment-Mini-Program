@@ -1,7 +1,13 @@
 import { useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 
-import type { ScreenData, ContentDraft, ContentKind } from "@/types/app";
+import type {
+  BannerLinkType,
+  ContentDraft,
+  ContentKind,
+  LiveDisplayMode,
+  ScreenData,
+} from "@/types/app";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
 import { ContentCreateModal } from "@/components/content/ContentCreateModal";
 import { ContentList } from "@/components/content/ContentList";
@@ -75,6 +81,11 @@ export function ContentPanel({
       assistantQrcodeUrl: "",
       coverImageUrl: "",
       liveUrl: "",
+      bannerLinkType: "NONE",
+      bannerLinkValue: "",
+      liveDisplayMode: "CALENDAR",
+      jixinliIconUrl: "",
+      tongxinliIconUrl: "",
       coverCrop: { x: 0, y: 0, width: 1, height: 1 },
       pageKey: sitePageKeyForKind(activeKind) || undefined,
     });
@@ -93,6 +104,11 @@ export function ContentPanel({
       assistantQrcodeUrl: target?.assistantQrcodeUrl || "",
       coverImageUrl: target?.coverImageUrl || "",
       liveUrl: "",
+      bannerLinkType: "NONE",
+      bannerLinkValue: "",
+      liveDisplayMode: "CALENDAR",
+      jixinliIconUrl: "",
+      tongxinliIconUrl: "",
       coverCrop: target?.coverCrop || { x: 0, y: 0, width: 1, height: 1 },
       pageKey: target?.pageKey || sitePageKeyForKind(activeKind) || undefined,
     });
@@ -117,6 +133,11 @@ export function ContentPanel({
         assistantQrcodeUrl: item.assistantQrcodeUrl || "",
         coverImageUrl: item.coverImageUrl || "",
         liveUrl: item.liveUrl || "",
+        bannerLinkType: item.bannerLinkType || "NONE",
+        bannerLinkValue: item.bannerLinkValue || "",
+        liveDisplayMode: item.liveDisplayMode || "CALENDAR",
+        jixinliIconUrl: item.jixinliIconUrl || "",
+        tongxinliIconUrl: item.tongxinliIconUrl || "",
         coverCrop: item.coverCrop || { x: 0, y: 0, width: 1, height: 1 },
         pageKey: sitePageKeyForKind(activeKind) || undefined,
       });
@@ -170,6 +191,11 @@ export function ContentPanel({
               assistantQrcodeUrl: item.assistantQrcodeUrl || "",
               coverImageUrl: item.coverImageUrl || "",
               liveUrl: item.liveUrl || "",
+              bannerLinkType: item.bannerLinkType || "NONE",
+              bannerLinkValue: item.bannerLinkValue || "",
+              liveDisplayMode: item.liveDisplayMode || "CALENDAR",
+              jixinliIconUrl: item.jixinliIconUrl || "",
+              tongxinliIconUrl: item.tongxinliIconUrl || "",
               coverCrop: item.coverCrop || { x: 0, y: 0, width: 1, height: 1 },
               pageKey: item.pageKey,
             });
@@ -213,22 +239,31 @@ function getContentItems(data: ScreenData, kind: ContentKind): ContentListItem[]
     return (data.banners || []).map((item) => ({
       id: item.Id,
       title: item.Title,
-      meta: item.IsActive ? "启用" : "停用",
+      meta: `${item.IsActive ? "启用" : "停用"} · ${bannerLinkLabel(item.LinkType)}`,
       date: item.CreatedAt,
       imageUrl: item.ImageUrl,
+      summary: item.LinkValue || "不跳转",
+      bannerLinkType: normalizeBannerLinkType(item.LinkType),
+      bannerLinkValue: item.LinkValue,
     }));
   }
 
   if (kind === "activity" || kind === "live") {
-    return (data.activities || []).map((item) => ({
-      id: item.Id,
-      title: item.Title,
-      meta: kind === "live" ? (item.LinkUrl ? "已配置链接" : "直播预告") : item.Type,
-      date: item.CreatedAt,
-      summary: item.Content,
-      imageUrl: item.CoverUrl,
-      liveUrl: item.LinkUrl,
-    }));
+    return (data.activities || []).map((item) => {
+      const liveDisplayMode = normalizeLiveDisplayMode(item.LiveDisplayMode, item.LinkUrl);
+      return {
+        id: item.Id,
+        title: item.Title,
+        meta: kind === "live" ? liveModeLabel(liveDisplayMode) : item.Type,
+        date: item.CreatedAt,
+        summary: item.Content,
+        imageUrl: item.CoverUrl,
+        liveUrl: item.LinkUrl,
+        liveDisplayMode,
+        jixinliIconUrl: item.JixinliIconUrl,
+        tongxinliIconUrl: item.TongxinliIconUrl,
+      };
+    });
   }
 
   if (kind === "home_cover") {
@@ -277,4 +312,30 @@ function previewText(value?: string | null) {
     return "-";
   }
   return text.length > 80 ? `${text.slice(0, 80)}…` : text;
+}
+
+function normalizeBannerLinkType(value?: string | null): BannerLinkType {
+  const normalized = (value || "").toUpperCase();
+  return normalized === "PAGE" || normalized === "URL" ? normalized : "NONE";
+}
+
+function bannerLinkLabel(value?: string | null) {
+  const normalized = normalizeBannerLinkType(value);
+  if (normalized === "PAGE") return "小程序页面";
+  if (normalized === "URL") return "外部网址";
+  return "不跳转";
+}
+
+function normalizeLiveDisplayMode(value?: string | null, linkUrl?: string | null): LiveDisplayMode {
+  const normalized = (value || "").toUpperCase();
+  if (normalized === "CALENDAR" || normalized === "CHANNELS" || normalized === "WEB") {
+    return normalized;
+  }
+  return linkUrl ? "WEB" : "CALENDAR";
+}
+
+function liveModeLabel(value: LiveDisplayMode) {
+  if (value === "CHANNELS") return "视频号入口";
+  if (value === "WEB") return "普通链接";
+  return "图文日历";
 }

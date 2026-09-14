@@ -27,6 +27,11 @@ function emptyDraft(kind: ContentKind): ContentDraft {
     assistantQrcodeUrl: "",
     coverImageUrl: "",
     liveUrl: "",
+    bannerLinkType: "NONE",
+    bannerLinkValue: "",
+    liveDisplayMode: "CALENDAR",
+    jixinliIconUrl: "",
+    tongxinliIconUrl: "",
     coverCrop: { x: 0, y: 0, width: 1, height: 1 },
   };
 }

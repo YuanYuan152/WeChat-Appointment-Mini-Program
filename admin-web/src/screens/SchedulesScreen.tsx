@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { fetchScheduleOverview } from "@/services/schedules";
 import { AppRoute, useAppRoute } from "@/components/AppRoute";
-import { SchedulesPanel } from "@/panels/SchedulesPanel";
+import { SchedulesPanel, type ScheduleFilter } from "@/panels/SchedulesPanel";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
+import { addLocalDays } from "@/lib/date";
 import type { ScreenData } from "@/types/app";
 
 export function SchedulesScreen() {
@@ -23,6 +24,7 @@ function SchedulesScreenContent() {
   const [data, setData] = useState<ScreenData>({});
   const [selectedKeyword, setSelectedKeyword] = useState("");
   const [queryKeyword, setQueryKeyword] = useState("");
+  const [scheduleFilter, setScheduleFilter] = useState<ScheduleFilter>("all");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [listLoading, setListLoading] = useState(false);
@@ -69,12 +71,47 @@ function SchedulesScreenContent() {
     setPageSize(nextPageSize);
   }, []);
 
+  const filteredSchedules = useMemo(() => {
+    const schedules = data.schedules;
+    if (!schedules || scheduleFilter === "all") return schedules;
+
+    const startDate = schedules.startDate || schedules.date;
+    const endDate = scheduleFilter === "today" ? startDate : addLocalDays(startDate, 6);
+    const counselors = schedules.counselors
+      .map((counselor) => {
+        const bookedSchedules = counselor.schedules.filter((schedule) => {
+          const date = schedule.startTime?.slice(0, 10);
+          return Boolean(
+            date
+            && schedule.status === "BOOKED"
+            && date >= startDate
+            && date <= endDate,
+          );
+        });
+        return {
+          ...counselor,
+          scheduleCount: bookedSchedules.length,
+          schedules: bookedSchedules,
+        };
+      })
+      .filter((counselor) => counselor.schedules.length > 0);
+
+    return { ...schedules, counselors };
+  }, [data.schedules, scheduleFilter]);
+
+  const changeScheduleFilter = useCallback((nextFilter: ScheduleFilter) => {
+    setPage(1);
+    setScheduleFilter(nextFilter);
+  }, []);
+
   return (
     <SchedulesPanel
-      schedules={data.schedules}
+      schedules={filteredSchedules}
       listLoading={listLoading}
       selectedKeyword={selectedKeyword}
       setSelectedKeyword={setSelectedKeyword}
+      scheduleFilter={scheduleFilter}
+      onScheduleFilterChange={changeScheduleFilter}
       page={page}
       pageSize={pageSize}
       onSearch={search}

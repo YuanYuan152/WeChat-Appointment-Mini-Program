@@ -148,6 +148,9 @@ class ActivityCreate(BaseModel):
     content: Optional[str] = None
     cover_url: Optional[str] = None
     link_url: Optional[str] = None
+    live_display_mode: Optional[str] = None
+    jixinli_icon_url: Optional[str] = None
+    tongxinli_icon_url: Optional[str] = None
     is_active: Optional[bool] = True
     start_at: Optional[datetime] = None
     end_at: Optional[datetime] = None
@@ -160,6 +163,9 @@ class ActivityUpdate(BaseModel):
     content: Optional[str] = None
     cover_url: Optional[str] = None
     link_url: Optional[str] = None
+    live_display_mode: Optional[str] = None
+    jixinli_icon_url: Optional[str] = None
+    tongxinli_icon_url: Optional[str] = None
     is_active: Optional[bool] = None
     start_at: Optional[datetime] = None
     end_at: Optional[datetime] = None
@@ -173,6 +179,9 @@ class ActivityOut(BaseModel):
     Content: Optional[str] = None
     CoverUrl: Optional[str] = None
     LinkUrl: Optional[str] = None
+    LiveDisplayMode: Optional[str] = None
+    JixinliIconUrl: Optional[str] = None
+    TongxinliIconUrl: Optional[str] = None
     IsActive: bool
     StartAt: Optional[datetime] = None
     EndAt: Optional[datetime] = None
@@ -512,12 +521,22 @@ def create_activity(
     _ops: AppAccount = Depends(require_content_manager),
     db: Session = Depends(get_db),
 ):
+    activity_type = (body.type or "NOTICE").upper()
+    link_url = (body.link_url or "").strip() or None
+    live_display_mode = (body.live_display_mode or "").strip().upper() or None
+    if activity_type == "LIVE":
+        live_display_mode = live_display_mode or ("WEB" if link_url else "CALENDAR")
+        if live_display_mode not in ("CALENDAR", "CHANNELS", "WEB"):
+            raise HTTPException(status_code=400, detail="直播展示类型不支持")
     activity = AppActivity(
-        Type=(body.type or "NOTICE").upper(),
+        Type=activity_type,
         Title=body.title,
         Content=body.content,
         CoverUrl=body.cover_url,
-        LinkUrl=(body.link_url or "").strip() or None,
+        LinkUrl=link_url,
+        LiveDisplayMode=live_display_mode,
+        JixinliIconUrl=(body.jixinli_icon_url or "").strip() or None,
+        TongxinliIconUrl=(body.tongxinli_icon_url or "").strip() or None,
         IsActive=body.is_active if body.is_active is not None else True,
         StartAt=body.start_at,
         EndAt=body.end_at,
@@ -546,14 +565,19 @@ def update_activity(
     mapping = {
         "type": "Type", "title": "Title", "content": "Content", "cover_url": "CoverUrl",
         "link_url": "LinkUrl",
+        "live_display_mode": "LiveDisplayMode",
+        "jixinli_icon_url": "JixinliIconUrl",
+        "tongxinli_icon_url": "TongxinliIconUrl",
         "is_active": "IsActive", "start_at": "StartAt", "end_at": "EndAt", "sort_order": "SortOrder",
     }
     for src, dst in mapping.items():
         val = getattr(body, src, None)
         if val is not None:
-            if src == "type" and isinstance(val, str):
+            if src in ("type", "live_display_mode") and isinstance(val, str):
                 val = val.upper()
-            if src == "link_url" and isinstance(val, str):
+            if src == "live_display_mode" and val not in ("CALENDAR", "CHANNELS", "WEB"):
+                raise HTTPException(status_code=400, detail="直播展示类型不支持")
+            if src in ("link_url", "jixinli_icon_url", "tongxinli_icon_url") and isinstance(val, str):
                 val = val.strip() or None
             setattr(activity, dst, val)
     activity.UpdatedAt = datetime.utcnow()

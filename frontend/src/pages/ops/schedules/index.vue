@@ -17,17 +17,29 @@
       <view v-if="keyword" class="reset-btn" @tap="resetSearch">清空</view>
     </view>
 
+    <view class="filter-bar">
+      <view
+        v-for="option in filterOptions"
+        :key="option.value"
+        class="filter-btn"
+        :class="{ active: scheduleFilter === option.value }"
+        @tap="scheduleFilter = option.value"
+      >
+        {{ option.label }}
+      </view>
+    </view>
+
     <view v-if="loading" class="empty">加载中...</view>
-    <view v-else-if="counselors.length === 0" class="empty">暂无匹配的咨询师或排期</view>
+    <view v-else-if="displayedCounselors.length === 0" class="empty">{{ emptyText }}</view>
 
     <view
-      v-for="c in counselors"
+      v-for="c in displayedCounselors"
       :key="c.counselorId"
       class="counselor-card"
     >
       <view class="card-main">
         <text class="name">{{ c.counselorName }}</text>
-        <text class="count">未来30天 {{ c.scheduleCount }} 节</text>
+        <text class="count">{{ countText(c.scheduleCount) }}</text>
       </view>
       <view v-if="c.schedules.length" class="schedule-list">
         <view v-for="s in c.schedules" :key="s.scheduleId" class="schedule-row">
@@ -42,10 +54,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
+import { addDays } from '@/constants/scheduleSlots'
 
 interface ScheduleItem {
   scheduleId: number
@@ -64,13 +77,56 @@ interface CounselorGroup {
   schedules: ScheduleItem[]
 }
 
+type ScheduleFilter = 'all' | 'today' | 'week'
+
+interface ScheduleOverview {
+  startDate?: string
+  counselors: CounselorGroup[]
+}
+
 const loading = ref(true)
 const keyword = ref('')
 const counselors = ref<CounselorGroup[]>([])
+const scheduleFilter = ref<ScheduleFilter>('all')
+const overviewStartDate = ref('')
+const filterOptions: { label: string; value: ScheduleFilter }[] = [
+  { label: '全部', value: 'all' },
+  { label: '仅今日有约', value: 'today' },
+  { label: '仅本周有约', value: 'week' },
+]
 
 const todayStr = () => {
   const d = new Date()
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+const displayedCounselors = computed(() => {
+  if (scheduleFilter.value === 'all') return counselors.value
+
+  const startDate = overviewStartDate.value || todayStr()
+  const endDate = scheduleFilter.value === 'today' ? startDate : addDays(startDate, 6)
+  return counselors.value
+    .map(counselor => {
+      const schedules = counselor.schedules.filter(schedule => {
+        const date = schedule.startTime?.slice(0, 10)
+        if (!date) return false
+        return schedule.status === 'BOOKED' && date >= startDate && date <= endDate
+      })
+      return { ...counselor, scheduleCount: schedules.length, schedules }
+    })
+    .filter(counselor => counselor.schedules.length > 0)
+})
+
+const emptyText = computed(() => {
+  if (scheduleFilter.value === 'today') return '今日暂无已预约排期'
+  if (scheduleFilter.value === 'week') return '未来7天暂无已预约排期'
+  return '暂无匹配的咨询师或排期'
+})
+
+const countText = (count: number) => {
+  if (scheduleFilter.value === 'today') return `今日已约 ${count} 节`
+  if (scheduleFilter.value === 'week') return `未来7天已约 ${count} 节`
+  return `未来30天 ${count} 节`
 }
 
 const goDetail = (c: CounselorGroup) => {
@@ -91,17 +147,20 @@ const goDetail = (c: CounselorGroup) => {
 const load = async () => {
   loading.value = true
   try {
-    const res = await httpV2.get<{ counselors: CounselorGroup[] }>(
+    const res = await httpV2.get<ScheduleOverview>(
       API_ENDPOINTS.ops.schedulesOverview,
       { keyword: keyword.value.trim() || undefined },
     )
     if (res.code === 0 && res.data?.counselors) {
       counselors.value = res.data.counselors
+      overviewStartDate.value = res.data.startDate || todayStr()
     } else {
       counselors.value = []
+      overviewStartDate.value = todayStr()
     }
   } catch {
     counselors.value = []
+    overviewStartDate.value = todayStr()
     uni.showToast({ title: '加载失败', icon: 'none' })
   } finally {
     loading.value = false
@@ -134,6 +193,28 @@ onShow(load)
 }
 .search-input { flex: 1; min-width: 0; font-size: 26rpx; padding: 10rpx 12rpx; }
 .search-btn, .reset-btn { flex-shrink: 0; font-size: 25rpx; color: #3D5A4E; font-weight: 600; padding: 10rpx; }
+.filter-bar {
+  display: flex;
+  gap: 12rpx;
+  margin-bottom: 20rpx;
+  padding: 8rpx;
+  background: #fff;
+  border-radius: 18rpx;
+}
+.filter-btn {
+  flex: 1;
+  min-width: 0;
+  padding: 16rpx 8rpx;
+  border-radius: 14rpx;
+  color: #6B7280;
+  font-size: 24rpx;
+  font-weight: 600;
+  text-align: center;
+}
+.filter-btn.active {
+  background: #3D5A4E;
+  color: #fff;
+}
 .empty { text-align: center; padding: 80rpx 0; color: #9CA3AF; font-size: 28rpx; }
 .counselor-card {
   background: #fff; border-radius: 24rpx; padding: 28rpx; margin-bottom: 20rpx;

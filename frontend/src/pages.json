@@ -146,6 +146,15 @@
             }
         },
         {
+            "path": "pages/live/detail",
+            "style": {
+                "navigationBarTitleText": "直播预告",
+                "navigationBarBackgroundColor": "#ffffff",
+                "navigationBarTextStyle": "black",
+                "backgroundColor": "#F7F5F2"
+            }
+        },
+        {
             "path": "pages/theme/index",
             "style": {
                 "navigationBarTitleText": "主题月",

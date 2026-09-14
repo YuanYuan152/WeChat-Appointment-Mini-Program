@@ -31,15 +31,66 @@ function buildActivityPayload(draft: ContentDraft) {
   }
   const content = (draft.summary || draft.body || "").trim();
   const coverUrl = draft.imageUrl.trim();
-  if (draft.kind === "live" && !content && !coverUrl) {
-    throw new Error("请填写文字内容或上传封面图片");
+  const isLive = draft.kind === "live";
+  if (isLive && draft.liveDisplayMode === "CALENDAR" && (!content || !coverUrl)) {
+    throw new Error("图文日历需要填写预告文字并上传日历图片");
+  }
+  if (
+    isLive
+    && draft.liveDisplayMode === "CHANNELS"
+    && (!draft.jixinliIconUrl.trim() || !draft.tongxinliIconUrl.trim())
+  ) {
+    throw new Error("请上传济心理和同心理两个视频号图标");
+  }
+  if (isLive && draft.liveDisplayMode === "WEB" && !draft.liveUrl.trim()) {
+    throw new Error("请输入直播链接");
   }
   return {
     title: draft.title.trim(),
     content: content || undefined,
-    cover_url: coverUrl || undefined,
-    link_url: draft.kind === "live" ? draft.liveUrl.trim() : undefined,
+    cover_url: isLive && draft.liveDisplayMode === "CHANNELS" ? "" : coverUrl || undefined,
+    link_url: isLive
+      ? draft.liveDisplayMode === "WEB"
+        ? draft.liveUrl.trim()
+        : ""
+      : undefined,
+    live_display_mode: isLive ? draft.liveDisplayMode : undefined,
+    jixinli_icon_url: isLive
+      ? draft.liveDisplayMode === "CHANNELS"
+        ? draft.jixinliIconUrl.trim()
+        : ""
+      : undefined,
+    tongxinli_icon_url: isLive
+      ? draft.liveDisplayMode === "CHANNELS"
+        ? draft.tongxinliIconUrl.trim()
+        : ""
+      : undefined,
     type: activityTypeForKind(draft.kind),
+    is_active: true,
+  };
+}
+
+function bannerPayload(draft: ContentDraft) {
+  if (!draft.title.trim()) {
+    throw new Error("请输入标题");
+  }
+  if (!draft.imageUrl.trim()) {
+    throw new Error("请上传 Banner 图片");
+  }
+  if (draft.bannerLinkType !== "NONE" && !draft.bannerLinkValue.trim()) {
+    throw new Error("请输入 Banner 跳转地址");
+  }
+  if (
+    draft.bannerLinkType === "URL"
+    && !/^https:\/\/[^\s]+$/i.test(draft.bannerLinkValue.trim())
+  ) {
+    throw new Error("外部网址必须是完整的 HTTPS 地址");
+  }
+  return {
+    title: draft.title.trim(),
+    image_url: draft.imageUrl.trim(),
+    link_type: draft.bannerLinkType,
+    link_value: draft.bannerLinkType === "NONE" ? "" : draft.bannerLinkValue.trim(),
     is_active: true,
   };
 }
@@ -71,20 +122,9 @@ export async function fetchContentData(kind: ContentKind, _articlePagination: Pa
 
 export function createContent(draft: ContentDraft) {
   if (draft.kind === "banner") {
-    if (!draft.title.trim()) {
-      throw new Error("请输入标题");
-    }
-    if (!draft.imageUrl.trim()) {
-      throw new Error("请上传 Banner 图片");
-    }
     return apiRequest("/api/mini/ops/banners", {
       method: "POST",
-      body: JSON.stringify({
-        title: draft.title,
-        image_url: draft.imageUrl,
-        link_type: "PAGE",
-        is_active: true,
-      }),
+      body: JSON.stringify(bannerPayload(draft)),
     });
   }
 
@@ -142,19 +182,9 @@ export function createContent(draft: ContentDraft) {
 
 export function updateContent(kind: ContentKind, id: number, draft: ContentDraft) {
   if (kind === "banner") {
-    if (!draft.title.trim()) {
-      throw new Error("请输入标题");
-    }
-    if (!draft.imageUrl.trim()) {
-      throw new Error("请上传 Banner 图片");
-    }
     return apiRequest(`/api/mini/ops/banners/${id}`, {
       method: "PUT",
-      body: JSON.stringify({
-        title: draft.title,
-        image_url: draft.imageUrl,
-        is_active: true,
-      }),
+      body: JSON.stringify(bannerPayload(draft)),
     });
   }
 

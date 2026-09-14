@@ -295,6 +295,9 @@ export interface Activity {
   Content?: string | null;
   CoverUrl?: string | null;
   LinkUrl?: string | null;
+  LiveDisplayMode?: string | null;
+  JixinliIconUrl?: string | null;
+  TongxinliIconUrl?: string | null;
   IsActive: boolean;
   StartAt?: string | null;
   EndAt?: string | null;

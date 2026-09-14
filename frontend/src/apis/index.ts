@@ -42,13 +42,27 @@ const mapActivity = (item: any): Activity => ({
 
 const mapLiveStream = (item: any): LiveStream => {
     const link = String(item.linkUrl || item.LinkUrl || item.link || '').trim()
+    const rawDisplayMode = String(item.liveDisplayMode || item.LiveDisplayMode || '').toUpperCase()
+    const displayMode: LiveStream['displayMode'] =
+        rawDisplayMode === 'CALENDAR' || rawDisplayMode === 'CHANNELS' || rawDisplayMode === 'WEB'
+            ? rawDisplayMode
+            : link
+                ? 'WEB'
+                : 'CALENDAR'
     return {
         id: Number(item.id || item.Id || 0),
         title: item.title || item.Title || '直播预告',
         description: item.summary || item.Content || item.content || '',
         image: fixImageUrl(item.coverUrl || item.CoverUrl || item.image || '/static/images-opt/huodong11.jpg'),
-        time: link ? '点击进入直播' : '',
+        time: displayMode === 'WEB' ? '点击进入直播' : '',
         link: link || undefined,
+        displayMode,
+        jixinliIcon: item.jixinliIconUrl || item.JixinliIconUrl
+            ? fixImageUrl(item.jixinliIconUrl || item.JixinliIconUrl)
+            : undefined,
+        tongxinliIcon: item.tongxinliIconUrl || item.TongxinliIconUrl
+            ? fixImageUrl(item.tongxinliIconUrl || item.TongxinliIconUrl)
+            : undefined,
         status: '预告',
     }
 }
@@ -61,6 +75,8 @@ const mapBanner = (item: any): Banner => ({
     image: fixImageUrl(item.imageUrl || item.ImageUrl || '/static/images-opt/slide11.jpg'),
     buttonText: '查看详情',
     date: '',
+    linkType: item.linkType || item.LinkType || 'NONE',
+    linkValue: item.linkValue || item.LinkValue || undefined,
 })
 
 // 首页相关API

@@ -154,6 +154,9 @@ export type ContentKind =
   | "charity"
   | "contact";
 
+export type BannerLinkType = "NONE" | "PAGE" | "URL";
+export type LiveDisplayMode = "CALENDAR" | "CHANNELS" | "WEB";
+
 export interface ContentDraft {
   kind: ContentKind;
   title: string;
@@ -164,6 +167,11 @@ export interface ContentDraft {
   assistantQrcodeUrl: string;
   coverImageUrl: string;
   liveUrl: string;
+  bannerLinkType: BannerLinkType;
+  bannerLinkValue: string;
+  liveDisplayMode: LiveDisplayMode;
+  jixinliIconUrl: string;
+  tongxinliIconUrl: string;
   coverCrop: {
     x: number;
     y: number;

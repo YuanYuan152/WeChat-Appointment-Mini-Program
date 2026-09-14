@@ -86,6 +86,36 @@
       </view>
     </view>
 
+    <!-- 后端有有效内容时展示 Banner -->
+    <view v-if="banners.length > 0" class="section-block banner-block">
+      <swiper
+        class="banner-swiper"
+        :indicator-dots="banners.length > 1"
+        indicator-color="rgba(255,255,255,0.55)"
+        indicator-active-color="#FFFFFF"
+        :autoplay="banners.length > 1"
+        :interval="4000"
+        :duration="500"
+        :circular="banners.length > 1"
+      >
+        <swiper-item v-for="banner in banners" :key="banner.id">
+          <view class="banner-item" @tap="handleBannerClick(banner)">
+            <image :src="banner.image" class="banner-image" mode="aspectFill" @error="handleImageError" />
+            <view v-if="banner.title || canOpenBanner(banner)" class="banner-overlay">
+              <text v-if="banner.title" class="banner-title">{{ banner.title }}</text>
+              <view
+                v-if="canOpenBanner(banner)"
+                class="banner-action"
+                @tap.stop="handleBannerClick(banner)"
+              >
+                查看详情
+              </view>
+            </view>
+          </view>
+        </swiper-item>
+      </swiper>
+    </view>
+
     <!-- 服务入口 -->
     <view class="section-block">
       <view class="section-head">
@@ -162,15 +192,44 @@
         </view>
 
         <view v-if="activeTab === 'live'" class="activity-list">
-          <view class="act-card" v-for="live in liveStreams" :key="live.id" @tap="handleLiveClick(live)">
-            <view class="live-badge"><view class="live-dot" />预告</view>
-            <image :src="live.image" class="act-img" mode="aspectFill" />
-            <view class="act-info">
+          <view v-for="live in liveStreams" :key="live.id">
+            <view v-if="live.displayMode === 'CALENDAR'" class="act-card" @tap="goLiveDetail(live)">
+              <image :src="live.image" class="act-img" mode="aspectFill" @error="handleImageError" />
+              <view class="live-calendar-copy">
+                <text class="act-title">{{ live.title }}</text>
+                <text v-if="live.description" class="act-desc">{{ live.description }}</text>
+                <view class="act-foot">
+                  <text class="act-time">完整直播安排</text>
+                  <view class="act-btn outline">查看日历</view>
+                </view>
+              </view>
+            </view>
+
+            <view v-else-if="live.displayMode === 'CHANNELS'" class="live-channels-card">
               <text class="act-title">{{ live.title }}</text>
-              <text class="act-desc">{{ live.description }}</text>
-              <view class="act-foot">
-                <text class="act-time">{{ live.link ? '点击进入直播' : (live.time || '敬请期待') }}</text>
-                <view class="act-btn outline" @tap.stop="handleJoinLive(live)">{{ live.link ? '进入直播' : '预约直播' }}</view>
+              <text v-if="live.description" class="live-calendar-desc">{{ live.description }}</text>
+              <view class="channel-buttons">
+                <view class="channel-btn" @tap="openChannelProfile(JIXINLI_FINDER_USERNAME, '济心理')">
+                  <image v-if="live.jixinliIcon" :src="live.jixinliIcon" class="channel-icon" mode="aspectFill" />
+                  <text>济心理</text>
+                </view>
+                <view class="channel-btn" @tap="openChannelProfile(TONGXINLI_FINDER_USERNAME, '同心理')">
+                  <image v-if="live.tongxinliIcon" :src="live.tongxinliIcon" class="channel-icon" mode="aspectFill" />
+                  <text>同心理</text>
+                </view>
+              </view>
+            </view>
+
+            <view v-else class="act-card" @tap="handleLiveClick(live)">
+              <view class="live-badge"><view class="live-dot" />预告</view>
+              <image :src="live.image" class="act-img" mode="aspectFill" />
+              <view class="act-info">
+                <text class="act-title">{{ live.title }}</text>
+                <text class="act-desc">{{ live.description }}</text>
+                <view class="act-foot">
+                  <text class="act-time">{{ live.time || '敬请期待' }}</text>
+                  <view class="act-btn outline" @tap.stop="handleJoinLive(live)">进入直播</view>
+                </view>
               </view>
             </view>
           </view>
@@ -186,7 +245,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import type { Doctor, Activity, LiveStream } from '@/types'
+import type { Banner, Doctor, Activity, LiveStream } from '@/types'
 import { homeApi } from '@/apis'
 import { fixArrayImageUrls, fixImageUrl } from '@/utils/image'
 import { handleRequireLogin } from '@/utils/auth'
@@ -194,10 +253,13 @@ import { fetchPublicSiteContent } from '@/utils/siteContentApi'
 import { buildHeroCoverImageStyle, normalizeCoverCrop } from '@/utils/coverCrop'
 
 const DEFAULT_HERO_COVER = '/static/images-opt/slide11.jpg'
+const JIXINLI_FINDER_USERNAME = 'sphG7uQZhHzDQVE'
+const TONGXINLI_FINDER_USERNAME = 'sphAl8n0L8df'
 
 // 响应式数据
 const searchKeyword = ref('')
 const activeTab = ref('live')
+const banners = ref<Banner[]>([])
 const doctors = ref<Doctor[]>([])
 const activities = ref<Activity[]>([])
 const liveStreams = ref<LiveStream[]>([])
@@ -282,6 +344,7 @@ const loadPageData = async () => {
   try {
     const payload = await homeApi.getIndexData()
     if (payload.code === 0 && payload.data) {
+      banners.value = fixArrayImageUrls(payload.data.banners || [], ['image'])
       doctors.value = fixArrayImageUrls(payload.data.doctors || [], ['avatar'])
       activities.value = fixArrayImageUrls(payload.data.activities || [], ['image'])
       liveStreams.value = fixArrayImageUrls(payload.data.liveStreams || [], ['image'])
@@ -356,6 +419,7 @@ const loadMockData = () => {
       description: '家庭热点问题系列公益论坛',
       image: '/static/images-opt/huodong11.jpg',
       time: '2024-05-15 19:30',
+      displayMode: 'WEB',
       status: 'upcoming'
     }
   ]
@@ -484,6 +548,27 @@ const switchTab = (tab: string) => {
   activeTab.value = tab
 }
 
+const handleBannerClick = (banner: Banner) => {
+  const link = banner.linkValue?.trim()
+  if (!link || banner.linkType === 'NONE') return
+
+  if (banner.linkType === 'URL' || /^https?:\/\//i.test(link)) {
+    uni.navigateTo({
+      url: `/pages/test/webview?url=${encodeURIComponent(link)}&title=${encodeURIComponent(banner.title || '详情')}`,
+    })
+    return
+  }
+
+  navigateTo(link.startsWith('/') ? link : `/${link}`)
+}
+
+const canOpenBanner = (banner: Banner) =>
+  Boolean(banner.linkValue?.trim() && banner.linkType !== 'NONE')
+
+const goLiveDetail = (live: LiveStream) => {
+  uni.navigateTo({ url: `/pages/live/detail?id=${live.id}` })
+}
+
 // 活动点击
 const handleActivityClick = (activity: Activity) => {
   // TODO: 处理活动点击
@@ -504,6 +589,20 @@ const handleLiveClick = (live: LiveStream) => {
 // 加入直播
 const handleJoinLive = (live: LiveStream) => {
   openLiveLink(live)
+}
+
+const openChannelProfile = (finderUserName: string, channelName: string) => {
+  // #ifdef MP-WEIXIN
+  uni.openChannelsUserProfile({
+    finderUserName,
+    fail: () => {
+      uni.showToast({ title: `无法打开${channelName}视频号，请确认已关联小程序`, icon: 'none' })
+    },
+  })
+  // #endif
+  // #ifndef MP-WEIXIN
+  uni.showToast({ title: '请在微信小程序中打开视频号', icon: 'none' })
+  // #endif
 }
 
 const openLiveLink = (live: LiveStream) => {
@@ -700,6 +799,54 @@ const navigateTo = (url: string) => {
 .section-title { font-size: 34rpx; font-weight: 600; color: #2C2C2C; letter-spacing: 1rpx; }
 .section-more { font-size: 26rpx; color: #8A8A8A; }
 
+.banner-block { padding-top: 16rpx; }
+.banner-swiper {
+  height: 280rpx;
+  border-radius: 20rpx;
+  overflow: hidden;
+  box-shadow: 0 4rpx 20rpx rgba(0,0,0,0.04);
+}
+.banner-item {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 20rpx;
+  background: #E8E4DE;
+}
+.banner-image { width: 100%; height: 100%; }
+.banner-overlay {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  padding: 48rpx 28rpx 24rpx;
+  background: linear-gradient(transparent, rgba(0,0,0,0.55));
+}
+.banner-title {
+  display: block;
+  flex: 1;
+  min-width: 0;
+  color: #fff;
+  font-size: 28rpx;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.banner-overlay {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+}
+.banner-action {
+  flex-shrink: 0;
+  padding: 12rpx 24rpx;
+  border-radius: 999rpx;
+  background: rgba(61,90,78,0.92);
+  color: #fff;
+  font-size: 23rpx;
+  font-weight: 600;
+}
+
 /* 服务卡片 */
 .service-list { display: flex; flex-direction: column; gap: 16rpx; }
 .service-card {
@@ -762,6 +909,40 @@ const navigateTo = (url: string) => {
   height: 4rpx; background: #3D5A4E; border-radius: 2rpx;
 }
 .activity-list { display: flex; flex-direction: column; gap: 20rpx; }
+.live-channels-card {
+  overflow: hidden;
+  border-radius: 20rpx;
+  background: #fff;
+  box-shadow: 0 4rpx 20rpx rgba(0,0,0,0.03);
+}
+.live-calendar-copy { flex: 1; display: flex; min-width: 0; flex-direction: column; justify-content: space-between; }
+.live-channels-card { padding: 24rpx; }
+.live-calendar-desc {
+  display: block;
+  margin-top: 12rpx;
+  color: #8A8A8A;
+  font-size: 24rpx;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+.channel-buttons { display: flex; gap: 20rpx; margin-top: 24rpx; }
+.channel-btn {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 14rpx;
+  min-width: 0;
+  padding: 18rpx 20rpx;
+  border: 1rpx solid #DDE5E1;
+  border-radius: 16rpx;
+  background: #F7FAF8;
+  color: #3D5A4E;
+  font-size: 26rpx;
+  font-weight: 600;
+}
+.channel-btn:active { opacity: 0.8; }
+.channel-icon { width: 56rpx; height: 56rpx; flex-shrink: 0; border-radius: 50%; }
 .act-card {
   display: flex; background: #fff; border-radius: 20rpx;
   padding: 20rpx; gap: 20rpx;

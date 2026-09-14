@@ -17,6 +17,11 @@ export interface ContentListItem {
   coverImageUrl?: string | null;
   startAt?: string | null;
   liveUrl?: string | null;
+  bannerLinkType?: "NONE" | "PAGE" | "URL";
+  bannerLinkValue?: string | null;
+  liveDisplayMode?: "CALENDAR" | "CHANNELS" | "WEB";
+  jixinliIconUrl?: string | null;
+  tongxinliIconUrl?: string | null;
   coverCrop?: {
     x: number;
     y: number;

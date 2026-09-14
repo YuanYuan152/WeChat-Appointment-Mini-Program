@@ -34,6 +34,8 @@ export interface Banner {
   image: string
   buttonText: string
   date: string
+  linkType?: string
+  linkValue?: string
 }
 
 // 功能卡片类型
@@ -136,6 +138,9 @@ export interface LiveStream {
   image: string
   time: string
   link?: string
+  displayMode: 'CALENDAR' | 'CHANNELS' | 'WEB'
+  jixinliIcon?: string
+  tongxinliIcon?: string
   status?: string
 }
 

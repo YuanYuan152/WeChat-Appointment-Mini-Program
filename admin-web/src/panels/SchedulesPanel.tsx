@@ -4,11 +4,15 @@ import type { ScheduleOverview } from "@/types/api";
 import { getPageItems } from "@/lib/pagination";
 import { Badge, EmptyState, Pagination, QueryButton, QueryField, QueryResetButton, TableActionButton, queryControlClass } from "@/components/ui";
 
+export type ScheduleFilter = "all" | "today" | "week";
+
 export function SchedulesPanel({
   schedules,
   listLoading,
   selectedKeyword,
   setSelectedKeyword,
+  scheduleFilter,
+  onScheduleFilterChange,
   page,
   pageSize,
   onSearch,
@@ -21,6 +25,8 @@ export function SchedulesPanel({
   listLoading: boolean;
   selectedKeyword: string;
   setSelectedKeyword: (value: string) => void;
+  scheduleFilter: ScheduleFilter;
+  onScheduleFilterChange: (value: ScheduleFilter) => void;
   page: number;
   pageSize: number;
   onSearch: () => void;
@@ -59,6 +65,28 @@ export function SchedulesPanel({
           </QueryField>
         </div>
 
+        <div className="mt-4 flex max-w-xl flex-wrap gap-2" aria-label="预约时间筛选">
+          {([
+            ["all", "全部"],
+            ["today", "仅今日有约"],
+            ["week", "仅本周有约"],
+          ] as const).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
+                scheduleFilter === value
+                  ? "border-[var(--lxxl-green)] bg-[var(--lxxl-green)] text-white"
+                  : "border-[var(--lxxl-border)] bg-white text-[var(--lxxl-muted)] hover:border-[var(--lxxl-green)] hover:text-[var(--lxxl-green)]"
+              }`}
+              aria-pressed={scheduleFilter === value}
+              onClick={() => onScheduleFilterChange(value)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
         <div className="mt-4 flex flex-wrap gap-3">
           <QueryButton type="submit" />
           <QueryResetButton onClick={onReset} />
@@ -71,7 +99,7 @@ export function SchedulesPanel({
           </div>
         )}
         {counselors.length === 0 ? (
-        <EmptyState text={listLoading ? "正在加载列表..." : "暂无匹配的咨询师或排期。"} />
+        <EmptyState text={listLoading ? "正在加载列表..." : emptyText(scheduleFilter)} />
       ) : (
         <>
           <div className="grid gap-4 border-t border-[var(--lxxl-border)] p-5 lg:grid-cols-2">
@@ -80,7 +108,7 @@ export function SchedulesPanel({
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <h3 className="font-semibold">{counselor.counselorName}</h3>
-                    <p className="mt-1 text-xs text-[var(--lxxl-muted)]">未来30天 {counselor.scheduleCount} 节</p>
+                    <p className="mt-1 text-xs text-[var(--lxxl-muted)]">{countText(scheduleFilter, counselor.scheduleCount)}</p>
                   </div>
                   <TableActionButton onClick={() => onViewCounselor(counselor)}>查看完整排期</TableActionButton>
                 </div>
@@ -124,4 +152,16 @@ function scheduleStatusLabel(status?: string | null) {
     return "可排期";
   }
   return statusLabel(status);
+}
+
+function emptyText(filter: ScheduleFilter) {
+  if (filter === "today") return "今日暂无已预约排期。";
+  if (filter === "week") return "未来7天暂无已预约排期。";
+  return "暂无匹配的咨询师或排期。";
+}
+
+function countText(filter: ScheduleFilter, count: number) {
+  if (filter === "today") return `今日已约 ${count} 节`;
+  if (filter === "week") return `未来7天已约 ${count} 节`;
+  return `未来30天 ${count} 节`;
 }

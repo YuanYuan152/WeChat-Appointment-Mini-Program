@@ -429,6 +429,9 @@ def ensure_app_site_page_columns():
 
 APP_ACTIVITY_COLUMNS = {
     "LinkUrl": "NVARCHAR(500) NULL",
+    "LiveDisplayMode": "NVARCHAR(20) NULL",
+    "JixinliIconUrl": "NVARCHAR(500) NULL",
+    "TongxinliIconUrl": "NVARCHAR(500) NULL",
 }
 
 

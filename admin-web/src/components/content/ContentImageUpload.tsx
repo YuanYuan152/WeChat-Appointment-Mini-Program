@@ -5,6 +5,9 @@ import { useRef, useState } from "react";
 import { API_BASE_URL } from "@/lib/api";
 import { uploadImage } from "@/services/uploads";
 
+const SUPPORTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+const SUPPORTED_IMAGE_EXTENSION = /\.(?:jpe?g|png|webp|gif)$/i;
+
 export function ContentImageUpload({
   value,
   onChange,
@@ -26,8 +29,11 @@ export function ContentImageUpload({
     if (!file || uploading) {
       return;
     }
-    if (!file.type.startsWith("image/")) {
-      setError("请选择图片文件");
+    if (
+      !SUPPORTED_IMAGE_TYPES.has(file.type.toLowerCase())
+      && !SUPPORTED_IMAGE_EXTENSION.test(file.name)
+    ) {
+      setError("仅支持 JPG、JPEG、PNG、WebP 或 GIF 图片");
       return;
     }
     if (file.size > 10 * 1024 * 1024) {
@@ -67,7 +73,7 @@ export function ContentImageUpload({
       </div>
       <input
         ref={inputRef}
-        accept="image/jpeg,image/png,image/webp,image/gif"
+        accept=".jpg,.jpeg,.png,.webp,.gif,image/jpeg,image/png,image/webp,image/gif"
         className="hidden"
         type="file"
         onChange={(event) => {

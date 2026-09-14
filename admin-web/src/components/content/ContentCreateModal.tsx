@@ -7,15 +7,24 @@ import type { ContentDraft, ContentKind } from "@/types/app";
 
 function canSubmitDraft(activeKind: ContentKind, draft: ContentDraft) {
   if (activeKind === "banner") {
-    return draft.title.trim() && draft.imageUrl.trim();
+    return Boolean(
+      draft.title.trim()
+      && draft.imageUrl.trim()
+      && (draft.bannerLinkType === "NONE" || draft.bannerLinkValue.trim()),
+    );
   }
   if (activeKind === "activity") {
     return Boolean(draft.title.trim());
   }
   if (activeKind === "live") {
-    return Boolean(
-      draft.title.trim() && (draft.summary.trim() || draft.body.trim() || draft.imageUrl.trim()),
-    );
+    if (!draft.title.trim()) return false;
+    if (draft.liveDisplayMode === "CALENDAR") {
+      return Boolean(draft.summary.trim() && draft.imageUrl.trim());
+    }
+    if (draft.liveDisplayMode === "CHANNELS") {
+      return Boolean(draft.jixinliIconUrl.trim() && draft.tongxinliIconUrl.trim());
+    }
+    return Boolean(draft.liveUrl.trim());
   }
   if (activeKind === "home_cover") {
     return draft.coverImageUrl.trim();
@@ -80,8 +89,11 @@ export function ContentCreateModal({
     isSiteSectionPage ||
     activeKind === "consultation_guide";
   const showImageField =
-    activeKind === "banner" || activeKind === "activity" || activeKind === "live";
-  const showLiveUrlField = activeKind === "live";
+    activeKind === "banner"
+    || activeKind === "activity"
+    || (activeKind === "live" && draft.liveDisplayMode !== "CHANNELS");
+  const showLiveUrlField = activeKind === "live" && draft.liveDisplayMode === "WEB";
+  const showChannelIconFields = activeKind === "live" && draft.liveDisplayMode === "CHANNELS";
   const showAssistantQrcodeField = activeKind === "contact";
   const showHomeCoverField = activeKind === "home_cover";
 
@@ -107,7 +119,7 @@ export function ContentCreateModal({
           <h3 className="text-lg font-semibold">{modalTitle}</h3>
           <p className="mt-1 text-sm text-[var(--lxxl-muted)]">
             {activeKind === "live"
-              ? "保存后会展示在小程序首页「最新动态 → 直播预告」。可填写文字、封面图片与直播链接。"
+              ? "保存后会展示在小程序首页「最新动态 → 直播预告」，可选择图文日历、视频号入口或普通链接。"
               : mode === "edit"
                 ? "保存后会同步到小程序前端。"
                 : "保存后会创建并同步到小程序前端。"}
@@ -150,6 +162,68 @@ export function ContentCreateModal({
                 value={draft.subtitle}
                 onChange={(event) => setDraft((prev) => ({ ...prev, subtitle: event.target.value }))}
               />
+            </label>
+          )}
+
+          {activeKind === "banner" && (
+            <>
+              <label className="block">
+                <span className="text-sm font-medium">点击跳转</span>
+                <select
+                  className="mt-2 h-11 w-full rounded-xl border border-[var(--lxxl-border)] bg-white px-3 text-sm outline-none transition focus:border-[var(--lxxl-green)]"
+                  value={draft.bannerLinkType}
+                  onChange={(event) =>
+                    setDraft((prev) => ({
+                      ...prev,
+                      bannerLinkType: event.target.value as ContentDraft["bannerLinkType"],
+                    }))
+                  }
+                >
+                  <option value="NONE">不跳转</option>
+                  <option value="PAGE">小程序页面</option>
+                  <option value="URL">外部网址</option>
+                </select>
+              </label>
+              {draft.bannerLinkType !== "NONE" && (
+                <label className="block">
+                  <span className="text-sm font-medium">
+                    跳转地址<span className="ml-1 text-[#B94A48]">*</span>
+                  </span>
+                  <input
+                    className="mt-2 h-11 w-full rounded-xl border border-[var(--lxxl-border)] px-3 text-sm outline-none transition focus:border-[var(--lxxl-green)]"
+                    placeholder={
+                      draft.bannerLinkType === "URL"
+                        ? "https://example.com"
+                        : "/pages/consultant/list"
+                    }
+                    type={draft.bannerLinkType === "URL" ? "url" : "text"}
+                    value={draft.bannerLinkValue}
+                    onChange={(event) =>
+                      setDraft((prev) => ({ ...prev, bannerLinkValue: event.target.value }))
+                    }
+                  />
+                </label>
+              )}
+            </>
+          )}
+
+          {activeKind === "live" && (
+            <label className="block">
+              <span className="text-sm font-medium">展示类型</span>
+              <select
+                className="mt-2 h-11 w-full rounded-xl border border-[var(--lxxl-border)] bg-white px-3 text-sm outline-none transition focus:border-[var(--lxxl-green)]"
+                value={draft.liveDisplayMode}
+                onChange={(event) =>
+                  setDraft((prev) => ({
+                    ...prev,
+                    liveDisplayMode: event.target.value as ContentDraft["liveDisplayMode"],
+                  }))
+                }
+              >
+                <option value="CALENDAR">图文日历（无跳转）</option>
+                <option value="CHANNELS">视频号入口</option>
+                <option value="WEB">普通直播链接</option>
+              </select>
             </label>
           )}
 
@@ -219,6 +293,23 @@ export function ContentCreateModal({
             </label>
           )}
 
+          {showChannelIconFields && (
+            <>
+              <ContentImageUpload
+                label="济心理视频号图标"
+                required
+                value={draft.jixinliIconUrl}
+                onChange={(url) => setDraft((prev) => ({ ...prev, jixinliIconUrl: url }))}
+              />
+              <ContentImageUpload
+                label="同心理视频号图标"
+                required
+                value={draft.tongxinliIconUrl}
+                onChange={(url) => setDraft((prev) => ({ ...prev, tongxinliIconUrl: url }))}
+              />
+            </>
+          )}
+
           {showHomeCoverField && (
             <ContentCoverCropUpload
               crop={draft.coverCrop}
@@ -246,11 +337,16 @@ export function ContentCreateModal({
               label={
                 activeKind === "banner"
                   ? "Banner 图片"
-                  : activeKind === "live"
+                  : activeKind === "live" && draft.liveDisplayMode === "CALENDAR"
+                    ? "直播日历图片"
+                    : activeKind === "live"
                     ? "封面图片（可选）"
                     : "封面图片"
               }
-              required={activeKind === "banner"}
+              required={
+                activeKind === "banner"
+                || (activeKind === "live" && draft.liveDisplayMode === "CALENDAR")
+              }
               value={draft.imageUrl}
               onChange={(url) => setDraft((prev) => ({ ...prev, imageUrl: url }))}
             />
