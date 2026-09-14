@@ -51,7 +51,7 @@ const HIDDEN_OPS_PATHS = new Set([
 ])
 
 const allEntries = [
-  { title: '排期情况', desc: '按日浏览 · 点击进入普通/日历排期', symbol: '期', tone: 'tone-green', path: '/pages/ops/schedules/index' },
+  { title: '排期情况', desc: '未来30天总览 · 搜索并管理改期', symbol: '期', tone: 'tone-green', path: '/pages/ops/schedules/index' },
   { title: '咨询室情况', desc: '咨询室占用与管理', symbol: '室', tone: 'tone-green', path: '/pages/ops/rooms/index' },
   { title: '运营看板', desc: '关键指标与日活数据', symbol: '数', tone: 'tone-muted', path: '/pages/ops/dashboard/index', roles: ['Ops', 'Admin'] },
   { title: '角色&权限绑定', desc: '为账号绑定角色并分配管理工作台权限', symbol: '人', tone: 'tone-green', path: '/pages/ops/admin-roles/index' },

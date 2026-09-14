@@ -431,6 +431,42 @@ def notify_counselor_new_appointment(
     )
 
 
+def notify_counselor_appointment_rescheduled(
+    db: Session,
+    consultation: AppConsultation,
+    *,
+    old_start_time: datetime,
+    reason: str,
+) -> None:
+    """管理工作台改期后通知咨询师。"""
+    ctx = _consultation_context(db, consultation)
+    new_time_text = _format_datetime(ctx["startTime"])
+    old_time_text = _format_datetime(old_start_time)
+    patient_label = _patient_label(ctx["patientName"], ctx.get("patientContractTag"))
+    detail = {
+        **_patient_detail_fields(ctx),
+        "oldStartTime": old_time_text,
+        "startTime": new_time_text,
+        "endTime": _format_datetime(ctx["endTime"]),
+        "location": ctx["location"],
+        "reason": reason,
+        "consultationId": consultation.Id,
+        "tip": "咨询时间已修改，请按新时间安排咨询",
+    }
+    _notify_counselor(
+        db,
+        consultation.CounselorId,
+        type_="ORDER",
+        title="咨询时间已修改",
+        content=_message_payload(
+            f"{patient_label} · {old_time_text} 调整为 {new_time_text}",
+            detail,
+        ),
+        related_type="COUNSELOR_APPOINTMENT_RESCHEDULED",
+        related_id=consultation.Id,
+    )
+
+
 def schedule_counselor_consultation_reminder(
     db: Session,
     consultation: AppConsultation,

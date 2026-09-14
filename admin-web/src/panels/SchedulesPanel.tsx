@@ -1,53 +1,36 @@
 import { formatDateTime, statusLabel } from "@/lib/format";
 import type { ScheduleOverview } from "@/types/api";
 
-import { getLocalDateValue } from "@/lib/date";
 import { getPageItems } from "@/lib/pagination";
-import { Badge, EmptyState, Pagination, QueryButton, QueryField, QueryResetButton, queryControlClass } from "@/components/ui";
+import { Badge, EmptyState, Pagination, QueryButton, QueryField, QueryResetButton, TableActionButton, queryControlClass } from "@/components/ui";
 
 export function SchedulesPanel({
   schedules,
   listLoading,
-  selectedDate,
-  setSelectedDate,
   selectedKeyword,
   setSelectedKeyword,
-  queryKeyword,
   page,
   pageSize,
   onSearch,
   onReset,
+  onViewCounselor,
   onPageChange,
   onPageSizeChange,
 }: {
   schedules?: ScheduleOverview;
   listLoading: boolean;
-  selectedDate: string;
-  setSelectedDate: (value: string) => void;
   selectedKeyword: string;
   setSelectedKeyword: (value: string) => void;
-  queryKeyword: string;
   page: number;
   pageSize: number;
   onSearch: () => void;
   onReset: () => void;
+  onViewCounselor: (counselor: ScheduleOverview["counselors"][number]) => void;
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
 }) {
-  const rows = schedules?.counselors.flatMap((counselor) =>
-    counselor.schedules.map((schedule) => ({ counselorName: counselor.counselorName, ...schedule })),
-  ) || [];
-  const normalizedKeyword = queryKeyword.trim().toLowerCase();
-  const filteredRows = normalizedKeyword
-    ? rows.filter((row) =>
-        [row.counselorName, row.patientName, row.centerName, row.roomName]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase()
-          .includes(normalizedKeyword),
-      )
-    : rows;
-  const { currentPage, items } = getPageItems(filteredRows, page, pageSize);
+  const counselors = schedules?.counselors || [];
+  const { currentPage, items } = getPageItems(counselors, page, pageSize);
 
   return (
     <section className="rounded-xl border border-[var(--lxxl-border)] bg-white">
@@ -61,23 +44,15 @@ export function SchedulesPanel({
         <div>
           <h2 className="text-xl font-semibold tracking-normal">排期情况</h2>
           <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">
-            日期：{schedules?.date || getLocalDateValue()}。复用运营排期总览接口。
+            默认展示 {schedules?.startDate || schedules?.date || "今天"} 至 {schedules?.endDate || "未来30天"} 的全部咨询师。
           </p>
         </div>
 
-        <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <QueryField label="日期">
+        <div className="mt-5 max-w-xl">
+          <QueryField label="咨询师或来访">
             <input
               className={queryControlClass}
-              type="date"
-              value={selectedDate}
-              onChange={(event) => setSelectedDate(event.target.value)}
-            />
-          </QueryField>
-          <QueryField label="姓名">
-            <input
-              className={queryControlClass}
-              placeholder="咨询师/来访者"
+              placeholder="搜索姓名或昵称"
               value={selectedKeyword}
               onChange={(event) => setSelectedKeyword(event.target.value)}
             />
@@ -90,52 +65,50 @@ export function SchedulesPanel({
         </div>
       </form>
       <div className="relative">
-        {listLoading && rows.length > 0 && (
+        {listLoading && counselors.length > 0 && (
           <div className="absolute inset-x-0 top-0 z-10 border-t border-[var(--lxxl-border)] bg-white/80 px-5 py-3 text-sm text-[var(--lxxl-muted)] backdrop-blur-sm">
             正在加载列表...
           </div>
         )}
-        {filteredRows.length === 0 ? (
-        <EmptyState text={listLoading ? "正在加载列表..." : "该日期暂无排期记录。"} />
+        {counselors.length === 0 ? (
+        <EmptyState text={listLoading ? "正在加载列表..." : "暂无匹配的咨询师或排期。"} />
       ) : (
         <>
-          <table className="w-full border-collapse text-sm">
-            <thead className="bg-[#FAF8F4] text-left text-[var(--lxxl-muted)]">
-              <tr>
-                <th className="px-5 py-3 font-medium">咨询师</th>
-                <th className="px-5 py-3 font-medium">时间</th>
-                <th className="px-5 py-3 font-medium">预约中心</th>
-                <th className="px-5 py-3 font-medium">咨询室</th>
-                <th className="px-5 py-3 font-medium">来访者</th>
-                <th className="px-5 py-3 font-medium">状态</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((row) => (
-                <tr key={row.scheduleId} className="border-t border-[var(--lxxl-border)]">
-                  <td className="px-5 py-4">{row.counselorName}</td>
-                  <td className="px-5 py-4">
-                    {formatDateTime(row.startTime)} - {formatDateTime(row.endTime)}
-                  </td>
-                  <td className="px-5 py-4">{row.centerName || "-"}</td>
-                  <td className="px-5 py-4">{row.roomName || row.roomId || "-"}</td>
-                  <td className="px-5 py-4">
-                    <div>{row.patientName || "-"}</div>
-                    {row.patientContractTag && (
-                      <div className="mt-1 text-xs font-medium text-[#315D4B]">{row.patientContractTag}</div>
-                    )}
-                  </td>
-                  <td className="px-5 py-4">
-                    <Badge tone="green">{scheduleStatusLabel(row.status)}</Badge>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="grid gap-4 border-t border-[var(--lxxl-border)] p-5 lg:grid-cols-2">
+            {items.map((counselor) => (
+              <article key={counselor.counselorId} className="rounded-xl border border-[var(--lxxl-border)] p-5">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="font-semibold">{counselor.counselorName}</h3>
+                    <p className="mt-1 text-xs text-[var(--lxxl-muted)]">未来30天 {counselor.scheduleCount} 节</p>
+                  </div>
+                  <TableActionButton onClick={() => onViewCounselor(counselor)}>查看完整排期</TableActionButton>
+                </div>
+                <div className="mt-4 space-y-3">
+                  {counselor.schedules.length ? counselor.schedules.map((schedule) => (
+                    <div key={schedule.scheduleId} className="rounded-lg bg-[#FAF8F4] px-4 py-3 text-sm">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-medium">
+                          {counselor.counselorName} - {schedule.patientName || "开放排期"}
+                        </span>
+                        <Badge tone="green">{scheduleStatusLabel(schedule.status)}</Badge>
+                      </div>
+                      <div className="mt-2 text-xs leading-5 text-[var(--lxxl-muted)]">
+                        {formatDateTime(schedule.startTime)} · {schedule.centerName || "未指定中心"}
+                        {schedule.roomName ? ` · ${schedule.roomName}` : ""}
+                      </div>
+                    </div>
+                  )) : (
+                    <div className="text-sm text-[var(--lxxl-muted)]">未来30天暂无排期</div>
+                  )}
+                </div>
+              </article>
+            ))}
+          </div>
           <Pagination
             page={currentPage}
             pageSize={pageSize}
-            total={filteredRows.length}
+            total={counselors.length}
             onPageChange={onPageChange}
             onPageSizeChange={onPageSizeChange}
           />

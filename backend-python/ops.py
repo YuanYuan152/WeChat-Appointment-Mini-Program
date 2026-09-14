@@ -845,7 +845,8 @@ def _room_occupancy_at(
 
 @router.get("/schedules/overview", summary="各咨询师排期总览")
 def ops_schedules_overview(
-    date: Optional[str] = Query(None, description="YYYY-MM-DD，默认今天"),
+    date: Optional[str] = Query(None, description="兼容旧版：指定后仅查询该日"),
+    keyword: Optional[str] = Query(None, description="咨询师或来访姓名/昵称"),
     _ops: AppAccount = Depends(require_ops),
     db: Session = Depends(get_db),
 ):
@@ -858,13 +859,17 @@ def ops_schedules_overview(
         day = china_now().date()
 
     day_start = datetime.combine(day, time.min)
-    day_end = datetime.combine(day, time.max)
+    day_end = datetime.combine(
+        day + timedelta(days=1 if date else ROLLING_WINDOW_DAYS),
+        time.min,
+    )
+    normalized_keyword = (keyword or "").strip().lower()
 
     schedules = (
         db.query(AppSchedule)
         .filter(
             AppSchedule.StartTime >= day_start,
-            AppSchedule.StartTime <= day_end,
+            AppSchedule.StartTime < day_end,
             AppSchedule.Status != "CANCELLED",
         )
         .order_by(AppSchedule.StartTime)
@@ -887,6 +892,19 @@ def ops_schedules_overview(
     result = []
     for cp in counselors:
         cid = cp.AccountId
+        counselor_account = db.query(AccountModel).filter(AccountModel.Id == cid).first()
+        counselor_name = cp.Name or _counselor_name(db, cid)
+        counselor_search_text = " ".join(
+            str(value or "")
+            for value in (
+                cp.Name,
+                getattr(counselor_account, "RealName", None),
+                getattr(counselor_account, "Nickname", None),
+            )
+        ).lower()
+        counselor_matches = bool(
+            normalized_keyword and normalized_keyword in counselor_search_text
+        )
         items = []
         for s in schedules:
             if s.CounselorId != cid:
@@ -894,6 +912,31 @@ def ops_schedules_overview(
             center_id = parse_center_id(s.Note)
             room_id = display_room_id(s.Note, s.Status)
             patient_name, _, patient_contract_tag = _schedule_patient_info(db, s.Id)
+            if normalized_keyword and not counselor_matches:
+                consultation = (
+                    db.query(AppConsultation)
+                    .filter(
+                        AppConsultation.ScheduleId == s.Id,
+                        AppConsultation.Status.in_(["PENDING", "CONFIRMED", "ONGOING"]),
+                    )
+                    .first()
+                )
+                patient = (
+                    db.query(AccountModel)
+                    .filter(AccountModel.Id == consultation.PatientId)
+                    .first()
+                    if consultation
+                    else None
+                )
+                patient_search_text = " ".join(
+                    str(value or "")
+                    for value in (
+                        getattr(patient, "RealName", None),
+                        getattr(patient, "Nickname", None),
+                    )
+                ).lower()
+                if normalized_keyword not in patient_search_text:
+                    continue
             items.append({
                 "scheduleId": s.Id,
                 "startTime": s.StartTime,
@@ -906,13 +949,21 @@ def ops_schedules_overview(
                 "patientName": patient_name,
                 "patientContractTag": patient_contract_tag,
             })
+        if normalized_keyword and not counselor_matches and not items:
+            continue
         result.append({
             "counselorId": cid,
-            "counselorName": cp.Name or _counselor_name(db, cid),
+            "counselorName": counselor_name,
+            "counselorNickname": getattr(counselor_account, "Nickname", None),
             "scheduleCount": len(items),
             "schedules": items,
         })
-    return {"date": day.isoformat(), "counselors": result}
+    return {
+        "date": day.isoformat(),
+        "startDate": day.isoformat(),
+        "endDate": (day if date else day + timedelta(days=ROLLING_WINDOW_DAYS - 1)).isoformat(),
+        "counselors": result,
+    }
 
 
 @router.get(
@@ -951,6 +1002,62 @@ def ops_counselor_schedule_calendar(
         past_days=past_days,
         month=month,
     )
+
+
+class RescheduleRequest(BaseModel):
+    start_time: datetime
+    end_time: datetime
+    room_id: Optional[str] = None
+    reason: str = Field(..., min_length=1, max_length=500)
+
+
+@router.get("/schedules/{schedule_id}/reschedule-options", summary="获取已预约排期的可改时间与咨询室")
+def schedule_reschedule_options(
+    schedule_id: int,
+    date: str = Query(..., description="目标日期 YYYY-MM-DD"),
+    _ops: AppAccount = Depends(require_ops),
+    db: Session = Depends(get_db),
+):
+    from schedule_reschedule_service import build_reschedule_options
+
+    try:
+        target_date = date_type.fromisoformat(date)
+        return build_reschedule_options(
+            db,
+            schedule_id=schedule_id,
+            target_date=target_date,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.put("/schedules/{schedule_id}/reschedule", summary="修改已预约排期的时间与咨询室")
+def reschedule_schedule(
+    schedule_id: int,
+    body: RescheduleRequest,
+    ops_account: AppAccount = Depends(require_ops),
+    db: Session = Depends(get_db),
+):
+    from schedule_reschedule_service import reschedule_booked_consultation
+
+    try:
+        result = reschedule_booked_consultation(
+            db,
+            schedule_id=schedule_id,
+            operator_account_id=ops_account.Id,
+            new_start_time=body.start_time,
+            new_end_time=body.end_time,
+            room_id=body.room_id,
+            reason=body.reason,
+        )
+        db.commit()
+        return result
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception:
+        db.rollback()
+        raise
 
 
 class RoomCreate(BaseModel):

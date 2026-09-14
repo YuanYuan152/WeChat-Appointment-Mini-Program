@@ -528,6 +528,27 @@ class AppScheduleCancelLog(Base):
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
 
 
+class AppScheduleRescheduleLog(Base):
+    """管理工作台修改已预约咨询时间的审计记录。"""
+    __tablename__ = "AppScheduleRescheduleLog"
+
+    Id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    OriginalScheduleId = Column(Integer, nullable=False)
+    TargetScheduleId = Column(Integer, nullable=False)
+    ConsultationId = Column(Integer, nullable=False)
+    OperatorAccountId = Column(Integer, nullable=False)
+    Reason = Column(UnicodeText, nullable=False)
+    OldStartTime = Column(DateTime, nullable=False)
+    OldEndTime = Column(DateTime, nullable=False)
+    OldCenterId = Column(String(50), nullable=True)
+    OldRoomId = Column(String(100), nullable=True)
+    NewStartTime = Column(DateTime, nullable=False)
+    NewEndTime = Column(DateTime, nullable=False)
+    NewCenterId = Column(String(50), nullable=True)
+    NewRoomId = Column(String(100), nullable=True)
+    CreatedAt = Column(DateTime, default=func.now(), nullable=False)
+
+
 class AppRefundExemption(Base):
     __tablename__ = "AppRefundExemption"
 

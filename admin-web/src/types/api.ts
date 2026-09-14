@@ -362,13 +362,58 @@ export interface ScheduleItem {
 export interface CounselorSchedules {
   counselorId: number;
   counselorName: string;
+  counselorNickname?: string | null;
   scheduleCount: number;
   schedules: ScheduleItem[];
 }
 
 export interface ScheduleOverview {
   date: string;
+  startDate?: string;
+  endDate?: string;
   counselors: CounselorSchedules[];
+}
+
+export interface ScheduleRescheduleRoom {
+  roomId: string;
+  roomName: string;
+  available: boolean;
+  unavailableReason?: string | null;
+}
+
+export interface ScheduleRescheduleSlot {
+  key: string;
+  startTime: string;
+  endTime: string;
+  selectable: boolean;
+  unavailableReason?: string | null;
+  rooms: ScheduleRescheduleRoom[];
+}
+
+export interface ScheduleRescheduleOptions {
+  scheduleId: number;
+  consultationId: number;
+  date: string;
+  centerId: string;
+  centerName?: string | null;
+  currentStartTime: string;
+  currentEndTime: string;
+  currentRoomId?: string | null;
+  slots: ScheduleRescheduleSlot[];
+}
+
+export interface ScheduleRescheduleResult {
+  scheduleId: number;
+  originalScheduleId: number;
+  consultationId: number;
+  startTime: string;
+  endTime: string;
+  centerId: string;
+  centerName?: string | null;
+  roomId?: string | null;
+  roomName?: string | null;
+  reason: string;
+  message: string;
 }
 
 export interface Room {

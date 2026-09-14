@@ -185,6 +185,10 @@ export const API_ENDPOINTS = {
     schedulesOverview: '/api/mini/ops/schedules/overview',
     counselorScheduleCalendar: (counselorId: number | string) =>
       `/api/mini/ops/schedules/counselors/${counselorId}/calendar`,
+    scheduleRescheduleOptions: (scheduleId: number | string) =>
+      `/api/mini/ops/schedules/${scheduleId}/reschedule-options`,
+    rescheduleSchedule: (scheduleId: number | string) =>
+      `/api/mini/ops/schedules/${scheduleId}/reschedule`,
     rooms: '/api/mini/ops/rooms',
     roomsStatus: '/api/mini/ops/rooms/status',
     roomDetail: (id: number | string) => `/api/mini/ops/rooms/${id}`,

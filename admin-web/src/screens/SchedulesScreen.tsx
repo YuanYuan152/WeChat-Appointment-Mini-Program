@@ -1,12 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { fetchScheduleOverview } from "@/services/schedules";
 import { AppRoute, useAppRoute } from "@/components/AppRoute";
 import { SchedulesPanel } from "@/panels/SchedulesPanel";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
-import { getLocalDateValue } from "@/lib/date";
 import type { ScreenData } from "@/types/app";
 
 export function SchedulesScreen() {
@@ -18,10 +18,9 @@ export function SchedulesScreen() {
 }
 
 function SchedulesScreenContent() {
+  const router = useRouter();
   const { clearNotice, refreshKey, showNotice } = useAppRoute();
   const [data, setData] = useState<ScreenData>({});
-  const [selectedDate, setSelectedDate] = useState(() => getLocalDateValue());
-  const [queryDate, setQueryDate] = useState(() => getLocalDateValue());
   const [selectedKeyword, setSelectedKeyword] = useState("");
   const [queryKeyword, setQueryKeyword] = useState("");
   const [page, setPage] = useState(1);
@@ -32,14 +31,14 @@ function SchedulesScreenContent() {
     setListLoading(true);
     clearNotice();
     try {
-      const schedules = await fetchScheduleOverview(queryDate);
+      const schedules = await fetchScheduleOverview(queryKeyword);
       setData((prev) => ({ ...prev, schedules }));
     } catch (error) {
       showNotice("error", error instanceof Error ? error.message : "排期情况加载失败");
     } finally {
       setListLoading(false);
     }
-  }, [clearNotice, queryDate, showNotice]);
+  }, [clearNotice, queryKeyword, showNotice]);
 
   useEffect(() => {
     void loadData();
@@ -47,27 +46,23 @@ function SchedulesScreenContent() {
 
   const search = useCallback(() => {
     setPage(1);
-    if (selectedDate === queryDate) {
-      setQueryKeyword(selectedKeyword.trim());
+    const nextKeyword = selectedKeyword.trim();
+    if (nextKeyword === queryKeyword) {
       void loadData();
       return;
     }
-    setQueryKeyword(selectedKeyword.trim());
-    setQueryDate(selectedDate);
-  }, [loadData, queryDate, selectedDate, selectedKeyword]);
+    setQueryKeyword(nextKeyword);
+  }, [loadData, queryKeyword, selectedKeyword]);
 
-  const resetDate = useCallback(() => {
-    const today = getLocalDateValue();
-    setSelectedDate(today);
+  const reset = useCallback(() => {
     setSelectedKeyword("");
-    setQueryKeyword("");
     setPage(1);
-    if (queryDate === today) {
+    if (!queryKeyword) {
       void loadData();
       return;
     }
-    setQueryDate(today);
-  }, [loadData, queryDate]);
+    setQueryKeyword("");
+  }, [loadData, queryKeyword]);
 
   const changePageSize = useCallback((nextPageSize: number) => {
     setPage(1);
@@ -78,15 +73,18 @@ function SchedulesScreenContent() {
     <SchedulesPanel
       schedules={data.schedules}
       listLoading={listLoading}
-      selectedDate={selectedDate}
-      setSelectedDate={setSelectedDate}
       selectedKeyword={selectedKeyword}
       setSelectedKeyword={setSelectedKeyword}
-      queryKeyword={queryKeyword}
       page={page}
       pageSize={pageSize}
       onSearch={search}
-      onReset={resetDate}
+      onReset={reset}
+      onViewCounselor={(counselor) => {
+        const date = counselor.schedules[0]?.startTime?.slice(0, 10) || "";
+        const params = new URLSearchParams({ name: counselor.counselorName });
+        if (date) params.set("date", date);
+        router.push(`/schedules/${counselor.counselorId}?${params.toString()}`);
+      }}
       onPageChange={setPage}
       onPageSizeChange={changePageSize}
     />
