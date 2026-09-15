@@ -26,6 +26,7 @@ def attach_intake_to_order(
     *,
     is_adult: Optional[bool],
     signature_url: Optional[str],
+    agreement_type: Optional[str] = None,
     real_name: Optional[str] = None,
     emergency_contact: Optional[str] = None,
     emergency_relation: Optional[str] = None,
@@ -35,7 +36,18 @@ def attach_intake_to_order(
     if not needs_intake_agreement(db, account):
         return
     url = (signature_url or "").strip()
-    if is_adult is None or not url:
+    from consultation_agreement_types import (
+        agreement_type_from_legacy_is_adult,
+        legacy_is_adult_for_agreement_type,
+        normalize_agreement_type,
+    )
+
+    submitted_type: Optional[str] = None
+    if agreement_type:
+        submitted_type = normalize_agreement_type(agreement_type)
+    elif is_adult is not None:
+        submitted_type = agreement_type_from_legacy_is_adult(is_adult)
+    if not submitted_type or not url:
         raise ValueError("首次预约需选择协议并签署心理咨询协议")
     from order_contract_agreement import (
         apply_emergency_contact_to_account,
@@ -49,7 +61,8 @@ def attach_intake_to_order(
         emergency_relation=emergency_relation,
         emergency_phone=emergency_phone,
     )
-    order.IntakeIsAdult = is_adult
+    order.IntakeAgreementType = submitted_type
+    order.IntakeIsAdult = legacy_is_adult_for_agreement_type(submitted_type)
     order.IntakeSignatureUrl = url
 
 

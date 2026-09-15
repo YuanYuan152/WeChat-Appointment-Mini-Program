@@ -154,6 +154,7 @@ export default defineConfig(({ command, mode }) => {
   console.log(`   API地址: ${apiBaseUrl}`)
   console.log(`   V2地址: ${env.VITE_API_V2_BASE_URL || '(default)'}`)
   console.log(`   模拟登录: ${env.VITE_ENABLE_MOCK_LOGIN === 'true' ? '开' : '关'}`)
+  console.log(`   真实支付: ${env.VITE_ENABLE_REAL_PAY === 'true' ? '开' : '关（走 simulate）'}`)
   console.log(`   命令: ${command}`)
 
   return {

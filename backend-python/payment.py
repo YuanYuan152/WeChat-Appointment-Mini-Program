@@ -61,6 +61,7 @@ class CreateOrderRequest(BaseModel):
     description: Optional[str] = "心理咨询预约"
     center_id: Optional[str] = None
     is_adult: Optional[bool] = None
+    agreement_type: Optional[str] = None
     signature_url: Optional[str] = None
     real_name: Optional[str] = None
     emergency_contact: Optional[str] = None
