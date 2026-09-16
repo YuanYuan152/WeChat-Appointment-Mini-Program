@@ -86,13 +86,8 @@ def require_ops_or_admin(
     current_account: AppAccount = Depends(get_current_account),
     db: Session = Depends(get_db),
 ) -> AppAccount:
-    binding = db.query(AppRoleBinding).filter(
-        AppRoleBinding.AccountId == current_account.Id,
-        AppRoleBinding.RoleType.in_(["Ops", "Admin"]),
-    ).first()
-    if not binding:
-        raise HTTPException(status_code=403, detail="无 Web 管理端权限")
-    return current_account
+    """与 admin.require_ops_or_admin / 前端菜单对齐：Assistant、Ops、Admin。"""
+    return require_staff_workbench(current_account, db)
 
 
 def require_staff_workbench(
