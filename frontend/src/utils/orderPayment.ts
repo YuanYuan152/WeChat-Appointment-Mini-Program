@@ -57,6 +57,23 @@ function isFreePayParams(payParams: any) {
   return Boolean(payParams?.free || payParams?.already_paid || payParams?.alreadyPaid)
 }
 
+function safeShowLoading(title: string) {
+  try {
+    uni.showLoading({ title })
+  } catch (error) {
+    // 原生订阅弹窗关闭期间 loading 异常不能阻断支付请求。
+    console.warn('[payment] showLoading fail', error)
+  }
+}
+
+function safeHideLoading() {
+  try {
+    uni.hideLoading()
+  } catch (error) {
+    console.warn('[payment] hideLoading fail', error)
+  }
+}
+
 async function syncOrderAfterPay(orderId: number | string): Promise<void> {
   try {
     await httpV2.post(API_ENDPOINTS.payment.syncOrder, { order_id: Number(orderId) })
@@ -66,10 +83,10 @@ async function syncOrderAfterPay(orderId: number | string): Promise<void> {
 }
 
 async function confirmFreeOrder(orderId: number): Promise<{ ok: boolean; msg?: string }> {
-  uni.showLoading({ title: '确认中...' })
+  safeShowLoading('确认中...')
   try {
     const orderRes = await httpV2.post(API_ENDPOINTS.payment.payOrder, { order_id: orderId })
-    uni.hideLoading()
+    safeHideLoading()
     if (orderRes.code !== 0 || !orderRes.data) {
       return { ok: false, msg: orderRes.msg || '确认失败' }
     }
@@ -79,7 +96,7 @@ async function confirmFreeOrder(orderId: number): Promise<{ ok: boolean; msg?: s
     }
     return { ok: false, msg: orderRes.msg || '免费单确认失败' }
   } catch (e: any) {
-    uni.hideLoading()
+    safeHideLoading()
     return { ok: false, msg: e?.message || '确认失败' }
   }
 }
@@ -93,24 +110,24 @@ export async function executeOrderPayment(
   }
 
   if (!useRealWechatPay()) {
-    uni.showLoading({ title: '支付中...' })
+    safeShowLoading('支付中...')
     try {
       const res = await httpV2.post(API_ENDPOINTS.payment.simulatePayOrder, { order_id: orderId })
-      uni.hideLoading()
+      safeHideLoading()
       if (res.code !== 0) {
         return { ok: false, msg: res.msg || '支付失败' }
       }
       return { ok: true }
     } catch (e: any) {
-      uni.hideLoading()
+      safeHideLoading()
       return { ok: false, msg: e?.message || '支付失败' }
     }
   }
 
-  uni.showLoading({ title: '正在下单...' })
+  safeShowLoading('正在下单...')
   try {
     const orderRes = await httpV2.post(API_ENDPOINTS.payment.payOrder, { order_id: orderId })
-    uni.hideLoading()
+    safeHideLoading()
     if (orderRes.code !== 0 || !orderRes.data) {
       return { ok: false, msg: orderRes.msg || '下单失败' }
     }
@@ -138,7 +155,7 @@ export async function executeOrderPayment(
       } as any)
     })
   } catch (e: any) {
-    uni.hideLoading()
+    safeHideLoading()
     return { ok: false, msg: e?.message || '支付异常' }
   }
 }

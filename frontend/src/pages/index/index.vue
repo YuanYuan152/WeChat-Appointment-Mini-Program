@@ -254,7 +254,7 @@ import { buildHeroCoverImageStyle, normalizeCoverCrop } from '@/utils/coverCrop'
 
 const DEFAULT_HERO_COVER = '/static/images-opt/slide11.jpg'
 const JIXINLI_FINDER_USERNAME = 'sphG7uQZhHzDQVE'
-const TONGXINLI_FINDER_USERNAME = 'sphAl8n0L8df'
+const TONGXINLI_FINDER_USERNAME = 'sphvHML0XCJiogG'
 
 // 响应式数据
 const searchKeyword = ref('')

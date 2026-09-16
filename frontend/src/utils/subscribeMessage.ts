@@ -88,8 +88,8 @@ export function openSubscribeSetting(): Promise<unknown> {
   return new Promise((resolve, reject) => {
     uni.openSetting({
       withSubscriptions: true,
-      success: (res) => resolve(res),
-      fail: (err) => reject(err),
+      success: (res: unknown) => resolve(res),
+      fail: (err: unknown) => reject(err),
     } as any)
   })
 }
@@ -164,38 +164,52 @@ export function requestOfficialSubscribeInGesture(
   const tmplIds = tmplIdsForKeys(keys)
 
   return new Promise((resolve) => {
+    let settled = false
+    const rejectedResults = () =>
+      Object.fromEntries(tmplIds.map((id) => [id, 'reject']))
+    const finish = (results: SubscribeResultMap) => {
+      if (settled) return
+      settled = true
+      resolve({
+        accepted: hasAccepted(results),
+        results,
+        tmplIds,
+      })
+    }
+
     if (!tmplIds.length) {
-      resolve({ accepted: false, results: {}, tmplIds: [] })
+      finish({})
       return
     }
 
-    uni.requestSubscribeMessage({
-      tmplIds,
-      success: async (res: any) => {
-        const results: SubscribeResultMap = {}
-        tmplIds.forEach((id) => {
-          results[id] = String(res?.[id] || 'reject')
-        })
-        const accepted = hasAccepted(results)
-        try {
-          await MessageApi.saveSubscribePreference({
-            accepted,
+    try {
+      uni.requestSubscribeMessage({
+        tmplIds,
+        success: (res: any) => {
+          const results: SubscribeResultMap = {}
+          tmplIds.forEach((id) => {
+            results[id] = String(res?.[id] || 'reject')
+          })
+          // 订阅结果一产生就放行支付；偏好保存失败或超时不能阻塞支付。
+          finish(results)
+          void MessageApi.saveSubscribePreference({
+            accepted: hasAccepted(results),
             results,
             event_keys: keys,
+          }).catch((error) => {
+            console.warn('[subscribe] save preference fail', error)
           })
-        } catch (e) {
-          console.warn('[subscribe] save preference fail', e)
-        }
-        resolve({ accepted, results, tmplIds })
-      },
-      fail: (err) => {
-        console.warn('[subscribe] requestSubscribeMessage fail', err)
-        resolve({
-          accepted: false,
-          results: Object.fromEntries(tmplIds.map((id) => [id, 'reject'])),
-          tmplIds,
-        })
-      },
-    })
+        },
+        fail: (error) => {
+          console.warn('[subscribe] requestSubscribeMessage fail', error)
+          finish(rejectedResults())
+        },
+        // 部分基础库异常场景只触发 complete，确保支付流程不会永久等待。
+        complete: () => finish(rejectedResults()),
+      })
+    } catch (error) {
+      console.warn('[subscribe] requestSubscribeMessage throw', error)
+      finish(rejectedResults())
+    }
   })
 }

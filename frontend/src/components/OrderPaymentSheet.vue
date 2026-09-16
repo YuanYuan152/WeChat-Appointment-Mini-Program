@@ -680,7 +680,8 @@ const onConfirm = () => {
           icon: 'none',
         })
       }
-    } catch {
+    } catch (error) {
+      console.error('[payment] confirm flow failed', error)
       uni.showToast({
         title: isFreeOrderFee(order.value?.TotalFee) ? '确认失败' : '支付失败',
         icon: 'none',
