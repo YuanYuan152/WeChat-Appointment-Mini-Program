@@ -165,14 +165,14 @@
       </scroll-view>
     </view>
 
-    <!-- 直播预告 / 活动招募 -->
+    <!-- 直播预约 / 活动招募 -->
     <view class="section-block">
       <view class="section-head">
         <text class="section-title">最新动态</text>
       </view>
 
       <view class="seg-tabs">
-        <view class="seg-item" :class="{ active: activeTab === 'live' }" @tap="switchTab('live')">直播预告</view>
+        <view class="seg-item" :class="{ active: activeTab === 'live' }" @tap="switchTab('live')">直播预约</view>
         <view class="seg-item" :class="{ active: activeTab === 'activity' }" @tap="switchTab('activity')">活动招募</view>
       </view>
 
@@ -194,7 +194,9 @@
         <view v-if="activeTab === 'live'" class="activity-list">
           <view v-for="live in liveStreams" :key="live.id">
             <view v-if="live.displayMode === 'CALENDAR'" class="act-card" @tap="goLiveDetail(live)">
-              <image :src="live.image" class="act-img" mode="aspectFill" @error="handleImageError" />
+              <view class="act-img act-img--top">
+                <image :src="live.image" class="act-img-inner" mode="widthFix" @error="handleImageError" />
+              </view>
               <view class="live-calendar-copy">
                 <text class="act-title">{{ live.title }}</text>
                 <text v-if="live.description" class="act-desc">{{ live.description }}</text>
@@ -205,17 +207,33 @@
               </view>
             </view>
 
-            <view v-else-if="live.displayMode === 'CHANNELS'" class="live-channels-card">
-              <text class="act-title">{{ live.title }}</text>
-              <text v-if="live.description" class="live-calendar-desc">{{ live.description }}</text>
-              <view class="channel-buttons">
-                <view class="channel-btn" @tap="openChannelProfile(JIXINLI_FINDER_USERNAME, '济心理')">
-                  <image v-if="live.jixinliIcon" :src="live.jixinliIcon" class="channel-icon" mode="aspectFill" />
-                  <text>济心理</text>
+            <view v-else-if="live.displayMode === 'CHANNELS'" class="live-channels-wrap">
+              <view class="channel-list">
+                <view class="channel-row" @tap="openChannelProfile(JIXINLI_FINDER_USERNAME, '济心理')">
+                  <image
+                    v-if="live.jixinliIcon"
+                    :src="live.jixinliIcon"
+                    class="channel-avatar"
+                    mode="aspectFill"
+                  />
+                  <view v-else class="channel-avatar channel-avatar--placeholder">济</view>
+                  <text class="channel-name">济心理视频号</text>
+                  <view class="channel-reserve-btn" @tap.stop="openChannelProfile(JIXINLI_FINDER_USERNAME, '济心理')">
+                    预约直播
+                  </view>
                 </view>
-                <view class="channel-btn" @tap="openChannelProfile(TONGXINLI_FINDER_USERNAME, '同心理')">
-                  <image v-if="live.tongxinliIcon" :src="live.tongxinliIcon" class="channel-icon" mode="aspectFill" />
-                  <text>同心理</text>
+                <view class="channel-row" @tap="openChannelProfile(TONGXINLI_FINDER_USERNAME, '同心理')">
+                  <image
+                    v-if="live.tongxinliIcon"
+                    :src="live.tongxinliIcon"
+                    class="channel-avatar"
+                    mode="aspectFill"
+                  />
+                  <view v-else class="channel-avatar channel-avatar--placeholder tong">同</view>
+                  <text class="channel-name">同心理视频号</text>
+                  <view class="channel-reserve-btn" @tap.stop="openChannelProfile(TONGXINLI_FINDER_USERNAME, '同心理')">
+                    预约直播
+                  </view>
                 </view>
               </view>
             </view>
@@ -595,7 +613,10 @@ const openChannelProfile = (finderUserName: string, channelName: string) => {
   // #ifdef MP-WEIXIN
   uni.openChannelsUserProfile({
     finderUserName,
-    fail: () => {
+    fail: (err: { errMsg?: string; errno?: number }) => {
+      const msg = String(err?.errMsg || '')
+      // 用户在系统弹窗点「取消」属于正常中断，不提示失败
+      if (/cancel/i.test(msg)) return
       uni.showToast({ title: `无法打开${channelName}视频号，请确认已关联小程序`, icon: 'none' })
     },
   })
@@ -909,40 +930,66 @@ const navigateTo = (url: string) => {
   height: 4rpx; background: #3D5A4E; border-radius: 2rpx;
 }
 .activity-list { display: flex; flex-direction: column; gap: 20rpx; }
-.live-channels-card {
-  overflow: hidden;
-  border-radius: 20rpx;
-  background: #fff;
-  box-shadow: 0 4rpx 20rpx rgba(0,0,0,0.03);
-}
 .live-calendar-copy { flex: 1; display: flex; min-width: 0; flex-direction: column; justify-content: space-between; }
-.live-channels-card { padding: 24rpx; }
+.live-channels-wrap { display: flex; flex-direction: column; }
 .live-calendar-desc {
   display: block;
-  margin-top: 12rpx;
   color: #8A8A8A;
   font-size: 24rpx;
   line-height: 1.7;
   white-space: pre-wrap;
 }
-.channel-buttons { display: flex; gap: 20rpx; margin-top: 24rpx; }
-.channel-btn {
+.channel-list {
   display: flex;
-  flex: 1;
+  flex-direction: column;
+  gap: 20rpx;
+}
+.channel-row {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  padding: 28rpx 24rpx;
+  background: #fff;
+  border-radius: 20rpx;
+  border: 1rpx solid #EEEEEE;
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.04);
+}
+.channel-row:active { opacity: 0.92; }
+.channel-avatar {
+  width: 72rpx;
+  height: 72rpx;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #F5F5F5;
+}
+.channel-avatar--placeholder {
+  display: flex;
   align-items: center;
   justify-content: center;
-  gap: 14rpx;
-  min-width: 0;
-  padding: 18rpx 20rpx;
-  border: 1rpx solid #DDE5E1;
-  border-radius: 16rpx;
-  background: #F7FAF8;
-  color: #3D5A4E;
-  font-size: 26rpx;
+  font-size: 28rpx;
   font-weight: 600;
+  color: #fff;
+  background: #6B5B95;
 }
-.channel-btn:active { opacity: 0.8; }
-.channel-icon { width: 56rpx; height: 56rpx; flex-shrink: 0; border-radius: 50%; }
+.channel-avatar--placeholder.tong { background: #E85A4F; }
+.channel-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 30rpx;
+  font-weight: 500;
+  color: #2C2C2C;
+}
+.channel-reserve-btn {
+  flex-shrink: 0;
+  padding: 14rpx 28rpx;
+  border-radius: 999rpx;
+  background: #E8D4A8;
+  color: #7A6230;
+  font-size: 24rpx;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.channel-reserve-btn:active { opacity: 0.85; }
 .act-card {
   display: flex; background: #fff; border-radius: 20rpx;
   padding: 20rpx; gap: 20rpx;
@@ -951,6 +998,15 @@ const navigateTo = (url: string) => {
 }
 .act-card:active { opacity: 0.95; }
 .act-img { width: 160rpx; height: 160rpx; border-radius: 12rpx; background: #F0EDE8; flex-shrink: 0; }
+.act-img--top {
+  overflow: hidden;
+  padding: 0;
+}
+.act-img-inner {
+  display: block;
+  width: 100%;
+  vertical-align: top;
+}
 .act-info { flex: 1; display: flex; flex-direction: column; justify-content: space-between; }
 .act-title {
   font-size: 28rpx; font-weight: 600; color: #2C2C2C; line-height: 1.5;

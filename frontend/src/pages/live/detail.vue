@@ -10,7 +10,9 @@
         :src="live.image"
         class="calendar-image"
         mode="widthFix"
+        show-menu-by-longpress
         @error="handleImageError"
+        @tap="previewCalendarImage"
       />
     </view>
   </view>
@@ -44,6 +46,12 @@ const loadLive = async (id: number) => {
 
 const handleImageError = () => {
   uni.showToast({ title: '直播日历图片加载失败', icon: 'none' })
+}
+
+const previewCalendarImage = () => {
+  const url = live.value?.image
+  if (!url) return
+  uni.previewImage({ current: url, urls: [url] })
 }
 
 onLoad((query) => {

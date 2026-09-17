@@ -234,7 +234,10 @@ export function ContentCreateModal({
                 {(activeKind === "brand" ||
                   activeKind === "charity" ||
                   activeKind === "contact" ||
-                  activeKind === "consultation_guide") && <span className="ml-1 text-[#B94A48]">*</span>}
+                  activeKind === "consultation_guide" ||
+                  (activeKind === "live" && draft.liveDisplayMode === "CALENDAR")) && (
+                  <span className="ml-1 text-[#B94A48]">*</span>
+                )}
               </span>
               <textarea
                 className={
@@ -244,7 +247,9 @@ export function ContentCreateModal({
                 }
                 placeholder={
                   activeKind === "live"
-                    ? "请输入直播预告文字（可与封面图片二选一或同时填写）"
+                    ? draft.liveDisplayMode === "CALENDAR"
+                      ? "请输入直播预告文字（必填）"
+                      : "请输入直播预告文字（可选）"
                     : activeKind === "activity"
                       ? "请输入活动正文"
                       : activeKind === "home_cover"

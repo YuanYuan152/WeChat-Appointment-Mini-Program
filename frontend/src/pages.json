@@ -148,7 +148,7 @@
         {
             "path": "pages/live/detail",
             "style": {
-                "navigationBarTitleText": "直播预告",
+                "navigationBarTitleText": "直播预约",
                 "navigationBarBackgroundColor": "#ffffff",
                 "navigationBarTextStyle": "black",
                 "backgroundColor": "#F7F5F2"

@@ -51,7 +51,7 @@ const mapLiveStream = (item: any): LiveStream => {
                 : 'CALENDAR'
     return {
         id: Number(item.id || item.Id || 0),
-        title: item.title || item.Title || '直播预告',
+        title: item.title || item.Title || '直播预约',
         description: item.summary || item.Content || item.content || '',
         image: fixImageUrl(item.coverUrl || item.CoverUrl || item.image || '/static/images-opt/huodong11.jpg'),
         time: displayMode === 'WEB' ? '点击进入直播' : '',

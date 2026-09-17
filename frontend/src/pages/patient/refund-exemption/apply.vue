@@ -14,13 +14,9 @@
 
     <view class="form-card">
       <view class="form-item">
-        <text class="label">申请退款金额（元）</text>
-        <input
-          class="input"
-          type="digit"
-          v-model="form.amountYuan"
-          placeholder="请输入申请退款的金额"
-        />
+        <text class="label">退款金额</text>
+        <text class="amount-readonly">￥{{ orderAmountYuan || '--' }}</text>
+        <text class="amount-hint">按订单实付金额全额退款，不可修改</text>
       </view>
 
       <view class="form-item">
@@ -78,13 +74,27 @@ interface ConsultationItem {
 const consultationId = ref(0)
 const counselorName = ref('')
 const slotText = ref('')
+const orderAmountCents = ref(0)
 const orderAmountYuan = ref('')
 
-const form = ref({ amountYuan: '', reason: '' })
+const form = ref({ reason: '' })
 const screenshotUrl = ref('')
 const uploading = ref(false)
 const submitting = ref(false)
 const screenshotPreviewUrl = computed(() => fixImageUrl(screenshotUrl.value))
+
+const formatYuan = (cents?: number) => {
+  if (!cents) return ''
+  return (cents / 100).toFixed(2).replace(/\.00$/, '')
+}
+
+const setOrderAmount = (cents?: number) => {
+  const value = Number(cents || 0)
+  if (value > 0) {
+    orderAmountCents.value = value
+    orderAmountYuan.value = formatYuan(value)
+  }
+}
 
 const pickScreenshot = () => {
   if (uploading.value) return
@@ -123,21 +133,11 @@ const formatSlotRange = (start?: string, end?: string) => {
   return `${datePart} ${startClock} – ${endClock}`
 }
 
-const formatYuan = (cents?: number) => {
-  if (!cents) return ''
-  return (cents / 100).toFixed(2).replace(/\.00$/, '')
-}
-
 const applyConsultation = (item: ConsultationItem) => {
   consultationId.value = item.id
   counselorName.value = item.counselorName || ''
   slotText.value = formatSlotRange(item.startTime, item.endTime)
-  if (item.orderAmount) {
-    orderAmountYuan.value = formatYuan(item.orderAmount)
-    if (!form.value.amountYuan) {
-      form.value.amountYuan = orderAmountYuan.value
-    }
-  }
+  setOrderAmount(item.orderAmount)
 }
 
 const loadConsultation = async (id: number) => {
@@ -163,13 +163,9 @@ onLoad(async (options: Record<string, string | undefined>) => {
   consultationId.value = id
   counselorName.value = decodeURIComponent(options?.counselorName || '')
   slotText.value = decodeURIComponent(options?.slotText || '')
-  const cents = Number(options?.orderAmount || 0)
-  if (cents > 0) {
-    orderAmountYuan.value = formatYuan(cents)
-    form.value.amountYuan = orderAmountYuan.value
-  }
+  setOrderAmount(Number(options?.orderAmount || 0))
 
-  if (!counselorName.value || !slotText.value) {
+  if (!counselorName.value || !slotText.value || !orderAmountCents.value) {
     await loadConsultation(id)
   }
 })
@@ -179,9 +175,8 @@ const submit = async () => {
     uni.showToast({ title: '预约信息无效', icon: 'none' })
     return
   }
-  const amountYuan = parseFloat(form.value.amountYuan)
-  if (!amountYuan || amountYuan <= 0) {
-    uni.showToast({ title: '请填写有效的申请退款金额', icon: 'none' })
+  if (!orderAmountCents.value || orderAmountCents.value <= 0) {
+    uni.showToast({ title: '订单金额无效，无法申请退款', icon: 'none' })
     return
   }
   const reason = form.value.reason.trim()
@@ -197,7 +192,7 @@ const submit = async () => {
   submitting.value = true
   try {
     const res = await httpV2.post(API_ENDPOINTS.patient.refundExemption(consultationId.value), {
-      amount: Math.round(amountYuan * 100),
+      amount: orderAmountCents.value,
       reason,
       screenshot_url: screenshotUrl.value,
     })
@@ -293,13 +288,19 @@ const submit = async () => {
   margin-bottom: 14rpx;
 }
 
-.input {
-  font-size: 30rpx;
-  color: #1F2937;
-  height: 72rpx;
-  background: #F9FAFB;
-  border-radius: 12rpx;
-  padding: 0 20rpx;
+.amount-readonly {
+  display: block;
+  font-size: 36rpx;
+  font-weight: 700;
+  color: #0D9488;
+  line-height: 1.4;
+}
+
+.amount-hint {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: #9CA3AF;
 }
 
 .textarea {
