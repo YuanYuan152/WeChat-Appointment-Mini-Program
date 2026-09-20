@@ -4,7 +4,7 @@
  * createApp().app.mount('#app') 在微信端必须保留。
  */
 import { updateTabBarForRole, readStoredRole } from '@/utils/tabBar'
-import { isDevMode, warnIfDeviceCannotReachLocalApi } from '@/utils/auth'
+import { warnIfDeviceCannotReachLocalApi } from '@/utils/auth'
 import { migrateLegacySession } from '@/utils/session'
 import { resolveApiV2BaseUrl } from '@/config/apiBase'
 
@@ -15,20 +15,8 @@ export default {
     if (launched) return
     launched = true
     const v2Base = resolveApiV2BaseUrl()
-    // warn 比 info 更容易在真机调试/过滤级别下看到
     console.warn('[API_V2] V2后端地址=', v2Base)
     console.log('App Launch')
-    console.log('V2 API:', v2Base)
-    if (isDevMode()) {
-      // 真机调试时主窗口 Console 往往看不到日志，用 Toast 直接确认地址
-      setTimeout(() => {
-        uni.showToast({
-          title: `V2:${v2Base.replace(/^https?:\/\//, '')}`,
-          icon: 'none',
-          duration: 3500,
-        })
-      }, 500)
-    }
     try {
       migrateLegacySession()
     } catch (e) {

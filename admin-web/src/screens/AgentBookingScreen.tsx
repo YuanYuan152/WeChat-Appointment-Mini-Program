@@ -34,7 +34,7 @@ const INITIAL_DRAFT = (): AgentBookingDraft => ({
   centerId: AGENT_BOOKING_CENTER_OPTIONS[0]?.value || "yangpu",
   slotKey: "",
   roomId: "",
-  agreementIsAdult: null,
+  agreementType: null,
   isFreeExperienceOrder: false,
   freeOrderReason: "",
 });
@@ -409,7 +409,7 @@ function AgentBookingScreenContent() {
           setDraft((prev) => ({ ...prev, slotKey: "", roomId: "" }));
           return undefined;
         }
-        if (!latestPatient.isContractSigned && draft.agreementIsAdult === null) {
+        if (!latestPatient.isContractSigned && draft.agreementType === null) {
           const message = "该来访当前未签约，请先选择需要推送的签约协议";
           setSlotError(message);
           showNotice("error", message);
@@ -424,11 +424,9 @@ function AgentBookingScreenContent() {
           endTime: slot.endTime,
           roomId: roomId || undefined,
           scheduleId: slot.existingAvailableScheduleId || slot.counselorScheduleId || undefined,
-          agreementIsAdult: latestPatient.isContractSigned
+          agreementType: latestPatient.isContractSigned
             ? undefined
-            : draft.agreementIsAdult === null
-              ? undefined
-              : draft.agreementIsAdult,
+            : draft.agreementType || undefined,
           isFreeExperienceOrder: draft.isFreeExperienceOrder,
           freeOrderReason: draft.isFreeExperienceOrder ? draft.freeOrderReason.trim() : undefined,
         });
@@ -453,7 +451,7 @@ function AgentBookingScreenContent() {
     [
       activeQuery,
       clearNotice,
-      draft.agreementIsAdult,
+      draft.agreementType,
       draft.centerId,
       draft.freeOrderReason,
       draft.isFreeExperienceOrder,

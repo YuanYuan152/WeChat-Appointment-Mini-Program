@@ -92,10 +92,17 @@ const orderTimeLabel = (item: PatientOrder) => {
 }
 
 const loadOrder = async () => {
-  if (!orderId.value) return
+  if (!orderId.value) {
+    loading.value = false
+    return
+  }
   loading.value = true
   try {
-    const res = await httpV2.get<PatientOrder>(API_ENDPOINTS.patient.orderDetail(orderId.value))
+    const res = await httpV2.get<PatientOrder>(
+      API_ENDPOINTS.patient.orderDetail(orderId.value),
+      undefined,
+      { showLoading: false, showError: false },
+    )
     if (res.code === 0 && res.data) {
       order.value = res.data
     }

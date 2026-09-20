@@ -186,7 +186,7 @@ const formatTime = (dt: string) => formatChinaDateTime(dt)
 
 const loadActiveRole = async () => {
   try {
-    const me = await AuthApi.getMe()
+    const me = await AuthApi.getMe({ showLoading: false, showError: false })
     userRoles.value = me.roles || []
     activeRole.value = me.activeRole || me.roles?.[0] || ''
     if (me.roles?.length) {
@@ -264,8 +264,16 @@ const loadUnreadCrisisCount = async () => {
 }
 
 const loadUnreadCount = async () => {
-  const res = await httpV2.get<{ count: number }>(API_ENDPOINTS.message.unreadCount, undefined, { showLoading: false })
-  if (res.code === 0 && res.data) unreadCount.value = res.data.count || 0
+  try {
+    const res = await httpV2.get<{ count: number }>(
+      API_ENDPOINTS.message.unreadCount,
+      undefined,
+      { showLoading: false, showError: false },
+    )
+    if (res.code === 0 && res.data) unreadCount.value = res.data.count || 0
+  } catch {
+    // 角标失败不影响列表展示
+  }
 }
 
 const buildListParams = () => {
@@ -284,13 +292,18 @@ const buildListParams = () => {
   return params
 }
 
+const refreshMessageBadges = () => {
+  void loadUnreadCount()
+  void loadUnreadCrisisCount()
+}
+
 const loadMessages = async () => {
   loading.value = true
   try {
     const res = await httpV2.get<MessageItem[]>(
       API_ENDPOINTS.message.list,
       buildListParams(),
-      { showLoading: false },
+      { showLoading: false, showError: false },
     )
     if (res.code === 0 && res.data) {
       messages.value = res.data
@@ -301,11 +314,13 @@ const loadMessages = async () => {
     } else {
       messages.value = []
     }
-    await loadUnreadCount()
-    await loadUnreadCrisisCount()
+  } catch {
+    messages.value = []
   } finally {
+    // 列表一结束就关灰字 loading，未读统计不挡展示
     loading.value = false
   }
+  refreshMessageBadges()
 }
 
 const toggleFilter = () => {
@@ -390,7 +405,7 @@ onShow(async () => {
   closeFilter()
   await loadActiveRole()
   activeCategory.value = sanitizeMessageCategoryForRole(inboxRole.value, activeCategory.value)
-  await loadUnreadCrisisCount()
+  // 先出列表，危机角标后台刷新，避免部分安卓上串行请求把灰字 loading 拖死
   await loadMessages()
 })
 </script>

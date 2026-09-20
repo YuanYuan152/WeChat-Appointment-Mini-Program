@@ -268,14 +268,15 @@ def search_proxy_patients(db: Session, keyword: Optional[str] = None, limit: int
         name = acc.RealName or acc.Nickname or f"来访#{acc.Id}"
         contract = contract_map.get(acc.Id, {})
         tag = contract.get("contractTag")
-        label = f"{name} · {acc.Mobile or acc.Id}"
+        # 代理预约选人列表不展示手机号，仅用编号区分
+        label = f"{name} · ID {acc.Id}"
         if tag:
-            label = f"{name} {tag} · {acc.Mobile or acc.Id}"
+            label = f"{name} {tag} · ID {acc.Id}"
         result.append(
             {
                 "id": acc.Id,
                 "name": name,
-                "mobile": acc.Mobile,
+                "mobile": None,
                 "contractTag": tag,
                 "isContractSigned": bool(contract.get("isContractSigned")),
                 "boundCounselorId": contract.get("boundCounselorId"),
@@ -322,14 +323,14 @@ def search_counselor_proxy_patients(
         bound_id = contract.get("boundCounselorId")
         name = acc.RealName or acc.Nickname or f"来访#{acc.Id}"
         tag = contract.get("contractTag")
-        label = f"{name} · {acc.Mobile or acc.Id}"
+        label = f"{name} · ID {acc.Id}"
         if tag:
-            label = f"{name} {tag} · {acc.Mobile or acc.Id}"
+            label = f"{name} {tag} · ID {acc.Id}"
         result.append(
             {
                 "id": acc.Id,
                 "name": name,
-                "mobile": acc.Mobile,
+                "mobile": None,
                 "contractTag": tag,
                 "isContractSigned": True,
                 "boundCounselorId": bound_id,

@@ -758,13 +758,21 @@ const markReadIfNeeded = async (item: MessageItem) => {
 }
 
 const loadDetail = async () => {
-  if (!messageId.value) return
+  if (!messageId.value) {
+    loading.value = false
+    return
+  }
   loading.value = true
   try {
-    const res = await httpV2.get<MessageItem>(API_ENDPOINTS.message.detail(messageId.value))
+    const res = await httpV2.get<MessageItem>(
+      API_ENDPOINTS.message.detail(messageId.value),
+      undefined,
+      { showLoading: false, showError: false },
+    )
     if (res.code === 0 && res.data) {
       message.value = res.data
-      await markReadIfNeeded(res.data)
+      // 已读标记后台进行，避免部分安卓上卡住详情灰字 loading
+      void markReadIfNeeded(res.data)
     }
   } finally {
     loading.value = false

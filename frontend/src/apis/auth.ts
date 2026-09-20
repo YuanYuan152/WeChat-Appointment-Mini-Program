@@ -137,8 +137,11 @@ export class AuthApi {
   /**
    * 获取当前用户信息及角色
    */
-  static async getMe(): Promise<UserInfo> {
-    const res = await httpV2.get<UserInfo>(API_ENDPOINTS.auth.me)
+  static async getMe(options?: { showLoading?: boolean; showError?: boolean }): Promise<UserInfo> {
+    const res = await httpV2.get<UserInfo>(API_ENDPOINTS.auth.me, undefined, {
+      showLoading: options?.showLoading ?? true,
+      showError: options?.showError,
+    })
     if (res.code === 0 && res.data) {
       const role = resolveAccountRole(res.data.roles, res.data.activeRole)
       const token = uni.getStorageSync('token') || ''

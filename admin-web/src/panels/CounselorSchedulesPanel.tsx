@@ -819,7 +819,7 @@ function CounselorProxyBookingModal({
                   <span>
                     <span className="font-medium">{patient.name}</span>
                     <span className="ml-2 text-xs text-[var(--lxxl-muted)]">
-                      {patient.mobile || `编号 ${patient.id}`}
+                      编号 {patient.id}
                     </span>
                   </span>
                   <span className="text-xs text-[#315D4B]">

@@ -22,7 +22,8 @@
             class="dropdown-item"
             @tap="selectPatient(p)"
           >
-            {{ p.label || formatPatientInline(p.name, p.contractTag) }}
+            {{ formatPatientInline(p.name, p.contractTag) }}
+            <text v-if="p.id" class="dropdown-id"> · ID {{ p.id }}</text>
           </view>
         </view>
         <text v-if="selectedPatient" class="selected-tag">已选：{{ formatPatientInline(selectedPatient.name, selectedPatient.contractTag) }}</text>
@@ -914,6 +915,10 @@ onLoad(async (opts) => {
   font-size: 26rpx;
   color: #374151;
   border-bottom: 1rpx solid #F3F4F6;
+}
+.dropdown-id {
+  color: #9CA3AF;
+  font-size: 22rpx;
 }
 
 .dropdown-item:active {

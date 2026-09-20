@@ -278,7 +278,7 @@
                   class="patient-dropdown-item"
                   :class="{ disabled: p.canProxyPush === false }"
                   @tap="selectProxyPatient(p)"
-                >{{ p.label || formatPatientInline(p.name, p.contractTag) }}</view>
+                >{{ formatPatientInline(p.name, p.contractTag) }}<text v-if="p.id" class="patient-id-hint"> · ID {{ p.id }}</text></view>
               </view>
               <text v-if="proxySelectedPatient" class="selected-patient-tag">
                 已选：{{ formatPatientInline(proxySelectedPatient.name, proxySelectedPatient.contractTag) }}
@@ -1799,6 +1799,10 @@ defineExpose({ refresh, focusScheduleId, applyListFilter, getUnrecordedCount })
   font-size: 26rpx;
   color: #374151;
   border-bottom: 1rpx solid #F3F4F6;
+}
+.patient-id-hint {
+  color: #9CA3AF;
+  font-size: 22rpx;
 }
 .patient-dropdown-item:active { background: #F9FAFB; }
 .patient-dropdown-item.disabled { color: #9CA3AF; }

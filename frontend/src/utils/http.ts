@@ -140,14 +140,23 @@ class HttpRequest {
         requestData = JSON.stringify(requestData)
       }
 
-      // 发送请求
-      const response = await uni.request({
-        url: fullUrl,
-        method,
-        data: requestData,
-        header: finalHeaders,
-        timeout: timeout ?? this.timeout
-      })
+      // 发送请求（硬超时兜底：部分安卓上 uni.request 的 fail/timeout 回调会滞后或不触发）
+      const requestTimeout = timeout ?? this.timeout
+      const hardTimeoutMs = Math.max(requestTimeout + 800, requestTimeout)
+      const response = await Promise.race([
+        uni.request({
+          url: fullUrl,
+          method,
+          data: requestData,
+          header: finalHeaders,
+          timeout: requestTimeout,
+        }),
+        new Promise<never>((_, reject) => {
+          setTimeout(() => {
+            reject({ errMsg: `request:fail timeout ${hardTimeoutMs}ms` })
+          }, hardTimeoutMs)
+        }),
+      ])
 
       if (showLoading) endLoading()
 

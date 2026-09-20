@@ -6,6 +6,10 @@
     <view v-if="loading" class="empty-state">
       <text class="empty-text">加载中...</text>
     </view>
+    <view v-else-if="loadFailed" class="empty-state">
+      <text class="empty-text">订单加载失败</text>
+      <view class="retry-btn" @tap="loadOrders()">点击重试</view>
+    </view>
     <view v-else-if="orders.length === 0" class="empty-state">
       <text class="empty-text">暂无订单记录</text>
     </view>
@@ -62,6 +66,7 @@ import { copyContactCenterAddress, getContactCenterAddress } from '@/constants/c
 
 const orders = ref<PatientOrder[]>([])
 const loading = ref(true)
+const loadFailed = ref(false)
 const showPaySheet = ref(false)
 const payOrderId = ref<number | null>(null)
 const payOrder = ref<PatientOrder | null>(null)
@@ -124,6 +129,7 @@ const tryOpenPendingPay = () => {
 
 const loadOrders = async (opts?: { silent?: boolean }) => {
   if (!opts?.silent) loading.value = true
+  loadFailed.value = false
   try {
     const res = await httpV2.get<PatientOrder[]>(
       API_ENDPOINTS.patient.orders,
@@ -133,9 +139,14 @@ const loadOrders = async (opts?: { silent?: boolean }) => {
     if (res.code === 0 && Array.isArray(res.data)) {
       orders.value = res.data
       tryOpenPendingPay()
+      loadFailed.value = false
+    } else if (!opts?.silent && orders.value.length === 0) {
+      loadFailed.value = res.code !== 0
     }
   } catch {
-    // 静默失败
+    if (!opts?.silent && orders.value.length === 0) {
+      loadFailed.value = true
+    }
   } finally {
     loading.value = false
   }
@@ -166,6 +177,15 @@ onShow(() => {
 .page-title { font-size: 40rpx; font-weight: 700; color: #1F2937; }
 .empty-state { text-align: center; padding: 120rpx 0; }
 .empty-text { font-size: 28rpx; color: #9CA3AF; }
+.retry-btn {
+  display: inline-block;
+  margin-top: 28rpx;
+  padding: 14rpx 36rpx;
+  border-radius: 999rpx;
+  border: 1rpx solid #3D5A4E;
+  color: #3D5A4E;
+  font-size: 26rpx;
+}
 .order-card { background: #fff; border-radius: 24rpx; padding: 32rpx; margin-bottom: 24rpx; box-shadow: 0 4rpx 16rpx rgba(0,0,0,0.06); }
 .order-header { display: flex; justify-content: space-between; margin-bottom: 16rpx; }
 .order-no { font-size: 24rpx; color: #6B7280; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-right: 16rpx; }

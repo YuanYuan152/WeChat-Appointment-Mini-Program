@@ -706,7 +706,7 @@ export interface PatientContractInfo {
 
 export interface PatientContractArtifact {
   orderId: number;
-  agreementType: "TONGXIN" | "YANGFAN";
+  agreementType: "TONGXIN" | "YANGFAN" | "QIHANG";
   agreementTypeLabel: string;
   isTongxin: boolean;
   signedAt: string;

@@ -43,7 +43,8 @@ export interface AgentBookingDraft {
   centerId: string;
   slotKey: string;
   roomId: string;
-  agreementIsAdult: boolean | null;
+  /** 未签约来访必选：TONGXIN / YANGFAN / QIHANG */
+  agreementType: "TONGXIN" | "YANGFAN" | "QIHANG" | null;
   isFreeExperienceOrder: boolean;
   freeOrderReason: string;
 }
@@ -152,7 +153,7 @@ export function AgentBookingPanel({
             <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
               <SearchablePersonSelect
                 label="来访者"
-                placeholder="姓名或电话"
+                placeholder="姓名或编号"
                 required
                 search={onSearchPatients}
                 value={patient}
@@ -481,7 +482,10 @@ function SearchablePersonSelect({
                 >
                   <span className="block font-medium">{formatPatientInline(item)}</span>
                   <span className="mt-1 block text-xs text-[var(--lxxl-muted)]">
-                    {[item.mobile || `ID ${item.id}`, item.boundCounselorName ? `绑定：${item.boundCounselorName}` : "未绑定咨询师"].join(" · ")}
+                    {[
+                      `ID ${item.id}`,
+                      item.boundCounselorName ? `绑定：${item.boundCounselorName}` : "未绑定咨询师",
+                    ].join(" · ")}
                   </span>
                 </button>
               ))
@@ -499,7 +503,9 @@ function uniqueExactPersonMatch(items: ProxyPersonOption[], inputValue: string) 
     return undefined;
   }
   const matches = items.filter((item) =>
-    [item.name, item.mobile].some((value) => normalizePersonSearchValue(value) === keyword),
+    [item.name, `ID ${item.id}`, String(item.id)].some(
+      (value) => normalizePersonSearchValue(value) === keyword,
+    ),
   );
   return matches.length === 1 ? matches[0] : undefined;
 }
@@ -629,7 +635,7 @@ function ProxyBookingModal({
       !selectedSlot.past &&
       !selectedSlot.counselorOccupied &&
       (!draft.isFreeExperienceOrder || Boolean(draft.freeOrderReason.trim())) &&
-      (patient?.isContractSigned || draft.agreementIsAdult !== null) &&
+      (patient?.isContractSigned || draft.agreementType !== null) &&
       (!needsRoom || (selectedRoom?.available && !selectedRoom.occupiedByOther)),
   );
 
@@ -729,28 +735,26 @@ function ProxyBookingModal({
                 未签约来访需选择推送的协议，来访支付前将按此协议签署。
               </p>
               <div className="flex flex-wrap gap-3">
-                <button
-                  className={`rounded-xl border px-4 py-3 text-sm transition ${
-                    draft.agreementIsAdult === true
-                      ? "border-[var(--lxxl-green)] bg-[#F4FBF7] text-[var(--lxxl-green-dark)]"
-                      : "border-[var(--lxxl-border)] bg-white hover:border-[var(--lxxl-green)]"
-                  }`}
-                  type="button"
-                  onClick={() => setDraft((prev) => ({ ...prev, agreementIsAdult: true }))}
-                >
-                  同心理咨询协议
-                </button>
-                <button
-                  className={`rounded-xl border px-4 py-3 text-sm transition ${
-                    draft.agreementIsAdult === false
-                      ? "border-[var(--lxxl-green)] bg-[#F4FBF7] text-[var(--lxxl-green-dark)]"
-                      : "border-[var(--lxxl-border)] bg-white hover:border-[var(--lxxl-green)]"
-                  }`}
-                  type="button"
-                  onClick={() => setDraft((prev) => ({ ...prev, agreementIsAdult: false }))}
-                >
-                  “扬帆计划”协议
-                </button>
+                {(
+                  [
+                    { value: "TONGXIN" as const, label: "同心理咨询协议" },
+                    { value: "YANGFAN" as const, label: "“扬帆计划”协议" },
+                    { value: "QIHANG" as const, label: "启航咨询协议" },
+                  ] as const
+                ).map((item) => (
+                  <button
+                    key={item.value}
+                    className={`rounded-xl border px-4 py-3 text-sm transition ${
+                      draft.agreementType === item.value
+                        ? "border-[var(--lxxl-green)] bg-[#F4FBF7] text-[var(--lxxl-green-dark)]"
+                        : "border-[var(--lxxl-border)] bg-white hover:border-[var(--lxxl-green)]"
+                    }`}
+                    type="button"
+                    onClick={() => setDraft((prev) => ({ ...prev, agreementType: item.value }))}
+                  >
+                    {item.label}
+                  </button>
+                ))}
               </div>
             </QueryField>
           )}
