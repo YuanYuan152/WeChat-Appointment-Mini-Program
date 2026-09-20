@@ -46,7 +46,7 @@
     "setting": {
       "urlCheck": false,
       "es6": true,
-      "enhance": false,
+      "enhance": true,
       "postcss": true,
       "preloadBackgroundData": false,
       "minified": true,
@@ -97,4 +97,4 @@
     "enable": false
   },
   "vueVersion": "3"
-} 
+}

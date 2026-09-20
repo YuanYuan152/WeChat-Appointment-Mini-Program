@@ -56,7 +56,8 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { onLoad, onShow } from '@dcloudio/uni-app'
+import { onLoad, onShow, onUnload } from '@dcloudio/uni-app'
+import { createListLoadGuard } from '@/utils/listLoadGuard'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
 import OrderPaymentSheet from '@/components/OrderPaymentSheet.vue'
@@ -67,6 +68,16 @@ import { copyContactCenterAddress, getContactCenterAddress } from '@/constants/c
 const orders = ref<PatientOrder[]>([])
 const loading = ref(true)
 const loadFailed = ref(false)
+const loadGuard = createListLoadGuard(() => {
+  loading.value = false
+  loadFailed.value = orders.value.length === 0
+  console.warn('[orders] page load deadline exceeded')
+})
+let showTimer: ReturnType<typeof setTimeout> | undefined
+onUnload(() => {
+  loadGuard.dispose()
+  if (showTimer !== undefined) clearTimeout(showTimer)
+})
 const showPaySheet = ref(false)
 const payOrderId = ref<number | null>(null)
 const payOrder = ref<PatientOrder | null>(null)
@@ -128,6 +139,7 @@ const tryOpenPendingPay = () => {
 }
 
 const loadOrders = async (opts?: { silent?: boolean }) => {
+  const requestId = loadGuard.start()
   if (!opts?.silent) loading.value = true
   loadFailed.value = false
   try {
@@ -136,19 +148,20 @@ const loadOrders = async (opts?: { silent?: boolean }) => {
       undefined,
       { showLoading: false, showError: false },
     )
+    if (!loadGuard.isCurrent(requestId)) return
     if (res.code === 0 && Array.isArray(res.data)) {
       orders.value = res.data
       tryOpenPendingPay()
       loadFailed.value = false
     } else if (!opts?.silent && orders.value.length === 0) {
-      loadFailed.value = res.code !== 0
+      loadFailed.value = true
     }
   } catch {
-    if (!opts?.silent && orders.value.length === 0) {
+    if (loadGuard.isCurrent(requestId) && !opts?.silent && orders.value.length === 0) {
       loadFailed.value = true
     }
   } finally {
-    loading.value = false
+    if (loadGuard.finish(requestId)) loading.value = false
   }
 }
 
@@ -157,12 +170,27 @@ onLoad((opts) => {
 })
 
 onShow(() => {
-  if (!ensureLoggedInOrRedirect('/pages/patient/orders/list')) {
-    loading.value = false
-    return
-  }
-  // 已有列表时静默刷新，避免整页白屏闪烁
-  loadOrders({ silent: orders.value.length > 0 })
+  if (showTimer !== undefined) clearTimeout(showTimer)
+  // 避免在原生页面加载回调中直接发起请求或登录跳转。
+  showTimer = setTimeout(() => {
+    showTimer = undefined
+    try {
+      if (!ensureLoggedInOrRedirect('/pages/patient/orders/list')) {
+        loading.value = false
+        return
+      }
+      // 已有列表时静默刷新，避免整页白屏闪烁。
+      void loadOrders({ silent: orders.value.length > 0 }).catch(error => {
+        loading.value = false
+        loadFailed.value = orders.value.length === 0
+        console.error('[orders] refresh failed', error)
+      })
+    } catch (error) {
+      loading.value = false
+      loadFailed.value = orders.value.length === 0
+      console.error('[orders] page initialization failed', error)
+    }
+  }, 0)
 })
 </script>
 

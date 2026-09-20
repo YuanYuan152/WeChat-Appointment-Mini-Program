@@ -1,6 +1,7 @@
 /** 小程序时间展示：统一按中国北京时间（Asia/Shanghai） */
 
-const SHANGHAI_TIME_ZONE = 'Asia/Shanghai'
+// 当前预约/订单业务使用北京时间 UTC+8，不依赖宿主时区或 Intl。
+const CHINA_OFFSET_MS = 8 * 60 * 60 * 1000
 
 /**
  * 解析接口时间字符串。
@@ -27,17 +28,11 @@ export function formatChinaDateTime(value?: string | null): string {
   if (!date) {
     return String(value).replace('T', ' ').slice(0, 16)
   }
-  const parts = new Intl.DateTimeFormat('zh-CN', {
-    timeZone: SHANGHAI_TIME_ZONE,
-    hour12: false,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).formatToParts(date)
-  const pick = (type: string) => parts.find(p => p.type === type)?.value || ''
-  return `${pick('year')}-${pick('month')}-${pick('day')} ${pick('hour')}:${pick('minute')}`
+  // 部分安卓微信没有 Intl；渲染中调用会抛错，导致页面停留在旧的加载视图。
+  // 偏移后只读 UTC 字段，避免再叠加手机本地时区。
+  const chinaDate = new Date(date.getTime() + CHINA_OFFSET_MS)
+  const pad = (part: number) => part < 10 ? `0${part}` : String(part)
+  return `${chinaDate.getUTCFullYear()}-${pad(chinaDate.getUTCMonth() + 1)}-${pad(chinaDate.getUTCDate())} ${pad(chinaDate.getUTCHours())}:${pad(chinaDate.getUTCMinutes())}`
 }
 
 /** 仅时分（用于结束时间后缀） */

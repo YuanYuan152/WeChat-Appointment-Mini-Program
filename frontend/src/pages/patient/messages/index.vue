@@ -87,6 +87,11 @@
     <view v-if="loading" class="empty-state">
       <text class="empty-desc">加载中...</text>
     </view>
+    <view v-else-if="loadFailed" class="empty-state">
+      <text class="empty-title">消息加载失败</text>
+      <text class="empty-desc">请检查网络后重试</text>
+      <button class="retry-btn" @tap="loadMessages">点击重试</button>
+    </view>
     <view v-else-if="messages.length === 0" class="empty-state">
       <text class="empty-title">暂无消息</text>
       <text class="empty-desc">{{ emptyHint }}</text>
@@ -116,7 +121,8 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { onLoad, onShow } from '@dcloudio/uni-app'
+import { onShow, onUnload } from '@dcloudio/uni-app'
+import { createListLoadGuard } from '@/utils/listLoadGuard'
 import { AuthApi } from '@/apis/auth'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
@@ -144,6 +150,12 @@ const userRoles = ref<string[]>([])
 const activeCategory = ref('ALL')
 const searchKeyword = ref('')
 const loading = ref(false)
+const loadFailed = ref(false)
+const loadGuard = createListLoadGuard(() => {
+  loading.value = false
+  loadFailed.value = true
+  console.warn('[messages] page load deadline exceeded')
+})
 const filterOpen = ref(false)
 
 let searchTimer: ReturnType<typeof setTimeout> | null = null
@@ -298,29 +310,32 @@ const refreshMessageBadges = () => {
 }
 
 const loadMessages = async () => {
+  const requestId = loadGuard.start()
   loading.value = true
+  loadFailed.value = false
   try {
     const res = await httpV2.get<MessageItem[]>(
       API_ENDPOINTS.message.list,
       buildListParams(),
       { showLoading: false, showError: false },
     )
-    if (res.code === 0 && res.data) {
+    if (!loadGuard.isCurrent(requestId)) return
+    if (res.code === 0 && Array.isArray(res.data)) {
       messages.value = res.data
       if (isAdminOpsInbox.value && !crisisUnreadView.value) {
         const fromList = countUnreadCrisis(res.data)
         unreadCrisisCount.value = Math.max(unreadCrisisCount.value, fromList)
       }
     } else {
-      messages.value = []
+      loadFailed.value = true
     }
   } catch {
-    messages.value = []
+    if (loadGuard.isCurrent(requestId)) loadFailed.value = true
   } finally {
     // 列表一结束就关灰字 loading，未读统计不挡展示
-    loading.value = false
+    if (loadGuard.finish(requestId)) loading.value = false
   }
-  refreshMessageBadges()
+  if (loadGuard.isCurrent(requestId)) refreshMessageBadges()
 }
 
 const toggleFilter = () => {
@@ -399,14 +414,41 @@ const openMessage = async (item: MessageItem) => {
   })
 }
 
-onLoad(loadActiveRole)
+let pageDisposed = false
+let showGeneration = 0
+let showTimer: ReturnType<typeof setTimeout> | undefined
+onUnload(() => {
+  pageDisposed = true
+  showGeneration++
+  loadGuard.dispose()
+  if (showTimer !== undefined) clearTimeout(showTimer)
+  if (searchTimer) clearTimeout(searchTimer)
+})
 
-onShow(async () => {
-  closeFilter()
+const refreshOnShow = async (generation: number) => {
   await loadActiveRole()
+  if (pageDisposed || generation !== showGeneration) return
   activeCategory.value = sanitizeMessageCategoryForRole(inboxRole.value, activeCategory.value)
   // 先出列表，危机角标后台刷新，避免部分安卓上串行请求把灰字 loading 拖死
   await loadMessages()
+}
+
+onShow(() => {
+  const generation = ++showGeneration
+  closeFilter()
+  if (showTimer !== undefined) clearTimeout(showTimer)
+  // 让原生生命周期同步返回，业务异步任务在下一轮执行并显式处理异常。
+  showTimer = setTimeout(() => {
+    showTimer = undefined
+    if (pageDisposed || generation !== showGeneration) return
+    void refreshOnShow(generation).catch(error => {
+      if (pageDisposed || generation !== showGeneration) return
+      loadGuard.dispose()
+      loading.value = false
+      loadFailed.value = true
+      console.error('[messages] refresh failed', error)
+    })
+  }, 0)
 })
 </script>
 
@@ -667,6 +709,14 @@ onShow(async () => {
   font-size: 34rpx;
   font-weight: 800;
   color: #1F2937;
+}
+
+.retry-btn {
+  margin-top: 28rpx;
+  font-size: 26rpx;
+  color: #3D5A4E;
+  background: #F0EDE8;
+  border-radius: 999rpx;
 }
 
 .empty-desc {

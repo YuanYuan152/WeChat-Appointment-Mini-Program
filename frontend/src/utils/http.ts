@@ -97,8 +97,9 @@ class HttpRequest {
 
     if (showLoading) beginLoading()
 
-    let fullUrl = url.startsWith('http') ? url : `${this.baseURL}${url}`
+    let fullUrl = url
     try {
+      fullUrl = url.startsWith('http') ? url : `${this.baseURL}${url}`
       // 添加查询参数（跳过 undefined / null，避免被序列化成 "undefined"）
       if (params && Object.keys(params).length > 0) {
         const queryString = Object.keys(params)
@@ -140,33 +141,46 @@ class HttpRequest {
         requestData = JSON.stringify(requestData)
       }
 
-      // 发送请求（硬超时兜底：部分安卓上 uni.request 的 fail/timeout 回调会滞后或不触发）
-      const requestTimeout = timeout ?? this.timeout
-      const hardTimeoutMs = Math.max(requestTimeout + 800, requestTimeout)
-      const response = await Promise.race([
-        uni.request({
-          url: fullUrl,
-          method,
-          data: requestData,
-          header: finalHeaders,
-          timeout: requestTimeout,
-        }),
-        new Promise<never>((_, reject) => {
-          setTimeout(() => {
-            reject({ errMsg: `request:fail timeout ${hardTimeoutMs}ms` })
-          }, hardTimeoutMs)
-        }),
-      ])
-
-      if (showLoading) endLoading()
+      // 显式回调获得 RequestTask；超时真正取消请求，并屏蔽迟到回调。
+      const configuredTimeout = timeout ?? this.timeout
+      const requestTimeout = Number.isFinite(configuredTimeout) && configuredTimeout > 0
+        ? configuredTimeout : 15000
+      const response = await new Promise<UniApp.RequestSuccessCallbackResult>((resolve, reject) => {
+        let settled = false
+        let task: UniApp.RequestTask | undefined
+        const finish = (error?: unknown, result?: UniApp.RequestSuccessCallbackResult) => {
+          if (settled) return
+          settled = true
+          clearTimeout(timer)
+          if (error) reject(error)
+          else resolve(result!)
+        }
+        const timer = setTimeout(() => {
+          finish({ errMsg: `request:fail timeout ${requestTimeout + 800}ms` })
+          try { task?.abort() } catch { /* 已结算，取消失败不影响收尾 */ }
+        }, requestTimeout + 800)
+        try {
+          task = uni.request({
+            url: fullUrl,
+            method,
+            data: requestData,
+            header: finalHeaders,
+            timeout: requestTimeout,
+            success: result => finish(undefined, result),
+            fail: error => finish(error),
+          })
+        } catch (error) {
+          finish(error)
+        }
+      })
 
       // 处理响应
       return this.handleResponse<T>(response, showError)
     } catch (error) {
-      if (showLoading) endLoading()
-
       // 处理错误
       return this.handleError(error, showError, fullUrl)
+    } finally {
+      if (showLoading) endLoading()
     }
   }
 
