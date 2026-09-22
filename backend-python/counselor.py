@@ -204,6 +204,7 @@ class ScheduleCalendarItem(BaseModel):
     leaveScreenshotUrl: Optional[str] = None
     hasCaseRecord: bool = False
     caseRecordId: Optional[int] = None
+    pendingOrderId: Optional[int] = None
 
 
 class ScheduleCalendarOut(BaseModel):
@@ -920,6 +921,7 @@ def _calendar_items_for_schedules(
                 ),
                 hasCaseRecord=has_record,
                 caseRecordId=case_record.Id if case_record else None,
+                pendingOrderId=pending_proxy_order.Id if pending_proxy_order else None,
             )
         )
     return items

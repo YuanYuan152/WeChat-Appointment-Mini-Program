@@ -81,6 +81,71 @@ def _cancel_pending_proxy_order(db: Session, order: AppOrder) -> None:
     schedule.UpdatedAt = _now()
 
 
+def cancel_proxy_order_push(
+    db: Session,
+    *,
+    order_id: Optional[int] = None,
+    schedule_id: Optional[int] = None,
+    operator_account_id: int,
+) -> Dict[str, Any]:
+    """管理工作台取消代理推送：关闭待支付单并释放排期，来访端不再显示待支付。"""
+    expire_pending_proxy_orders(db)
+    order: Optional[AppOrder] = None
+    if order_id:
+        order = db.query(AppOrder).filter(AppOrder.Id == int(order_id)).first()
+    elif schedule_id:
+        order = pending_proxy_order_for_schedule(db, int(schedule_id))
+    if not order:
+        raise ValueError("待支付代理订单不存在")
+    if order.Status != "PENDING":
+        raise ValueError("仅待支付的代理订单可以取消推送")
+    if not (order.Description or "").startswith("proxy:"):
+        raise ValueError("仅代理推送订单可以取消推送")
+
+    schedule = (
+        db.query(AppSchedule).filter(AppSchedule.Id == order.SlotId).first()
+        if order.SlotId
+        else None
+    )
+    patient = db.query(AppAccount).filter(AppAccount.Id == order.AccountId).first()
+    counselor_name = "咨询师"
+    if schedule and schedule.CounselorId:
+        counselor = db.query(AppAccount).filter(AppAccount.Id == schedule.CounselorId).first()
+        if counselor:
+            counselor_name = counselor.RealName or counselor.Nickname or counselor_name
+
+    _cancel_pending_proxy_order(db, order)
+
+    from patient_message_service import notify_patient_proxy_order_cancelled
+    from counselor_message_service import notify_counselor_proxy_order_cancelled
+
+    if patient:
+        notify_patient_proxy_order_cancelled(
+            db,
+            patient=patient,
+            counselor_name=counselor_name,
+            schedule=schedule,
+            order=order,
+            operator_account_id=operator_account_id,
+        )
+    if schedule and schedule.CounselorId:
+        notify_counselor_proxy_order_cancelled(
+            db,
+            counselor_id=int(schedule.CounselorId),
+            patient=patient,
+            schedule=schedule,
+            order=order,
+            operator_account_id=operator_account_id,
+        )
+
+    return {
+        "orderId": order.Id,
+        "scheduleId": schedule.Id if schedule else None,
+        "status": order.Status,
+        "message": "已取消推送",
+    }
+
+
 def cancel_pending_proxy_orders_for_patient(
     db: Session,
     patient_id: int,
@@ -533,6 +598,8 @@ def build_proxy_slot_options(
                 "tooSoon": too_soon,
                 "unavailableReason": unavailable_reason,
                 "counselorOccupied": counselor_occupied,
+                # 待支付代理推送占用：日历显示待支付，时段芯片勿标成「已预约」
+                "pendingPayment": pending_on_self,
                 "counselorScheduleId": self_row.Id if self_row and not is_booked and not pending_on_self else None,
                 "existingAvailableScheduleId": (
                     self_row.Id if self_row and self_row.Status == "AVAILABLE" and not pending_on_self else None

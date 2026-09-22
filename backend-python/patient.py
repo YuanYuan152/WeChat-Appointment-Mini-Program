@@ -444,8 +444,9 @@ def get_my_consultations(
         avatar = (prof.AvatarUrl if prof and prof.AvatarUrl else None) or (acc.AvatarUrl if acc else None)
 
         sched = schedule_map.get(r.ScheduleId) if r.ScheduleId else None
-        start_time = r.StartTime or (sched.StartTime if sched else None)
-        end_time = r.EndTime or (sched.EndTime if sched else None)
+        # 改期后以排期时间为准（与员工日历一致），避免咨询单旧时间未跟上时来访仍见旧时段
+        start_time = (sched.StartTime if sched else None) or r.StartTime
+        end_time = (sched.EndTime if sched else None) or r.EndTime
 
         center_note_text = r.Note or (sched.Note if sched else None)
         center_id = parse_center_id(center_note_text)

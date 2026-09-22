@@ -18,6 +18,7 @@ from database import get_db
 from models import AppSchedule
 from proxy_booking_service import (
     build_proxy_slot_options,
+    cancel_proxy_order_push,
     expire_pending_proxy_orders,
     push_proxy_order,
     search_proxy_counselors,
@@ -199,3 +200,33 @@ def proxy_push_order(
     except ValueError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+class ProxyCancelOrderRequest(BaseModel):
+    order_id: Optional[int] = None
+    schedule_id: Optional[int] = None
+
+
+@router.post("/cancel-order", summary="取消代理预约推送（待支付订单）")
+def proxy_cancel_order(
+    body: ProxyCancelOrderRequest,
+    staff: AppAccount = Depends(require_staff_workbench),
+    db: Session = Depends(get_db),
+):
+    if not body.order_id and not body.schedule_id:
+        raise HTTPException(status_code=400, detail="请提供 order_id 或 schedule_id")
+    try:
+        result = cancel_proxy_order_push(
+            db,
+            order_id=body.order_id,
+            schedule_id=body.schedule_id,
+            operator_account_id=staff.Id,
+        )
+        db.commit()
+        return result
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception:
+        db.rollback()
+        raise

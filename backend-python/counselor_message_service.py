@@ -109,8 +109,8 @@ def _consultation_context(db: Session, consultation: AppConsultation) -> Dict[st
         else None
     )
     note = consultation.Note or (schedule.Note if schedule else None)
-    start_time = consultation.StartTime or (schedule.StartTime if schedule else None)
-    end_time = consultation.EndTime or (schedule.EndTime if schedule else None)
+    start_time = (schedule.StartTime if schedule else None) or consultation.StartTime
+    end_time = (schedule.EndTime if schedule else None) or consultation.EndTime
     location = _appointment_location(
         db, note, status=schedule.Status if schedule else "BOOKED",
     )
@@ -707,5 +707,52 @@ def notify_counselor_proxy_order_pending(
         title="代理预约待支付",
         content=_message_payload(summary, detail),
         related_type="COUNSELOR_PROXY_ORDER_PENDING",
+        related_id=order.Id,
+    )
+
+
+def notify_counselor_proxy_order_cancelled(
+    db: Session,
+    *,
+    counselor_id: int,
+    patient: Optional[AppAccount],
+    schedule: Optional[AppSchedule],
+    order: AppOrder,
+    operator_account_id: int,
+) -> None:
+    """管理工作台取消代理推送后通知咨询师。"""
+    patient_id = patient.Id if patient else order.AccountId
+    patient_name = _patient_name_plain(db, patient_id) if patient_id else "来访者"
+    patient_tag = _patient_contract_tag(db, patient_id) if patient_id else None
+    patient_label = _patient_label(patient_name, patient_tag)
+    center_name = "待定"
+    time_text = "—"
+    end_text = None
+    schedule_id = None
+    if schedule:
+        center_id = parse_center_id(schedule.Note)
+        center_name = center_display_name(center_id) if center_id else "待定"
+        time_text = _format_datetime(schedule.StartTime)
+        end_text = _format_datetime(schedule.EndTime)
+        schedule_id = schedule.Id
+    summary = f"{patient_label} · {time_text} · 推送已取消"
+    detail = {
+        "patientName": patient_name,
+        "patientContractTag": patient_tag,
+        "startTime": time_text,
+        "endTime": end_text,
+        "location": center_name,
+        "orderId": order.Id,
+        "scheduleId": schedule_id,
+        "operatorAccountId": operator_account_id,
+        "tip": "助理已取消该待支付代理预约",
+    }
+    _notify_counselor(
+        db,
+        counselor_id,
+        type_="ORDER",
+        title="代理预约推送已取消",
+        content=_message_payload(summary, detail),
+        related_type="COUNSELOR_PROXY_ORDER_CANCELLED",
         related_id=order.Id,
     )

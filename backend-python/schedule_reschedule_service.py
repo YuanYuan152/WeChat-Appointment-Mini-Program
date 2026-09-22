@@ -33,10 +33,16 @@ from schedule_slots import (
     is_aligned_standard_slot,
     paid_occupied_rooms_at_center,
     rolling_window_end,
-    validate_slot_in_rolling_window,
 )
 
 RESCHEDULABLE_CONSULTATION_STATUSES = ("PENDING", "CONFIRMED")
+
+
+def _validate_staff_reschedule_target(start: datetime) -> None:
+    """管理工作台改期：仅可改为未来滚动窗口内时段，且满足统一提前量。"""
+    from schedule_slots import validate_slot_in_rolling_window
+
+    validate_slot_in_rolling_window(start)
 
 
 def _load_reschedulable(
@@ -113,6 +119,19 @@ def _target_conflict_reason(
         if target and row.Id == target.Id:
             continue
         return "咨询师在该时段已有其他排期"
+    leave_conflict = (
+        db.query(AppLeaveRequest.Id)
+        .join(AppSchedule, AppSchedule.Id == AppLeaveRequest.ScheduleId)
+        .filter(
+            AppLeaveRequest.CounselorId == schedule.CounselorId,
+            AppLeaveRequest.Status.in_(("PENDING", "APPROVED")),
+            AppLeaveRequest.ScheduleId != schedule.Id,
+            AppSchedule.StartTime == start_time,
+        )
+        .first()
+    )
+    if leave_conflict:
+        return "咨询师该时段已请假或有待审核请假"
     if target:
         pending_order = (
             db.query(AppOrder.Id)
@@ -193,6 +212,8 @@ def build_reschedule_options(
         "currentStartTime": schedule.StartTime,
         "currentEndTime": schedule.EndTime,
         "currentRoomId": parse_room_id(schedule.Note),
+        "minDate": today.isoformat(),
+        "maxDate": rolling_window_end(today).isoformat(),
         "slots": result,
     }
 
@@ -276,7 +297,7 @@ def reschedule_booked_consultation(
     schedule, consultation = _load_reschedulable(db, schedule_id, for_update=True)
     if not is_aligned_standard_slot(new_start_time, new_end_time):
         raise ValueError("请选择标准时间槽")
-    validate_slot_in_rolling_window(new_start_time)
+    _validate_staff_reschedule_target(new_start_time)
 
     center_id = parse_center_id(schedule.Note)
     if not center_id:

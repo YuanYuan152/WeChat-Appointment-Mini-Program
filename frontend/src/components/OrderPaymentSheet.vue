@@ -168,7 +168,7 @@
             </view>
             <view class="detail-row">
               <text class="label">订单状态</text>
-              <text class="value pending">{{ isFreeOrder ? '待确认' : '待支付' }}</text>
+              <text class="value pending">待支付</text>
             </view>
             <view v-if="expireText" class="expire-tip">{{ expireText }}</view>
           </view>

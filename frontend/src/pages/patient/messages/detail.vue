@@ -410,12 +410,20 @@
           <text class="value">{{ detail.counselorName }}</text>
         </view>
         <view v-if="detail.startTime" class="detail-row">
-          <text class="label">预约时间</text>
+          <text class="label">{{ relatedType === 'PATIENT_APPOINTMENT_RESCHEDULED' ? '新预约时间' : '预约时间' }}</text>
           <text class="value">{{ formatTime(detail.startTime) }}<text v-if="detail.endTime"> - {{ formatEndTime(detail.endTime) }}</text></text>
+        </view>
+        <view v-if="relatedType === 'PATIENT_APPOINTMENT_RESCHEDULED' && detail.oldStartTime" class="detail-row">
+          <text class="label">原预约时间</text>
+          <text class="value">{{ formatTime(detail.oldStartTime) }}</text>
         </view>
         <view v-if="detail.location" class="detail-row">
           <text class="label">{{ relatedType === 'PATIENT_APPOINTMENT_SUCCESS' ? '预约中心' : '预约地点' }}</text>
           <text class="value">{{ detail.centerName || detail.location }}</text>
+        </view>
+        <view v-if="relatedType === 'PATIENT_APPOINTMENT_RESCHEDULED' && detail.reason" class="detail-row">
+          <text class="label">修改原因</text>
+          <text class="value multiline">{{ detail.reason }}</text>
         </view>
         <view v-if="relatedType === 'PATIENT_APPOINTMENT_CANCEL' || relatedType === 'PATIENT_LEAVE_APPROVED'" class="detail-row">
           <text class="label">退款说明</text>
@@ -442,12 +450,24 @@
           <text class="value">{{ patientNameFromDetail(detail) }}</text>
         </view>
         <view class="detail-row">
-          <text class="label">{{ (relatedType === 'COUNSELOR_LEAVE_SUBMITTED' || relatedType === 'COUNSELOR_LEAVE_SUCCESS') ? '请假时段' : '咨询时间' }}</text>
+          <text class="label">{{
+            (relatedType === 'COUNSELOR_LEAVE_SUBMITTED' || relatedType === 'COUNSELOR_LEAVE_SUCCESS')
+              ? '请假时段'
+              : (relatedType === 'COUNSELOR_APPOINTMENT_RESCHEDULED' ? '新咨询时间' : '咨询时间')
+          }}</text>
           <text class="value">{{ formatTime(detail.startTime) }}<text v-if="detail.endTime"> - {{ formatEndTime(detail.endTime) }}</text></text>
+        </view>
+        <view v-if="relatedType === 'COUNSELOR_APPOINTMENT_RESCHEDULED' && detail.oldStartTime" class="detail-row">
+          <text class="label">原咨询时间</text>
+          <text class="value">{{ formatTime(detail.oldStartTime) }}</text>
         </view>
         <view class="detail-row">
           <text class="label">咨询地点</text>
           <text class="value">{{ detail.location }}</text>
+        </view>
+        <view v-if="relatedType === 'COUNSELOR_APPOINTMENT_RESCHEDULED' && detail.reason" class="detail-row">
+          <text class="label">修改原因</text>
+          <text class="value multiline">{{ detail.reason }}</text>
         </view>
         <view v-if="(relatedType === 'COUNSELOR_LEAVE_SUBMITTED' || relatedType === 'COUNSELOR_LEAVE_SUCCESS') && detail.leaveReason" class="detail-row">
           <text class="label">请假原因</text>

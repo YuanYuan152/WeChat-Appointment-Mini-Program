@@ -128,13 +128,77 @@
                 <text v-if="slot.patientName" class="slot-patient">来访者：{{ formatPatientInline(slot.patientName, slot.patientContractTag) }}</text>
               </view>
             </view>
-            <text class="slot-status" :style="{ color: meta(slot.displayStatus).color }">
-              {{ slot.displayLabel }}
-            </text>
+            <view class="slot-right">
+              <text class="slot-status" :style="{ color: meta(slot.displayStatus).color }">
+                {{ slot.displayLabel }}
+              </text>
+              <view
+                v-if="canCancelProxyPush(slot)"
+                class="slot-action-btn cancel-push-btn"
+                @tap.stop="confirmCancelProxyPush(slot)"
+              >取消推送</view>
+              <view
+                v-if="canReschedule(slot)"
+                class="slot-action-btn"
+                @tap.stop="openReschedule(slot)"
+              >改时间</view>
+            </view>
           </view>
         </view>
       </template>
     </template>
+
+    <view v-if="showReschedule" class="modal-overlay" @touchmove.stop.prevent>
+      <view class="modal-card reschedule-modal-card" @tap.stop>
+        <scroll-view class="modal-scroll" scroll-y enhanced :show-scrollbar="false" @touchmove.stop>
+          <view class="modal-content">
+            <text class="modal-title">修改咨询时间</text>
+            <text class="modal-sub">当前：{{ rescheduleCurrentText }}</text>
+            <view class="form-item">
+              <text class="form-label">新日期</text>
+              <picker mode="date" :value="rescheduleDate" :start="rescheduleMinDate" :end="rescheduleMaxDate" @change="onRescheduleDateChange">
+                <view class="picker-row">{{ rescheduleDate }}</view>
+              </picker>
+            </view>
+            <view class="form-item">
+              <text class="form-label">新时段</text>
+              <view v-if="rescheduleLoading" class="picker-row">加载可用时段...</view>
+              <view v-else class="slot-grid">
+                <view
+                  v-for="item in rescheduleOptions?.slots || []"
+                  :key="item.key"
+                  class="slot-chip"
+                  :class="{ active: selectedRescheduleSlot?.key === item.key, disabled: !item.selectable }"
+                  @tap="selectRescheduleSlot(item)"
+                >{{ item.key }}</view>
+              </view>
+            </view>
+            <view v-if="selectedRescheduleSlot && rescheduleOptions?.centerId !== 'video'" class="form-item">
+              <text class="form-label">咨询室</text>
+              <view class="slot-grid">
+                <view
+                  v-for="room in selectedRescheduleSlot.rooms"
+                  :key="room.roomId"
+                  class="slot-chip"
+                  :class="{ active: rescheduleRoomId === room.roomId, disabled: !room.available }"
+                  @tap="selectRescheduleRoom(room)"
+                >{{ room.roomName }}</view>
+              </view>
+            </view>
+            <view class="form-item">
+              <text class="form-label">修改原因 <text class="required">*</text></text>
+              <textarea v-model="rescheduleReason" class="reason-input" :maxlength="500" placeholder="请输入修改原因，将来访与咨询师可见" />
+            </view>
+          </view>
+        </scroll-view>
+        <view class="modal-footer">
+          <button class="modal-btn cancel" :disabled="rescheduleSubmitting" @tap="closeReschedule">取消</button>
+          <button class="modal-btn confirm" :disabled="!canSubmitReschedule || rescheduleSubmitting" @tap="submitReschedule">
+            {{ rescheduleSubmitting ? '修改中...' : '确认修改' }}
+          </button>
+        </view>
+      </view>
+    </view>
 
     <view v-if="showAdd" class="modal-overlay" @touchmove.stop.prevent>
       <view class="modal-card" @tap.stop>
@@ -348,9 +412,39 @@ interface CalendarSlot {
   displayStatus: ScheduleDisplayStatus
   displayLabel: string
   centerName?: string
+  centerId?: string
+  roomId?: string
   roomName?: string
   patientName?: string
   patientContractTag?: string
+  consultationId?: number
+  consultationStatus?: string
+  leaveRequestId?: number
+  pendingOrderId?: number
+}
+
+interface RescheduleRoom {
+  roomId: string
+  roomName: string
+  available: boolean
+  unavailableReason?: string
+}
+
+interface RescheduleSlot {
+  key: string
+  startTime: string
+  endTime: string
+  selectable: boolean
+  unavailableReason?: string
+  rooms: RescheduleRoom[]
+}
+
+interface RescheduleOptions {
+  scheduleId: number
+  centerId: string
+  centerName?: string
+  currentRoomId?: string
+  slots: RescheduleSlot[]
 }
 
 interface RoomOption {
@@ -368,6 +462,7 @@ interface TimeSlotOption {
   tooSoon?: boolean
   unavailableReason?: string
   counselorOccupied?: boolean
+  pendingPayment?: boolean
   existingAvailableScheduleId?: number | null
   startTime: string
   endTime: string
@@ -445,6 +540,154 @@ const meta = (status: ScheduleDisplayStatus) =>
   SCHEDULE_DISPLAY_META[status] || SCHEDULE_DISPLAY_META.OPEN
 
 const formatTime = (iso: string) => (iso ? iso.replace('T', ' ').slice(11, 16) : '')
+const formatDateTime = (iso: string) => (iso ? iso.replace('T', ' ').slice(0, 16) : '')
+
+const showReschedule = ref(false)
+const rescheduleLoading = ref(false)
+const rescheduleSubmitting = ref(false)
+const rescheduleSource = ref<CalendarSlot | null>(null)
+const rescheduleDate = ref(formatDateLocal())
+const rescheduleOptions = ref<RescheduleOptions | null>(null)
+const selectedRescheduleSlot = ref<RescheduleSlot | null>(null)
+const rescheduleRoomId = ref('')
+const rescheduleReason = ref('')
+const rescheduleMinDate = computed(() => formatDateLocal())
+const rescheduleMaxDate = computed(() => addDays(formatDateLocal(), ROLLING_WINDOW_DAYS - 1))
+
+const canCancelProxyPush = (slot: CalendarSlot) =>
+  slot.displayStatus === 'PENDING_PAYMENT'
+
+const canReschedule = (slot: CalendarSlot) => {
+  if (slot.displayStatus !== 'BOOKED' || slot.leaveRequestId) return false
+  if (slot.consultationStatus && !['PENDING', 'CONFIRMED'].includes(slot.consultationStatus)) return false
+  const start = new Date(slot.startTime.includes('T') ? slot.startTime : slot.startTime.replace(' ', 'T'))
+  return !Number.isNaN(start.getTime()) && start.getTime() > Date.now()
+}
+
+const rescheduleCurrentText = computed(() => {
+  const slot = rescheduleSource.value
+  if (!slot) return '—'
+  return `${formatDateTime(slot.startTime)} · ${slot.centerName || ''}${slot.roomName ? ` · ${slot.roomName}` : ''}`
+})
+
+const canSubmitReschedule = computed(() => {
+  if (!selectedRescheduleSlot.value?.selectable || !rescheduleReason.value.trim()) return false
+  if (rescheduleOptions.value?.centerId !== 'video' && !rescheduleRoomId.value) return false
+  return true
+})
+
+const confirmCancelProxyPush = (slot: CalendarSlot) => {
+  uni.showModal({
+    title: '取消推送',
+    content: '确认取消该待支付代理预约？取消后订单将来访端消失，排期将释放。',
+    success: async (modalRes) => {
+      if (!modalRes.confirm) return
+      try {
+        const res = await httpV2.post(
+          API_ENDPOINTS.admin.proxyBookingCancelOrder,
+          {
+            order_id: slot.pendingOrderId || undefined,
+            schedule_id: slot.id,
+          },
+        )
+        if (res.code !== 0) throw new Error(res.msg || '取消失败')
+        uni.showToast({ title: '已取消推送', icon: 'success' })
+        await loadSchedules()
+        await loadMonthSlots()
+      } catch (error) {
+        uni.showToast({ title: error instanceof Error ? error.message : '取消失败', icon: 'none' })
+      }
+    },
+  })
+}
+
+const loadRescheduleOptions = async () => {
+  const source = rescheduleSource.value
+  if (!source) return
+  rescheduleLoading.value = true
+  selectedRescheduleSlot.value = null
+  rescheduleRoomId.value = ''
+  try {
+    const res = await httpV2.get<RescheduleOptions>(
+      API_ENDPOINTS.ops.scheduleRescheduleOptions(source.id),
+      { date: rescheduleDate.value },
+      { showLoading: false },
+    )
+    if (res.code !== 0 || !res.data) throw new Error(res.msg || '加载失败')
+    rescheduleOptions.value = res.data
+  } catch (error) {
+    rescheduleOptions.value = null
+    uni.showToast({ title: error instanceof Error ? error.message : '加载失败', icon: 'none' })
+  } finally {
+    rescheduleLoading.value = false
+  }
+}
+
+const openReschedule = (slot: CalendarSlot) => {
+  rescheduleSource.value = slot
+  rescheduleDate.value = slot.startTime.slice(0, 10)
+  rescheduleReason.value = ''
+  rescheduleOptions.value = null
+  selectedRescheduleSlot.value = null
+  rescheduleRoomId.value = ''
+  showReschedule.value = true
+  void loadRescheduleOptions()
+}
+
+const closeReschedule = () => {
+  if (rescheduleSubmitting.value) return
+  showReschedule.value = false
+}
+
+const onRescheduleDateChange = (e: { detail: { value: string } }) => {
+  rescheduleDate.value = e.detail.value
+  void loadRescheduleOptions()
+}
+
+const selectRescheduleSlot = (slot: RescheduleSlot) => {
+  if (!slot.selectable) {
+    if (slot.unavailableReason) uni.showToast({ title: slot.unavailableReason, icon: 'none' })
+    return
+  }
+  selectedRescheduleSlot.value = slot
+  const currentRoom = rescheduleOptions.value?.currentRoomId
+  rescheduleRoomId.value = slot.rooms.find(room => room.available && room.roomId === currentRoom)?.roomId || ''
+}
+
+const selectRescheduleRoom = (room: RescheduleRoom) => {
+  if (!room.available) return
+  rescheduleRoomId.value = room.roomId
+}
+
+const submitReschedule = async () => {
+  const source = rescheduleSource.value
+  const target = selectedRescheduleSlot.value
+  if (!source || !target || !canSubmitReschedule.value) {
+    uni.showToast({ title: '请选择新时间、咨询室并填写修改原因', icon: 'none' })
+    return
+  }
+  rescheduleSubmitting.value = true
+  try {
+    const res = await httpV2.put(
+      API_ENDPOINTS.ops.rescheduleSchedule(source.id),
+      {
+        start_time: target.startTime,
+        end_time: target.endTime,
+        room_id: rescheduleOptions.value?.centerId === 'video' ? null : rescheduleRoomId.value,
+        reason: rescheduleReason.value.trim(),
+      },
+    )
+    if (res.code !== 0) throw new Error(res.msg || '修改失败')
+    uni.showToast({ title: '咨询时间已修改', icon: 'success' })
+    showReschedule.value = false
+    await loadSchedules()
+    await loadMonthSlots()
+  } catch (error) {
+    uni.showToast({ title: error instanceof Error ? error.message : '修改失败', icon: 'none' })
+  } finally {
+    rescheduleSubmitting.value = false
+  }
+}
 
 const weekdayLabel = (dateStr: string) => {
   const d = new Date(`${dateStr}T00:00:00`)
@@ -543,6 +786,7 @@ const bookingDurationText = (startTime: string) => {
 const slotChipHint = (ts: TimeSlotOption) => {
   if (ts.tooSoon) return '（不足90分钟）'
   if (ts.past) return '（已过）'
+  if (ts.pendingPayment) return '（待支付）'
   if (ts.counselorOccupied && !ts.existingAvailableScheduleId) return '（已预约）'
   if (ts.existingAvailableScheduleId) return '（可约）'
   return ''
@@ -1040,6 +1284,53 @@ onLoad(async (opts) => {
   font-size: 24rpx;
   font-weight: 600;
   flex-shrink: 0;
+}
+
+.slot-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10rpx;
+  flex-shrink: 0;
+  margin-left: 16rpx;
+}
+
+.slot-action-btn {
+  padding: 8rpx 18rpx;
+  border-radius: 999rpx;
+  background: #3D5A4E;
+  color: #fff;
+  font-size: 22rpx;
+  line-height: 1.3;
+}
+
+.cancel-push-btn {
+  background: #9A3412;
+}
+
+.reschedule-modal-card {
+  height: 78vh;
+  max-height: 78vh;
+}
+
+.reason-input {
+  width: 100%;
+  min-height: 160rpx;
+  padding: 20rpx;
+  box-sizing: border-box;
+  border-radius: 12rpx;
+  background: #F9FAFB;
+  font-size: 26rpx;
+  color: #374151;
+}
+
+.modal-footer {
+  flex-shrink: 0;
+  display: flex;
+  gap: 16rpx;
+  padding: 20rpx 32rpx calc(20rpx + env(safe-area-inset-bottom));
+  border-top: 1rpx solid #E5E7EB;
+  background: #fff;
 }
 
 .calendar-nav {

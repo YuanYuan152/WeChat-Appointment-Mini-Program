@@ -17,11 +17,12 @@ def consultation_end_time(
     consultation: AppConsultation,
     schedule: Optional[AppSchedule] = None,
 ) -> Optional[datetime]:
-    if consultation.EndTime:
-        return consultation.EndTime
+    # 改期后以排期结束时间为准，避免咨询单旧 EndTime 导致自动完成/提醒偏移
     if schedule and schedule.EndTime:
         return schedule.EndTime
-    start = consultation.StartTime or (schedule.StartTime if schedule else None)
+    if consultation.EndTime:
+        return consultation.EndTime
+    start = (schedule.StartTime if schedule else None) or consultation.StartTime
     if start:
         return start + timedelta(minutes=50)
     return None

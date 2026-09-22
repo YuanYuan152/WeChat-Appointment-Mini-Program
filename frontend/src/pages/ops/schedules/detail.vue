@@ -116,6 +116,11 @@
             <text class="slot-status" :style="{ color: slotStatusColor(slot) }">{{ slot.displayLabel }}</text>
             <text v-if="slot.leaveRequestId" class="slot-detail-hint">点击查看请假详情</text>
             <view
+              v-if="canCancelProxyPush(slot)"
+              class="reschedule-btn cancel-push-btn"
+              @tap.stop="confirmCancelProxyPush(slot)"
+            >取消推送</view>
+            <view
               v-if="canReschedule(slot)"
               class="reschedule-btn"
               @tap.stop="openReschedule(slot)"
@@ -151,7 +156,7 @@
         <text class="modal-tip">当前：{{ rescheduleCurrentText }}</text>
         <view class="reschedule-field">
           <text class="detail-label">新日期</text>
-          <picker mode="date" :value="rescheduleDate" :start="minDate" :end="listWindowEnd" @change="onRescheduleDateChange">
+          <picker mode="date" :value="rescheduleDate" :start="rescheduleMinDate" :end="rescheduleMaxDate" @change="onRescheduleDateChange">
             <view class="reschedule-picker">{{ rescheduleDate }}</view>
           </picker>
         </view>
@@ -230,6 +235,7 @@ interface CalendarSlot {
   leaveReason?: string
   leaveSubmittedAt?: string
   leaveStatus?: string
+  pendingOrderId?: number
 }
 
 interface RescheduleRoom {
@@ -519,6 +525,9 @@ const canReschedule = (slot: CalendarSlot) => {
   return !Number.isNaN(start.getTime()) && start.getTime() > Date.now()
 }
 
+const canCancelProxyPush = (slot: CalendarSlot) =>
+  slot.displayStatus === 'PENDING_PAYMENT' && !!(slot.pendingOrderId || slot.id)
+
 const rescheduleCurrentText = computed(() => {
   const slot = rescheduleSource.value
   if (!slot) return '—'
@@ -530,6 +539,9 @@ const canSubmitReschedule = computed(() => {
   if (rescheduleOptions.value?.centerId !== 'video' && !rescheduleRoomId.value) return false
   return true
 })
+
+const rescheduleMinDate = computed(() => formatDateLocal())
+const rescheduleMaxDate = computed(() => listWindowEnd.value)
 
 const loadList = async () => {
   if (!counselorId.value) {
@@ -711,6 +723,30 @@ const submitReschedule = async () => {
   } finally {
     rescheduleSubmitting.value = false
   }
+}
+
+const confirmCancelProxyPush = (slot: CalendarSlot) => {
+  uni.showModal({
+    title: '取消推送',
+    content: '确认取消该待支付代理预约？取消后订单将来访端消失，排期将释放。',
+    success: async (modalRes) => {
+      if (!modalRes.confirm) return
+      try {
+        const res = await httpV2.post(
+          API_ENDPOINTS.admin.proxyBookingCancelOrder,
+          {
+            order_id: slot.pendingOrderId || undefined,
+            schedule_id: slot.id,
+          },
+        )
+        if (res.code !== 0) throw new Error(res.msg || '取消失败')
+        uni.showToast({ title: '已取消推送', icon: 'success' })
+        await reload()
+      } catch (error) {
+        uni.showToast({ title: error instanceof Error ? error.message : '取消失败', icon: 'none' })
+      }
+    },
+  })
 }
 
 const onSlotTap = (slot: CalendarSlot) => {
@@ -950,6 +986,10 @@ onShow(reload)
   background: #3D5A4E;
   color: #fff;
   font-size: 22rpx;
+}
+
+.cancel-push-btn {
+  background: #9A3412;
 }
 
 .calendar-section {

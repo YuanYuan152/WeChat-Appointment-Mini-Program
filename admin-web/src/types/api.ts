@@ -1025,6 +1025,7 @@ export interface CounselorScheduleCalendarItem {
   leaveStatus?: string | null;
   hasCaseRecord: boolean;
   caseRecordId?: number | null;
+  pendingOrderId?: number | null;
 }
 
 export interface CounselorScheduleCalendar {
@@ -1102,6 +1103,7 @@ export interface ProxySlotOption {
   label: string;
   past: boolean;
   counselorOccupied: boolean;
+  pendingPayment?: boolean;
   counselorScheduleId?: number | null;
   existingAvailableScheduleId?: number | null;
   allRoomsFull: boolean;

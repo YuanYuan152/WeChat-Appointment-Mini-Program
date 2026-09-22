@@ -529,6 +529,7 @@ interface ProxyTimeSlotOpt {
   tooSoon?: boolean
   unavailableReason?: string
   counselorOccupied?: boolean
+  pendingPayment?: boolean
   existingAvailableScheduleId?: number | null
   startTime: string
   endTime: string
@@ -1206,6 +1207,7 @@ const loadProxySlotOptions = async () => {
 const proxySlotChipHint = (ts: ProxyTimeSlotOpt) => {
   if (ts.tooSoon) return '（不足90分钟）'
   if (ts.past) return '（已过）'
+  if (ts.pendingPayment) return '（待支付）'
   if (ts.counselorOccupied && !ts.existingAvailableScheduleId) return '（已预约）'
   if (ts.existingAvailableScheduleId) return '（可约）'
   return ''

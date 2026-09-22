@@ -78,6 +78,7 @@ export function AgentBookingPanel({
   onCloseCreate,
   onLoadSlots,
   onPushOrder,
+  onCancelProxyPush,
   onPageChange,
   onPageSizeChange,
 }: {
@@ -108,6 +109,7 @@ export function AgentBookingPanel({
   onCloseCreate: () => void;
   onLoadSlots: (selection?: Pick<AgentBookingDraft, "date" | "centerId">) => Promise<boolean> | boolean;
   onPushOrder: (slot: ProxySlotOption, roomId: string) => Promise<ProxyPushOrderResult | undefined>;
+  onCancelProxyPush: (item: ProxyScheduleCalendarItem) => Promise<void>;
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
 }) {
@@ -376,10 +378,10 @@ export function AgentBookingPanel({
                 text={listLoading ? "正在加载排期..." : "当前咨询师暂无未来排期，可点击代理预约创建新时段。"}
               />
             ) : query.mode === "calendar" ? (
-              <ScheduleCalendarView rows={rows} />
+              <ScheduleCalendarView rows={rows} onCancelProxyPush={onCancelProxyPush} />
             ) : (
               <>
-                <ScheduleTable rows={pagedRows} />
+                <ScheduleTable rows={pagedRows} onCancelProxyPush={onCancelProxyPush} />
                 <Pagination
                   page={page}
                   pageSize={pageSize}
@@ -602,7 +604,25 @@ function normalizePersonSearchValue(value?: string | null) {
   return (value || "").trim().toLocaleLowerCase();
 }
 
-function ScheduleTable({ rows }: { rows: ProxyScheduleCalendarItem[] }) {
+function ScheduleTable({
+  rows,
+  onCancelProxyPush,
+}: {
+  rows: ProxyScheduleCalendarItem[];
+  onCancelProxyPush: (item: ProxyScheduleCalendarItem) => Promise<void>;
+}) {
+  const [cancellingId, setCancellingId] = useState<number | null>(null);
+  const handleCancel = async (item: ProxyScheduleCalendarItem) => {
+    if (!window.confirm("确认取消该待支付代理预约？取消后订单将来访端消失，排期将释放。")) {
+      return;
+    }
+    setCancellingId(item.id);
+    try {
+      await onCancelProxyPush(item);
+    } finally {
+      setCancellingId(null);
+    }
+  };
   return (
     <table className="w-full border-collapse text-sm">
       <thead className="bg-[#FAF8F4] text-left text-[var(--lxxl-muted)]">
@@ -613,6 +633,7 @@ function ScheduleTable({ rows }: { rows: ProxyScheduleCalendarItem[] }) {
           <th className="px-5 py-3 font-medium">状态</th>
           <th className="px-5 py-3 font-medium">来访者</th>
           <th className="px-5 py-3 font-medium">咨询记录</th>
+          <th className="px-5 py-3 font-medium">操作</th>
         </tr>
       </thead>
       <tbody>
@@ -628,6 +649,20 @@ function ScheduleTable({ rows }: { rows: ProxyScheduleCalendarItem[] }) {
               {formatPatientNameWithContractTag(item.patientName, item.patientContractTag) || "-"}
             </td>
             <td className="px-5 py-4 text-[var(--lxxl-muted)]">{item.hasCaseRecord ? "已填写" : "-"}</td>
+            <td className="px-5 py-4">
+              {item.displayStatus === "PENDING_PAYMENT" ? (
+                <button
+                  type="button"
+                  className="rounded-lg border border-[#C2410C] px-3 py-1.5 text-xs font-medium text-[#C2410C] transition hover:bg-[#FFF7ED] disabled:opacity-50"
+                  disabled={cancellingId === item.id}
+                  onClick={() => void handleCancel(item)}
+                >
+                  {cancellingId === item.id ? "取消中..." : "取消推送"}
+                </button>
+              ) : (
+                <span className="text-[var(--lxxl-muted)]">-</span>
+              )}
+            </td>
           </tr>
         ))}
       </tbody>
@@ -635,7 +670,14 @@ function ScheduleTable({ rows }: { rows: ProxyScheduleCalendarItem[] }) {
   );
 }
 
-function ScheduleCalendarView({ rows }: { rows: ProxyScheduleCalendarItem[] }) {
+function ScheduleCalendarView({
+  rows,
+  onCancelProxyPush,
+}: {
+  rows: ProxyScheduleCalendarItem[];
+  onCancelProxyPush: (item: ProxyScheduleCalendarItem) => Promise<void>;
+}) {
+  const [cancellingId, setCancellingId] = useState<number | null>(null);
   const groups = useMemo(() => {
     const map = new Map<string, ProxyScheduleCalendarItem[]>();
     rows.forEach((row) => {
@@ -644,6 +686,18 @@ function ScheduleCalendarView({ rows }: { rows: ProxyScheduleCalendarItem[] }) {
     });
     return Array.from(map.entries());
   }, [rows]);
+
+  const handleCancel = async (item: ProxyScheduleCalendarItem) => {
+    if (!window.confirm("确认取消该待支付代理预约？取消后订单将来访端消失，排期将释放。")) {
+      return;
+    }
+    setCancellingId(item.id);
+    try {
+      await onCancelProxyPush(item);
+    } finally {
+      setCancellingId(null);
+    }
+  };
 
   return (
     <div className="grid gap-4 border-t border-[var(--lxxl-border)] p-5 lg:grid-cols-2 2xl:grid-cols-3">
@@ -667,6 +721,16 @@ function ScheduleCalendarView({ rows }: { rows: ProxyScheduleCalendarItem[] }) {
                     formatPatientNameWithContractTag(item.patientName, item.patientContractTag),
                   ].filter(Boolean).join(" · ") || "-"}
                 </div>
+                {item.displayStatus === "PENDING_PAYMENT" && (
+                  <button
+                    type="button"
+                    className="mt-2 rounded-lg border border-[#C2410C] px-3 py-1 text-xs font-medium text-[#C2410C] transition hover:bg-[#FFF7ED] disabled:opacity-50"
+                    disabled={cancellingId === item.id}
+                    onClick={() => void handleCancel(item)}
+                  >
+                    {cancellingId === item.id ? "取消中..." : "取消推送"}
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -1021,6 +1085,9 @@ function scheduleStatusTone(item: ProxyScheduleCalendarItem) {
 function slotHint(slot: ProxySlotOption) {
   if (slot.past) {
     return "已过期";
+  }
+  if (slot.pendingPayment) {
+    return "待支付";
   }
   if (slot.counselorOccupied) {
     return "咨询师该时段已占用";

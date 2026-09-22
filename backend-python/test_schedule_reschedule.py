@@ -111,6 +111,8 @@ class ScheduleRescheduleTests(unittest.TestCase):
         self.assertEqual(source.Status, "AVAILABLE")
         self.assertEqual(target.Status, "BOOKED")
         self.assertEqual(consultation.ScheduleId, target.Id)
+        self.assertEqual(consultation.StartTime, target.StartTime)
+        self.assertEqual(consultation.EndTime, target.EndTime)
         self.assertEqual(order.SlotId, target.Id)
         self.assertEqual(
             self.db.query(AppScheduleRescheduleLog).one().Reason,

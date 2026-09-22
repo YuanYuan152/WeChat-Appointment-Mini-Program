@@ -15,13 +15,14 @@ import {
   type AgentBookingQuery,
 } from "@/panels/AgentBookingPanel";
 import {
+  cancelProxyOrder,
   fetchProxyScheduleCalendar,
   fetchProxySlotOptions,
   pushProxyOrder,
   searchProxyCounselors,
   searchProxyPatients,
 } from "@/services/proxyBooking";
-import type { ProxyPersonOption, ProxySlotOption } from "@/types/api";
+import type { ProxyPersonOption, ProxyScheduleCalendarItem, ProxySlotOption } from "@/types/api";
 import type { ScreenData } from "@/types/app";
 
 const INITIAL_QUERY = (): AgentBookingQuery => ({
@@ -497,6 +498,31 @@ function AgentBookingScreenContent() {
     [refreshPatientContract],
   );
 
+  const cancelProxyPush = useCallback(
+    async (item: ProxyScheduleCalendarItem) => {
+      clearNotice();
+      try {
+        const result = await cancelProxyOrder({
+          orderId: item.pendingOrderId || undefined,
+          scheduleId: item.id,
+        });
+        showNotice("success", result.message || "已取消推送");
+        const selectedCounselor = counselorRef.current;
+        if (selectedCounselor) {
+          await loadCalendar(activeQuery, selectedCounselor, {
+            clearExistingNotice: false,
+            notifyOnError: false,
+          });
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "取消推送失败";
+        showNotice("error", message);
+        throw error;
+      }
+    },
+    [activeQuery, clearNotice, loadCalendar, showNotice],
+  );
+
   const changePageSize = useCallback((nextPageSize: number) => {
     setPage(1);
     setPageSize(nextPageSize);
@@ -522,6 +548,7 @@ function AgentBookingScreenContent() {
       slotLoading={slotLoading}
       slotOptions={data.proxySlotOptions}
       onBindCounselor={bindCounselor}
+      onCancelProxyPush={cancelProxyPush}
       onCloseCreate={closeCreate}
       onLoadSlots={loadSlots}
       onOpenCreate={prepareCreate}

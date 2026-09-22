@@ -178,8 +178,8 @@ def _consultation_context(
         else None
     )
     note = consultation.Note or (schedule.Note if schedule else None)
-    start_time = consultation.StartTime or (schedule.StartTime if schedule else None)
-    end_time = consultation.EndTime or (schedule.EndTime if schedule else None)
+    start_time = (schedule.StartTime if schedule else None) or consultation.StartTime
+    end_time = (schedule.EndTime if schedule else None) or consultation.EndTime
     location = _appointment_location(db, note, status=schedule.Status if schedule else "BOOKED")
     return {
         "schedule": schedule,

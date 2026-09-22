@@ -77,3 +77,16 @@ export function pushProxyOrder(input: {
     }),
   });
 }
+
+export function cancelProxyOrder(input: { orderId?: number; scheduleId?: number }) {
+  return apiRequest<{ orderId: number; scheduleId?: number | null; message: string }>(
+    `${BASE_PATH}/cancel-order`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        order_id: input.orderId || undefined,
+        schedule_id: input.scheduleId || undefined,
+      }),
+    },
+  );
+}

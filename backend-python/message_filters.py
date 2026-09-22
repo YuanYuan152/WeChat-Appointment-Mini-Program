@@ -63,7 +63,13 @@ CATEGORY_RELATED_TYPES: dict[str, list[str]] = {
     "proxy_booking": [
         "STAFF_PROXY_ORDER_PUSHED",
         "PATIENT_PROXY_ORDER_PENDING",
+        "PATIENT_PROXY_ORDER_CANCELLED",
         "COUNSELOR_PROXY_ORDER_PENDING",
+        "COUNSELOR_PROXY_ORDER_CANCELLED",
+    ],
+    "appointment_rescheduled": [
+        "PATIENT_APPOINTMENT_RESCHEDULED",
+        "COUNSELOR_APPOINTMENT_RESCHEDULED",
     ],
     "leave_notice": ["PATIENT_LEAVE_APPROVED"],
     "charity_negotiation": ["PATIENT_CHARITY_NEGOTIATION_TIP"],
@@ -84,7 +90,8 @@ CATEGORY_KEYWORDS: dict[str, list[str]] = {
     "charity_milestone": ["公益咨询第30次", "第三十次公益咨询", "30次公益咨询"],
     "professional_pair_milestone": ["正价咨询第30次", "第三十次预约", "调整抽成比例"],
     "pricing": ["改价成功", "调价成功", "基础价格", "抽成比例", "价格调整", "抽成已调整"],
-    "proxy_booking": ["代理预约", "代理预约已推送", "待支付预约"],
+    "proxy_booking": ["代理预约", "代理预约已推送", "待支付预约", "推送已取消", "待支付预约已取消"],
+    "appointment_rescheduled": ["咨询时间已修改", "调整为"],
     "charity_negotiation": ["公益咨询议价", "议价后方可再次预约"],
     "leave_notice": ["咨询师请假，预约已取消"],
 }

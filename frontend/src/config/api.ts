@@ -247,6 +247,7 @@ export const API_ENDPOINTS = {
     proxyBookingCalendar: '/api/mini/admin/proxy-booking/calendar',
     proxyBookingSlotOptions: '/api/mini/admin/proxy-booking/slot-options',
     proxyBookingPushOrder: '/api/mini/admin/proxy-booking/push-order',
+    proxyBookingCancelOrder: '/api/mini/admin/proxy-booking/cancel-order',
     systemSettings: '/api/mini/admin/system-settings',
     updateProxyOrderTtl: '/api/mini/admin/system-settings/proxy-order-ttl',
   },
