@@ -262,7 +262,12 @@ export function RoomsPanel({
       </section>
 
       {(detailLoading || selectedRoom) && (
-        <DetailDrawer title="咨询室详情" onClose={onCloseDetail}>
+        <DetailDrawer
+          title="咨询室详情"
+          closeDisabled={actionLoading}
+          footer={null}
+          onClose={onCloseDetail}
+        >
           {detailLoading && !selectedRoom ? (
             <div className="py-10 text-sm text-[var(--lxxl-muted)]">正在加载详情...</div>
           ) : selectedRoom ? (
@@ -271,6 +276,7 @@ export function RoomsPanel({
               room={selectedRoom}
               roomOptions={roomOptions}
               snapshot={selectedSnapshot}
+              onClose={onCloseDetail}
               onChangeScheduleRoom={onChangeScheduleRoom}
               onSaveRoom={onSaveRoom}
               onSaveSlotStatuses={onSaveSlotStatuses}
@@ -311,7 +317,7 @@ export function RoomsPanel({
   );
 }
 
-function RoomDetailPanel({
+export function RoomDetailPanel({
   room,
   snapshot,
   roomOptions,
@@ -319,6 +325,7 @@ function RoomDetailPanel({
   onSaveRoom,
   onSaveSlotStatuses,
   onChangeScheduleRoom,
+  onClose,
 }: {
   room: RoomDetail;
   snapshot?: RoomStatus;
@@ -330,6 +337,7 @@ function RoomDetailPanel({
     slots: Array<{ startTime: string; status: RoomSlotManualStatus }>,
   ) => Promise<void>;
   onChangeScheduleRoom: (scheduleId: number, roomCode: string) => Promise<void>;
+  onClose: () => void;
 }) {
   const activeSnapshot = snapshot || room.current;
   const scheduleId = activeSnapshot?.scheduleId || room.current?.scheduleId;
@@ -344,8 +352,7 @@ function RoomDetailPanel({
   }, [room.id, room.name, room.status]);
 
   useEffect(() => {
-    const nextRoom = roomOptions?.options.find((option) => !option.isCurrent)?.roomCode || "";
-    setTargetRoomCode(nextRoom);
+    setTargetRoomCode("");
   }, [roomOptions]);
 
   useEffect(() => {
@@ -371,6 +378,19 @@ function RoomDetailPanel({
       .filter((slot) => slot.status !== slot.original)
       .map(({ startTime, status: nextStatus }) => ({ startTime, status: nextStatus })),
   );
+
+  const saveAll = async () => {
+    if (!room.id || !name.trim()) {
+      return;
+    }
+    if (scheduleId && targetRoomCode) {
+      await onChangeScheduleRoom(scheduleId, targetRoomCode);
+    }
+    await onSaveRoom(room.id, { name: name.trim(), status });
+    if (changedSlots.length > 0) {
+      await onSaveSlotStatuses(room.id, changedSlots);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -422,14 +442,9 @@ function RoomDetailPanel({
                 </option>
               ))}
             </select>
-            <button
-              className="h-10 rounded-xl bg-[var(--lxxl-green)] px-4 text-sm font-medium text-white disabled:opacity-50"
-              type="button"
-              disabled={actionLoading || !targetRoomCode}
-              onClick={() => onChangeScheduleRoom(scheduleId, targetRoomCode)}
-            >
-              确认调换
-            </button>
+            <p className="text-xs leading-5 text-[var(--lxxl-muted)]">
+              如需调换，请选择目标咨询室，最后点击底部“确认并保存”统一提交。
+            </p>
           </div>
         ) : (
           <div className="mt-3 text-sm text-[var(--lxxl-muted)]">当前时段没有已预约咨询，无需调换。</div>
@@ -461,14 +476,6 @@ function RoomDetailPanel({
                 </select>
               </QueryField>
             </div>
-            <button
-              className="mt-4 h-10 rounded-xl bg-[var(--lxxl-green)] px-4 text-sm font-medium text-white disabled:opacity-50"
-              type="button"
-              disabled={actionLoading || !room.id || !name.trim()}
-              onClick={() => room.id && onSaveRoom(room.id, { name: name.trim(), status })}
-            >
-              保存
-            </button>
           </section>
 
           <section>
@@ -479,14 +486,6 @@ function RoomDetailPanel({
                   以半小时为单位维护可用/停用状态；一次预约占用“50 分钟咨询 + 10 分钟打扫”对应的两个半小时时段。
                 </p>
               </div>
-              <button
-                className="h-10 rounded-xl bg-[var(--lxxl-green)] px-4 text-sm font-medium text-white disabled:opacity-50"
-                type="button"
-                disabled={actionLoading || !room.id || changedSlots.length === 0}
-                onClick={() => room.id && onSaveSlotStatuses(room.id, changedSlots)}
-              >
-                保存时段状态
-              </button>
             </div>
             <div className="mt-3 space-y-3">
               {room.days.map((day) => (
@@ -505,6 +504,24 @@ function RoomDetailPanel({
           </section>
         </div>
       </CollapsibleSection>
+      <div className="sticky bottom-0 z-10 -mx-6 flex gap-3 border-t border-[var(--lxxl-border)] bg-white px-6 py-4 shadow-[0_-6px_16px_rgba(0,0,0,0.04)]">
+        <button
+          className="h-10 rounded-xl bg-[var(--lxxl-green)] px-5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+          type="button"
+          disabled={actionLoading || !room.id || !name.trim()}
+          onClick={() => void saveAll()}
+        >
+          {actionLoading ? "保存中..." : "确认并保存"}
+        </button>
+        <button
+          className="h-10 rounded-xl border border-[var(--lxxl-border)] px-4 text-sm font-medium text-[var(--lxxl-muted)] disabled:opacity-50"
+          type="button"
+          disabled={actionLoading}
+          onClick={onClose}
+        >
+          关闭
+        </button>
+      </div>
     </div>
   );
 }

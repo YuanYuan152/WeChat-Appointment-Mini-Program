@@ -134,13 +134,13 @@ export function OpsCounselorSchedulePanel({
   );
 }
 
-function RescheduleModal({
+export function RescheduleModal({
   item,
   onClose,
   onLoadOptions,
   onSubmit,
 }: {
-  item: CounselorScheduleCalendarItem;
+  item: Pick<CounselorScheduleCalendarItem, "id" | "startTime" | "endTime" | "roomName" | "centerName">;
   onClose: () => void;
   onLoadOptions: (scheduleId: number, date: string) => Promise<ScheduleRescheduleOptions>;
   onSubmit: (input: { startTime: string; endTime: string; roomId?: string; reason: string }) => Promise<void>;

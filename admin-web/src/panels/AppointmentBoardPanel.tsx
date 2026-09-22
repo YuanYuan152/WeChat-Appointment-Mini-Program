@@ -1,20 +1,28 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
-import { Badge, EmptyState, QueryButton, QueryField, queryControlClass } from "@/components/ui";
+import {
+  EmptyState,
+  QueryButton,
+  QueryField,
+  QueryResetButton,
+  TableActionButton,
+  queryControlClass,
+} from "@/components/ui";
 import { formatPatientNameWithContractTag } from "@/lib/patientContract";
 import type { Room, RoomDayStatus, ScheduleItem, ScheduleOverview } from "@/types/api";
 
 export type AppointmentBoardView = "room" | "list";
 
-type BoardAppointment = ScheduleItem & {
+export type BoardAppointment = ScheduleItem & {
   counselorId: number;
   counselorName: string;
 };
 
 type BoardRoom = {
   key: string;
+  databaseId?: number | null;
   centerId: string;
   centerName: string;
   roomId: string;
@@ -26,15 +34,22 @@ const START_MINUTES = 9 * 60;
 const END_MINUTES = 24 * 60;
 const SLOT_MINUTES = 30;
 const SLOT_HEIGHT = 52;
-const COLOR_PALETTE = [
-  ["#FFF2B8", "#725800"],
-  ["#DDF3D5", "#315F2B"],
-  ["#DCEBFF", "#24548C"],
-  ["#FBE1EC", "#853759"],
-  ["#E9DFF8", "#62458A"],
-  ["#D9F2EF", "#276B63"],
-  ["#FFE5CF", "#8B4B1B"],
-] as const;
+type BoardDisplayStatus =
+  | "PENDING_PAYMENT"
+  | "BOOKED"
+  | "CANCELLED"
+  | "ONGOING"
+  | "RECORD_PENDING"
+  | "RECORD_COMPLETED";
+
+const STATUS_META: Record<BoardDisplayStatus, { label: string; background: string; color: string }> = {
+  PENDING_PAYMENT: { label: "待支付", background: "#EEEEEE", color: "#555555" },
+  BOOKED: { label: "已预约", background: "#FBE1E1", color: "#7B4545" },
+  CANCELLED: { label: "已取消", background: "#DDE7FA", color: "#405779" },
+  ONGOING: { label: "进行中", background: "#FFF2C9", color: "#755E18" },
+  RECORD_PENDING: { label: "待填写咨询记录", background: "#FCE7CF", color: "#7B5427" },
+  RECORD_COMPLETED: { label: "已完成咨询记录", background: "#DDF2D8", color: "#356433" },
+};
 
 export function AppointmentBoardPanel({
   date,
@@ -46,6 +61,9 @@ export function AppointmentBoardPanel({
   roomDayStatus,
   loading,
   onRefresh,
+  onOpenRoom,
+  onCancelPending,
+  onOpenReschedule,
 }: {
   date: string;
   setDate: (value: string) => void;
@@ -56,9 +74,28 @@ export function AppointmentBoardPanel({
   roomDayStatus?: RoomDayStatus;
   loading: boolean;
   onRefresh: () => void;
+  onOpenRoom: (room: Room) => void;
+  onCancelPending: (appointment: BoardAppointment) => Promise<void>;
+  onOpenReschedule: (appointment: BoardAppointment) => void;
 }) {
+  const [statusFilter, setStatusFilter] = useState<BoardDisplayStatus | "">("");
+  const [consultationIdQuery, setConsultationIdQuery] = useState("");
   const appointments = useMemo(() => flattenAppointments(schedules), [schedules]);
   const boardRooms = useMemo(() => buildBoardRooms(rooms, appointments), [appointments, rooms]);
+  const filteredAppointments = useMemo(
+    () => appointments.filter((item) => {
+      if (statusFilter && displayStatus(item) !== statusFilter) return false;
+      const query = consultationIdQuery.trim();
+      return !query || String(item.consultationId || "").includes(query);
+    }),
+    [appointments, consultationIdQuery, statusFilter],
+  );
+
+  const openAppointmentStatus = (appointment: BoardAppointment) => {
+    setStatusFilter(displayStatus(appointment));
+    setConsultationIdQuery(appointment.consultationId ? String(appointment.consultationId) : "");
+    setView("list");
+  };
 
   return (
     <section className="overflow-hidden rounded-xl border border-[var(--lxxl-border)] bg-white">
@@ -85,7 +122,7 @@ export function AppointmentBoardPanel({
           <div className="ml-auto flex rounded-xl border border-[var(--lxxl-border)] bg-[#FAF8F4] p-1">
             {([
               ["room", "咨询室视图"],
-              ["list", "列表视图"],
+              ["list", "预约状态视图"],
             ] as const).map(([value, label]) => (
               <button
                 key={value}
@@ -112,9 +149,19 @@ export function AppointmentBoardPanel({
           rooms={boardRooms}
           appointments={appointments}
           roomDayStatus={roomDayStatus}
+          onOpenAppointment={openAppointmentStatus}
+          onOpenRoom={onOpenRoom}
         />
       ) : (
-        <AppointmentList appointments={appointments} />
+        <AppointmentList
+          appointments={filteredAppointments}
+          consultationIdQuery={consultationIdQuery}
+          statusFilter={statusFilter}
+          setConsultationIdQuery={setConsultationIdQuery}
+          setStatusFilter={setStatusFilter}
+          onCancelPending={onCancelPending}
+          onOpenReschedule={onOpenReschedule}
+        />
       )}
     </section>
   );
@@ -125,11 +172,15 @@ function RoomBoard({
   rooms,
   appointments,
   roomDayStatus,
+  onOpenAppointment,
+  onOpenRoom,
 }: {
   date: string;
   rooms: BoardRoom[];
   appointments: BoardAppointment[];
   roomDayStatus?: RoomDayStatus;
+  onOpenAppointment: (appointment: BoardAppointment) => void;
+  onOpenRoom: (room: Room) => void;
 }) {
   const timeSlots = buildTimeSlots();
   const groups = groupRooms(rooms);
@@ -138,9 +189,17 @@ function RoomBoard({
 
   return (
     <div className="border-t border-[var(--lxxl-border)]">
-      <div className="overflow-x-auto">
+      <div className="flex flex-wrap gap-x-5 gap-y-2 border-b border-[var(--lxxl-border)] bg-white px-5 py-3">
+        {Object.entries(STATUS_META).map(([status, meta]) => (
+          <div className="flex items-center gap-2 text-xs text-[var(--lxxl-muted)]" key={status}>
+            <span className="h-3 w-7 rounded-full" style={{ background: meta.background }} />
+            <span>{meta.label}</span>
+          </div>
+        ))}
+      </div>
+      <div className="max-h-[calc(100vh-190px)] overflow-auto">
         <div style={{ minWidth: 136 + rooms.length * columnWidth }}>
-          <div className="flex border-b border-[var(--lxxl-border)] bg-[#FAF8F4]">
+          <div className="sticky top-0 z-30 flex border-b border-[var(--lxxl-border)] bg-[#FAF8F4] shadow-sm">
             <div className="flex w-[136px] shrink-0 items-center justify-center border-r border-[var(--lxxl-border)] px-3 py-4 text-center text-sm font-medium">
               <span>{date}</span>
             </div>
@@ -166,7 +225,17 @@ function RoomBoard({
                         key={room.key}
                         className="border-r border-[var(--lxxl-border)] px-2 py-3 text-center text-sm last:border-r-0"
                       >
-                        {room.roomName}
+                        {room.centerId === "video" || room.centerId === "unassigned" ? (
+                          room.roomName
+                        ) : (
+                          <button
+                            type="button"
+                            className="w-full rounded-lg border border-[var(--lxxl-border)] bg-white px-2 py-1.5 font-medium transition hover:border-[var(--lxxl-green)] hover:text-[var(--lxxl-green)]"
+                            onClick={() => onOpenRoom(boardRoomToRoom(room))}
+                          >
+                            {room.roomName}
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -196,7 +265,7 @@ function RoomBoard({
             >
               {rooms.map((room) => {
                 const roomAppointments = appointments.filter(
-                  (item) => appointmentRoomKey(item) === room.key && !isCancelled(item),
+                  (item) => appointmentRoomKey(item) === room.key,
                 );
                 return (
                   <div
@@ -222,6 +291,7 @@ function RoomBoard({
                               <AppointmentSlotBar
                                 key={`${appointment.scheduleId}-${slot}`}
                                 appointment={appointment}
+                                onClick={() => onOpenAppointment(appointment)}
                               />
                             ))
                           ) : unavailable ? (
@@ -243,39 +313,97 @@ function RoomBoard({
   );
 }
 
-function AppointmentSlotBar({ appointment }: { appointment: BoardAppointment }) {
-  const [background, color] = COLOR_PALETTE[Math.abs(appointment.scheduleId) % COLOR_PALETTE.length];
+function AppointmentSlotBar({
+  appointment,
+  onClick,
+}: {
+  appointment: BoardAppointment;
+  onClick: () => void;
+}) {
+  const meta = STATUS_META[displayStatus(appointment)];
   const patient = formatPatientNameWithContractTag(
     appointment.patientName,
     appointment.patientContractTag,
   ) || "来访";
 
   return (
-    <div
-      className="min-h-7 truncate rounded-full border border-black/5 px-2 py-1 text-center text-xs font-medium leading-5 shadow-sm"
-      style={{ background, color }}
+    <button
+      type="button"
+      className="min-h-7 w-full truncate rounded-full border border-black/5 px-2 py-1 text-center text-xs font-medium leading-5 shadow-sm transition hover:brightness-95"
+      style={{ background: meta.background, color: meta.color }}
       title={`${appointment.counselorName} - ${patient} ${timeText(appointment.startTime)}-${timeText(appointment.endTime)}`}
+      onClick={onClick}
     >
       {appointment.counselorName} - {patient}
-    </div>
+    </button>
   );
 }
 
-function AppointmentList({ appointments }: { appointments: BoardAppointment[] }) {
-  if (appointments.length === 0) {
-    return <EmptyState text="当日暂无预约。" />;
-  }
+function AppointmentList({
+  appointments,
+  statusFilter,
+  consultationIdQuery,
+  setStatusFilter,
+  setConsultationIdQuery,
+  onCancelPending,
+  onOpenReschedule,
+}: {
+  appointments: BoardAppointment[];
+  statusFilter: BoardDisplayStatus | "";
+  consultationIdQuery: string;
+  setStatusFilter: (value: BoardDisplayStatus | "") => void;
+  setConsultationIdQuery: (value: string) => void;
+  onCancelPending: (appointment: BoardAppointment) => Promise<void>;
+  onOpenReschedule: (appointment: BoardAppointment) => void;
+}) {
   return (
-    <div className="overflow-x-auto border-t border-[var(--lxxl-border)]">
+    <div className="border-t border-[var(--lxxl-border)]">
+      <div className="flex flex-wrap items-end gap-3 border-b border-[var(--lxxl-border)] bg-[#FAF8F4] px-5 py-4">
+        <QueryField label="预约状态">
+          <select
+            className={`${queryControlClass} min-w-48`}
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value as BoardDisplayStatus | "")}
+          >
+            <option value="">全部状态</option>
+            {Object.entries(STATUS_META).map(([value, meta]) => (
+              <option key={value} value={value}>{meta.label}</option>
+            ))}
+          </select>
+        </QueryField>
+        <QueryField label="咨询 ID">
+          <input
+            className={`${queryControlClass} min-w-48`}
+            inputMode="numeric"
+            placeholder="输入咨询 ID"
+            value={consultationIdQuery}
+            onChange={(event) => setConsultationIdQuery(event.target.value.replace(/\D/g, ""))}
+          />
+        </QueryField>
+        <QueryResetButton
+          onClick={() => {
+            setStatusFilter("");
+            setConsultationIdQuery("");
+          }}
+        >
+          重置
+        </QueryResetButton>
+      </div>
+      {appointments.length === 0 ? (
+        <EmptyState text="没有符合条件的预约。" />
+      ) : (
+      <div className="overflow-x-auto">
       <table className="w-full min-w-[920px] border-collapse text-sm">
         <thead className="bg-[#FAF8F4] text-left text-[var(--lxxl-muted)]">
           <tr>
             <th className="px-5 py-3 font-medium">预约时间</th>
+            <th className="px-5 py-3 font-medium">咨询 ID</th>
             <th className="px-5 py-3 font-medium">状态</th>
             <th className="px-5 py-3 font-medium">咨询师</th>
             <th className="px-5 py-3 font-medium">来访者</th>
             <th className="px-5 py-3 font-medium">咨询中心</th>
             <th className="px-5 py-3 font-medium">咨询室</th>
+            <th className="px-5 py-3 text-right font-medium">操作</th>
           </tr>
         </thead>
         <tbody>
@@ -284,10 +412,17 @@ function AppointmentList({ appointments }: { appointments: BoardAppointment[] })
               <td className="whitespace-nowrap px-5 py-4 font-medium">
                 {timeText(item.startTime)} - {timeText(item.endTime)}
               </td>
+              <td className="px-5 py-4">{item.consultationId || "-"}</td>
               <td className="px-5 py-4">
-                <Badge tone={statusTone(effectiveStatus(item))}>
-                  {boardStatusLabel(effectiveStatus(item))}
-                </Badge>
+                <span
+                  className="inline-flex rounded-full px-2.5 py-1 text-xs font-medium"
+                  style={{
+                    background: STATUS_META[displayStatus(item)].background,
+                    color: STATUS_META[displayStatus(item)].color,
+                  }}
+                >
+                  {STATUS_META[displayStatus(item)].label}
+                </span>
               </td>
               <td className="px-5 py-4">{item.counselorName}</td>
               <td className="px-5 py-4">
@@ -295,10 +430,30 @@ function AppointmentList({ appointments }: { appointments: BoardAppointment[] })
               </td>
               <td className="px-5 py-4 text-[var(--lxxl-muted)]">{item.centerName || "-"}</td>
               <td className="px-5 py-4 text-[var(--lxxl-muted)]">{item.roomName || (item.centerId === "video" ? "视频咨询" : "未分配")}</td>
+              <td className="px-5 py-4 text-right">
+                <div className="flex justify-end gap-2">
+                  {displayStatus(item) === "PENDING_PAYMENT" && item.canCancelPending && (
+                    <TableActionButton
+                      onClick={() => {
+                        if (window.confirm("确认取消该待支付订单？")) void onCancelPending(item);
+                      }}
+                    >
+                      取消
+                    </TableActionButton>
+                  )}
+                  {canRescheduleAppointment(item) && (
+                    <TableActionButton onClick={() => onOpenReschedule(item)}>
+                      重新选择时间
+                    </TableActionButton>
+                  )}
+                </div>
+              </td>
             </tr>
           ))}
         </tbody>
       </table>
+      </div>
+      )}
     </div>
   );
 }
@@ -318,7 +473,7 @@ function flattenAppointments(schedules?: ScheduleOverview): BoardAppointment[] {
 }
 
 function isAppointment(item: ScheduleItem) {
-  return Boolean(item.consultationId || item.patientName)
+  return Boolean(item.consultationId || item.orderId || item.patientName)
     || ["BOOKED", "CONFIRMED", "ONGOING", "DONE", "CANCELLED", "CANCELED"].includes(item.status);
 }
 
@@ -326,8 +481,33 @@ function effectiveStatus(item: ScheduleItem) {
   return item.consultationStatus || item.status;
 }
 
-function isCancelled(item: ScheduleItem) {
-  return ["CANCELLED", "CANCELED"].includes(String(effectiveStatus(item)).toUpperCase());
+function displayStatus(item: BoardAppointment): BoardDisplayStatus {
+  const orderStatus = String(item.orderStatus || "").toUpperCase();
+  const status = String(effectiveStatus(item) || "").toUpperCase();
+  if (orderStatus === "PENDING") return "PENDING_PAYMENT";
+  if (
+    ["CANCELLED", "CANCELED", "REFUNDED", "CLOSED"].includes(orderStatus)
+    || ["CANCELLED", "CANCELED"].includes(status)
+  ) {
+    return "CANCELLED";
+  }
+  const now = Date.now();
+  const start = new Date(item.startTime || "").getTime();
+  const end = new Date(item.endTime || "").getTime();
+  if (status === "ONGOING" || (Number.isFinite(start) && Number.isFinite(end) && start <= now && now < end)) {
+    return "ONGOING";
+  }
+  if (Number.isFinite(end) && end <= now) {
+    return item.caseRecordId ? "RECORD_COMPLETED" : "RECORD_PENDING";
+  }
+  return "BOOKED";
+}
+
+function canRescheduleAppointment(item: BoardAppointment) {
+  return displayStatus(item) === "BOOKED"
+    && new Date(item.startTime || "").getTime() > Date.now()
+    && Boolean(item.consultationId)
+    && ["PENDING", "CONFIRMED"].includes(String(item.consultationStatus || "").toUpperCase());
 }
 
 function buildBoardRooms(rooms: Room[], appointments: BoardAppointment[]): BoardRoom[] {
@@ -338,6 +518,7 @@ function buildBoardRooms(rooms: Room[], appointments: BoardAppointment[]): Board
     )
     .map((room) => ({
       key: `${room.centerId}:${room.roomCode}`,
+      databaseId: room.id,
       centerId: room.centerId,
       centerName: room.centerName,
       roomId: room.roomCode,
@@ -348,6 +529,7 @@ function buildBoardRooms(rooms: Room[], appointments: BoardAppointment[]): Board
     ...physical,
     {
       key: "video:video",
+      databaseId: null,
       centerId: "video",
       centerName: "线上咨询",
       roomId: "video",
@@ -358,6 +540,7 @@ function buildBoardRooms(rooms: Room[], appointments: BoardAppointment[]): Board
   if (appointments.some((item) => !result.some((room) => room.key === appointmentRoomKey(item)))) {
     result.push({
       key: "unassigned:unassigned",
+      databaseId: null,
       centerId: "unassigned",
       centerName: "其他",
       roomId: "unassigned",
@@ -372,6 +555,17 @@ function appointmentRoomKey(item: BoardAppointment) {
   if (item.centerId === "video") return "video:video";
   if (!item.centerId || !item.roomId) return "unassigned:unassigned";
   return `${item.centerId}:${item.roomId}`;
+}
+
+function boardRoomToRoom(room: BoardRoom): Room {
+  return {
+    id: room.databaseId,
+    centerId: room.centerId,
+    centerName: room.centerName,
+    roomCode: room.roomId,
+    name: room.roomName,
+    status: room.status,
+  };
 }
 
 function appointmentOverlapsSlot(appointment: BoardAppointment, slotStart: number) {
@@ -429,23 +623,3 @@ function timeText(value?: string | null) {
   return String(value || "").slice(11, 16) || "-";
 }
 
-function boardStatusLabel(status?: string | null) {
-  const labels: Record<string, string> = {
-    BOOKED: "已预约",
-    CONFIRMED: "已确认",
-    ONGOING: "进行中",
-    DONE: "已完成",
-    CANCELLED: "已取消",
-    CANCELED: "已取消",
-    ON_LEAVE: "已请假",
-  };
-  return labels[String(status || "").toUpperCase()] || status || "未知";
-}
-
-function statusTone(status?: string | null): "green" | "gold" | "red" | "neutral" {
-  const normalized = String(status || "").toUpperCase();
-  if (normalized === "DONE") return "green";
-  if (["CANCELLED", "CANCELED", "ON_LEAVE"].includes(normalized)) return "red";
-  if (["BOOKED", "CONFIRMED", "ONGOING"].includes(normalized)) return "gold";
-  return "neutral";
-}

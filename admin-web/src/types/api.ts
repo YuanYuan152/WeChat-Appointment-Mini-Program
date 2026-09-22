@@ -352,6 +352,10 @@ export interface Article {
 export interface ScheduleItem {
   scheduleId: number;
   consultationId?: number | null;
+  orderId?: number | null;
+  orderStatus?: string | null;
+  caseRecordId?: number | null;
+  canCancelPending?: boolean;
   startTime?: string | null;
   endTime?: string | null;
   status: string;

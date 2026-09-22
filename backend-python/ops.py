@@ -20,7 +20,7 @@ from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.exc import ProgrammingError, OperationalError
 from sqlalchemy.orm import Session
 
@@ -35,7 +35,7 @@ from staff_roles import (
 from models import (
     AppBanner, AppActivity, AppArticle, AppOrder, AppRoleBinding,
     AppAccount as AccountModel, AppSchedule, AppCounselorProfile,
-    AppConsultation, AppConsultationRoom,
+    AppConsultation, AppConsultationRoom, AppCaseRecord,
 )
 from app_time import china_now
 from room_slot_status import (
@@ -897,6 +897,13 @@ def ops_schedules_overview(
     if not include_cancelled:
         schedules_query = schedules_query.filter(AppSchedule.Status != "CANCELLED")
     schedules = schedules_query.order_by(AppSchedule.StartTime).all()
+    has_case_record_table = True
+    if db.get_bind().dialect.name == "sqlite":
+        has_case_record_table = db.execute(
+            text("SELECT 1 FROM sqlite_master WHERE type='table' AND name=:name"),
+            {"name": AppCaseRecord.__tablename__},
+        ).first() is not None
+    from case_record_service import case_record_has_content
 
     counselors = (
         db.query(AppCounselorProfile)
@@ -940,16 +947,34 @@ def ops_schedules_overview(
                 .order_by(AppConsultation.Id.desc())
                 .first()
             )
+            order = (
+                db.query(AppOrder)
+                .filter(AppOrder.SlotId == s.Id)
+                .order_by(AppOrder.Id.desc())
+                .first()
+            )
             patient = (
                 db.query(AccountModel).filter(AccountModel.Id == consultation.PatientId).first()
                 if consultation
-                else None
+                else (
+                    db.query(AccountModel).filter(AccountModel.Id == order.AccountId).first()
+                    if order
+                    else None
+                )
             )
             if not patient_name and patient:
                 from patient_contract_service import patient_contract_extras
 
                 patient_name = patient.RealName or patient.Nickname
                 patient_contract_tag = patient_contract_extras(db, patient).get("contractTag")
+            case_record = (
+                db.query(AppCaseRecord)
+                .filter(AppCaseRecord.ConsultationId == consultation.Id)
+                .order_by(AppCaseRecord.Id.desc())
+                .first()
+                if consultation and has_case_record_table
+                else None
+            )
             if normalized_keyword and not counselor_matches:
                 patient_search_text = " ".join(
                     str(value or "")
@@ -963,6 +988,18 @@ def ops_schedules_overview(
             items.append({
                 "scheduleId": s.Id,
                 "consultationId": consultation.Id if consultation else None,
+                "orderId": order.Id if order else None,
+                "orderStatus": order.Status if order else None,
+                "caseRecordId": (
+                    case_record.Id
+                    if case_record and case_record_has_content(case_record)
+                    else None
+                ),
+                "canCancelPending": bool(
+                    order
+                    and order.Status == "PENDING"
+                    and (order.Description or "").startswith("proxy:")
+                ),
                 "startTime": s.StartTime,
                 "endTime": s.EndTime,
                 "status": s.Status,
