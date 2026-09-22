@@ -2,6 +2,7 @@ import { apiRequest } from "@/lib/api";
 import type {
   ApiMessage,
   Room,
+  RoomDayStatus,
   RoomDetail,
   RoomSlotManualStatus,
   RoomStatusSnapshot,
@@ -18,6 +19,11 @@ export function fetchRooms(centerId = "") {
   const params = new URLSearchParams();
   if (centerId) params.set("center_id", centerId);
   return apiRequest<Room[]>(withQuery("/api/mini/ops/rooms", params));
+}
+
+export function fetchRoomDayStatus(date: string) {
+  const params = new URLSearchParams({ date });
+  return apiRequest<RoomDayStatus>(`/api/mini/ops/rooms/day-status?${params.toString()}`);
 }
 
 export async function fetchRoomsData(filters: RoomFilters) {

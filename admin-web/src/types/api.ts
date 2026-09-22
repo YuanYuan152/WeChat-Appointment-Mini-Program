@@ -454,6 +454,18 @@ export interface RoomStatusSnapshot {
   rooms: RoomStatus[];
 }
 
+export interface RoomDayStatus {
+  date: string;
+  rooms: Array<{
+    centerId: string;
+    roomCode: string;
+    slots: Array<{
+      timeSlot: string;
+      status: string;
+    }>;
+  }>;
+}
+
 export interface RoomDetailSlot {
   key: string;
   startTime?: string | null;
