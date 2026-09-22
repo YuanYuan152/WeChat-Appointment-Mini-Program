@@ -393,55 +393,57 @@
           <text class="modal-title">确认订单</text>
           <view class="modal-close-btn" @click="closePayment">×</view>
         </view>
-        <view class="modal-body">
-          <view class="pay-amount-box">
-            <template v-if="doctor.priceNegotiation || doctor.needsNegotiation">
-              <text class="pay-amount">{{ doctor.billingLabel || doctor.priceLabel || '议价' }}</text>
-            </template>
-            <template v-else>
-              <text class="pay-currency">￥</text>
-              <text class="pay-amount">{{ selectedSlot?.Price || 0 }}</text>
-            </template>
-          </view>
-          
-          <view class="pay-details">
-            <view class="pay-row">
-              <text class="pay-label">咨询师</text>
-              <text class="pay-value">{{ doctor.name }}</text>
+          <scroll-view class="pay-body-scroll" scroll-y :show-scrollbar="false">
+            <view class="pay-amount-box">
+              <template v-if="doctor.priceNegotiation || doctor.needsNegotiation">
+                <text class="pay-amount">{{ doctor.billingLabel || doctor.priceLabel || '议价' }}</text>
+              </template>
+              <template v-else>
+                <text class="pay-currency">￥</text>
+                <text class="pay-amount">{{ selectedSlot?.Price || 0 }}</text>
+              </template>
             </view>
-            <view class="pay-row">
-              <text class="pay-label">预约时间</text>
-              <text class="pay-value highlight">{{ selectedSlot?.startDate }} {{ selectedSlot?.startHH }}-{{ selectedSlot?.endHH }}</text>
-            </view>
-            <view class="pay-row">
-              <text class="pay-label">咨询方式</text>
-              <text class="pay-value">线上/线下</text>
-            </view>
-          </view>
-          
-          <view class="pay-warm-tips">
-            <view class="pay-tip-title">
-              <text class="pay-tip-icon">!</text>
-              <text class="pay-tip-title-text">温馨提示</text>
-            </view>
-            <view class="pay-rules-list">
-              <text class="pay-rule-item">· 距咨询开始超过24小时可免费取消；</text>
-              <text class="pay-rule-item">· 距咨询开始24小时内取消或爽约，不予退款；</text>
-              <text class="pay-rule-item">· 特殊情况可致电咨询，申请人工退款；</text>
-              <text class="pay-rule-item">· 迟到15分钟以上视为爽约。</text>
-            </view>
-          </view>
 
-          <view class="pay-agree-row" @tap="togglePayRulesAgreed">
-            <view class="pay-checkbox" :class="{ checked: payRulesAgreed }">
-              <text v-if="payRulesAgreed" class="pay-check-icon">✓</text>
+            <view class="pay-details">
+              <view class="pay-row">
+                <text class="pay-label">咨询师</text>
+                <text class="pay-value">{{ doctor.name }}</text>
+              </view>
+              <view class="pay-row">
+                <text class="pay-label">预约时间</text>
+                <text class="pay-value highlight">{{ selectedSlot?.startDate }} {{ selectedSlot?.startHH }}-{{ selectedSlot?.endHH }}</text>
+              </view>
+              <view class="pay-row">
+                <text class="pay-label">咨询方式</text>
+                <text class="pay-value">线上/线下</text>
+              </view>
             </view>
-            <text class="pay-agree-text">
-              我已同意上述规则及
-              <text class="pay-agree-link" @tap.stop="openPrivacyPolicy">《隐私协议》</text>
-            </text>
-          </view>
-        </view>
+
+            <view class="pay-warm-tips">
+              <view class="pay-tip-title">
+                <text class="pay-tip-icon">!</text>
+                <text class="pay-tip-title-text">温馨提示</text>
+              </view>
+              <view class="pay-rules-list">
+                <text class="pay-rule-item">· 咨询采用预约制，请确认参加本次咨询的时间，费用，地点，咨询师将为您预留出相应时间；</text>
+                <text class="pay-rule-item">· 支付成功后预约立即生效；</text>
+                <text class="pay-rule-item">· 如需改约或取消，也请至少提前24小时联系我们；</text>
+                <text class="pay-rule-item">· 在咨询开始前24小时内临时取消咨询或爽约，将计为一节正式咨询，不予退款，除非双方另行协商一致；</text>
+                <text class="pay-rule-item">· 请注意预定的咨询时间，如有迟到，咨询时间不做延长；</text>
+                <text class="pay-rule-item">· 有任何问题可随时给助理留言，我们将在工作时间9-21点内进行回复。</text>
+              </view>
+            </view>
+
+            <view class="pay-agree-row" @tap="togglePayRulesAgreed">
+              <view class="pay-checkbox" :class="{ checked: payRulesAgreed }">
+                <text v-if="payRulesAgreed" class="pay-check-icon">✓</text>
+              </view>
+              <text class="pay-agree-text">
+                我已同意上述规则及
+                <text class="pay-agree-link" @tap.stop="openPrivacyPolicy">《隐私协议》</text>
+              </text>
+            </view>
+          </scroll-view>
         <view class="modal-footer-modern">
           <button
             class="btn-fill full-width"
@@ -603,7 +605,8 @@ const agreementSheetStyle = computed(() => {
   return { height: `${h}px`, maxHeight: `${h}px`, minHeight: `${h}px` }
 })
 const paymentSheetStyle = computed(() => {
-  const h = Math.max(360, Math.round(modalWindowHeightPx.value * (3 / 4)))
+  // 温馨提示条目较多，支付确认层加高，便于完整阅读
+  const h = Math.max(420, Math.round(modalWindowHeightPx.value * 0.88))
   return { height: `${h}px`, maxHeight: `${h}px`, minHeight: `${h}px` }
 })
 const showSignatureCanvas = ref(false)
@@ -2478,6 +2481,14 @@ onMounted(() => {
   flex-direction: column;
 }
 
+.pay-body-scroll {
+  flex: 1;
+  min-height: 0;
+  height: 0;
+  padding: 0 40rpx 24rpx;
+  box-sizing: border-box;
+}
+
 .modal-content.full-height {
   width: 100%;
   max-width: 100%;
@@ -2971,9 +2982,17 @@ onMounted(() => {
 }
 
 .pay-rule-item {
+  display: block;
   font-size: 24rpx;
   color: #92400E;
-  line-height: 1.6;
+  line-height: 1.65;
+  margin-bottom: 12rpx;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.pay-rule-item:last-child {
+  margin-bottom: 0;
 }
 
 .pay-agree-row {

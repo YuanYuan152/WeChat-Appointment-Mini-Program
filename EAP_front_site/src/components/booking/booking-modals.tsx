@@ -248,10 +248,12 @@ export function BookingModals({
             <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-4 text-sm text-amber-900">
               <p className="mb-2 font-medium">温馨提示</p>
               <ul className="space-y-1 text-xs leading-relaxed">
-                <li>· 距咨询开始超过 24 小时可免费取消；</li>
-                <li>· 距咨询开始 24 小时内取消或爽约，不予退款；</li>
-                <li>· 特殊情况可致电咨询，申请人工豁免；</li>
-                <li>· 迟到 15 分钟以上视为爽约。</li>
+                <li>· 咨询采用预约制，请确认参加本次咨询的时间，费用，地点，咨询师将为您预留出相应时间；</li>
+                <li>· 支付成功后预约立即生效；</li>
+                <li>· 如需改约或取消，也请至少提前24小时联系我们；</li>
+                <li>· 在咨询开始前24小时内临时取消咨询或爽约，将计为一节正式咨询，不予退款，除非双方另行协商一致；</li>
+                <li>· 请注意预定的咨询时间，如有迟到，咨询时间不做延长；</li>
+                <li>· 有任何问题可随时给助理留言，我们将在工作时间9-21点内进行回复。</li>
               </ul>
             </div>
             <button

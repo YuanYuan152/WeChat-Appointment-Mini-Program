@@ -175,9 +175,12 @@
 
           <view class="tips-block">
             <text class="tips-title">温馨提示</text>
+            <text class="tips-line">· 咨询采用预约制，请确认参加本次咨询的时间，费用，地点，咨询师将为您预留出相应时间；</text>
             <text class="tips-line">· {{ isFreeOrder ? '确认后预约立即生效；' : '支付成功后预约立即生效；' }}</text>
-            <text class="tips-line">· 距咨询开始超过 24 小时可免费取消；</text>
-            <text class="tips-line">· 24 小时内取消或爽约，按规定不予退款。</text>
+            <text class="tips-line">· 如需改约或取消，也请至少提前24小时联系我们；</text>
+            <text class="tips-line">· 在咨询开始前24小时内临时取消咨询或爽约，将计为一节正式咨询，不予退款，除非双方另行协商一致；</text>
+            <text class="tips-line">· 请注意预定的咨询时间，如有迟到，咨询时间不做延长；</text>
+            <text class="tips-line">· 有任何问题可随时给助理留言，我们将在工作时间9-21点内进行回复。</text>
           </view>
 
           <view class="agree-row" @tap="agreed = !agreed">
@@ -1099,7 +1102,13 @@ const onConfirm = () => {
   display: block;
   font-size: 24rpx;
   color: #92400E;
-  line-height: 1.6;
+  line-height: 1.65;
+  margin-bottom: 12rpx;
+  white-space: normal;
+  word-break: break-word;
+}
+.tips-line:last-child {
+  margin-bottom: 0;
 }
 .agree-row {
   display: flex;
