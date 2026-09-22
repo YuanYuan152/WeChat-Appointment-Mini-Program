@@ -14,6 +14,12 @@ function withQuery(path: string, params: URLSearchParams) {
   return query ? `${path}?${query}` : path;
 }
 
+export function fetchRooms(centerId = "") {
+  const params = new URLSearchParams();
+  if (centerId) params.set("center_id", centerId);
+  return apiRequest<Room[]>(withQuery("/api/mini/ops/rooms", params));
+}
+
 export async function fetchRoomsData(filters: RoomFilters) {
   const roomParams = new URLSearchParams();
   const statusParams = new URLSearchParams();

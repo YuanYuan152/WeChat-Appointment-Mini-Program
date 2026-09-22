@@ -6,7 +6,7 @@ import { AppRoute, useAppRoute } from "@/components/AppRoute";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
 import { getLocalDateValue } from "@/lib/date";
 import { boundCounselorFromPatient, formatPatientInline } from "@/lib/patientContract";
-import { fetchPatientContractInfo } from "@/services/boards";
+import { fetchPatientContractInfo, updatePatientBoundCounselor } from "@/services/boards";
 import {
   AGENT_BOOKING_CENTER_OPTIONS,
   AgentBookingPanel,
@@ -18,6 +18,7 @@ import {
   fetchProxyScheduleCalendar,
   fetchProxySlotOptions,
   pushProxyOrder,
+  searchProxyCounselors,
   searchProxyPatients,
 } from "@/services/proxyBooking";
 import type { ProxyPersonOption, ProxySlotOption } from "@/types/api";
@@ -296,6 +297,36 @@ function AgentBookingScreenContent() {
     }));
   }, []);
 
+  const searchCounselors = useCallback(async (keyword: string) => {
+    const result = await searchProxyCounselors(keyword);
+    return result.items || [];
+  }, []);
+
+  const bindCounselor = useCallback(
+    async (patientId: number, counselorId: number | null) => {
+      clearNotice();
+      try {
+        const contract = await updatePatientBoundCounselor(patientId, counselorId);
+        const selectedPatient = patientRef.current;
+        const refreshed = selectedPatient
+          ? await refreshPatientContract(selectedPatient, true)
+          : undefined;
+        if (!refreshed) {
+          throw new Error("绑定已更新，但最新来访状态刷新失败，请刷新页面后核对");
+        }
+        const actionText = counselorId ? "已更新绑定咨询师" : "已解除咨询师绑定";
+        const contractText = contract.isContractSigned
+          ? "当前签约状态：已签约"
+          : "当前签约状态：未签约，代理预约时需选择协议";
+        showNotice("success", `${actionText}。${contractText}`);
+      } catch (error) {
+        showNotice("error", error instanceof Error ? error.message : "绑定咨询师更新失败");
+        throw error;
+      }
+    },
+    [clearNotice, refreshPatientContract, showNotice],
+  );
+
   const loadSlots = useCallback(async (
     selection: Pick<AgentBookingDraft, "date" | "centerId"> = {
       date: draft.date,
@@ -490,6 +521,7 @@ function AgentBookingScreenContent() {
       slotError={slotError}
       slotLoading={slotLoading}
       slotOptions={data.proxySlotOptions}
+      onBindCounselor={bindCounselor}
       onCloseCreate={closeCreate}
       onLoadSlots={loadSlots}
       onOpenCreate={prepareCreate}
@@ -500,6 +532,7 @@ function AgentBookingScreenContent() {
       onRefreshPatient={refreshCurrentPatient}
       onSearch={search}
       onSearchPatients={searchPatients}
+      onSearchCounselors={searchCounselors}
     />
   );
 }

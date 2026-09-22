@@ -351,9 +351,11 @@ export interface Article {
 
 export interface ScheduleItem {
   scheduleId: number;
+  consultationId?: number | null;
   startTime?: string | null;
   endTime?: string | null;
   status: string;
+  consultationStatus?: string | null;
   centerId?: string | null;
   centerName?: string | null;
   roomId?: string | null;

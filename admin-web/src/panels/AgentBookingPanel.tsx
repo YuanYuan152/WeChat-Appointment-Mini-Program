@@ -17,6 +17,7 @@ import {
   formatPatientNameWithContractTag,
   patientContractTag,
 } from "@/lib/patientContract";
+import { BindCounselorModal } from "@/panels/UserBoardPanel";
 import type {
   ProxyPersonOption,
   ProxyPushOrderResult,
@@ -68,6 +69,8 @@ export function AgentBookingPanel({
   setQuery,
   setDraft,
   onSearchPatients,
+  onSearchCounselors,
+  onBindCounselor,
   onSearch,
   onReset,
   onRefreshPatient,
@@ -96,6 +99,8 @@ export function AgentBookingPanel({
   setQuery: Dispatch<SetStateAction<AgentBookingQuery>>;
   setDraft: Dispatch<SetStateAction<AgentBookingDraft>>;
   onSearchPatients: (keyword: string) => Promise<ProxyPersonOption[]>;
+  onSearchCounselors: (keyword: string) => Promise<ProxyPersonOption[]>;
+  onBindCounselor: (patientId: number, counselorId: number | null) => Promise<void>;
   onSearch: () => void;
   onReset: () => void;
   onRefreshPatient: () => Promise<ProxyPersonOption | undefined>;
@@ -110,6 +115,14 @@ export function AgentBookingPanel({
   const rollingMaxDate = getRollingScheduleMaxDateValue();
   const [createOpen, setCreateOpen] = useState(false);
   const [openingCreate, setOpeningCreate] = useState(false);
+  const [bindOpen, setBindOpen] = useState(false);
+  const [bindKeyword, setBindKeyword] = useState("");
+  const [bindOptions, setBindOptions] = useState<ProxyPersonOption[]>([]);
+  const [selectedCounselorId, setSelectedCounselorId] = useState<number | null>(null);
+  const [bindLoading, setBindLoading] = useState(false);
+  const [bindSaving, setBindSaving] = useState(false);
+  const [bindError, setBindError] = useState("");
+  const bindSearchSeq = useRef(0);
   const rows = useMemo(() => calendar?.slots || [], [calendar?.slots]);
   const total = rows.length;
   const pagedRows = useMemo(() => {
@@ -121,6 +134,39 @@ export function AgentBookingPanel({
   const selectedSlot = visibleSlotOptions?.slots.find((slot) => slot.key === draft.slotKey);
   const selectedRoom = selectedSlot?.rooms.find((room) => room.roomId === draft.roomId);
   const canOpenCreate = Boolean(patient && counselor && !patientStatusLoading && !patientStatusError);
+
+  const loadCounselors = async (keyword: string) => {
+    const requestSeq = bindSearchSeq.current + 1;
+    bindSearchSeq.current = requestSeq;
+    setBindLoading(true);
+    setBindError("");
+    try {
+      const options = await onSearchCounselors(keyword);
+      if (bindSearchSeq.current !== requestSeq) return;
+      setBindOptions(options);
+      setSelectedCounselorId((current) => {
+        if (current === patient?.boundCounselorId || options.some((item) => item.id === current)) {
+          return current;
+        }
+        return null;
+      });
+    } catch (error) {
+      if (bindSearchSeq.current !== requestSeq) return;
+      setBindOptions([]);
+      setBindError(error instanceof Error ? error.message : "咨询师搜索失败，请重试");
+    } finally {
+      if (bindSearchSeq.current === requestSeq) setBindLoading(false);
+    }
+  };
+
+  const openBinding = () => {
+    if (!patient) return;
+    setBindKeyword("");
+    setBindError("");
+    setSelectedCounselorId(patient.boundCounselorId || null);
+    setBindOpen(true);
+    void loadCounselors("");
+  };
 
   const openCreate = async () => {
     setOpeningCreate(true);
@@ -186,9 +232,21 @@ export function AgentBookingPanel({
                     <Badge tone="gold">不可预约</Badge>
                   ) : null}
                 </div>
-                <p className="mt-1 text-xs leading-5 text-[var(--lxxl-muted)]">
-                  根据来访当前绑定关系自动带出，不能在代理预约中更换。
-                </p>
+                <div className="mt-2 flex items-center justify-between gap-3">
+                  <p className="text-xs leading-5 text-[var(--lxxl-muted)]">
+                    绑定后自动切换至该咨询师的排期；换绑或解绑会重置签约状态。
+                  </p>
+                  {patient && (
+                    <button
+                      type="button"
+                      className="shrink-0 rounded-lg border border-[var(--lxxl-green)] px-3 py-1.5 text-xs font-medium text-[var(--lxxl-green)] transition hover:bg-[#F4FBF7] disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={patientStatusLoading || Boolean(patientStatusError)}
+                      onClick={openBinding}
+                    >
+                      {counselor ? "更换咨询师" : "绑定咨询师"}
+                    </button>
+                  )}
+                </div>
               </QueryField>
               <QueryField label="签约状态">
                 <div className={`${queryControlClass} flex items-center gap-2`}>
@@ -353,6 +411,36 @@ export function AgentBookingPanel({
           onLoadSlots={onLoadSlots}
           onPushOrder={onPushOrder}
           onRefreshPatient={onRefreshPatient}
+        />
+      )}
+      {bindOpen && patient && (
+        <BindCounselorModal
+          boundCounselorId={patient.boundCounselorId}
+          error={bindError}
+          keyword={bindKeyword}
+          loading={bindLoading}
+          options={bindOptions}
+          prompt="可在代理预约页直接绑定或更换咨询师；规则与来访管理一致。"
+          saving={bindSaving}
+          selectedCounselorId={selectedCounselorId}
+          setKeyword={setBindKeyword}
+          setSelectedCounselorId={setSelectedCounselorId}
+          onClose={() => {
+            bindSearchSeq.current += 1;
+            setBindOpen(false);
+          }}
+          onSave={async (counselorId) => {
+            setBindSaving(true);
+            try {
+              await onBindCounselor(patient.id, counselorId);
+              setBindOpen(false);
+            } catch {
+              // 页面级通知已展示业务错误，保留弹窗便于重新选择。
+            } finally {
+              setBindSaving(false);
+            }
+          }}
+          onSearch={() => loadCounselors(bindKeyword)}
         />
       )}
     </>

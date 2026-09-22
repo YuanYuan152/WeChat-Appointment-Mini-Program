@@ -639,7 +639,7 @@ function UserDetailPanel({
   );
 }
 
-function BindCounselorModal({
+export function BindCounselorModal({
   boundCounselorId,
   error,
   keyword,

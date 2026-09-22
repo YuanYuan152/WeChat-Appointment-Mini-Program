@@ -871,6 +871,7 @@ def _room_occupancy_at(
 def ops_schedules_overview(
     date: Optional[str] = Query(None, description="兼容旧版：指定后仅查询该日"),
     keyword: Optional[str] = Query(None, description="咨询师或来访姓名/昵称"),
+    include_cancelled: bool = False,
     _ops: AppAccount = Depends(require_ops),
     db: Session = Depends(get_db),
 ):
@@ -889,16 +890,13 @@ def ops_schedules_overview(
     )
     normalized_keyword = (keyword or "").strip().lower()
 
-    schedules = (
-        db.query(AppSchedule)
-        .filter(
-            AppSchedule.StartTime >= day_start,
-            AppSchedule.StartTime < day_end,
-            AppSchedule.Status != "CANCELLED",
-        )
-        .order_by(AppSchedule.StartTime)
-        .all()
+    schedules_query = db.query(AppSchedule).filter(
+        AppSchedule.StartTime >= day_start,
+        AppSchedule.StartTime < day_end,
     )
+    if not include_cancelled:
+        schedules_query = schedules_query.filter(AppSchedule.Status != "CANCELLED")
+    schedules = schedules_query.order_by(AppSchedule.StartTime).all()
 
     counselors = (
         db.query(AppCounselorProfile)
@@ -936,22 +934,23 @@ def ops_schedules_overview(
             center_id = parse_center_id(s.Note)
             room_id = display_room_id(s.Note, s.Status)
             patient_name, _, patient_contract_tag = _schedule_patient_info(db, s.Id)
+            consultation = (
+                db.query(AppConsultation)
+                .filter(AppConsultation.ScheduleId == s.Id)
+                .order_by(AppConsultation.Id.desc())
+                .first()
+            )
+            patient = (
+                db.query(AccountModel).filter(AccountModel.Id == consultation.PatientId).first()
+                if consultation
+                else None
+            )
+            if not patient_name and patient:
+                from patient_contract_service import patient_contract_extras
+
+                patient_name = patient.RealName or patient.Nickname
+                patient_contract_tag = patient_contract_extras(db, patient).get("contractTag")
             if normalized_keyword and not counselor_matches:
-                consultation = (
-                    db.query(AppConsultation)
-                    .filter(
-                        AppConsultation.ScheduleId == s.Id,
-                        AppConsultation.Status.in_(["PENDING", "CONFIRMED", "ONGOING"]),
-                    )
-                    .first()
-                )
-                patient = (
-                    db.query(AccountModel)
-                    .filter(AccountModel.Id == consultation.PatientId)
-                    .first()
-                    if consultation
-                    else None
-                )
                 patient_search_text = " ".join(
                     str(value or "")
                     for value in (
@@ -963,9 +962,11 @@ def ops_schedules_overview(
                     continue
             items.append({
                 "scheduleId": s.Id,
+                "consultationId": consultation.Id if consultation else None,
                 "startTime": s.StartTime,
                 "endTime": s.EndTime,
                 "status": s.Status,
+                "consultationStatus": consultation.Status if consultation else None,
                 "centerId": center_id,
                 "centerName": center_display_name(center_id),
                 "roomId": room_id,

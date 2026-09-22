@@ -47,6 +47,7 @@ export type SectionId =
   | "content"
   | "assessments"
   | "assessmentReports"
+  | "appointmentBoard"
   | "schedules"
   | "rooms"
   | "pricing"

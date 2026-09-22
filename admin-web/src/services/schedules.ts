@@ -8,9 +8,11 @@ import type {
 
 const BASE_PATH = "/api/mini/ops/schedules";
 
-export function fetchScheduleOverview(keyword = "") {
+export function fetchScheduleOverview(keyword = "", date = "", includeCancelled = false) {
   const params = new URLSearchParams();
   if (keyword.trim()) params.set("keyword", keyword.trim());
+  if (date.trim()) params.set("date", date.trim());
+  if (includeCancelled) params.set("include_cancelled", "true");
   const query = params.toString();
   return apiRequest<ScheduleOverview>(`${BASE_PATH}/overview${query ? `?${query}` : ""}`);
 }
