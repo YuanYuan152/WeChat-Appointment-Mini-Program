@@ -1191,6 +1191,45 @@ def rooms_status(
     }
 
 
+@router.get("/rooms/day-status", summary="咨询室全天可用状态")
+def rooms_day_status(
+    date: str = Query(..., description="YYYY-MM-DD"),
+    _ops: AppAccount = Depends(require_ops),
+    db: Session = Depends(get_db),
+):
+    try:
+        day = date_type.fromisoformat(date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="date 格式应为 YYYY-MM-DD")
+
+    slot_starts = [
+        datetime.combine(day, time(hour, minute))
+        for hour in range(9, 24)
+        for minute in (0, 30)
+    ]
+    result = []
+    for room in get_all_consultation_rooms(db):
+        room_db_id = room.get("dbId")
+        default_status = room.get("status", "AVAILABLE")
+        statuses = (
+            slot_status_map_for_room(db, room_db_id, slot_starts, default_status)
+            if room_db_id is not None
+            else {slot: default_status for slot in slot_starts}
+        )
+        result.append({
+            "centerId": room["centerId"],
+            "roomCode": room["id"],
+            "slots": [
+                {
+                    "timeSlot": slot.strftime("%H:%M"),
+                    "status": statuses.get(slot, default_status),
+                }
+                for slot in slot_starts
+            ],
+        })
+    return {"date": day.isoformat(), "rooms": result}
+
+
 @router.get("/rooms/{room_id}", summary="咨询室详情与未来一周各时段状态")
 def get_room_detail(
     room_id: int,

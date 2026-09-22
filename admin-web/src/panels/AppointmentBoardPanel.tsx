@@ -4,7 +4,7 @@ import { useMemo } from "react";
 
 import { Badge, EmptyState, QueryButton, QueryField, queryControlClass } from "@/components/ui";
 import { formatPatientNameWithContractTag } from "@/lib/patientContract";
-import type { Room, ScheduleItem, ScheduleOverview } from "@/types/api";
+import type { Room, RoomDayStatus, ScheduleItem, ScheduleOverview } from "@/types/api";
 
 export type AppointmentBoardView = "room" | "list";
 
@@ -19,6 +19,7 @@ type BoardRoom = {
   centerName: string;
   roomId: string;
   roomName: string;
+  status: string;
 };
 
 const START_MINUTES = 9 * 60;
@@ -42,6 +43,7 @@ export function AppointmentBoardPanel({
   setView,
   schedules,
   rooms,
+  roomDayStatus,
   loading,
   onRefresh,
 }: {
@@ -51,6 +53,7 @@ export function AppointmentBoardPanel({
   setView: (value: AppointmentBoardView) => void;
   schedules?: ScheduleOverview;
   rooms: Room[];
+  roomDayStatus?: RoomDayStatus;
   loading: boolean;
   onRefresh: () => void;
 }) {
@@ -104,7 +107,12 @@ export function AppointmentBoardPanel({
       {loading && !schedules ? (
         <EmptyState text="正在加载预约看板..." />
       ) : view === "room" ? (
-        <RoomBoard date={date} rooms={boardRooms} appointments={appointments} />
+        <RoomBoard
+          date={date}
+          rooms={boardRooms}
+          appointments={appointments}
+          roomDayStatus={roomDayStatus}
+        />
       ) : (
         <AppointmentList appointments={appointments} />
       )}
@@ -116,19 +124,17 @@ function RoomBoard({
   date,
   rooms,
   appointments,
+  roomDayStatus,
 }: {
   date: string;
   rooms: BoardRoom[];
   appointments: BoardAppointment[];
+  roomDayStatus?: RoomDayStatus;
 }) {
   const timeSlots = buildTimeSlots();
   const groups = groupRooms(rooms);
   const columnWidth = 156;
   const bodyHeight = timeSlots.length * SLOT_HEIGHT;
-
-  if (rooms.length === 0) {
-    return <EmptyState text="暂无咨询室配置。" />;
-  }
 
   return (
     <div className="border-t border-[var(--lxxl-border)]">
@@ -195,14 +201,37 @@ function RoomBoard({
                 return (
                   <div
                     key={room.key}
-                    className="relative border-r border-[var(--lxxl-border)]"
-                    style={{
-                      backgroundImage: `repeating-linear-gradient(to bottom, transparent 0, transparent ${SLOT_HEIGHT - 1}px, var(--lxxl-border) ${SLOT_HEIGHT - 1}px, var(--lxxl-border) ${SLOT_HEIGHT}px)`,
-                    }}
+                    className="border-r border-[var(--lxxl-border)]"
                   >
-                    {roomAppointments.map((appointment) => (
-                      <AppointmentBlock key={appointment.scheduleId} appointment={appointment} />
-                    ))}
+                    {timeSlots.map((slot) => {
+                      const slotStart = minutesFromSlotLabel(slot);
+                      const slotAppointments = roomAppointments.filter((appointment) =>
+                        appointmentOverlapsSlot(appointment, slotStart),
+                      );
+                      const unavailable = roomSlotStatus(roomDayStatus, room, slotStart) !== "AVAILABLE";
+                      return (
+                        <div
+                          key={`${room.key}-${slot}`}
+                          className={`flex flex-col justify-center gap-1 overflow-hidden border-b border-[var(--lxxl-border)] px-1.5 py-1 ${
+                            unavailable ? "bg-[#F6F3EE]" : ""
+                          }`}
+                          style={{ height: SLOT_HEIGHT }}
+                        >
+                          {slotAppointments.length > 0 ? (
+                            slotAppointments.map((appointment) => (
+                              <AppointmentSlotBar
+                                key={`${appointment.scheduleId}-${slot}`}
+                                appointment={appointment}
+                              />
+                            ))
+                          ) : unavailable ? (
+                            <div className="rounded-full bg-[#E5E0D8] px-2 py-1 text-center text-xs font-medium text-[#756F67]">
+                              不可用
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
                   </div>
                 );
               })}
@@ -214,15 +243,7 @@ function RoomBoard({
   );
 }
 
-function AppointmentBlock({ appointment }: { appointment: BoardAppointment }) {
-  const start = minutesOfDay(appointment.startTime);
-  const end = minutesOfDay(appointment.endTime);
-  const visibleStart = Math.max(start, START_MINUTES);
-  const visibleEnd = Math.min(Math.max(end, visibleStart + SLOT_MINUTES), END_MINUTES);
-  if (visibleStart >= END_MINUTES || visibleEnd <= START_MINUTES) return null;
-
-  const top = ((visibleStart - START_MINUTES) / SLOT_MINUTES) * SLOT_HEIGHT + 3;
-  const height = Math.max(46, ((visibleEnd - visibleStart) / SLOT_MINUTES) * SLOT_HEIGHT - 6);
+function AppointmentSlotBar({ appointment }: { appointment: BoardAppointment }) {
   const [background, color] = COLOR_PALETTE[Math.abs(appointment.scheduleId) % COLOR_PALETTE.length];
   const patient = formatPatientNameWithContractTag(
     appointment.patientName,
@@ -231,12 +252,11 @@ function AppointmentBlock({ appointment }: { appointment: BoardAppointment }) {
 
   return (
     <div
-      className="absolute inset-x-1 z-10 overflow-hidden rounded-md border border-black/5 px-2 py-1.5 text-xs leading-5 shadow-sm"
-      style={{ top, height, background, color }}
-      title={`${appointment.counselorName} - ${patient}`}
+      className="min-h-7 truncate rounded-full border border-black/5 px-2 py-1 text-center text-xs font-medium leading-5 shadow-sm"
+      style={{ background, color }}
+      title={`${appointment.counselorName} - ${patient} ${timeText(appointment.startTime)}-${timeText(appointment.endTime)}`}
     >
-      <div className="font-semibold">{appointment.counselorName} - {patient}</div>
-      <div className="opacity-75">{timeText(appointment.startTime)}-{timeText(appointment.endTime)}</div>
+      {appointment.counselorName} - {patient}
     </div>
   );
 }
@@ -322,17 +342,19 @@ function buildBoardRooms(rooms: Room[], appointments: BoardAppointment[]): Board
       centerName: room.centerName,
       roomId: room.roomCode,
       roomName: room.name,
+      status: room.status || "AVAILABLE",
     }));
-  const result = [...physical];
-  if (appointments.some((item) => item.centerId === "video")) {
-    result.push({
+  const result = [
+    ...physical,
+    {
       key: "video:video",
       centerId: "video",
-      centerName: "视频咨询",
+      centerName: "线上咨询",
       roomId: "video",
       roomName: "视频咨询",
-    });
-  }
+      status: "AVAILABLE",
+    },
+  ];
   if (appointments.some((item) => !result.some((room) => room.key === appointmentRoomKey(item)))) {
     result.push({
       key: "unassigned:unassigned",
@@ -340,6 +362,7 @@ function buildBoardRooms(rooms: Room[], appointments: BoardAppointment[]): Board
       centerName: "其他",
       roomId: "unassigned",
       roomName: "未分配咨询室",
+      status: "AVAILABLE",
     });
   }
   return result;
@@ -349,6 +372,22 @@ function appointmentRoomKey(item: BoardAppointment) {
   if (item.centerId === "video") return "video:video";
   if (!item.centerId || !item.roomId) return "unassigned:unassigned";
   return `${item.centerId}:${item.roomId}`;
+}
+
+function appointmentOverlapsSlot(appointment: BoardAppointment, slotStart: number) {
+  const appointmentStart = minutesOfDay(appointment.startTime);
+  const appointmentEnd = minutesOfDay(appointment.endTime);
+  return appointmentStart < slotStart + SLOT_MINUTES && appointmentEnd > slotStart;
+}
+
+function roomSlotStatus(dayStatus: RoomDayStatus | undefined, room: BoardRoom, slotStart: number) {
+  if (room.centerId === "video" || room.centerId === "unassigned") return "AVAILABLE";
+  const roomStatus = dayStatus?.rooms.find(
+    (item) => item.centerId === room.centerId && item.roomCode === room.roomId,
+  );
+  return roomStatus?.slots.find((slot) => slot.timeSlot === formatMinutes(slotStart))?.status
+    || room.status
+    || "AVAILABLE";
 }
 
 function groupRooms(rooms: BoardRoom[]) {
@@ -373,6 +412,11 @@ function minutesOfDay(value?: string | null) {
   const time = String(value || "").slice(11, 16);
   const [hour, minute] = time.split(":").map(Number);
   return Number.isFinite(hour) && Number.isFinite(minute) ? hour * 60 + minute : START_MINUTES;
+}
+
+function minutesFromSlotLabel(value: string) {
+  const [hour, minute] = value.slice(0, 5).split(":").map(Number);
+  return hour * 60 + minute;
 }
 
 function formatMinutes(minutes: number) {

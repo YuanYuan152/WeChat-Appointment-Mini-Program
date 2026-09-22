@@ -8,9 +8,9 @@ import {
   type AppointmentBoardView,
 } from "@/panels/AppointmentBoardPanel";
 import { getLocalDateValue } from "@/lib/date";
-import { fetchRooms } from "@/services/rooms";
+import { fetchRoomDayStatus, fetchRooms } from "@/services/rooms";
 import { fetchScheduleOverview } from "@/services/schedules";
-import type { Room, ScheduleOverview } from "@/types/api";
+import type { Room, RoomDayStatus, ScheduleOverview } from "@/types/api";
 
 export function AppointmentBoardScreen() {
   return (
@@ -26,18 +26,21 @@ function AppointmentBoardScreenContent() {
   const [view, setView] = useState<AppointmentBoardView>("room");
   const [schedules, setSchedules] = useState<ScheduleOverview>();
   const [rooms, setRooms] = useState<Room[]>([]);
+  const [roomDayStatus, setRoomDayStatus] = useState<RoomDayStatus>();
   const [loading, setLoading] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     clearNotice();
     try {
-      const [nextSchedules, nextRooms] = await Promise.all([
+      const [nextSchedules, nextRooms, nextRoomDayStatus] = await Promise.all([
         fetchScheduleOverview("", date, true),
         fetchRooms(),
+        fetchRoomDayStatus(date),
       ]);
       setSchedules(nextSchedules);
       setRooms(nextRooms);
+      setRoomDayStatus(nextRoomDayStatus);
     } catch (error) {
       showNotice("error", error instanceof Error ? error.message : "预约看板加载失败");
     } finally {
@@ -57,6 +60,7 @@ function AppointmentBoardScreenContent() {
       setView={setView}
       schedules={schedules}
       rooms={rooms}
+      roomDayStatus={roomDayStatus}
       loading={loading}
       onRefresh={() => void loadData()}
     />
