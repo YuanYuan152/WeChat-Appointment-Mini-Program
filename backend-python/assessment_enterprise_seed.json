@@ -1,0 +1,48 @@
+[
+  {
+    "schemaVersion": 1,
+    "id": "zhongjian-onboarding",
+    "version": 1,
+    "status": "published",
+    "category": "professional",
+    "visibility": "private",
+    "title": "中建新员工入职综合测评",
+    "subtitle": "心理健康、工作适应、社会支持与睡眠综合评估",
+    "description": "由广厦心安为中建新员工提供的企业专属综合测评。",
+    "instructions": "请根据最近一个月的真实感受和工作情况作答。",
+    "cover": "/images/assessment-zhongjian.jpg",
+    "duration": 20,
+    "sortOrder": 0,
+    "scoringType": "sum",
+    "scoringPreset": "generic-sum-v2",
+    "questions": [
+      {"id":"scl90-1","text":"感到紧张或容易紧张","required":true,"options":[{"id":"scl90-1-a","text":"从无","value":1},{"id":"scl90-1-b","text":"轻度","value":2},{"id":"scl90-1-c","text":"中度","value":3},{"id":"scl90-1-d","text":"偏重","value":4},{"id":"scl90-1-e","text":"严重","value":5}]},
+      {"id":"scl90-2","text":"感到与他人格格不入，缺少支持","required":true,"options":[{"id":"scl90-2-a","text":"从无","value":1},{"id":"scl90-2-b","text":"轻度","value":2},{"id":"scl90-2-c","text":"中度","value":3},{"id":"scl90-2-d","text":"偏重","value":4},{"id":"scl90-2-e","text":"严重","value":5}]},
+      {"id":"scl90-3","text":"容易担忧一些琐碎的事","required":true,"options":[{"id":"scl90-3-a","text":"从无","value":1},{"id":"scl90-3-b","text":"轻度","value":2},{"id":"scl90-3-c","text":"中度","value":3},{"id":"scl90-3-d","text":"偏重","value":4},{"id":"scl90-3-e","text":"严重","value":5}]},
+      {"id":"scl90-4","text":"感到做事困难，注意力不集中","required":true,"options":[{"id":"scl90-4-a","text":"从无","value":1},{"id":"scl90-4-b","text":"轻度","value":2},{"id":"scl90-4-c","text":"中度","value":3},{"id":"scl90-4-d","text":"偏重","value":4},{"id":"scl90-4-e","text":"严重","value":5}]},
+      {"id":"scl90-5","text":"入睡困难或睡眠质量差","required":true,"options":[{"id":"scl90-5-a","text":"从无","value":1},{"id":"scl90-5-b","text":"轻度","value":2},{"id":"scl90-5-c","text":"中度","value":3},{"id":"scl90-5-d","text":"偏重","value":4},{"id":"scl90-5-e","text":"严重","value":5}]},
+      {"id":"scl90-6","text":"感到疲乏无力","required":true,"options":[{"id":"scl90-6-a","text":"从无","value":1},{"id":"scl90-6-b","text":"轻度","value":2},{"id":"scl90-6-c","text":"中度","value":3},{"id":"scl90-6-d","text":"偏重","value":4},{"id":"scl90-6-e","text":"严重","value":5}]},
+      {"id":"mbti-1","text":"你通常从哪种方式获得能量？","required":true,"options":[{"id":"mbti-1-a","text":"与人交流","value":1},{"id":"mbti-1-b","text":"独处充电","value":2}]},
+      {"id":"mbti-2","text":"你更关注哪类信息？","required":true,"options":[{"id":"mbti-2-a","text":"事实和细节","value":1},{"id":"mbti-2-b","text":"可能性与整体图景","value":2}]},
+      {"id":"mbti-3","text":"你做决定时更倾向于？","required":true,"options":[{"id":"mbti-3-a","text":"逻辑分析","value":1},{"id":"mbti-3-b","text":"考虑对人的影响","value":2}]},
+      {"id":"mbti-4","text":"你更喜欢哪种工作方式？","required":true,"options":[{"id":"mbti-4-a","text":"明确计划和结论","value":1},{"id":"mbti-4-b","text":"保持开放和灵活","value":2}]},
+      {"id":"adapt-1","text":"我对未来 3 个月的工作内容有比较清晰的了解","required":true,"options":[{"id":"adapt-1-a","text":"完全不同意","value":1},{"id":"adapt-1-b","text":"不太同意","value":2},{"id":"adapt-1-c","text":"一般","value":3},{"id":"adapt-1-d","text":"比较同意","value":4},{"id":"adapt-1-e","text":"完全同意","value":5}]},
+      {"id":"adapt-2","text":"我认为我目前的岗位与我的能力和兴趣相匹配","required":true,"options":[{"id":"adapt-2-a","text":"完全不同意","value":1},{"id":"adapt-2-b","text":"不太同意","value":2},{"id":"adapt-2-c","text":"一般","value":3},{"id":"adapt-2-d","text":"比较同意","value":4},{"id":"adapt-2-e","text":"完全同意","value":5}]},
+      {"id":"adapt-3","text":"我能适应项目部或工作现场的工作节奏","required":true,"options":[{"id":"adapt-3-a","text":"完全不同意","value":1},{"id":"adapt-3-b","text":"不太同意","value":2},{"id":"adapt-3-c","text":"一般","value":3},{"id":"adapt-3-d","text":"比较同意","value":4},{"id":"adapt-3-e","text":"完全同意","value":5}]},
+      {"id":"adapt-4","text":"我与同事的沟通与协作比较顺畅","required":true,"options":[{"id":"adapt-4-a","text":"完全不同意","value":1},{"id":"adapt-4-b","text":"不太同意","value":2},{"id":"adapt-4-c","text":"一般","value":3},{"id":"adapt-4-d","text":"比较同意","value":4},{"id":"adapt-4-e","text":"完全同意","value":5}]},
+      {"id":"adapt-5","text":"我可以从领导那里获得必要的指导","required":true,"options":[{"id":"adapt-5-a","text":"完全不同意","value":1},{"id":"adapt-5-b","text":"不太同意","value":2},{"id":"adapt-5-c","text":"一般","value":3},{"id":"adapt-5-d","text":"比较同意","value":4},{"id":"adapt-5-e","text":"完全同意","value":5}]},
+      {"id":"ssrs-1","text":"我能获得来自家人的情感支持","required":true,"options":[{"id":"ssrs-1-a","text":"完全没有","value":1},{"id":"ssrs-1-b","text":"很少","value":2},{"id":"ssrs-1-c","text":"一般","value":3},{"id":"ssrs-1-d","text":"较多","value":4},{"id":"ssrs-1-e","text":"非常多","value":5}]},
+      {"id":"ssrs-2","text":"我能获得来自密友或同事的倾听与理解","required":true,"options":[{"id":"ssrs-2-a","text":"完全没有","value":1},{"id":"ssrs-2-b","text":"很少","value":2},{"id":"ssrs-2-c","text":"一般","value":3},{"id":"ssrs-2-d","text":"较多","value":4},{"id":"ssrs-2-e","text":"非常多","value":5}]},
+      {"id":"ssrs-3","text":"我能获得来自单位或领导的关心与照顾","required":true,"options":[{"id":"ssrs-3-a","text":"完全没有","value":1},{"id":"ssrs-3-b","text":"很少","value":2},{"id":"ssrs-3-c","text":"一般","value":3},{"id":"ssrs-3-d","text":"较多","value":4},{"id":"ssrs-3-e","text":"非常多","value":5}]},
+      {"id":"ssrs-4","text":"需要时我能获得专业机构的帮助","required":true,"options":[{"id":"ssrs-4-a","text":"完全没有","value":1},{"id":"ssrs-4-b","text":"很少","value":2},{"id":"ssrs-4-c","text":"一般","value":3},{"id":"ssrs-4-d","text":"较多","value":4},{"id":"ssrs-4-e","text":"非常多","value":5}]},
+      {"id":"psqi-1","text":"你对整体睡眠质量的评价","required":true,"options":[{"id":"psqi-1-a","text":"很好","value":1},{"id":"psqi-1-b","text":"较好","value":2},{"id":"psqi-1-c","text":"较差","value":3},{"id":"psqi-1-d","text":"很差","value":4}]},
+      {"id":"psqi-2","text":"你通常入睡所需时间的情况","required":true,"options":[{"id":"psqi-2-a","text":"很好","value":1},{"id":"psqi-2-b","text":"较好","value":2},{"id":"psqi-2-c","text":"较差","value":3},{"id":"psqi-2-d","text":"很差","value":4}]},
+      {"id":"psqi-3","text":"你每晚实际睡眠时长的情况","required":true,"options":[{"id":"psqi-3-a","text":"很好","value":1},{"id":"psqi-3-b","text":"较好","value":2},{"id":"psqi-3-c","text":"较差","value":3},{"id":"psqi-3-d","text":"很差","value":4}]},
+      {"id":"psqi-4","text":"你白天精神状态与工作效率的情况","required":true,"options":[{"id":"psqi-4-a","text":"很好","value":1},{"id":"psqi-4-b","text":"较好","value":2},{"id":"psqi-4-c","text":"较差","value":3},{"id":"psqi-4-d","text":"很差","value":4}]}
+    ],
+    "scoreRanges": [
+      {"min":0,"max":999,"level":"综合测评结果","description":"你的综合测评已完成，请结合专业人员反馈理解结果。","suggestions":["保持规律作息","遇到困扰时及时寻求支持"]}
+    ],
+    "disclaimer": "本测评结果仅供企业 EAP 健康支持参考，不能替代专业诊断。"
+  }
+]

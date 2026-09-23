@@ -46,6 +46,7 @@ export type SectionId =
   | "systemFeedback"
   | "content"
   | "assessments"
+  | "assessmentEnterprises"
   | "assessmentReports"
   | "appointmentBoard"
   | "schedules"

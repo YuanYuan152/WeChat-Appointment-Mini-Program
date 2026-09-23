@@ -32,6 +32,7 @@ from assessment_routes import (
 )
 from assessment_report_routes import web_report_router as assessment_report_router
 from assessment_share_routes import router as assessment_share_router
+from assessment_enterprise_routes import public_router as assessment_enterprise_public_router
 from config import settings
 from database import engine
 from runtime_safety import (
@@ -181,6 +182,7 @@ app.include_router(web_auth_router)
 app.include_router(assessment_public_router)
 app.include_router(assessment_report_router)
 app.include_router(assessment_share_router)
+app.include_router(assessment_enterprise_public_router)
 
 
 @app.get("/health/live", include_in_schema=False)

@@ -584,6 +584,25 @@ function BasicFields({
         </div>
       </EditorSection>
 
+      <EditorSection
+        description="公开量表会展示给所有大众来访；私有量表仅可通过“企业定制”中已授权的企业专属链接访问。"
+        title="权限设置"
+      >
+        <QueryField label="访问权限" required>
+          <select
+            className={`${queryControlClass} max-w-sm`}
+            disabled={disabled}
+            value={definition.visibility || "public"}
+            onChange={(event) =>
+              patch({ visibility: event.target.value as AssessmentDefinition["visibility"] })
+            }
+          >
+            <option value="public">公开</option>
+            <option value="private">私有</option>
+          </select>
+        </QueryField>
+      </EditorSection>
+
       <EditorSection description="这些内容会显示在 EAP 量表列表和答题引导页。" title="展示信息">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <QueryField className="md:col-span-2" label="量表名称" required>

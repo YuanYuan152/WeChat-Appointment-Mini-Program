@@ -349,6 +349,23 @@ export interface Article {
   createdAt?: string | null;
 }
 
+export interface AssessmentEnterprise {
+  id: string;
+  companyName: string;
+  url: string;
+  slug: string;
+  assessmentIds: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PrivateAssessmentOption {
+  id: string;
+  title: string;
+  status: string;
+  visibility: "private";
+}
+
 export interface ScheduleItem {
   scheduleId: number;
   consultationId?: number | null;

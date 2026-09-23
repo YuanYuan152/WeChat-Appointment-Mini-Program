@@ -68,6 +68,7 @@ def get_assessment_store() -> AssessmentDefinitionStore:
             / "scale-guidance.ts"
         ),
         report_profiles_file=backend_dir / "assessment_seed_report_profiles.json",
+        enterprise_seed_file=backend_dir / "assessment_enterprise_seed.json",
     )
 
 
@@ -158,6 +159,8 @@ def list_published_assessments(
 def get_published_assessment(assessment_id: str):
     try:
         result = get_assessment_store().get_published(assessment_id)
+        if result["definition"].get("visibility", "public") != "public":
+            raise AssessmentNotFound("量表不存在或未公开")
         try:
             result.update(public_share_info(assessment_id))
         except (AssessmentShareCodeError, AssessmentShareConfigurationError):

@@ -259,6 +259,7 @@ export function createDefaultAssessmentDefinition(
     version: 1,
     status: "draft",
     category: type === "match" ? "fun" : "professional",
+    visibility: "public",
     title: "",
     subtitle: "",
     description: "",

@@ -121,6 +121,7 @@ TOP_LEVEL_FIELDS = {
     "version",
     "status",
     "category",
+    "visibility",
     "title",
     "subtitle",
     "description",
@@ -423,6 +424,8 @@ def validate_definition(
         raise AssessmentValidationError("status 不合法")
     if definition.get("category") not in {"professional", "fun"}:
         raise AssessmentValidationError("category 不合法")
+    if definition.get("visibility", "public") not in {"public", "private"}:
+        raise AssessmentValidationError("visibility 仅支持 public 或 private")
     _assert_string(definition.get("title"), "title")
     _assert_string(definition.get("subtitle"), "subtitle", allow_empty=True)
     _assert_string(definition.get("description"), "description", allow_empty=True)
@@ -817,6 +820,7 @@ class AssessmentDefinitionStore:
         seed_data_dir: Optional[Path | str] = None,
         guidance_file: Optional[Path | str] = None,
         report_profiles_file: Optional[Path | str] = None,
+        enterprise_seed_file: Optional[Path | str] = None,
     ) -> None:
         self.data_dir = Path(data_dir)
         self.seed_data_dir = Path(seed_data_dir) if seed_data_dir else None
@@ -824,6 +828,7 @@ class AssessmentDefinitionStore:
         self.report_profiles_file = (
             Path(report_profiles_file) if report_profiles_file else None
         )
+        self.enterprise_seed_file = Path(enterprise_seed_file) if enterprise_seed_file else None
         self.index_path = self.data_dir / "index.json"
         self.drafts_dir = self.data_dir / "drafts"
         self.published_dir = self.data_dir / "published"
@@ -909,15 +914,14 @@ class AssessmentDefinitionStore:
     def ensure_seeded(self) -> None:
         with self._write_lock():
             index = self._read_index()
-            if index["assessments"]:
-                return
-            if not self.seed_data_dir:
-                self._write_index(index)
-                return
-            definitions = self._load_seed_definitions()
             now = _utc_now()
-            for sort_order, definition in enumerate(definitions):
+            changed = False
+            definitions = self._load_seed_definitions() if not index["assessments"] and self.seed_data_dir else []
+            enterprise_definitions = self._load_enterprise_seed_definitions()
+            for sort_order, definition in enumerate([*definitions, *enterprise_definitions]):
                 assessment_id = definition["id"]
+                if assessment_id in index["assessments"]:
+                    continue
                 definition["sortOrder"] = sort_order
                 definition["createdAt"] = now
                 definition["updatedAt"] = now
@@ -932,7 +936,17 @@ class AssessmentDefinitionStore:
                     draft_version=None,
                     draft_revision=None,
                 )
-            self._write_index(index)
+                changed = True
+            if changed or not self.index_path.exists():
+                self._write_index(index)
+
+    def _load_enterprise_seed_definitions(self) -> list[dict[str, Any]]:
+        if not self.enterprise_seed_file or not self.enterprise_seed_file.exists():
+            return []
+        values = _load_json(self.enterprise_seed_file)
+        if not isinstance(values, list):
+            raise AssessmentDefinitionError("企业私有量表种子必须是数组")
+        return [copy.deepcopy(_assert_object(value, "enterprise assessment seed")) for value in values]
 
     def _load_seed_definitions(self) -> list[dict[str, Any]]:
         if not self.seed_data_dir:
@@ -1022,6 +1036,7 @@ class AssessmentDefinitionStore:
         return {
             "id": definition["id"],
             "category": definition["category"],
+            "visibility": definition.get("visibility", "public"),
             "title": definition["title"],
             "status": status,
             "sortOrder": definition.get("sortOrder", 0),
@@ -1038,6 +1053,7 @@ class AssessmentDefinitionStore:
             "id": definition["id"],
             "version": definition["version"],
             "category": definition["category"],
+            "visibility": definition.get("visibility", "public"),
             "title": definition["title"],
             "subtitle": definition["subtitle"],
             "description": definition["description"],
@@ -1069,6 +1085,8 @@ class AssessmentDefinitionStore:
             definition = _load_json(
                 self._published_path(entry["id"], int(entry["publishedVersion"]))
             )
+            if definition.get("visibility", "public") != "public":
+                continue
             if normalized_keyword and normalized_keyword not in (
                 f"{definition.get('title', '')} {definition.get('subtitle', '')}"
             ).casefold():
@@ -1085,6 +1103,7 @@ class AssessmentDefinitionStore:
         definition = _load_json(
             self._published_path(assessment_id, int(entry["publishedVersion"]))
         )
+        definition.setdefault("visibility", "public")
         return {
             "definition": definition,
             "questionCount": len(definition["questions"]),
@@ -1165,10 +1184,14 @@ class AssessmentDefinitionStore:
 
     def _editable_definition(self, entry: dict[str, Any]) -> dict[str, Any]:
         if entry.get("draftVersion") and self._draft_path(entry["id"]).exists():
-            return _load_json(self._draft_path(entry["id"]))
+            definition = _load_json(self._draft_path(entry["id"]))
+            definition.setdefault("visibility", "public")
+            return definition
         published_version = entry.get("publishedVersion")
         if published_version:
-            return _load_json(self._published_path(entry["id"], int(published_version)))
+            definition = _load_json(self._published_path(entry["id"], int(published_version)))
+            definition.setdefault("visibility", "public")
+            return definition
         raise AssessmentNotFound("量表定义不存在")
 
     def get_admin(self, assessment_id: str) -> dict[str, Any]:
@@ -1189,6 +1212,7 @@ class AssessmentDefinitionStore:
     def create_draft(self, definition: dict[str, Any]) -> dict[str, Any]:
         self.ensure_seeded()
         draft = copy.deepcopy(definition)
+        draft.setdefault("visibility", "public")
         now = _utc_now()
         draft["version"] = 1
         draft["status"] = "draft"
@@ -1233,6 +1257,7 @@ class AssessmentDefinitionStore:
             if definition.get("id") != assessment_id:
                 raise AssessmentValidationError("量表 ID 发布后不可修改")
             draft = copy.deepcopy(definition)
+            draft.setdefault("visibility", "public")
             draft_version = int(entry.get("publishedVersion") or 0) + 1
             if entry.get("draftVersion"):
                 draft_version = int(entry["draftVersion"])
@@ -1278,6 +1303,7 @@ class AssessmentDefinitionStore:
             if not draft_path.exists():
                 raise AssessmentDefinitionError("量表草稿文件缺失")
             draft = _load_json(draft_path)
+            draft.setdefault("visibility", "public")
             current_revision = definition_revision(draft)
             if expected_revision != current_revision:
                 raise AssessmentConflict("量表已被其他管理员修改，请刷新后重试")

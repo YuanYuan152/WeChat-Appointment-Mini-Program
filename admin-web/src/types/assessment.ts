@@ -1,4 +1,5 @@
 export type AssessmentCategory = "professional" | "fun";
+export type AssessmentVisibility = "public" | "private";
 
 export type AssessmentDefinitionStatus = "draft" | "published" | "archived";
 
@@ -120,6 +121,7 @@ export interface AssessmentDefinition {
   version: number;
   status: AssessmentDefinitionStatus;
   category: AssessmentCategory;
+  visibility?: AssessmentVisibility;
   title: string;
   subtitle: string;
   description: string;
@@ -154,6 +156,7 @@ export interface AssessmentVersionSummary {
 export interface AssessmentListItem {
   id: string;
   category: AssessmentCategory;
+  visibility: AssessmentVisibility;
   title: string;
   status: AssessmentLifecycleStatus;
   sortOrder: number;

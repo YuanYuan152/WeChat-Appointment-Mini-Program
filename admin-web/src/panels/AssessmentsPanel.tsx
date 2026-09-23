@@ -183,6 +183,7 @@ export function AssessmentsPanel({
                     <tr>
                       <th className="px-5 py-3 font-medium">量表</th>
                       <th className="px-5 py-3 font-medium">类型</th>
+                      <th className="px-5 py-3 font-medium">权限</th>
                       <th className="px-5 py-3 font-medium">状态</th>
                       <th className="px-5 py-3 font-medium">内容</th>
                       <th className="px-5 py-3 font-medium">使用数据</th>
@@ -214,6 +215,11 @@ export function AssessmentsPanel({
                             )}
                           </td>
                           <td className="px-5 py-4">{categoryLabel(item.category)}</td>
+                          <td className="px-5 py-4">
+                            <Badge tone={item.visibility === "private" ? "gold" : "green"}>
+                              {item.visibility === "private" ? "私有" : "公开"}
+                            </Badge>
+                          </td>
                           <td className="px-5 py-4">
                             <Badge tone={statusTone(effectiveStatus)}>
                               {statusLabel(effectiveStatus)}
