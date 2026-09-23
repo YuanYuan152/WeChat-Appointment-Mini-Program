@@ -20,6 +20,7 @@ from proxy_booking_service import (
     build_proxy_slot_options,
     cancel_proxy_order_push,
     expire_pending_proxy_orders,
+    preview_proxy_order_fee,
     push_proxy_order,
     search_proxy_counselors,
     search_proxy_patients,
@@ -166,6 +167,25 @@ def proxy_slot_options(
         "centerName": center_display_name(center_id) or center_id,
         "slots": slots,
     }
+
+
+@router.get("/preview-fee", summary="预览代理预约推送金额")
+def proxy_preview_fee(
+    patient_id: int = Query(...),
+    counselor_id: int = Query(...),
+    is_free_experience_order: bool = Query(False),
+    _staff: AppAccount = Depends(require_staff_workbench),
+    db: Session = Depends(get_db),
+):
+    try:
+        return preview_proxy_order_fee(
+            db,
+            patient_id=patient_id,
+            counselor_id=counselor_id,
+            is_free_experience_order=is_free_experience_order,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post("/push-order", summary="推送代理预约订单（待来访支付）")

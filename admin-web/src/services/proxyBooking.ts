@@ -47,6 +47,25 @@ export function fetchProxySlotOptions(input: { counselorId: number; date: string
   return apiRequest<ProxySlotOptions>(`${BASE_PATH}/slot-options?${params.toString()}`);
 }
 
+export function fetchProxyPreviewFee(input: {
+  patientId: number;
+  counselorId: number;
+  isFreeExperienceOrder?: boolean;
+}) {
+  const params = new URLSearchParams({
+    patient_id: String(input.patientId),
+    counselor_id: String(input.counselorId),
+    is_free_experience_order: input.isFreeExperienceOrder ? "true" : "false",
+  });
+  return apiRequest<{
+    totalFee: number;
+    totalFeeYuan: number;
+    isFreeOrder: boolean;
+    isFreeExperienceOrder?: boolean;
+    feeLabel: string;
+  }>(`${BASE_PATH}/preview-fee?${params.toString()}`);
+}
+
 export function pushProxyOrder(input: {
   patientId: number;
   counselorId: number;

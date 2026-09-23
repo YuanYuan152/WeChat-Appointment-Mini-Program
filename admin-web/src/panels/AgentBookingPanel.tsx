@@ -18,6 +18,7 @@ import {
   patientContractTag,
 } from "@/lib/patientContract";
 import { BindCounselorModal } from "@/panels/UserBoardPanel";
+import { fetchProxyPreviewFee } from "@/services/proxyBooking";
 import type {
   ProxyPersonOption,
   ProxyPushOrderResult,
@@ -776,6 +777,10 @@ function ProxyBookingModal({
   onClose: () => void;
 }) {
   const [submitting, setSubmitting] = useState(false);
+  const [feeLoading, setFeeLoading] = useState(false);
+  const [feeLabel, setFeeLabel] = useState("");
+  const [feeError, setFeeError] = useState("");
+  const feeRequestSeq = useRef(0);
   const needsRoom = draft.centerId !== "video";
   const canSubmit = Boolean(
     patient &&
@@ -790,6 +795,37 @@ function ProxyBookingModal({
       (patient?.isContractSigned || draft.agreementType !== null) &&
       (!needsRoom || (selectedRoom?.available && !selectedRoom.occupiedByOther)),
   );
+
+  useEffect(() => {
+    if (!patient?.id || !counselor?.id) {
+      setFeeLabel("");
+      setFeeError("请先选择来访与咨询师");
+      setFeeLoading(false);
+      return;
+    }
+    const requestSeq = feeRequestSeq.current + 1;
+    feeRequestSeq.current = requestSeq;
+    setFeeLoading(true);
+    setFeeError("");
+    void fetchProxyPreviewFee({
+      patientId: patient.id,
+      counselorId: counselor.id,
+      isFreeExperienceOrder: draft.isFreeExperienceOrder,
+    })
+      .then((result) => {
+        if (feeRequestSeq.current !== requestSeq) return;
+        setFeeLabel(result.feeLabel || (result.isFreeOrder ? "免费" : formatMoneyFromCents(result.totalFee)));
+        setFeeError("");
+      })
+      .catch((error) => {
+        if (feeRequestSeq.current !== requestSeq) return;
+        setFeeLabel("");
+        setFeeError(error instanceof Error ? error.message : "金额计算失败");
+      })
+      .finally(() => {
+        if (feeRequestSeq.current === requestSeq) setFeeLoading(false);
+      });
+  }, [patient?.id, counselor?.id, draft.isFreeExperienceOrder]);
 
   const handlePush = async () => {
     if (!selectedSlot || !canSubmit) {
@@ -1030,6 +1066,20 @@ function ProxyBookingModal({
               )}
             </div>
           )}
+
+          <div className="mt-5 rounded-xl border border-[#D1E7DD] bg-[#F4FBF7] px-4 py-4">
+            <div className="text-sm font-medium text-[var(--lxxl-ink)]">推送金额</div>
+            <div
+              className={`mt-2 text-2xl font-semibold ${
+                feeLabel === "免费" ? "text-[#B45309]" : "text-[var(--lxxl-green-dark)]"
+              }`}
+            >
+              {feeLoading ? "计算中..." : feeError || feeLabel || "—"}
+            </div>
+            <p className="mt-2 text-xs leading-5 text-[var(--lxxl-muted)]">
+              按当前来访与绑定咨询师的定价计算；勾选免费体验单后为 0 元。
+            </p>
+          </div>
         </div>
 
         <div className="flex justify-start gap-3 border-t border-[var(--lxxl-border)] px-6 py-4">

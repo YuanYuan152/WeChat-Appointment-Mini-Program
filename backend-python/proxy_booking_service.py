@@ -848,3 +848,32 @@ def push_proxy_order(
         ),
         "proxyOrderTtlMinutes": ttl_minutes,
     }
+
+
+def preview_proxy_order_fee(
+    db: Session,
+    *,
+    patient_id: int,
+    counselor_id: int,
+    is_free_experience_order: bool = False,
+) -> Dict[str, Any]:
+    """推送前预览应付金额（与 push_proxy_order 计费口径一致）。"""
+    if is_free_experience_order:
+        total_fee = 0
+    else:
+        total_fee = int(resolve_display_price_cents(db, patient_id, counselor_id) or 0)
+    is_free = total_fee <= 0
+    yuan = total_fee / 100
+    if is_free:
+        fee_label = "免费"
+    elif yuan == int(yuan):
+        fee_label = f"¥{int(yuan)}"
+    else:
+        fee_label = f"¥{yuan:.2f}".rstrip("0").rstrip(".")
+    return {
+        "totalFee": total_fee,
+        "totalFeeYuan": yuan,
+        "isFreeOrder": is_free,
+        "isFreeExperienceOrder": bool(is_free_experience_order),
+        "feeLabel": fee_label,
+    }

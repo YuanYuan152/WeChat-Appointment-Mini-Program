@@ -2245,6 +2245,26 @@ def counselor_proxy_slot_options(
     }
 
 
+@router.get("/proxy-booking/preview-fee", summary="预览代理预约推送金额")
+def counselor_proxy_preview_fee(
+    patient_id: int = Query(...),
+    is_free_experience_order: bool = Query(False),
+    counselor: AppAccount = Depends(require_counselor),
+    db: Session = Depends(get_db),
+):
+    from proxy_booking_service import preview_proxy_order_fee
+
+    try:
+        return preview_proxy_order_fee(
+            db,
+            patient_id=patient_id,
+            counselor_id=counselor.Id,
+            is_free_experience_order=is_free_experience_order,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.post("/proxy-booking/push-order", summary="推送代理预约订单（待来访支付）")
 def counselor_proxy_push_order(
     body: CounselorProxyPushOrderRequest,

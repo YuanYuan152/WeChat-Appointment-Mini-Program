@@ -348,6 +348,16 @@
             <view v-else class="form-item video-center-hint">
               <text class="video-hint-text">视频咨询无需选择咨询室</text>
             </view>
+
+            <view v-if="proxySelectedPatient" class="form-item push-fee-card">
+              <text class="form-label">推送金额</text>
+              <text v-if="proxyFeeLoading" class="push-fee-value muted">计算中...</text>
+              <text v-else-if="proxyFeeError" class="push-fee-value muted">{{ proxyFeeError }}</text>
+              <text v-else class="push-fee-value" :class="{ free: proxyFeeIsFree }">
+                {{ proxyFeeLabel || '—' }}
+              </text>
+              <text class="form-hint">按当前来访与您的定价计算</text>
+            </view>
           </view>
           </scroll-view>
 
@@ -647,6 +657,11 @@ const proxyPatientSuggestions = ref<ProxyPatientItem[]>([])
 const proxySelectedPatient = ref<ProxyPatientItem | null>(null)
 const showProxyPatientDropdown = ref(false)
 const proxySubmitting = ref(false)
+const proxyFeeLoading = ref(false)
+const proxyFeeLabel = ref('')
+const proxyFeeIsFree = ref(false)
+const proxyFeeError = ref('')
+let proxyFeeRequestSeq = 0
 const proxySlotOptionsLoading = ref(false)
 const proxyTimeSlotOptions = ref<ProxyTimeSlotOpt[]>([])
 let proxyPatientSearchTimer: ReturnType<typeof setTimeout> | null = null
@@ -1167,6 +1182,9 @@ const onProxyPatientInput = (e: { detail: { value: string } }) => {
   proxyPatientKeyword.value = e.detail.value
   if (proxySelectedPatient.value && e.detail.value !== proxySelectedPatient.value.name) {
     proxySelectedPatient.value = null
+    proxyFeeLabel.value = ''
+    proxyFeeIsFree.value = false
+    proxyFeeError.value = ''
   }
   showProxyPatientDropdown.value = true
   if (proxyPatientSearchTimer) clearTimeout(proxyPatientSearchTimer)
@@ -1177,6 +1195,48 @@ const selectProxyPatient = (p: ProxyPatientItem) => {
   proxySelectedPatient.value = p
   proxyPatientKeyword.value = p.name
   showProxyPatientDropdown.value = false
+  void loadProxyPushFee()
+}
+
+const loadProxyPushFee = async () => {
+  const patient = proxySelectedPatient.value
+  if (!patient) {
+    proxyFeeLabel.value = ''
+    proxyFeeIsFree.value = false
+    proxyFeeError.value = ''
+    return
+  }
+  const requestSeq = ++proxyFeeRequestSeq
+  proxyFeeLoading.value = true
+  proxyFeeError.value = ''
+  try {
+    const res = await httpV2.get<{
+      totalFee?: number
+      feeLabel?: string
+      isFreeOrder?: boolean
+    }>(
+      API_ENDPOINTS.counselor.proxyBookingPreviewFee,
+      { patient_id: patient.id },
+      { showLoading: false },
+    )
+    if (requestSeq !== proxyFeeRequestSeq) return
+    if (res.code !== 0 || !res.data) {
+      proxyFeeLabel.value = ''
+      proxyFeeIsFree.value = false
+      proxyFeeError.value = res.msg || '金额计算失败'
+      return
+    }
+    proxyFeeLabel.value = res.data.feeLabel || (res.data.isFreeOrder ? '免费' : '—')
+    proxyFeeIsFree.value = Boolean(res.data.isFreeOrder || (res.data.totalFee != null && res.data.totalFee <= 0))
+    proxyFeeError.value = ''
+  } catch (e: unknown) {
+    if (requestSeq !== proxyFeeRequestSeq) return
+    proxyFeeLabel.value = ''
+    proxyFeeIsFree.value = false
+    proxyFeeError.value = e instanceof Error ? e.message : '金额计算失败'
+  } finally {
+    if (requestSeq === proxyFeeRequestSeq) proxyFeeLoading.value = false
+  }
 }
 
 const isProxyPatientEligible = (p: ProxyPatientItem | null) => {
@@ -1755,6 +1815,27 @@ defineExpose({ refresh, focusScheduleId, applyListFilter, getUnrecordedCount })
 .video-hint-text {
   display: block; font-size: 26rpx; color: #6B7280; line-height: 1.6;
   background: #F0FDFA; border-radius: 12rpx; padding: 20rpx;
+}
+.push-fee-card {
+  margin-top: 8rpx;
+  padding: 24rpx;
+  border-radius: 16rpx;
+  background: #F4FBF7;
+  border: 1rpx solid #D1E7DD;
+}
+.push-fee-value {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 40rpx;
+  font-weight: 700;
+  color: #1F4034;
+  line-height: 1.3;
+}
+.push-fee-value.free { color: #B45309; }
+.push-fee-value.muted {
+  font-size: 26rpx;
+  font-weight: 500;
+  color: #6B7280;
 }
 .center-row { display: flex; gap: 16rpx; flex-wrap: wrap; }
 .center-chip, .slot-chip {

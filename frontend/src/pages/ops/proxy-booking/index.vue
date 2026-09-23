@@ -326,6 +326,16 @@
                 />
               </view>
             </view>
+
+            <view class="form-item push-fee-card">
+              <text class="form-label">推送金额</text>
+              <text v-if="pushFeeLoading" class="push-fee-value muted">计算中...</text>
+              <text v-else-if="pushFeeError" class="push-fee-value muted">{{ pushFeeError }}</text>
+              <text v-else class="push-fee-value" :class="{ free: pushFeeIsFree }">
+                {{ pushFeeLabel || '—' }}
+              </text>
+              <text class="form-hint">按当前来访与绑定咨询师的定价计算；勾选免费体验单后为 0 元</text>
+            </view>
           </view>
         </scroll-view>
 
@@ -496,6 +506,11 @@ const showAdd = ref(false)
 const submitting = ref(false)
 const slotOptionsLoading = ref(false)
 const timeSlotOptions = ref<TimeSlotOption[]>([])
+const pushFeeLoading = ref(false)
+const pushFeeLabel = ref('')
+const pushFeeIsFree = ref(false)
+const pushFeeError = ref('')
+let pushFeeRequestSeq = 0
 
 const minDate = computed(() => formatDateLocal())
 const maxDate = computed(() => addDays(minDate.value, ROLLING_WINDOW_DAYS - 1))
@@ -949,6 +964,53 @@ const openAddModal = () => {
   }
   showAdd.value = true
   loadSlotOptions()
+  void loadPushFee()
+}
+
+const loadPushFee = async () => {
+  const patient = selectedPatient.value
+  const counselor = selectedCounselor.value
+  if (!patient || !counselor) {
+    pushFeeLabel.value = ''
+    pushFeeIsFree.value = false
+    pushFeeError.value = '请先选择来访与咨询师'
+    return
+  }
+  const requestSeq = ++pushFeeRequestSeq
+  pushFeeLoading.value = true
+  pushFeeError.value = ''
+  try {
+    const res = await httpV2.get<{
+      totalFee?: number
+      feeLabel?: string
+      isFreeOrder?: boolean
+    }>(
+      API_ENDPOINTS.admin.proxyBookingPreviewFee,
+      {
+        patient_id: patient.id,
+        counselor_id: counselor.id,
+        is_free_experience_order: form.value.isFreeExperienceOrder,
+      },
+      { showLoading: false },
+    )
+    if (requestSeq !== pushFeeRequestSeq) return
+    if (res.code !== 0 || !res.data) {
+      pushFeeLabel.value = ''
+      pushFeeIsFree.value = false
+      pushFeeError.value = res.msg || '金额计算失败'
+      return
+    }
+    pushFeeLabel.value = res.data.feeLabel || (res.data.isFreeOrder ? '免费' : '—')
+    pushFeeIsFree.value = Boolean(res.data.isFreeOrder || (res.data.totalFee != null && res.data.totalFee <= 0))
+    pushFeeError.value = ''
+  } catch (e: unknown) {
+    if (requestSeq !== pushFeeRequestSeq) return
+    pushFeeLabel.value = ''
+    pushFeeIsFree.value = false
+    pushFeeError.value = e instanceof Error ? e.message : '金额计算失败'
+  } finally {
+    if (requestSeq === pushFeeRequestSeq) pushFeeLoading.value = false
+  }
 }
 
 const onCenterChange = (id: string) => {
@@ -988,6 +1050,7 @@ const onFreeExperienceChange = (e: { detail: { value: boolean } }) => {
   if (!e.detail.value) {
     form.value.isFreeExperienceOrder = false
     form.value.freeOrderReason = ''
+    void loadPushFee()
     return
   }
   uni.showModal({
@@ -997,6 +1060,7 @@ const onFreeExperienceChange = (e: { detail: { value: boolean } }) => {
     success: ({ confirm }) => {
       form.value.isFreeExperienceOrder = confirm
       if (!confirm) form.value.freeOrderReason = ''
+      void loadPushFee()
     },
   })
 }
@@ -1489,6 +1553,33 @@ onLoad(async (opts) => {
   border-radius: 12rpx;
   background: #F9FAFB;
   font-size: 26rpx;
+}
+
+.push-fee-card {
+  margin-top: 8rpx;
+  padding: 24rpx;
+  border-radius: 16rpx;
+  background: #F4FBF7;
+  border: 1rpx solid #D1E7DD;
+}
+
+.push-fee-value {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 40rpx;
+  font-weight: 700;
+  color: #1F4034;
+  line-height: 1.3;
+}
+
+.push-fee-value.free {
+  color: #B45309;
+}
+
+.push-fee-value.muted {
+  font-size: 26rpx;
+  font-weight: 500;
+  color: #6B7280;
 }
 
 .center-row {
