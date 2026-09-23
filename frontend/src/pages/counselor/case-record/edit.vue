@@ -5,7 +5,7 @@
     </view>
 
     <view class="form-section">
-      <CaseRecordHeaderForm v-model="headerInfo" />
+      <CaseRecordHeaderForm v-model="headerInfo" :gender-readonly="genderFromPatient" />
     </view>
 
     <view class="form-section">
@@ -126,12 +126,18 @@ const mergeHeaderInfo = (
 
 const form = ref({ subjective: '', objective: '', assessment: '', plan: '' })
 const headerInfo = ref<CaseRecordHeaderInfo>(createEmptyHeaderInfo())
+const genderFromPatient = ref(false)
 const riskAssessment = ref<RiskAssessmentData>(createEmptyRiskAssessment())
 const saving = ref(false)
 const consultationId = ref(0)
 const recordId = ref(0)
 const isAmendment = ref(false)
 const amendReason = ref('')
+
+const applyHeaderInfo = (header: CaseRecordHeaderInfo) => {
+  headerInfo.value = header
+  genderFromPatient.value = !!String(header.gender || '').trim()
+}
 
 const loadFormDefaults = async (cid: number) => {
   if (!cid) return createEmptyHeaderInfo()
@@ -169,12 +175,12 @@ const loadExistingDraft = async (rid: number) => {
   riskAssessment.value = applyCalculatedCrisisLevel(normalizeRiskAssessment(res.data.RiskAssessment))
   if (res.data.ConsultationId) consultationId.value = res.data.ConsultationId
   if (headerInfoIsComplete(res.data.HeaderInfo)) {
-    headerInfo.value = normalizeHeaderInfo(res.data.HeaderInfo)
+    applyHeaderInfo(normalizeHeaderInfo(res.data.HeaderInfo))
   } else if (res.data.ConsultationId) {
     const defaults = await loadFormDefaults(res.data.ConsultationId)
-    headerInfo.value = mergeHeaderInfo(res.data.HeaderInfo, defaults)
+    applyHeaderInfo(mergeHeaderInfo(res.data.HeaderInfo, defaults))
   } else {
-    headerInfo.value = normalizeHeaderInfo(res.data.HeaderInfo)
+    applyHeaderInfo(normalizeHeaderInfo(res.data.HeaderInfo))
   }
 }
 
@@ -185,7 +191,7 @@ onLoad(async (opts) => {
   if (recordId.value) {
     await loadExistingDraft(recordId.value)
   } else if (consultationId.value) {
-    headerInfo.value = await loadFormDefaults(consultationId.value)
+    applyHeaderInfo(await loadFormDefaults(consultationId.value))
   }
 })
 

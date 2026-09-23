@@ -16,9 +16,9 @@
       </view>
 
       <view class="header-field">
-        <text class="field-label">性别<text v-if="required" class="required">*</text></text>
+        <text class="field-label">性别<text v-if="required && !genderReadonly" class="required">*</text></text>
         <input
-          v-if="!readonly"
+          v-if="!readonly && !genderReadonly"
           class="field-input"
           :value="modelValue.gender"
           placeholder="请填写"
@@ -97,11 +97,14 @@ const props = withDefaults(
     readonly?: boolean
     required?: boolean
     showTitle?: boolean
+    /** 来访者账号已有性别时只读展示，咨询师无需再填 */
+    genderReadonly?: boolean
   }>(),
   {
     readonly: false,
     required: true,
     showTitle: true,
+    genderReadonly: false,
   },
 )
 

@@ -287,6 +287,7 @@ function UserBoardScreenContent() {
     accountId: number,
     patientSource: string,
     patientSourceDetail: string,
+    gender: string,
   ) => {
     clearNotice();
     setSourceSavingAccountId(accountId);
@@ -295,6 +296,7 @@ function UserBoardScreenContent() {
         accountId,
         patientSource,
         patientSourceDetail,
+        gender,
       );
       setData((current) => ({
         ...current,
@@ -310,9 +312,9 @@ function UserBoardScreenContent() {
       setSelectedUserBoard((current) =>
         current && current.profile.id === accountId ? { ...current, profile } : current,
       );
-      showNotice("success", profile.patientSourceDetail ? "来访来源已保存" : "来访来源已清空");
+      showNotice("success", "来访信息已保存");
     } catch (error) {
-      showNotice("error", error instanceof Error ? error.message : "来访来源保存失败");
+      showNotice("error", error instanceof Error ? error.message : "来访信息保存失败");
       throw error;
     } finally {
       setSourceSavingAccountId(undefined);

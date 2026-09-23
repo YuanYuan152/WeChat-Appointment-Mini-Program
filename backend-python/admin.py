@@ -1957,7 +1957,7 @@ def get_admin_patient_detail(
         patientId=patient.Id,
         name=_admin_patient_name(patient),
         mobile=patient.Mobile,
-        gender=patient.Gender,
+        gender=_normalize_gender_value(patient.Gender) or patient.Gender,
         emergencyContact=patient.EmergencyContact,
         emergencyPhone=patient.EmergencyPhone,
         **_admin_patient_meta(patient),

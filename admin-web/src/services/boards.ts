@@ -63,10 +63,11 @@ export function updatePatientSourceDetail(
   accountId: number,
   patientSource: string,
   patientSourceDetail: string,
+  gender?: string | null,
 ) {
   return apiRequest<UserBoardSummary>(`${PATIENT_BOARD}/${accountId}/source`, {
     method: "PUT",
-    body: JSON.stringify({ patientSource, patientSourceDetail }),
+    body: JSON.stringify({ patientSource, patientSourceDetail, gender: gender ?? "" }),
   });
 }
 

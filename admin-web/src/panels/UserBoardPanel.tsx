@@ -82,6 +82,7 @@ export function UserBoardPanel({
     accountId: number,
     patientSource: string,
     patientSourceDetail: string,
+    gender: string,
   ) => Promise<void>;
   contractDownloading: boolean;
   onDownloadContract: (accountId: number) => Promise<void>;
@@ -283,6 +284,7 @@ function UserDetailPanel({
     accountId: number,
     patientSource: string,
     patientSourceDetail: string,
+    gender: string,
   ) => Promise<void>;
   contractDownloading: boolean;
   onDownloadContract: (accountId: number) => Promise<void>;
@@ -301,6 +303,11 @@ function UserDetailPanel({
   );
   const [sourceDetailDraft, setSourceDetailDraft] = useState(
     detail.profile.patientSourceDetail || "",
+  );
+  const [genderDraft, setGenderDraft] = useState(
+    detail.profile.gender === "男" || detail.profile.gender === "女"
+      ? detail.profile.gender
+      : "",
   );
   const bindSearchSeq = useRef(0);
   const canProxyBooking = detail.profile.isVisitor === true;
@@ -405,11 +412,23 @@ function UserDetailPanel({
         {contractTag && <Badge tone="green">{contractTag}</Badge>}
       </div>
       <div className="mt-1 text-sm text-[var(--lxxl-muted)]">
-        {detail.profile.mobile || "-"} · {detail.profile.gender || "性别未填"} · 来访者
+        {detail.profile.mobile || "-"} · {genderDraft || detail.profile.gender || "性别未填"} · 来访者
       </div>
       <div className="mt-4 rounded-xl border border-[var(--lxxl-border)] bg-white p-4">
         <div className="text-sm font-semibold">来访信息</div>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <label className="block text-xs text-[var(--lxxl-muted)]">
+            性别
+            <select
+              className={`${queryControlClass} mt-1`}
+              value={genderDraft}
+              onChange={(event) => setGenderDraft(event.target.value)}
+            >
+              <option value="">请选择</option>
+              <option value="男">男</option>
+              <option value="女">女</option>
+            </select>
+          </label>
           <label className="block text-xs text-[var(--lxxl-muted)]">
             来访类型
             <select
@@ -444,6 +463,7 @@ function UserDetailPanel({
                 detail.profile.id,
                 patientSourceDraft,
                 sourceDetailDraft,
+                genderDraft,
               ).catch(() => undefined);
             }}
           >

@@ -28,6 +28,7 @@ from case_record_header_config import (
     DEFAULT_OFFLINE_CONSULT_METHOD,
     DEFAULT_VIDEO_CONSULT_METHOD,
 )
+from common import _normalize_gender_value
 from models import (
     AppAccount,
     AppCaseRecord,
@@ -210,7 +211,8 @@ def build_default_header_info(
 
     header = empty_header_info()
     header["code"] = str(patient.Id) if patient else ""
-    header["gender"] = (patient.Gender or "").strip() if patient else ""
+    raw_gender = (patient.Gender or "").strip() if patient else ""
+    header["gender"] = _normalize_gender_value(raw_gender) or raw_gender
     header["consult_method"] = (
         DEFAULT_VIDEO_CONSULT_METHOD
         if is_video_center(center_id)

@@ -17,9 +17,19 @@
           <text class="label">手机号</text>
           <text class="value">{{ detail.mobile || '未填写' }}</text>
         </view>
-        <view v-if="detail.gender" class="info-row">
+        <view class="info-row">
           <text class="label">性别</text>
-          <text class="value">{{ genderLabel(detail.gender) }}</text>
+          <view class="gender-chips">
+            <view
+              v-for="option in patientGenderOptions"
+              :key="option"
+              class="gender-chip"
+              :class="{ active: selectedGender === option }"
+              @tap.stop="selectGender(option)"
+            >
+              {{ option }}
+            </view>
+          </view>
         </view>
         <view class="info-row">
           <text class="label">来访类型</text>
@@ -196,6 +206,7 @@ import {
   PATIENT_SOURCE_DETAIL_OPTIONS,
   PATIENT_SOURCE_OPTIONS,
 } from '@/constants/userRoleMeta'
+import { normalizeCounselorGender } from '@/utils/gender'
 
 interface ConsultationItem {
   consultationId: number
@@ -274,6 +285,8 @@ const selectedCounselorId = ref<number | null>(null)
 const sourceSaving = ref(false)
 const patientSource = ref('')
 const patientSourceDetail = ref('')
+const selectedGender = ref<'' | '男' | '女'>('')
+const patientGenderOptions: Array<'男' | '女'> = ['男', '女']
 const patientSourceLabels = PATIENT_SOURCE_OPTIONS.map(option => option.label)
 const patientSourceDetailOptions = [...PATIENT_SOURCE_DETAIL_OPTIONS]
 
@@ -293,8 +306,6 @@ const filteredConsultations = computed(() => {
   if (activeTab.value === 'ALL') return detail.value.consultations
   return detail.value.consultations.filter(c => c.phase === activeTab.value)
 })
-
-const genderLabel = (g: string) => ({ male: '男', female: '女', M: '男', F: '女' }[g] || g)
 
 const formatDT = (dt?: string) => (dt ? dt.slice(0, 16).replace('T', ' ') : '—')
 
@@ -347,7 +358,7 @@ const closeBindCounselor = () => {
 }
 
 const savePatientSource = async (
-  payload: { patientSource?: string; patientSourceDetail?: string },
+  payload: { patientSource?: string; patientSourceDetail?: string; gender?: string },
 ) => {
   if (!patientIdRef.value || sourceSaving.value) return
   sourceSaving.value = true
@@ -361,11 +372,15 @@ const savePatientSource = async (
     }
     if (payload.patientSource !== undefined) patientSource.value = payload.patientSource
     if (payload.patientSourceDetail !== undefined) patientSourceDetail.value = payload.patientSourceDetail
+    if (payload.gender !== undefined) {
+      selectedGender.value = normalizeCounselorGender(payload.gender)
+    }
     if (detail.value) {
       detail.value.patientSource = patientSource.value
       detail.value.patientSourceLabel = patientSourceLabel.value
       detail.value.patientSourceDetail = patientSourceDetail.value
       detail.value.typeLabel = patientSourceLabel.value
+      detail.value.gender = selectedGender.value || undefined
     }
     uni.showToast({ title: '来访信息已保存', icon: 'success' })
   } catch {
@@ -383,6 +398,12 @@ const changePatientSource = (event: { detail: { value: string | number } }) => {
 const changePatientSourceDetail = (event: { detail: { value: string | number } }) => {
   const option = patientSourceDetailOptions[Number(event.detail.value)]
   if (option) void savePatientSource({ patientSourceDetail: option })
+}
+
+const selectGender = (option: '男' | '女') => {
+  if (sourceSaving.value) return
+  const next = selectedGender.value === option ? '' : option
+  void savePatientSource({ gender: next })
 }
 
 const saveBindCounselor = async (counselorId: number | null) => {
@@ -432,6 +453,7 @@ onLoad(async (opts) => {
       staffRemark.value = res.data.staffRemark || ''
       patientSource.value = res.data.patientSource || ''
       patientSourceDetail.value = res.data.patientSourceDetail || ''
+      selectedGender.value = normalizeCounselorGender(res.data.gender)
     }
   } finally {
     loading.value = false
@@ -466,11 +488,31 @@ onLoad(async (opts) => {
   white-space: nowrap;
   flex-shrink: 0;
 }
-.info-row { display: flex; gap: 24rpx; padding: 10rpx 0; }
+.info-row { display: flex; gap: 24rpx; padding: 10rpx 0; align-items: center; }
 .label { font-size: 26rpx; color: #8A8A8A; width: 160rpx; flex-shrink: 0; }
 .value { flex: 1; font-size: 26rpx; color: #2C2C2C; line-height: 1.5; }
 .picker-value { min-height: 39rpx; color: #2C2C2C; }
 .picker-arrow { color: #9CA3AF; margin-left: 8rpx; }
+.gender-chips {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+}
+.gender-chip {
+  min-width: 120rpx;
+  padding: 10rpx 28rpx;
+  border-radius: 999rpx;
+  font-size: 26rpx;
+  color: #6B6560;
+  background: #F0EDE8;
+  text-align: center;
+}
+.gender-chip.active {
+  background: #3D5A4E;
+  color: #fff;
+  font-weight: 600;
+}
 .feedback-entry {
   display: flex;
   align-items: center;

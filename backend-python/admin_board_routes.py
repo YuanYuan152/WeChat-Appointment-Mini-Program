@@ -37,7 +37,7 @@ from patient_contract_service import (
 from schedule_meta import center_display_name, parse_center_id, parse_room_id, room_display_name
 from staff_remark_service import get_staff_remark, get_staff_remarks_map
 from pricing_service import get_counselor_profile
-from common import _profile_is_public_visible
+from common import _normalize_gender_value, _profile_is_public_visible
 from user_role_meta import (
     normalize_patient_source,
     patient_source_label,
@@ -51,6 +51,7 @@ class PatientSourceDetailUpdate(BaseModel):
     patientSourceDetail: Optional[str] = Field(default=None, max_length=200)
     # 兼容旧管理端仅以 source 传详细来源。
     source: Optional[str] = Field(default=None, max_length=200)
+    gender: Optional[str] = Field(default=None, max_length=10)
 
 
 def _account_name(account: Optional[AppAccount]) -> str:
@@ -143,7 +144,7 @@ def _user_summary(
         "id": account.Id,
         "name": _account_name(account),
         "mobile": account.Mobile,
-        "gender": account.Gender,
+        "gender": _normalize_gender_value(account.Gender) or account.Gender,
         "roles": roles,
         "activeRole": account.ActiveRole,
         "patientSource": normalize_patient_source(account.PatientSource),
@@ -377,7 +378,7 @@ def register_admin_board_routes(
             ],
         }
 
-    @router.put("/boards/patients/{account_id}/source", summary="修改来访类型与详细来源")
+    @router.put("/boards/patients/{account_id}/source", summary="修改来访类型、详细来源与性别")
     def update_patient_source_detail(
         account_id: int,
         body: PatientSourceDetailUpdate,
@@ -404,6 +405,15 @@ def register_admin_board_routes(
                 account.PatientSourceDetail = validate_patient_source_detail(detail_value)
             except ValueError as exc:
                 raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if "gender" in body.model_fields_set:
+            raw_gender = (body.gender or "").strip()
+            if not raw_gender:
+                account.Gender = None
+            else:
+                normalized_gender = _normalize_gender_value(raw_gender)
+                if not normalized_gender:
+                    raise HTTPException(status_code=400, detail="性别仅支持男或女")
+                account.Gender = normalized_gender
         db.commit()
         db.refresh(account)
         roles = _roles_for_accounts(db, {account_id}).get(account_id, [])
