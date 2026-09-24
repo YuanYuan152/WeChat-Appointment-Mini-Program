@@ -352,11 +352,21 @@ export interface Article {
 export interface AssessmentEnterprise {
   id: string;
   companyName: string;
+  siteName: string;
+  logoUrl: string;
+  slogan: string;
   url: string;
   slug: string;
   assessmentIds: string[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AssessmentEnterpriseBranding {
+  companyName: string;
+  siteName: string;
+  logoUrl: string;
+  slogan: string;
 }
 
 export interface PrivateAssessmentOption {

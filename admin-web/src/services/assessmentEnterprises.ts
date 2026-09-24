@@ -1,5 +1,9 @@
 import { apiRequest } from "@/lib/api";
-import type { AssessmentEnterprise, PrivateAssessmentOption } from "@/types/api";
+import type {
+  AssessmentEnterprise,
+  AssessmentEnterpriseBranding,
+  PrivateAssessmentOption,
+} from "@/types/api";
 
 const BASE_PATH = "/api/mini/admin/assessment-enterprises";
 
@@ -11,9 +15,23 @@ export function fetchPrivateAssessmentOptions() {
   return apiRequest<PrivateAssessmentOption[]>(`${BASE_PATH}/private-assessments`);
 }
 
+export function fetchAssessmentEnterpriseDefault() {
+  return apiRequest<AssessmentEnterpriseBranding>(`${BASE_PATH}/default`);
+}
+
+export function saveAssessmentEnterpriseDefault(input: AssessmentEnterpriseBranding) {
+  return apiRequest<AssessmentEnterpriseBranding>(`${BASE_PATH}/default`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
 export function saveAssessmentEnterprise(input: {
   id?: string;
   companyName: string;
+  siteName: string;
+  logoUrl: string;
+  slogan: string;
   url: string;
   assessmentIds: string[];
 }) {
@@ -21,6 +39,9 @@ export function saveAssessmentEnterprise(input: {
     method: input.id ? "PUT" : "POST",
     body: JSON.stringify({
       companyName: input.companyName,
+      siteName: input.siteName,
+      logoUrl: input.logoUrl,
+      slogan: input.slogan,
       url: input.url,
       assessmentIds: input.assessmentIds,
     }),

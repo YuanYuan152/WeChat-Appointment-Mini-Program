@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { AppRoute, useAppRoute } from "@/components/AppRoute";
+import { ContentImageUpload } from "@/components/content/ContentImageUpload";
 import {
   EmptyState,
   QueryButton,
@@ -14,15 +15,22 @@ import {
 import {
   deleteAssessmentEnterprise,
   fetchAssessmentEnterprises,
+  fetchAssessmentEnterpriseDefault,
   fetchPrivateAssessmentOptions,
   generateAssessmentEnterpriseQrCode,
   saveAssessmentEnterprise,
+  saveAssessmentEnterpriseDefault,
 } from "@/services/assessmentEnterprises";
-import type { AssessmentEnterprise, PrivateAssessmentOption } from "@/types/api";
+import type {
+  AssessmentEnterprise,
+  AssessmentEnterpriseBranding,
+  PrivateAssessmentOption,
+} from "@/types/api";
 
 const DEFAULT_BASE_URL = (
   process.env.NEXT_PUBLIC_ZHONGJIAN_SITE_BASE_URL
-  || `${(process.env.NEXT_PUBLIC_EAP_BASE_URL || "http://127.0.0.1:3000").replace(/\/$/, "")}/onboarding`
+  || process.env.NEXT_PUBLIC_EAP_BASE_URL
+  || "http://127.0.0.1:3000"
 ).replace(/\/$/, "");
 
 function generateSecureSuffix() {
@@ -43,6 +51,7 @@ function AssessmentEnterprisesContent() {
   const { clearNotice, refreshKey, showNotice } = useAppRoute();
   const [items, setItems] = useState<AssessmentEnterprise[]>([]);
   const [assessmentOptions, setAssessmentOptions] = useState<PrivateAssessmentOption[]>([]);
+  const [defaultBranding, setDefaultBranding] = useState<AssessmentEnterpriseBranding>();
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState<AssessmentEnterprise | null | undefined>(undefined);
   const [qr, setQr] = useState<{ companyName: string; url: string; svg: string }>();
@@ -51,12 +60,14 @@ function AssessmentEnterprisesContent() {
     setLoading(true);
     clearNotice();
     try {
-      const [enterprises, privateAssessments] = await Promise.all([
+      const [enterprises, privateAssessments, branding] = await Promise.all([
         fetchAssessmentEnterprises(),
         fetchPrivateAssessmentOptions(),
+        fetchAssessmentEnterpriseDefault(),
       ]);
       setItems(enterprises);
       setAssessmentOptions(privateAssessments);
+      setDefaultBranding(branding);
     } catch (error) {
       showNotice("error", error instanceof Error ? error.message : "企业定制配置加载失败");
     } finally {
@@ -70,6 +81,21 @@ function AssessmentEnterprisesContent() {
 
   return (
     <>
+      {defaultBranding && (
+        <DefaultBrandingEditor
+          value={defaultBranding}
+          onSave={async (input) => {
+            try {
+              const saved = await saveAssessmentEnterpriseDefault(input);
+              setDefaultBranding(saved);
+              showNotice("success", "默认网站设置已保存");
+            } catch (error) {
+              showNotice("error", error instanceof Error ? error.message : "默认设置保存失败");
+              throw error;
+            }
+          }}
+        />
+      )}
       <section className="overflow-hidden rounded-xl border border-[var(--lxxl-border)] bg-white">
         <div className="flex flex-wrap items-start justify-between gap-4 px-6 py-5 sm:px-7 lg:px-8">
           <div>
@@ -99,7 +125,10 @@ function AssessmentEnterprisesContent() {
                 <tbody>
                   {items.map((item) => (
                     <tr className="border-t border-[var(--lxxl-border)] align-top" key={item.id}>
-                      <td className="px-5 py-4 font-medium">{item.companyName}</td>
+                      <td className="px-5 py-4">
+                        <div className="font-medium">{item.companyName}</div>
+                        <div className="mt-1 text-xs text-[var(--lxxl-muted)]">{item.siteName} · {item.slogan}</div>
+                      </td>
                       <td className="max-w-md px-5 py-4">
                         <a className="break-all text-[var(--lxxl-green)] hover:underline" href={item.url} rel="noreferrer" target="_blank">
                           {item.url}
@@ -167,6 +196,60 @@ function AssessmentEnterprisesContent() {
   );
 }
 
+function DefaultBrandingEditor({
+  value,
+  onSave,
+}: {
+  value: AssessmentEnterpriseBranding;
+  onSave: (input: AssessmentEnterpriseBranding) => Promise<void>;
+}) {
+  const [draft, setDraft] = useState(value);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => setDraft(value), [value]);
+
+  return (
+    <section className="mb-6 rounded-xl border border-[var(--lxxl-border)] bg-white p-6 sm:p-7 lg:p-8">
+      <h2 className="text-xl font-semibold">默认设置</h2>
+      <p className="mt-2 text-sm text-[var(--lxxl-muted)]">
+        控制不带企业专属后缀访问网站时显示的品牌信息。
+      </p>
+      <div className="mt-5 grid gap-4 lg:grid-cols-2">
+        <QueryField label="网站名" required>
+          <input className={queryControlClass} value={draft.siteName} onChange={(event) => setDraft({ ...draft, siteName: event.target.value })} />
+        </QueryField>
+        <QueryField label="公司名" required>
+          <input className={queryControlClass} value={draft.companyName} onChange={(event) => setDraft({ ...draft, companyName: event.target.value })} />
+        </QueryField>
+        <div className="lg:col-span-2">
+          <ContentImageUpload label="网站 Logo" required value={draft.logoUrl} onChange={(logoUrl) => setDraft({ ...draft, logoUrl })} />
+        </div>
+        <div className="lg:col-span-2">
+          <QueryField label="口号" required>
+            <input className={queryControlClass} value={draft.slogan} onChange={(event) => setDraft({ ...draft, slogan: event.target.value })} />
+          </QueryField>
+        </div>
+      </div>
+      <div className="mt-5">
+        <QueryButton
+          disabled={saving || Object.values(draft).some((text) => !text.trim())}
+          onClick={() => {
+            setSaving(true);
+            void onSave({
+              companyName: draft.companyName.trim(),
+              siteName: draft.siteName.trim(),
+              logoUrl: draft.logoUrl.trim(),
+              slogan: draft.slogan.trim(),
+            }).finally(() => setSaving(false));
+          }}
+        >
+          {saving ? "保存中..." : "保存默认设置"}
+        </QueryButton>
+      </div>
+    </section>
+  );
+}
+
 function EnterpriseEditor({
   item,
   options,
@@ -176,9 +259,12 @@ function EnterpriseEditor({
   item: AssessmentEnterprise | null;
   options: PrivateAssessmentOption[];
   onClose: () => void;
-  onSave: (input: { id?: string; companyName: string; url: string; assessmentIds: string[] }) => Promise<void>;
+  onSave: (input: { id?: string; companyName: string; siteName: string; logoUrl: string; slogan: string; url: string; assessmentIds: string[] }) => Promise<void>;
 }) {
   const [companyName, setCompanyName] = useState(item?.companyName || "");
+  const [siteName, setSiteName] = useState(item?.siteName || "广厦心安");
+  const [logoUrl, setLogoUrl] = useState(item?.logoUrl || "/assets/guangsha-xinan-logo.jpg");
+  const [slogan, setSlogan] = useState(item?.slogan || "建广厦万间，护心安一寸");
   const [suffix, setSuffix] = useState(item?.slug || generateSecureSuffix);
   const [assessmentIds, setAssessmentIds] = useState<string[]>(item?.assessmentIds || []);
   const [saving, setSaving] = useState(false);
@@ -191,6 +277,13 @@ function EnterpriseEditor({
         <div className="mt-5 space-y-4">
           <QueryField label="公司名" required>
             <input className={queryControlClass} value={companyName} onChange={(event) => setCompanyName(event.target.value)} />
+          </QueryField>
+          <QueryField label="网站名" required>
+            <input className={queryControlClass} value={siteName} onChange={(event) => setSiteName(event.target.value)} />
+          </QueryField>
+          <ContentImageUpload label="网站左上角 Logo" required value={logoUrl} onChange={setLogoUrl} />
+          <QueryField label="口号" required>
+            <input className={queryControlClass} value={slogan} onChange={(event) => setSlogan(event.target.value)} />
           </QueryField>
           <QueryField label="专属 URL" required>
             <div className="flex flex-col gap-2 sm:flex-row">
@@ -237,10 +330,18 @@ function EnterpriseEditor({
         </div>
         <div className="mt-6 flex gap-3">
           <QueryButton
-            disabled={saving || !companyName.trim() || suffix.length < 20 || assessmentIds.length === 0}
+            disabled={saving || !companyName.trim() || !siteName.trim() || !logoUrl.trim() || !slogan.trim() || suffix.length < 20 || assessmentIds.length === 0}
             onClick={() => {
               setSaving(true);
-              void onSave({ id: item?.id, companyName: companyName.trim(), url: url.trim(), assessmentIds })
+              void onSave({
+                id: item?.id,
+                companyName: companyName.trim(),
+                siteName: siteName.trim(),
+                logoUrl: logoUrl.trim(),
+                slogan: slogan.trim(),
+                url: url.trim(),
+                assessmentIds,
+              })
                 .finally(() => setSaving(false));
             }}
           >

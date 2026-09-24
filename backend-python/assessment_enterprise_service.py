@@ -17,6 +17,12 @@ from config import settings
 SLUG_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 MIN_SECURE_SLUG_LENGTH = 20
 _lock = threading.RLock()
+DEFAULT_BRANDING = {
+    "siteName": "广厦心安",
+    "companyName": "中建三局集团有限公司",
+    "logoUrl": "/assets/guangsha-xinan-logo.jpg",
+    "slogan": "建广厦万间，护心安一寸",
+}
 
 
 class EnterpriseConfigError(ValueError):
@@ -31,6 +37,48 @@ def _data_path() -> Path:
     configured = settings.ASSESSMENT_DATA_DIR.strip()
     root = Path(configured) if configured else Path(__file__).resolve().parent / "runtime" / "assessment-data"
     return root / "enterprises.json"
+
+
+def _default_data_path() -> Path:
+    return _data_path().with_name("enterprise-default.json")
+
+
+def _branding(value: dict[str, Any] | None = None) -> dict[str, str]:
+    source = value or {}
+    return {
+        key: str(source.get(key) or default).strip()
+        for key, default in DEFAULT_BRANDING.items()
+    }
+
+
+def _normalized_enterprise(item: dict[str, Any]) -> dict[str, Any]:
+    result = {**item, **_branding(item)}
+    parsed = urlparse(str(result.get("url") or ""))
+    slug = str(result.get("slug") or "")
+    if parsed.scheme in {"http", "https"} and parsed.netloc and slug:
+        result["url"] = f"{parsed.scheme}://{parsed.netloc}/{slug}"
+    return result
+
+
+def get_default_branding() -> dict[str, str]:
+    path = _default_data_path()
+    if not path.exists():
+        return dict(DEFAULT_BRANDING)
+    value = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(value, dict):
+        raise EnterpriseConfigError("默认网站配置文件格式错误")
+    return _branding(value)
+
+
+def save_default_branding(branding: dict[str, Any]) -> dict[str, str]:
+    result = _branding(branding)
+    with _lock:
+        path = _default_data_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = path.with_suffix(f".{uuid.uuid4().hex}.tmp")
+        temporary.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+        os.replace(temporary, path)
+    return result
 
 
 def _read() -> list[dict[str, Any]]:
@@ -68,7 +116,10 @@ def slug_from_url(url: str) -> str:
 
 def list_enterprises() -> list[dict[str, Any]]:
     with _lock:
-        return sorted(_read(), key=lambda item: (item.get("companyName", ""), item["id"]))
+        return sorted(
+            [_normalized_enterprise(item) for item in _read()],
+            key=lambda item: (item.get("companyName", ""), item["id"]),
+        )
 
 
 def get_enterprise_by_slug(slug: str) -> dict[str, Any]:
@@ -77,7 +128,7 @@ def get_enterprise_by_slug(slug: str) -> dict[str, Any]:
         item = next((entry for entry in _read() if entry.get("slug") == normalized), None)
     if not item:
         raise EnterpriseConfigError("企业专属链接不存在")
-    return item
+    return _normalized_enterprise(item)
 
 
 def save_enterprise(
@@ -86,6 +137,9 @@ def save_enterprise(
     company_name: str,
     url: str,
     assessment_ids: list[str],
+    site_name: str,
+    logo_url: str,
+    slogan: str,
 ) -> dict[str, Any]:
     name = (company_name or "").strip()
     if not name:
@@ -95,6 +149,12 @@ def save_enterprise(
     ids = list(dict.fromkeys(item.strip() for item in assessment_ids if item.strip()))
     if not ids:
         raise EnterpriseConfigError("请至少选择一个私有量表")
+    branding = _branding({
+        "siteName": site_name,
+        "companyName": name,
+        "logoUrl": logo_url,
+        "slogan": slogan,
+    })
     with _lock:
         items = _read()
         duplicate = next(
@@ -107,20 +167,20 @@ def save_enterprise(
         current = next((item for item in items if item.get("id") == enterprise_id), None)
         if current:
             current.update(
-                companyName=name,
                 url=normalized_url,
                 slug=slug,
                 assessmentIds=ids,
+                **branding,
                 updatedAt=now,
             )
             result = current
         else:
             result = {
                 "id": uuid.uuid4().hex,
-                "companyName": name,
                 "url": normalized_url,
                 "slug": slug,
                 "assessmentIds": ids,
+                **branding,
                 "createdAt": now,
                 "updatedAt": now,
             }

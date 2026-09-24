@@ -13,9 +13,11 @@ from assessment_definition_service import AssessmentDefinitionError
 from assessment_enterprise_service import (
     EnterpriseConfigError,
     delete_enterprise,
+    get_default_branding,
     get_enterprise_by_slug,
     list_enterprises,
     save_enterprise,
+    save_default_branding,
 )
 from assessment_routes import get_assessment_store
 
@@ -28,8 +30,18 @@ public_router = APIRouter(
 
 class EnterprisePayload(BaseModel):
     companyName: str = Field(..., min_length=1, max_length=120)
+    siteName: str = Field(..., min_length=1, max_length=120)
+    logoUrl: str = Field(..., min_length=1, max_length=500)
+    slogan: str = Field(..., min_length=1, max_length=200)
     url: str = Field(..., min_length=8, max_length=500)
     assessmentIds: list[str] = Field(..., min_length=1)
+
+
+class BrandingPayload(BaseModel):
+    companyName: str = Field(..., min_length=1, max_length=120)
+    siteName: str = Field(..., min_length=1, max_length=120)
+    logoUrl: str = Field(..., min_length=1, max_length=500)
+    slogan: str = Field(..., min_length=1, max_length=200)
 
 
 def _private_published(assessment_ids: list[str]) -> list[dict[str, Any]]:
@@ -46,13 +58,21 @@ def _private_published(assessment_ids: list[str]) -> list[dict[str, Any]]:
     return definitions
 
 
-@public_router.get("/{slug}", summary="按企业链接后缀读取已授权私有量表")
+@public_router.get("/default", summary="读取无后缀网站的默认品牌配置")
+def get_public_default_branding():
+    return get_default_branding()
+
+
+@public_router.get("/{slug}", summary="按企业链接后缀读取企业网站配置及已授权私有量表")
 def get_public_enterprise_assessments(slug: str):
     try:
         enterprise = get_enterprise_by_slug(slug)
         definitions = _private_published(enterprise.get("assessmentIds", []))
         return {
             "companyName": enterprise["companyName"],
+            "siteName": enterprise["siteName"],
+            "logoUrl": enterprise["logoUrl"],
+            "slogan": enterprise["slogan"],
             "slug": enterprise["slug"],
             "assessments": definitions,
         }
@@ -68,6 +88,17 @@ def register_assessment_enterprise_admin_routes(
     @router.get("/assessment-enterprises", summary="企业定制量表配置")
     def list_admin_enterprises(_actor: Any = Depends(require_staff_workbench)):
         return list_enterprises()
+
+    @router.get("/assessment-enterprises/default", summary="默认网站品牌配置")
+    def get_admin_default_branding(_actor: Any = Depends(require_staff_workbench)):
+        return get_default_branding()
+
+    @router.put("/assessment-enterprises/default", summary="保存默认网站品牌配置")
+    def update_admin_default_branding(
+        body: BrandingPayload,
+        _actor: Any = Depends(require_staff_workbench),
+    ):
+        return save_default_branding(body.model_dump())
 
     @router.get("/assessment-enterprises/private-assessments", summary="可分配的私有量表")
     def list_private_assessments(_actor: Any = Depends(require_staff_workbench)):
@@ -97,6 +128,9 @@ def register_assessment_enterprise_admin_routes(
                 company_name=body.companyName,
                 url=body.url,
                 assessment_ids=body.assessmentIds,
+                site_name=body.siteName,
+                logo_url=body.logoUrl,
+                slogan=body.slogan,
             )
         except EnterpriseConfigError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -114,6 +148,9 @@ def register_assessment_enterprise_admin_routes(
                 company_name=body.companyName,
                 url=body.url,
                 assessment_ids=body.assessmentIds,
+                site_name=body.siteName,
+                logo_url=body.logoUrl,
+                slogan=body.slogan,
             )
         except EnterpriseConfigError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
