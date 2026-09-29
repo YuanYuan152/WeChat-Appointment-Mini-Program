@@ -24,6 +24,7 @@ import {
 import type {
   AssessmentEnterprise,
   AssessmentEnterpriseBranding,
+  AssessmentEnterpriseHeroSlide,
   PrivateAssessmentOption,
 } from "@/types/api";
 
@@ -196,6 +197,37 @@ function AssessmentEnterprisesContent() {
   );
 }
 
+const DEFAULT_HERO_SLIDES: AssessmentEnterpriseHeroSlide[] = [
+  {
+    imageUrl: "/assets/hero-site.jpg",
+    title: "心理测评",
+    desc: "专业量表，帮助你更好认识自己",
+  },
+  {
+    imageUrl: "/assets/hero-office.jpg",
+    title: "职场支持",
+    desc: "关注工作压力与情绪健康",
+  },
+  {
+    imageUrl: "/assets/hero-family.jpg",
+    title: "生活与家庭",
+    desc: "陪伴你与家人共同成长",
+  },
+];
+
+function normalizeHeroSlides(
+  slides?: AssessmentEnterpriseHeroSlide[] | null,
+): AssessmentEnterpriseHeroSlide[] {
+  return DEFAULT_HERO_SLIDES.map((fallback, index) => {
+    const current = slides?.[index];
+    return {
+      imageUrl: (current?.imageUrl || "").trim() || fallback.imageUrl,
+      title: (current?.title || "").trim() || fallback.title,
+      desc: (current?.desc || "").trim() || fallback.desc,
+    };
+  });
+}
+
 function DefaultBrandingEditor({
   value,
   onSave,
@@ -203,10 +235,31 @@ function DefaultBrandingEditor({
   value: AssessmentEnterpriseBranding;
   onSave: (input: AssessmentEnterpriseBranding) => Promise<void>;
 }) {
-  const [draft, setDraft] = useState(value);
+  const withDefaults = (input: AssessmentEnterpriseBranding): AssessmentEnterpriseBranding => ({
+    ...input,
+    onboardingEntryLabel: (input.onboardingEntryLabel || "").trim() || "新员工入职测评",
+    heroSlides: normalizeHeroSlides(input.heroSlides),
+  });
+  const [draft, setDraft] = useState(() => withDefaults(value));
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => setDraft(value), [value]);
+  useEffect(() => setDraft(withDefaults(value)), [value]);
+
+  const updateHeroSlide = (
+    index: number,
+    patch: Partial<AssessmentEnterpriseHeroSlide>,
+  ) => {
+    setDraft((current) => ({
+      ...current,
+      heroSlides: current.heroSlides.map((slide, slideIndex) =>
+        slideIndex === index ? { ...slide, ...patch } : slide,
+      ),
+    }));
+  };
+
+  const heroReady = draft.heroSlides.every(
+    (slide) => slide.imageUrl.trim() && slide.title.trim() && slide.desc.trim(),
+  );
 
   return (
     <section className="mb-6 rounded-xl border border-[var(--lxxl-border)] bg-white p-6 sm:p-7 lg:p-8">
@@ -234,10 +287,74 @@ function DefaultBrandingEditor({
             <input className={queryControlClass} value={draft.slogan} onChange={(event) => setDraft({ ...draft, slogan: event.target.value })} />
           </QueryField>
         </div>
+        <div className="lg:col-span-2">
+          <QueryField label="入职测评入口文案" required>
+            <input
+              className={queryControlClass}
+              value={draft.onboardingEntryLabel}
+              placeholder="新员工入职测评"
+              onChange={(event) => setDraft({ ...draft, onboardingEntryLabel: event.target.value })}
+            />
+          </QueryField>
+          <p className="mt-1 text-xs text-[var(--lxxl-muted)]">
+            显示在 EAP 首页导航与主按钮的测评入口文案。
+          </p>
+        </div>
       </div>
+
+      <div className="mt-8 border-t border-[var(--lxxl-border)] pt-6">
+        <h3 className="text-base font-semibold">首页轮播图</h3>
+        <p className="mt-1 text-sm text-[var(--lxxl-muted)]">
+          对应 EAP 首页右侧自动滚动的三张图片，可分别修改图片与文案。
+        </p>
+        <div className="mt-4 grid gap-4 lg:grid-cols-3">
+          {draft.heroSlides.map((slide, index) => (
+            <div
+              key={`hero-slide-${index}`}
+              className="rounded-xl border border-[var(--lxxl-border)] bg-[#FAF8F4] p-4"
+            >
+              <div className="mb-3 text-sm font-medium text-[var(--lxxl-ink)]">
+                第 {index + 1} 张
+              </div>
+              <ContentImageUpload
+                label="轮播图片"
+                required
+                value={slide.imageUrl}
+                onChange={(imageUrl) => updateHeroSlide(index, { imageUrl })}
+              />
+              <div className="mt-3 space-y-3">
+                <QueryField label="标题" required>
+                  <input
+                    className={queryControlClass}
+                    value={slide.title}
+                    maxLength={40}
+                    onChange={(event) => updateHeroSlide(index, { title: event.target.value })}
+                  />
+                </QueryField>
+                <QueryField label="说明文字" required>
+                  <input
+                    className={queryControlClass}
+                    value={slide.desc}
+                    maxLength={120}
+                    onChange={(event) => updateHeroSlide(index, { desc: event.target.value })}
+                  />
+                </QueryField>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <div className="mt-5">
         <QueryButton
-          disabled={saving || !draft.siteName.trim() || !draft.logoUrl.trim() || !draft.slogan.trim()}
+          disabled={
+            saving
+            || !draft.siteName.trim()
+            || !draft.logoUrl.trim()
+            || !draft.slogan.trim()
+            || !draft.onboardingEntryLabel.trim()
+            || !heroReady
+          }
           onClick={() => {
             setSaving(true);
             void onSave({
@@ -245,6 +362,12 @@ function DefaultBrandingEditor({
               siteName: draft.siteName.trim(),
               logoUrl: draft.logoUrl.trim(),
               slogan: draft.slogan.trim(),
+              onboardingEntryLabel: draft.onboardingEntryLabel.trim(),
+              heroSlides: draft.heroSlides.map((slide) => ({
+                imageUrl: slide.imageUrl.trim(),
+                title: slide.title.trim(),
+                desc: slide.desc.trim(),
+              })),
             }).finally(() => setSaving(false));
           }}
         >
@@ -268,7 +391,7 @@ function EnterpriseEditor({
 }) {
   const [companyName, setCompanyName] = useState(item?.companyName || "");
   const [siteName, setSiteName] = useState(item?.siteName || "心安 EAP");
-  const [logoUrl, setLogoUrl] = useState(item?.logoUrl || "/assets/guangsha-xinan-logo.jpg");
+  const [logoUrl, setLogoUrl] = useState(item?.logoUrl || "/static/uploads/eap-default-logo.png");
   const [slogan, setSlogan] = useState(item?.slogan || "专业测评，贴心陪伴");
   const [suffix, setSuffix] = useState(item?.slug || generateSecureSuffix);
   const [assessmentIds, setAssessmentIds] = useState<string[]>(item?.assessmentIds || []);

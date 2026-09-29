@@ -362,11 +362,21 @@ export interface AssessmentEnterprise {
   updatedAt: string;
 }
 
+export interface AssessmentEnterpriseHeroSlide {
+  imageUrl: string;
+  title: string;
+  desc: string;
+}
+
 export interface AssessmentEnterpriseBranding {
   companyName: string;
   siteName: string;
   logoUrl: string;
   slogan: string;
+  /** EAP 首页「新员工入职测评」入口文案 */
+  onboardingEntryLabel: string;
+  /** EAP 首页右侧三张轮播图 */
+  heroSlides: AssessmentEnterpriseHeroSlide[];
 }
 
 export interface PrivateAssessmentOption {

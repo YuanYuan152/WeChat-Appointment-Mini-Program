@@ -20,9 +20,28 @@ _lock = threading.RLock()
 DEFAULT_BRANDING = {
     "siteName": "心安 EAP",
     "companyName": "",
-    "logoUrl": "/assets/guangsha-xinan-logo.jpg",
+    "logoUrl": "/static/uploads/eap-default-logo.png",
     "slogan": "专业测评，贴心陪伴",
+    "onboardingEntryLabel": "新员工入职测评",
 }
+
+DEFAULT_HERO_SLIDES = [
+    {
+        "imageUrl": "/assets/hero-site.jpg",
+        "title": "心理测评",
+        "desc": "专业量表，帮助你更好认识自己",
+    },
+    {
+        "imageUrl": "/assets/hero-office.jpg",
+        "title": "职场支持",
+        "desc": "关注工作压力与情绪健康",
+    },
+    {
+        "imageUrl": "/assets/hero-family.jpg",
+        "title": "生活与家庭",
+        "desc": "陪伴你与家人共同成长",
+    },
+]
 
 
 class EnterpriseConfigError(ValueError):
@@ -60,6 +79,30 @@ def _branding(value: dict[str, Any] | None = None) -> dict[str, str]:
     return result
 
 
+def _normalize_hero_slides(value: Any) -> list[dict[str, str]]:
+    """首页右侧三张轮播：固定 3 张，缺省回填默认图与文案。"""
+    raw_list = value if isinstance(value, list) else []
+    result: list[dict[str, str]] = []
+    for index, default in enumerate(DEFAULT_HERO_SLIDES):
+        raw = raw_list[index] if index < len(raw_list) and isinstance(raw_list[index], dict) else {}
+        image_url = str(raw.get("imageUrl") or "").strip() or default["imageUrl"]
+        title = str(raw.get("title") or "").strip() or default["title"]
+        desc = str(raw.get("desc") or "").strip() or default["desc"]
+        result.append({
+            "imageUrl": image_url[:500],
+            "title": title[:40],
+            "desc": desc[:120],
+        })
+    return result
+
+
+def _default_branding_payload(value: dict[str, Any] | None = None) -> dict[str, Any]:
+    source = value or {}
+    result: dict[str, Any] = dict(_branding(source))
+    result["heroSlides"] = _normalize_hero_slides(source.get("heroSlides"))
+    return result
+
+
 def _normalized_enterprise(item: dict[str, Any]) -> dict[str, Any]:
     result = {**item, **_branding(item)}
     parsed = urlparse(str(result.get("url") or ""))
@@ -69,18 +112,18 @@ def _normalized_enterprise(item: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def get_default_branding() -> dict[str, str]:
+def get_default_branding() -> dict[str, Any]:
     path = _default_data_path()
     if not path.exists():
-        return dict(DEFAULT_BRANDING)
+        return _default_branding_payload()
     value = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(value, dict):
         raise EnterpriseConfigError("默认网站配置文件格式错误")
-    return _branding(value)
+    return _default_branding_payload(value)
 
 
-def save_default_branding(branding: dict[str, Any]) -> dict[str, str]:
-    result = _branding(branding)
+def save_default_branding(branding: dict[str, Any]) -> dict[str, Any]:
+    result = _default_branding_payload(branding)
     with _lock:
         path = _default_data_path()
         path.parent.mkdir(parents=True, exist_ok=True)
