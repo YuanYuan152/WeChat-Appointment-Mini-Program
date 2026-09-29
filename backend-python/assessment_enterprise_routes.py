@@ -38,7 +38,7 @@ class EnterprisePayload(BaseModel):
 
 
 class BrandingPayload(BaseModel):
-    companyName: str = Field(..., min_length=1, max_length=120)
+    companyName: str = Field(default="", max_length=120)
     siteName: str = Field(..., min_length=1, max_length=120)
     logoUrl: str = Field(..., min_length=1, max_length=500)
     slogan: str = Field(..., min_length=1, max_length=200)

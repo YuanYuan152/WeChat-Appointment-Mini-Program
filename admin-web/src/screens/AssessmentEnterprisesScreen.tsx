@@ -218,8 +218,13 @@ function DefaultBrandingEditor({
         <QueryField label="网站名" required>
           <input className={queryControlClass} value={draft.siteName} onChange={(event) => setDraft({ ...draft, siteName: event.target.value })} />
         </QueryField>
-        <QueryField label="公司名" required>
-          <input className={queryControlClass} value={draft.companyName} onChange={(event) => setDraft({ ...draft, companyName: event.target.value })} />
+        <QueryField label="公司名">
+          <input
+            className={queryControlClass}
+            value={draft.companyName}
+            placeholder="选填；不填则 EAP 首页不显示公司名"
+            onChange={(event) => setDraft({ ...draft, companyName: event.target.value })}
+          />
         </QueryField>
         <div className="lg:col-span-2">
           <ContentImageUpload label="网站 Logo" required value={draft.logoUrl} onChange={(logoUrl) => setDraft({ ...draft, logoUrl })} />
@@ -232,7 +237,7 @@ function DefaultBrandingEditor({
       </div>
       <div className="mt-5">
         <QueryButton
-          disabled={saving || Object.values(draft).some((text) => !text.trim())}
+          disabled={saving || !draft.siteName.trim() || !draft.logoUrl.trim() || !draft.slogan.trim()}
           onClick={() => {
             setSaving(true);
             void onSave({
@@ -262,9 +267,9 @@ function EnterpriseEditor({
   onSave: (input: { id?: string; companyName: string; siteName: string; logoUrl: string; slogan: string; url: string; assessmentIds: string[] }) => Promise<void>;
 }) {
   const [companyName, setCompanyName] = useState(item?.companyName || "");
-  const [siteName, setSiteName] = useState(item?.siteName || "广厦心安");
+  const [siteName, setSiteName] = useState(item?.siteName || "心安 EAP");
   const [logoUrl, setLogoUrl] = useState(item?.logoUrl || "/assets/guangsha-xinan-logo.jpg");
-  const [slogan, setSlogan] = useState(item?.slogan || "建广厦万间，护心安一寸");
+  const [slogan, setSlogan] = useState(item?.slogan || "专业测评，贴心陪伴");
   const [suffix, setSuffix] = useState(item?.slug || generateSecureSuffix);
   const [assessmentIds, setAssessmentIds] = useState<string[]>(item?.assessmentIds || []);
   const [saving, setSaving] = useState(false);

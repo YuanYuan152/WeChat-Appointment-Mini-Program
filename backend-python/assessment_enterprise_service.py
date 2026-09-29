@@ -18,10 +18,10 @@ SLUG_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 MIN_SECURE_SLUG_LENGTH = 20
 _lock = threading.RLock()
 DEFAULT_BRANDING = {
-    "siteName": "广厦心安",
-    "companyName": "中建三局集团有限公司",
+    "siteName": "心安 EAP",
+    "companyName": "",
     "logoUrl": "/assets/guangsha-xinan-logo.jpg",
-    "slogan": "建广厦万间，护心安一寸",
+    "slogan": "专业测评，贴心陪伴",
 }
 
 
@@ -44,11 +44,20 @@ def _default_data_path() -> Path:
 
 
 def _branding(value: dict[str, Any] | None = None) -> dict[str, str]:
+    """规范化品牌字段。
+
+    公司名允许为空（不回填默认值），其余字段为空时回退到 DEFAULT_BRANDING。
+    """
     source = value or {}
-    return {
-        key: str(source.get(key) or default).strip()
-        for key, default in DEFAULT_BRANDING.items()
-    }
+    result: dict[str, str] = {}
+    for key, default in DEFAULT_BRANDING.items():
+        raw = source.get(key)
+        if key == "companyName":
+            result[key] = "" if raw is None else str(raw).strip()
+            continue
+        text = "" if raw is None else str(raw).strip()
+        result[key] = text or str(default).strip()
+    return result
 
 
 def _normalized_enterprise(item: dict[str, Any]) -> dict[str, Any]:
