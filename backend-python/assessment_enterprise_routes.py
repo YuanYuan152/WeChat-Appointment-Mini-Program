@@ -37,11 +37,19 @@ class EnterprisePayload(BaseModel):
     assessmentIds: list[str] = Field(..., min_length=1)
 
 
+class HeroSlidePayload(BaseModel):
+    imageUrl: str = Field(..., min_length=1, max_length=500)
+    title: str = Field(..., min_length=1, max_length=40)
+    desc: str = Field(..., min_length=1, max_length=120)
+
+
 class BrandingPayload(BaseModel):
-    companyName: str = Field(..., min_length=1, max_length=120)
+    companyName: str = Field(default="", max_length=120)
     siteName: str = Field(..., min_length=1, max_length=120)
     logoUrl: str = Field(..., min_length=1, max_length=500)
     slogan: str = Field(..., min_length=1, max_length=200)
+    onboardingEntryLabel: str = Field(default="新员工入职测评", min_length=1, max_length=40)
+    heroSlides: list[HeroSlidePayload] = Field(..., min_length=3, max_length=3)
 
 
 def _published_assessments(assessment_ids: list[str]) -> list[dict[str, Any]]:
@@ -65,11 +73,17 @@ def get_public_enterprise_assessments(slug: str):
     try:
         enterprise = get_enterprise_by_slug(slug)
         definitions = _published_assessments(enterprise.get("assessmentIds", []))
+        default_branding = get_default_branding()
         return {
             "companyName": enterprise["companyName"],
             "siteName": enterprise["siteName"],
             "logoUrl": enterprise["logoUrl"],
             "slogan": enterprise["slogan"],
+            "onboardingEntryLabel": default_branding.get(
+                "onboardingEntryLabel",
+                "新员工入职测评",
+            ),
+            "heroSlides": default_branding.get("heroSlides", []),
             "slug": enterprise["slug"],
             "assessments": definitions,
         }

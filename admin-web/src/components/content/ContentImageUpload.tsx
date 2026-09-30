@@ -104,5 +104,13 @@ function resolveImageUrl(imageUrl?: string | null) {
   if (/^(https?:|data:|blob:)/i.test(value)) {
     return value;
   }
+  if (value.startsWith("/assets/")) {
+    const eapBase = (
+      process.env.NEXT_PUBLIC_ZHONGJIAN_SITE_BASE_URL
+      || process.env.NEXT_PUBLIC_EAP_BASE_URL
+      || "http://127.0.0.1:3000"
+    ).replace(/\/$/, "");
+    return `${eapBase}${value}`;
+  }
   return value.startsWith("/") ? `${API_BASE_URL}${value}` : `${API_BASE_URL}/${value}`;
 }
