@@ -373,7 +373,7 @@ export interface PrivateAssessmentOption {
   id: string;
   title: string;
   status: string;
-  visibility: "private";
+  visibility: "public" | "private";
 }
 
 export interface ScheduleItem {

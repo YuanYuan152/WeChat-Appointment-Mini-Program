@@ -44,15 +44,12 @@ class BrandingPayload(BaseModel):
     slogan: str = Field(..., min_length=1, max_length=200)
 
 
-def _private_published(assessment_ids: list[str]) -> list[dict[str, Any]]:
+def _published_assessments(assessment_ids: list[str]) -> list[dict[str, Any]]:
     definitions: list[dict[str, Any]] = []
     try:
         for assessment_id in assessment_ids:
             result = get_assessment_store().get_published(assessment_id)
-            definition = result["definition"]
-            if definition.get("visibility", "public") != "private":
-                raise EnterpriseConfigError(f"量表 {assessment_id} 不是私有量表")
-            definitions.append(definition)
+            definitions.append(result["definition"])
     except AssessmentDefinitionError as exc:
         raise EnterpriseConfigError(str(exc)) from exc
     return definitions
@@ -63,11 +60,11 @@ def get_public_default_branding():
     return get_default_branding()
 
 
-@public_router.get("/{slug}", summary="按企业链接后缀读取企业网站配置及已授权私有量表")
+@public_router.get("/{slug}", summary="按企业链接后缀读取企业网站配置及已授权量表")
 def get_public_enterprise_assessments(slug: str):
     try:
         enterprise = get_enterprise_by_slug(slug)
-        definitions = _private_published(enterprise.get("assessmentIds", []))
+        definitions = _published_assessments(enterprise.get("assessmentIds", []))
         return {
             "companyName": enterprise["companyName"],
             "siteName": enterprise["siteName"],
@@ -100,9 +97,9 @@ def register_assessment_enterprise_admin_routes(
     ):
         return save_default_branding(body.model_dump())
 
-    @router.get("/assessment-enterprises/private-assessments", summary="可分配的私有量表")
-    def list_private_assessments(_actor: Any = Depends(require_staff_workbench)):
-        result = get_assessment_store().list_admin(page=1, page_size=100)
+    @router.get("/assessment-enterprises/private-assessments", summary="可分配的已发布量表（含私有与公有）")
+    def list_assignable_assessments(_actor: Any = Depends(require_staff_workbench)):
+        result = get_assessment_store().list_admin(page=1, page_size=500)
         return [
             {
                 "id": item["id"],
@@ -111,7 +108,7 @@ def register_assessment_enterprise_admin_routes(
                 "visibility": item.get("visibility", "public"),
             }
             for item in result["items"]
-            if item.get("visibility", "public") == "private"
+            if item.get("visibility", "public") in {"private", "public"}
             and item.get("publishedVersion")
             and not item.get("archivedAt")
         ]
@@ -122,7 +119,7 @@ def register_assessment_enterprise_admin_routes(
         _actor: Any = Depends(require_staff_workbench),
     ):
         try:
-            _private_published(body.assessmentIds)
+            _published_assessments(body.assessmentIds)
             return save_enterprise(
                 enterprise_id=None,
                 company_name=body.companyName,
@@ -142,7 +139,7 @@ def register_assessment_enterprise_admin_routes(
         _actor: Any = Depends(require_staff_workbench),
     ):
         try:
-            _private_published(body.assessmentIds)
+            _published_assessments(body.assessmentIds)
             return save_enterprise(
                 enterprise_id=enterprise_id,
                 company_name=body.companyName,

@@ -101,7 +101,7 @@ function AssessmentEnterprisesContent() {
           <div>
             <h2 className="text-xl font-semibold">企业定制</h2>
             <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">
-              为企业创建专属访问链接，授权已发布的私有量表，并生成可下载二维码。
+              为企业创建专属访问链接，授权已发布的私有或公有量表，并生成可下载二维码。
             </p>
           </div>
           <QueryButton onClick={() => setEditing(null)}>新增公司链接</QueryButton>
@@ -118,7 +118,7 @@ function AssessmentEnterprisesContent() {
                   <tr>
                     <th className="px-5 py-3 font-medium">公司</th>
                     <th className="px-5 py-3 font-medium">专属链接</th>
-                    <th className="px-5 py-3 font-medium">私有量表</th>
+                    <th className="px-5 py-3 font-medium">授权量表</th>
                     <th className="px-5 py-3 text-right font-medium">操作</th>
                   </tr>
                 </thead>
@@ -250,6 +250,38 @@ function DefaultBrandingEditor({
   );
 }
 
+function AssessmentOptionList({
+  options,
+  selectedIds,
+  emptyText,
+  onToggle,
+}: {
+  options: PrivateAssessmentOption[];
+  selectedIds: string[];
+  emptyText: string;
+  onToggle: (id: string, checked: boolean) => void;
+}) {
+  return (
+    <div className="divide-y divide-[var(--lxxl-border)] rounded-xl border border-[var(--lxxl-border)]">
+      {options.length === 0 ? (
+        <div className="px-4 py-5 text-sm text-[var(--lxxl-muted)]">{emptyText}</div>
+      ) : (
+        options.map((option) => (
+          <label className="flex cursor-pointer items-center gap-3 px-4 py-3" key={option.id}>
+            <input
+              checked={selectedIds.includes(option.id)}
+              type="checkbox"
+              onChange={(event) => onToggle(option.id, event.target.checked)}
+            />
+            <span>{option.title}</span>
+            <span className="text-xs text-[var(--lxxl-muted)]">{option.id}</span>
+          </label>
+        ))
+      )}
+    </div>
+  );
+}
+
 function EnterpriseEditor({
   item,
   options,
@@ -269,6 +301,14 @@ function EnterpriseEditor({
   const [assessmentIds, setAssessmentIds] = useState<string[]>(item?.assessmentIds || []);
   const [saving, setSaving] = useState(false);
   const url = `${DEFAULT_BASE_URL}/${suffix}`;
+  const privateOptions = options.filter((option) => option.visibility === "private");
+  const publicOptions = options.filter((option) => option.visibility !== "private");
+
+  const toggleAssessment = (id: string, checked: boolean) => {
+    setAssessmentIds((current) =>
+      checked ? [...current, id] : current.filter((itemId) => itemId !== id),
+    );
+  };
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/30 p-6">
@@ -304,27 +344,26 @@ function EnterpriseEditor({
               完整链接：{url}。前缀固定为中建站点域名，随机后缀用于降低链接被猜测的风险。
             </p>
           </QueryField>
-          <QueryField label="授权私有量表" required>
-            <div className="divide-y divide-[var(--lxxl-border)] rounded-xl border border-[var(--lxxl-border)]">
-              {options.length === 0 ? (
-                <div className="px-4 py-5 text-sm text-[var(--lxxl-muted)]">暂无已发布私有量表，请先在量表管理中设置并发布。</div>
-              ) : options.map((option) => (
-                <label className="flex cursor-pointer items-center gap-3 px-4 py-3" key={option.id}>
-                  <input
-                    checked={assessmentIds.includes(option.id)}
-                    type="checkbox"
-                    onChange={(event) =>
-                      setAssessmentIds((current) =>
-                        event.target.checked
-                          ? [...current, option.id]
-                          : current.filter((id) => id !== option.id),
-                      )
-                    }
-                  />
-                  <span>{option.title}</span>
-                  <span className="text-xs text-[var(--lxxl-muted)]">{option.id}</span>
-                </label>
-              ))}
+          <QueryField label="授权量表" required>
+            <div className="space-y-4">
+              <div>
+                <div className="mb-2 text-sm font-medium text-[var(--lxxl-ink)]">私有量表</div>
+                <AssessmentOptionList
+                  emptyText="暂无已发布私有量表，请先在量表管理中设置并发布。"
+                  options={privateOptions}
+                  selectedIds={assessmentIds}
+                  onToggle={toggleAssessment}
+                />
+              </div>
+              <div>
+                <div className="mb-2 text-sm font-medium text-[var(--lxxl-ink)]">公有量表</div>
+                <AssessmentOptionList
+                  emptyText="暂无已发布公有量表，请先在量表管理中设置并发布。"
+                  options={publicOptions}
+                  selectedIds={assessmentIds}
+                  onToggle={toggleAssessment}
+                />
+              </div>
             </div>
           </QueryField>
         </div>
