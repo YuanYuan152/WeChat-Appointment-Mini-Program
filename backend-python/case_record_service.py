@@ -34,6 +34,7 @@ from models import (
     AppCaseRecord,
     AppCaseRecordRevision,
     AppConsultation,
+    AppCounselorProfile,
     AppOrder,
     AppRoleBinding,
     AppSchedule,
