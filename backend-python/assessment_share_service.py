@@ -12,6 +12,7 @@ from typing import Any, Optional
 from urllib.parse import quote, urlsplit
 
 from sqlalchemy import distinct, func
+from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import Session
 
 from config import settings
@@ -355,31 +356,36 @@ def assessment_admin_list_stats(
         assessment_id: {"completedCount": 0, "scanCount": 0}
         for assessment_id in normalized_ids
     }
-    report_rows = (
-        db.query(
-            AppAssessmentReport.AssessmentId.label("assessment_id"),
-            func.count(AppAssessmentReport.Id).label("completed_count"),
+    try:
+        report_rows = (
+            db.query(
+                AppAssessmentReport.AssessmentId.label("assessment_id"),
+                func.count(AppAssessmentReport.Id).label("completed_count"),
+            )
+            .filter(
+                AppAssessmentReport.AssessmentId.in_(normalized_ids),
+                AppAssessmentReport.DeletedAt.is_(None),
+            )
+            .group_by(AppAssessmentReport.AssessmentId)
+            .all()
         )
-        .filter(
-            AppAssessmentReport.AssessmentId.in_(normalized_ids),
-            AppAssessmentReport.DeletedAt.is_(None),
-        )
-        .group_by(AppAssessmentReport.AssessmentId)
-        .all()
-    )
-    for row in report_rows:
-        result[row.assessment_id]["completedCount"] = int(row.completed_count)
+        for row in report_rows:
+            result[row.assessment_id]["completedCount"] = int(row.completed_count)
 
-    scan_rows = (
-        db.query(
-            AppAssessmentShareScan.AssessmentId.label("assessment_id"),
-            func.count(AppAssessmentShareScan.Id).label("scan_count"),
+        scan_rows = (
+            db.query(
+                AppAssessmentShareScan.AssessmentId.label("assessment_id"),
+                func.count(AppAssessmentShareScan.Id).label("scan_count"),
+            )
+            .filter(AppAssessmentShareScan.AssessmentId.in_(normalized_ids))
+            .group_by(AppAssessmentShareScan.AssessmentId)
+            .all()
         )
-        .filter(AppAssessmentShareScan.AssessmentId.in_(normalized_ids))
-        .group_by(AppAssessmentShareScan.AssessmentId)
-        .all()
-    )
-    for row in scan_rows:
-        result[row.assessment_id]["scanCount"] = int(row.scan_count)
+        for row in scan_rows:
+            result[row.assessment_id]["scanCount"] = int(row.scan_count)
+    except ProgrammingError:
+        # 本地/未迁移库可能尚未创建量表报告与扫码表；列表仍应可浏览，统计置 0。
+        db.rollback()
+        return result
 
     return result
