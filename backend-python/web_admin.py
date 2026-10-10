@@ -1230,7 +1230,12 @@ def operation_records(
             "updatedAt": row.UpdatedAt,
         })
 
-    for row in db.query(AppBanner).all():
+    try:
+        banners = db.query(AppBanner).all()
+    except (OperationalError, ProgrammingError):
+        db.rollback()
+        banners = []
+    for row in banners:
         records.append({
             "id": f"banner-{row.Id}",
             "occurredAt": row.UpdatedAt or row.CreatedAt,
@@ -1246,7 +1251,13 @@ def operation_records(
             "status": "ACTIVE" if row.IsActive else "INACTIVE",
         })
 
-    for row in db.query(AppActivity).all():
+    try:
+        activities = db.query(AppActivity).all()
+    except (OperationalError, ProgrammingError):
+        # AppActivity 新增列（LinkUrl/LiveDisplayMode 等）未迁移时跳过内容记录，避免整页 500
+        db.rollback()
+        activities = []
+    for row in activities:
         records.append({
             "id": f"activity-{row.Id}",
             "occurredAt": row.UpdatedAt or row.CreatedAt,
@@ -1262,7 +1273,12 @@ def operation_records(
             "status": "ACTIVE" if row.IsActive else "INACTIVE",
         })
 
-    for row in db.query(AppArticle).all():
+    try:
+        articles = db.query(AppArticle).all()
+    except (OperationalError, ProgrammingError):
+        db.rollback()
+        articles = []
+    for row in articles:
         records.append({
             "id": f"article-{row.Id}",
             "occurredAt": row.UpdatedAt or row.CreatedAt,
