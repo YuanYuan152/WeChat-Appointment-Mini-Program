@@ -427,7 +427,12 @@
       "required": ["id", "title", "questionIds", "aggregate", "scoreRanges"],
       "properties": {
         "id": {
-          "$ref": "#/$defs/stableId"
+          "allOf": [
+            {
+              "$ref": "#/$defs/stableId"
+            }
+          ],
+          "description": "一级维度使用普通 ID；二级维度使用“父维度ID.子维度ID”，且父维度必须存在。最多支持两级。"
         },
         "title": {
           "type": "string",

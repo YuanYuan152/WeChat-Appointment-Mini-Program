@@ -188,6 +188,26 @@ class AssessmentDefinitionStoreTests(unittest.TestCase):
         with self.assertRaises(AssessmentValidationError):
             self.store.create_draft(definition)
 
+    def test_second_level_dimension_requires_existing_parent(self) -> None:
+        definition = self.example_definition()
+        parent = copy.deepcopy(definition["dimensions"][0])
+        child = copy.deepcopy(definition["dimensions"][0])
+        parent.update({"id": "A", "title": "父维度"})
+        child.update({"id": "A.b", "title": "子维度"})
+        definition["dimensions"] = [parent, child]
+
+        validate_definition(definition, allow_fixed_scoring=False)
+
+        definition["dimensions"] = [child]
+        with self.assertRaisesRegex(AssessmentValidationError, "缺少父维度"):
+            validate_definition(definition, allow_fixed_scoring=False)
+
+    def test_dimension_hierarchy_supports_at_most_two_levels(self) -> None:
+        definition = self.example_definition()
+        definition["dimensions"][0]["id"] = "A.b.c"
+        with self.assertRaisesRegex(AssessmentValidationError, "最多支持两级"):
+            validate_definition(definition, allow_fixed_scoring=False)
+
     def test_assessment_id_must_fit_static_share_code(self) -> None:
         definition = self.example_definition()
         definition["id"] = "a" * 55

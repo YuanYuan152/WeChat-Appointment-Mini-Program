@@ -7,6 +7,7 @@ import {
   resolveAssessmentAssetUrl,
 } from "@/lib/assessmentReport";
 import { API_BASE_URL } from "@/lib/api";
+import { getDimensionParentId } from "@/lib/assessmentEditor";
 import { formatUtcFullDateTime } from "@/lib/format";
 import type {
   AssessmentReportDetail,
@@ -325,16 +326,32 @@ function DimensionResult({
   const definition = assessment.dimensions?.find(
     (item) => item.id === dimension.id,
   );
+  const parentDimensionId = getDimensionParentId(dimension.id);
+  const parentDefinition = parentDimensionId
+    ? assessment.dimensions?.find((item) => item.id === parentDimensionId)
+    : undefined;
   const { min, max } = getScoreRangeBounds(definition?.scoreRanges);
   const span = Math.max(1, max - min);
   const percentage =
     Math.min(100, Math.max(0, ((dimension.score - min) / span) * 100));
 
   return (
-    <article className="rounded-xl border border-[var(--lxxl-border)] p-4">
+    <article
+      className={`rounded-xl border p-4 ${
+        parentDimensionId
+          ? "ml-4 border-l-4 border-l-[var(--lxxl-green)]"
+          : "border-[var(--lxxl-border)]"
+      }`}
+    >
       <div className="flex items-start justify-between gap-3">
         <div>
           <h6 className="font-medium">{dimension.title}</h6>
+          {parentDimensionId && (
+            <p className="mt-1 text-xs text-[var(--lxxl-muted)]">
+              子维度 · 从属于{" "}
+              {parentDefinition?.title || parentDimensionId}
+            </p>
+          )}
           <p className="mt-1 text-xs text-[var(--lxxl-muted)]">
             {dimension.score} 分 · 区间 {min}–{max}
           </p>

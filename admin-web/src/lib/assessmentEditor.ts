@@ -470,11 +470,17 @@ export function parseLines(text: string): string[] {
 export interface AssessmentScoreCoverageSummary {
   path: string;
   label: string;
+  parentDimensionId?: string;
   minimum: number;
   maximum: number;
   reachableCount: number;
   uncoveredScores: number[];
   validationError?: string;
+}
+
+export function getDimensionParentId(dimensionId: string): string | undefined {
+  const parts = dimensionId.trim().split(".");
+  return parts.length === 2 && parts.every(Boolean) ? parts[0] : undefined;
 }
 
 class ReachabilityLimitError extends Error {}
@@ -682,6 +688,14 @@ export function getAssessmentScoreCoverageSummaries(
         if (!Array.isArray(dimension.questionIds)) {
           return [];
         }
+        const parentDimensionId = getDimensionParentId(dimension.id);
+        const parentDimension = parentDimensionId
+          ? definition.dimensions?.find((item) => item.id === parentDimensionId)
+          : undefined;
+        const dimensionName = dimension.title || dimension.id || String(index + 1);
+        const coverageLabel = parentDimension
+          ? `维度“${parentDimension.title || parentDimension.id}” › 子维度“${dimensionName}”`
+          : `维度“${dimensionName}”`;
         const reachableScores = enumerateReachableScores(
           definition,
           dimension.questionIds,
@@ -689,19 +703,22 @@ export function getAssessmentScoreCoverageSummaries(
             ? dimension.reverseQuestionIds
             : [],
           dimension.aggregate,
-          `维度“${dimension.title || dimension.id || index + 1}”`,
+          coverageLabel,
           true,
           dimension.calculationMode ?? "simple",
           dimension.formula ?? "",
         );
         return reachableScores
           ? [
-              buildCoverageSummary(
-                `dimensions[${index}].scoreRanges`,
-                `维度“${dimension.title || dimension.id || index + 1}”`,
-                reachableScores,
-                dimension.scoreRanges,
-              ),
+              {
+                ...buildCoverageSummary(
+                  `dimensions[${index}].scoreRanges`,
+                  coverageLabel,
+                  reachableScores,
+                  dimension.scoreRanges,
+                ),
+                parentDimensionId,
+              },
             ]
           : [];
       });
@@ -1084,6 +1101,9 @@ export function validateAssessmentDefinition(
         issues,
         "维度 ID 重复",
       );
+      const dimensionIds = new Set(
+        definition.dimensions.map((dimension) => dimension.id),
+      );
       definition.dimensions.forEach((dimension, index) => {
         const path = `dimensions[${index}]`;
         addRequired(`${path}.id`, "维度 ID", dimension.id);
@@ -1092,6 +1112,24 @@ export function validateAssessmentDefinition(
           issues.push({
             path: `${path}.id`,
             message: "维度 ID 格式不合法",
+            severity: "error",
+          });
+        }
+        const idParts = dimension.id.split(".");
+        if (idParts.length > 2) {
+          issues.push({
+            path: `${path}.id`,
+            message: "维度最多支持两级，子维度 ID 格式应为“父维度ID.子维度ID”",
+            severity: "error",
+          });
+        } else if (
+          idParts.length === 2 &&
+          idParts[0] &&
+          !dimensionIds.has(idParts[0])
+        ) {
+          issues.push({
+            path: `${path}.id`,
+            message: `子维度缺少父维度：${idParts[0]}`,
             severity: "error",
           });
         }

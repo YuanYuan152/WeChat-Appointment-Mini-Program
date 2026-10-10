@@ -11,6 +11,7 @@ import {
   createStableId,
   formatLines,
   getAssessmentScoreCoverageSummaries,
+  getDimensionParentId,
   isFixedScoringType,
   parseLines,
   type AssessmentScoreCoverageSummary,
@@ -1451,10 +1452,20 @@ function ScoreCoveragePanel({
               key={summary.path}
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="text-sm font-medium">{summary.label}</div>
-                <Badge tone={valid ? "green" : "red"}>
-                  {valid ? "覆盖完整" : "需要调整"}
-                </Badge>
+                <div>
+                  <div className="text-sm font-medium">{summary.label}</div>
+                  {summary.parentDimensionId && (
+                    <p className="mt-1 text-xs text-[var(--lxxl-muted)]">
+                      二级维度 · 从属于 {summary.parentDimensionId}
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {summary.parentDimensionId && <Badge tone="gold">子维度</Badge>}
+                  <Badge tone={valid ? "green" : "red"}>
+                    {valid ? "覆盖完整" : "需要调整"}
+                  </Badge>
+                </div>
               </div>
               {summary.validationError ? (
                 <p className="mt-2 text-xs leading-5 text-[#A13F37]">
@@ -1545,6 +1556,9 @@ function DimensionEditor({
   onChange: (definition: AssessmentDefinition) => void;
 }) {
   const dimensions = definition.dimensions || [];
+  const [expandedQuestionSections, setExpandedQuestionSections] = useState<
+    Record<number, boolean>
+  >({});
 
   function setDimensions(next: AssessmentDimension[]) {
     onChange({ ...definition, dimensions: next });
@@ -1584,7 +1598,7 @@ function DimensionEditor({
           新增维度
         </AddButton>
       }
-      description="每个维度选择参与计算的题目，可单独设置反向计分题和结果区间。"
+      description="每个维度独立配置题目、计算方式和结果区间。将维度 ID 写成“父维度ID.子维度ID”（如 A.b）即可建立二级从属关系。"
       title="维度与报告区间"
     >
       <div className="space-y-4">
@@ -1592,6 +1606,12 @@ function DimensionEditor({
           const dimensionReverseIds = dimension.reverseQuestionIds || [];
           const calculationMode = dimension.calculationMode ?? "simple";
           const allQuestionIds = definition.questions.map((question) => question.id);
+          const parentDimensionId = getDimensionParentId(dimension.id);
+          const parentDimension = parentDimensionId
+            ? dimensions.find((item) => item.id === parentDimensionId)
+            : undefined;
+          const questionsExpanded =
+            expandedQuestionSections[dimensionIndex] ?? true;
           let formulaError = "";
           if (calculationMode === "formula") {
             try {
@@ -1603,16 +1623,34 @@ function DimensionEditor({
           return (
             <div
               key={dimensionIndex}
-              className="rounded-xl border border-[var(--lxxl-border)] bg-[#FCFBF8] p-4"
+              className={`rounded-xl border bg-[#FCFBF8] p-4 ${
+                parentDimensionId
+                  ? "ml-4 border-l-4 border-l-[var(--lxxl-green)]"
+                  : "border-[var(--lxxl-border)]"
+              }`}
             >
               <CardHeader
                 index={dimensionIndex}
-                label={dimension.title || dimension.id || "未命名维度"}
+                label={`${parentDimensionId ? "↳ " : ""}${dimension.title || dimension.id || "未命名维度"}`}
                 removeDisabled={disabled || dimensions.length <= 1}
                 onRemove={() =>
                   setDimensions(dimensions.filter((_, index) => index !== dimensionIndex))
                 }
               />
+              {parentDimensionId && (
+                <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-[#F2F7F4] px-3 py-2 text-xs text-[var(--lxxl-muted)]">
+                  <Badge tone={parentDimension ? "green" : "red"}>二级维度</Badge>
+                  <span>
+                    从属于{" "}
+                    <strong className="text-[var(--lxxl-text)]">
+                      {parentDimension
+                        ? `${parentDimension.title || parentDimension.id}（${parentDimensionId}）`
+                        : parentDimensionId}
+                    </strong>
+                    {!parentDimension && "，请先创建对应的父维度"}
+                  </span>
+                </div>
+              )}
               <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4">
                 <CompactField label="维度 ID">
                   <input
@@ -1737,48 +1775,67 @@ function DimensionEditor({
 
               <div className="mt-4 rounded-xl border border-[var(--lxxl-border)] bg-white p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="text-sm font-medium">参与计算的题目</div>
-                  <div className="flex gap-2">
-                    <button
-                      className="text-xs text-[var(--lxxl-green)] hover:underline disabled:cursor-not-allowed disabled:opacity-50"
-                      disabled={disabled}
-                      type="button"
-                      onClick={() =>
-                        setDimensions(
-                          replaceAt(dimensions, dimensionIndex, {
-                            ...dimension,
-                            questionIds: allQuestionIds,
-                            formula:
-                              calculationMode === "formula"
-                                ? allQuestionIds.join(" + ")
-                                : dimension.formula,
-                          }),
-                        )
-                      }
-                    >
-                      全选题目
-                    </button>
-                    <button
-                      className="text-xs text-[var(--lxxl-muted)] hover:underline disabled:cursor-not-allowed disabled:opacity-50"
-                      disabled={disabled}
-                      type="button"
-                      onClick={() =>
-                        setDimensions(
-                          replaceAt(dimensions, dimensionIndex, {
-                            ...dimension,
-                            questionIds: [],
-                            reverseQuestionIds: [],
-                            formula:
-                              calculationMode === "formula" ? "" : dimension.formula,
-                          }),
-                        )
-                      }
-                    >
-                      取消全选
-                    </button>
-                  </div>
+                  <button
+                    aria-expanded={questionsExpanded}
+                    className="flex items-center gap-2 text-left text-sm font-medium"
+                    type="button"
+                    onClick={() =>
+                      setExpandedQuestionSections((current) => ({
+                        ...current,
+                        [dimensionIndex]: !questionsExpanded,
+                      }))
+                    }
+                  >
+                    <span aria-hidden>{questionsExpanded ? "▾" : "▸"}</span>
+                    <span>参与计算的题目</span>
+                    <span className="text-xs font-normal text-[var(--lxxl-muted)]">
+                      已选 {dimension.questionIds.length}/{definition.questions.length}
+                    </span>
+                  </button>
+                  {questionsExpanded && (
+                    <div className="flex gap-2">
+                      <button
+                        className="text-xs text-[var(--lxxl-green)] hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={disabled}
+                        type="button"
+                        onClick={() =>
+                          setDimensions(
+                            replaceAt(dimensions, dimensionIndex, {
+                              ...dimension,
+                              questionIds: allQuestionIds,
+                              formula:
+                                calculationMode === "formula"
+                                  ? allQuestionIds.join(" + ")
+                                  : dimension.formula,
+                            }),
+                          )
+                        }
+                      >
+                        全选题目
+                      </button>
+                      <button
+                        className="text-xs text-[var(--lxxl-muted)] hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={disabled}
+                        type="button"
+                        onClick={() =>
+                          setDimensions(
+                            replaceAt(dimensions, dimensionIndex, {
+                              ...dimension,
+                              questionIds: [],
+                              reverseQuestionIds: [],
+                              formula:
+                                calculationMode === "formula" ? "" : dimension.formula,
+                            }),
+                          )
+                        }
+                      >
+                        取消全选
+                      </button>
+                    </div>
+                  )}
                 </div>
-                <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
+                {questionsExpanded && (
+                  <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
                   {definition.questions.map((question) => {
                     const selected = dimension.questionIds.includes(question.id);
                     return (
@@ -1849,7 +1906,8 @@ function DimensionEditor({
                       </div>
                     );
                   })}
-                </div>
+                  </div>
+                )}
               </div>
 
               <div className="mt-4">

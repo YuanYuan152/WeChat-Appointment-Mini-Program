@@ -26,6 +26,11 @@ interface ReportViewProps {
   inviteAssessment?: Assessment;
 }
 
+function dimensionParentId(id: string): string | undefined {
+  const parts = id.split(".");
+  return parts.length === 2 && parts.every(Boolean) ? parts[0] : undefined;
+}
+
 export function ReportView({
   assessment,
   result,
@@ -205,14 +210,27 @@ export function ReportView({
 
             {result.dimensions.map((dim) => {
               const dimDef = assessment.dimensions?.find((d) => d.id === dim.id);
+              const parentId = dimensionParentId(dim.id);
+              const parentDefinition = parentId
+                ? assessment.dimensions?.find((item) => item.id === parentId)
+                : undefined;
               const max = getRangeMax(dimDef?.scoreRanges);
               const min = getRangeMin(dimDef?.scoreRanges);
               return (
                 <div
                   key={dim.id}
                   id={`dimension-${dim.id}`}
-                  className="scroll-mt-24 rounded-[var(--radius)] border border-border bg-card p-6 shadow-sm"
+                  className={`scroll-mt-24 rounded-[var(--radius)] border bg-card p-6 shadow-sm ${
+                    parentId
+                      ? "ml-4 border-l-4 border-l-primary"
+                      : "border-border"
+                  }`}
                 >
+                  {parentId && (
+                    <p className="mb-3 text-xs text-muted-foreground">
+                      子维度 · 从属于 {parentDefinition?.title || parentId}
+                    </p>
+                  )}
                   <DimensionAxisHorizontal
                     dim={dim}
                     max={max}

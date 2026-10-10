@@ -709,3 +709,39 @@ test("rejects an invalid formula or a formula that differs from selected questio
       .some((issue) => issue.message.includes("完全一致")),
   );
 });
+
+test("derives second-level dimensions from dotted ids and shows hierarchy in coverage", () => {
+  const definition = completeRequiredFields(
+    editor.createDefaultAssessmentDefinition("dimension"),
+  );
+  const base = definition.dimensions[0];
+  definition.dimensions = [
+    { ...base, id: "A", title: "父维度" },
+    { ...base, id: "A.b", title: "子维度" },
+  ];
+
+  assert.deepEqual(editor.validateAssessmentDefinition(definition), []);
+  const childSummary = editor
+    .getAssessmentScoreCoverageSummaries(definition)
+    .find((summary) => summary.parentDimensionId === "A");
+  assert.equal(childSummary.label, "维度“父维度” › 子维度“子维度”");
+});
+
+test("rejects orphaned or deeper-than-second-level dimensions", () => {
+  const definition = completeRequiredFields(
+    editor.createDefaultAssessmentDefinition("dimension"),
+  );
+  definition.dimensions[0].id = "missing.child";
+  assert.ok(
+    editor
+      .validateAssessmentDefinition(definition)
+      .some((issue) => issue.message.includes("缺少父维度")),
+  );
+
+  definition.dimensions[0].id = "A.b.c";
+  assert.ok(
+    editor
+      .validateAssessmentDefinition(definition)
+      .some((issue) => issue.message.includes("最多支持两级")),
+  );
+});

@@ -650,7 +650,7 @@ def validate_definition(
             _validate_range_coverage(score_ranges, reachable_scores, "scoreRanges")
     if scoring_type == "dimension":
         dimensions = definition.get("dimensions")
-        _assert_unique_ids(dimensions, "dimensions")
+        dimension_ids = _assert_unique_ids(dimensions, "dimensions")
         for index, raw_dimension in enumerate(dimensions):
             dimension = _assert_object(raw_dimension, f"dimensions[{index}]")
             allowed_dimension_fields = {
@@ -666,6 +666,17 @@ def validate_definition(
             }
             if dimension.keys() - allowed_dimension_fields:
                 raise AssessmentValidationError(f"dimensions[{index}]包含未知字段")
+            dimension_id = str(dimension.get("id") or "")
+            id_parts = dimension_id.split(".")
+            if len(id_parts) > 2:
+                raise AssessmentValidationError(
+                    f"dimensions[{index}].id 最多支持两级，"
+                    "子维度 ID 格式应为“父维度ID.子维度ID”"
+                )
+            if len(id_parts) == 2 and id_parts[0] not in dimension_ids:
+                raise AssessmentValidationError(
+                    f"dimensions[{index}]子维度缺少父维度：{id_parts[0]}"
+                )
             _assert_string(dimension.get("title"), f"dimensions[{index}].title")
             _assert_optional_string(dimension.get("intro"), f"dimensions[{index}].intro")
             references = _validate_id_list(
