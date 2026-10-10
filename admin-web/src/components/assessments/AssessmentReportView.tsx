@@ -61,7 +61,12 @@ function ReportMeta({ detail }: { detail: AssessmentReportDetail }) {
         </div>
         <div className="flex flex-wrap gap-2">
           <Badge tone={detail.source === "eap" ? "green" : "gold"}>
-            {detail.source === "eap" ? "EAP 量表" : "小程序历史量表"}
+            {detail.sourceLabel?.trim()
+              || (detail.source === "mini-legacy"
+                ? "自有EAP网页"
+                : detail.sourceDetail
+                  ? `EAP量表.${String(detail.sourceDetail).replace(" · ", ".").replace(/·/g, ".")}`
+                  : "EAP量表")}
           </Badge>
           <Badge>
             {detail.category === "professional" ? "专业量表" : "趣味量表"}
@@ -434,7 +439,7 @@ function LegacyReport({
     <>
       <section className="rounded-2xl border border-[var(--lxxl-border)] bg-white p-6">
         <div className="rounded-xl border border-[#E7D3A8] bg-[#FFF9EC] px-4 py-3 text-sm leading-6 text-[#7A5C22]">
-          这是小程序历史量表记录，不包含 EAP 版本化报告快照。
+          这是自有 EAP 网页历史量表记录，不包含 EAP 版本化报告快照。
         </div>
         <div className="mt-6 grid gap-6 md:grid-cols-[220px_minmax(0,1fr)] md:items-center">
           <ScoreRing

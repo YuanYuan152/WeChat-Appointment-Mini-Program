@@ -1,13 +1,18 @@
 """企业定制量表的公开解析与管理接口。"""
 from __future__ import annotations
 
+import hashlib
+import re
+import uuid
 from io import BytesIO
 from typing import Any, Callable, List, Optional
+from uuid import UUID
 
 import qrcode
 import qrcode.image.svg
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 
 from assessment_definition_service import AssessmentDefinitionError
 from assessment_enterprise_service import (
@@ -21,7 +26,17 @@ from assessment_enterprise_service import (
     save_enterprise,
     save_default_branding,
 )
+from assessment_report_service import (
+    AssessmentReportError,
+    submit_report,
+)
 from assessment_routes import get_assessment_store
+from config import settings
+from database import get_db
+from models import AppAccount
+from patient_registration import ensure_default_patient_registration
+
+_ENTERPRISE_VISITOR_OPENID_RE = re.compile(r"^eap-ent-[a-z0-9-]{8,80}-[a-f0-9]{16}$")
 
 
 public_router = APIRouter(
@@ -56,6 +71,80 @@ class BrandingPayload(BaseModel):
     slogan: str = Field(..., min_length=1, max_length=200)
     onboardingEntryLabel: str = Field(default="新员工入职测评", min_length=1, max_length=40)
     heroSlides: list[HeroSlidePayload] = Field(..., min_length=3, max_length=3)
+
+
+class EnterpriseReportItemPayload(BaseModel):
+    clientSubmissionId: UUID
+    assessmentId: str = Field(..., min_length=1, max_length=80)
+    assessmentVersion: int = Field(..., ge=1)
+    answers: dict[str, str]
+
+
+class EnterpriseReportsSubmitPayload(BaseModel):
+    visitorKey: str = Field(..., min_length=8, max_length=64)
+    employeeInfo: dict[str, Any] = Field(default_factory=dict)
+    reports: list[EnterpriseReportItemPayload] = Field(..., min_length=1, max_length=20)
+
+
+def _enterprise_source_label(enterprise: dict[str, Any]) -> str:
+    """返回「网站名.公司名」，供 admin 展示为 EAP量表.网站名.公司名。"""
+    site_name = str(enterprise.get("siteName") or "").strip().replace(".", "·")
+    company_name = str(enterprise.get("companyName") or "").strip().replace(".", "·")
+    if site_name and company_name:
+        return f"{site_name}.{company_name}"
+    return site_name or company_name or "企业定制EAP"
+
+
+def _ensure_enterprise_visitor(
+    db: Session,
+    *,
+    slug: str,
+    visitor_key: str,
+    employee_info: dict[str, Any],
+) -> AppAccount:
+    key = re.sub(r"[^a-zA-Z0-9_-]", "", (visitor_key or "").strip())[:64]
+    if len(key) < 8:
+        raise HTTPException(status_code=422, detail="访客标识无效")
+    digest = hashlib.sha256(f"{slug}:{key}".encode("utf-8")).hexdigest()[:16]
+    slug_part = re.sub(r"[^a-z0-9-]", "", slug.lower())[:40] or "enterprise"
+    openid = f"eap-ent-{slug_part}-{digest}"
+    if not _ENTERPRISE_VISITOR_OPENID_RE.fullmatch(openid):
+        openid = f"eap-ent-{digest}{digest[:8]}"
+
+    account = db.query(AppAccount).filter(AppAccount.OpenId == openid).first()
+    display_name = str(
+        employee_info.get("name")
+        or employee_info.get("empNo")
+        or "企业来访"
+    ).strip()[:50] or "企业来访"
+    if not account:
+        account = AppAccount(
+            OpenId=openid,
+            ActiveRole="Patient",
+            RealName=display_name,
+            Nickname=display_name,
+            PatientSource="ENTERPRISE_EAP",
+            PatientSourceDetail=slug[:200],
+        )
+        db.add(account)
+        db.commit()
+        db.refresh(account)
+    else:
+        changed = False
+        if display_name and account.RealName != display_name:
+            account.RealName = display_name
+            account.Nickname = display_name
+            changed = True
+        if ensure_default_patient_registration(db, account):
+            changed = True
+        if changed:
+            db.commit()
+            db.refresh(account)
+
+    if ensure_default_patient_registration(db, account):
+        db.commit()
+        db.refresh(account)
+    return account
 
 
 def _published_assessments(
@@ -109,6 +198,84 @@ def get_public_enterprise_assessments(slug: str):
         }
     except EnterpriseConfigError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@public_router.post("/{slug}/reports", summary="企业专属链接提交入职量表结果")
+def submit_enterprise_assessment_reports(
+    slug: str,
+    body: EnterpriseReportsSubmitPayload,
+    db: Session = Depends(get_db),
+):
+    try:
+        enterprise = get_enterprise_by_slug(slug)
+    except EnterpriseConfigError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    allowed_ids = {
+        str(item).strip()
+        for item in (enterprise.get("assessmentIds") or [])
+        if str(item).strip()
+    }
+    if not allowed_ids:
+        raise HTTPException(status_code=422, detail="该企业链接未授权任何量表")
+
+    for item in body.reports:
+        if item.assessmentId not in allowed_ids:
+            raise HTTPException(
+                status_code=422,
+                detail=f"量表未授权给该企业链接：{item.assessmentId}",
+            )
+
+    account = _ensure_enterprise_visitor(
+        db,
+        slug=enterprise["slug"],
+        visitor_key=body.visitorKey,
+        employee_info=body.employeeInfo or {},
+    )
+    source_label = _enterprise_source_label(enterprise)
+    consent_version = settings.ASSESSMENT_CONSENT_VERSION.strip() or "enterprise-onboarding"
+    demographic_meta = {
+        "_enterpriseSlug": enterprise["slug"],
+        "_enterpriseSiteName": str(enterprise.get("siteName") or "").strip(),
+        "_enterpriseCompanyName": str(enterprise.get("companyName") or "").strip(),
+        "_enterpriseSourceLabel": source_label,
+        "_employeeInfo": body.employeeInfo or {},
+    }
+
+    saved: list[dict[str, Any]] = []
+    store = get_assessment_store()
+    try:
+        for item in body.reports:
+            detail = submit_report(
+                db,
+                account=account,
+                store=store,
+                client_submission_id=str(item.clientSubmissionId),
+                assessment_id=item.assessmentId,
+                assessment_version=item.assessmentVersion,
+                demographic_answers=demographic_meta,
+                answers=item.answers,
+                entry_source="web",
+                share_code=None,
+                consent_version=consent_version,
+            )
+            saved.append(
+                {
+                    "assessmentId": item.assessmentId,
+                    "publicId": detail.get("publicId") or detail.get("reportId"),
+                    "assessmentTitle": detail.get("assessmentTitle"),
+                }
+            )
+    except (AssessmentReportError, AssessmentDefinitionError) as exc:
+        status = getattr(exc, "status_code", 500)
+        raise HTTPException(status_code=status, detail=str(exc)) from exc
+
+    return {
+        "accountId": account.Id,
+        "sourceLabel": source_label,
+        "savedCount": len(saved),
+        "reports": saved,
+    }
 
 
 def register_assessment_enterprise_admin_routes(

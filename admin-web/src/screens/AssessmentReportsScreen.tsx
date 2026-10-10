@@ -34,6 +34,8 @@ function getInitialFilters(assessmentId: string): AssessmentReportListFilters {
     assessmentId,
     category: "",
     source: "",
+    sourceKey: "",
+    completedAt: "",
     startAt: "",
     endAt: "",
   };
@@ -42,10 +44,17 @@ function getInitialFilters(assessmentId: string): AssessmentReportListFilters {
 function normalizedFilters(
   filters: AssessmentReportListFilters,
 ): AssessmentReportListFilters {
+  const completedAt = filters.completedAt?.trim() || "";
+  const sourceKey = filters.sourceKey?.trim() || "";
   return {
     ...filters,
     keyword: filters.keyword?.trim() || "",
     assessmentId: filters.assessmentId?.trim() || "",
+    sourceKey,
+    source: "",
+    completedAt,
+    startAt: completedAt,
+    endAt: completedAt,
   };
 }
 
@@ -59,9 +68,8 @@ function isSameQuery(
     (first.keyword || "") === (second.keyword || "") &&
     (first.assessmentId || "") === (second.assessmentId || "") &&
     (first.category || "") === (second.category || "") &&
-    (first.source || "") === (second.source || "") &&
-    (first.startAt || "") === (second.startAt || "") &&
-    (first.endAt || "") === (second.endAt || "")
+    (first.sourceKey || "") === (second.sourceKey || "") &&
+    (first.completedAt || "") === (second.completedAt || "")
   );
 }
 
@@ -381,7 +389,7 @@ function AssessmentReportsScreenContent({
           ? await fetchPatientAssessmentReports(accountId, {
               page: queryFilters.page,
               pageSize: queryFilters.pageSize,
-              source: queryFilters.source,
+              sourceKey: queryFilters.sourceKey,
             })
           : await fetchAssessmentReports({
               ...queryFilters,
@@ -427,21 +435,13 @@ function AssessmentReportsScreenContent({
       page: 1,
       pageSize: queryFilters.pageSize,
     });
-    if (
-      nextFilters.startAt &&
-      nextFilters.endAt &&
-      nextFilters.startAt > nextFilters.endAt
-    ) {
-      showNotice("error", "开始日期不能晚于结束日期");
-      return;
-    }
     setDraftFilters(nextFilters);
     if (isSameQuery(nextFilters, queryFilters)) {
       void loadList();
       return;
     }
     setQueryFilters(nextFilters);
-  }, [draftFilters, loadList, queryFilters, showNotice]);
+  }, [draftFilters, loadList, queryFilters]);
 
   const reset = useCallback(() => {
     const nextFilters = getInitialFilters(initialAssessmentId);

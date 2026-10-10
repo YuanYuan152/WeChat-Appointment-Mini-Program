@@ -15,6 +15,18 @@ interface AssessmentReportListItemBase {
   assessmentTitle: string;
   resultSummary: string;
   completedAt: string;
+  /** 企业定制 EAP：网站名.公司名 */
+  sourceDetail?: string | null;
+  /** 展示文案：自有EAP网页 / EAP量表 / EAP量表.网站名.公司名 */
+  sourceLabel?: string | null;
+  /** 筛选用：mini-legacy | eap | eap:网站名.公司名 */
+  sourceKey?: string | null;
+  entryChannel?: string | null;
+}
+
+export interface AssessmentReportSourceOption {
+  key: string;
+  label: string;
 }
 
 export interface EapAssessmentReportListItem
@@ -48,8 +60,15 @@ export interface AssessmentReportListFilters {
   keyword?: string;
   assessmentId?: string;
   category?: AssessmentCategory | "";
+  /** @deprecated 请使用 sourceKey */
   source?: AssessmentReportSource | "";
+  /** mini-legacy | eap | eap:网站名.公司名 */
+  sourceKey?: string;
+  /** 完成时间（日期，按中国时区当天筛选） */
+  completedAt?: string;
+  /** @deprecated 由 completedAt 推导，保留兼容 */
   startAt?: string;
+  /** @deprecated 由 completedAt 推导，保留兼容 */
   endAt?: string;
 }
 
@@ -57,6 +76,7 @@ export interface PatientAssessmentReportListFilters {
   page: number;
   pageSize: number;
   source?: AssessmentReportSource | "";
+  sourceKey?: string;
 }
 
 export interface SumAssessmentScoreResult {

@@ -1,6 +1,6 @@
 "use client";
 
-import type { Dispatch, SetStateAction } from "react";
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 
 import { AssessmentReportDialog } from "@/components/assessments/AssessmentReportDialog";
 import {
@@ -14,10 +14,14 @@ import {
   queryControlClass,
 } from "@/components/ui";
 import { formatUtcFullDateTime } from "@/lib/format";
+import { fetchAssessments } from "@/services/assessments";
+import { fetchAssessmentReportSourceOptions } from "@/services/assessmentReports";
+import type { AssessmentListItem } from "@/types/assessment";
 import type {
   AssessmentReportDetail,
   AssessmentReportListFilters,
   AssessmentReportListItem,
+  AssessmentReportSourceOption,
 } from "@/types/assessmentReport";
 
 export function AssessmentReportsPanel({
@@ -61,6 +65,95 @@ export function AssessmentReportsPanel({
   const patient = patientScoped ? items[0] : undefined;
   const subject =
     patient?.patientName || (accountId ? `来访者 ${accountId}` : "");
+  const [assessmentOptions, setAssessmentOptions] = useState<
+    AssessmentListItem[]
+  >([]);
+  const [sourceOptions, setSourceOptions] = useState<
+    AssessmentReportSourceOption[]
+  >([
+    { key: "mini-legacy", label: "自有EAP网页" },
+  ]);
+
+  useEffect(() => {
+    if (patientScoped) {
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const result = await fetchAssessments({
+          page: 1,
+          pageSize: 200,
+        });
+        if (!cancelled) {
+          setAssessmentOptions(result.items || []);
+        }
+      } catch {
+        if (!cancelled) {
+          setAssessmentOptions([]);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [patientScoped]);
+
+  // 列表刷新后同步来源筛选项（含新出现的 EAP量表.网站名.公司名）
+  useEffect(() => {
+    if (patientScoped || listLoading) {
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const sources = await fetchAssessmentReportSourceOptions();
+        if (!cancelled && sources.items?.length) {
+          setSourceOptions(sources.items);
+        }
+      } catch {
+        // 保留已有选项
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [patientScoped, listLoading, total]);
+
+  const assessmentSelectOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const item of assessmentOptions) {
+      if (item.id && item.title) {
+        map.set(item.id, item.title);
+      }
+    }
+    // 若当前筛选项不在已发布列表中，仍保留可选项
+    if (
+      draftFilters.assessmentId &&
+      !map.has(draftFilters.assessmentId)
+    ) {
+      map.set(draftFilters.assessmentId, draftFilters.assessmentId);
+    }
+    return Array.from(map.entries()).sort((a, b) =>
+      a[1].localeCompare(b[1], "zh-CN"),
+    );
+  }, [assessmentOptions, draftFilters.assessmentId]);
+
+  const mergedSourceOptions = useMemo(() => {
+    const key = draftFilters.sourceKey?.trim();
+    if (!key || sourceOptions.some((option) => option.key === key)) {
+      return sourceOptions;
+    }
+    const label =
+      key === "mini-legacy"
+        ? "自有EAP网页"
+        : key === "eap"
+          ? "EAP量表"
+          : key.startsWith("eap:")
+            ? `EAP量表.${key.slice(4)}`
+            : key;
+    return [...sourceOptions, { key, label }];
+  }, [draftFilters.sourceKey, sourceOptions]);
 
   return (
     <>
@@ -79,7 +172,7 @@ export function AssessmentReportsPanel({
               </h2>
               <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">
                 {patientScoped
-                  ? `查看${subject}的 EAP 量表和小程序历史量表报告。`
+                  ? `查看${subject}的 EAP 量表与自有 EAP 网页报告。`
                   : "按来访者、量表、来源和完成时间查看测评报告。报告内容以提交时快照为准。"}
               </p>
             </div>
@@ -114,11 +207,9 @@ export function AssessmentReportsPanel({
                     }
                   />
                 </QueryField>
-                <QueryField label="量表 ID">
-                  <input
+                <QueryField label="量表名称">
+                  <select
                     className={queryControlClass}
-                    placeholder="输入量表 ID"
-                    maxLength={80}
                     value={draftFilters.assessmentId || ""}
                     onChange={(event) =>
                       setDraftFilters((current) => ({
@@ -126,7 +217,14 @@ export function AssessmentReportsPanel({
                         assessmentId: event.target.value,
                       }))
                     }
-                  />
+                  >
+                    <option value="">全部量表</option>
+                    {assessmentSelectOptions.map(([id, title]) => (
+                      <option key={id} value={id}>
+                        {title}
+                      </option>
+                    ))}
+                  </select>
                 </QueryField>
                 <QueryField label="量表类型">
                   <select
@@ -150,49 +248,37 @@ export function AssessmentReportsPanel({
             <QueryField label="报告来源">
               <select
                 className={queryControlClass}
-                value={draftFilters.source || ""}
+                value={draftFilters.sourceKey || ""}
                 onChange={(event) =>
                   setDraftFilters((current) => ({
                     ...current,
-                    source: event.target
-                      .value as AssessmentReportListFilters["source"],
+                    sourceKey: event.target.value,
+                    source: "",
                   }))
                 }
               >
                 <option value="">全部来源</option>
-                <option value="eap">EAP 量表</option>
-                <option value="mini-legacy">小程序历史量表</option>
+                {mergedSourceOptions.map((option) => (
+                  <option key={option.key} value={option.key}>
+                    {option.label}
+                  </option>
+                ))}
               </select>
             </QueryField>
             {!patientScoped && (
-              <>
-                <QueryField label="完成日期（开始）">
-                  <input
-                    className={queryControlClass}
-                    type="date"
-                    value={draftFilters.startAt || ""}
-                    onChange={(event) =>
-                      setDraftFilters((current) => ({
-                        ...current,
-                        startAt: event.target.value,
-                      }))
-                    }
-                  />
-                </QueryField>
-                <QueryField label="完成日期（结束）">
-                  <input
-                    className={queryControlClass}
-                    type="date"
-                    value={draftFilters.endAt || ""}
-                    onChange={(event) =>
-                      setDraftFilters((current) => ({
-                        ...current,
-                        endAt: event.target.value,
-                      }))
-                    }
-                  />
-                </QueryField>
-              </>
+              <QueryField label="完成时间">
+                <input
+                  className={queryControlClass}
+                  type="date"
+                  value={draftFilters.completedAt || ""}
+                  onChange={(event) =>
+                    setDraftFilters((current) => ({
+                      ...current,
+                      completedAt: event.target.value,
+                    }))
+                  }
+                />
+              </QueryField>
             )}
           </div>
 
@@ -252,7 +338,7 @@ export function AssessmentReportsPanel({
                             <Badge
                               tone={item.source === "eap" ? "green" : "gold"}
                             >
-                              {sourceLabel(item.source)}
+                              {formatReportSourceLabel(item)}
                             </Badge>
                             <span className="text-xs text-[var(--lxxl-muted)]">
                               {item.category === "professional"
@@ -303,6 +389,20 @@ export function AssessmentReportsPanel({
   );
 }
 
-function sourceLabel(source: AssessmentReportListItem["source"]) {
-  return source === "eap" ? "EAP 量表" : "小程序历史量表";
+function formatReportSourceLabel(item: AssessmentReportListItem) {
+  if (item.sourceLabel?.trim()) {
+    return item.sourceLabel.trim();
+  }
+  if (item.source === "mini-legacy") {
+    return "自有EAP网页";
+  }
+  const detail = (item.sourceDetail || "")
+    .trim()
+    .replace(/^EAP量表\./, "")
+    .replace(" · ", ".")
+    .replace(/·/g, ".");
+  if (detail) {
+    return `EAP量表.${detail}`;
+  }
+  return "EAP量表";
 }

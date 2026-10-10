@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from typing import Any, Callable, Literal, Optional
 from uuid import UUID
@@ -224,10 +225,72 @@ def _account_display_name(account: Optional[AppAccount]) -> str:
     return account.RealName or account.Nickname or account.Mobile or f"用户 {account.Id}"
 
 
+def _normalize_enterprise_detail(value: Optional[str]) -> str:
+    """统一为「网站名.公司名」形式，兼容历史「网站名 · 公司名」。"""
+    text = (value or "").strip()
+    if not text:
+        return ""
+    if text.startswith("EAP量表."):
+        text = text[len("EAP量表.") :]
+    return text.replace(" · ", ".").replace("·", ".").strip(".")
+
+
+def _enterprise_source_detail(row: AppAssessmentReport) -> Optional[str]:
+    raw = row.DemographicAnswers
+    if not raw:
+        return None
+    try:
+        payload = json.loads(raw)
+    except (TypeError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    label = _normalize_enterprise_detail(
+        str(payload.get("_enterpriseSourceLabel") or "")
+    )
+    if label:
+        return label
+    site_name = str(payload.get("_enterpriseSiteName") or "").strip().replace(".", "·")
+    company_name = str(payload.get("_enterpriseCompanyName") or "").strip().replace(
+        ".", "·"
+    )
+    if site_name and company_name:
+        return f"{site_name}.{company_name}"
+    return site_name or company_name or None
+
+
+def _eap_source_display_label(source_detail: Optional[str]) -> str:
+    detail = _normalize_enterprise_detail(source_detail)
+    if detail:
+        return f"EAP量表.{detail}"
+    return "EAP量表"
+
+
+def _parse_source_key(
+    source_key: Optional[str],
+    source: Optional[AssessmentReportSource],
+) -> tuple[Optional[AssessmentReportSource], Optional[str], bool]:
+    """
+    返回 (channel, enterprise_detail, require_plain_eap)。
+    source_key 优先：mini-legacy | eap | eap:网站名.公司名
+    """
+    key = (source_key or "").strip()
+    if key == "mini-legacy":
+        return "mini-legacy", None, False
+    if key == "eap":
+        return "eap", None, True
+    if key.startswith("eap:"):
+        return "eap", _normalize_enterprise_detail(key[4:]), False
+    if source in ("eap", "mini-legacy"):
+        return source, None, False
+    return None, None, False
+
+
 def _eap_admin_item(
     row: AppAssessmentReport,
     account: Optional[AppAccount],
 ) -> dict[str, Any]:
+    source_detail = _enterprise_source_detail(row)
     return {
         "source": "eap",
         "reportId": row.PublicId,
@@ -240,6 +303,10 @@ def _eap_admin_item(
         "assessmentTitle": row.AssessmentTitle,
         "resultSummary": row.ResultSummary or "",
         "completedAt": _utc_iso(row.CompletedAt),
+        "sourceDetail": source_detail,
+        "sourceLabel": _eap_source_display_label(source_detail),
+        "sourceKey": f"eap:{source_detail}" if source_detail else "eap",
+        "entryChannel": "enterprise-eap" if source_detail else "eap",
     }
 
 
@@ -261,6 +328,10 @@ def _legacy_admin_item(
         "assessmentTitle": scale_label(scale_type),
         "resultSummary": interpretation["resultSummary"],
         "completedAt": _utc_iso(row.CreatedAt),
+        "sourceDetail": None,
+        "sourceLabel": "自有EAP网页",
+        "sourceKey": "mini-legacy",
+        "entryChannel": "own-eap-web",
     }
 
 
@@ -297,6 +368,7 @@ def _admin_report_items(
     assessment_id: Optional[str],
     category: Optional[AssessmentCategory],
     source: Optional[AssessmentReportSource],
+    source_key: Optional[str] = None,
     start_at: Optional[datetime],
     end_at: Optional[datetime],
 ) -> list[dict[str, Any]]:
@@ -304,11 +376,13 @@ def _admin_report_items(
     if not patient_ids:
         return []
 
+    channel, enterprise_detail, require_plain_eap = _parse_source_key(source_key, source)
+
     result: list[dict[str, Any]] = []
     normalized_assessment = (assessment_id or "").strip()
     start_at = _utc_naive(start_at)
     end_at = _utc_naive(end_at)
-    if source in (None, "eap"):
+    if channel in (None, "eap"):
         query = (
             db.query(AppAssessmentReport)
             .options(
@@ -321,6 +395,7 @@ def _admin_report_items(
                     AppAssessmentReport.AssessmentTitle,
                     AppAssessmentReport.ResultSummary,
                     AppAssessmentReport.CompletedAt,
+                    AppAssessmentReport.DemographicAnswers,
                 )
             )
             .filter(
@@ -340,7 +415,7 @@ def _admin_report_items(
             _eap_admin_item(row, account_map.get(row.AccountId)) for row in query.all()
         )
 
-    if source in (None, "mini-legacy") and category in (None, "professional"):
+    if channel in (None, "mini-legacy") and category in (None, "professional"):
         query = (
             db.query(AppPsychScaleResult)
             .options(
@@ -365,11 +440,66 @@ def _admin_report_items(
             _legacy_admin_item(row, account_map.get(row.AccountId)) for row in query.all()
         )
 
+    if enterprise_detail:
+        result = [
+            item
+            for item in result
+            if item.get("source") == "eap"
+            and _normalize_enterprise_detail(item.get("sourceDetail")) == enterprise_detail
+        ]
+    elif require_plain_eap:
+        result = [
+            item
+            for item in result
+            if item.get("source") == "eap" and not item.get("sourceDetail")
+        ]
+
     result.sort(
         key=lambda item: (item["completedAt"], item["source"], item["reportId"]),
         reverse=True,
     )
     return result
+
+
+def _admin_source_options(
+    db: Session,
+    *,
+    visitor_ids: set[int],
+) -> list[dict[str, str]]:
+    items = _admin_report_items(
+        db,
+        visitor_ids=visitor_ids,
+        keyword=None,
+        assessment_id=None,
+        category=None,
+        source=None,
+        source_key=None,
+        start_at=None,
+        end_at=None,
+    )
+    options: list[dict[str, str]] = [
+        {"key": "mini-legacy", "label": "自有EAP网页"},
+    ]
+    has_plain_eap = False
+    enterprise_labels: set[str] = set()
+    for item in items:
+        if item.get("source") == "mini-legacy":
+            continue
+        detail = _normalize_enterprise_detail(item.get("sourceDetail"))
+        if detail:
+            enterprise_labels.add(detail)
+        else:
+            has_plain_eap = True
+    if has_plain_eap:
+        options.append({"key": "eap", "label": "EAP量表"})
+    for detail in sorted(enterprise_labels, key=lambda value: value.casefold()):
+        options.append(
+            {
+                "key": f"eap:{detail}",
+                "label": _eap_source_display_label(detail),
+            }
+        )
+    return options
 
 
 def register_assessment_report_admin_routes(
@@ -388,6 +518,7 @@ def register_assessment_report_admin_routes(
         assessment_id: Optional[str] = Query(None, max_length=80),
         category: Optional[AssessmentCategory] = Query(None),
         source: Optional[AssessmentReportSource] = Query(None),
+        source_key: Optional[str] = Query(None, max_length=200),
         start_at: Optional[datetime] = Query(None),
         end_at: Optional[datetime] = Query(None),
         _actor: AppAccount = Depends(require_assessment_viewer),
@@ -404,6 +535,7 @@ def register_assessment_report_admin_routes(
             assessment_id=assessment_id,
             category=category,
             source=source,
+            source_key=source_key,
             start_at=normalized_start,
             end_at=normalized_end,
         )
@@ -413,6 +545,21 @@ def register_assessment_report_admin_routes(
             "page": page,
             "pageSize": page_size,
             "total": len(items),
+        }
+
+    @router.get(
+        "/assessment-reports/source-options",
+        summary="管理后台报告来源筛选项",
+    )
+    def list_admin_assessment_report_source_options(
+        _actor: AppAccount = Depends(require_assessment_viewer),
+        db: Session = Depends(get_db),
+    ):
+        return {
+            "items": _admin_source_options(
+                db,
+                visitor_ids=visitor_patient_ids(db),
+            )
         }
 
     @router.get(
@@ -524,6 +671,7 @@ def register_assessment_report_admin_routes(
         page: int = Query(1, ge=1),
         page_size: int = Query(20, ge=1, le=100),
         source: Optional[AssessmentReportSource] = Query(None),
+        source_key: Optional[str] = Query(None, max_length=200),
         _actor: AppAccount = Depends(require_assessment_viewer),
         db: Session = Depends(get_db),
     ):
@@ -536,6 +684,7 @@ def register_assessment_report_admin_routes(
             assessment_id=None,
             category=None,
             source=source,
+            source_key=source_key,
             start_at=None,
             end_at=None,
         )

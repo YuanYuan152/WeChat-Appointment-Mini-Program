@@ -4,6 +4,7 @@ import type {
   AssessmentReportListFilters,
   AssessmentReportPage,
   AssessmentReportSource,
+  AssessmentReportSourceOption,
   PatientAssessmentReportListFilters,
 } from "@/types/assessmentReport";
 
@@ -32,14 +33,18 @@ export function fetchAssessmentReports(filters: AssessmentReportListFilters) {
   if (filters.category) {
     params.set("category", filters.category);
   }
-  if (filters.source) {
-    params.set("source", filters.source);
-  }
+  setTrimmedParam(params, "source_key", filters.sourceKey || filters.source);
   setTrimmedParam(params, "start_at", filters.startAt);
   setTrimmedParam(params, "end_at", filters.endAt);
 
   return apiRequest<AssessmentReportPage>(
     `${ASSESSMENT_REPORTS_PATH}?${params.toString()}`,
+  );
+}
+
+export function fetchAssessmentReportSourceOptions() {
+  return apiRequest<{ items: AssessmentReportSourceOption[] }>(
+    `${ASSESSMENT_REPORTS_PATH}/source-options`,
   );
 }
 
@@ -52,9 +57,7 @@ export function fetchPatientAssessmentReports(
     page_size: String(filters.pageSize),
   });
 
-  if (filters.source) {
-    params.set("source", filters.source);
-  }
+  setTrimmedParam(params, "source_key", filters.sourceKey || filters.source);
 
   return apiRequest<AssessmentReportPage>(
     `${PATIENT_BOARDS_PATH}/${accountId}/assessment-reports?${params.toString()}`,

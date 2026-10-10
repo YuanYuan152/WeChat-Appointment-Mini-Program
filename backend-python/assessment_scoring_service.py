@@ -64,15 +64,28 @@ def validate_submission_answers(
     demographic_questions = {
         str(item["id"]): item for item in definition.get("demographicQuestions", [])
     }
-    unknown_demographics = sorted(set(demographic_answers) - set(demographic_questions))
+    # 以下划线开头的键保留为企业来源等元数据，不参与人口学题目校验
+    meta_demographics = {
+        str(key): value
+        for key, value in demographic_answers.items()
+        if str(key).startswith("_")
+    }
+    form_demographics = {
+        str(key): value
+        for key, value in demographic_answers.items()
+        if not str(key).startswith("_")
+    }
+    unknown_demographics = sorted(set(form_demographics) - set(demographic_questions))
     if unknown_demographics:
         raise AssessmentAnswerError(f"包含未知人口学题目：{unknown_demographics}")
 
-    normalized_demographics: dict[str, Any] = {}
+    # 企业定制 EAP 入职流程用员工信息表替代量表内人口学题
+    skip_required_demographics = "_enterpriseSlug" in meta_demographics
+    normalized_demographics: dict[str, Any] = dict(meta_demographics)
     for question_id, question in demographic_questions.items():
-        value = demographic_answers.get(question_id)
+        value = form_demographics.get(question_id)
         if _is_empty(value):
-            if question.get("required"):
+            if question.get("required") and not skip_required_demographics:
                 raise AssessmentAnswerError(
                     f"请填写人口学信息：{question.get('text', question_id)}"
                 )
