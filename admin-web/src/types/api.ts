@@ -358,8 +358,23 @@ export interface AssessmentEnterprise {
   url: string;
   slug: string;
   assessmentIds: string[];
+  /** 当前企业链接上的量表展示名覆盖；未设置则使用原量表名 */
+  assessmentTitles?: Record<string, string>;
+  /**
+   * 员工基本信息字段勾选结果。
+   * null/undefined = 未定制，EAP 展示默认模板全部字段；
+   * string[] = 仅展示勾选字段。
+   */
+  employeeInfoFields?: string[] | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface EmployeeInfoFieldOption {
+  id: string;
+  label: string;
+  group: string;
+  required: boolean;
 }
 
 export interface AssessmentEnterpriseHeroSlide {

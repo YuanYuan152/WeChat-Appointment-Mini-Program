@@ -15,7 +15,9 @@ from assessment_enterprise_service import (
     delete_enterprise,
     get_default_branding,
     get_enterprise_by_slug,
+    list_employee_info_field_catalog,
     list_enterprises,
+    resolve_employee_info_fields,
     save_enterprise,
     save_default_branding,
 )
@@ -35,6 +37,10 @@ class EnterprisePayload(BaseModel):
     slogan: str = Field(..., min_length=1, max_length=200)
     url: str = Field(..., min_length=8, max_length=500)
     assessmentIds: list[str] = Field(..., min_length=1)
+    # 仅覆盖当前企业链接展示名，不修改原量表定义
+    assessmentTitles: dict[str, str] = Field(default_factory=dict)
+    # null/省略 = 未定制（EAP 展示默认模板全部字段）；list = 仅勾选字段
+    employeeInfoFields: list[str] | None = None
 
 
 class HeroSlidePayload(BaseModel):
@@ -52,12 +58,20 @@ class BrandingPayload(BaseModel):
     heroSlides: list[HeroSlidePayload] = Field(..., min_length=3, max_length=3)
 
 
-def _published_assessments(assessment_ids: list[str]) -> list[dict[str, Any]]:
+def _published_assessments(
+    assessment_ids: list[str],
+    assessment_titles: dict[str, str] | None = None,
+) -> list[dict[str, Any]]:
+    titles = assessment_titles or {}
     definitions: list[dict[str, Any]] = []
     try:
         for assessment_id in assessment_ids:
             result = get_assessment_store().get_published(assessment_id)
-            definitions.append(result["definition"])
+            definition = dict(result["definition"])
+            override = str(titles.get(assessment_id) or "").strip()
+            if override:
+                definition["title"] = override
+            definitions.append(definition)
     except AssessmentDefinitionError as exc:
         raise EnterpriseConfigError(str(exc)) from exc
     return definitions
@@ -72,7 +86,10 @@ def get_public_default_branding():
 def get_public_enterprise_assessments(slug: str):
     try:
         enterprise = get_enterprise_by_slug(slug)
-        definitions = _published_assessments(enterprise.get("assessmentIds", []))
+        definitions = _published_assessments(
+            enterprise.get("assessmentIds", []),
+            enterprise.get("assessmentTitles") or {},
+        )
         default_branding = get_default_branding()
         return {
             "companyName": enterprise["companyName"],
@@ -85,6 +102,9 @@ def get_public_enterprise_assessments(slug: str):
             ),
             "heroSlides": default_branding.get("heroSlides", []),
             "slug": enterprise["slug"],
+            "employeeInfoFields": resolve_employee_info_fields(
+                enterprise.get("employeeInfoFields"),
+            ),
             "assessments": definitions,
         }
     except EnterpriseConfigError as exc:
@@ -127,13 +147,20 @@ def register_assessment_enterprise_admin_routes(
             and not item.get("archivedAt")
         ]
 
+    @router.get(
+        "/assessment-enterprises/employee-info-fields",
+        summary="默认员工信息填写模板字段目录",
+    )
+    def list_employee_info_fields(_actor: Any = Depends(require_staff_workbench)):
+        return list_employee_info_field_catalog()
+
     @router.post("/assessment-enterprises", summary="新增企业定制链接")
     def create_admin_enterprise(
         body: EnterprisePayload,
         _actor: Any = Depends(require_staff_workbench),
     ):
         try:
-            _published_assessments(body.assessmentIds)
+            _published_assessments(body.assessmentIds, body.assessmentTitles)
             return save_enterprise(
                 enterprise_id=None,
                 company_name=body.companyName,
@@ -142,6 +169,8 @@ def register_assessment_enterprise_admin_routes(
                 site_name=body.siteName,
                 logo_url=body.logoUrl,
                 slogan=body.slogan,
+                assessment_titles=body.assessmentTitles,
+                employee_info_fields=body.employeeInfoFields,
             )
         except EnterpriseConfigError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -153,7 +182,7 @@ def register_assessment_enterprise_admin_routes(
         _actor: Any = Depends(require_staff_workbench),
     ):
         try:
-            _published_assessments(body.assessmentIds)
+            _published_assessments(body.assessmentIds, body.assessmentTitles)
             return save_enterprise(
                 enterprise_id=enterprise_id,
                 company_name=body.companyName,
@@ -162,6 +191,8 @@ def register_assessment_enterprise_admin_routes(
                 site_name=body.siteName,
                 logo_url=body.logoUrl,
                 slogan=body.slogan,
+                assessment_titles=body.assessmentTitles,
+                employee_info_fields=body.employeeInfoFields,
             )
         except EnterpriseConfigError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc

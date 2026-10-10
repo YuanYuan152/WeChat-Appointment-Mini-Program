@@ -16,6 +16,7 @@ import {
   deleteAssessmentEnterprise,
   fetchAssessmentEnterprises,
   fetchAssessmentEnterpriseDefault,
+  fetchEmployeeInfoFieldCatalog,
   fetchPrivateAssessmentOptions,
   generateAssessmentEnterpriseQrCode,
   saveAssessmentEnterprise,
@@ -25,6 +26,7 @@ import type {
   AssessmentEnterprise,
   AssessmentEnterpriseBranding,
   AssessmentEnterpriseHeroSlide,
+  EmployeeInfoFieldOption,
   PrivateAssessmentOption,
 } from "@/types/api";
 
@@ -52,6 +54,7 @@ function AssessmentEnterprisesContent() {
   const { clearNotice, refreshKey, showNotice } = useAppRoute();
   const [items, setItems] = useState<AssessmentEnterprise[]>([]);
   const [assessmentOptions, setAssessmentOptions] = useState<PrivateAssessmentOption[]>([]);
+  const [employeeInfoFieldCatalog, setEmployeeInfoFieldCatalog] = useState<EmployeeInfoFieldOption[]>([]);
   const [defaultBranding, setDefaultBranding] = useState<AssessmentEnterpriseBranding>();
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState<AssessmentEnterprise | null | undefined>(undefined);
@@ -61,14 +64,16 @@ function AssessmentEnterprisesContent() {
     setLoading(true);
     clearNotice();
     try {
-      const [enterprises, privateAssessments, branding] = await Promise.all([
+      const [enterprises, privateAssessments, branding, fieldCatalog] = await Promise.all([
         fetchAssessmentEnterprises(),
         fetchPrivateAssessmentOptions(),
         fetchAssessmentEnterpriseDefault(),
+        fetchEmployeeInfoFieldCatalog(),
       ]);
       setItems(enterprises);
       setAssessmentOptions(privateAssessments);
       setDefaultBranding(branding);
+      setEmployeeInfoFieldCatalog(fieldCatalog);
     } catch (error) {
       showNotice("error", error instanceof Error ? error.message : "企业定制配置加载失败");
     } finally {
@@ -136,7 +141,14 @@ function AssessmentEnterprisesContent() {
                         </a>
                       </td>
                       <td className="px-5 py-4">
-                        {item.assessmentIds.map((id) => assessmentOptions.find((option) => option.id === id)?.title || id).join("、")}
+                        {item.assessmentIds
+                          .map((id) => {
+                            const override = (item.assessmentTitles?.[id] || "").trim();
+                            const original =
+                              assessmentOptions.find((option) => option.id === id)?.title || id;
+                            return override || original;
+                          })
+                          .join("、")}
                       </td>
                       <td className="px-5 py-4">
                         <div className="flex justify-end gap-3">
@@ -176,6 +188,7 @@ function AssessmentEnterprisesContent() {
 
       {editing !== undefined && (
         <EnterpriseEditor
+          employeeInfoFieldCatalog={employeeInfoFieldCatalog}
           item={editing}
           options={assessmentOptions}
           onClose={() => setEditing(undefined)}
@@ -381,45 +394,242 @@ function DefaultBrandingEditor({
 function AssessmentOptionList({
   options,
   selectedIds,
+  displayTitles,
   emptyText,
   onToggle,
+  onDisplayTitleChange,
 }: {
   options: PrivateAssessmentOption[];
   selectedIds: string[];
+  displayTitles: Record<string, string>;
   emptyText: string;
   onToggle: (id: string, checked: boolean) => void;
+  onDisplayTitleChange: (id: string, title: string) => void;
 }) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draftTitle, setDraftTitle] = useState("");
+
+  const startEdit = (option: PrivateAssessmentOption) => {
+    const current = (displayTitles[option.id] || "").trim() || option.title;
+    setEditingId(option.id);
+    setDraftTitle(current);
+  };
+
+  const commitEdit = (option: PrivateAssessmentOption) => {
+    const next = draftTitle.trim();
+    // 与原名相同或清空 → 不覆盖，仍展示原量表名
+    onDisplayTitleChange(option.id, next === option.title ? "" : next);
+    setEditingId(null);
+    setDraftTitle("");
+  };
+
   return (
     <div className="divide-y divide-[var(--lxxl-border)] rounded-xl border border-[var(--lxxl-border)]">
       {options.length === 0 ? (
         <div className="px-4 py-5 text-sm text-[var(--lxxl-muted)]">{emptyText}</div>
       ) : (
-        options.map((option) => (
-          <label className="flex cursor-pointer items-center gap-3 px-4 py-3" key={option.id}>
-            <input
-              checked={selectedIds.includes(option.id)}
-              type="checkbox"
-              onChange={(event) => onToggle(option.id, event.target.checked)}
-            />
-            <span>{option.title}</span>
-            <span className="text-xs text-[var(--lxxl-muted)]">{option.id}</span>
-          </label>
-        ))
+        options.map((option) => {
+          const selected = selectedIds.includes(option.id);
+          const override = (displayTitles[option.id] || "").trim();
+          const shownTitle = override || option.title;
+          const isEditing = editingId === option.id;
+          return (
+            <div className="px-4 py-3" key={option.id}>
+              <div className="flex items-center gap-3">
+                <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3">
+                  <input
+                    checked={selected}
+                    type="checkbox"
+                    onChange={(event) => onToggle(option.id, event.target.checked)}
+                  />
+                  <span className="min-w-0 truncate">{shownTitle}</span>
+                  {override ? (
+                    <span className="shrink-0 text-xs text-[var(--lxxl-muted)]">原名：{option.title}</span>
+                  ) : (
+                    <span className="shrink-0 text-xs text-[var(--lxxl-muted)]">{option.id}</span>
+                  )}
+                </label>
+                {selected && !isEditing && (
+                  <button
+                    aria-label={`编辑「${option.title}」在本企业链接中的展示名`}
+                    className="shrink-0 rounded-md px-1.5 py-0.5 text-base leading-none text-[var(--lxxl-muted)] hover:bg-[#F7F5F2] hover:text-[var(--lxxl-ink)]"
+                    type="button"
+                    onClick={() => startEdit(option)}
+                  >
+                    🖊
+                  </button>
+                )}
+              </div>
+              {selected && isEditing && (
+                <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <input
+                    autoFocus
+                    className={`${queryControlClass} flex-1`}
+                    maxLength={120}
+                    placeholder="本企业链接展示名（不影响原量表名称）"
+                    value={draftTitle}
+                    onChange={(event) => setDraftTitle(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        commitEdit(option);
+                      }
+                      if (event.key === "Escape") {
+                        setEditingId(null);
+                        setDraftTitle("");
+                      }
+                    }}
+                  />
+                  <div className="flex gap-2">
+                    <QueryButton onClick={() => commitEdit(option)}>确定</QueryButton>
+                    <QueryResetButton
+                      onClick={() => {
+                        setEditingId(null);
+                        setDraftTitle("");
+                      }}
+                    >
+                      取消
+                    </QueryResetButton>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })
       )}
     </div>
+  );
+}
+
+function EmployeeInfoTemplatePanel({
+  catalog,
+  value,
+  onChange,
+}: {
+  catalog: EmployeeInfoFieldOption[];
+  value: string[] | null;
+  onChange: (next: string[] | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const allIds = catalog.map((field) => field.id);
+  const effectiveIds = value ?? allIds;
+  const customized = value !== null;
+  const groups = Array.from(new Set(catalog.map((field) => field.group)));
+
+  const [draftIds, setDraftIds] = useState<string[]>(effectiveIds);
+
+  const openPanel = () => {
+    setDraftIds(value ?? allIds);
+    setOpen(true);
+  };
+
+  const toggleDraft = (id: string, checked: boolean) => {
+    setDraftIds((current) =>
+      checked ? [...current, id] : current.filter((fieldId) => fieldId !== id),
+    );
+  };
+
+  const summary = customized
+    ? `已定制：勾选 ${value.length} / ${allIds.length} 项`
+    : `未定制：默认展示全部 ${allIds.length} 项`;
+
+  return (
+    <>
+      <div className="block min-w-0">
+        <span className="mb-2 block text-xs font-medium text-black">默认员工信息填写模板</span>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <p className="flex-1 text-sm text-[var(--lxxl-muted)]">{summary}</p>
+          <QueryButton onClick={openPanel}>查看并勾选字段</QueryButton>
+          {customized && (
+            <QueryResetButton onClick={() => onChange(null)}>恢复默认全部字段</QueryResetButton>
+          )}
+        </div>
+        <p className="mt-1 text-xs text-[var(--lxxl-muted)]">
+          未编辑时，EAP 入职基本信息页展示模板中全部字段；勾选后仅展示选中字段。
+        </p>
+      </div>
+
+      {open && (
+        <div className="fixed inset-0 z-[70] grid place-items-center bg-black/40 p-6">
+          <section className="max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
+            <h4 className="text-base font-semibold">默认员工信息填写模板</h4>
+            <p className="mt-1 text-sm text-[var(--lxxl-muted)]">
+              勾选需要员工在 EAP 基本信息页填写的字段。带「默认必填」标记的字段在勾选后仍为必填。
+            </p>
+            <div className="mt-4 space-y-4">
+              {groups.map((group) => (
+                <div key={group}>
+                  <div className="mb-2 text-sm font-medium text-[var(--lxxl-ink)]">{group}</div>
+                  <div className="divide-y divide-[var(--lxxl-border)] rounded-xl border border-[var(--lxxl-border)]">
+                    {catalog
+                      .filter((field) => field.group === group)
+                      .map((field) => (
+                        <label className="flex cursor-pointer items-center gap-3 px-4 py-3" key={field.id}>
+                          <input
+                            checked={draftIds.includes(field.id)}
+                            type="checkbox"
+                            onChange={(event) => toggleDraft(field.id, event.target.checked)}
+                          />
+                          <span className="flex-1">{field.label}</span>
+                          {field.required && (
+                            <span className="text-xs text-[var(--lxxl-muted)]">默认必填</span>
+                          )}
+                        </label>
+                      ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-5 flex flex-wrap gap-3">
+              <QueryButton
+                disabled={draftIds.length === 0}
+                onClick={() => {
+                  const ordered = allIds.filter((id) => draftIds.includes(id));
+                  if (ordered.length === 0) return;
+                  onChange(ordered);
+                  setOpen(false);
+                }}
+              >
+                确认勾选
+              </QueryButton>
+              <QueryResetButton
+                onClick={() => {
+                  setDraftIds(allIds);
+                }}
+              >
+                全选
+              </QueryResetButton>
+              <QueryResetButton onClick={() => setOpen(false)}>取消</QueryResetButton>
+            </div>
+          </section>
+        </div>
+      )}
+    </>
   );
 }
 
 function EnterpriseEditor({
   item,
   options,
+  employeeInfoFieldCatalog,
   onClose,
   onSave,
 }: {
   item: AssessmentEnterprise | null;
   options: PrivateAssessmentOption[];
+  employeeInfoFieldCatalog: EmployeeInfoFieldOption[];
   onClose: () => void;
-  onSave: (input: { id?: string; companyName: string; siteName: string; logoUrl: string; slogan: string; url: string; assessmentIds: string[] }) => Promise<void>;
+  onSave: (input: {
+    id?: string;
+    companyName: string;
+    siteName: string;
+    logoUrl: string;
+    slogan: string;
+    url: string;
+    assessmentIds: string[];
+    assessmentTitles: Record<string, string>;
+    employeeInfoFields: string[] | null;
+  }) => Promise<void>;
 }) {
   const [companyName, setCompanyName] = useState(item?.companyName || "");
   const [siteName, setSiteName] = useState(item?.siteName || "心安 EAP");
@@ -427,6 +637,12 @@ function EnterpriseEditor({
   const [slogan, setSlogan] = useState(item?.slogan || "专业测评，贴心陪伴");
   const [suffix, setSuffix] = useState(item?.slug || generateSecureSuffix);
   const [assessmentIds, setAssessmentIds] = useState<string[]>(item?.assessmentIds || []);
+  const [assessmentTitles, setAssessmentTitles] = useState<Record<string, string>>(
+    () => ({ ...(item?.assessmentTitles || {}) }),
+  );
+  const [employeeInfoFields, setEmployeeInfoFields] = useState<string[] | null>(
+    () => (Array.isArray(item?.employeeInfoFields) ? [...item.employeeInfoFields] : null),
+  );
   const [saving, setSaving] = useState(false);
   const url = `${DEFAULT_BASE_URL}/${suffix}`;
   const privateOptions = options.filter((option) => option.visibility === "private");
@@ -436,6 +652,27 @@ function EnterpriseEditor({
     setAssessmentIds((current) =>
       checked ? [...current, id] : current.filter((itemId) => itemId !== id),
     );
+    if (!checked) {
+      setAssessmentTitles((current) => {
+        if (!(id in current)) return current;
+        const next = { ...current };
+        delete next[id];
+        return next;
+      });
+    }
+  };
+
+  const updateDisplayTitle = (id: string, title: string) => {
+    setAssessmentTitles((current) => {
+      const next = { ...current };
+      const trimmed = title.trim();
+      if (!trimmed) {
+        delete next[id];
+      } else {
+        next[id] = trimmed;
+      }
+      return next;
+    });
   };
 
   return (
@@ -472,23 +709,35 @@ function EnterpriseEditor({
               完整链接：{url}。前缀固定为中建站点域名，随机后缀用于降低链接被猜测的风险。
             </p>
           </QueryField>
+          <EmployeeInfoTemplatePanel
+            catalog={employeeInfoFieldCatalog}
+            value={employeeInfoFields}
+            onChange={setEmployeeInfoFields}
+          />
           <QueryField label="授权量表" required>
+            <p className="mb-2 text-xs text-[var(--lxxl-muted)]">
+              勾选后可点 🖊 编辑本企业链接中的展示名；不会修改量表管理中的原名称。
+            </p>
             <div className="space-y-4">
               <div>
                 <div className="mb-2 text-sm font-medium text-[var(--lxxl-ink)]">私有量表</div>
                 <AssessmentOptionList
+                  displayTitles={assessmentTitles}
                   emptyText="暂无已发布私有量表，请先在量表管理中设置并发布。"
                   options={privateOptions}
                   selectedIds={assessmentIds}
+                  onDisplayTitleChange={updateDisplayTitle}
                   onToggle={toggleAssessment}
                 />
               </div>
               <div>
                 <div className="mb-2 text-sm font-medium text-[var(--lxxl-ink)]">公有量表</div>
                 <AssessmentOptionList
+                  displayTitles={assessmentTitles}
                   emptyText="暂无已发布公有量表，请先在量表管理中设置并发布。"
                   options={publicOptions}
                   selectedIds={assessmentIds}
+                  onDisplayTitleChange={updateDisplayTitle}
                   onToggle={toggleAssessment}
                 />
               </div>
@@ -500,6 +749,11 @@ function EnterpriseEditor({
             disabled={saving || !companyName.trim() || !siteName.trim() || !logoUrl.trim() || !slogan.trim() || suffix.length < 20 || assessmentIds.length === 0}
             onClick={() => {
               setSaving(true);
+              const titlesForSelected = Object.fromEntries(
+                assessmentIds
+                  .map((id) => [id, (assessmentTitles[id] || "").trim()] as const)
+                  .filter(([, title]) => Boolean(title)),
+              );
               void onSave({
                 id: item?.id,
                 companyName: companyName.trim(),
@@ -508,6 +762,8 @@ function EnterpriseEditor({
                 slogan: slogan.trim(),
                 url: url.trim(),
                 assessmentIds,
+                assessmentTitles: titlesForSelected,
+                employeeInfoFields,
               })
                 .finally(() => setSaving(false));
             }}

@@ -2,6 +2,7 @@ import { apiRequest } from "@/lib/api";
 import type {
   AssessmentEnterprise,
   AssessmentEnterpriseBranding,
+  EmployeeInfoFieldOption,
   PrivateAssessmentOption,
 } from "@/types/api";
 
@@ -13,6 +14,10 @@ export function fetchAssessmentEnterprises() {
 
 export function fetchPrivateAssessmentOptions() {
   return apiRequest<PrivateAssessmentOption[]>(`${BASE_PATH}/private-assessments`);
+}
+
+export function fetchEmployeeInfoFieldCatalog() {
+  return apiRequest<EmployeeInfoFieldOption[]>(`${BASE_PATH}/employee-info-fields`);
 }
 
 export function fetchAssessmentEnterpriseDefault() {
@@ -34,6 +39,8 @@ export function saveAssessmentEnterprise(input: {
   slogan: string;
   url: string;
   assessmentIds: string[];
+  assessmentTitles?: Record<string, string>;
+  employeeInfoFields?: string[] | null;
 }) {
   return apiRequest<AssessmentEnterprise>(input.id ? `${BASE_PATH}/${input.id}` : BASE_PATH, {
     method: input.id ? "PUT" : "POST",
@@ -44,6 +51,8 @@ export function saveAssessmentEnterprise(input: {
       slogan: input.slogan,
       url: input.url,
       assessmentIds: input.assessmentIds,
+      assessmentTitles: input.assessmentTitles || {},
+      employeeInfoFields: input.employeeInfoFields ?? null,
     }),
   });
 }

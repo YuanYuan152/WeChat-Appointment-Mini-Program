@@ -43,6 +43,58 @@ DEFAULT_HERO_SLIDES = [
     },
 ]
 
+# EAP 入职「基本信息」默认收集模板（未定制企业链接时展示全部）
+DEFAULT_EMPLOYEE_INFO_FIELDS: list[dict[str, Any]] = [
+    {"id": "empNo", "label": "工号", "group": "个人信息", "required": True},
+    {"id": "name", "label": "姓名", "group": "个人信息", "required": True},
+    {"id": "gender", "label": "性别", "group": "个人信息", "required": True},
+    {"id": "age", "label": "年龄", "group": "个人信息", "required": True},
+    {"id": "edu", "label": "学历", "group": "个人信息", "required": False},
+    {"id": "joinDate", "label": "入职日期", "group": "个人信息", "required": False},
+    {"id": "dept", "label": "所属部门", "group": "岗位信息", "required": True},
+    {"id": "post", "label": "岗位", "group": "岗位信息", "required": True},
+    {"id": "category", "label": "岗位类别", "group": "岗位信息", "required": True},
+    {"id": "workLoc", "label": "工作地", "group": "岗位信息", "required": True},
+    {"id": "livingStatus", "label": "居住状况", "group": "生活情况", "required": False},
+    {"id": "hasFamily", "label": "是否与家人异地", "group": "生活情况", "required": False},
+]
+
+
+def list_employee_info_field_catalog() -> list[dict[str, Any]]:
+    return [dict(item) for item in DEFAULT_EMPLOYEE_INFO_FIELDS]
+
+
+def default_employee_info_field_ids() -> list[str]:
+    return [str(item["id"]) for item in DEFAULT_EMPLOYEE_INFO_FIELDS]
+
+
+def _normalize_employee_info_fields(value: Any) -> list[str] | None:
+    """None 表示未定制（展示全部）；list 表示企业勾选结果（仅这些字段）。"""
+    if value is None:
+        return None
+    if not isinstance(value, list):
+        return None
+    allowed = {str(item["id"]) for item in DEFAULT_EMPLOYEE_INFO_FIELDS}
+    order = default_employee_info_field_ids()
+    selected = []
+    seen: set[str] = set()
+    for raw in value:
+        field_id = str(raw or "").strip()
+        if not field_id or field_id not in allowed or field_id in seen:
+            continue
+        selected.append(field_id)
+        seen.add(field_id)
+    # 保持与默认模板相同的顺序
+    return [field_id for field_id in order if field_id in seen]
+
+
+def resolve_employee_info_fields(value: Any) -> list[str]:
+    """公开页使用：未定制时回退为默认模板全部字段。"""
+    normalized = _normalize_employee_info_fields(value)
+    if normalized is None:
+        return default_employee_info_field_ids()
+    return normalized
+
 
 class EnterpriseConfigError(ValueError):
     pass
@@ -103,8 +155,44 @@ def _default_branding_payload(value: dict[str, Any] | None = None) -> dict[str, 
     return result
 
 
+def _normalize_assessment_titles(
+    assessment_ids: list[str],
+    titles: Any,
+) -> dict[str, str]:
+    """仅保留当前授权量表的展示名覆盖；空字符串表示使用原量表名。"""
+    allowed = set(assessment_ids)
+    source = titles if isinstance(titles, dict) else {}
+    result: dict[str, str] = {}
+    for raw_id, raw_title in source.items():
+        assessment_id = str(raw_id or "").strip()
+        if not assessment_id or assessment_id not in allowed:
+            continue
+        title = "" if raw_title is None else str(raw_title).strip()
+        if not title:
+            continue
+        result[assessment_id] = title[:120]
+    return result
+
+
 def _normalized_enterprise(item: dict[str, Any]) -> dict[str, Any]:
     result = {**item, **_branding(item)}
+    assessment_ids = [
+        str(value).strip()
+        for value in (result.get("assessmentIds") or [])
+        if str(value).strip()
+    ]
+    result["assessmentIds"] = assessment_ids
+    result["assessmentTitles"] = _normalize_assessment_titles(
+        assessment_ids,
+        result.get("assessmentTitles"),
+    )
+    # 未写入该键 / 值为 null → 未定制；写入 list → 企业定制勾选
+    if "employeeInfoFields" in item:
+        result["employeeInfoFields"] = _normalize_employee_info_fields(
+            item.get("employeeInfoFields"),
+        )
+    else:
+        result["employeeInfoFields"] = None
     parsed = urlparse(str(result.get("url") or ""))
     slug = str(result.get("slug") or "")
     if parsed.scheme in {"http", "https"} and parsed.netloc and slug:
@@ -192,6 +280,8 @@ def save_enterprise(
     site_name: str,
     logo_url: str,
     slogan: str,
+    assessment_titles: dict[str, str] | None = None,
+    employee_info_fields: list[str] | None = None,
 ) -> dict[str, Any]:
     name = (company_name or "").strip()
     if not name:
@@ -201,6 +291,9 @@ def save_enterprise(
     ids = list(dict.fromkeys(item.strip() for item in assessment_ids if item.strip()))
     if not ids:
         raise EnterpriseConfigError("请至少选择一个私有量表")
+    titles = _normalize_assessment_titles(ids, assessment_titles)
+    # None = 未定制（默认全字段）；list = 企业勾选结果
+    normalized_info_fields = _normalize_employee_info_fields(employee_info_fields)
     branding = _branding({
         "siteName": site_name,
         "companyName": name,
@@ -222,9 +315,14 @@ def save_enterprise(
                 url=normalized_url,
                 slug=slug,
                 assessmentIds=ids,
+                assessmentTitles=titles,
                 **branding,
                 updatedAt=now,
             )
+            if normalized_info_fields is None:
+                current.pop("employeeInfoFields", None)
+            else:
+                current["employeeInfoFields"] = normalized_info_fields
             result = current
         else:
             result = {
@@ -232,13 +330,16 @@ def save_enterprise(
                 "url": normalized_url,
                 "slug": slug,
                 "assessmentIds": ids,
+                "assessmentTitles": titles,
                 **branding,
                 "createdAt": now,
                 "updatedAt": now,
             }
+            if normalized_info_fields is not None:
+                result["employeeInfoFields"] = normalized_info_fields
             items.append(result)
         _write(items)
-        return dict(result)
+        return _normalized_enterprise(result)
 
 
 def delete_enterprise(enterprise_id: str) -> None:
