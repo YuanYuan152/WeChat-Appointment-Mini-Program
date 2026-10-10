@@ -5,6 +5,7 @@ import type {
   DimensionDefinition,
   ScoreRange,
 } from "@/lib/api/types";
+import { evaluateDimensionFormula } from "@/lib/assessment/dimension-formula";
 
 export function calculateScore(
   assessment: Assessment,
@@ -118,13 +119,28 @@ function scoreDimension(
   dimension: DimensionDefinition
 ) {
   const reverseIds = dimension.reverseQuestionIds ?? [];
-  const values = dimension.questionIds.map((qid) =>
-    getOptionValue(assessment, answers, qid, reverseIds)
+  const valueMap = Object.fromEntries(
+    dimension.questionIds.map((qid) => [
+      qid,
+      getOptionValue(assessment, answers, qid, reverseIds),
+    ])
   );
-  const score =
-    dimension.aggregate === "average"
-      ? values.reduce((a, b) => a + b, 0) / values.length
-      : values.reduce((a, b) => a + b, 0);
+  const values = Object.values(valueMap);
+  let score: number;
+  if ((dimension.calculationMode ?? "simple") === "formula") {
+    score = evaluateDimensionFormula(
+      dimension.formula ?? "",
+      assessment.questions.map((question) => question.id),
+      valueMap,
+    );
+  } else if (dimension.aggregate === "product") {
+    score = values.reduce((result, value) => result * value, 1);
+  } else {
+    score = values.reduce((a, b) => a + b, 0);
+    if (dimension.aggregate === "average") {
+      score /= values.length;
+    }
+  }
   const rounded = Math.round(score * 100) / 100;
   const range = findRange(rounded, dimension.scoreRanges);
   return {

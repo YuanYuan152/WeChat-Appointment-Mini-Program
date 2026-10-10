@@ -106,7 +106,9 @@ export interface DimensionDefinition {
   title: string;
   questionIds: string[];
   reverseQuestionIds?: string[];
-  aggregate?: "sum" | "average";
+  calculationMode?: "simple" | "formula";
+  aggregate?: "sum" | "product" | "average";
+  formula?: string;
   intro?: string;
   scoreRanges: ScoreRange[];
 }

@@ -182,6 +182,49 @@ class GenericScoringExamplesTests(unittest.TestCase):
         self.assertEqual(2.0, scores["emotion"])
         self.assertEqual(1.67, scores["average"])
 
+    def test_dimension_product_and_formula_have_expected_scores(self) -> None:
+        definition = load_example("professional-dimension.json")
+        common = {
+            "intro": "",
+            "questionIds": ["q1", "q2", "q3"],
+            "reverseQuestionIds": [],
+            "scoreRanges": [
+                {
+                    "min": 0,
+                    "max": 8,
+                    "level": "有效",
+                    "description": "计算结果",
+                    "suggestions": [],
+                }
+            ],
+        }
+        definition["dimensions"] = [
+            {
+                **common,
+                "id": "product",
+                "title": "全部相乘",
+                "calculationMode": "simple",
+                "aggregate": "product",
+            },
+            {
+                **common,
+                "id": "formula",
+                "title": "公式计算",
+                "calculationMode": "formula",
+                "aggregate": "sum",
+                "formula": "(q1 + q2) * q3",
+            },
+        ]
+        validate_definition(definition, allow_fixed_scoring=False)
+
+        result = calculate_assessment_result(
+            definition,
+            {"q1": "q1-b", "q2": "q2-c", "q3": "q3-b"},
+        )
+        scores = {item["id"]: item["score"] for item in result["dimensions"]}
+        self.assertEqual(2.0, scores["product"])
+        self.assertEqual(3.0, scores["formula"])
+
     def test_match_example_uses_accumulated_weights(self) -> None:
         definition = load_example("fun-match.json")
         definition["questions"][0]["options"][0]["matchTags"] = {

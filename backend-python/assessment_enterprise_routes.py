@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from io import BytesIO
-from typing import Any, Callable
+from typing import Any, Callable, List, Optional
 
 import qrcode
 import qrcode.image.svg
@@ -40,7 +40,7 @@ class EnterprisePayload(BaseModel):
     # 仅覆盖当前企业链接展示名，不修改原量表定义
     assessmentTitles: dict[str, str] = Field(default_factory=dict)
     # null/省略 = 未定制（EAP 展示默认模板全部字段）；list = 仅勾选字段
-    employeeInfoFields: list[str] | None = None
+    employeeInfoFields: Optional[List[str]] = None
 
 
 class HeroSlidePayload(BaseModel):

@@ -488,6 +488,38 @@ class AssessmentDefinitionStoreTests(unittest.TestCase):
 
         validate_definition(definition, allow_fixed_scoring=False)
 
+    def test_dimension_formula_must_be_valid_and_match_selected_questions(self) -> None:
+        definition = self.example_definition()
+        definition["id"] = "dimension-invalid-formula"
+        definition["dimensions"] = [
+            {
+                "id": "formula",
+                "title": "公式维度",
+                "intro": "",
+                "questionIds": ["q1", "q2"],
+                "reverseQuestionIds": [],
+                "calculationMode": "formula",
+                "aggregate": "sum",
+                "formula": "q1 + (q2",
+                "scoreRanges": [
+                    {
+                        "min": 0,
+                        "max": 4,
+                        "level": "结果",
+                        "description": "公式结果",
+                        "suggestions": [],
+                    }
+                ],
+            }
+        ]
+
+        with self.assertRaisesRegex(AssessmentValidationError, "括号不匹配"):
+            validate_definition(definition, allow_fixed_scoring=False)
+
+        definition["dimensions"][0]["formula"] = "q1"
+        with self.assertRaisesRegex(AssessmentValidationError, "完全一致"):
+            validate_definition(definition, allow_fixed_scoring=False)
+
     def test_backend_rejects_non_finite_scores_and_empty_match_tags(self) -> None:
         definition = self.example_definition()
         definition["id"] = "not-finite"

@@ -8,6 +8,11 @@ from datetime import date
 from typing import Any
 
 from assessment_definition_service import ALLOWED_SCORING_PRESETS
+from assessment_formula import (
+    AssessmentFormulaError,
+    evaluate_dimension_formula,
+    parse_dimension_formula,
+)
 
 
 class AssessmentAnswerError(ValueError):
@@ -258,13 +263,32 @@ def _dimension_result(definition: dict[str, Any], answers: dict[str, str]):
     dimensions = []
     for dimension in definition.get("dimensions", []):
         reverse_ids = set(dimension.get("reverseQuestionIds", []))
-        values = [
-            _option_value(definition, answers, question_id, reverse_ids)
-            for question_id in dimension.get("questionIds", [])
-        ]
-        score = sum(values)
-        if dimension.get("aggregate") == "average":
-            score = score / len(values)
+        question_ids = dimension.get("questionIds", [])
+        value_map = {
+            question_id: _option_value(
+                definition,
+                answers,
+                question_id,
+                reverse_ids,
+            )
+            for question_id in question_ids
+        }
+        values = list(value_map.values())
+        if dimension.get("calculationMode", "simple") == "formula":
+            try:
+                node = parse_dimension_formula(
+                    str(dimension.get("formula", "")),
+                    [str(question["id"]) for question in definition.get("questions", [])],
+                )
+                score = evaluate_dimension_formula(node, value_map)
+            except AssessmentFormulaError as exc:
+                raise AssessmentAnswerError(f"维度计算公式无效：{exc}") from exc
+        elif dimension.get("aggregate") == "product":
+            score = math.prod(values)
+        else:
+            score = sum(values)
+            if dimension.get("aggregate") == "average":
+                score = score / len(values)
         score = _js_round_2(float(score))
         range_item = _find_range(score, dimension.get("scoreRanges"))
         dimensions.append(

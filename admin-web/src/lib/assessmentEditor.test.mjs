@@ -4,7 +4,21 @@ import test from "node:test";
 import ts from "typescript";
 
 const sourceUrl = new URL("./assessmentEditor.ts", import.meta.url);
-const source = await readFile(sourceUrl, "utf8");
+const formulaSourceUrl = new URL("./assessmentFormula.ts", import.meta.url);
+const formulaSource = await readFile(formulaSourceUrl, "utf8");
+const { outputText: formulaOutputText } = ts.transpileModule(formulaSource, {
+  compilerOptions: {
+    module: ts.ModuleKind.ES2022,
+    target: ts.ScriptTarget.ES2022,
+  },
+  fileName: formulaSourceUrl.pathname,
+});
+const formulaModuleUrl =
+  `data:text/javascript;base64,${Buffer.from(formulaOutputText).toString("base64")}`;
+const source = (await readFile(sourceUrl, "utf8")).replace(
+  'from "@/lib/assessmentFormula"',
+  `from "${formulaModuleUrl}"`,
+);
 const { outputText } = ts.transpileModule(source, {
   compilerOptions: {
     module: ts.ModuleKind.ES2022,
@@ -609,5 +623,89 @@ test("fails closed when exact score reachability exceeds the safety limit", () =
     editor
       .validateAssessmentDefinition(definition)
       .some((issue) => issue.message.includes("无法完成精确校验")),
+  );
+});
+
+test("supports product and formula dimension calculations", () => {
+  const definition = completeRequiredFields(
+    editor.createDefaultAssessmentDefinition("dimension"),
+  );
+  definition.questions = ["q1", "q2"].map((id) => ({
+    id,
+    text: id,
+    required: true,
+    options: [
+      { id: `${id}-a`, text: "一分", value: 1 },
+      { id: `${id}-b`, text: "两分", value: 2 },
+    ],
+  }));
+  definition.dimensions = [
+    {
+      id: "product",
+      title: "乘积",
+      questionIds: ["q1", "q2"],
+      reverseQuestionIds: [],
+      calculationMode: "simple",
+      aggregate: "product",
+      scoreRanges: [
+        {
+          min: 1,
+          max: 4,
+          level: "有效",
+          description: "有效",
+          suggestions: [],
+        },
+      ],
+    },
+    {
+      id: "formula",
+      title: "公式",
+      questionIds: ["q1", "q2"],
+      reverseQuestionIds: [],
+      calculationMode: "formula",
+      aggregate: "sum",
+      formula: "(q1 + q2) / q1",
+      scoreRanges: [
+        {
+          min: 1,
+          max: 3,
+          level: "有效",
+          description: "有效",
+          suggestions: [],
+        },
+      ],
+    },
+  ];
+
+  assert.deepEqual(editor.validateAssessmentDefinition(definition), []);
+  assert.deepEqual(
+    editor
+      .getAssessmentScoreCoverageSummaries(definition)
+      .map((summary) => [summary.minimum, summary.maximum]),
+    [[1, 4], [1.5, 3]],
+  );
+});
+
+test("rejects an invalid formula or a formula that differs from selected questions", () => {
+  const definition = completeRequiredFields(
+    editor.createDefaultAssessmentDefinition("dimension"),
+  );
+  definition.dimensions[0] = {
+    ...definition.dimensions[0],
+    calculationMode: "formula",
+    formula: "q1 + (",
+  };
+  assert.ok(
+    editor
+      .validateAssessmentDefinition(definition)
+      .some((issue) => issue.path.endsWith(".formula")),
+  );
+
+  definition.dimensions[0].formula = "q1";
+  definition.dimensions[0].questionIds = ["q1", "q2"];
+  assert.ok(
+    editor
+      .validateAssessmentDefinition(definition)
+      .some((issue) => issue.message.includes("完全一致")),
   );
 });

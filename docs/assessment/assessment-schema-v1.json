@@ -453,8 +453,15 @@
             "$ref": "#/$defs/stableId"
           }
         },
+        "calculationMode": {
+          "enum": ["simple", "formula"]
+        },
         "aggregate": {
-          "enum": ["sum", "average"]
+          "enum": ["sum", "product", "average"]
+        },
+        "formula": {
+          "type": "string",
+          "maxLength": 500
         },
         "scoreRanges": {
           "type": "array",

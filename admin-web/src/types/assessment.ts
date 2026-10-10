@@ -88,7 +88,9 @@ export interface AssessmentDimension {
   intro?: string;
   questionIds: string[];
   reverseQuestionIds?: string[];
-  aggregate: "sum" | "average";
+  calculationMode?: "simple" | "formula";
+  aggregate: "sum" | "product" | "average";
+  formula?: string;
   scoreRanges: AssessmentScoreRange[];
 }
 

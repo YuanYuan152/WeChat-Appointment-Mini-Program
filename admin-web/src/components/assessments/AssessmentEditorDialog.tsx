@@ -16,6 +16,12 @@ import {
   type AssessmentScoreCoverageSummary,
   validateAssessmentDefinition,
 } from "@/lib/assessmentEditor";
+import {
+  compileDimensionFormula,
+  formulaQuestionIds,
+  removeFormulaQuestionId,
+  replaceFormulaQuestionId,
+} from "@/lib/assessmentFormula";
 import { formatFullDateTime } from "@/lib/format";
 import type { AssessmentEditorMode } from "@/panels/AssessmentsPanel";
 import type {
@@ -1056,6 +1062,7 @@ function QuestionFields({
 
   function changeQuestionId(index: number, nextId: string) {
     const previousId = questions[index].id;
+    const knownQuestionIds = questions.map((question) => question.id);
     const nextQuestions = replaceAt(questions, index, {
       ...questions[index],
       id: nextId,
@@ -1072,12 +1079,22 @@ function QuestionFields({
         reverseQuestionIds: dimension.reverseQuestionIds?.map((id) =>
           id === previousId ? nextId : id,
         ),
+        formula:
+          dimension.calculationMode === "formula" && dimension.formula
+            ? replaceFormulaQuestionId(
+                dimension.formula,
+                previousId,
+                nextId,
+                knownQuestionIds,
+              )
+            : dimension.formula,
       })),
     });
   }
 
   function removeQuestion(index: number) {
     const removedId = questions[index].id;
+    const knownQuestionIds = questions.map((question) => question.id);
     onChange({
       ...definition,
       questions: questions.filter((_, itemIndex) => itemIndex !== index),
@@ -1086,6 +1103,14 @@ function QuestionFields({
         ...dimension,
         questionIds: dimension.questionIds.filter((id) => id !== removedId),
         reverseQuestionIds: dimension.reverseQuestionIds?.filter((id) => id !== removedId),
+        formula:
+          dimension.calculationMode === "formula" && dimension.formula
+            ? removeFormulaQuestionId(
+                dimension.formula,
+                removedId,
+                knownQuestionIds,
+              )
+            : dimension.formula,
       })),
     });
   }
@@ -1541,6 +1566,7 @@ function DimensionEditor({
                 intro: "",
                 questionIds: firstQuestionId ? [firstQuestionId] : [],
                 reverseQuestionIds: [],
+                calculationMode: "simple",
                 aggregate: "sum",
                 scoreRanges: [
                   {
@@ -1564,6 +1590,16 @@ function DimensionEditor({
       <div className="space-y-4">
         {dimensions.map((dimension, dimensionIndex) => {
           const dimensionReverseIds = dimension.reverseQuestionIds || [];
+          const calculationMode = dimension.calculationMode ?? "simple";
+          const allQuestionIds = definition.questions.map((question) => question.id);
+          let formulaError = "";
+          if (calculationMode === "formula") {
+            try {
+              compileDimensionFormula(dimension.formula ?? "", allQuestionIds);
+            } catch (error) {
+              formulaError = error instanceof Error ? error.message : "公式不合法";
+            }
+          }
           return (
             <div
               key={dimensionIndex}
@@ -1608,24 +1644,80 @@ function DimensionEditor({
                     }
                   />
                 </CompactField>
-                <CompactField label="汇总方式">
-                  <select
-                    className={compactInputClass}
-                    disabled={disabled}
-                    value={dimension.aggregate}
-                    onChange={(event) =>
-                      setDimensions(
-                        replaceAt(dimensions, dimensionIndex, {
-                          ...dimension,
-                          aggregate: event.target.value as AssessmentDimension["aggregate"],
-                        }),
-                      )
-                    }
-                  >
-                    <option value="sum">求和</option>
-                    <option value="average">平均值</option>
-                  </select>
+                <CompactField label="计算方式">
+                  <div className="flex h-9 items-center gap-4 rounded-lg border border-[var(--lxxl-border)] bg-white px-3 text-sm">
+                    {(["simple", "formula"] as const).map((mode) => (
+                      <label className="flex cursor-pointer items-center gap-1.5" key={mode}>
+                        <input
+                          checked={calculationMode === mode}
+                          disabled={disabled}
+                          name={`dimension-calculation-${dimensionIndex}`}
+                          type="radio"
+                          onChange={() =>
+                            setDimensions(
+                              replaceAt(dimensions, dimensionIndex, {
+                                ...dimension,
+                                calculationMode: mode,
+                                formula:
+                                  mode === "formula"
+                                    ? dimension.formula ?? dimension.questionIds.join(" + ")
+                                    : undefined,
+                              }),
+                            )
+                          }
+                        />
+                        {mode === "simple" ? "简单计算" : "设置公式计算"}
+                      </label>
+                    ))}
+                  </div>
                 </CompactField>
+                {calculationMode === "simple" ? (
+                  <CompactField className="md:col-span-4" label="简单计算">
+                    <select
+                      className={compactInputClass}
+                      disabled={disabled}
+                      value={dimension.aggregate}
+                      onChange={(event) =>
+                        setDimensions(
+                          replaceAt(dimensions, dimensionIndex, {
+                            ...dimension,
+                            aggregate: event.target.value as AssessmentDimension["aggregate"],
+                          }),
+                        )
+                      }
+                    >
+                      <option value="sum">全部相加</option>
+                      <option value="product">全部相乘</option>
+                      <option value="average">平均数</option>
+                    </select>
+                  </CompactField>
+                ) : (
+                  <CompactField className="md:col-span-4" label="计算公式">
+                    <input
+                      className={compactInputClass}
+                      disabled={disabled}
+                      placeholder="例如：(q1 + q2) / q3"
+                      value={dimension.formula ?? ""}
+                      onChange={(event) => {
+                        const formula = event.target.value;
+                        const questionIds = formulaQuestionIds(formula, allQuestionIds);
+                        setDimensions(
+                          replaceAt(dimensions, dimensionIndex, {
+                            ...dimension,
+                            formula,
+                            questionIds,
+                            reverseQuestionIds: dimensionReverseIds.filter((id) =>
+                              questionIds.includes(id),
+                            ),
+                          }),
+                        );
+                      }}
+                    />
+                    <p className={`mt-1 text-xs ${formulaError ? "text-[#A13F37]" : "text-[var(--lxxl-muted)]"}`}>
+                      {formulaError || "仅支持题目 ID、+、-、*、/ 和英文括号 ()。"}
+                    </p>
+                  </CompactField>
+                )}
                 <CompactField className="md:col-span-4" label="维度说明">
                   <textarea
                     className={compactTextareaClass}
@@ -1644,7 +1736,48 @@ function DimensionEditor({
               </div>
 
               <div className="mt-4 rounded-xl border border-[var(--lxxl-border)] bg-white p-4">
-                <div className="text-sm font-medium">参与计算的题目</div>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="text-sm font-medium">参与计算的题目</div>
+                  <div className="flex gap-2">
+                    <button
+                      className="text-xs text-[var(--lxxl-green)] hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={disabled}
+                      type="button"
+                      onClick={() =>
+                        setDimensions(
+                          replaceAt(dimensions, dimensionIndex, {
+                            ...dimension,
+                            questionIds: allQuestionIds,
+                            formula:
+                              calculationMode === "formula"
+                                ? allQuestionIds.join(" + ")
+                                : dimension.formula,
+                          }),
+                        )
+                      }
+                    >
+                      全选题目
+                    </button>
+                    <button
+                      className="text-xs text-[var(--lxxl-muted)] hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={disabled}
+                      type="button"
+                      onClick={() =>
+                        setDimensions(
+                          replaceAt(dimensions, dimensionIndex, {
+                            ...dimension,
+                            questionIds: [],
+                            reverseQuestionIds: [],
+                            formula:
+                              calculationMode === "formula" ? "" : dimension.formula,
+                          }),
+                        )
+                      }
+                    >
+                      取消全选
+                    </button>
+                  </div>
+                </div>
                 <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
                   {definition.questions.map((question) => {
                     const selected = dimension.questionIds.includes(question.id);
@@ -1663,10 +1796,24 @@ function DimensionEditor({
                               const questionIds = event.target.checked
                                 ? [...dimension.questionIds, question.id]
                                 : dimension.questionIds.filter((id) => id !== question.id);
+                              const currentFormula = dimension.formula ?? "";
+                              const formula =
+                                calculationMode !== "formula"
+                                  ? dimension.formula
+                                  : event.target.checked
+                                    ? currentFormula.trim()
+                                      ? `${currentFormula.trim()} + ${question.id}`
+                                      : question.id
+                                    : removeFormulaQuestionId(
+                                        currentFormula,
+                                        question.id,
+                                        allQuestionIds,
+                                      );
                               setDimensions(
                                 replaceAt(dimensions, dimensionIndex, {
                                   ...dimension,
                                   questionIds,
+                                  formula,
                                   reverseQuestionIds: dimensionReverseIds.filter((id) =>
                                     questionIds.includes(id),
                                   ),

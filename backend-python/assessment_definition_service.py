@@ -22,6 +22,12 @@ from assessment_asset_service import (
     AssessmentAssetReferenceError,
     validate_assessment_asset_reference,
 )
+from assessment_formula import (
+    AssessmentFormulaError,
+    evaluate_dimension_formula,
+    formula_question_ids,
+    parse_dimension_formula,
+)
 
 
 ASSESSMENT_ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
@@ -325,9 +331,39 @@ def _reachable_scores(
     aggregate: str,
     label: str,
     round_final_score: bool = False,
+    calculation_mode: str = "simple",
+    formula: str = "",
 ) -> set[float]:
     questions_by_id = {str(question["id"]): question for question in questions}
-    scores = {0.0}
+    if calculation_mode == "formula":
+        try:
+            node = parse_dimension_formula(formula, list(questions_by_id))
+            states: list[dict[str, float]] = [{}]
+            for question_id in question_ids:
+                question = questions_by_id[question_id]
+                values = _question_score_values(
+                    question,
+                    reverse=question_id in reverse_ids,
+                )
+                next_states: list[dict[str, float]] = []
+                for state in states:
+                    for value in values:
+                        next_states.append({**state, question_id: value})
+                        if len(next_states) > MAX_REACHABLE_SCORE_STATES:
+                            raise AssessmentValidationError(
+                                f"{label}可达组合超过 {MAX_REACHABLE_SCORE_STATES} 个，"
+                                "无法完成精确校验，请简化公式或选项分值"
+                            )
+                states = next_states
+            return {
+                math.floor(evaluate_dimension_formula(node, state) * 100 + 0.5)
+                / 100
+                for state in states
+            }
+        except AssessmentFormulaError as exc:
+            raise AssessmentValidationError(f"{label}公式不合法：{exc}") from exc
+
+    scores = {1.0 if aggregate == "product" else 0.0}
     for question_id in question_ids:
         question = questions_by_id[question_id]
         values = _question_score_values(
@@ -337,7 +373,9 @@ def _reachable_scores(
         next_scores: set[float] = set()
         for current in scores:
             for value in values:
-                next_scores.add(current + value)
+                next_scores.add(
+                    current * value if aggregate == "product" else current + value
+                )
                 if len(next_scores) > MAX_REACHABLE_SCORE_STATES:
                     raise AssessmentValidationError(
                         f"{label}可达分值超过 {MAX_REACHABLE_SCORE_STATES} 个，"
@@ -621,7 +659,9 @@ def validate_definition(
                 "intro",
                 "questionIds",
                 "reverseQuestionIds",
+                "calculationMode",
                 "aggregate",
+                "formula",
                 "scoreRanges",
             }
             if dimension.keys() - allowed_dimension_fields:
@@ -643,8 +683,33 @@ def validate_definition(
                 raise AssessmentValidationError(
                     f"dimensions[{index}].reverseQuestionIds 必须属于该维度"
                 )
-            if dimension.get("aggregate") not in {"sum", "average"}:
+            calculation_mode = dimension.get("calculationMode", "simple")
+            if calculation_mode not in {"simple", "formula"}:
+                raise AssessmentValidationError(
+                    f"dimensions[{index}].calculationMode 不合法"
+                )
+            if dimension.get("aggregate") not in {"sum", "product", "average"}:
                 raise AssessmentValidationError(f"dimensions[{index}].aggregate 不合法")
+            formula = dimension.get("formula", "")
+            if formula is not None and not isinstance(formula, str):
+                raise AssessmentValidationError(
+                    f"dimensions[{index}].formula 必须是字符串"
+                )
+            if calculation_mode == "formula":
+                try:
+                    formula_node = parse_dimension_formula(
+                        formula or "",
+                        [str(question["id"]) for question in questions],
+                    )
+                except AssessmentFormulaError as exc:
+                    raise AssessmentValidationError(
+                        f"dimensions[{index}].formula 不合法：{exc}"
+                    ) from exc
+                if formula_question_ids(formula_node) != references:
+                    raise AssessmentValidationError(
+                        f"dimensions[{index}].formula 中的题目 ID "
+                        "必须与 questionIds 完全一致"
+                    )
             range_label = f"dimensions[{index}].scoreRanges"
             score_ranges = dimension.get("scoreRanges")
             _validate_ranges(score_ranges, range_label)
@@ -656,6 +721,8 @@ def validate_definition(
                     aggregate=str(dimension.get("aggregate")),
                     label=range_label,
                     round_final_score=True,
+                    calculation_mode=str(calculation_mode),
+                    formula=str(formula or ""),
                 )
                 _validate_range_coverage(
                     score_ranges,

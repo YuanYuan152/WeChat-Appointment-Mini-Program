@@ -6,6 +6,7 @@ import type {
   AssessmentScoringType,
   AssessmentValidationIssue,
 } from "@/types/assessment";
+import { compileDimensionFormula } from "@/lib/assessmentFormula";
 
 const STABLE_ID_PATTERN = /^[A-Za-z0-9]+(?:[-_.][A-Za-z0-9]+)*$/;
 const ASSESSMENT_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -287,6 +288,7 @@ export function createDefaultAssessmentDefinition(
         intro: "",
         questionIds: questions.map((question) => question.id),
         reverseQuestionIds: [],
+        calculationMode: "simple",
         aggregate: "sum",
         scoreRanges: createDefaultScoreRanges(questions),
       },
@@ -372,6 +374,7 @@ export function changeAssessmentScoringType(
         intro: "",
         questionIds,
         reverseQuestionIds: [],
+        calculationMode: "simple",
         aggregate: "sum",
         scoreRanges: createDefaultScoreRanges(next.questions, questionIds),
       },
@@ -502,9 +505,11 @@ function enumerateReachableScores(
   definition: AssessmentDefinition,
   questionIds: string[],
   reverseQuestionIds: string[],
-  aggregate: "sum" | "average",
+  aggregate: "sum" | "product" | "average",
   label: string,
   roundFinalScore = false,
+  calculationMode: "simple" | "formula" = "simple",
+  formula = "",
 ): number[] | undefined {
   if (questionIds.length === 0) {
     return undefined;
@@ -513,7 +518,48 @@ function enumerateReachableScores(
     definition.questions.map((question) => [question.id, question]),
   );
   const reverseIds = new Set(reverseQuestionIds);
-  let scores = new Set([0]);
+  const compiledFormula =
+    calculationMode === "formula"
+      ? compileDimensionFormula(
+          formula,
+          definition.questions.map((question) => question.id),
+        )
+      : null;
+
+  if (compiledFormula) {
+    let states: Array<Record<string, number>> = [{}];
+    for (const questionId of questionIds) {
+      const question = questions.get(questionId);
+      if (!question) {
+        return undefined;
+      }
+      const values = questionScoreValues(question, reverseIds.has(questionId));
+      if (!values) {
+        return undefined;
+      }
+      const nextStates: Array<Record<string, number>> = [];
+      for (const state of states) {
+        for (const value of values) {
+          nextStates.push({ ...state, [questionId]: value });
+          if (nextStates.length > MAX_REACHABLE_SCORE_STATES) {
+            throw new ReachabilityLimitError(
+              `${label}可达组合超过 ${MAX_REACHABLE_SCORE_STATES.toLocaleString("zh-CN")} 个，无法完成精确校验，请简化公式或选项分值`,
+            );
+          }
+        }
+      }
+      states = nextStates;
+    }
+    return [
+      ...new Set(
+        states.map(
+          (state) => Math.round(compiledFormula.evaluate(state) * 100) / 100,
+        ),
+      ),
+    ].sort((left, right) => left - right);
+  }
+
+  let scores = new Set([aggregate === "product" ? 1 : 0]);
 
   for (const questionId of questionIds) {
     const question = questions.get(questionId);
@@ -527,7 +573,7 @@ function enumerateReachableScores(
     const nextScores = new Set<number>();
     for (const current of scores) {
       for (const value of values) {
-        nextScores.add(current + value);
+        nextScores.add(aggregate === "product" ? current * value : current + value);
         if (nextScores.size > MAX_REACHABLE_SCORE_STATES) {
           throw new ReachabilityLimitError(
             `${label}可达分值超过 ${MAX_REACHABLE_SCORE_STATES.toLocaleString("zh-CN")} 个，无法完成精确校验，请简化选项分值`,
@@ -645,6 +691,8 @@ export function getAssessmentScoreCoverageSummaries(
           dimension.aggregate,
           `维度“${dimension.title || dimension.id || index + 1}”`,
           true,
+          dimension.calculationMode ?? "simple",
+          dimension.formula ?? "",
         );
         return reachableScores
           ? [
@@ -659,7 +707,7 @@ export function getAssessmentScoreCoverageSummaries(
       });
     }
   } catch (error) {
-    if (error instanceof ReachabilityLimitError) {
+    if (error instanceof Error) {
       return [
         {
           path: "scoring",
@@ -1047,12 +1095,46 @@ export function validateAssessmentDefinition(
             severity: "error",
           });
         }
-        if (!["sum", "average"].includes(dimension.aggregate)) {
+        const calculationMode = dimension.calculationMode ?? "simple";
+        if (!["simple", "formula"].includes(calculationMode)) {
           issues.push({
-            path: `${path}.aggregate`,
-            message: "维度汇总方式不合法",
+            path: `${path}.calculationMode`,
+            message: "维度计算方式不合法",
             severity: "error",
           });
+        }
+        if (!["sum", "product", "average"].includes(dimension.aggregate)) {
+          issues.push({
+            path: `${path}.aggregate`,
+            message: "简单计算方式不合法",
+            severity: "error",
+          });
+        }
+        if (calculationMode === "formula") {
+          try {
+            const compiled = compileDimensionFormula(
+              dimension.formula ?? "",
+              definition.questions.map((question) => question.id),
+            );
+            const selected = new Set(dimension.questionIds);
+            const referenced = new Set(compiled.questionIds);
+            if (
+              selected.size !== referenced.size ||
+              [...selected].some((id) => !referenced.has(id))
+            ) {
+              issues.push({
+                path: `${path}.formula`,
+                message: "公式中的题目 ID 必须与已点选题目完全一致",
+                severity: "error",
+              });
+            }
+          } catch (error) {
+            issues.push({
+              path: `${path}.formula`,
+              message: error instanceof Error ? error.message : "公式不合法",
+              severity: "error",
+            });
+          }
         }
         if (!dimension.questionIds.length) {
           issues.push({
