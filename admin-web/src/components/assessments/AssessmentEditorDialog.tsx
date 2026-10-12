@@ -452,7 +452,7 @@ export function AssessmentEditorDialog({
                   type="button"
                   onClick={() => void archive()}
                 >
-                  归档
+                  取消前端展示
                 </button>
               )}
               {!archived && (
@@ -469,7 +469,7 @@ export function AssessmentEditorDialog({
                   type="button"
                   onClick={() => void publish()}
                 >
-                  发布草稿
+                  发布版本
                 </button>
               )}
               {!archived && activeTab !== "versions" && (
@@ -484,7 +484,7 @@ export function AssessmentEditorDialog({
                   type="button"
                   onClick={() => void save()}
                 >
-                  {actionLoading ? "处理中..." : isCreate && !currentDetail ? "创建草稿" : "保存草稿"}
+                  {actionLoading ? "处理中..." : isCreate && !currentDetail ? "创建草稿" : "保存"}
                 </button>
               )}
             </div>
