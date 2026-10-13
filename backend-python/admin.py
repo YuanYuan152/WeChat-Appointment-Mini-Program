@@ -157,7 +157,7 @@ def require_assessment_editor(
     current_account: AppAccount = Depends(get_current_account),
     db: Session = Depends(get_db),
 ) -> AppAccount:
-    """量表定义涉及发布版本，咨询主任、管理员与科研可编辑。"""
+    """量表定义 / 企业定制：管理员与科研可编辑。"""
     if not is_assessment_editor_role(get_account_role(db, current_account.Id)):
         raise HTTPException(status_code=403, detail="无量表配置权限")
     return current_account
@@ -167,7 +167,7 @@ def require_assessment_viewer(
     current_account: AppAccount = Depends(get_current_account),
     db: Session = Depends(get_db),
 ) -> AppAccount:
-    """量表结果：管理工作台与科研可查看。"""
+    """量表结果：管理员与科研可查看。"""
     if not is_assessment_viewer_role(get_account_role(db, current_account.Id)):
         raise HTTPException(status_code=403, detail="无量表结果查看权限")
     return current_account
@@ -3212,7 +3212,7 @@ register_assessment_share_admin_routes(
 
 register_assessment_enterprise_admin_routes(
     router,
-    require_staff_workbench=require_staff_workbench,
+    require_assessment_editor=require_assessment_editor,
 )
 
 register_system_settings_routes(

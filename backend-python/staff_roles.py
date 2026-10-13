@@ -65,13 +65,13 @@ def is_content_manager_role(role: str) -> bool:
 
 
 def is_assessment_editor_role(role: str) -> bool:
-    """量表定义编辑：咨询主任、管理员、科研。"""
-    return role in {"Ops", "Admin"} or role in RESEARCH_ROLES
+    """量表定义 / 企业定制：管理员、科研。"""
+    return role == "Admin" or role in RESEARCH_ROLES
 
 
 def is_assessment_viewer_role(role: str) -> bool:
-    """量表结果查看：管理工作台 + 科研。"""
-    return role in STAFF_WORKBENCH_ROLES or role in RESEARCH_ROLES
+    """量表结果查看：管理员、科研。"""
+    return role == "Admin" or role in RESEARCH_ROLES
 
 
 def is_visitor_ui_role(role: str) -> bool:

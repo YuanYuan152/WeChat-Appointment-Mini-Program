@@ -281,25 +281,25 @@ def submit_enterprise_assessment_reports(
 def register_assessment_enterprise_admin_routes(
     router: APIRouter,
     *,
-    require_staff_workbench: Callable[..., Any],
+    require_assessment_editor: Callable[..., Any],
 ) -> None:
     @router.get("/assessment-enterprises", summary="企业定制量表配置")
-    def list_admin_enterprises(_actor: Any = Depends(require_staff_workbench)):
+    def list_admin_enterprises(_actor: Any = Depends(require_assessment_editor)):
         return list_enterprises()
 
     @router.get("/assessment-enterprises/default", summary="默认网站品牌配置")
-    def get_admin_default_branding(_actor: Any = Depends(require_staff_workbench)):
+    def get_admin_default_branding(_actor: Any = Depends(require_assessment_editor)):
         return get_default_branding()
 
     @router.put("/assessment-enterprises/default", summary="保存默认网站品牌配置")
     def update_admin_default_branding(
         body: BrandingPayload,
-        _actor: Any = Depends(require_staff_workbench),
+        _actor: Any = Depends(require_assessment_editor),
     ):
         return save_default_branding(body.model_dump())
 
     @router.get("/assessment-enterprises/private-assessments", summary="可分配的已发布量表（含私有与公有）")
-    def list_assignable_assessments(_actor: Any = Depends(require_staff_workbench)):
+    def list_assignable_assessments(_actor: Any = Depends(require_assessment_editor)):
         result = get_assessment_store().list_admin(page=1, page_size=500)
         return [
             {
@@ -318,13 +318,13 @@ def register_assessment_enterprise_admin_routes(
         "/assessment-enterprises/employee-info-fields",
         summary="默认员工信息填写模板字段目录",
     )
-    def list_employee_info_fields(_actor: Any = Depends(require_staff_workbench)):
+    def list_employee_info_fields(_actor: Any = Depends(require_assessment_editor)):
         return list_employee_info_field_catalog()
 
     @router.post("/assessment-enterprises", summary="新增企业定制链接")
     def create_admin_enterprise(
         body: EnterprisePayload,
-        _actor: Any = Depends(require_staff_workbench),
+        _actor: Any = Depends(require_assessment_editor),
     ):
         try:
             _published_assessments(body.assessmentIds, body.assessmentTitles)
@@ -346,7 +346,7 @@ def register_assessment_enterprise_admin_routes(
     def update_admin_enterprise(
         enterprise_id: str,
         body: EnterprisePayload,
-        _actor: Any = Depends(require_staff_workbench),
+        _actor: Any = Depends(require_assessment_editor),
     ):
         try:
             _published_assessments(body.assessmentIds, body.assessmentTitles)
@@ -367,7 +367,7 @@ def register_assessment_enterprise_admin_routes(
     @router.delete("/assessment-enterprises/{enterprise_id}", summary="删除企业定制链接")
     def delete_admin_enterprise(
         enterprise_id: str,
-        _actor: Any = Depends(require_staff_workbench),
+        _actor: Any = Depends(require_assessment_editor),
     ):
         try:
             delete_enterprise(enterprise_id)
@@ -378,7 +378,7 @@ def register_assessment_enterprise_admin_routes(
     @router.get("/assessment-enterprises/{enterprise_id}/qrcode", summary="生成企业链接二维码")
     def enterprise_qrcode(
         enterprise_id: str,
-        _actor: Any = Depends(require_staff_workbench),
+        _actor: Any = Depends(require_assessment_editor),
     ):
         enterprise = next(
             (item for item in list_enterprises() if item.get("id") == enterprise_id),
