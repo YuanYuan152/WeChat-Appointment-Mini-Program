@@ -149,7 +149,7 @@ function AssessmentDataViewTabs({
 }) {
   const tabs: Array<{ id: AssessmentDataView; label: string }> = [
     { id: "reports", label: "填写记录" },
-    { id: "share-stats", label: "分享统计" },
+    { id: "share-stats", label: "数据统计" },
   ];
 
   return (

@@ -272,7 +272,7 @@ export function AssessmentsPanel({
                               <TableActionButton
                                 onClick={() => onOpenShareStats(item.id)}
                               >
-                                分享统计
+                                数据统计
                               </TableActionButton>
                               <TableActionButton
                                 disabled={archived}
