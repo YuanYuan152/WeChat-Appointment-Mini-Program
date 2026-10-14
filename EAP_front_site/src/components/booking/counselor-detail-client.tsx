@@ -385,37 +385,43 @@ export function CounselorDetailClient({ counselorId, source }: CounselorDetailCl
 
   return (
     <div className="pb-28">
-      <div className="relative mb-6 overflow-hidden rounded-[var(--radius)] border border-border bg-card">
-        <div className="relative h-56 sm:h-64">
-          <Image
-            src={resolveCounselorPublicAvatar(counselor.avatarUrl)}
-            alt={counselor.name}
-            fill
-            className="object-cover"
-            priority
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-          <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
-            <h1 className="font-serif text-2xl font-bold sm:text-3xl">{counselor.name}</h1>
-            <p className="mt-1 text-white/80">{counselor.title || "心理咨询师"}</p>
-            <p className="mt-2 text-xl font-semibold">
-              ¥{priceYuan}
-              <span className="text-sm font-normal text-white/80">/次</span>
-            </p>
+      <div className="mb-6 overflow-hidden rounded-[var(--radius)] border border-border bg-card shadow-sm">
+        <div className="flex flex-col sm:flex-row">
+          <div className="relative h-56 w-full shrink-0 sm:h-auto sm:min-h-[14rem] sm:w-48">
+            <Image
+              src={resolveCounselorPublicAvatar(counselor.avatarUrl)}
+              alt={counselor.name}
+              fill
+              className="object-cover"
+              sizes="(max-width: 640px) 100vw, 192px"
+              priority
+            />
           </div>
-        </div>
-        <div className="grid grid-cols-3 divide-x divide-border border-t border-border text-center">
-          <div className="py-4">
-            <div className="text-lg font-semibold">{counselor.workYears}年+</div>
-            <div className="text-xs text-muted-foreground">从业年限</div>
-          </div>
-          <div className="py-4">
-            <div className="text-lg font-semibold">{counselor.consultHours}h+</div>
-            <div className="text-xs text-muted-foreground">咨询时数</div>
-          </div>
-          <div className="py-4">
-            <div className="text-lg font-semibold">{counselor.province || "线下/线上"}</div>
-            <div className="text-xs text-muted-foreground">服务方式</div>
+          <div className="flex flex-1 flex-col justify-between gap-6 p-5 sm:p-6">
+            <div>
+              <h1 className="font-serif text-2xl font-bold sm:text-3xl">{counselor.name}</h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {counselor.title || "心理咨询师"}
+              </p>
+              <p className="mt-3 text-xl font-semibold text-primary">
+                ¥{priceYuan}
+                <span className="text-sm font-normal text-muted-foreground">/次</span>
+              </p>
+            </div>
+            <div className="grid grid-cols-3 gap-3 border-t border-border pt-4 text-center sm:text-left">
+              <div>
+                <div className="text-lg font-semibold">{counselor.workYears}年+</div>
+                <div className="text-xs text-muted-foreground">从业年限</div>
+              </div>
+              <div>
+                <div className="text-lg font-semibold">{counselor.consultHours}h+</div>
+                <div className="text-xs text-muted-foreground">咨询时数</div>
+              </div>
+              <div>
+                <div className="text-lg font-semibold">{counselor.province || "线下/线上"}</div>
+                <div className="text-xs text-muted-foreground">服务方式</div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
