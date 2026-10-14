@@ -14,10 +14,15 @@ export function billingToYuan(billingCents: number): number {
 
 export function splitCsv(value?: string | null): string[] {
   if (!value) return [];
-  return value
-    .split(/[,，]/)
-    .map((s) => s.trim())
-    .filter(Boolean);
+  const seen = new Set<string>();
+  const items: string[] = [];
+  for (const part of value.split(/[,，]/)) {
+    const item = part.trim();
+    if (!item || seen.has(item)) continue;
+    seen.add(item);
+    items.push(item);
+  }
+  return items;
 }
 
 export function formatSlotRange(start?: string | null, end?: string | null): string {

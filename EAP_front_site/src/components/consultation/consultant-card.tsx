@@ -44,8 +44,8 @@ export function ConsultantCard({ consultant, index = 0 }: ConsultantCardProps) {
             </div>
 
             <div className="mt-3 flex flex-wrap gap-1.5">
-              {consultant.specialties.map((s) => (
-                <Badge key={s} variant="secondary">{s}</Badge>
+              {consultant.specialties.map((s, i) => (
+                <Badge key={`${s}-${i}`} variant="secondary">{s}</Badge>
               ))}
             </div>
 

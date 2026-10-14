@@ -25,7 +25,7 @@ import {
   formatSlotRange,
   formatYuan,
 } from "@/lib/booking/utils";
-import { resolveCounselorAvatar } from "@/lib/booking/counselor-avatars";
+import { resolveCounselorPublicAvatar } from "@/lib/booking/counselor-avatars";
 import { useAuthStore } from "@/lib/stores/auth-store";
 import { cn } from "@/lib/utils";
 
@@ -172,7 +172,7 @@ export function ConsultationRecordsClient() {
             <div className="flex gap-4">
               <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-full">
                 <Image
-                  src={resolveCounselorAvatar(r.counselorName, r.counselorId)}
+                  src={resolveCounselorPublicAvatar(r.counselorAvatar)}
                   alt={r.counselorName}
                   fill
                   className="object-cover"

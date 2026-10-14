@@ -18,6 +18,8 @@ export interface CounselorListItem {
 export interface CounselorDetail extends CounselorListItem {
   profile?: string | null;
   career?: string | null;
+  /** 培训经历（与小程序详情 trainingExperience 一致） */
+  trainingExperience?: string | null;
   qualification?: string | null;
   targetGroup?: string | null;
   mode?: string | null;

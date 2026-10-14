@@ -6,11 +6,11 @@ const projectRoot = path.dirname(fileURLToPath(import.meta.url));
 
 const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
-let apiHostname = "localhost";
+const apiHostnames = new Set<string>(["localhost", "127.0.0.1"]);
 try {
-  apiHostname = new URL(apiBase).hostname;
+  apiHostnames.add(new URL(apiBase).hostname);
 } catch {
-  /* use default */
+  /* keep defaults */
 }
 
 const nextConfig: NextConfig = {
@@ -30,8 +30,10 @@ const nextConfig: NextConfig = {
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "ui-avatars.com" },
-      { protocol: "http", hostname: apiHostname, pathname: "/static/**" },
-      { protocol: "https", hostname: apiHostname, pathname: "/static/**" },
+      ...[...apiHostnames].flatMap((hostname) => [
+        { protocol: "http" as const, hostname, pathname: "/static/**" },
+        { protocol: "https" as const, hostname, pathname: "/static/**" },
+      ]),
     ],
   },
 };

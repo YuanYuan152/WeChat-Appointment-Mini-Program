@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { CounselorListItem } from "@/lib/booking/types";
 import { billingToYuan, splitCsv } from "@/lib/booking/utils";
-import { resolveCounselorAvatar } from "@/lib/booking/counselor-avatars";
+import { resolveCounselorPublicAvatar } from "@/lib/booking/counselor-avatars";
 import { consultationDetailPath } from "@/lib/booking/paths";
 
 interface CounselorCardProps {
@@ -29,7 +29,7 @@ export function CounselorCard({ counselor, index = 0 }: CounselorCardProps) {
       <div className="flex flex-col sm:flex-row">
         <div className="relative h-48 w-full shrink-0 sm:h-auto sm:w-44">
           <Image
-            src={resolveCounselorAvatar(counselor.name, counselor.id)}
+            src={resolveCounselorPublicAvatar(counselor.avatarUrl)}
             alt={counselor.name}
             fill
             className="object-cover"
@@ -52,8 +52,8 @@ export function CounselorCard({ counselor, index = 0 }: CounselorCardProps) {
 
           {specialties.length > 0 && (
             <div className="mt-3 flex flex-wrap gap-1.5">
-              {specialties.slice(0, 4).map((s) => (
-                <Badge key={s} variant="secondary">
+              {specialties.slice(0, 4).map((s, i) => (
+                <Badge key={`${s}-${i}`} variant="secondary">
                   {s}
                 </Badge>
               ))}

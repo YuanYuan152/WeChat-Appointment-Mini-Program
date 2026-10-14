@@ -784,13 +784,13 @@ export function DimensionRadar({
           </div>
 
           <div className="mt-auto flex w-full flex-col items-center gap-1 pb-1 pt-3">
-            <div className="flex h-36 w-24 items-center justify-center overflow-hidden rounded border border-border bg-white">
+            <div className="relative h-36 w-36 overflow-hidden rounded border border-border bg-white">
               <Image
                 alt="联系助理微信二维码"
-                className="h-full w-full object-contain"
-                height={256}
+                className="object-cover"
+                fill
+                sizes="144px"
                 src={ASSISTANT_CONTACT.qrcodeSrc}
-                width={160}
               />
             </div>
             <p className="max-w-[120px] text-center text-[9px] leading-snug text-muted-foreground/65">

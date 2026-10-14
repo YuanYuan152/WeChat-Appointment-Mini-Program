@@ -35,7 +35,7 @@ import {
   billingToYuan,
   splitCsv,
 } from "@/lib/booking/utils";
-import { resolveCounselorAvatar } from "@/lib/booking/counselor-avatars";
+import { resolveCounselorPublicAvatar } from "@/lib/booking/counselor-avatars";
 import { consultationDetailPath } from "@/lib/booking/paths";
 import { useAuthStore } from "@/lib/stores/auth-store";
 import { cn } from "@/lib/utils";
@@ -388,7 +388,7 @@ export function CounselorDetailClient({ counselorId, source }: CounselorDetailCl
       <div className="relative mb-6 overflow-hidden rounded-[var(--radius)] border border-border bg-card">
         <div className="relative h-56 sm:h-64">
           <Image
-            src={resolveCounselorAvatar(counselor.name, counselor.id)}
+            src={resolveCounselorPublicAvatar(counselor.avatarUrl)}
             alt={counselor.name}
             fill
             className="object-cover"
@@ -440,22 +440,30 @@ export function CounselorDetailClient({ counselorId, source }: CounselorDetailCl
         <div className="space-y-6">
           <section className="rounded-[var(--radius)] border border-border bg-card p-6">
             <h2 className="mb-3 font-serif text-lg font-semibold">简介</h2>
-            <p className="leading-relaxed text-muted-foreground">
+            <p className="whitespace-pre-line leading-relaxed text-muted-foreground">
               {counselor.introduce || counselor.profile || "暂无简介"}
             </p>
           </section>
-          {counselor.qualification && (
+          <section className="rounded-[var(--radius)] border border-border bg-card p-6">
+            <h2 className="mb-3 font-serif text-lg font-semibold">从业资质</h2>
+            <p className="whitespace-pre-line text-muted-foreground">
+              {counselor.qualification || "暂无资质信息"}
+            </p>
+          </section>
+          {(counselor.trainingExperience || counselor.career) && (
             <section className="rounded-[var(--radius)] border border-border bg-card p-6">
-              <h2 className="mb-3 font-serif text-lg font-semibold">资质</h2>
-              <p className="text-muted-foreground">{counselor.qualification}</p>
+              <h2 className="mb-3 font-serif text-lg font-semibold">培训经历</h2>
+              <p className="whitespace-pre-line text-muted-foreground">
+                {(counselor.trainingExperience || counselor.career || "").trim()}
+              </p>
             </section>
           )}
           {fields.length > 0 && (
             <section className="rounded-[var(--radius)] border border-border bg-card p-6">
               <h2 className="mb-3 font-serif text-lg font-semibold">专业领域</h2>
               <div className="flex flex-wrap gap-2">
-                {fields.map((f) => (
-                  <Badge key={f}>{f}</Badge>
+                {fields.map((f, i) => (
+                  <Badge key={`${f}-${i}`}>{f}</Badge>
                 ))}
               </div>
             </section>
@@ -464,8 +472,8 @@ export function CounselorDetailClient({ counselorId, source }: CounselorDetailCl
             <section className="rounded-[var(--radius)] border border-border bg-card p-6">
               <h2 className="mb-3 font-serif text-lg font-semibold">服务人群</h2>
               <div className="flex flex-wrap gap-2">
-                {targetGroups.map((g) => (
-                  <Badge key={g} variant="outline">
+                {targetGroups.map((g, i) => (
+                  <Badge key={`${g}-${i}`} variant="outline">
                     {g}
                   </Badge>
                 ))}

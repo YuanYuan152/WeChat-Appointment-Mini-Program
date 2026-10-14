@@ -41,18 +41,18 @@ export function ContactAssistantContent({
         {assistant.hint && (
           <p className="mb-4 text-sm text-muted-foreground">{assistant.hint}</p>
         )}
-        <div className="relative mx-auto flex h-48 w-48 items-center justify-center overflow-hidden rounded-xl bg-muted">
+        <div className="relative mx-auto h-48 w-48 overflow-hidden rounded-xl bg-muted">
           {!qrFailed ? (
             <Image
               src={assistant.qrcodeSrc}
               alt="咨询助理微信二维码"
-              width={192}
-              height={192}
-              className="object-contain"
+              fill
+              sizes="192px"
+              className="object-cover"
               onError={() => setQrFailed(true)}
             />
           ) : (
-            <div className="px-4 text-center">
+            <div className="absolute inset-0 flex flex-col items-center justify-center px-4 text-center">
               <p className="text-sm font-medium text-muted-foreground">二维码暂未配置</p>
               <p className="mt-1 text-xs text-muted-foreground">请致电助理或前往咨询中心</p>
             </div>

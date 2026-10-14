@@ -47,9 +47,9 @@ export function Footer() {
                   <Image
                     src={assistant.qrcodeSrc}
                     alt="咨询助理微信二维码"
-                    width={96}
-                    height={96}
-                    className="object-contain"
+                    fill
+                    sizes="96px"
+                    className="object-cover"
                   />
                 </div>
                 <div className="min-w-0 pt-1">
