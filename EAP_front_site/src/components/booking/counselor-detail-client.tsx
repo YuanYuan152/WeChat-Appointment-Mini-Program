@@ -623,12 +623,9 @@ export function CounselorDetailClient({ counselorId, source }: CounselorDetailCl
           </Button>
           <Button
             className="flex-1"
-            disabled={!canProceedBooking}
-            onClick={makeAppointment}
+            onClick={() => setContactOpen(true)}
           >
-            {canProceedBooking
-              ? `立即预约 ¥${selectedSlot?.Price ?? priceYuan}`
-              : "立即预约"}
+            联系助理进行预约
           </Button>
         </div>
       </div>
