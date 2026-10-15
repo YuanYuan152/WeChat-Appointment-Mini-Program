@@ -780,8 +780,13 @@ function ProxyBookingModal({
   const [feeLoading, setFeeLoading] = useState(false);
   const [feeLabel, setFeeLabel] = useState("");
   const [feeError, setFeeError] = useState("");
+  const [videoRoomPrefExpanded, setVideoRoomPrefExpanded] = useState(false);
+  const [videoRoomNoticeAgreed, setVideoRoomNoticeAgreed] = useState(false);
   const feeRequestSeq = useRef(0);
-  const needsRoom = draft.centerId !== "video";
+  const isVideo = draft.centerId === "video";
+  const needsRoom = !isVideo;
+  const VIDEO_ROOM_NOTICE =
+    "如需使用线下咨询室进行视频咨询再选择咨询室，如果不需要使用线下咨询室请不要选择（请勾选须知后可选择咨询室）";
   const canSubmit = Boolean(
     patient &&
       counselor &&
@@ -793,7 +798,10 @@ function ProxyBookingModal({
       !selectedSlot.counselorOccupied &&
       (!draft.isFreeExperienceOrder || Boolean(draft.freeOrderReason.trim())) &&
       (patient?.isContractSigned || draft.agreementType !== null) &&
-      (!needsRoom || (selectedRoom?.available && !selectedRoom.occupiedByOther)),
+      (needsRoom
+        ? selectedRoom?.available && !selectedRoom.occupiedByOther
+        : !draft.roomId
+          || (videoRoomNoticeAgreed && selectedRoom?.available && !selectedRoom.occupiedByOther)),
   );
 
   useEffect(() => {
@@ -833,7 +841,7 @@ function ProxyBookingModal({
     }
     setSubmitting(true);
     try {
-      const result = await onPushOrder(selectedSlot, needsRoom ? draft.roomId : "");
+      const result = await onPushOrder(selectedSlot, draft.roomId || "");
       if (result) {
         onClose();
       }
@@ -881,6 +889,8 @@ function ProxyBookingModal({
                 onChange={(event) => {
                   const selection = { date: draft.date, centerId: event.target.value };
                   setDraft((prev) => ({ ...prev, ...selection, slotKey: "", roomId: "" }));
+                  setVideoRoomPrefExpanded(false);
+                  setVideoRoomNoticeAgreed(false);
                   void onLoadSlots(selection);
                 }}
               >
@@ -1008,6 +1018,78 @@ function ProxyBookingModal({
                 </QueryField>
               )}
 
+              {isVideo && selectedSlot && (
+                <div className="space-y-3">
+                  <button
+                    className="flex w-full items-center justify-between rounded-xl border border-[var(--lxxl-border)] bg-[#FAF8F4] px-4 py-3 text-left"
+                    type="button"
+                    onClick={() => {
+                      setVideoRoomPrefExpanded((v) => {
+                        if (v) {
+                          setVideoRoomNoticeAgreed(false);
+                          setDraft((prev) => ({ ...prev, roomId: "" }));
+                        }
+                        return !v;
+                      });
+                    }}
+                  >
+                    <span className="text-sm font-medium">咨询室偏好（可选）</span>
+                    <span className="text-xs text-[var(--lxxl-green-dark)]">
+                      {videoRoomPrefExpanded ? "收起" : "展开"}
+                    </span>
+                  </button>
+                  {!videoRoomPrefExpanded ? (
+                    <p className="text-xs text-[var(--lxxl-muted)]">
+                      默认不占用线下咨询室；如需使用请展开选择
+                    </p>
+                  ) : (
+                    <>
+                      <label className="flex cursor-pointer items-start gap-3 text-xs leading-5 text-[var(--lxxl-muted)]">
+                        <input
+                          checked={videoRoomNoticeAgreed}
+                          className="mt-0.5"
+                          type="checkbox"
+                          onChange={(event) => {
+                            setVideoRoomNoticeAgreed(event.target.checked);
+                            if (!event.target.checked) {
+                              setDraft((prev) => ({ ...prev, roomId: "" }));
+                            }
+                          }}
+                        />
+                        <span>{VIDEO_ROOM_NOTICE}</span>
+                      </label>
+                      <div className={`grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 ${videoRoomNoticeAgreed ? "" : "opacity-50"}`}>
+                        {selectedSlot.rooms.map((room) => {
+                          const selected = draft.roomId === room.roomId;
+                          const selectable =
+                            videoRoomNoticeAgreed && room.available && !room.occupiedByOther;
+                          return (
+                            <button
+                              className={`rounded-xl border px-4 py-3 text-left text-sm transition ${
+                                selected
+                                  ? "border-[var(--lxxl-green)] bg-[#F4FBF7]"
+                                  : selectable
+                                    ? "border-[var(--lxxl-border)] bg-white hover:border-[var(--lxxl-green)]"
+                                    : "cursor-not-allowed border-[var(--lxxl-border)] bg-[#F4F1EB] text-[var(--lxxl-muted)]"
+                              }`}
+                              disabled={!selectable}
+                              key={room.roomId}
+                              type="button"
+                              onClick={() => setDraft((prev) => ({ ...prev, roomId: room.roomId }))}
+                            >
+                              <span className="block font-medium">{room.roomName}</span>
+                              <span className="mt-1 block text-xs text-[var(--lxxl-muted)]">
+                                {room.available && !room.occupiedByOther ? "可预约" : "已占用"}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
               {selectedSlot && (
                 <div className="rounded-xl bg-[#FAF8F4] px-4 py-3 text-sm leading-6 text-[var(--lxxl-muted)]">
                   {bookingDurationText(selectedSlot.startTime)}
@@ -1015,7 +1097,9 @@ function ProxyBookingModal({
                     ? selectedRoom
                       ? ` · ${selectedRoom.roomName}`
                       : " · 请继续选择咨询室"
-                    : ""}
+                    : selectedRoom
+                      ? ` · ${selectedRoom.roomName}`
+                      : ""}
                   。
                 </div>
               )}

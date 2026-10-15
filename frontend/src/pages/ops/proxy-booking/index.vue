@@ -279,7 +279,33 @@
               </view>
             </view>
             <view v-else class="form-item">
-              <text class="video-hint">视频咨询无需选择咨询室</text>
+              <view class="pref-toggle-row" @tap="toggleVideoRoomPref">
+                <text class="form-label">咨询室偏好（可选）</text>
+                <text class="pref-toggle-hint">{{ videoRoomPrefExpanded ? '收起' : '展开' }}</text>
+              </view>
+              <text v-if="!videoRoomPrefExpanded" class="video-hint">默认不占用线下咨询室；如需使用请展开选择</text>
+              <view v-else class="video-room-pref-body">
+                <view class="notice-check-row" @tap="toggleVideoRoomNotice">
+                  <view class="notice-checkbox" :class="{ checked: videoRoomNoticeAgreed }">
+                    <text v-if="videoRoomNoticeAgreed" class="notice-check-mark">✓</text>
+                  </view>
+                  <text class="notice-check-text">{{ VIDEO_ROOM_NOTICE }}</text>
+                </view>
+                <view class="center-row" :class="{ 'pref-locked': !videoRoomNoticeAgreed }">
+                  <view
+                    v-for="room in roomOptionsForSlot"
+                    :key="room.roomId"
+                    class="center-chip"
+                    :class="{
+                      active: form.roomId === room.roomId,
+                      disabled: !videoRoomNoticeAgreed || !room.available,
+                    }"
+                    @tap="selectRoom(room)"
+                  >
+                    {{ room.roomName }}{{ room.occupiedByOther ? '（已占用）' : '' }}
+                  </view>
+                </view>
+              </view>
             </view>
 
             <view v-if="!patientContractSigned" class="form-item">
@@ -529,6 +555,30 @@ const canPushOrder = computed(() => {
   return true
 })
 const isVideoCenterSelected = computed(() => isVideoCenter(form.value.centerId))
+const VIDEO_ROOM_NOTICE =
+  '如需使用线下咨询室进行视频咨询再选择咨询室，如果不需要使用线下咨询室请不要选择（请勾选须知后可选择咨询室）'
+const videoRoomPrefExpanded = ref(false)
+const videoRoomNoticeAgreed = ref(false)
+
+const resetVideoRoomPrefUi = () => {
+  videoRoomPrefExpanded.value = false
+  videoRoomNoticeAgreed.value = false
+}
+
+const toggleVideoRoomPref = () => {
+  videoRoomPrefExpanded.value = !videoRoomPrefExpanded.value
+  if (!videoRoomPrefExpanded.value) {
+    videoRoomNoticeAgreed.value = false
+    form.value.roomId = ''
+  }
+}
+
+const toggleVideoRoomNotice = () => {
+  videoRoomNoticeAgreed.value = !videoRoomNoticeAgreed.value
+  if (!videoRoomNoticeAgreed.value) {
+    form.value.roomId = ''
+  }
+}
 
 const form = ref({
   centerId: defaultCenterId,
@@ -962,6 +1012,7 @@ const openAddModal = () => {
     isFreeExperienceOrder: false,
     freeOrderReason: '',
   }
+  resetVideoRoomPrefUi()
   showAdd.value = true
   loadSlotOptions()
   void loadPushFee()
@@ -1017,6 +1068,7 @@ const onCenterChange = (id: string) => {
   form.value.centerId = id
   form.value.slotKey = ''
   form.value.roomId = ''
+  resetVideoRoomPrefUi()
   loadSlotOptions()
 }
 
@@ -1042,6 +1094,10 @@ const selectTimeSlot = (ts: TimeSlotOption) => {
 }
 
 const selectRoom = (room: RoomOption) => {
+  if (isVideoCenterSelected.value && !videoRoomNoticeAgreed.value) {
+    uni.showToast({ title: '请先勾选视频咨询选用咨询室须知', icon: 'none' })
+    return
+  }
   if (!room.available) return
   form.value.roomId = room.roomId
 }
@@ -1075,6 +1131,14 @@ const submitProxyOrder = () => {
     uni.showToast({ title: '请选择咨询室', icon: 'none' })
     return
   }
+  if (
+    isVideoCenterSelected.value
+    && form.value.roomId
+    && !videoRoomNoticeAgreed.value
+  ) {
+    uni.showToast({ title: '请先勾选视频咨询选用咨询室须知', icon: 'none' })
+    return
+  }
   if (!patientContractSigned.value && !form.value.agreementType) {
     uni.showToast({ title: '请选择签署协议类型', icon: 'none' })
     return
@@ -1093,7 +1157,7 @@ const submitProxyOrder = () => {
         center_id: form.value.centerId,
         start_time: form.value.startTime,
         end_time: form.value.endTime,
-        room_id: isVideoCenterSelected.value ? null : form.value.roomId,
+        room_id: form.value.roomId || null,
         schedule_id: form.value.scheduleId,
         is_free_experience_order: form.value.isFreeExperienceOrder,
         free_order_reason: form.value.isFreeExperienceOrder
@@ -1644,6 +1708,54 @@ onLoad(async (opts) => {
   border: 2rpx solid #10B981;
 }
 
+.pref-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+.pref-toggle-hint {
+  font-size: 24rpx;
+  color: #3D5A4E;
+  flex-shrink: 0;
+}
+.video-room-pref-body { margin-top: 12rpx; }
+.notice-check-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12rpx;
+  margin-bottom: 16rpx;
+}
+.notice-checkbox {
+  width: 32rpx;
+  height: 32rpx;
+  margin-top: 4rpx;
+  border: 2rpx solid #9CA3AF;
+  border-radius: 6rpx;
+  flex-shrink: 0;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+.notice-checkbox.checked {
+  border-color: #3D5A4E;
+  background: #fff;
+}
+.notice-check-mark {
+  font-size: 22rpx;
+  line-height: 1;
+  color: #3D5A4E;
+  font-weight: 700;
+}
+.notice-check-text {
+  flex: 1;
+  font-size: 22rpx;
+  line-height: 1.5;
+  color: #6B7280;
+}
+.pref-locked { opacity: 0.55; }
 .video-hint {
   font-size: 24rpx;
   color: #6B7280;

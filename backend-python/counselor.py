@@ -66,8 +66,11 @@ from schedule_meta import (
     get_consultation_rooms,
     is_video_center,
     parse_center_id,
+    parse_pref_room_id,
     parse_room_id,
+    resolve_room_physical_center_id,
     room_display_name,
+    rooms_for_slot_selection,
     release_assigned_room,
     schedule_pref_note,
 )
@@ -551,8 +554,6 @@ def _compute_dashboard_stats(
 
 def _build_schedule_note(body: ScheduleCreate) -> Optional[str]:
     if body.center_id:
-        if is_video_center(body.center_id):
-            return schedule_pref_note(body.center_id)
         pref = (body.room_id or "").strip() or None
         return schedule_pref_note(body.center_id, pref)
     return body.note
@@ -565,28 +566,41 @@ def _resolve_calendar_room(
     db: Session,
 ) -> tuple[Optional[str], Optional[str]]:
     """返回 (roomId, roomName) 供工作台展示。"""
-    if is_video_center(center_id):
-        if schedule.Status == "BOOKED" or _active_consultation(consultation):
-            return None, "线上视频（不占咨询室）"
-        return None, None
-
     room_id = display_room_id(schedule.Note, schedule.Status)
     if not room_id and consultation and consultation.Note:
         room_id = parse_room_id(consultation.Note)
 
     is_booked = schedule.Status == "BOOKED" or _active_consultation(consultation)
+    room_center = resolve_room_physical_center_id(room_id, db) if room_id else None
+    display_center = room_center or center_id
+
+    if is_video_center(center_id):
+        if room_id:
+            name = room_display_name(display_center, room_id, db) or room_id
+            if is_booked:
+                return room_id, f"线上视频 · 咨询室 {name}"
+            if schedule.Status == "AVAILABLE":
+                return room_id, f"{name}（偏好）"
+            return room_id, name
+        if is_booked:
+            return None, "线上视频（不占咨询室）"
+        if schedule.Status == "AVAILABLE":
+            return None, None
+        return None, None
+
     if is_booked and room_id:
-        name = room_display_name(center_id, room_id, db) or room_id
+        name = room_display_name(display_center, room_id, db) or room_id
         return room_id, f"咨询室 {name}"
 
     if schedule.Status == "AVAILABLE" and center_id:
         pref_id = display_room_id(schedule.Note, schedule.Status)
         if pref_id:
-            name = room_display_name(center_id, pref_id, db) or pref_id
+            pref_center = resolve_room_physical_center_id(pref_id, db) or center_id
+            name = room_display_name(pref_center, pref_id, db) or pref_id
             return pref_id, f"{name}（偏好）"
         return None, "无偏好"
 
-    return room_id, room_display_name(center_id, room_id, db) if room_id else None
+    return room_id, room_display_name(display_center, room_id, db) if room_id else None
 
 
 def _active_consultation(consultation: Optional[AppConsultation]) -> bool:
@@ -966,7 +980,7 @@ def schedule_slot_options(
         raise HTTPException(status_code=400, detail="无效的预约中心")
 
     options: List[TimeSlotOption] = []
-    rooms = [] if is_video_center(center_id) else get_consultation_rooms(db, center_id)
+    rooms = rooms_for_slot_selection(db, center_id)
     for start_dt, end_dt in all_slot_bounds_for_date(slot_date):
         key = start_dt.strftime("%H:%M")
         label = f"{key} – {end_dt.strftime('%H:%M')}"
@@ -979,7 +993,13 @@ def schedule_slot_options(
         )
         room_opts: List[RoomSlotOption] = []
         usable_room_ids = []
-        paid_occupied = paid_occupied_rooms_at_center(db, center_id, start_dt) if rooms else set()
+        paid_occupied: set[str] = set()
+        if not is_video_center(center_id):
+            paid_occupied = paid_occupied_rooms_at_center(db, center_id, start_dt)
+        else:
+            for cid in CENTER_NAMES:
+                if not is_video_center(cid):
+                    paid_occupied |= paid_occupied_rooms_at_center(db, cid, start_dt)
         for room in rooms:
             room_ok = is_booking_window_operational(
                 db,
@@ -990,7 +1010,8 @@ def schedule_slot_options(
             if room_ok:
                 usable_room_ids.append(room["id"])
             paid_taken = room["id"] in paid_occupied
-            available = not too_soon and room_ok
+            # 偏好可选已占用室时前端会灰显 occupiedByOther；available 表示运营窗口可用
+            available = not too_soon and room_ok and not paid_taken
             room_opts.append(
                 RoomSlotOption(
                     roomId=room["id"],
@@ -1158,6 +1179,7 @@ def create_schedule(
     if counselor_has_slot(db, counselor.Id, body.start_time):
         raise HTTPException(status_code=400, detail="您在该时间槽已有排期，同一时段最多一节")
 
+    pref = (body.room_id or "").strip() or None
     if not is_video_center(body.center_id):
         rooms = get_consultation_rooms(db, body.center_id)
         usable_room_ids = []
@@ -1178,10 +1200,27 @@ def create_schedule(
                 status_code=400,
                 detail="该时段所有咨询室均已约满，无法排期",
             )
-
-        pref = (body.room_id or "").strip() or None
         if pref and pref not in usable_room_ids:
             raise HTTPException(status_code=400, detail="咨询室偏好在该时段不可用")
+        if pref and pref in paid_occupied_rooms_at_center(db, body.center_id, body.start_time):
+            raise HTTPException(status_code=400, detail="该咨询室在该时段已被占用")
+    elif pref:
+        physical = resolve_room_physical_center_id(pref, db)
+        if not physical:
+            raise HTTPException(status_code=400, detail="无效的咨询室偏好")
+        rooms = get_consultation_rooms(db, physical)
+        selected = next((r for r in rooms if r["id"] == pref), None)
+        if not selected:
+            raise HTTPException(status_code=400, detail="无效的咨询室偏好")
+        if not is_booking_window_operational(
+            db,
+            selected.get("dbId"),
+            body.start_time,
+            selected.get("status", "AVAILABLE"),
+        ):
+            raise HTTPException(status_code=400, detail="咨询室偏好在该时段不可用")
+        if pref in paid_occupied_rooms_at_center(db, physical, body.start_time):
+            raise HTTPException(status_code=400, detail="该咨询室在该时段已被占用")
 
     schedule = AppSchedule(
         CounselorId=counselor.Id,
@@ -1234,7 +1273,14 @@ def update_schedule(
     elif body.center_id is not None and schedule.Status == "AVAILABLE":
         pref = (body.room_id or "").strip() or None
         if pref:
-            rooms = get_consultation_rooms(db, body.center_id)
+            physical = (
+                body.center_id
+                if not is_video_center(body.center_id)
+                else resolve_room_physical_center_id(pref, db)
+            )
+            if not physical:
+                raise HTTPException(status_code=400, detail="无效的咨询室偏好")
+            rooms = get_consultation_rooms(db, physical)
             selected_room = next((room for room in rooms if room["id"] == pref), None)
             if not selected_room:
                 raise HTTPException(status_code=400, detail="无效的咨询室偏好")
@@ -1246,6 +1292,8 @@ def update_schedule(
             )
             if not room_ok:
                 raise HTTPException(status_code=400, detail="咨询室偏好在该时段不可用")
+            if pref in paid_occupied_rooms_at_center(db, physical, schedule.StartTime, exclude_id=schedule.Id):
+                raise HTTPException(status_code=400, detail="该咨询室在该时段已被占用")
         schedule.Note = schedule_pref_note(body.center_id, pref)
     elif body.note is not None:
         schedule.Note = body.note

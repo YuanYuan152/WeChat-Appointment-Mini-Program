@@ -826,10 +826,11 @@ def _room_occupancy_at(
     manual_status = resolve_slot_manual_status(
         db, room_db_id, status_slot_start, room_default_status or "AVAILABLE",
     )
+    _ = center_id  # 占用按 room_code 跨预约类型统计（含视频咨询占用该线下室）
     for s in active_schedules_at(db, status_slot_start, duration_minutes=30):
-        if parse_center_id(s.Note) != center_id or parse_room_id(s.Note) != room_code:
+        if parse_room_id(s.Note) != room_code:
             continue
-        if s.Status != "BOOKED" or not parse_room_id(s.Note):
+        if s.Status != "BOOKED":
             continue
         patient_name, patient_mobile, patient_contract_tag = _schedule_patient_info(db, s.Id)
         counselor_name = _counselor_name(db, s.CounselorId)
@@ -1653,7 +1654,9 @@ TERMINAL_CONSULTATION_STATUSES = ("DONE", "CANCELLED", "CANCELED")
 
 
 def _note_matches_room(note: Optional[str], center_id: str, room_code: str) -> bool:
-    return parse_center_id(note) == center_id and parse_room_id(note) == room_code
+    """咨询室匹配：以 room: 为准（视频咨询占用线下室时 center: 可能为 video）。"""
+    _ = center_id
+    return parse_room_id(note) == room_code
 
 
 def _room_has_unfinished_booking(

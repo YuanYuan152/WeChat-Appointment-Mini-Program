@@ -81,6 +81,45 @@ def get_all_consultation_rooms(db: Optional[Session]) -> List[dict]:
     return result
 
 
+def resolve_room_physical_center_id(
+    room_id: Optional[str],
+    db: Optional[Session] = None,
+) -> Optional[str]:
+    """由咨询室 id 解析所属线下中心（视频排期占用线下室时使用）。"""
+    rid = (room_id or "").strip()
+    if not rid:
+        return None
+    for center_id in CENTER_NAMES:
+        if not is_physical_center(center_id):
+            continue
+        for room in get_consultation_rooms(db, center_id):
+            if room["id"] == rid:
+                return center_id
+    prefix = rid.split("-", 1)[0]
+    if is_physical_center(prefix):
+        return prefix
+    return None
+
+
+def rooms_for_slot_selection(db: Optional[Session], center_id: str) -> List[dict]:
+    """排期/代理可选咨询室。视频咨询返回全部线下中心咨询室（可选，非必选）。"""
+    if is_video_center(center_id):
+        result: List[dict] = []
+        for room in get_all_consultation_rooms(db):
+            cid = room.get("centerId") or ""
+            cname = CENTER_NAMES.get(cid, cid)
+            short = cname.replace("预约中心", "").strip() or cname
+            result.append(
+                {
+                    **room,
+                    "name": f"{short}·{room['name']}",
+                    "centerName": cname,
+                }
+            )
+        return result
+    return [{**room, "centerId": center_id} for room in get_consultation_rooms(db, center_id)]
+
+
 def _note_parts(note: Optional[str]) -> List[str]:
     if not note:
         return []
@@ -175,9 +214,7 @@ def schedule_note(
 
 
 def schedule_pref_note(center_id: str, pref_room_id: Optional[str] = None) -> str:
-    """排期时仅记录中心与咨询室偏好，不占用咨询室。视频咨询不记录偏好。"""
-    if is_video_center(center_id):
-        return schedule_note(center_id)
+    """排期时记录中心与咨询室偏好（偏好不占室；视频也可选线下室偏好）。"""
     return schedule_note(center_id, pref_room_id=pref_room_id)
 
 

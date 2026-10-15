@@ -28,6 +28,8 @@ from schedule_meta import (
     parse_pref_room_id,
     parse_room_id,
     release_assigned_room,
+    resolve_room_physical_center_id,
+    rooms_for_slot_selection,
     schedule_note,
 )
 from room_slot_status import (
@@ -205,7 +207,10 @@ def _acquire_proxy_booking_locks(
             f"proxy:counselor:{int(counselor_id)}:{slot_key}",
         ])
         if room_id:
-            resources.append(f"proxy:room:{center_id}:{room_id}:{slot_key}")
+            physical = resolve_room_physical_center_id(room_id) or center_id
+            resources.append(f"proxy:room:{physical}:{room_id}:{slot_key}")
+            if physical != center_id:
+                resources.append(f"booking:center:{physical}:{slot_key}")
     for resource in sorted(resources):
         result = db.execute(
             text(
@@ -485,18 +490,24 @@ def _rooms_with_proxy_pending(
     start_dt: datetime,
     exclude_schedule_id: Optional[int] = None,
 ) -> set[str]:
-    """含代理待支付已占用的咨询室。"""
-    occupied = set(paid_occupied_rooms_at_center(db, center_id, start_dt))
+    """含代理待支付已占用的咨询室（含视频咨询占用该中心线下室）。"""
+    if is_video_center(center_id):
+        occupied: set[str] = set()
+        for cid in CENTER_NAMES:
+            if not is_video_center(cid):
+                occupied |= paid_occupied_rooms_at_center(db, cid, start_dt)
+        center_room_ids = {r["id"] for r in rooms_for_slot_selection(db, center_id)}
+    else:
+        occupied = set(paid_occupied_rooms_at_center(db, center_id, start_dt))
+        center_room_ids = {r["id"] for r in get_consultation_rooms(db, center_id)}
     for row in active_schedules_at(db, start_dt, exclude_id=exclude_schedule_id):
         if row.Status != "AVAILABLE":
-            continue
-        if parse_center_id(row.Note) != center_id:
             continue
         pending = pending_proxy_order_for_schedule(db, row.Id)
         if not pending:
             continue
         room_id = parse_room_id(row.Note)
-        if room_id:
+        if room_id and room_id in center_room_ids:
             occupied.add(room_id)
     return occupied
 
@@ -520,7 +531,7 @@ def build_proxy_slot_options(
     if center_id not in CENTER_NAMES:
         raise ValueError("无效的预约中心")
 
-    rooms = [] if is_video_center(center_id) else get_consultation_rooms(db, center_id)
+    rooms = rooms_for_slot_selection(db, center_id)
     options: List[Dict[str, Any]] = []
 
     for start_dt, end_dt in all_slot_bounds_for_date(slot_date):
@@ -550,11 +561,9 @@ def build_proxy_slot_options(
         )
         counselor_occupied = overlapping_row is not None or is_booked or pending_on_self
 
-        proxy_occupied = _rooms_with_proxy_pending(
+        all_occupied = _rooms_with_proxy_pending(
             db, center_id, start_dt, exclude_schedule_id=self_row.Id if self_row else None,
         )
-        paid_occupied = paid_occupied_rooms_at_center(db, center_id, start_dt) if rooms else set()
-        all_occupied = proxy_occupied | paid_occupied
 
         room_opts: List[Dict[str, Any]] = []
         for room in rooms:
@@ -576,8 +585,7 @@ def build_proxy_slot_options(
                 }
             )
 
-        # 线下中心只要没有可选择的房间就应当约满。已有 AVAILABLE 排期
-        # 不能绕过咨询室可用性，否则前端会出现“时段可点、房间全灰”。
+        # 线下中心只要没有可选择的房间就应当约满。视频咨询室可选非必选，不因咨询室满禁时段。
         all_rooms_full = False if is_video_center(center_id) else not any(
             room["available"] for room in room_opts
         )
@@ -721,11 +729,20 @@ def push_proxy_order(
         room_id=room_id,
     )
 
+    selected_room_id = (room_id or "").strip() or None
     if not is_video_center(center_id):
-        if not room_id:
+        if not selected_room_id:
             raise ValueError("请选择咨询室")
-        rooms = get_consultation_rooms(db, center_id)
-        selected_room = next((room for room in rooms if room["id"] == room_id), None)
+    if selected_room_id:
+        physical = (
+            center_id
+            if not is_video_center(center_id)
+            else resolve_room_physical_center_id(selected_room_id, db)
+        )
+        if not physical:
+            raise ValueError("无效的咨询室")
+        rooms = get_consultation_rooms(db, physical)
+        selected_room = next((room for room in rooms if room["id"] == selected_room_id), None)
         if not selected_room:
             raise ValueError("无效的咨询室")
         if not is_booking_window_operational(
@@ -735,9 +752,8 @@ def push_proxy_order(
             selected_room.get("status", "AVAILABLE"),
         ):
             raise ValueError("该咨询室在该时段不可用")
-        occupied = _rooms_with_proxy_pending(db, center_id, start_time)
-        occupied |= paid_occupied_rooms_at_center(db, center_id, start_time)
-        if room_id in occupied:
+        occupied = _rooms_with_proxy_pending(db, physical, start_time)
+        if selected_room_id in occupied:
             raise ValueError("该咨询室在该时段已被占用")
 
     schedule: Optional[AppSchedule] = None
@@ -764,18 +780,14 @@ def push_proxy_order(
         if counselor_has_slot(db, counselor_id, start_time):
             raise ValueError("该咨询师在该时间槽已有排期")
         if not is_video_center(center_id):
-            usable = [room_id] if room_id else []
+            usable = [selected_room_id] if selected_room_id else []
             if not has_available_room_at_center(db, center_id, start_time, usable):
                 raise ValueError("该时段咨询室不可用")
 
     note = schedule_note(
         center_id,
-        room_id=room_id if not is_video_center(center_id) else None,
-        pref_room_id=(
-            existing_pref_room_id
-            if existing_pref_room_id and not is_video_center(center_id)
-            else None
-        ),
+        room_id=selected_room_id,
+        pref_room_id=existing_pref_room_id,
     )
     if schedule:
         schedule.Note = note

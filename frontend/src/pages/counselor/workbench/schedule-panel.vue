@@ -222,16 +222,44 @@
                     class="center-chip"
                     :class="{
                       active: form.roomId === room.roomId,
-                      disabled: !room.available,
+                      disabled: !room.available || room.occupiedByOther,
                     }"
                     @tap="selectRoom(room)"
                   >{{ room.roomName }}{{ roomLabel(room) }}</view>
                 </view>
               </view>
 
-              <view v-else class="form-item video-center-hint">
-                <text class="form-label">咨询室</text>
-                <text class="video-hint-text">视频咨询无需选择咨询室，预约成功后也不占用线下咨询室。</text>
+              <view v-else class="form-item">
+                <view class="pref-toggle-row" @tap="toggleVideoRoomPref">
+                  <text class="form-label">咨询室偏好（可选）</text>
+                  <text class="pref-toggle-hint">{{ videoRoomPrefExpanded ? '收起' : '展开' }}</text>
+                </view>
+                <text v-if="!videoRoomPrefExpanded" class="video-hint-text">默认不占用线下咨询室；如需使用请展开选择</text>
+                <view v-else class="video-room-pref-body">
+                  <view class="notice-check-row" @tap="toggleVideoRoomNotice">
+                    <view class="notice-checkbox" :class="{ checked: videoRoomNoticeAgreed }">
+                      <text v-if="videoRoomNoticeAgreed" class="notice-check-mark">✓</text>
+                    </view>
+                    <text class="notice-check-text">{{ VIDEO_ROOM_NOTICE }}</text>
+                  </view>
+                  <view class="center-row">
+                    <view
+                      class="center-chip"
+                      :class="{ active: form.roomId === NO_PREF || !form.roomId }"
+                      @tap="selectNoPref"
+                    >无偏好</view>
+                    <view
+                      v-for="room in roomOptionsForSlot"
+                      :key="room.roomId"
+                      class="center-chip"
+                      :class="{
+                        active: form.roomId === room.roomId,
+                        disabled: !videoRoomNoticeAgreed || !room.available || room.occupiedByOther,
+                      }"
+                      @tap="selectRoom(room)"
+                    >{{ room.roomName }}{{ roomLabel(room) }}</view>
+                  </view>
+                </view>
               </view>
             </view>
           </scroll-view>
@@ -345,8 +373,32 @@
                 >{{ room.roomName }}{{ room.occupiedByOther ? '（已占用）' : '' }}</view>
               </view>
             </view>
-            <view v-else class="form-item video-center-hint">
-              <text class="video-hint-text">视频咨询无需选择咨询室</text>
+            <view v-else class="form-item">
+              <view class="pref-toggle-row" @tap="toggleProxyVideoRoomPref">
+                <text class="form-label">咨询室偏好（可选）</text>
+                <text class="pref-toggle-hint">{{ proxyVideoRoomPrefExpanded ? '收起' : '展开' }}</text>
+              </view>
+              <text v-if="!proxyVideoRoomPrefExpanded" class="video-hint-text">默认不占用线下咨询室；如需使用请展开选择</text>
+              <view v-else class="video-room-pref-body">
+                <view class="notice-check-row" @tap="toggleProxyVideoRoomNotice">
+                  <view class="notice-checkbox" :class="{ checked: proxyVideoRoomNoticeAgreed }">
+                    <text v-if="proxyVideoRoomNoticeAgreed" class="notice-check-mark">✓</text>
+                  </view>
+                  <text class="notice-check-text">{{ VIDEO_ROOM_NOTICE }}</text>
+                </view>
+                <view class="center-row" :class="{ 'pref-locked': !proxyVideoRoomNoticeAgreed }">
+                  <view
+                    v-for="room in proxyRoomOptionsForSlot"
+                    :key="room.roomId"
+                    class="center-chip"
+                    :class="{
+                      active: proxyForm.roomId === room.roomId,
+                      disabled: !proxyVideoRoomNoticeAgreed || !room.available,
+                    }"
+                    @tap="selectProxyRoom(room)"
+                  >{{ room.roomName }}{{ room.occupiedByOther ? '（已占用）' : '' }}</view>
+                </view>
+              </view>
             </view>
 
             <view v-if="proxySelectedPatient" class="form-item push-fee-card">
@@ -607,6 +659,8 @@ const DOT_COLORS: Record<string, string> = {
 }
 
 const NO_PREF = '__none__'
+const VIDEO_ROOM_NOTICE =
+  '如需使用线下咨询室进行视频咨询再选择咨询室，如果不需要使用线下咨询室请不要选择（请勾选须知后可选择咨询室）'
 const MS_24H = 24 * 60 * 60 * 1000
 
 const DEFAULT_BOOKED_LEAVE_HINT =
@@ -675,6 +729,8 @@ const proxyForm = ref({
   scheduleId: null as number | null,
 })
 const isProxyVideoCenterSelected = computed(() => isVideoCenter(proxyForm.value.centerId))
+const proxyVideoRoomPrefExpanded = ref(false)
+const proxyVideoRoomNoticeAgreed = ref(false)
 const proxyRoomOptionsForSlot = computed(() => {
   const ts = proxyTimeSlotOptions.value.find((t) => t.key === proxyForm.value.slotKey)
   return ts?.rooms || []
@@ -712,16 +768,18 @@ const centers = APPOINTMENT_CENTERS
 const defaultCenterId = 'yangpu'
 
 const isVideoCenterSelected = computed(() => isVideoCenter(form.value.centerId))
+const videoRoomPrefExpanded = ref(false)
+const videoRoomNoticeAgreed = ref(false)
 
 const toolbarTip = computed(() =>
   isVideoCenterSelected.value
-    ? '支持整点/半点开始；咨询 50 分钟并预留 10 分钟打扫，视频咨询不占咨询室'
+    ? '支持整点/半点开始；咨询 50 分钟并预留 10 分钟打扫；视频咨询可选用线下咨询室'
     : '支持整点/半点开始；咨询 50 分钟并预留 10 分钟打扫，付款后才占用咨询室',
 )
 
 const addModalSub = computed(() =>
   isVideoCenterSelected.value
-    ? '选择一个月内未开始的整点或半点开始时间（视频咨询）'
+    ? '选择一个月内未开始的整点或半点开始时间（视频咨询，咨询室可选）'
     : '选择一个月内未开始的整点或半点开始时间',
 )
 
@@ -729,6 +787,46 @@ const slotRoomText = (slot: CalendarSlot) => {
   if (slot.roomName) return slot.roomName
   if (isVideoCenter(slot.centerId) && isBookedSlot(slot)) return '线上视频（不占咨询室）'
   return ''
+}
+
+const resetVideoRoomPrefUi = () => {
+  videoRoomPrefExpanded.value = false
+  videoRoomNoticeAgreed.value = false
+}
+
+const resetProxyVideoRoomPrefUi = () => {
+  proxyVideoRoomPrefExpanded.value = false
+  proxyVideoRoomNoticeAgreed.value = false
+}
+
+const toggleVideoRoomPref = () => {
+  videoRoomPrefExpanded.value = !videoRoomPrefExpanded.value
+  if (!videoRoomPrefExpanded.value) {
+    videoRoomNoticeAgreed.value = false
+    form.value.roomId = NO_PREF
+  }
+}
+
+const toggleVideoRoomNotice = () => {
+  videoRoomNoticeAgreed.value = !videoRoomNoticeAgreed.value
+  if (!videoRoomNoticeAgreed.value) {
+    form.value.roomId = NO_PREF
+  }
+}
+
+const toggleProxyVideoRoomPref = () => {
+  proxyVideoRoomPrefExpanded.value = !proxyVideoRoomPrefExpanded.value
+  if (!proxyVideoRoomPrefExpanded.value) {
+    proxyVideoRoomNoticeAgreed.value = false
+    proxyForm.value.roomId = ''
+  }
+}
+
+const toggleProxyVideoRoomNotice = () => {
+  proxyVideoRoomNoticeAgreed.value = !proxyVideoRoomNoticeAgreed.value
+  if (!proxyVideoRoomNoticeAgreed.value) {
+    proxyForm.value.roomId = ''
+  }
 }
 
 /** 滚动窗口须每次按当前日期计算，避免 Tab 页常驻导致日期过期、日历加载失败 */
@@ -1101,7 +1199,8 @@ const loadSlotOptions = async () => {
 const onCenterChange = async (id: string) => {
   form.value.centerId = id
   form.value.slotKey = ''
-  form.value.roomId = isVideoCenter(id) ? '' : NO_PREF
+  form.value.roomId = NO_PREF
+  resetVideoRoomPrefUi()
   await loadSlotOptions()
 }
 
@@ -1147,8 +1246,12 @@ const scheduleSlotChipHint = (ts: TimeSlotOpt) => {
 }
 
 const selectRoom = (room: RoomOpt) => {
-  if (!room.available) {
-    uni.showToast({ title: '该咨询室暂不可用', icon: 'none' })
+  if (isVideoCenterSelected.value && !videoRoomNoticeAgreed.value) {
+    uni.showToast({ title: '请先勾选视频咨询选用咨询室须知', icon: 'none' })
+    return
+  }
+  if (!room.available || room.occupiedByOther) {
+    uni.showToast({ title: room.occupiedByOther ? '该咨询室已被占用' : '该咨询室暂不可用', icon: 'none' })
     return
   }
   form.value.roomId = room.roomId
@@ -1163,6 +1266,7 @@ const openAddModal = async () => {
     startTime: '',
     endTime: '',
   }
+  resetVideoRoomPrefUi()
   showAdd.value = true
   await loadSlotOptions()
 }
@@ -1287,6 +1391,7 @@ const openProxyModal = async () => {
     endTime: '',
     scheduleId: null,
   }
+  resetProxyVideoRoomPrefUi()
   showProxy.value = true
   await Promise.all([searchProxyPatients(''), loadProxySlotOptions()])
 }
@@ -1296,6 +1401,7 @@ const onProxyCenterChange = async (id: string) => {
   proxyForm.value.slotKey = ''
   proxyForm.value.roomId = ''
   proxyForm.value.scheduleId = null
+  resetProxyVideoRoomPrefUi()
   await loadProxySlotOptions()
 }
 
@@ -1322,6 +1428,10 @@ const selectProxyTimeSlot = (ts: ProxyTimeSlotOpt) => {
 }
 
 const selectProxyRoom = (room: RoomOpt) => {
+  if (isProxyVideoCenterSelected.value && !proxyVideoRoomNoticeAgreed.value) {
+    uni.showToast({ title: '请先勾选视频咨询选用咨询室须知', icon: 'none' })
+    return
+  }
   if (!room.available) return
   proxyForm.value.roomId = room.roomId
 }
@@ -1340,6 +1450,14 @@ const submitProxyOrder = async () => {
     uni.showToast({ title: '请选择咨询室', icon: 'none' })
     return
   }
+  if (
+    isProxyVideoCenterSelected.value
+    && proxyForm.value.roomId
+    && !proxyVideoRoomNoticeAgreed.value
+  ) {
+    uni.showToast({ title: '请先勾选视频咨询选用咨询室须知', icon: 'none' })
+    return
+  }
   proxySubmitting.value = true
   try {
     const res = await httpV2.post(API_ENDPOINTS.counselor.proxyBookingPushOrder, {
@@ -1347,7 +1465,7 @@ const submitProxyOrder = async () => {
       center_id: proxyForm.value.centerId,
       start_time: proxyForm.value.startTime,
       end_time: proxyForm.value.endTime,
-      room_id: isProxyVideoCenterSelected.value ? null : proxyForm.value.roomId,
+      room_id: proxyForm.value.roomId || null,
       schedule_id: proxyForm.value.scheduleId,
     })
     if (res.code !== 0) {
@@ -1497,6 +1615,11 @@ const submitSlot = () => {
     uni.showToast({ title: '请选择咨询室偏好', icon: 'none' })
     return
   }
+  const resolvedRoomId = !roomId || roomId === NO_PREF ? null : roomId
+  if (isVideoCenter(centerId) && resolvedRoomId && !videoRoomNoticeAgreed.value) {
+    uni.showToast({ title: '请先勾选视频咨询选用咨询室须知', icon: 'none' })
+    return
+  }
 
   // 手势内同步官方订阅（咨询提醒），禁止业务成功后再弹自定义框
   const subscribeDone = tryOfficialRoleSubscribeInGesture('schedule')
@@ -1507,7 +1630,7 @@ const submitSlot = () => {
         start_time: startTime.slice(0, 19),
         end_time: endTime.slice(0, 19),
         center_id: centerId,
-        room_id: isVideoCenter(centerId) ? null : (roomId === NO_PREF ? null : roomId),
+        room_id: resolvedRoomId,
       })
       await subscribeDone
       if (res.code === 0) {
@@ -1812,6 +1935,54 @@ defineExpose({ refresh, focusScheduleId, applyListFilter, getUnrecordedCount })
 .modal-sub { display: block; font-size: 24rpx; color: #9CA3AF; margin: 8rpx 0 24rpx; }
 .form-item { margin-bottom: 24rpx; }
 .form-label { display: block; font-size: 26rpx; color: #6B7280; margin-bottom: 12rpx; }
+.pref-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+.pref-toggle-hint {
+  font-size: 24rpx;
+  color: #3D5A4E;
+  flex-shrink: 0;
+}
+.video-room-pref-body { margin-top: 12rpx; }
+.notice-check-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12rpx;
+  margin-bottom: 16rpx;
+}
+.notice-checkbox {
+  width: 32rpx;
+  height: 32rpx;
+  margin-top: 4rpx;
+  border: 2rpx solid #9CA3AF;
+  border-radius: 6rpx;
+  flex-shrink: 0;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+.notice-checkbox.checked {
+  border-color: #3D5A4E;
+  background: #fff;
+}
+.notice-check-mark {
+  font-size: 22rpx;
+  line-height: 1;
+  color: #3D5A4E;
+  font-weight: 700;
+}
+.notice-check-text {
+  flex: 1;
+  font-size: 22rpx;
+  line-height: 1.5;
+  color: #6B7280;
+}
+.pref-locked { opacity: 0.55; }
 .video-hint-text {
   display: block; font-size: 26rpx; color: #6B7280; line-height: 1.6;
   background: #F0FDFA; border-radius: 12rpx; padding: 20rpx;

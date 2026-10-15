@@ -181,13 +181,9 @@ def room_occupied_at_center(
     start_time: datetime,
     exclude_id: Optional[int] = None,
 ) -> Optional[AppSchedule]:
-    """指定预约中心 + 咨询室 + 时段是否已被付款占用。"""
-    for row in active_schedules_at(db, start_time, exclude_id=exclude_id):
-        if parse_center_id(row.Note) != center_id:
-            continue
-        if _assigned_room_id(row) == room_id:
-            return row
-    return None
+    """指定咨询室 + 时段是否已被付款占用（含视频咨询占用该线下室）。"""
+    del center_id  # 占用按 room_id 跨中心统计
+    return room_occupied(db, room_id, start_time, exclude_id=exclude_id)
 
 
 def paid_occupied_rooms_at_center(
@@ -197,13 +193,20 @@ def paid_occupied_rooms_at_center(
     *,
     exclude_id: Optional[int] = None,
 ) -> set[str]:
-    """某中心某时段已被付款占用的咨询室集合。"""
+    """某中心某时段已被付款占用的咨询室集合。
+
+    按咨询室 id 统计（含「视频咨询但占用了该中心线下室」的预约），
+    与排期 Note 中的 center: 是否为该中心无关。
+    """
+    from schedule_meta import get_consultation_rooms, is_video_center
+
+    if is_video_center(center_id):
+        return set()
+    center_room_ids = {room["id"] for room in get_consultation_rooms(db, center_id)}
     occupied: set[str] = set()
     for row in active_schedules_at(db, start_time, exclude_id=exclude_id):
-        if parse_center_id(row.Note) != center_id:
-            continue
         room = _assigned_room_id(row)
-        if room:
+        if room and room in center_room_ids:
             occupied.add(room)
     return occupied
 

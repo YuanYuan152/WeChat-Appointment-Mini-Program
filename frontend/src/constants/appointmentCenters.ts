@@ -6,7 +6,7 @@ export interface AppointmentCenter {
   /** 与后端 AppSchedule.Note / centerId 字段对齐 */
   id: string
   name: string
-  /** 线上视频咨询：不占咨询室、排期不可选咨询室偏好 */
+  /** 线上视频咨询：默认不占咨询室，可选线下咨询室偏好 */
   virtual?: boolean
 }
 

@@ -15,6 +15,7 @@ from schedule_meta import (
     parse_center_id,
     parse_pref_room_id,
     parse_room_id,
+    resolve_room_physical_center_id,
 )
 from room_slot_status import is_booking_window_operational
 from schedule_slots import paid_occupied_rooms_at_center
@@ -71,11 +72,11 @@ def _pending_proxy_reserved_rooms(
         )
         .all()
     )
+    center_room_ids = {r["id"] for r in get_consultation_rooms(db, center_id)}
     return {
         room_id
         for row in rows
-        if parse_center_id(row.Note) == center_id
-        if (room_id := parse_room_id(row.Note))
+        if (room_id := parse_room_id(row.Note)) and room_id in center_room_ids
     }
 
 
@@ -141,12 +142,30 @@ def apply_room_assignment(
     *,
     required_room_id: Optional[str] = None,
 ) -> Optional[str]:
-    """分配咨询室并写回排期 Note，返回实际咨询室 id；视频咨询返回 None。"""
+    """分配咨询室并写回排期 Note，返回实际咨询室 id。
+
+    视频咨询默认不占室；若代理已指定 room: 或排期带 pref:，则按所属线下中心占用。
+    """
     resolved_center = center_id or parse_center_id(schedule.Note)
     if not resolved_center:
         raise ValueError("排期未指定预约中心，无法分配咨询室")
+
     if is_video_center(resolved_center):
-        return None
+        pref = parse_pref_room_id(schedule.Note) or _legacy_pref_room_id(schedule)
+        target = required_room_id or parse_room_id(schedule.Note) or pref
+        if not target:
+            return None
+        physical = resolve_room_physical_center_id(target, db)
+        if not physical:
+            raise ValueError("视频咨询所选咨询室无效")
+        assigned = assign_room_for_payment(
+            db,
+            schedule,
+            physical,
+            required_room_id=required_room_id or parse_room_id(schedule.Note) or target,
+        )
+        schedule.Note = assign_room_to_note(schedule.Note, assigned)
+        return assigned
 
     assigned = assign_room_for_payment(
         db,

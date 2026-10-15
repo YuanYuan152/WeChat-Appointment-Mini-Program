@@ -650,6 +650,10 @@ function CounselorProxyBookingModal({
   const [patientError, setPatientError] = useState("");
   const [slotFetchError, setSlotFetchError] = useState("");
   const [submitError, setSubmitError] = useState("");
+  const [videoRoomPrefExpanded, setVideoRoomPrefExpanded] = useState(false);
+  const [videoRoomNoticeAgreed, setVideoRoomNoticeAgreed] = useState(false);
+  const VIDEO_ROOM_NOTICE =
+    "如需使用线下咨询室进行视频咨询再选择咨询室，如果不需要使用线下咨询室请不要选择（请勾选须知后可选择咨询室）";
 
   useEffect(() => {
     let active = true;
@@ -716,7 +720,9 @@ function CounselorProxyBookingModal({
       !selectedSlot.past &&
       !selectedSlot.counselorOccupied &&
       !selectedSlot.allRoomsFull &&
-      (isVideo || (selectedRoom?.available && !selectedRoom.occupiedByOther)),
+      (isVideo
+        ? !roomId || (videoRoomNoticeAgreed && selectedRoom?.available && !selectedRoom.occupiedByOther)
+        : selectedRoom?.available && !selectedRoom.occupiedByOther),
   );
 
   async function submit() {
@@ -731,7 +737,7 @@ function CounselorProxyBookingModal({
         center_id: centerId,
         start_time: selectedSlot.startTime,
         end_time: selectedSlot.endTime,
-        room_id: isVideo ? null : roomId,
+        room_id: roomId || null,
         schedule_id: selectedSlot.existingAvailableScheduleId ?? null,
       });
       await onCreated(result.message || "订单已推送");
@@ -755,6 +761,8 @@ function CounselorProxyBookingModal({
     setDate(getLocalDateValue());
     setSlotKey("");
     setRoomId("");
+    setVideoRoomPrefExpanded(false);
+    setVideoRoomNoticeAgreed(false);
     setSlotOptions(undefined);
     setPatientLoading(false);
     setSlotLoading(false);
@@ -859,6 +867,8 @@ function CounselorProxyBookingModal({
                   setCenterId(event.target.value);
                   setSlotKey("");
                   setRoomId("");
+                  setVideoRoomPrefExpanded(false);
+                  setVideoRoomNoticeAgreed(false);
                   setSubmitError("");
                 }}
               >
@@ -953,6 +963,79 @@ function CounselorProxyBookingModal({
                 </QueryField>
               )}
 
+              {isVideo && selectedSlot && (
+                <div className="space-y-3">
+                  <button
+                    className="flex w-full items-center justify-between rounded-xl border border-[var(--lxxl-border)] bg-[#FAF8F4] px-4 py-3 text-left"
+                    type="button"
+                    onClick={() => {
+                      setVideoRoomPrefExpanded((v) => {
+                        if (v) {
+                          setVideoRoomNoticeAgreed(false);
+                          setRoomId("");
+                        }
+                        return !v;
+                      });
+                    }}
+                  >
+                    <span className="text-sm font-medium">咨询室偏好（可选）</span>
+                    <span className="text-xs text-[var(--lxxl-green-dark)]">
+                      {videoRoomPrefExpanded ? "收起" : "展开"}
+                    </span>
+                  </button>
+                  {!videoRoomPrefExpanded ? (
+                    <p className="text-xs text-[var(--lxxl-muted)]">
+                      默认不占用线下咨询室；如需使用请展开选择
+                    </p>
+                  ) : (
+                    <>
+                      <label className="flex cursor-pointer items-start gap-3 text-xs leading-5 text-[var(--lxxl-muted)]">
+                        <input
+                          checked={videoRoomNoticeAgreed}
+                          className="mt-0.5"
+                          type="checkbox"
+                          onChange={(event) => {
+                            setVideoRoomNoticeAgreed(event.target.checked);
+                            if (!event.target.checked) setRoomId("");
+                          }}
+                        />
+                        <span>{VIDEO_ROOM_NOTICE}</span>
+                      </label>
+                      <div className={`grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 ${videoRoomNoticeAgreed ? "" : "opacity-50"}`}>
+                        {selectedSlot.rooms.map((room) => {
+                          const selected = roomId === room.roomId;
+                          const selectable =
+                            videoRoomNoticeAgreed && room.available && !room.occupiedByOther;
+                          return (
+                            <button
+                              className={`rounded-xl border px-4 py-3 text-left text-sm transition ${
+                                selected
+                                  ? "border-[var(--lxxl-green)] bg-[#F4FBF7]"
+                                  : selectable
+                                    ? "border-[var(--lxxl-border)] bg-white hover:border-[var(--lxxl-green)]"
+                                    : "cursor-not-allowed border-[var(--lxxl-border)] bg-[#F4F1EB] text-[var(--lxxl-muted)]"
+                              }`}
+                              disabled={!selectable}
+                              key={room.roomId}
+                              type="button"
+                              onClick={() => {
+                                setRoomId(room.roomId);
+                                setSubmitError("");
+                              }}
+                            >
+                              <span className="block font-medium">{room.roomName}</span>
+                              <span className="mt-1 block text-xs text-[var(--lxxl-muted)]">
+                                {room.available && !room.occupiedByOther ? "可预约" : "已占用"}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
               {selectedSlot && (
                 <div className="rounded-xl bg-[#FAF8F4] px-4 py-3 text-sm leading-6 text-[var(--lxxl-muted)]">
                   {bookingDurationText(selectedSlot.startTime)}
@@ -960,7 +1043,9 @@ function CounselorProxyBookingModal({
                     ? selectedRoom
                       ? ` · ${selectedRoom.roomName}`
                       : " · 请继续选择咨询室"
-                    : ""}
+                    : selectedRoom
+                      ? ` · ${selectedRoom.roomName}`
+                      : ""}
                   。
                 </div>
               )}
@@ -1068,9 +1153,18 @@ function CreateScheduleModal({
   slotOptions?: CounselorSlotOptions;
 }) {
   const [submitting, setSubmitting] = useState(false);
+  const [videoRoomPrefExpanded, setVideoRoomPrefExpanded] = useState(false);
+  const [videoRoomNoticeAgreed, setVideoRoomNoticeAgreed] = useState(false);
+  const isVideo = draft.centerId === "video";
+  const VIDEO_ROOM_NOTICE =
+    "如需使用线下咨询室进行视频咨询再选择咨询室，如果不需要使用线下咨询室请不要选择（请勾选须知后可选择咨询室）";
+  const videoRooms = selectedSlot?.rooms || [];
 
   const handleCreate = async () => {
     if (!selectedSlot || submitting) {
+      return;
+    }
+    if (isVideo && draft.roomId && !videoRoomNoticeAgreed) {
       return;
     }
     setSubmitting(true);
@@ -1124,6 +1218,8 @@ function CreateScheduleModal({
                 onChange={(event) => {
                   const selection = { date: draft.date, centerId: event.target.value };
                   setDraft((prev) => ({ ...prev, ...selection, slotKey: "", roomId: "" }));
+                  setVideoRoomPrefExpanded(false);
+                  setVideoRoomNoticeAgreed(false);
                   void onLoadSlots(selection);
                 }}
               >
@@ -1152,46 +1248,110 @@ function CreateScheduleModal({
               请先读取当前日期和预约中心的可用时段。
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <QueryField label="开始时间">
-                <select
-                className={queryControlClass}
-                  disabled={submitting}
-                  value={draft.slotKey}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, slotKey: event.target.value, roomId: "" }))}
-                >
-                  <option value="">请选择开始时间</option>
-                  {slotOptions.slots.map((slot) => (
-                    <option
-                      key={slot.key}
-                      disabled={slot.past || slot.counselorOccupied || slot.allRoomsFull}
-                      value={slot.key}
-                    >
-                      {slot.key}
-                      {slot.past ? "（已过期）" : slot.counselorOccupied ? "（已有排期）" : slot.allRoomsFull ? "（已约满）" : ""}
-                    </option>
-                  ))}
-                </select>
-                <p className="mt-2 text-xs text-[var(--lxxl-muted)]">
-                  支持整点和半点开始；咨询 50 分钟，随后预留 10 分钟打扫。
-                </p>
-              </QueryField>
-              {draft.centerId !== "video" && (
-                <QueryField label="咨询室">
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <QueryField label="开始时间">
                   <select
-                    className={queryControlClass}
+                  className={queryControlClass}
                     disabled={submitting}
-                    value={draft.roomId}
-                    onChange={(event) => setDraft((prev) => ({ ...prev, roomId: event.target.value }))}
+                    value={draft.slotKey}
+                    onChange={(event) => setDraft((prev) => ({ ...prev, slotKey: event.target.value, roomId: "" }))}
                   >
-                    <option value="">无偏好</option>
-                    {availableRooms.map((room) => (
-                      <option key={room.roomId} value={room.roomId}>
-                        {room.roomName}
+                    <option value="">请选择开始时间</option>
+                    {slotOptions.slots.map((slot) => (
+                      <option
+                        key={slot.key}
+                        disabled={slot.past || slot.counselorOccupied || slot.allRoomsFull}
+                        value={slot.key}
+                      >
+                        {slot.key}
+                        {slot.past ? "（已过期）" : slot.counselorOccupied ? "（已有排期）" : slot.allRoomsFull ? "（已约满）" : ""}
                       </option>
                     ))}
                   </select>
+                  <p className="mt-2 text-xs text-[var(--lxxl-muted)]">
+                    支持整点和半点开始；咨询 50 分钟，随后预留 10 分钟打扫。
+                  </p>
                 </QueryField>
+                {!isVideo && (
+                  <QueryField label="咨询室">
+                    <select
+                      className={queryControlClass}
+                      disabled={submitting}
+                      value={draft.roomId}
+                      onChange={(event) => setDraft((prev) => ({ ...prev, roomId: event.target.value }))}
+                    >
+                      <option value="">无偏好</option>
+                      {availableRooms.map((room) => (
+                        <option key={room.roomId} value={room.roomId}>
+                          {room.roomName}
+                        </option>
+                      ))}
+                    </select>
+                  </QueryField>
+                )}
+              </div>
+              {isVideo && selectedSlot && (
+                <div className="space-y-3">
+                  <button
+                    className="flex w-full items-center justify-between rounded-xl border border-[var(--lxxl-border)] bg-[#FAF8F4] px-4 py-3 text-left"
+                    type="button"
+                    onClick={() => {
+                      setVideoRoomPrefExpanded((v) => {
+                        if (v) {
+                          setVideoRoomNoticeAgreed(false);
+                          setDraft((prev) => ({ ...prev, roomId: "" }));
+                        }
+                        return !v;
+                      });
+                    }}
+                  >
+                    <span className="text-sm font-medium">咨询室偏好（可选）</span>
+                    <span className="text-xs text-[var(--lxxl-green-dark)]">
+                      {videoRoomPrefExpanded ? "收起" : "展开"}
+                    </span>
+                  </button>
+                  {!videoRoomPrefExpanded ? (
+                    <p className="text-xs text-[var(--lxxl-muted)]">
+                      默认不占用线下咨询室；如需使用请展开选择
+                    </p>
+                  ) : (
+                    <>
+                      <label className="flex cursor-pointer items-start gap-3 text-xs leading-5 text-[var(--lxxl-muted)]">
+                        <input
+                          checked={videoRoomNoticeAgreed}
+                          className="mt-0.5"
+                          type="checkbox"
+                          onChange={(event) => {
+                            setVideoRoomNoticeAgreed(event.target.checked);
+                            if (!event.target.checked) {
+                              setDraft((prev) => ({ ...prev, roomId: "" }));
+                            }
+                          }}
+                        />
+                        <span>{VIDEO_ROOM_NOTICE}</span>
+                      </label>
+                      <select
+                        className={queryControlClass}
+                        disabled={submitting || !videoRoomNoticeAgreed}
+                        value={draft.roomId}
+                        onChange={(event) => setDraft((prev) => ({ ...prev, roomId: event.target.value }))}
+                      >
+                        <option value="">无偏好</option>
+                        {videoRooms.map((room) => (
+                          <option
+                            disabled={!room.available || room.occupiedByOther}
+                            key={room.roomId}
+                            value={room.roomId}
+                          >
+                            {room.roomName}
+                            {!room.available || room.occupiedByOther ? "（已占用）" : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </>
+                  )}
+                </div>
               )}
             </div>
           )}
@@ -1204,7 +1364,14 @@ function CreateScheduleModal({
 
         <div className="flex justify-start gap-3 border-t border-[var(--lxxl-border)] px-6 py-4">
           <QueryButton
-            disabled={submitting || !selectedSlot || selectedSlot.past || selectedSlot.counselorOccupied || selectedSlot.allRoomsFull}
+            disabled={
+              submitting
+              || !selectedSlot
+              || selectedSlot.past
+              || selectedSlot.counselorOccupied
+              || selectedSlot.allRoomsFull
+              || Boolean(isVideo && draft.roomId && !videoRoomNoticeAgreed)
+            }
             onClick={handleCreate}
           >
             {submitting ? "新增中" : "新增"}

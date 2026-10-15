@@ -137,7 +137,14 @@ def complete_paid_order(
         return
 
     if is_video_center(resolved_center):
-        consultation_note = schedule_note(resolved_center)
+        required_room_id = parse_room_id(schedule.Note) if is_proxy_order else None
+        assigned_room = apply_room_assignment(
+            db,
+            schedule,
+            resolved_center,
+            required_room_id=required_room_id,
+        )
+        consultation_note = schedule_note(resolved_center, assigned_room)
     else:
         required_room_id = parse_room_id(schedule.Note) if is_proxy_order else None
         if is_proxy_order and not required_room_id:
