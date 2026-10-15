@@ -15,9 +15,9 @@ BOOKING_LEAD_TIME_MESSAGE = "开始时间须至少晚于当前中国时间90分�
 # 每节咨询 50 分钟，结束后预留 10 分钟打扫；相邻预约因此仍至少间隔 60 分钟。
 CLEANING_DURATION_MINUTES = 10
 OCCUPANCY_DURATION_MINUTES = SLOT_DURATION_MINUTES + CLEANING_DURATION_MINUTES
-# 每日可选开始小时（午休 12 点不排），每小时支持整点和半点开始；
+# 每日可选开始小时（含 12:00 / 12:30），每小时支持整点和半点开始；
 # 最晚开始时间为 23:00，不生成 23:30。
-SLOT_START_HOURS = [9, 10, 11, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
+SLOT_START_HOURS = [9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
 SLOT_START_MINUTES = (0, 30)
 
 

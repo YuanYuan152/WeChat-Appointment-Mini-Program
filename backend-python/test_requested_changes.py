@@ -10,6 +10,8 @@ class RequestedChangesTests(unittest.TestCase):
     def test_slot_options_end_at_2300(self):
         starts = [start.strftime("%H:%M") for start, _ in all_slot_bounds_for_date(date(2026, 8, 13))]
 
+        self.assertIn("12:00", starts)
+        self.assertIn("12:30", starts)
         self.assertIn("23:00", starts)
         self.assertNotIn("23:30", starts)
         self.assertEqual("23:00", starts[-1])

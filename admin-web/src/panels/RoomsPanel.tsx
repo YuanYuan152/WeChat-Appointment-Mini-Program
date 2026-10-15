@@ -30,7 +30,7 @@ import type {
 } from "@/types/api";
 import type { RoomFilters } from "@/types/app";
 
-const FIXED_TIME_SLOTS = [9, 10, 11, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23].flatMap((hour) =>
+const FIXED_TIME_SLOTS = [9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23].flatMap((hour) =>
   [0, 30].map(
     (minute) => `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`,
   ),
