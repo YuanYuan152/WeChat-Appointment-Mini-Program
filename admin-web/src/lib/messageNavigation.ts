@@ -67,12 +67,12 @@ export function resolveMessageActionTarget(
 
     if (isCaseRecordAmendmentPendingMessage(item)) {
       return {
-        href: buildHref(sectionPathById.caseRecords, {
+        href: buildHref("/case-records/amendments", {
           amendmentId: firstNumber(detail.amendmentId, detail.caseRecordAmendmentId, item.RelatedId),
           messageId: item.Id,
         }),
-        label: "前往修改审核",
-        description: "进入咨询记录修改审核入口，处理这条修改申请。",
+        label: "前往咨询记录审核",
+        description: "进入咨询记录审核入口，处理这条修改申请。",
       };
     }
 

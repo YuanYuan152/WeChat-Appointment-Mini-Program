@@ -4,19 +4,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 import {
-  approveCaseRecordAmendment,
-  fetchCaseRecordAmendments,
   fetchCaseRecordDetail,
   fetchCounselorRecordDetails,
   fetchCounselorRecordSummary,
-  rejectCaseRecordAmendment,
+  type CaseRecordPeriod,
 } from "@/services/records";
 import { AppRoute, useAppRoute } from "@/components/AppRoute";
 import { CaseRecordsPanel } from "@/panels/CaseRecordsPanel";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
-import { getMessage } from "@/lib/display";
 import type { AdminCaseRecordDetail, AdminConsultationRecord, CounselorRecordSummary } from "@/types/api";
-import type { ScreenData } from "@/types/app";
 
 export function CaseRecordsScreen() {
   return (
@@ -29,60 +25,102 @@ export function CaseRecordsScreen() {
 function CaseRecordsScreenContent() {
   const searchParams = useSearchParams();
   const { clearNotice, refreshKey, showNotice } = useAppRoute();
-  const focusedAmendmentId = numberFromSearchParam(searchParams.get("amendmentId"));
-  const initialAmendmentStatus = focusedAmendmentId ? "ALL" : "PENDING";
-  const focusedRecordId = focusedAmendmentId ? null : numberFromSearchParam(searchParams.get("recordId"));
-  const [data, setData] = useState<ScreenData>({});
+  const focusedRecordId = numberFromSearchParam(searchParams.get("recordId"));
+  const [records, setRecords] = useState<CounselorRecordSummary[]>();
   const [selectedCounselorName, setSelectedCounselorName] = useState<string | null>(null);
+  const [selectedCounselorId, setSelectedCounselorId] = useState<number | null>(null);
   const [selectedCounselorRecords, setSelectedCounselorRecords] = useState<AdminConsultationRecord[]>();
   const [selectedCaseRecord, setSelectedCaseRecord] = useState<AdminCaseRecordDetail>();
   const [recordsLoading, setRecordsLoading] = useState(false);
-  const [amendmentsLoading, setAmendmentsLoading] = useState(false);
   const [selectedRecordsLoading, setSelectedRecordsLoading] = useState(false);
   const [caseRecordLoading, setCaseRecordLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
-  const [amendmentStatus, setAmendmentStatus] = useState(initialAmendmentStatus);
-  const [appliedAmendmentStatus, setAppliedAmendmentStatus] = useState(initialAmendmentStatus);
+  const [period, setPeriod] = useState<CaseRecordPeriod>("month");
+  const [appliedPeriod, setAppliedPeriod] = useState<CaseRecordPeriod>("month");
+  const [counselorKeyword, setCounselorKeyword] = useState("");
+  const [appliedCounselorKeyword, setAppliedCounselorKeyword] = useState("");
   const openedRecordRef = useRef<number | null>(null);
 
   const loadData = useCallback(async () => {
     setRecordsLoading(true);
-    setAmendmentsLoading(true);
     clearNotice();
     try {
-      const counselorRecords = await fetchCounselorRecordSummary();
-      const caseRecordAmendments = await fetchCaseRecordAmendments(appliedAmendmentStatus);
-      setData((prev) => ({ ...prev, counselorRecords, caseRecordAmendments }));
+      setRecords(
+        await fetchCounselorRecordSummary({
+          period: appliedPeriod,
+          keyword: appliedCounselorKeyword,
+        }),
+      );
     } catch (error) {
       showNotice("error", error instanceof Error ? error.message : "咨询记录加载失败");
     } finally {
       setRecordsLoading(false);
-      setAmendmentsLoading(false);
     }
-  }, [appliedAmendmentStatus, clearNotice, showNotice]);
+  }, [appliedCounselorKeyword, appliedPeriod, clearNotice, showNotice]);
 
   useEffect(() => {
     void loadData();
   }, [loadData, refreshKey]);
 
+  const applyRecordFilters = useCallback(() => {
+    setPage(1);
+    setAppliedPeriod(period);
+    setAppliedCounselorKeyword(counselorKeyword.trim());
+  }, [counselorKeyword, period]);
+
+  const resetRecordFilters = useCallback(() => {
+    setPeriod("month");
+    setCounselorKeyword("");
+    setPage(1);
+    setAppliedPeriod("month");
+    setAppliedCounselorKeyword("");
+  }, []);
+
   const openCounselor = useCallback(
     async (record: CounselorRecordSummary) => {
       clearNotice();
       setSelectedCounselorName(record.counselorName);
+      setSelectedCounselorId(record.counselorId);
       setSelectedCounselorRecords(undefined);
       setSelectedCaseRecord(undefined);
       setSelectedRecordsLoading(true);
       try {
-        setSelectedCounselorRecords(await fetchCounselorRecordDetails(record.counselorId));
+        setSelectedCounselorRecords(
+          await fetchCounselorRecordDetails(record.counselorId, { period: appliedPeriod }),
+        );
       } catch (error) {
         showNotice("error", error instanceof Error ? error.message : "咨询记录明细加载失败");
       } finally {
         setSelectedRecordsLoading(false);
       }
     },
-    [clearNotice, showNotice],
+    [appliedPeriod, clearNotice, showNotice],
   );
+
+  // 时间筛选变更后，若明细抽屉已打开则按新区间刷新明细
+  useEffect(() => {
+    if (!selectedCounselorId || !selectedCounselorName || selectedCaseRecord) {
+      return;
+    }
+    let active = true;
+    setSelectedRecordsLoading(true);
+    void fetchCounselorRecordDetails(selectedCounselorId, { period: appliedPeriod })
+      .then((items) => {
+        if (active) setSelectedCounselorRecords(items);
+      })
+      .catch((error) => {
+        if (active) {
+          showNotice("error", error instanceof Error ? error.message : "咨询记录明细加载失败");
+        }
+      })
+      .finally(() => {
+        if (active) setSelectedRecordsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [appliedPeriod, selectedCaseRecord, selectedCounselorId, selectedCounselorName, showNotice]);
 
   const openCaseRecord = useCallback(
     async (recordId: number) => {
@@ -111,6 +149,7 @@ function CaseRecordsScreenContent() {
 
   const closeDetails = useCallback(() => {
     setSelectedCounselorName(null);
+    setSelectedCounselorId(null);
     setSelectedCounselorRecords(undefined);
     setSelectedCaseRecord(undefined);
     setSelectedRecordsLoading(false);
@@ -121,57 +160,9 @@ function CaseRecordsScreenContent() {
     setSelectedCaseRecord(undefined);
   }, []);
 
-  const loadAmendments = useCallback(async () => {
-    setAmendmentsLoading(true);
-    clearNotice();
-    try {
-      const caseRecordAmendments = await fetchCaseRecordAmendments(amendmentStatus);
-      setAppliedAmendmentStatus(amendmentStatus);
-      setData((prev) => ({ ...prev, caseRecordAmendments }));
-    } catch (error) {
-      showNotice("error", error instanceof Error ? error.message : "修改审核加载失败");
-    } finally {
-      setAmendmentsLoading(false);
-    }
-  }, [amendmentStatus, clearNotice, showNotice]);
-
-  const approveAmendment = useCallback(
-    async (amendmentId: number) => {
-      setAmendmentsLoading(true);
-      clearNotice();
-      try {
-        const result = await approveCaseRecordAmendment(amendmentId);
-        showNotice("success", getMessage(result, "已通过修改申请"));
-        await loadData();
-      } catch (error) {
-        showNotice("error", error instanceof Error ? error.message : "通过修改申请失败");
-      } finally {
-        setAmendmentsLoading(false);
-      }
-    },
-    [clearNotice, loadData, showNotice],
-  );
-
-  const rejectAmendment = useCallback(
-    async (amendmentId: number, rejectReason: string) => {
-      setAmendmentsLoading(true);
-      clearNotice();
-      try {
-        const result = await rejectCaseRecordAmendment(amendmentId, rejectReason);
-        showNotice("success", getMessage(result, "已驳回修改申请"));
-        await loadData();
-      } catch (error) {
-        showNotice("error", error instanceof Error ? error.message : "驳回修改申请失败");
-      } finally {
-        setAmendmentsLoading(false);
-      }
-    },
-    [clearNotice, loadData, showNotice],
-  );
-
   return (
     <CaseRecordsPanel
-      records={data.counselorRecords}
+      records={records}
       page={page}
       pageSize={pageSize}
       onPageChange={setPage}
@@ -179,20 +170,19 @@ function CaseRecordsScreenContent() {
         setPage(1);
         setPageSize(nextPageSize);
       }}
+      period={period}
+      setPeriod={setPeriod}
+      counselorKeyword={counselorKeyword}
+      setCounselorKeyword={setCounselorKeyword}
+      appliedPeriod={appliedPeriod}
+      onApplyRecordFilters={applyRecordFilters}
+      onResetRecordFilters={resetRecordFilters}
       selectedCounselorName={selectedCounselorName}
       selectedRecords={selectedCounselorRecords}
       selectedRecordsLoading={selectedRecordsLoading}
       selectedCaseRecord={selectedCaseRecord}
       caseRecordLoading={caseRecordLoading}
-      amendments={data.caseRecordAmendments}
-      amendmentsLoading={amendmentsLoading}
-      focusedAmendmentId={focusedAmendmentId}
       recordsLoading={recordsLoading}
-      amendmentStatus={amendmentStatus}
-      setAmendmentStatus={setAmendmentStatus}
-      onLoadAmendments={loadAmendments}
-      onApproveAmendment={approveAmendment}
-      onRejectAmendment={rejectAmendment}
       onOpenCounselor={openCounselor}
       onOpenCaseRecord={openCaseRecord}
       onBackToRecordList={backToRecordList}

@@ -1,7 +1,8 @@
 """管理员轻控制台：最小角色绑定/解绑能力。"""
 
 import re
-from datetime import datetime, timedelta
+from datetime import date as date_type
+from datetime import datetime, time, timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -1070,14 +1071,46 @@ def _build_amendment_admin_out(
 )
 def list_case_record_amendments(
     status: Optional[str] = Query(None, description="PENDING / APPROVED / REJECTED"),
+    keyword: Optional[str] = Query(None, max_length=100, description="按咨询师姓名或手机号筛选"),
+    period: Optional[str] = Query(
+        "month",
+        description="时间范围：all / month / week / today（按咨询时间筛选）",
+    ),
     _admin: AppAccount = Depends(require_ops_or_admin),
     db: Session = Depends(get_db),
 ):
+    if period is not None and (period or "").strip().lower() not in _RECORD_PERIODS:
+        raise HTTPException(status_code=400, detail="period 应为 all / month / week / today")
     q = db.query(AppCaseRecordAmendmentRequest).order_by(
         AppCaseRecordAmendmentRequest.CreatedAt.desc()
     )
     if status and status.upper() != "ALL":
         q = q.filter(AppCaseRecordAmendmentRequest.Status == status.upper())
+    since = _consultation_record_since(period=period, days=None)
+    if since is not None:
+        matching_consultation_ids = select(AppConsultation.Id).where(
+            AppConsultation.StartTime >= since
+        )
+        q = q.filter(AppCaseRecordAmendmentRequest.ConsultationId.in_(matching_consultation_ids))
+    normalized_keyword = (keyword or "").strip()
+    if normalized_keyword:
+        like = f"%{normalized_keyword}%"
+        matching_account_ids = select(AppAccount.Id).where(
+            or_(
+                AppAccount.RealName.like(like),
+                AppAccount.Nickname.like(like),
+                AppAccount.Mobile.like(like),
+            )
+        )
+        matching_profile_ids = select(AppCounselorProfile.AccountId).where(
+            AppCounselorProfile.Name.like(like)
+        )
+        q = q.filter(
+            or_(
+                AppCaseRecordAmendmentRequest.CounselorId.in_(matching_account_ids),
+                AppCaseRecordAmendmentRequest.CounselorId.in_(matching_profile_ids),
+            )
+        )
     try:
         rows = q.limit(100).all()
     except SQLAlchemyError:
@@ -1538,17 +1571,62 @@ class AdminConsultationRecordOut(BaseModel):
     subjectivePreview: Optional[str] = None
 
 
+_RECORD_PERIODS = {"all", "month", "week", "today"}
+
+
+def _consultation_record_since(
+    *,
+    period: Optional[str],
+    days: Optional[int],
+) -> Optional[datetime]:
+    """按中国时区计算咨询记录统计起始时间；period=all 时不限时间。"""
+    normalized = (period or "").strip().lower()
+    now = china_now()
+    today = now.date()
+    if normalized == "all":
+        return None
+    if normalized == "today":
+        return datetime.combine(today, time.min)
+    if normalized == "week":
+        return datetime.combine(today - timedelta(days=6), time.min)
+    if normalized == "month":
+        return datetime.combine(date_type(today.year, today.month, 1), time.min)
+    span = days if days is not None else 30
+    span = max(1, min(int(span), 3650))
+    return now - timedelta(days=span)
+
+
+def _counselor_display_name(
+    profile: Optional[AppCounselorProfile],
+    account: Optional[AppAccount],
+) -> str:
+    return (
+        (profile.Name if profile else None)
+        or (account.Nickname if account else None)
+        or (account.RealName if account else None)
+        or (account.Mobile if account else None)
+        or "未留姓名咨询师"
+    )
+
+
 @router.get(
     "/consultation-records/counselors",
     response_model=List[CounselorRecordSummaryOut],
-    summary="咨询师咨询记录概览（近 N 天）",
+    summary="咨询师咨询记录概览",
 )
 def list_counselor_record_summaries(
-    days: int = Query(30, ge=1, le=90, description="统计近多少天"),
+    period: Optional[str] = Query(
+        None,
+        description="时间范围：all / month / week / today；优先于 days",
+    ),
+    days: int = Query(30, ge=1, le=3650, description="统计近多少天（period 未传时生效）"),
+    keyword: Optional[str] = Query(None, description="按咨询师姓名筛选"),
     _admin: AppAccount = Depends(require_ops_or_admin),
     db: Session = Depends(get_db),
 ):
-    since = datetime.utcnow() - timedelta(days=days)
+    if period is not None and (period or "").strip().lower() not in _RECORD_PERIODS:
+        raise HTTPException(status_code=400, detail="period 应为 all / month / week / today")
+    since = _consultation_record_since(period=period, days=days)
     counselor_bindings = (
         db.query(AppRoleBinding)
         .filter(AppRoleBinding.RoleType == "Counselor")
@@ -1569,15 +1647,13 @@ def list_counselor_record_summaries(
         for a in db.query(AppAccount).filter(AppAccount.Id.in_(counselor_ids)).all()
     }
 
-    consultations = (
-        db.query(AppConsultation)
-        .filter(
-            AppConsultation.CounselorId.in_(counselor_ids),
-            AppConsultation.Status == "DONE",
-            AppConsultation.EndTime >= since,
-        )
-        .all()
+    consultation_query = db.query(AppConsultation).filter(
+        AppConsultation.CounselorId.in_(counselor_ids),
+        AppConsultation.Status == "DONE",
     )
+    if since is not None:
+        consultation_query = consultation_query.filter(AppConsultation.EndTime >= since)
+    consultations = consultation_query.all()
     cons_by_counselor: dict[int, list] = {}
     consultation_ids: list[int] = []
     for c in consultations:
@@ -1591,6 +1667,7 @@ def list_counselor_record_summaries(
         ).all():
             records_by_consultation[r.ConsultationId] = r
 
+    keyword_normalized = (keyword or "").strip().lower()
     result: List[CounselorRecordSummaryOut] = []
     for cid in counselor_ids:
         cons = cons_by_counselor.get(cid, [])
@@ -1610,38 +1687,47 @@ def list_counselor_record_summaries(
                 recorded += 1
         profile = profiles.get(cid)
         account = accounts.get(cid)
-        name = (
-            (profile.Name if profile else None)
-            or (account.Nickname if account else None)
-            or (account.RealName if account else None)
-            or (account.Mobile if account else None)
-            or "未留姓名咨询师"
-        )
+        name = _counselor_display_name(profile, account)
+        if keyword_normalized and keyword_normalized not in name.lower():
+            continue
         completed = len(cons)
-        result.append(
-            CounselorRecordSummaryOut(
-                counselorId=cid,
-                counselorName=name,
-                completedCount=completed,
-                recordedCount=recorded,
-                missingCount=max(0, completed - recorded),
+        # 姓名筛选时仍展示该咨询师（即使窗口内无完成咨询），便于定位
+        if keyword_normalized or completed > 0:
+            result.append(
+                CounselorRecordSummaryOut(
+                    counselorId=cid,
+                    counselorName=name,
+                    completedCount=completed,
+                    recordedCount=recorded,
+                    missingCount=max(0, completed - recorded),
+                )
             )
-        )
-    result.sort(key=lambda x: (-x.completedCount, x.counselorName))
+    # 无关键字时保持「有完成咨询优先」；有关键字时按姓名排，零完成也保留
+    if keyword_normalized:
+        result.sort(key=lambda x: (-x.missingCount, -x.completedCount, x.counselorName))
+    else:
+        result = [item for item in result if item.completedCount > 0]
+        result.sort(key=lambda x: (-x.completedCount, x.counselorName))
     return result
 
 
 @router.get(
     "/consultation-records/counselors/{counselor_id}",
     response_model=List[AdminConsultationRecordOut],
-    summary="指定咨询师近 N 天咨询记录明细",
+    summary="指定咨询师咨询记录明细",
 )
 def list_counselor_consultation_records(
     counselor_id: int,
-    days: int = Query(30, ge=1, le=90),
+    period: Optional[str] = Query(
+        None,
+        description="时间范围：all / month / week / today；优先于 days",
+    ),
+    days: int = Query(30, ge=1, le=3650),
     _admin: AppAccount = Depends(require_ops_or_admin),
     db: Session = Depends(get_db),
 ):
+    if period is not None and (period or "").strip().lower() not in _RECORD_PERIODS:
+        raise HTTPException(status_code=400, detail="period 应为 all / month / week / today")
     binding = db.query(AppRoleBinding).filter(
         AppRoleBinding.AccountId == counselor_id,
         AppRoleBinding.RoleType == "Counselor",
@@ -1649,14 +1735,15 @@ def list_counselor_consultation_records(
     if not binding:
         raise HTTPException(status_code=404, detail="咨询师不存在")
 
-    since = datetime.utcnow() - timedelta(days=days)
+    since = _consultation_record_since(period=period, days=days)
+    consultation_query = db.query(AppConsultation).filter(
+        AppConsultation.CounselorId == counselor_id,
+        AppConsultation.Status == "DONE",
+    )
+    if since is not None:
+        consultation_query = consultation_query.filter(AppConsultation.EndTime >= since)
     consultations = (
-        db.query(AppConsultation)
-        .filter(
-            AppConsultation.CounselorId == counselor_id,
-            AppConsultation.Status == "DONE",
-            AppConsultation.EndTime >= since,
-        )
+        consultation_query
         .order_by(AppConsultation.EndTime.desc(), AppConsultation.Id.desc())
         .all()
     )

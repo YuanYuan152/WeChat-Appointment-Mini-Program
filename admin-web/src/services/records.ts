@@ -10,13 +10,43 @@ import type {
 
 import type { OperationFilters, PaginationParams } from "@/types/app";
 
-export function fetchCounselorRecordSummary(days = 30) {
-  return apiRequest<CounselorRecordSummary[]>(`/api/mini/admin/consultation-records/counselors?days=${days}`);
+export type CaseRecordPeriod = "all" | "month" | "week" | "today";
+
+export function fetchCounselorRecordSummary(options?: {
+  period?: CaseRecordPeriod;
+  days?: number;
+  keyword?: string;
+}) {
+  const params = new URLSearchParams();
+  if (options?.period) {
+    params.set("period", options.period);
+  } else if (options?.days != null) {
+    params.set("days", String(options.days));
+  } else {
+    params.set("period", "month");
+  }
+  if (options?.keyword?.trim()) {
+    params.set("keyword", options.keyword.trim());
+  }
+  return apiRequest<CounselorRecordSummary[]>(
+    `/api/mini/admin/consultation-records/counselors?${params.toString()}`,
+  );
 }
 
-export function fetchCounselorRecordDetails(counselorId: number, days = 30) {
+export function fetchCounselorRecordDetails(
+  counselorId: number,
+  options?: { period?: CaseRecordPeriod; days?: number },
+) {
+  const params = new URLSearchParams();
+  if (options?.period) {
+    params.set("period", options.period);
+  } else if (options?.days != null) {
+    params.set("days", String(options.days));
+  } else {
+    params.set("period", "month");
+  }
   return apiRequest<AdminConsultationRecord[]>(
-    `/api/mini/admin/consultation-records/counselors/${counselorId}?days=${days}`,
+    `/api/mini/admin/consultation-records/counselors/${counselorId}?${params.toString()}`,
   );
 }
 
@@ -24,8 +54,20 @@ export function fetchCaseRecordDetail(recordId: number) {
   return apiRequest<AdminCaseRecordDetail>(`/api/mini/admin/consultation-records/records/${recordId}`);
 }
 
-export function fetchCaseRecordAmendments(status = "PENDING") {
-  return apiRequest<CaseRecordAmendment[]>(`/api/mini/admin/case-record-amendments?status=${status}`);
+export function fetchCaseRecordAmendments(options?: {
+  status?: string;
+  keyword?: string;
+  period?: CaseRecordPeriod;
+}) {
+  const params = new URLSearchParams({
+    status: options?.status || "PENDING",
+    period: options?.period || "month",
+  });
+  const normalizedKeyword = (options?.keyword || "").trim();
+  if (normalizedKeyword) {
+    params.set("keyword", normalizedKeyword);
+  }
+  return apiRequest<CaseRecordAmendment[]>(`/api/mini/admin/case-record-amendments?${params.toString()}`);
 }
 
 export function approveCaseRecordAmendment(amendmentId: number) {
