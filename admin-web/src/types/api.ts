@@ -742,6 +742,31 @@ export interface OperationRecord {
   relatedConsultationId?: number | null;
 }
 
+export interface ShellUserCandidate {
+  id: number;
+  nickname?: string | null;
+  realName?: string | null;
+  openId?: string | null;
+  isActive: boolean;
+  createdAt?: string | null;
+  canDelete: boolean;
+  skipReason?: string | null;
+}
+
+export interface ShellUsersResponse {
+  total: number;
+  deletableCount: number;
+  items: ShellUserCandidate[];
+}
+
+export interface CleanupShellUsersResult {
+  message?: string;
+  deletedCount: number;
+  deletedUserIds: number[];
+  skippedCount: number;
+  skippedUserIds: number[];
+}
+
 export interface UserBoardSummary {
   id: number;
   name: string;

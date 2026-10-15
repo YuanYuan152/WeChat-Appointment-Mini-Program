@@ -90,7 +90,11 @@ from counselor_work_years import (
     work_start_year_for_admin,
 )
 from counselor_avatar import DEFAULT_COUNSELOR_PUBLIC_AVATAR, resolve_counselor_public_avatar_url
-from account_deletion_service import cleanup_shell_accounts, hard_delete_account
+from account_deletion_service import (
+    cleanup_shell_accounts,
+    hard_delete_account,
+    list_shell_account_candidates,
+)
 from counselor_identity_service import (
     apply_legacy_doctor_to_profile,
     dedupe_counselor_profiles,
@@ -821,19 +825,45 @@ def unbind_user_role(
     )
 
 
-@router.post("/users/cleanup-shells", summary="清理无手机号的壳用户")
-def cleanup_shell_users(
+class CleanupShellUsersBody(BaseModel):
+    account_ids: List[int] = Field(..., min_length=1)
+
+
+@router.get("/users/shells", summary="列出当前检测到的壳用户")
+def list_shell_users(
     admin: AppAccount = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    """仅清理无手机号且使用系统默认昵称的账号；有核心业务数据的账号跳过。"""
-    result = cleanup_shell_accounts(db, exclude_account_ids={int(admin.Id)})
+    """供 Web 来访管理确认删除前预览；不含当前登录管理员。"""
+    items = list_shell_account_candidates(db, exclude_account_ids={int(admin.Id)})
+    return {
+        "total": len(items),
+        "deletableCount": sum(1 for item in items if item.get("canDelete")),
+        "items": items,
+    }
+
+
+@router.post("/users/cleanup-shells", summary="清理无手机号的壳用户")
+def cleanup_shell_users(
+    body: CleanupShellUsersBody,
+    admin: AppAccount = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """仅清理勾选的壳用户；有核心业务数据的账号跳过。须由 Web 端先预览再确认。"""
+    try:
+        result = cleanup_shell_accounts(
+            db,
+            exclude_account_ids={int(admin.Id)},
+            account_ids=body.account_ids,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     db.commit()
     deleted_count = int(result["deletedCount"])
     skipped_count = int(result["skippedCount"])
     message = f"已清理 {deleted_count} 个壳用户"
     if skipped_count:
-        message += f"，另有 {skipped_count} 个账号因存在业务数据已跳过"
+        message += f"，另有 {skipped_count} 个账号已跳过（非壳用户、不存在或含业务数据）"
     return {
         **result,
         "message": message,

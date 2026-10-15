@@ -29,11 +29,10 @@
       <view class="add-btn" @tap="openAddModal">+ 添加用户</view>
       <view
         v-if="actorRole === 'Admin'"
-        class="cleanup-btn"
-        :class="{ disabled: cleaningShellUsers }"
-        @tap="cleanupShellUsers"
+        class="cleanup-btn cleanup-btn--disabled"
+        @tap="cleanupShellUsersBlocked"
       >
-        {{ cleaningShellUsers ? '清理中...' : '清除壳用户' }}
+        清除壳用户（请在 Web 后台操作）
       </view>
     </view>
 
@@ -383,7 +382,6 @@ const selected = reactive<Record<number, string>>({})
 const showAddModal = ref(false)
 
 const adding = ref(false)
-const cleaningShellUsers = ref(false)
 
 const addForm = reactive({
   mobile: '',
@@ -766,37 +764,13 @@ const deleteUser = (user: AdminUser) => {
   })
 }
 
-const cleanupShellUsers = () => {
-  if (cleaningShellUsers.value) return
+const cleanupShellUsersBlocked = () => {
   uni.showModal({
-    title: '确认清除壳用户',
+    title: '请在 Web 后台操作',
     content:
-      '将永久删除所有无手机号，且昵称为“用户+数字”、昵称为“未留姓名用户”或姓名为空的壳账号。有咨询、订单或个案数据的账号会自动跳过。该操作不可恢复。',
-    confirmText: '确认清理',
-    confirmColor: '#B91C1C',
-    success: async (modal) => {
-      if (!modal.confirm) return
-      cleaningShellUsers.value = true
-      try {
-        const res = await httpV2.post<{
-          message?: string
-          deletedCount?: number
-          skippedCount?: number
-        }>(API_ENDPOINTS.admin.cleanupShellUsers)
-        if (res.code !== 0) {
-          uni.showToast({ title: res.msg || '清理失败', icon: 'none' })
-          return
-        }
-        await load(true)
-        uni.showModal({
-          title: '清理完成',
-          content: res.data?.message || '壳用户已清理',
-          showCancel: false,
-        })
-      } finally {
-        cleaningShellUsers.value = false
-      }
-    },
+      '壳用户清理已改为仅支持 Web 来访管理：先预览检测到的壳用户列表，勾选确认后再删除。小程序端不再执行删除。',
+    showCancel: false,
+    confirmText: '知道了',
   })
 }
 
@@ -921,8 +895,11 @@ onShow(() => {
   white-space: nowrap;
 }
 
-.cleanup-btn.disabled {
-  opacity: 0.55;
+.cleanup-btn.disabled,
+.cleanup-btn--disabled {
+  opacity: 0.7;
+  background: #F3F4F6;
+  color: #6B7280;
 }
 
 .filter-row {

@@ -473,20 +473,65 @@ def is_shell_account(account: AppAccount) -> bool:
     )
 
 
-def cleanup_shell_accounts(
+def list_shell_account_candidates(
     db: Session,
     *,
     exclude_account_ids: Optional[set[int]] = None,
-) -> dict:
-    """物理删除符合命名规则的无手机号壳账号。
-
-    逐个走 hard_delete_account，若账号已有核心业务数据则跳过，避免批量清理
-    误删咨询、订单或个案历史。
-    """
+) -> list[dict]:
+    """列出当前可识别的壳用户（含是否可物理删除）。"""
     excluded = exclude_account_ids or set()
     candidates = (
         db.query(AppAccount)
         .filter(or_(AppAccount.Mobile.is_(None), AppAccount.Mobile == ""))
+        .order_by(AppAccount.Id.asc())
+        .all()
+    )
+    result: list[dict] = []
+    for account in candidates:
+        account_id = int(account.Id)
+        if account_id in excluded or not is_shell_account(account):
+            continue
+        skip_reason = hard_delete_blocking_reason(db, account_id)
+        result.append(
+            {
+                "id": account_id,
+                "nickname": getattr(account, "Nickname", None),
+                "realName": getattr(account, "RealName", None),
+                "openId": getattr(account, "OpenId", None),
+                "isActive": bool(getattr(account, "IsActive", True)),
+                "createdAt": getattr(account, "CreatedAt", None),
+                "canDelete": skip_reason is None,
+                "skipReason": skip_reason,
+            }
+        )
+    return result
+
+
+def cleanup_shell_accounts(
+    db: Session,
+    *,
+    exclude_account_ids: Optional[set[int]] = None,
+    account_ids: Optional[list[int]] = None,
+) -> dict:
+    """物理删除符合命名规则的无手机号壳账号。
+
+    必须显式传入 account_ids（由运营在 Web 端勾选确认），避免一键误删。
+    逐个走 hard_delete_account，若账号已有核心业务数据则跳过，避免批量清理
+    误删咨询、订单或个案历史。
+    """
+    if account_ids is None:
+        raise ValueError("请先选择要删除的壳用户")
+    selected_ids = {int(item) for item in account_ids}
+    if not selected_ids:
+        raise ValueError("请至少选择一个壳用户")
+
+    excluded = exclude_account_ids or set()
+    candidates = (
+        db.query(AppAccount)
+        .filter(
+            AppAccount.Id.in_(selected_ids),
+            or_(AppAccount.Mobile.is_(None), AppAccount.Mobile == ""),
+        )
         .order_by(AppAccount.Id.asc())
         .all()
     )
@@ -497,9 +542,12 @@ def cleanup_shell_accounts(
     )
     deleted_ids: list[int] = []
     skipped_ids: list[int] = []
+    found_ids: set[int] = set()
     for account in candidates:
         account_id = int(account.Id)
+        found_ids.add(account_id)
         if account_id in excluded or not is_shell_account(account):
+            skipped_ids.append(account_id)
             continue
         try:
             hard_delete_account(
@@ -510,6 +558,8 @@ def cleanup_shell_accounts(
             deleted_ids.append(account_id)
         except ValueError:
             skipped_ids.append(account_id)
+    for missing_id in sorted(selected_ids - found_ids):
+        skipped_ids.append(missing_id)
     return {
         "deletedCount": len(deleted_ids),
         "deletedUserIds": deleted_ids,

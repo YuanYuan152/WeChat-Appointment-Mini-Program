@@ -1,10 +1,12 @@
 import { apiFileRequest, apiRequest } from "@/lib/api";
 import type {
+  CleanupShellUsersResult,
   CounselorBoardDetail,
   CounselorBoardSummary,
   PatientContractInfo,
   PatientContractArtifact,
   PagedResult,
+  ShellUsersResponse,
   StaffRemarkUpdateResult,
   UserBoardDetail,
   UserBoardSummary,
@@ -95,4 +97,15 @@ export function fetchCounselorBoard(filters: CounselorBoardFilters, pagination: 
 
 export function fetchCounselorBoardDetail(accountId: number) {
   return apiRequest<CounselorBoardDetail>(`${COUNSELOR_BOARD}/${accountId}`);
+}
+
+export function fetchShellUsers() {
+  return apiRequest<ShellUsersResponse>("/api/mini/admin/users/shells");
+}
+
+export function cleanupShellUsers(accountIds: number[]) {
+  return apiRequest<CleanupShellUsersResult>("/api/mini/admin/users/cleanup-shells", {
+    method: "POST",
+    body: JSON.stringify({ account_ids: accountIds }),
+  });
 }

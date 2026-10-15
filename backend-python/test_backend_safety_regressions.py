@@ -537,7 +537,7 @@ class BackendSafetyRegressionTests(unittest.TestCase):
         ])
         self.db.commit()
 
-        result = cleanup_shell_accounts(self.db)
+        result = cleanup_shell_accounts(self.db, account_ids=[81, 82, 83, 84])
         self.db.commit()
 
         self.assertEqual(result["deletedCount"], 2)

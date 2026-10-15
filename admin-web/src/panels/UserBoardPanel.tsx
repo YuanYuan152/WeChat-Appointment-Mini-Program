@@ -2,7 +2,13 @@ import { memo, useRef, useState } from "react";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
 
 import { formatDateTime, formatMoneyFromCents, statusLabel } from "@/lib/format";
-import type { PagedResult, ProxyPersonOption, UserBoardDetail, UserBoardSummary } from "@/types/api";
+import type {
+  PagedResult,
+  ProxyPersonOption,
+  ShellUserCandidate,
+  UserBoardDetail,
+  UserBoardSummary,
+} from "@/types/api";
 
 import { DetailDrawer } from "@/components/boards/DetailDrawer";
 import { StaffRemarkEditor } from "@/components/boards/StaffRemarkEditor";
@@ -58,6 +64,17 @@ export function UserBoardPanel({
   onSaveSource,
   contractDownloading,
   onDownloadContract,
+  canCleanupShellUsers = false,
+  shellCleanupOpen = false,
+  shellCleanupLoading = false,
+  shellCleanupSubmitting = false,
+  shellUsers = [],
+  shellSelectedIds,
+  onOpenShellCleanup,
+  onCloseShellCleanup,
+  onToggleShellUser,
+  onToggleAllShellUsers,
+  onConfirmShellCleanup,
 }: {
   users?: PagedResult<UserBoardSummary>;
   listLoading: boolean;
@@ -86,13 +103,26 @@ export function UserBoardPanel({
   ) => Promise<void>;
   contractDownloading: boolean;
   onDownloadContract: (accountId: number) => Promise<void>;
+  canCleanupShellUsers?: boolean;
+  shellCleanupOpen?: boolean;
+  shellCleanupLoading?: boolean;
+  shellCleanupSubmitting?: boolean;
+  shellUsers?: ShellUserCandidate[];
+  shellSelectedIds?: Set<number>;
+  onOpenShellCleanup?: () => void;
+  onCloseShellCleanup?: () => void;
+  onToggleShellUser?: (accountId: number, checked: boolean) => void;
+  onToggleAllShellUsers?: (checked: boolean) => void;
+  onConfirmShellCleanup?: () => void;
 }) {
   return (
     <>
       <UserBoardListSection
+        canCleanupShellUsers={canCleanupShellUsers}
         filters={filters}
         listLoading={listLoading}
         onOpen={onOpen}
+        onOpenShellCleanup={onOpenShellCleanup}
         onPageChange={onPageChange}
         onPageSizeChange={onPageSizeChange}
         onReset={onReset}
@@ -121,6 +151,18 @@ export function UserBoardPanel({
           ) : null}
         </DetailDrawer>
       )}
+      {shellCleanupOpen && (
+        <ShellCleanupModal
+          items={shellUsers}
+          loading={shellCleanupLoading}
+          selectedIds={shellSelectedIds ?? new Set()}
+          submitting={shellCleanupSubmitting}
+          onClose={() => onCloseShellCleanup?.()}
+          onConfirm={() => onConfirmShellCleanup?.()}
+          onToggle={(accountId, checked) => onToggleShellUser?.(accountId, checked)}
+          onToggleAll={(checked) => onToggleAllShellUsers?.(checked)}
+        />
+      )}
     </>
   );
 }
@@ -135,6 +177,8 @@ const UserBoardListSection = memo(function UserBoardListSection({
   onPageChange,
   onPageSizeChange,
   onOpen,
+  canCleanupShellUsers = false,
+  onOpenShellCleanup,
 }: {
   users?: PagedResult<UserBoardSummary>;
   listLoading: boolean;
@@ -145,6 +189,8 @@ const UserBoardListSection = memo(function UserBoardListSection({
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
   onOpen: (accountId: number) => void;
+  canCleanupShellUsers?: boolean;
+  onOpenShellCleanup?: () => void;
 }) {
   return (
     <section className="rounded-xl border border-[var(--lxxl-border)] bg-white">
@@ -155,11 +201,22 @@ const UserBoardListSection = memo(function UserBoardListSection({
           onSearch();
         }}
       >
-        <div>
-          <h2 className="text-xl font-semibold tracking-normal">来访管理</h2>
-          <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">
-            查看来访资料，以及订单、退款、豁免和预约记录。
-          </p>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-semibold tracking-normal">来访管理</h2>
+            <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">
+              查看来访资料，以及订单、退款、豁免和预约记录。
+            </p>
+          </div>
+          {canCleanupShellUsers && onOpenShellCleanup && (
+            <button
+              className="h-10 shrink-0 rounded-xl border border-[#D7B48A] bg-[#FBF3DF] px-4 text-sm font-medium text-[#8A6438] transition hover:border-[#C49A62] hover:bg-[#F7E9C8]"
+              onClick={onOpenShellCleanup}
+              type="button"
+            >
+              清除壳用户
+            </button>
+          )}
         </div>
 
         <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -949,6 +1006,128 @@ function DetailCard({ title, rows, action }: { title: string; rows: Array<[strin
         ))}
       </div>
       {action && <div className="flex justify-end pt-1">{action}</div>}
+    </div>
+  );
+}
+
+function ShellCleanupModal({
+  items,
+  loading,
+  selectedIds,
+  submitting,
+  onClose,
+  onConfirm,
+  onToggle,
+  onToggleAll,
+}: {
+  items: ShellUserCandidate[];
+  loading: boolean;
+  selectedIds: Set<number>;
+  submitting: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  onToggle: (accountId: number, checked: boolean) => void;
+  onToggleAll: (checked: boolean) => void;
+}) {
+  const deletableItems = items.filter((item) => item.canDelete);
+  const selectedDeletableCount = deletableItems.filter((item) => selectedIds.has(item.id)).length;
+  const allDeletableSelected =
+    deletableItems.length > 0 && selectedDeletableCount === deletableItems.length;
+
+  return (
+    <div className="fixed inset-0 z-[60] grid place-items-center bg-black/30 px-6 py-6">
+      <section
+        aria-label="清除壳用户"
+        aria-modal="true"
+        className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-[var(--lxxl-border)] bg-white shadow-2xl"
+        role="dialog"
+      >
+        <div className="border-b border-[var(--lxxl-border)] px-6 py-5">
+          <h3 className="text-lg font-semibold">清除壳用户</h3>
+          <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">
+            以下为当前检测到的无手机号壳用户。可取消勾选后，再点击确认删除；含业务数据的账号不可删除。
+          </p>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+          {loading ? (
+            <div className="py-10 text-center text-sm text-[var(--lxxl-muted)]">正在检测壳用户...</div>
+          ) : items.length === 0 ? (
+            <div className="py-10 text-center text-sm text-[var(--lxxl-muted)]">未检测到可清理的壳用户。</div>
+          ) : (
+            <>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3 text-sm text-[var(--lxxl-muted)]">
+                <span>
+                  共 {items.length} 个，可删除 {deletableItems.length} 个，已选 {selectedDeletableCount}{" "}
+                  个
+                </span>
+                {deletableItems.length > 0 && (
+                  <label className="inline-flex cursor-pointer items-center gap-2">
+                    <input
+                      checked={allDeletableSelected}
+                      disabled={submitting}
+                      type="checkbox"
+                      onChange={(event) => onToggleAll(event.target.checked)}
+                    />
+                    <span>全选可删除</span>
+                  </label>
+                )}
+              </div>
+              <div className="divide-y divide-[var(--lxxl-border)] rounded-xl border border-[var(--lxxl-border)]">
+                {items.map((item) => {
+                  const displayName =
+                    item.realName || item.nickname || (item.openId ? `OpenID ${item.openId}` : `账号 #${item.id}`);
+                  return (
+                    <label
+                      className={`flex items-start gap-3 px-4 py-3 ${
+                        item.canDelete ? "cursor-pointer" : "cursor-not-allowed bg-[#FAF8F4] opacity-80"
+                      }`}
+                      key={item.id}
+                    >
+                      <input
+                        checked={item.canDelete && selectedIds.has(item.id)}
+                        className="mt-1"
+                        disabled={!item.canDelete || submitting}
+                        type="checkbox"
+                        onChange={(event) => onToggle(item.id, event.target.checked)}
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="flex flex-wrap items-center gap-2">
+                          <span className="font-medium text-[var(--lxxl-text)]">{displayName}</span>
+                          <Badge tone={item.canDelete ? "green" : "red"}>
+                            {item.canDelete ? "可删除" : "不可删除"}
+                          </Badge>
+                          {!item.isActive && <Badge tone="neutral">已停用</Badge>}
+                        </span>
+                        <span className="mt-1 block text-xs text-[var(--lxxl-muted)]">
+                          ID {item.id}
+                          {item.createdAt ? ` · 创建于 ${formatDateTime(item.createdAt)}` : ""}
+                        </span>
+                        {!item.canDelete && item.skipReason && (
+                          <span className="mt-1 block text-xs text-[#B34B43]">{item.skipReason}</span>
+                        )}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="flex flex-wrap gap-3 border-t border-[var(--lxxl-border)] px-6 py-4">
+          <QueryButton
+            className="w-auto min-w-28"
+            disabled={loading || submitting || selectedDeletableCount === 0}
+            onClick={onConfirm}
+          >
+            {submitting ? "删除中..." : `确认删除${selectedDeletableCount > 0 ? `（${selectedDeletableCount}）` : ""}`}
+          </QueryButton>
+          <QueryResetButton disabled={submitting} onClick={onClose}>
+            取消
+          </QueryResetButton>
+        </div>
+      </section>
     </div>
   );
 }

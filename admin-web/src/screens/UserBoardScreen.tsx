@@ -5,6 +5,8 @@ import type { SetStateAction } from "react";
 import { useRouter } from "next/navigation";
 
 import {
+  cleanupShellUsers,
+  fetchShellUsers,
   fetchUserBoard,
   fetchUserBoardDetail,
   fetchPatientContractArtifact,
@@ -17,7 +19,7 @@ import { searchProxyCounselors } from "@/services/proxyBooking";
 import { AppRoute, useAppRoute } from "@/components/AppRoute";
 import { UserBoardPanel, type UserProxyBookingTarget } from "@/panels/UserBoardPanel";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
-import type { ProxyPersonOption, UserBoardDetail } from "@/types/api";
+import type { ProxyPersonOption, ShellUserCandidate, UserBoardDetail } from "@/types/api";
 import { downloadContractPdf } from "@/lib/download-contract-pdf";
 import type { ScreenData, UserBoardFilters } from "@/types/app";
 
@@ -36,7 +38,7 @@ export function UserBoardScreen() {
 
 function UserBoardScreenContent() {
   const router = useRouter();
-  const { clearNotice, refreshKey, showNotice } = useAppRoute();
+  const { clearNotice, isAdmin, refreshKey, showNotice } = useAppRoute();
   const [data, setData] = useState<ScreenData>({});
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
@@ -46,10 +48,16 @@ function UserBoardScreenContent() {
   const [remarkSavingAccountId, setRemarkSavingAccountId] = useState<number>();
   const [sourceSavingAccountId, setSourceSavingAccountId] = useState<number>();
   const [contractDownloadingAccountId, setContractDownloadingAccountId] = useState<number>();
+  const [shellCleanupOpen, setShellCleanupOpen] = useState(false);
+  const [shellCleanupLoading, setShellCleanupLoading] = useState(false);
+  const [shellCleanupSubmitting, setShellCleanupSubmitting] = useState(false);
+  const [shellUsers, setShellUsers] = useState<ShellUserCandidate[]>([]);
+  const [shellSelectedIds, setShellSelectedIds] = useState<Set<number>>(() => new Set());
   const [filters, setFilters] = useState<UserBoardFilters>(INITIAL_USER_BOARD_FILTERS);
   const [draftFilters, setDraftFilters] = useState<UserBoardFilters>(INITIAL_USER_BOARD_FILTERS);
   const listRequestSeq = useRef(0);
   const detailRequestSeq = useRef(0);
+  const shellRequestSeq = useRef(0);
   const selectedAccountIdRef = useRef<number | undefined>(undefined);
 
   const loadData = useCallback(async () => {
@@ -336,6 +344,93 @@ function UserBoardScreenContent() {
     }
   }, [clearNotice, showNotice]);
 
+  const closeShellCleanup = useCallback(() => {
+    if (shellCleanupSubmitting) {
+      return;
+    }
+    shellRequestSeq.current += 1;
+    setShellCleanupOpen(false);
+    setShellCleanupLoading(false);
+    setShellUsers([]);
+    setShellSelectedIds(new Set());
+  }, [shellCleanupSubmitting]);
+
+  const openShellCleanup = useCallback(async () => {
+    const requestSeq = shellRequestSeq.current + 1;
+    shellRequestSeq.current = requestSeq;
+    clearNotice();
+    setShellCleanupOpen(true);
+    setShellCleanupLoading(true);
+    setShellUsers([]);
+    setShellSelectedIds(new Set());
+    try {
+      const result = await fetchShellUsers();
+      if (shellRequestSeq.current !== requestSeq) {
+        return;
+      }
+      const items = result.items || [];
+      setShellUsers(items);
+      setShellSelectedIds(new Set(items.filter((item) => item.canDelete).map((item) => item.id)));
+    } catch (error) {
+      if (shellRequestSeq.current === requestSeq) {
+        setShellCleanupOpen(false);
+        showNotice("error", error instanceof Error ? error.message : "壳用户列表加载失败");
+      }
+    } finally {
+      if (shellRequestSeq.current === requestSeq) {
+        setShellCleanupLoading(false);
+      }
+    }
+  }, [clearNotice, showNotice]);
+
+  const toggleShellUser = useCallback((accountId: number, checked: boolean) => {
+    setShellSelectedIds((current) => {
+      const next = new Set(current);
+      if (checked) {
+        next.add(accountId);
+      } else {
+        next.delete(accountId);
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleAllShellUsers = useCallback(
+    (checked: boolean) => {
+      if (!checked) {
+        setShellSelectedIds(new Set());
+        return;
+      }
+      setShellSelectedIds(
+        new Set(shellUsers.filter((item) => item.canDelete).map((item) => item.id)),
+      );
+    },
+    [shellUsers],
+  );
+
+  const confirmShellCleanup = useCallback(async () => {
+    const accountIds = Array.from(shellSelectedIds);
+    if (accountIds.length === 0) {
+      showNotice("error", "请至少勾选一个可删除的壳用户");
+      return;
+    }
+    clearNotice();
+    setShellCleanupSubmitting(true);
+    try {
+      const result = await cleanupShellUsers(accountIds);
+      shellRequestSeq.current += 1;
+      setShellCleanupOpen(false);
+      setShellUsers([]);
+      setShellSelectedIds(new Set());
+      showNotice("success", result.message || `已清理 ${result.deletedCount} 个壳用户`);
+      await loadData();
+    } catch (error) {
+      showNotice("error", error instanceof Error ? error.message : "壳用户清理失败");
+    } finally {
+      setShellCleanupSubmitting(false);
+    }
+  }, [clearNotice, loadData, shellSelectedIds, showNotice]);
+
   return (
     <UserBoardPanel
       users={data.userBoard}
@@ -360,6 +455,17 @@ function UserBoardScreenContent() {
       onSaveSource={savePatientSource}
       contractDownloading={contractDownloadingAccountId === selectedUserBoard?.profile.id}
       onDownloadContract={downloadContract}
+      canCleanupShellUsers={isAdmin}
+      shellCleanupOpen={shellCleanupOpen}
+      shellCleanupLoading={shellCleanupLoading}
+      shellCleanupSubmitting={shellCleanupSubmitting}
+      shellUsers={shellUsers}
+      shellSelectedIds={shellSelectedIds}
+      onOpenShellCleanup={() => void openShellCleanup()}
+      onCloseShellCleanup={closeShellCleanup}
+      onToggleShellUser={toggleShellUser}
+      onToggleAllShellUsers={toggleAllShellUsers}
+      onConfirmShellCleanup={() => void confirmShellCleanup()}
     />
   );
 }
