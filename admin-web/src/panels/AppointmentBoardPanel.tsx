@@ -147,6 +147,7 @@ export function AppointmentBoardPanel({
         <RoomBoard
           date={date}
           rooms={boardRooms}
+          sourceRooms={rooms}
           appointments={appointments}
           roomDayStatus={roomDayStatus}
           onOpenAppointment={openAppointmentStatus}
@@ -170,6 +171,7 @@ export function AppointmentBoardPanel({
 function RoomBoard({
   date,
   rooms,
+  sourceRooms,
   appointments,
   roomDayStatus,
   onOpenAppointment,
@@ -177,6 +179,7 @@ function RoomBoard({
 }: {
   date: string;
   rooms: BoardRoom[];
+  sourceRooms: Room[];
   appointments: BoardAppointment[];
   roomDayStatus?: RoomDayStatus;
   onOpenAppointment: (appointment: BoardAppointment) => void;
@@ -265,7 +268,7 @@ function RoomBoard({
             >
               {rooms.map((room) => {
                 const roomAppointments = appointments.filter(
-                  (item) => appointmentRoomKey(item) === room.key,
+                  (item) => appointmentRoomKey(item, sourceRooms) === room.key,
                 );
                 return (
                   <div
@@ -428,8 +431,14 @@ function AppointmentList({
               <td className="px-5 py-4">
                 {formatPatientNameWithContractTag(item.patientName, item.patientContractTag) || "-"}
               </td>
-              <td className="px-5 py-4 text-[var(--lxxl-muted)]">{item.centerName || "-"}</td>
-              <td className="px-5 py-4 text-[var(--lxxl-muted)]">{item.roomName || (item.centerId === "video" ? "视频咨询" : "未分配")}</td>
+              <td className="px-5 py-4 text-[var(--lxxl-muted)]">
+                {item.centerId === "video" && item.roomId
+                  ? `${item.centerName || "视频咨询"}（线下室）`
+                  : item.centerName || "-"}
+              </td>
+              <td className="px-5 py-4 text-[var(--lxxl-muted)]">
+                {item.roomName || (item.centerId === "video" ? "视频咨询" : "未分配")}
+              </td>
               <td className="px-5 py-4 text-right">
                 <div className="flex justify-end gap-2">
                   {displayStatus(item) === "PENDING_PAYMENT" && item.canCancelPending && (
@@ -537,7 +546,7 @@ function buildBoardRooms(rooms: Room[], appointments: BoardAppointment[]): Board
       status: "AVAILABLE",
     },
   ];
-  if (appointments.some((item) => !result.some((room) => room.key === appointmentRoomKey(item)))) {
+  if (appointments.some((item) => !result.some((room) => room.key === appointmentRoomKey(item, rooms)))) {
     result.push({
       key: "unassigned:unassigned",
       databaseId: null,
@@ -551,8 +560,30 @@ function buildBoardRooms(rooms: Room[], appointments: BoardAppointment[]): Board
   return result;
 }
 
-function appointmentRoomKey(item: BoardAppointment) {
-  if (item.centerId === "video") return "video:video";
+/** 由咨询室 code 解析线下中心（视频咨询占用线下室时用）。 */
+function physicalCenterIdForRoom(roomId: string, rooms: Room[]): string | null {
+  const matched = rooms.find(
+    (room) => room.roomCode === roomId && room.centerId !== "video" && room.centerId !== "unassigned",
+  );
+  if (matched?.centerId) return matched.centerId;
+  const prefix = roomId.split("-")[0]?.trim();
+  if (prefix && prefix !== "video" && prefix !== "unassigned") return prefix;
+  return null;
+}
+
+/**
+ * 看板列归属：
+ * - 视频咨询且未选线下室 → 线上「视频咨询」列
+ * - 视频咨询且已选/已占线下室 → 对应线下咨询室列
+ * - 线下预约 → 对应中心咨询室列
+ */
+function appointmentRoomKey(item: BoardAppointment, rooms: Room[] = []) {
+  if (item.centerId === "video") {
+    if (!item.roomId) return "video:video";
+    const physicalCenter = physicalCenterIdForRoom(item.roomId, rooms);
+    if (physicalCenter) return `${physicalCenter}:${item.roomId}`;
+    return "unassigned:unassigned";
+  }
   if (!item.centerId || !item.roomId) return "unassigned:unassigned";
   return `${item.centerId}:${item.roomId}`;
 }

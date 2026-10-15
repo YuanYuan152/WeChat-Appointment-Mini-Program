@@ -51,6 +51,7 @@ from schedule_meta import (
     center_display_name, room_display_name, get_consultation_rooms,
     get_all_consultation_rooms, CENTER_NAMES, parse_center_id, parse_room_id,
     display_room_id, assign_room_to_note, schedule_note,
+    resolve_room_physical_center_id,
 )
 from schedule_slots import (
     all_slot_bounds_for_date, rolling_window_end, ROLLING_WINDOW_DAYS,
@@ -1008,7 +1009,11 @@ def ops_schedules_overview(
                 "centerId": center_id,
                 "centerName": center_display_name(center_id),
                 "roomId": room_id,
-                "roomName": room_display_name(center_id, room_id, db),
+                "roomName": room_display_name(
+                    resolve_room_physical_center_id(room_id, db) or center_id,
+                    room_id,
+                    db,
+                ),
                 "patientName": patient_name,
                 "patientContractTag": patient_contract_tag,
             })
