@@ -644,6 +644,17 @@ type ListTimeFilter = 'all' | 'today' | 'week' | 'month'
 type ListStatusFilter = 'ALL' | 'OPEN' | 'BOOKED' | 'DONE' | 'UNRECORDED' | 'RECORDED' | 'ON_LEAVE' | 'EXPIRED'
 type CalendarDotStatus = ScheduleDisplayStatus | 'RECORDED'
 
+const props = withDefaults(
+  defineProps<{
+    initialListFilter?: {
+      time?: ListTimeFilter
+      status?: ListStatusFilter
+      expand?: boolean
+    } | null
+  }>(),
+  { initialListFilter: null },
+)
+
 const listTimeOptions: { value: ListTimeFilter; label: string }[] = [
   { value: 'all', label: '全部' },
   { value: 'today', label: '今天' },
@@ -656,7 +667,7 @@ const listStatusOptions: { value: ListStatusFilter; label: string }[] = [
   { value: 'OPEN', label: '已排期' },
   { value: 'BOOKED', label: '已预约' },
   { value: 'DONE', label: '已完成' },
-  { value: 'UNRECORDED', label: '未填咨询记录' },
+  { value: 'UNRECORDED', label: '未填写咨询记录' },
   { value: 'RECORDED', label: '咨询已填写' },
   { value: 'ON_LEAVE', label: '已请假' },
   { value: 'EXPIRED', label: '已过期' },
@@ -1810,11 +1821,16 @@ const submitSlot = () => {
 
 onMounted(() => {
   if (!selectedCalendarDate.value) selectedCalendarDate.value = formatDateLocal()
-  void loadMonthCalendar()
   void refreshSubscribeHint()
   fetchSystemSettings().then(data => {
     proxyOrderTtlMinutes.value = data.proxyOrderTtlMinutes
   })
+  // 个人中心「咨询记录填写」等入口：直接进入普通模式 + 时间段全部 + 未填写咨询记录
+  if (props.initialListFilter?.status || props.initialListFilter?.time) {
+    void applyListFilter(props.initialListFilter)
+    return
+  }
+  void loadMonthCalendar()
 })
 
 const refresh = async () => {

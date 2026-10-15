@@ -21,19 +21,28 @@
       </view>
     </view>
 
-    <SchedulePanel v-show="activeTab === 'schedule'" ref="scheduleRef" />
+    <SchedulePanel
+      v-show="activeTab === 'schedule'"
+      ref="scheduleRef"
+      :initial-list-filter="initialListFilter"
+    />
     <DashboardPanel v-if="dashboardMounted" v-show="activeTab === 'dashboard'" ref="dashboardRef" />
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { nextTick, ref } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import StaffWorkbenchNavBar from '@/components/StaffWorkbenchNavBar.vue'
 import SchedulePanel from './schedule-panel.vue'
 import DashboardPanel from './dashboard-panel.vue'
 
 type WorkbenchTab = 'schedule' | 'dashboard'
+type InitialListFilter = {
+  time?: 'all' | 'today' | 'week' | 'month'
+  status?: 'ALL' | 'OPEN' | 'BOOKED' | 'DONE' | 'UNRECORDED' | 'RECORDED' | 'ON_LEAVE' | 'EXPIRED'
+  expand?: boolean
+}
 
 const activeTab = ref<WorkbenchTab>('schedule')
 const dashboardMounted = ref(false)
@@ -42,6 +51,8 @@ const dashboardRef = ref<InstanceType<typeof DashboardPanel> | null>(null)
 const pendingScheduleId = ref(0)
 const preferDashboard = ref(false)
 const preferScheduleFilter = ref<'unrecorded' | ''>('')
+/** 个人中心「咨询记录填写」等入口：挂载时即进入普通模式并套用筛选 */
+const initialListFilter = ref<InitialListFilter | null>(null)
 
 const switchTab = (tab: WorkbenchTab) => {
   activeTab.value = tab
@@ -50,23 +61,35 @@ const switchTab = (tab: WorkbenchTab) => {
   if (tab === 'dashboard') dashboardRef.value?.refresh?.()
 }
 
+const waitForSchedulePanel = async (retries = 30) => {
+  for (let i = 0; i < retries; i++) {
+    if (scheduleRef.value?.applyListFilter) return scheduleRef.value
+    await nextTick()
+    await new Promise((resolve) => setTimeout(resolve, 32))
+  }
+  return scheduleRef.value
+}
+
 const applyPendingFocus = async () => {
   if (!pendingScheduleId.value) return
   const scheduleId = pendingScheduleId.value
   pendingScheduleId.value = 0
-  await scheduleRef.value?.focusScheduleId?.(scheduleId)
+  const panel = await waitForSchedulePanel()
+  await panel?.focusScheduleId?.(scheduleId)
 }
 
 const applyPendingScheduleFilter = async () => {
   if (!preferScheduleFilter.value) return
   const filter = preferScheduleFilter.value
-  preferScheduleFilter.value = ''
   activeTab.value = 'schedule'
+  const panel = await waitForSchedulePanel()
+  if (!panel?.applyListFilter) return
+  preferScheduleFilter.value = ''
   if (filter === 'unrecorded') {
-    // applyListFilter 内会切换普通模式并加载近 60 天列表，勿先 refresh 日历以免漏数
-    await scheduleRef.value?.applyListFilter?.({ status: 'UNRECORDED', time: 'all' })
+    // 时间段：全部；状态：未填写咨询记录；普通模式
+    await panel.applyListFilter({ status: 'UNRECORDED', time: 'all', expand: true })
   } else {
-    await scheduleRef.value?.refresh?.()
+    await panel.refresh?.()
   }
 }
 
@@ -79,6 +102,7 @@ onLoad((options?: Record<string, string | undefined>) => {
   }
   if (options?.scheduleFilter === 'unrecorded') {
     preferScheduleFilter.value = 'unrecorded'
+    initialListFilter.value = { status: 'UNRECORDED', time: 'all', expand: true }
   }
 })
 
