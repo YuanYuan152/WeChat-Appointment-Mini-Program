@@ -23,6 +23,7 @@ import type {
   RoomDetail,
   RoomDetailSlot,
   RoomSlotManualStatus,
+  RoomSlotStatusUpdate,
   RoomStatus,
   RoomStatusSnapshot,
   ScheduleRoomOptions,
@@ -35,7 +36,13 @@ const FIXED_TIME_SLOTS = [9, 10, 11, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
   ),
 ).filter((time) => time !== "23:30");
 type RoomEditableStatus = Exclude<RoomSlotManualStatus, "MAINTENANCE">;
-const ROOM_STATUS_OPTIONS: RoomEditableStatus[] = ["AVAILABLE", "DISABLED"];
+/** 咨询室全局状态：不含占用（占用按时段设置）。 */
+const ROOM_GLOBAL_STATUS_OPTIONS: Array<Exclude<RoomEditableStatus, "OCCUPIED">> = [
+  "AVAILABLE",
+  "DISABLED",
+];
+const SLOT_STATUS_OPTIONS: RoomEditableStatus[] = ["AVAILABLE", "DISABLED", "OCCUPIED"];
+type SlotDraft = { status: RoomEditableStatus; note: string };
 
 export function RoomsPanel({
   rooms,
@@ -82,7 +89,7 @@ export function RoomsPanel({
   onSaveRoom: (roomId: number, input: { name: string; status: string }) => Promise<void>;
   onSaveSlotStatuses: (
     roomId: number,
-    slots: Array<{ startTime: string; status: RoomSlotManualStatus }>,
+    slots: RoomSlotStatusUpdate[],
   ) => Promise<void>;
   onAddRoom: (input: { centerId: string; name: string; roomCode?: string; status: string }) => Promise<boolean>;
   onRenameRoom: (input: {
@@ -121,7 +128,7 @@ export function RoomsPanel({
                 快照：{snapshotText}。支持按预约中心、日期和半小时时段查询。
               </p>
               <p className="mt-1 text-sm leading-6 text-[var(--lxxl-muted)]">
-                咨询室状态控制整间房间是否可约；时段状态按半小时维护可用/停用，已过时段不可修改，停用后对应时间不可预约。
+                咨询室状态控制整间房间是否可约；时段状态按半小时维护可用/停用/占用，已过时段不可修改。停用或占用后对应时间不可预约；占用可设置连续时段与备注。
               </p>
             </div>
             <button
@@ -222,7 +229,17 @@ export function RoomsPanel({
                           <Badge tone={roomStatusTone(room.status)}>{roomStatusLabel(room.status)}</Badge>
                         </td>
                         <td className="px-5 py-4">
-                          <Badge tone={snapshot?.occupancy === "IN_SESSION" ? "gold" : "green"}>
+                          <Badge
+                            tone={
+                              snapshot?.occupancy === "IN_SESSION"
+                                ? "gold"
+                                : snapshot?.occupancy === "OCCUPIED"
+                                  ? "neutral"
+                                  : snapshot?.occupancy === "DISABLED"
+                                    ? "neutral"
+                                    : "green"
+                            }
+                          >
                             {roomStatusLabel(snapshot?.occupancy)}
                           </Badge>
                         </td>
@@ -334,7 +351,7 @@ export function RoomDetailPanel({
   onSaveRoom: (roomId: number, input: { name: string; status: string }) => Promise<void>;
   onSaveSlotStatuses: (
     roomId: number,
-    slots: Array<{ startTime: string; status: RoomSlotManualStatus }>,
+    slots: RoomSlotStatusUpdate[],
   ) => Promise<void>;
   onChangeScheduleRoom: (scheduleId: number, roomCode: string) => Promise<void>;
   onClose: () => void;
@@ -344,7 +361,12 @@ export function RoomDetailPanel({
   const [name, setName] = useState(room.name);
   const [status, setStatus] = useState<RoomEditableStatus>(() => normalizeEditableRoomStatus(room.status));
   const [targetRoomCode, setTargetRoomCode] = useState("");
-  const [slotStatusDrafts, setSlotStatusDrafts] = useState<Record<string, RoomEditableStatus>>({});
+  const [slotStatusDrafts, setSlotStatusDrafts] = useState<Record<string, SlotDraft>>({});
+  const [occupyDate, setOccupyDate] = useState(() => room.days[0]?.date || getLocalDateValue());
+  const [occupyStart, setOccupyStart] = useState(FIXED_TIME_SLOTS[0] || "09:00");
+  const [occupyEnd, setOccupyEnd] = useState(FIXED_TIME_SLOTS[1] || "09:30");
+  const [occupyNote, setOccupyNote] = useState("");
+  const [occupyError, setOccupyError] = useState("");
 
   useEffect(() => {
     setName(room.name);
@@ -356,28 +378,98 @@ export function RoomDetailPanel({
   }, [roomOptions]);
 
   useEffect(() => {
-    const next: Record<string, RoomEditableStatus> = {};
+    const next: Record<string, SlotDraft> = {};
     for (const day of room.days) {
       for (const slot of day.slots) {
         if (slot.startTime) {
-          next[slot.startTime] = normalizeSlotStatus(slot.manualStatus);
+          next[slot.startTime] = {
+            status: normalizeSlotStatus(slot.manualStatus),
+            note: slot.note || "",
+          };
         }
       }
     }
     setSlotStatusDrafts(next);
+    if (room.days[0]?.date) {
+      setOccupyDate(room.days[0].date);
+    }
   }, [room.id, room.days]);
 
   const changedSlots = room.days.flatMap((day) =>
     day.slots
       .filter((slot) => slot.startTime && slot.editable && !slot.past)
-      .map((slot) => ({
-        startTime: slot.startTime as string,
-        original: normalizeSlotStatus(slot.manualStatus),
-        status: slotStatusDrafts[slot.startTime as string] || normalizeSlotStatus(slot.manualStatus),
-      }))
-      .filter((slot) => slot.status !== slot.original)
-      .map(({ startTime, status: nextStatus }) => ({ startTime, status: nextStatus })),
+      .map((slot) => {
+        const startTime = slot.startTime as string;
+        const draft = slotStatusDrafts[startTime] || {
+          status: normalizeSlotStatus(slot.manualStatus),
+          note: slot.note || "",
+        };
+        const originalStatus = normalizeSlotStatus(slot.manualStatus);
+        const originalNote = slot.note || "";
+        const noteChanged =
+          draft.status === "OCCUPIED"
+            ? (draft.note || "").trim() !== originalNote.trim()
+            : false;
+        return {
+          startTime,
+          originalStatus,
+          status: draft.status,
+          note: draft.status === "OCCUPIED" ? draft.note.trim() : null,
+          changed: draft.status !== originalStatus || noteChanged,
+        };
+      })
+      .filter((slot) => slot.changed)
+      .map(({ startTime, status: nextStatus, note }) => ({
+        startTime,
+        status: nextStatus,
+        note,
+      })),
   );
+
+  const applyOccupyRange = () => {
+    setOccupyError("");
+    const day = room.days.find((item) => item.date === occupyDate);
+    if (!day) {
+      setOccupyError("所选日期不在可编辑范围内");
+      return;
+    }
+    const startIndex = FIXED_TIME_SLOTS.indexOf(occupyStart);
+    const endIndex = FIXED_TIME_SLOTS.indexOf(occupyEnd);
+    if (startIndex < 0 || endIndex < 0 || endIndex < startIndex) {
+      setOccupyError("请选择连续的开始与结束时段（结束不早于开始）");
+      return;
+    }
+    const selectedKeys = FIXED_TIME_SLOTS.slice(startIndex, endIndex + 1);
+    const editableSlots = day.slots.filter(
+      (slot) =>
+        slot.startTime
+        && slot.editable
+        && !slot.past
+        && selectedKeys.includes(slot.key),
+    );
+    if (editableSlots.length === 0) {
+      setOccupyError("所选连续时段内没有可调整的空闲时段");
+      return;
+    }
+    const editableKeys = editableSlots.map((slot) => slot.key).sort();
+    for (let index = 1; index < editableKeys.length; index += 1) {
+      const prev = FIXED_TIME_SLOTS.indexOf(editableKeys[index - 1]);
+      const curr = FIXED_TIME_SLOTS.indexOf(editableKeys[index]);
+      if (curr !== prev + 1) {
+        setOccupyError("占用时段必须连续；所选范围内存在已预约或不可调整时段，请缩小区间");
+        return;
+      }
+    }
+    const note = occupyNote.trim();
+    setSlotStatusDrafts((prev) => {
+      const next = { ...prev };
+      for (const slot of editableSlots) {
+        if (!slot.startTime) continue;
+        next[slot.startTime] = { status: "OCCUPIED", note };
+      }
+      return next;
+    });
+  };
 
   const saveAll = async () => {
     if (!room.id || !name.trim()) {
@@ -465,10 +557,12 @@ export function RoomDetailPanel({
               <QueryField label="状态">
                 <select
                   className={queryControlClass}
-                  value={status}
-                  onChange={(event) => setStatus(event.target.value as RoomEditableStatus)}
+                  value={status === "OCCUPIED" ? "AVAILABLE" : status}
+                  onChange={(event) =>
+                    setStatus(event.target.value as Exclude<RoomEditableStatus, "OCCUPIED">)
+                  }
                 >
-                  {ROOM_STATUS_OPTIONS.map((item) => (
+                  {ROOM_GLOBAL_STATUS_OPTIONS.map((item) => (
                     <option key={item} value={item}>
                       {roomStatusLabel(item)}
                     </option>
@@ -483,9 +577,77 @@ export function RoomDetailPanel({
               <div>
                 <h4 className="text-sm font-semibold">按时段调整状态</h4>
                 <p className="mt-1 text-xs text-[var(--lxxl-muted)]">
-                  以半小时为单位维护可用/停用状态；一次预约占用“50 分钟咨询 + 10 分钟打扫”对应的两个半小时时段。
+                  以半小时为单位维护可用/停用/占用；占用需选择连续时段并可填写备注。一次预约对应“50 分钟咨询 + 10 分钟打扫”两个半小时时段。
                 </p>
               </div>
+            </div>
+            <div className="mt-4 rounded-xl border border-[var(--lxxl-border)] bg-[#FAF8F4] p-4">
+              <h5 className="text-sm font-semibold">批量设为占用（连续时段）</h5>
+              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <QueryField label="日期">
+                  <select
+                    className={queryControlClass}
+                    value={occupyDate}
+                    onChange={(event) => setOccupyDate(event.target.value)}
+                  >
+                    {room.days.map((day) => (
+                      <option key={day.date} value={day.date}>
+                        {day.date}
+                      </option>
+                    ))}
+                  </select>
+                </QueryField>
+                <QueryField label="备注（可选）">
+                  <input
+                    className={queryControlClass}
+                    maxLength={500}
+                    placeholder="例如：设备检修 / 内部会议"
+                    value={occupyNote}
+                    onChange={(event) => setOccupyNote(event.target.value)}
+                  />
+                </QueryField>
+                <QueryField label="开始时段">
+                  <select
+                    className={queryControlClass}
+                    value={occupyStart}
+                    onChange={(event) => setOccupyStart(event.target.value)}
+                  >
+                    {FIXED_TIME_SLOTS.map((slot) => (
+                      <option key={slot} value={slot}>
+                        {slot}
+                      </option>
+                    ))}
+                  </select>
+                </QueryField>
+                <QueryField label="结束时段（含）">
+                  <select
+                    className={queryControlClass}
+                    value={occupyEnd}
+                    onChange={(event) => setOccupyEnd(event.target.value)}
+                  >
+                    {FIXED_TIME_SLOTS.map((slot) => (
+                      <option key={slot} value={slot}>
+                        {slot}
+                      </option>
+                    ))}
+                  </select>
+                </QueryField>
+              </div>
+              {occupyError ? (
+                <p className="mt-2 text-xs text-[#B42318]">{occupyError}</p>
+              ) : (
+                <p className="mt-2 text-xs text-[var(--lxxl-muted)]">
+                  将把所选连续半小时时段设为「占用」，并写入相同备注；仍需点击底部“确认并保存”提交。
+                </p>
+              )}
+              <button
+                className="mt-3 h-9 rounded-xl border border-[var(--lxxl-border)] bg-white px-4 text-sm font-medium text-[var(--lxxl-text)] disabled:opacity-50"
+                type="button"
+                disabled={actionLoading}
+                onClick={applyOccupyRange}
+              >
+                应用到草稿
+              </button>
             </div>
             <div className="mt-3 space-y-3">
               {room.days.map((day) => (
@@ -495,8 +657,11 @@ export function RoomDetailPanel({
                   day={day}
                   defaultOpen={day.date === getLocalDateValue()}
                   slotStatusDrafts={slotStatusDrafts}
-                  onChangeSlot={(startTime, nextStatus) => {
-                    setSlotStatusDrafts((prev) => ({ ...prev, [startTime]: nextStatus }));
+                  onChangeSlot={(startTime, nextDraft) => {
+                    setSlotStatusDrafts((prev) => ({
+                      ...prev,
+                      [startTime]: nextDraft,
+                    }));
                   }}
                 />
               ))}
@@ -536,8 +701,8 @@ function RoomDaySlots({
   day: RoomDetail["days"][number];
   defaultOpen?: boolean;
   actionLoading: boolean;
-  slotStatusDrafts: Record<string, RoomEditableStatus>;
-  onChangeSlot: (startTime: string, status: RoomEditableStatus) => void;
+  slotStatusDrafts: Record<string, SlotDraft>;
+  onChangeSlot: (startTime: string, draft: SlotDraft) => void;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const editableCount = day.slots.filter((slot) => !slot.past && slot.editable && slot.occupancy !== "IN_SESSION").length;
@@ -562,19 +727,25 @@ function RoomDaySlots({
       {open && (
         <div className="divide-y divide-[var(--lxxl-border)] border-t border-[var(--lxxl-border)]">
           {day.slots.map((slot) => {
-            const draftStatus = slot.startTime
-              ? slotStatusDrafts[slot.startTime] || normalizeSlotStatus(slot.manualStatus)
-              : normalizeSlotStatus(slot.manualStatus);
+            const draft = slot.startTime
+              ? slotStatusDrafts[slot.startTime] || {
+                  status: normalizeSlotStatus(slot.manualStatus),
+                  note: slot.note || "",
+                }
+              : {
+                  status: normalizeSlotStatus(slot.manualStatus),
+                  note: slot.note || "",
+                };
             return (
               <RoomSlotRow
                 key={`${day.date}-${slot.key}`}
                 actionLoading={actionLoading}
-                draftStatus={draftStatus}
-                onChange={(nextStatus) => {
+                draft={draft}
+                onChange={(nextDraft) => {
                   if (!slot.startTime) {
                     return;
                   }
-                  onChangeSlot(slot.startTime, nextStatus);
+                  onChangeSlot(slot.startTime, nextDraft);
                 }}
                 slot={slot}
               />
@@ -588,14 +759,14 @@ function RoomDaySlots({
 
 function RoomSlotRow({
   slot,
-  draftStatus,
+  draft,
   actionLoading,
   onChange,
 }: {
   slot: RoomDetailSlot;
-  draftStatus: RoomEditableStatus;
+  draft: SlotDraft;
   actionLoading: boolean;
-  onChange: (status: RoomEditableStatus) => void;
+  onChange: (draft: SlotDraft) => void;
 }) {
   const past = Boolean(slot.past);
   const locked = past || !slot.editable || slot.occupancy === "IN_SESSION";
@@ -603,15 +774,17 @@ function RoomSlotRow({
     ? "neutral"
     : slot.occupancy === "IN_SESSION"
       ? "gold"
-      : slot.occupancy === "IDLE"
-        ? "green"
-        : "neutral";
+      : draft.status === "OCCUPIED" || slot.occupancy === "OCCUPIED"
+        ? "neutral"
+        : slot.occupancy === "IDLE" && draft.status === "AVAILABLE"
+          ? "green"
+          : "neutral";
   const displayStatus =
-    !slot.occupancy || slot.occupancy === "IDLE" ? roomStatusLabel(draftStatus) : roomStatusLabel(slot.occupancy);
+    !slot.occupancy || slot.occupancy === "IDLE" ? roomStatusLabel(draft.status) : roomStatusLabel(slot.occupancy);
 
   return (
     <div
-      className={`grid gap-3 px-4 py-3 text-xs sm:grid-cols-[120px_1fr_150px] sm:items-center ${
+      className={`grid gap-3 px-4 py-3 text-xs sm:grid-cols-[120px_1fr_180px] sm:items-start ${
         past ? "bg-[var(--lxxl-bg)] text-[var(--lxxl-muted)] opacity-70" : ""
       }`}
     >
@@ -644,26 +817,48 @@ function RoomSlotRow({
             {slot.patientContractTag ? ` ${slot.patientContractTag}` : ""}
           </div>
         </div>
+        {draft.status === "OCCUPIED" && draft.note ? (
+          <div className="text-[var(--lxxl-text)]">备注：{draft.note}</div>
+        ) : null}
       </div>
-      <select
-        className={`${queryControlClass} h-9 ${
-          past ? "cursor-not-allowed bg-[var(--lxxl-border)] text-[var(--lxxl-muted)]" : ""
-        }`}
-        disabled={actionLoading || locked}
-        value={draftStatus}
-        onChange={(event) => onChange(event.target.value as RoomEditableStatus)}
-      >
-        {ROOM_STATUS_OPTIONS.map((item) => (
-          <option key={item} value={item}>
-            {roomStatusLabel(item)}
-          </option>
-        ))}
-      </select>
+      <div className="space-y-2">
+        <select
+          className={`${queryControlClass} h-9 ${
+            past ? "cursor-not-allowed bg-[var(--lxxl-border)] text-[var(--lxxl-muted)]" : ""
+          }`}
+          disabled={actionLoading || locked}
+          value={draft.status}
+          onChange={(event) => {
+            const nextStatus = event.target.value as RoomEditableStatus;
+            onChange({
+              status: nextStatus,
+              note: nextStatus === "OCCUPIED" ? draft.note : "",
+            });
+          }}
+        >
+          {SLOT_STATUS_OPTIONS.map((item) => (
+            <option key={item} value={item}>
+              {roomStatusLabel(item)}
+            </option>
+          ))}
+        </select>
+        {draft.status === "OCCUPIED" && !locked ? (
+          <input
+            className={queryControlClass}
+            disabled={actionLoading}
+            maxLength={500}
+            placeholder="占用备注（可选）"
+            value={draft.note}
+            onChange={(event) => onChange({ status: "OCCUPIED", note: event.target.value })}
+          />
+        ) : null}
+      </div>
     </div>
   );
 }
 
 function normalizeSlotStatus(status?: string | null): RoomEditableStatus {
+  if (status === "OCCUPIED") return "OCCUPIED";
   return normalizeEditableRoomStatus(status);
 }
 
@@ -677,6 +872,9 @@ function roomStatusLabel(status?: string | null) {
   }
   if (status === "DISABLED" || status === "MAINTENANCE") {
     return "停用";
+  }
+  if (status === "OCCUPIED") {
+    return "占用";
   }
   if (status === "AVAILABLE" || status === "IDLE") {
     return "可用";

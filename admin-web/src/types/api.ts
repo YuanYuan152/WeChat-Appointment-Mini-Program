@@ -490,6 +490,7 @@ export interface RoomStatus extends Room {
   occupancy?: string;
   label?: string;
   manualStatus?: string;
+  note?: string | null;
   atTime?: string | null;
   scheduleId?: number;
   counselorId?: number;
@@ -518,6 +519,7 @@ export interface RoomDayStatus {
     slots: Array<{
       timeSlot: string;
       status: string;
+      note?: string | null;
     }>;
   }>;
 }
@@ -531,6 +533,7 @@ export interface RoomDetailSlot {
   occupancy?: string | null;
   statusLabel?: string | null;
   manualStatus?: string | null;
+  note?: string | null;
   editable: boolean;
   scheduleId?: number | null;
   counselorId?: number | null;
@@ -544,7 +547,13 @@ export interface RoomDetailSlot {
   scheduleStatus?: string | null;
 }
 
-export type RoomSlotManualStatus = "AVAILABLE" | "MAINTENANCE" | "DISABLED";
+export type RoomSlotManualStatus = "AVAILABLE" | "MAINTENANCE" | "DISABLED" | "OCCUPIED";
+
+export interface RoomSlotStatusUpdate {
+  startTime: string;
+  status: RoomSlotManualStatus;
+  note?: string | null;
+}
 
 export interface RoomDetailDay {
   date: string;

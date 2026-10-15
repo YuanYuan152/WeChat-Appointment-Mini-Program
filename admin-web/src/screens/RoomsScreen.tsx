@@ -240,7 +240,7 @@ function RoomsScreenContent() {
   }, [loadData, selectedRoom, showNotice]);
 
   const saveSlotStatuses = useCallback(
-    async (roomId: number, slots: Array<{ startTime: string; status: RoomSlotManualStatus }>) => {
+    async (roomId: number, slots: Array<{ startTime: string; status: RoomSlotManualStatus; note?: string | null }>) => {
       setActionLoading(true);
       try {
         await saveRoomSlotStatuses(roomId, slots);

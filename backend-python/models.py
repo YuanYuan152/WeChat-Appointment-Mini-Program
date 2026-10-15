@@ -796,6 +796,7 @@ class AppConsultationRoomSlot(Base):
     RoomId = Column(Integer, nullable=False, index=True)
     StartTime = Column(DateTime, nullable=False)
     Status = Column(String(20), nullable=False, default="AVAILABLE")
+    Note = Column(Unicode(500), nullable=True)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
     UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
 

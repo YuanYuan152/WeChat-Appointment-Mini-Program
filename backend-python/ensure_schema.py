@@ -452,6 +452,22 @@ def ensure_app_activity_columns():
             print(f"[OK] Added AppActivity.{name}")
 
 
+def ensure_consultation_room_slot_columns():
+    inspector = inspect(engine)
+    if "AppConsultationRoomSlot" not in inspector.get_table_names():
+        return
+    existing = {col["name"] for col in inspector.get_columns("AppConsultationRoomSlot")}
+    missing = []
+    if "Note" not in existing:
+        missing.append(("Note", "NVARCHAR(500) NULL"))
+    if not missing:
+        return
+    with engine.begin() as conn:
+        for name, ddl in missing:
+            conn.execute(text(f"ALTER TABLE [dbo].[AppConsultationRoomSlot] ADD [{name}] {ddl}"))
+            print(f"[OK] Added AppConsultationRoomSlot.{name}")
+
+
 def print_summary():
     inspector = inspect(engine)
     tables = [name for name in inspector.get_table_names() if name.startswith("App")]
@@ -479,6 +495,7 @@ def main():
     ensure_counselor_patient_pricing_columns()
     ensure_app_site_page_columns()
     ensure_app_activity_columns()
+    ensure_consultation_room_slot_columns()
     from database import SessionLocal
     from charity_milestone_service import backfill_charity_negotiation_state
     db = SessionLocal()

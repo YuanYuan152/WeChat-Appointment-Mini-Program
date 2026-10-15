@@ -20,7 +20,7 @@
       </view>
 
       <view class="tip-card">
-        <text class="tip-text">点击可编辑的时段设置「可用 / 停用」，已预约时段仅可查看详情；修改后请点击底部「保存」生效</text>
+        <text class="tip-text">点击可编辑的时段设置「可用 / 停用」；占用由后台设置，此处仅展示（可改为可用/停用）；已预约时段仅可查看详情；修改后请点击底部「保存」生效</text>
       </view>
 
       <view class="legend-card">
@@ -48,6 +48,10 @@
             </text>
             <text class="slot-time">{{ slot.timeLabel }}</text>
             <text class="slot-status">{{ slotStatusText(day.date, slot) }}</text>
+            <text
+              v-if="displayStatus(day.date, slot) === 'OCCUPIED' && slot.note"
+              class="slot-note"
+            >备注：{{ slot.note }}</text>
             <text v-if="slot.counselorName && slot.occupancy !== 'IN_SESSION'" class="slot-meta">{{ slot.counselorName }}</text>
             <text v-if="isSlotDraft(day.date, slot)" class="slot-draft">未保存</text>
           </view>
@@ -155,6 +159,8 @@ import { formatDateLocal } from '@/constants/scheduleSlots'
 import { formatPatientInline } from '@/utils/patientContract'
 
 type ManualStatus = 'AVAILABLE' | 'DISABLED'
+/** 展示用状态：含后台设置的占用，不可在小程序新建占用。 */
+type DisplayStatus = ManualStatus | 'OCCUPIED' | 'IN_SESSION'
 
 interface SlotItem {
   key: string
@@ -164,7 +170,8 @@ interface SlotItem {
   past: boolean
   occupancy: string
   statusLabel: string
-  manualStatus: ManualStatus
+  manualStatus: ManualStatus | 'OCCUPIED' | string
+  note?: string | null
   editable: boolean
   counselorName?: string
   counselorMobile?: string
@@ -231,33 +238,41 @@ const statusOptions = [
   { label: '停用', value: 'DISABLED' as ManualStatus },
 ]
 
-const statusClass = (status: ManualStatus | 'IN_SESSION') => ({
+const statusClass = (status: DisplayStatus) => ({
   AVAILABLE: 'available',
   DISABLED: 'disabled',
+  OCCUPIED: 'occupied',
   IN_SESSION: 'in-session',
 }[status] || 'available')
 
-const manualStatusLabel = (status: ManualStatus) => ({
+const displayStatusLabel = (status: DisplayStatus) => ({
   AVAILABLE: '可用',
   DISABLED: '停用',
+  OCCUPIED: '占用',
+  IN_SESSION: '已预约',
 }[status] || status)
+
+const normalizeDisplayStatus = (status?: string | null): ManualStatus | 'OCCUPIED' => {
+  if (status === 'OCCUPIED') return 'OCCUPIED'
+  if (status === 'DISABLED' || status === 'MAINTENANCE') return 'DISABLED'
+  return 'AVAILABLE'
+}
 
 const legend = [
   ...statusOptions.map(opt => ({ ...opt, dotClass: statusClass(opt.value) })),
+  { label: '占用', value: 'OCCUPIED', dotClass: 'occupied' },
   { label: '已预约', value: 'IN_SESSION', dotClass: 'in-session' },
 ]
 
-const currentStatus = computed((): ManualStatus | 'IN_SESSION' => {
+const currentStatus = computed((): DisplayStatus => {
   const occ = detail.value?.current?.occupancy
   if (occ === 'IN_SESSION') return 'IN_SESSION'
+  if (occ === 'OCCUPIED') return 'OCCUPIED'
   if (occ === 'DISABLED') return 'DISABLED'
-  return 'AVAILABLE'
+  return normalizeDisplayStatus(detail.value?.status)
 })
 
-const currentLabel = computed(() => {
-  if (currentStatus.value === 'IN_SESSION') return '已预约'
-  return manualStatusLabel(currentStatus.value)
-})
+const currentLabel = computed(() => displayStatusLabel(currentStatus.value))
 
 const pickerSlotText = computed(() => {
   if (!pickerSlot.value) return ''
@@ -268,12 +283,17 @@ const slotDraftKey = (date: string, slot: SlotItem) => `${date}|${slot.key}`
 
 const slotStartIso = (date: string, slot: SlotItem) => `${date}T${slot.key}:00`
 
-const effectiveStatus = (date: string, slot: SlotItem): ManualStatus =>
-  draftStatuses.value[slotDraftKey(date, slot)] ?? slot.manualStatus ?? 'AVAILABLE'
+const displayStatus = (date: string, slot: SlotItem): ManualStatus | 'OCCUPIED' => {
+  const draft = draftStatuses.value[slotDraftKey(date, slot)]
+  if (draft !== undefined) return draft
+  if (slot.occupancy === 'OCCUPIED') return 'OCCUPIED'
+  return normalizeDisplayStatus(slot.manualStatus)
+}
 
 const isSlotDraft = (date: string, slot: SlotItem) => {
   const draft = draftStatuses.value[slotDraftKey(date, slot)]
-  return draft !== undefined && draft !== slot.manualStatus
+  if (draft === undefined) return false
+  return draft !== normalizeDisplayStatus(slot.manualStatus)
 }
 
 const pendingChanges = computed(() => {
@@ -296,13 +316,13 @@ const hasDraft = computed(() => pendingChanges.value.length > 0)
 
 const slotClass = (date: string, slot: SlotItem) => {
   if (slot.occupancy === 'IN_SESSION') return slot.past ? 'in-session past' : 'in-session'
-  const cls = statusClass(effectiveStatus(date, slot))
+  const cls = statusClass(displayStatus(date, slot))
   return slot.past ? `${cls} past` : cls
 }
 
 const slotStatusText = (date: string, slot: SlotItem) => {
   if (slot.occupancy === 'IN_SESSION') return '已预约点击查看详情'
-  return manualStatusLabel(effectiveStatus(date, slot))
+  return displayStatusLabel(displayStatus(date, slot))
 }
 
 const weekdayLabel = (dateStr: string) => {
@@ -405,7 +425,9 @@ const onSlotTap = (slot: SlotItem, date: string) => {
   }
   pickerSlot.value = slot
   pickerDate.value = date
-  pickerStatus.value = effectiveStatus(date, slot)
+  // 占用仅展示，编辑时改为可用/停用；打开选择器时默认「可用」便于解除占用
+  const current = displayStatus(date, slot)
+  pickerStatus.value = current === 'OCCUPIED' ? 'AVAILABLE' : current
   showPicker.value = true
 }
 
@@ -504,6 +526,7 @@ onLoad((opts) => {
 }
 .current-tag.available { background: #D1FAE5; color: #065F46; }
 .current-tag.disabled { background: #FEE2E2; color: #B91C1C; }
+.current-tag.occupied { background: #E9D5FF; color: #6B21A8; }
 .current-tag.in-session { background: #DBEAFE; color: #1D4ED8; }
 .info-card, .tip-card {
   background: #fff; border-radius: 24rpx; padding: 28rpx; margin-bottom: 24rpx;
@@ -519,6 +542,7 @@ onLoad((opts) => {
 .legend-dot { width: 20rpx; height: 20rpx; border-radius: 6rpx; }
 .legend-dot.available { background: #D1FAE5; }
 .legend-dot.disabled { background: #FECACA; }
+.legend-dot.occupied { background: #E9D5FF; }
 .legend-dot.in-session { background: #BFDBFE; }
 .legend-text { font-size: 22rpx; color: #6B7280; }
 .day-section { margin-bottom: 28rpx; }
@@ -537,8 +561,14 @@ onLoad((opts) => {
 .slot-card.editable { border-style: dashed; }
 .slot-card.available { background: #ECFDF5; border-color: #A7F3D0; }
 .slot-card.disabled { background: #FEF2F2; border-color: #FECACA; }
+.slot-card.occupied { background: #F5F3FF; border-color: #DDD6FE; }
+.slot-card.occupied .slot-status { color: #6B21A8; font-weight: 600; }
 .slot-card.in-session { background: #EFF6FF; border-color: #93C5FD; }
 .slot-card.in-session .slot-status { color: #1D4ED8; font-weight: 600; }
+.slot-note {
+  display: block; margin-top: 4rpx; font-size: 20rpx; color: #7C3AED;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .slot-card.past { opacity: 0.65; }
 .slot-card.draft { box-shadow: 0 0 0 2rpx #F59E0B inset; }
 .slot-time { display: block; font-size: 26rpx; font-weight: 700; color: #374151; }

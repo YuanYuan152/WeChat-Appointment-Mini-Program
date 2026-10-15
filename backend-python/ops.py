@@ -40,10 +40,11 @@ from models import (
 from app_time import china_now
 from room_slot_status import (
     SLOT_STATUSES,
+    normalize_note,
     normalize_slot_start,
-    resolve_slot_manual_status,
+    resolve_slot_manual_detail,
+    slot_detail_map_for_room,
     slot_start_iso,
-    slot_status_map_for_room,
     upsert_slot_statuses,
     is_booking_window_operational,
 )
@@ -824,7 +825,7 @@ def _room_occupancy_at(
 ) -> dict:
     status_slot_start = standard_slot_start_for_status(at_time)
     # 单时段配置优先；未配置时沿用咨询室全局状态，避免停用房间仍显示可用。
-    manual_status = resolve_slot_manual_status(
+    manual_status, manual_note = resolve_slot_manual_detail(
         db, room_db_id, status_slot_start, room_default_status or "AVAILABLE",
     )
     _ = center_id  # 占用按 room_code 跨预约类型统计（含视频咨询占用该线下室）
@@ -841,6 +842,7 @@ def _room_occupancy_at(
             "occupancy": "IN_SESSION",
             "label": "已预约",
             "manualStatus": manual_status,
+            "note": manual_note,
             "slotStartTime": status_slot_start,
             "scheduleId": s.Id,
             "counselorId": s.CounselorId,
@@ -857,14 +859,28 @@ def _room_occupancy_at(
         }
     if manual_status == "DISABLED":
         return {
-            "occupancy": "DISABLED", "label": "停用", "manualStatus": manual_status,
+            "occupancy": "DISABLED",
+            "label": "停用",
+            "manualStatus": manual_status,
+            "note": None,
             "slotStartTime": status_slot_start,
         }
-    idle_label = {"AVAILABLE": "可用", "DISABLED": "停用"}.get(
+    if manual_status == "OCCUPIED":
+        return {
+            "occupancy": "OCCUPIED",
+            "label": "占用",
+            "manualStatus": manual_status,
+            "note": manual_note,
+            "slotStartTime": status_slot_start,
+        }
+    idle_label = {"AVAILABLE": "可用", "DISABLED": "停用", "OCCUPIED": "占用"}.get(
         manual_status, "可用",
     )
     return {
-        "occupancy": "IDLE", "label": idle_label, "manualStatus": manual_status,
+        "occupancy": "IDLE",
+        "label": idle_label,
+        "manualStatus": manual_status,
+        "note": None,
         "slotStartTime": status_slot_start,
     }
 
@@ -1145,6 +1161,7 @@ class RoomUpdate(BaseModel):
 class RoomSlotStatusItem(BaseModel):
     start_time: datetime
     status: str
+    note: Optional[str] = None
 
 
 class RoomSlotStatusBatch(BaseModel):
@@ -1245,19 +1262,15 @@ def rooms_day_status(
     except ValueError:
         raise HTTPException(status_code=400, detail="date 格式应为 YYYY-MM-DD")
 
-    slot_starts = [
-        datetime.combine(day, time(hour, minute))
-        for hour in range(9, 24)
-        for minute in (0, 30)
-    ]
+    slot_starts = [start for start, _ in all_slot_bounds_for_date(day)]
     result = []
     for room in get_all_consultation_rooms(db):
         room_db_id = room.get("dbId")
         default_status = room.get("status", "AVAILABLE")
-        statuses = (
-            slot_status_map_for_room(db, room_db_id, slot_starts, default_status)
+        details = (
+            slot_detail_map_for_room(db, room_db_id, slot_starts, default_status)
             if room_db_id is not None
-            else {slot: default_status for slot in slot_starts}
+            else {slot: (default_status, None) for slot in slot_starts}
         )
         result.append({
             "centerId": room["centerId"],
@@ -1265,7 +1278,8 @@ def rooms_day_status(
             "slots": [
                 {
                     "timeSlot": slot.strftime("%H:%M"),
-                    "status": statuses.get(slot, default_status),
+                    "status": details.get(slot, (default_status, None))[0],
+                    "note": details.get(slot, (default_status, None))[1],
                 }
                 for slot in slot_starts
             ],
@@ -1312,7 +1326,7 @@ def get_room_detail(
             )
         cursor += timedelta(days=1)
 
-    status_by_start = slot_status_map_for_room(
+    detail_by_start = slot_detail_map_for_room(
         db,
         row.Id,
         [st for _, st, _ in all_bounds],
@@ -1324,7 +1338,9 @@ def get_room_detail(
         occ = _room_occupancy_at(
             db, row.CenterId, row.RoomCode, start_dt, row.Status, room_db_id=row.Id,
         )
-        manual_status = status_by_start.get(start_dt, row.Status or "AVAILABLE")
+        manual_status, manual_note = detail_by_start.get(
+            start_dt, (row.Status or "AVAILABLE", None)
+        )
         occupancy = occ.get("occupancy")
         past = start_dt <= now
         editable = (not past) and occupancy != "IN_SESSION"
@@ -1337,6 +1353,7 @@ def get_room_detail(
             "occupancy": occupancy,
             "statusLabel": occ.get("label"),
             "manualStatus": manual_status,
+            "note": occ.get("note") if occupancy == "OCCUPIED" else manual_note,
             "editable": editable,
             "scheduleId": occ.get("scheduleId"),
             "counselorId": occ.get("counselorId"),
@@ -1412,7 +1429,11 @@ def save_room_slot_statuses(
                 status_code=400,
                 detail=f"{start_norm.strftime('%m-%d %H:%M')} 已有预约，不可修改状态",
             )
-        to_save.append({"start_time": start_norm, "status": item.status})
+        try:
+            note = normalize_note(item.note, status=item.status)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        to_save.append({"start_time": start_norm, "status": item.status, "note": note})
 
     try:
         upsert_slot_statuses(db, row.Id, to_save)

@@ -84,7 +84,7 @@ export function deleteRoom(roomId: number) {
 
 export function saveRoomSlotStatuses(
   roomId: number,
-  slots: Array<{ startTime: string; status: RoomSlotManualStatus }>,
+  slots: Array<{ startTime: string; status: RoomSlotManualStatus; note?: string | null }>,
 ) {
   return apiRequest<ApiMessage>(`/api/mini/ops/rooms/${roomId}/slot-statuses`, {
     method: "PUT",
@@ -92,6 +92,7 @@ export function saveRoomSlotStatuses(
       slots: slots.map((slot) => ({
         start_time: slot.startTime,
         status: slot.status,
+        note: slot.status === "OCCUPIED" ? slot.note || null : null,
       })),
     }),
   });

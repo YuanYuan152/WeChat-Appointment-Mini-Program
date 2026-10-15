@@ -67,6 +67,7 @@ def _ensure_db_schema():
             ensure_app_order_columns,
             ensure_app_account_columns,
             ensure_app_site_page_columns,
+            ensure_consultation_room_slot_columns,
             ensure_counselor_profile_columns,
             ensure_leave_request_columns,
             ensure_schedule_cancel_log_columns,
@@ -83,6 +84,7 @@ def _ensure_db_schema():
         ensure_schedule_cancel_log_columns()
         ensure_counselor_profile_columns()
         ensure_app_site_page_columns()
+        ensure_consultation_room_slot_columns()
         from database import SessionLocal
         from charity_milestone_service import backfill_charity_negotiation_state
         db = SessionLocal()

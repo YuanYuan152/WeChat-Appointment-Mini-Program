@@ -138,7 +138,7 @@ function AppointmentBoardScreenContent() {
 
   const saveSlotStatuses = useCallback(async (
     roomId: number,
-    slots: Array<{ startTime: string; status: RoomSlotManualStatus }>,
+    slots: Array<{ startTime: string; status: RoomSlotManualStatus; note?: string | null }>,
   ) => {
     setActionLoading(true);
     try {

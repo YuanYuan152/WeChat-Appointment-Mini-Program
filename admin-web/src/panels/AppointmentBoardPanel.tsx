@@ -80,6 +80,11 @@ export function AppointmentBoardPanel({
 }) {
   const [statusFilter, setStatusFilter] = useState<BoardDisplayStatus | "">("");
   const [consultationIdQuery, setConsultationIdQuery] = useState("");
+  const [occupiedNoteModal, setOccupiedNoteModal] = useState<{
+    roomName: string;
+    timeSlot: string;
+    note: string;
+  } | null>(null);
   const appointments = useMemo(() => flattenAppointments(schedules), [schedules]);
   const boardRooms = useMemo(() => buildBoardRooms(rooms, appointments), [appointments, rooms]);
   const filteredAppointments = useMemo(
@@ -151,6 +156,7 @@ export function AppointmentBoardPanel({
           appointments={appointments}
           roomDayStatus={roomDayStatus}
           onOpenAppointment={openAppointmentStatus}
+          onOpenOccupied={(payload) => setOccupiedNoteModal(payload)}
           onOpenRoom={onOpenRoom}
         />
       ) : (
@@ -164,6 +170,29 @@ export function AppointmentBoardPanel({
           onOpenReschedule={onOpenReschedule}
         />
       )}
+
+      {occupiedNoteModal ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
+            <h3 className="text-lg font-semibold text-[var(--lxxl-text)]">占用备注</h3>
+            <p className="mt-2 text-sm text-[var(--lxxl-muted)]">
+              {occupiedNoteModal.roomName} · {occupiedNoteModal.timeSlot}
+            </p>
+            <div className="mt-4 rounded-xl border border-[var(--lxxl-border)] bg-[#FAF8F4] px-4 py-3 text-sm leading-6 text-[var(--lxxl-text)] whitespace-pre-wrap">
+              {occupiedNoteModal.note || "（无备注）"}
+            </div>
+            <div className="mt-5 flex justify-end">
+              <button
+                type="button"
+                className="h-10 rounded-xl bg-[var(--lxxl-green)] px-5 text-sm font-medium text-white"
+                onClick={() => setOccupiedNoteModal(null)}
+              >
+                关闭
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -175,6 +204,7 @@ function RoomBoard({
   appointments,
   roomDayStatus,
   onOpenAppointment,
+  onOpenOccupied,
   onOpenRoom,
 }: {
   date: string;
@@ -183,6 +213,7 @@ function RoomBoard({
   appointments: BoardAppointment[];
   roomDayStatus?: RoomDayStatus;
   onOpenAppointment: (appointment: BoardAppointment) => void;
+  onOpenOccupied: (payload: { roomName: string; timeSlot: string; note: string }) => void;
   onOpenRoom: (room: Room) => void;
 }) {
   const timeSlots = buildTimeSlots();
@@ -199,6 +230,14 @@ function RoomBoard({
             <span>{meta.label}</span>
           </div>
         ))}
+        <div className="flex items-center gap-2 text-xs text-[var(--lxxl-muted)]">
+          <span className="h-3 w-7 rounded-full bg-[#E9D5FF]" />
+          <span>占用（点击查看备注）</span>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-[var(--lxxl-muted)]">
+          <span className="h-3 w-7 rounded-full bg-[#E5E0D8]" />
+          <span>停用/不可用</span>
+        </div>
       </div>
       <div className="max-h-[calc(100vh-190px)] overflow-auto">
         <div style={{ minWidth: 136 + rooms.length * columnWidth }}>
@@ -280,12 +319,18 @@ function RoomBoard({
                       const slotAppointments = roomAppointments.filter((appointment) =>
                         appointmentOverlapsSlot(appointment, slotStart),
                       );
-                      const unavailable = roomSlotStatus(roomDayStatus, room, slotStart) !== "AVAILABLE";
+                      const slotMeta = roomSlotMeta(roomDayStatus, room, slotStart);
+                      const unavailable = slotMeta.status !== "AVAILABLE";
+                      const occupied = slotMeta.status === "OCCUPIED";
                       return (
                         <div
                           key={`${room.key}-${slot}`}
                           className={`flex flex-col justify-center gap-1 overflow-hidden border-b border-[var(--lxxl-border)] px-1.5 py-1 ${
-                            unavailable ? "bg-[#F6F3EE]" : ""
+                            occupied
+                              ? "bg-[#F3E8FF]"
+                              : unavailable
+                                ? "bg-[#F6F3EE]"
+                                : ""
                           }`}
                           style={{ height: SLOT_HEIGHT }}
                         >
@@ -297,6 +342,21 @@ function RoomBoard({
                                 onClick={() => onOpenAppointment(appointment)}
                               />
                             ))
+                          ) : occupied ? (
+                            <button
+                              type="button"
+                              className="w-full truncate rounded-full bg-[#E9D5FF] px-2 py-1 text-center text-xs font-medium text-[#6B21A8] transition hover:brightness-95"
+                              title={slotMeta.note || "占用（无备注）"}
+                              onClick={() =>
+                                onOpenOccupied({
+                                  roomName: room.roomName,
+                                  timeSlot: slot,
+                                  note: slotMeta.note || "",
+                                })
+                              }
+                            >
+                              占用{slotMeta.note ? " · 有备注" : ""}
+                            </button>
                           ) : unavailable ? (
                             <div className="rounded-full bg-[#E5E0D8] px-2 py-1 text-center text-xs font-medium text-[#756F67]">
                               不可用
@@ -605,14 +665,22 @@ function appointmentOverlapsSlot(appointment: BoardAppointment, slotStart: numbe
   return appointmentStart < slotStart + SLOT_MINUTES && appointmentEnd > slotStart;
 }
 
-function roomSlotStatus(dayStatus: RoomDayStatus | undefined, room: BoardRoom, slotStart: number) {
-  if (room.centerId === "video" || room.centerId === "unassigned") return "AVAILABLE";
+function roomSlotMeta(
+  dayStatus: RoomDayStatus | undefined,
+  room: BoardRoom,
+  slotStart: number,
+): { status: string; note: string } {
+  if (room.centerId === "video" || room.centerId === "unassigned") {
+    return { status: "AVAILABLE", note: "" };
+  }
   const roomStatus = dayStatus?.rooms.find(
     (item) => item.centerId === room.centerId && item.roomCode === room.roomId,
   );
-  return roomStatus?.slots.find((slot) => slot.timeSlot === formatMinutes(slotStart))?.status
-    || room.status
-    || "AVAILABLE";
+  const slot = roomStatus?.slots.find((item) => item.timeSlot === formatMinutes(slotStart));
+  return {
+    status: slot?.status || room.status || "AVAILABLE",
+    note: slot?.note || "",
+  };
 }
 
 function groupRooms(rooms: BoardRoom[]) {
