@@ -346,7 +346,7 @@ function RoomBoard({
                             <button
                               type="button"
                               className="w-full truncate rounded-full bg-[#E9D5FF] px-2 py-1 text-center text-xs font-medium text-[#6B21A8] transition hover:brightness-95"
-                              title={slotMeta.note || "占用（无备注）"}
+                              title={slotMeta.note ? `占用：${slotMeta.note}` : "占用"}
                               onClick={() =>
                                 onOpenOccupied({
                                   roomName: room.roomName,
@@ -355,7 +355,7 @@ function RoomBoard({
                                 })
                               }
                             >
-                              占用{slotMeta.note ? " · 有备注" : ""}
+                              {slotMeta.note ? `占用：${slotMeta.note}` : "占用"}
                             </button>
                           ) : unavailable ? (
                             <div className="rounded-full bg-[#E5E0D8] px-2 py-1 text-center text-xs font-medium text-[#756F67]">
