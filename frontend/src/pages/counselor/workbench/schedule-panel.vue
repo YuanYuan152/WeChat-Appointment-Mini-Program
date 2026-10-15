@@ -59,7 +59,7 @@
             :key="opt.value"
             class="filter-chip"
             :class="{ active: listStatusFilter === opt.value }"
-            @tap="listStatusFilter = opt.value"
+            @tap="onListStatusFilterTap(opt.value)"
           >{{ opt.label }}</view>
         </view>
         <text v-if="listFilterActive" class="filter-reset" @tap="resetListFilters">重置筛选</text>
@@ -622,6 +622,23 @@ interface CalendarSlot {
   leaveScreenshotUrl?: string
 }
 
+interface CompletedConsultationItem {
+  Id?: number
+  id?: number
+  PatientName?: string
+  patientName?: string
+  PatientContractTag?: string | null
+  patientContractTag?: string | null
+  StartTime?: string
+  startTime?: string
+  EndTime?: string
+  endTime?: string
+  CaseRecordId?: number | null
+  caseRecordId?: number | null
+  HasRecord?: boolean
+  hasRecord?: boolean
+}
+
 type ViewMode = 'list' | 'calendar'
 type ListTimeFilter = 'all' | 'today' | 'week' | 'month'
 type ListStatusFilter = 'ALL' | 'OPEN' | 'BOOKED' | 'DONE' | 'UNRECORDED' | 'RECORDED' | 'ON_LEAVE' | 'EXPIRED'
@@ -764,8 +781,66 @@ const cancellingBooked = ref(false)
 const submitting = ref(false)
 const slotOptionsLoading = ref(false)
 const timeSlotOptions = ref<TimeSlotOpt[]>([])
+const completedConsultations = ref<CompletedConsultationItem[]>([])
+const completedLoaded = ref(false)
 const centers = APPOINTMENT_CENTERS
 const defaultCenterId = 'yangpu'
+
+const pickBool = (...values: unknown[]) => {
+  for (const value of values) {
+    if (typeof value === 'boolean') return value
+    if (value === 0 || value === '0' || value === 'false') return false
+    if (value === 1 || value === '1' || value === 'true') return true
+  }
+  return false
+}
+
+const normalizeCalendarSlot = (raw: Record<string, unknown>): CalendarSlot => {
+  const displayStatus = String(raw.displayStatus ?? raw.DisplayStatus ?? 'OPEN') as ScheduleDisplayStatus
+  return {
+    id: Number(raw.id ?? raw.Id ?? 0),
+    startTime: String(raw.startTime ?? raw.StartTime ?? ''),
+    endTime: String(raw.endTime ?? raw.EndTime ?? ''),
+    displayStatus,
+    displayLabel: String(raw.displayLabel ?? raw.DisplayLabel ?? displayStatus),
+    centerName: (raw.centerName ?? raw.CenterName) as string | undefined,
+    centerId: (raw.centerId ?? raw.CenterId) as string | undefined,
+    roomName: (raw.roomName ?? raw.RoomName) as string | undefined,
+    patientName: (raw.patientName ?? raw.PatientName) as string | undefined,
+    patientContractTag: (raw.patientContractTag ?? raw.PatientContractTag) as string | undefined,
+    consultationId: (raw.consultationId ?? raw.ConsultationId) as number | undefined,
+    hasCaseRecord: pickBool(raw.hasCaseRecord, raw.HasCaseRecord, raw.has_case_record),
+    caseRecordId: (raw.caseRecordId ?? raw.CaseRecordId ?? null) as number | null,
+    canCancel: pickBool(raw.canCancel, raw.CanCancel),
+    requiresLeave: pickBool(raw.requiresLeave, raw.RequiresLeave),
+    cancelHint: (raw.cancelHint ?? raw.CancelHint) as string | undefined,
+    leaveRequestId: (raw.leaveRequestId ?? raw.LeaveRequestId) as number | undefined,
+    leaveReason: (raw.leaveReason ?? raw.LeaveReason) as string | undefined,
+    leaveSubmittedAt: (raw.leaveSubmittedAt ?? raw.LeaveSubmittedAt) as string | undefined,
+    leaveStatus: (raw.leaveStatus ?? raw.LeaveStatus) as string | undefined,
+    leaveScreenshotUrl: (raw.leaveScreenshotUrl ?? raw.LeaveScreenshotUrl) as string | undefined,
+  }
+}
+
+const completedToSlot = (item: CompletedConsultationItem): CalendarSlot => {
+  const consultationId = Number(item.Id ?? item.id ?? 0)
+  const startTime = String(item.StartTime ?? item.startTime ?? '')
+  const endTime = String(item.EndTime ?? item.endTime ?? startTime)
+  const hasRecord = pickBool(item.HasRecord, item.hasRecord)
+  return {
+    id: consultationId,
+    startTime,
+    endTime,
+    displayStatus: 'DONE',
+    displayLabel: hasRecord ? '咨询已填写' : '待填写',
+    patientName: item.PatientName ?? item.patientName,
+    patientContractTag: item.PatientContractTag ?? item.patientContractTag ?? undefined,
+    consultationId,
+    hasCaseRecord: hasRecord,
+    caseRecordId: item.CaseRecordId ?? item.caseRecordId ?? null,
+    canCancel: false,
+  }
+}
 
 const isVideoCenterSelected = computed(() => isVideoCenter(form.value.centerId))
 const videoRoomPrefExpanded = ref(false)
@@ -931,19 +1006,26 @@ const resetListFilters = () => {
 const slotMatchesTimeFilter = (slot: CalendarSlot, filter: ListTimeFilter) => {
   if (filter === 'all') return true
   const date = slot.startTime.slice(0, 10)
+  if (!date) return false
   const today = minDate.value
   if (filter === 'today') return date === today
-  if (filter === 'week') return date >= today && date <= addDays(today, 6)
+  // 「近7天」= 含今天往前共 7 天（历史待填/已填记录在此窗口）
+  if (filter === 'week') return date >= addDays(today, -6) && date <= today
   if (filter === 'month') return date.slice(0, 7) === today.slice(0, 7)
   return true
 }
 
+/** 已完成且可填写/已填写咨询记录的排期（与「填写咨询记录」按钮口径一致） */
+const isRecordableDoneSlot = (slot: CalendarSlot) =>
+  slot.displayStatus === 'DONE' && !!slot.consultationId
+
+const isRecordStatusFilter = (filter: ListStatusFilter) =>
+  filter === 'UNRECORDED' || filter === 'RECORDED'
+
 const slotMatchesStatusFilter = (slot: CalendarSlot, filter: ListStatusFilter) => {
   if (filter === 'ALL') return true
-  if (filter === 'RECORDED') return slot.displayStatus === 'DONE' && !!slot.hasCaseRecord
-  if (filter === 'UNRECORDED') {
-    return slot.displayStatus === 'DONE' && !!slot.consultationId && !slot.hasCaseRecord
-  }
+  if (filter === 'RECORDED') return isRecordableDoneSlot(slot) && !!slot.hasCaseRecord
+  if (filter === 'UNRECORDED') return isRecordableDoneSlot(slot) && !slot.hasCaseRecord
   if (filter === 'DONE') return slot.displayStatus === 'DONE'
   return slot.displayStatus === filter
 }
@@ -954,33 +1036,103 @@ interface ScheduleListFilter {
   expand?: boolean
 }
 
-const applyListFilter = (opts?: ScheduleListFilter) => {
-  viewMode.value = 'list'
-  if (opts?.time) listTimeFilter.value = opts.time
-  if (opts?.status) listStatusFilter.value = opts.status
-  if (opts?.expand !== false) showListFilter.value = true
+const loadCompletedConsultations = async (force = false) => {
+  if (completedLoaded.value && !force) return
+  try {
+    const res = await httpV2.get<CompletedConsultationItem[]>(
+      `${API_ENDPOINTS.counselor.consultations}/completed`,
+      undefined,
+      { showLoading: false, showError: false },
+    )
+    if (res.code === 0 && Array.isArray(res.data)) {
+      completedConsultations.value = res.data
+    } else {
+      completedConsultations.value = []
+    }
+    completedLoaded.value = true
+  } catch {
+    completedConsultations.value = []
+    completedLoaded.value = true
+  }
 }
 
-const getUnrecordedCount = () =>
-  slots.value.filter(
-    s => s.displayStatus === 'DONE' && !!s.consultationId && !s.hasCaseRecord,
-  ).length
+/** 咨询记录筛选用「已完成咨询」接口，与个人中心待填红点口径一致 */
+const recordFilterSlots = computed(() => {
+  const status = listStatusFilter.value
+  return completedConsultations.value
+    .map(completedToSlot)
+    .filter((slot) => {
+      if (!slot.consultationId || !slot.startTime) return false
+      if (status === 'UNRECORDED') return !slot.hasCaseRecord
+      if (status === 'RECORDED') return !!slot.hasCaseRecord
+      return false
+    })
+})
+
+/** 咨询记录相关筛选默认看全部时间，避免「今日/本周」把历史待填记录滤掉 */
+const onListStatusFilterTap = async (status: ListStatusFilter) => {
+  listStatusFilter.value = status
+  if (isRecordStatusFilter(status)) {
+    listTimeFilter.value = 'all'
+    await loadCompletedConsultations(true)
+  }
+}
+
+const applyListFilter = async (opts?: ScheduleListFilter) => {
+  viewMode.value = 'list'
+  if (opts?.time) listTimeFilter.value = opts.time
+  if (opts?.status) {
+    listStatusFilter.value = opts.status
+    if (isRecordStatusFilter(opts.status) && !opts.time) {
+      listTimeFilter.value = 'all'
+    }
+  }
+  if (opts?.expand !== false) showListFilter.value = true
+  if (isRecordStatusFilter(listStatusFilter.value)) {
+    await loadCompletedConsultations(true)
+  }
+  await loadCalendar()
+}
+
+const getUnrecordedCount = () => {
+  if (completedConsultations.value.length) {
+    return completedConsultations.value.filter((item) => !pickBool(item.HasRecord, item.hasRecord)).length
+  }
+  const pool = slots.value.length ? slots.value : monthSlots.value
+  return pool.filter((s) => isRecordableDoneSlot(s) && !s.hasCaseRecord).length
+}
 
 const slotPassesListFilters = (slot: CalendarSlot) =>
   slotMatchesTimeFilter(slot, listTimeFilter.value)
   && slotMatchesStatusFilter(slot, listStatusFilter.value)
 
 const groupedDays = computed(() => {
-  const startDate = listWindowStart.value
-  const endDate = listWindowEnd.value
+  const useRecordSource = isRecordStatusFilter(listStatusFilter.value)
+  const source = useRecordSource ? recordFilterSlots.value : slots.value
   const byDate = new Map<string, CalendarSlot[]>()
-  for (const s of slots.value) {
-    if (s.displayStatus === 'CANCELLED' && !s.leaveRequestId) continue
-    if (!slotPassesListFilters(s)) continue
+  for (const s of source) {
+    if (!useRecordSource && s.displayStatus === 'CANCELLED' && !s.leaveRequestId) continue
+    if (!useRecordSource && !slotPassesListFilters(s)) continue
+    if (useRecordSource && !slotMatchesTimeFilter(s, listTimeFilter.value)) continue
     const date = s.startTime.slice(0, 10)
+    if (!date) continue
     if (!byDate.has(date)) byDate.set(date, [])
     byDate.get(date)!.push(s)
   }
+
+  // 咨询记录筛选：只展示有数据的日期，不强制铺满近 60 天空天
+  if (useRecordSource) {
+    return Array.from(byDate.keys())
+      .sort((a, b) => b.localeCompare(a))
+      .map((date) => ({
+        date,
+        label: weekdayLabel(date),
+        slots: (byDate.get(date) || []).slice().sort((a, b) => b.startTime.localeCompare(a.startTime)),
+      }))
+  }
+
+  const startDate = listWindowStart.value
+  const endDate = listWindowEnd.value
   const days: { date: string; label: string; slots: CalendarSlot[] }[] = []
   let cursor = startDate
   while (cursor <= endDate) {
@@ -1100,6 +1252,9 @@ const switchViewMode = async (mode: ViewMode) => {
     await loadMonthCalendar()
   } else {
     await loadCalendar()
+    if (isRecordStatusFilter(listStatusFilter.value)) {
+      await loadCompletedConsultations(true)
+    }
   }
 }
 
@@ -1132,7 +1287,9 @@ const loadMonthCalendar = async () => {
       { showLoading: false, showError: false },
     )
     if (res.code === 0 && res.data) {
-      monthSlots.value = res.data.slots || []
+      monthSlots.value = (res.data.slots || []).map((item) =>
+        normalizeCalendarSlot(item as unknown as Record<string, unknown>),
+      )
     } else {
       monthSlots.value = []
       uni.showToast({ title: res.msg || '加载月历失败', icon: 'none' })
@@ -1148,17 +1305,19 @@ const loadMonthCalendar = async () => {
 const loadCalendar = async () => {
   loading.value = true
   try {
+    // 仅传 past_days，由后端以今天为锚点向前追溯，避免前后端“今天”不一致导致 400/空列表
     const res = await httpV2.get<{ slots: CalendarSlot[] }>(
       API_ENDPOINTS.counselor.scheduleCalendar,
       {
-        start: listWindowStart.value,
         past_days: PAST_WINDOW_DAYS,
         days: LIST_WINDOW_DAYS,
       },
       { showLoading: false, showError: false },
     )
     if (res.code === 0 && res.data) {
-      slots.value = res.data.slots || []
+      slots.value = (res.data.slots || []).map((item) =>
+        normalizeCalendarSlot(item as unknown as Record<string, unknown>),
+      )
     } else {
       slots.value = []
       uni.showToast({ title: res.msg || '加载排班失败', icon: 'none' })
@@ -1659,8 +1818,14 @@ onMounted(() => {
 })
 
 const refresh = async () => {
-  if (viewMode.value === 'calendar') await loadMonthCalendar()
-  else await loadCalendar()
+  if (viewMode.value === 'calendar') {
+    await loadMonthCalendar()
+  } else {
+    await loadCalendar()
+    if (isRecordStatusFilter(listStatusFilter.value)) {
+      await loadCompletedConsultations(true)
+    }
+  }
 }
 
 const focusScheduleId = async (scheduleId: number) => {

@@ -62,9 +62,11 @@ const applyPendingScheduleFilter = async () => {
   const filter = preferScheduleFilter.value
   preferScheduleFilter.value = ''
   activeTab.value = 'schedule'
-  await scheduleRef.value?.refresh?.()
   if (filter === 'unrecorded') {
-    scheduleRef.value?.applyListFilter?.({ status: 'UNRECORDED', time: 'all' })
+    // applyListFilter 内会切换普通模式并加载近 60 天列表，勿先 refresh 日历以免漏数
+    await scheduleRef.value?.applyListFilter?.({ status: 'UNRECORDED', time: 'all' })
+  } else {
+    await scheduleRef.value?.refresh?.()
   }
 }
 
