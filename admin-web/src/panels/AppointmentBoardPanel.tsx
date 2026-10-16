@@ -30,7 +30,7 @@ type BoardRoom = {
   status: string;
 };
 
-const START_MINUTES = 9 * 60;
+const START_MINUTES = 6 * 60;
 const END_MINUTES = 24 * 60;
 const SLOT_MINUTES = 30;
 const SLOT_HEIGHT = 52;
