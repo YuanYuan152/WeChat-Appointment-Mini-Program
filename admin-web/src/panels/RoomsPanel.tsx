@@ -30,7 +30,7 @@ import type {
 } from "@/types/api";
 import type { RoomFilters } from "@/types/app";
 
-const FIXED_TIME_SLOTS = [9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23].flatMap((hour) =>
+const FIXED_TIME_SLOTS = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23].flatMap((hour) =>
   [0, 30].map(
     (minute) => `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`,
   ),
@@ -363,7 +363,7 @@ export function RoomDetailPanel({
   const [targetRoomCode, setTargetRoomCode] = useState("");
   const [slotStatusDrafts, setSlotStatusDrafts] = useState<Record<string, SlotDraft>>({});
   const [occupyDate, setOccupyDate] = useState(() => room.days[0]?.date || getLocalDateValue());
-  const [occupyStart, setOccupyStart] = useState(FIXED_TIME_SLOTS[0] || "09:00");
+  const [occupyStart, setOccupyStart] = useState(FIXED_TIME_SLOTS[0] || "06:00");
   const [occupyEnd, setOccupyEnd] = useState(FIXED_TIME_SLOTS[1] || "09:30");
   const [occupyNote, setOccupyNote] = useState("");
   const [occupyError, setOccupyError] = useState("");
