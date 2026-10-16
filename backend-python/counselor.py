@@ -783,12 +783,9 @@ def _calendar_items_for_schedules(
         .all()
     )
     active_by_schedule: dict[int, AppConsultation] = {}
-    any_by_schedule: dict[int, AppConsultation] = {}
     for c in all_consultations:
         if not c.ScheduleId:
             continue
-        if c.ScheduleId not in any_by_schedule:
-            any_by_schedule[c.ScheduleId] = c
         if c.Status != "CANCELLED" and c.ScheduleId not in active_by_schedule:
             active_by_schedule[c.ScheduleId] = c
 
@@ -842,9 +839,10 @@ def _calendar_items_for_schedules(
         c = active_by_schedule.get(s.Id)
         pending_proxy_order = pending_proxy_map.get(s.Id)
         leave_row = leave_by_schedule.get(s.Id)
-        # 待支付代理预约尚未创建咨询单。此时应显示订单对应的来访，不能回退到
-        # 同一排期可能残留的历史已取消咨询单。
-        display_cons = c or (None if pending_proxy_order else any_by_schedule.get(s.Id))
+        # 仅挂有效咨询单。来访取消后排期回到已排期时，不得再挂已取消咨询单，
+        # 否则前端会误显来访信息并把「取消排期」当成「请假」。
+        # 待支付代理预约尚未创建咨询单时，由来访订单单独展示姓名。
+        display_cons = c
         center_id = parse_center_id(s.Note)
         room_id, room_name = _resolve_calendar_room(s, c, center_id, db)
         display_patient_id = (

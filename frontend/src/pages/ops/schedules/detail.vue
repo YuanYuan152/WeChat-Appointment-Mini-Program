@@ -346,12 +346,8 @@ const legend = [
 const meta = (status: ScheduleDisplayStatus) =>
   SCHEDULE_DISPLAY_META[status] || SCHEDULE_DISPLAY_META.OPEN
 
-const isBookedSlot = (slot: CalendarSlot) => {
-  if (slot.displayStatus === 'DONE' || slot.displayStatus === 'ON_LEAVE' || slot.displayStatus === 'EXPIRED') {
-    return false
-  }
-  return slot.displayStatus === 'BOOKED' || !!slot.patientName || !!slot.consultationId
-}
+const isBookedSlot = (slot: CalendarSlot) =>
+  slot.displayStatus === 'BOOKED' || slot.displayStatus === 'PENDING_PAYMENT'
 
 const slotRoomText = (slot: CalendarSlot) => {
   if (slot.roomName) return slot.roomName

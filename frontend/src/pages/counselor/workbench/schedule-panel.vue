@@ -696,16 +696,9 @@ const DEFAULT_BOOKED_LEAVE_HINT =
 
 const parseStartTime = (iso: string) => new Date(iso.includes('T') ? iso : iso.replace(' ', 'T'))
 
-const isBookedSlot = (slot: CalendarSlot) => {
-  if (slot.displayStatus === 'DONE' || slot.displayStatus === 'ON_LEAVE' || slot.displayStatus === 'EXPIRED') {
-    return false
-  }
-  // 已预约或待支付代理预约：均走请假（凭证 + 审核），与 requiresLeave 口径一致
-  if (slot.displayStatus === 'BOOKED' || slot.displayStatus === 'PENDING_PAYMENT' || slot.requiresLeave) {
-    return true
-  }
-  return !!slot.patientName || !!slot.consultationId
-}
+/** 仅「已预约 / 待支付」走请假；已排期（OPEN）一律显示并走「取消排期」 */
+const isBookedSlot = (slot: CalendarSlot) =>
+  slot.displayStatus === 'BOOKED' || slot.displayStatus === 'PENDING_PAYMENT'
 
 const hasPendingLeave = (slot: CalendarSlot) => !!slot.leaveRequestId
 
@@ -718,6 +711,8 @@ const slotHasStarted = (slot: CalendarSlot) => msUntilStart(slot) <= 0
 const showCancelAction = (slot: CalendarSlot) => {
   if (slot.displayStatus === 'EXPIRED' || hasPendingLeave(slot) || slotHasStarted(slot)) return false
   if (isBookedSlot(slot)) return true
+  // 已排期：咨询师可直接取消排期，不依赖历史咨询单残留字段
+  if (slot.displayStatus === 'OPEN') return slot.canCancel !== false
   return !!slot.canCancel
 }
 
