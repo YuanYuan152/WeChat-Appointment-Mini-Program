@@ -96,7 +96,7 @@ export function ContentImageUpload({
   );
 }
 
-function resolveImageUrl(imageUrl?: string | null) {
+export function resolveImageUrl(imageUrl?: string | null) {
   const value = imageUrl?.trim();
   if (!value) {
     return "";

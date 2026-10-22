@@ -366,8 +366,22 @@ export interface AssessmentEnterprise {
    * string[] = 仅展示勾选字段。
    */
   employeeInfoFields?: string[] | null;
+  /** 仅当前企业新增的员工信息字段，不影响其他企业 */
+  customEmployeeInfoFields?: CustomEmployeeInfoField[];
+  /**
+   * 本企业首页轮播。null/undefined = 未单独修改，展示通用首页轮播；
+   * 有值时只影响该企业链接，不回写通用配置。
+   */
+  heroSlides?: AssessmentEnterpriseHeroSlide[] | null;
+  /** 为 true 时，仅当前企业页面隐藏预约心理咨询及相关图片 */
+  hideConsultation?: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface CustomEmployeeInfoField {
+  id: string;
+  label: string;
 }
 
 export interface EmployeeInfoFieldOption {
@@ -381,6 +395,28 @@ export interface AssessmentEnterpriseHeroSlide {
   imageUrl: string;
   title: string;
   desc: string;
+}
+
+export interface EapArticle {
+  id: string;
+  title: string;
+  imageUrl: string;
+  body: string;
+  tags: string[];
+  duration: string;
+  excerpt?: string;
+  publishedAt?: string;
+  author?: string;
+  /** shared=通用；override=本企业改过；local=仅本企业新增 */
+  source?: "shared" | "override" | "local";
+}
+
+export interface EapArticleInput {
+  title: string;
+  imageUrl: string;
+  body: string;
+  tags: string[];
+  duration: string;
 }
 
 export interface AssessmentEnterpriseBranding {

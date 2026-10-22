@@ -68,15 +68,40 @@ def default_employee_info_field_ids() -> list[str]:
     return [str(item["id"]) for item in DEFAULT_EMPLOYEE_INFO_FIELDS]
 
 
-def _normalize_employee_info_fields(value: Any) -> list[str] | None:
-    """None 表示未定制（展示全部）；list 表示企业勾选结果（仅这些字段）。"""
+def _normalize_custom_employee_info_fields(value: Any) -> list[dict[str, str]]:
+    """仅保留本企业新增字段。id 必须是 custom- 前缀，避免和其他企业或默认字段冲突。"""
+    if not isinstance(value, list):
+        return []
+    result: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for raw in value:
+        if not isinstance(raw, dict):
+            continue
+        field_id = str(raw.get("id") or "").strip().lower()
+        label = str(raw.get("label") or "").strip()
+        if not re.fullmatch(r"custom-[a-f0-9]{12}", field_id):
+            continue
+        if not label or field_id in seen:
+            continue
+        result.append({"id": field_id, "label": label[:40]})
+        seen.add(field_id)
+        if len(result) >= 20:
+            break
+    return result
+
+
+def _normalize_employee_info_fields(
+    value: Any,
+    custom_ids: list[str] | None = None,
+) -> list[str] | None:
+    """None 表示未定制（展示全部默认字段）；list 表示企业勾选结果。"""
     if value is None:
         return None
     if not isinstance(value, list):
         return None
-    allowed = {str(item["id"]) for item in DEFAULT_EMPLOYEE_INFO_FIELDS}
-    order = default_employee_info_field_ids()
-    selected = []
+    extras = [field_id for field_id in (custom_ids or []) if field_id]
+    allowed = set(default_employee_info_field_ids()) | set(extras)
+    selected: list[str] = []
     seen: set[str] = set()
     for raw in value:
         field_id = str(raw or "").strip()
@@ -84,13 +109,18 @@ def _normalize_employee_info_fields(value: Any) -> list[str] | None:
             continue
         selected.append(field_id)
         seen.add(field_id)
-    # 保持与默认模板相同的顺序
-    return [field_id for field_id in order if field_id in seen]
+    ordered = [field_id for field_id in default_employee_info_field_ids() if field_id in seen]
+    ordered.extend(field_id for field_id in extras if field_id in seen)
+    return ordered
 
 
-def resolve_employee_info_fields(value: Any) -> list[str]:
-    """公开页使用：未定制时回退为默认模板全部字段。"""
-    normalized = _normalize_employee_info_fields(value)
+def resolve_employee_info_fields(
+    value: Any,
+    custom_fields: Any = None,
+) -> list[str]:
+    """公开页使用：未定制时回退为默认模板全部字段，不自动带上自定义字段。"""
+    custom_ids = [item["id"] for item in _normalize_custom_employee_info_fields(custom_fields)]
+    normalized = _normalize_employee_info_fields(value, custom_ids)
     if normalized is None:
         return default_employee_info_field_ids()
     return normalized
@@ -186,13 +216,23 @@ def _normalized_enterprise(item: dict[str, Any]) -> dict[str, Any]:
         assessment_ids,
         result.get("assessmentTitles"),
     )
+    custom_fields = _normalize_custom_employee_info_fields(item.get("customEmployeeInfoFields"))
+    result["customEmployeeInfoFields"] = custom_fields
+    custom_ids = [field["id"] for field in custom_fields]
     # 未写入该键 / 值为 null → 未定制；写入 list → 企业定制勾选
     if "employeeInfoFields" in item:
         result["employeeInfoFields"] = _normalize_employee_info_fields(
             item.get("employeeInfoFields"),
+            custom_ids,
         )
     else:
         result["employeeInfoFields"] = None
+    # 未写入或为 null：沿用通用首页轮播；写入 3 张则只属于该企业
+    stored_slides = item.get("heroSlides") if "heroSlides" in item else None
+    result["heroSlides"] = (
+        _normalize_hero_slides(stored_slides) if isinstance(stored_slides, list) else None
+    )
+    result["hideConsultation"] = bool(item.get("hideConsultation"))
     parsed = urlparse(str(result.get("url") or ""))
     slug = str(result.get("slug") or "")
     if parsed.scheme in {"http", "https"} and parsed.netloc and slug:
@@ -271,6 +311,28 @@ def get_enterprise_by_slug(slug: str) -> dict[str, Any]:
     return _normalized_enterprise(item)
 
 
+def _hero_slides_match(left: Any, right: Any) -> bool:
+    return _normalize_hero_slides(left) == _normalize_hero_slides(right)
+
+
+def resolve_enterprise_hero_slides(enterprise: dict[str, Any]) -> list[dict[str, str]]:
+    """企业未单独保存轮播时，读取当前通用首页轮播，不回写企业配置。"""
+    custom = enterprise.get("heroSlides")
+    if isinstance(custom, list) and custom:
+        return _normalize_hero_slides(custom)
+    return list(get_default_branding().get("heroSlides") or _normalize_hero_slides(None))
+
+
+def _persistable_hero_slides(hero_slides: list[dict[str, str]] | None) -> list[dict[str, str]] | None:
+    """与当前通用轮播一致时不落库，避免把通用配置复制进企业，也避免改写通用配置。"""
+    if hero_slides is None:
+        return None
+    normalized = _normalize_hero_slides(hero_slides)
+    if _hero_slides_match(normalized, get_default_branding().get("heroSlides")):
+        return None
+    return normalized
+
+
 def save_enterprise(
     *,
     enterprise_id: str | None,
@@ -282,6 +344,9 @@ def save_enterprise(
     slogan: str,
     assessment_titles: dict[str, str] | None = None,
     employee_info_fields: list[str] | None = None,
+    hero_slides: list[dict[str, str]] | None = None,
+    custom_employee_info_fields: list[dict[str, Any]] | None = None,
+    hide_consultation: bool | None = None,
 ) -> dict[str, Any]:
     name = (company_name or "").strip()
     if not name:
@@ -292,8 +357,7 @@ def save_enterprise(
     if not ids:
         raise EnterpriseConfigError("请至少选择一个私有量表")
     titles = _normalize_assessment_titles(ids, assessment_titles)
-    # None = 未定制（默认全字段）；list = 企业勾选结果
-    normalized_info_fields = _normalize_employee_info_fields(employee_info_fields)
+    persisted_slides = _persistable_hero_slides(hero_slides)
     branding = _branding({
         "siteName": site_name,
         "companyName": name,
@@ -310,6 +374,23 @@ def save_enterprise(
             raise EnterpriseConfigError("该链接后缀已被其他公司使用")
         now = _now()
         current = next((item for item in items if item.get("id") == enterprise_id), None)
+        existing_custom = _normalize_custom_employee_info_fields(
+            current.get("customEmployeeInfoFields") if current else None,
+        )
+        custom_fields = (
+            existing_custom
+            if custom_employee_info_fields is None
+            else _normalize_custom_employee_info_fields(custom_employee_info_fields)
+        )
+        normalized_info_fields = _normalize_employee_info_fields(
+            employee_info_fields,
+            [field["id"] for field in custom_fields],
+        )
+        hide_consultation_value = (
+            bool(current.get("hideConsultation"))
+            if hide_consultation is None and current
+            else bool(hide_consultation)
+        )
         if current:
             current.update(
                 url=normalized_url,
@@ -323,6 +404,15 @@ def save_enterprise(
                 current.pop("employeeInfoFields", None)
             else:
                 current["employeeInfoFields"] = normalized_info_fields
+            if custom_fields:
+                current["customEmployeeInfoFields"] = custom_fields
+            else:
+                current.pop("customEmployeeInfoFields", None)
+            if persisted_slides is None:
+                current.pop("heroSlides", None)
+            else:
+                current["heroSlides"] = persisted_slides
+            current["hideConsultation"] = hide_consultation_value
             result = current
         else:
             result = {
@@ -337,9 +427,30 @@ def save_enterprise(
             }
             if normalized_info_fields is not None:
                 result["employeeInfoFields"] = normalized_info_fields
+            if custom_fields:
+                result["customEmployeeInfoFields"] = custom_fields
+            if persisted_slides is not None:
+                result["heroSlides"] = persisted_slides
+            result["hideConsultation"] = hide_consultation_value
             items.append(result)
         _write(items)
         return _normalized_enterprise(result)
+
+
+def mutate_enterprises(mutator) -> None:
+    """mutator 返回 True 时写回企业配置。供图文覆盖、隐藏与删除同步使用。"""
+    with _lock:
+        items = _read()
+        if mutator(items):
+            _write(items)
+
+
+def get_enterprise_by_id(enterprise_id: str) -> dict[str, Any]:
+    with _lock:
+        item = next((entry for entry in _read() if entry.get("id") == enterprise_id), None)
+    if not item:
+        raise EnterpriseConfigError("企业配置不存在")
+    return _normalized_enterprise(item)
 
 
 def delete_enterprise(enterprise_id: str) -> None:

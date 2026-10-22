@@ -14,12 +14,23 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from assessment_definition_service import AssessmentDefinitionError
+from assessment_article_service import (
+    create_enterprise_article,
+    create_shared_article,
+    delete_enterprise_article,
+    delete_shared_article,
+    list_enterprise_articles,
+    list_shared_articles,
+    resolve_enterprise_articles,
+    update_enterprise_article,
+    update_shared_article,
+)
 from assessment_enterprise_service import (
     EnterpriseConfigError,
     delete_enterprise,
     get_default_branding,
     get_enterprise_by_slug,
+    resolve_enterprise_hero_slides,
     list_employee_info_field_catalog,
     list_enterprises,
     resolve_employee_info_fields,
@@ -45,6 +56,17 @@ public_router = APIRouter(
 )
 
 
+class HeroSlidePayload(BaseModel):
+    imageUrl: str = Field(..., min_length=1, max_length=500)
+    title: str = Field(..., min_length=1, max_length=40)
+    desc: str = Field(..., min_length=1, max_length=120)
+
+
+class CustomEmployeeInfoFieldPayload(BaseModel):
+    id: str = Field(..., min_length=1, max_length=40)
+    label: str = Field(..., min_length=1, max_length=40)
+
+
 class EnterprisePayload(BaseModel):
     companyName: str = Field(..., min_length=1, max_length=120)
     siteName: str = Field(..., min_length=1, max_length=120)
@@ -56,12 +78,12 @@ class EnterprisePayload(BaseModel):
     assessmentTitles: dict[str, str] = Field(default_factory=dict)
     # null/省略 = 未定制（EAP 展示默认模板全部字段）；list = 仅勾选字段
     employeeInfoFields: Optional[List[str]] = None
-
-
-class HeroSlidePayload(BaseModel):
-    imageUrl: str = Field(..., min_length=1, max_length=500)
-    title: str = Field(..., min_length=1, max_length=40)
-    desc: str = Field(..., min_length=1, max_length=120)
+    # 仅当前企业新增的员工信息字段，不影响其他企业
+    customEmployeeInfoFields: Optional[List[CustomEmployeeInfoFieldPayload]] = None
+    # null/省略 = 沿用通用首页轮播；3 张 = 仅本企业展示，不回写通用配置
+    heroSlides: Optional[list[HeroSlidePayload]] = None
+    # 仅隐藏当前企业页面上的预约心理咨询，不影响其他企业
+    hideConsultation: bool = False
 
 
 class BrandingPayload(BaseModel):
@@ -78,6 +100,14 @@ class EnterpriseReportItemPayload(BaseModel):
     assessmentId: str = Field(..., min_length=1, max_length=80)
     assessmentVersion: int = Field(..., ge=1)
     answers: dict[str, str]
+
+
+class ArticlePayload(BaseModel):
+    title: str = Field(..., min_length=1, max_length=80)
+    imageUrl: str = Field(..., min_length=1, max_length=500)
+    body: str = Field(..., min_length=1, max_length=20000)
+    tags: list[str] = Field(..., min_length=1, max_length=8)
+    duration: str = Field(..., min_length=1, max_length=40)
 
 
 class EnterpriseReportsSubmitPayload(BaseModel):
@@ -168,7 +198,9 @@ def _published_assessments(
 
 @public_router.get("/default", summary="读取无后缀网站的默认品牌配置")
 def get_public_default_branding():
-    return get_default_branding()
+    payload = get_default_branding()
+    payload["articles"] = list_shared_articles()
+    return payload
 
 
 @public_router.get("/{slug}", summary="按企业链接后缀读取企业网站配置及已授权量表")
@@ -189,12 +221,16 @@ def get_public_enterprise_assessments(slug: str):
                 "onboardingEntryLabel",
                 "新员工入职测评",
             ),
-            "heroSlides": default_branding.get("heroSlides", []),
+            "heroSlides": resolve_enterprise_hero_slides(enterprise),
             "slug": enterprise["slug"],
             "employeeInfoFields": resolve_employee_info_fields(
                 enterprise.get("employeeInfoFields"),
+                enterprise.get("customEmployeeInfoFields"),
             ),
+            "customEmployeeInfoFields": enterprise.get("customEmployeeInfoFields") or [],
+            "hideConsultation": bool(enterprise.get("hideConsultation")),
             "assessments": definitions,
+            "articles": resolve_enterprise_articles(enterprise),
         }
     except EnterpriseConfigError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -321,6 +357,95 @@ def register_assessment_enterprise_admin_routes(
     def list_employee_info_fields(_actor: Any = Depends(require_assessment_editor)):
         return list_employee_info_field_catalog()
 
+    @router.get("/assessment-enterprises/articles", summary="通用心理图文")
+    def list_admin_articles(_actor: Any = Depends(require_assessment_editor)):
+        return list_shared_articles()
+
+    @router.post("/assessment-enterprises/articles", summary="新增通用心理图文")
+    def create_admin_article(
+        body: ArticlePayload,
+        _actor: Any = Depends(require_assessment_editor),
+    ):
+        try:
+            return create_shared_article(body.model_dump())
+        except EnterpriseConfigError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    @router.put("/assessment-enterprises/articles/{article_id}", summary="修改通用心理图文")
+    def update_admin_article(
+        article_id: str,
+        body: ArticlePayload,
+        _actor: Any = Depends(require_assessment_editor),
+    ):
+        try:
+            return update_shared_article(article_id, body.model_dump())
+        except EnterpriseConfigError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    @router.delete("/assessment-enterprises/articles/{article_id}", summary="删除通用心理图文")
+    def delete_admin_article(
+        article_id: str,
+        _actor: Any = Depends(require_assessment_editor),
+    ):
+        try:
+            delete_shared_article(article_id)
+            return {"message": "图文已删除"}
+        except EnterpriseConfigError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    @router.get("/assessment-enterprises/{enterprise_id}/articles", summary="企业可见心理图文")
+    def list_admin_enterprise_articles(
+        enterprise_id: str,
+        _actor: Any = Depends(require_assessment_editor),
+    ):
+        try:
+            return list_enterprise_articles(enterprise_id)
+        except EnterpriseConfigError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    @router.post("/assessment-enterprises/{enterprise_id}/articles", summary="为企业新增专属图文")
+    def create_admin_enterprise_article(
+        enterprise_id: str,
+        body: ArticlePayload,
+        _actor: Any = Depends(require_assessment_editor),
+    ):
+        try:
+            return create_enterprise_article(enterprise_id, body.model_dump())
+        except EnterpriseConfigError as exc:
+            status = 404 if "不存在" in str(exc) else 422
+            raise HTTPException(status_code=status, detail=str(exc)) from exc
+
+    @router.put(
+        "/assessment-enterprises/{enterprise_id}/articles/{article_id}",
+        summary="修改企业图文",
+    )
+    def update_admin_enterprise_article(
+        enterprise_id: str,
+        article_id: str,
+        body: ArticlePayload,
+        _actor: Any = Depends(require_assessment_editor),
+    ):
+        try:
+            return update_enterprise_article(enterprise_id, article_id, body.model_dump())
+        except EnterpriseConfigError as exc:
+            status = 404 if "不存在" in str(exc) else 422
+            raise HTTPException(status_code=status, detail=str(exc)) from exc
+
+    @router.delete(
+        "/assessment-enterprises/{enterprise_id}/articles/{article_id}",
+        summary="从企业页面移除图文",
+    )
+    def delete_admin_enterprise_article(
+        enterprise_id: str,
+        article_id: str,
+        _actor: Any = Depends(require_assessment_editor),
+    ):
+        try:
+            delete_enterprise_article(enterprise_id, article_id)
+            return {"message": "已从该企业页面移除"}
+        except EnterpriseConfigError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
     @router.post("/assessment-enterprises", summary="新增企业定制链接")
     def create_admin_enterprise(
         body: EnterprisePayload,
@@ -338,6 +463,17 @@ def register_assessment_enterprise_admin_routes(
                 slogan=body.slogan,
                 assessment_titles=body.assessmentTitles,
                 employee_info_fields=body.employeeInfoFields,
+                custom_employee_info_fields=(
+                    [field.model_dump() for field in body.customEmployeeInfoFields]
+                    if body.customEmployeeInfoFields is not None
+                    else None
+                ),
+                hero_slides=(
+                    [slide.model_dump() for slide in body.heroSlides]
+                    if body.heroSlides is not None
+                    else None
+                ),
+                hide_consultation=body.hideConsultation,
             )
         except EnterpriseConfigError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -360,6 +496,17 @@ def register_assessment_enterprise_admin_routes(
                 slogan=body.slogan,
                 assessment_titles=body.assessmentTitles,
                 employee_info_fields=body.employeeInfoFields,
+                custom_employee_info_fields=(
+                    [field.model_dump() for field in body.customEmployeeInfoFields]
+                    if body.customEmployeeInfoFields is not None
+                    else None
+                ),
+                hero_slides=(
+                    [slide.model_dump() for slide in body.heroSlides]
+                    if body.heroSlides is not None
+                    else None
+                ),
+                hide_consultation=body.hideConsultation,
             )
         except EnterpriseConfigError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc

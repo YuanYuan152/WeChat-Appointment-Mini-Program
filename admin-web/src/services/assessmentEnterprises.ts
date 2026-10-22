@@ -2,6 +2,10 @@ import { apiRequest } from "@/lib/api";
 import type {
   AssessmentEnterprise,
   AssessmentEnterpriseBranding,
+  AssessmentEnterpriseHeroSlide,
+  CustomEmployeeInfoField,
+  EapArticle,
+  EapArticleInput,
   EmployeeInfoFieldOption,
   PrivateAssessmentOption,
 } from "@/types/api";
@@ -41,6 +45,9 @@ export function saveAssessmentEnterprise(input: {
   assessmentIds: string[];
   assessmentTitles?: Record<string, string>;
   employeeInfoFields?: string[] | null;
+  customEmployeeInfoFields?: CustomEmployeeInfoField[];
+  heroSlides?: AssessmentEnterpriseHeroSlide[] | null;
+  hideConsultation?: boolean;
 }) {
   return apiRequest<AssessmentEnterprise>(input.id ? `${BASE_PATH}/${input.id}` : BASE_PATH, {
     method: input.id ? "PUT" : "POST",
@@ -53,6 +60,9 @@ export function saveAssessmentEnterprise(input: {
       assessmentIds: input.assessmentIds,
       assessmentTitles: input.assessmentTitles || {},
       employeeInfoFields: input.employeeInfoFields ?? null,
+      customEmployeeInfoFields: input.customEmployeeInfoFields ?? [],
+      heroSlides: input.heroSlides ?? null,
+      hideConsultation: Boolean(input.hideConsultation),
     }),
   });
 }
@@ -63,4 +73,60 @@ export function deleteAssessmentEnterprise(id: string) {
 
 export function generateAssessmentEnterpriseQrCode(id: string) {
   return apiRequest<string>(`${BASE_PATH}/${id}/qrcode`);
+}
+
+export function fetchSharedEapArticles() {
+  return apiRequest<EapArticle[]>(`${BASE_PATH}/articles`);
+}
+
+export function createSharedEapArticle(input: EapArticleInput) {
+  return apiRequest<EapArticle>(`${BASE_PATH}/articles`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateSharedEapArticle(articleId: string, input: EapArticleInput) {
+  return apiRequest<EapArticle>(`${BASE_PATH}/articles/${encodeURIComponent(articleId)}`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteSharedEapArticle(articleId: string) {
+  return apiRequest<{ message: string }>(`${BASE_PATH}/articles/${encodeURIComponent(articleId)}`, {
+    method: "DELETE",
+  });
+}
+
+export function fetchEnterpriseEapArticles(enterpriseId: string) {
+  return apiRequest<EapArticle[]>(`${BASE_PATH}/${encodeURIComponent(enterpriseId)}/articles`);
+}
+
+export function createEnterpriseEapArticle(enterpriseId: string, input: EapArticleInput) {
+  return apiRequest<EapArticle>(`${BASE_PATH}/${encodeURIComponent(enterpriseId)}/articles`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateEnterpriseEapArticle(
+  enterpriseId: string,
+  articleId: string,
+  input: EapArticleInput,
+) {
+  return apiRequest<EapArticle>(
+    `${BASE_PATH}/${encodeURIComponent(enterpriseId)}/articles/${encodeURIComponent(articleId)}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(input),
+    },
+  );
+}
+
+export function deleteEnterpriseEapArticle(enterpriseId: string, articleId: string) {
+  return apiRequest<{ message: string }>(
+    `${BASE_PATH}/${encodeURIComponent(enterpriseId)}/articles/${encodeURIComponent(articleId)}`,
+    { method: "DELETE" },
+  );
 }

@@ -41,6 +41,7 @@ interface AppRouteContextValue {
   requestRefresh: () => void;
   refreshCurrentUser: () => Promise<CurrentUser>;
   runAction: (action: () => Promise<unknown>, successFallback: string) => Promise<void>;
+  setBreadcrumbTail: (tail: string | null) => void;
 }
 
 const AppRouteContext = createContext<AppRouteContextValue | null>(null);
@@ -75,6 +76,7 @@ function AppRouteRoot({ sectionId, children }: { sectionId: SectionId; children:
   const [accessKeyPassed, setAccessKeyPassed] = useState(false);
   const [autoLoginError, setAutoLoginError] = useState<string | null>(null);
   const [loginMode, setLoginMode] = useState<LoginMode>("sms");
+  const [breadcrumbTail, setBreadcrumbTail] = useState<string | null>(null);
   const accessKeyLoginEnabled = isAccessKeyLoginEnabled();
   const autoLoginStartedRef = useRef(false);
 
@@ -296,6 +298,7 @@ function AppRouteRoot({ sectionId, children }: { sectionId: SectionId; children:
       requestRefresh,
       refreshCurrentUser,
       runAction,
+      setBreadcrumbTail,
     };
   }, [clearNotice, currentUser, isAdmin, refreshCurrentUser, refreshKey, requestRefresh, runAction, showNotice]);
 
@@ -470,6 +473,7 @@ function AppRouteRoot({ sectionId, children }: { sectionId: SectionId; children:
         notice={notice}
         unreadMessageCount={unreadMessageCount}
         onChangeSection={(nextSection) => router.push(sectionPathById[nextSection])}
+        breadcrumbTail={breadcrumbTail}
         onLogout={handleLogout}
         onRefresh={requestRefresh}
       >

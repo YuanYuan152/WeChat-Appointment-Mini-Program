@@ -16,6 +16,7 @@ export function AppShell({
   loading,
   notice,
   unreadMessageCount,
+  breadcrumbTail,
   children,
   onChangeSection,
   onLogout,
@@ -26,6 +27,7 @@ export function AppShell({
   loading: boolean;
   notice: Notice | null;
   unreadMessageCount?: number | null;
+  breadcrumbTail?: string | null;
   children: ReactNode;
   onChangeSection: (section: SectionId) => void;
   onLogout: () => void;
@@ -86,9 +88,15 @@ export function AppShell({
             <nav aria-label="面包屑" className="flex items-center gap-2 text-sm">
               <span className="text-[var(--lxxl-muted)]">{activeGroup?.label || "管理端"}</span>
               <span className="text-[var(--lxxl-muted)]">&gt;</span>
-              <span className="font-medium text-[var(--lxxl-text)]">
+              <span className={breadcrumbTail ? "text-[var(--lxxl-muted)]" : "font-medium text-[var(--lxxl-text)]"}>
                 {activeSectionConfig?.label || "当前页面"}
               </span>
+              {breadcrumbTail ? (
+                <>
+                  <span className="text-[var(--lxxl-muted)]">&gt;</span>
+                  <span className="font-medium text-[var(--lxxl-text)]">{breadcrumbTail}</span>
+                </>
+              ) : null}
             </nav>
           </div>
 
