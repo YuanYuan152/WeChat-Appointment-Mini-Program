@@ -9,6 +9,7 @@ import {
   changeAssessmentScoringType,
   createDefaultAssessmentDefinition,
   createStableId,
+  normalizeAssessmentDefinition,
   formatLines,
   getAssessmentScoreCoverageSummaries,
   getDimensionParentId,
@@ -71,7 +72,10 @@ export function AssessmentEditorDialog({
 }) {
   const isCreate = initialMode === "create";
   const initialDefinition = useMemo(
-    () => detail?.definition || createDefaultAssessmentDefinition("sum"),
+    () =>
+      normalizeAssessmentDefinition(
+        detail?.definition || createDefaultAssessmentDefinition("sum"),
+      ),
     [detail?.definition],
   );
   const [currentDetail, setCurrentDetail] = useState(detail);
@@ -112,8 +116,9 @@ export function AssessmentEditorDialog({
       return;
     }
     setCurrentDetail(detail);
-    setDefinition(detail.definition);
-    const nextBaseline = serializeDefinition(detail.definition);
+    const nextDefinition = normalizeAssessmentDefinition(detail.definition);
+    setDefinition(nextDefinition);
+    const nextBaseline = serializeDefinition(nextDefinition);
     setBaseline(nextBaseline);
     setJsonDraft(nextBaseline);
     setLocalError("");
@@ -669,14 +674,6 @@ function BasicFields({
               disabled={disabled}
               value={definition.instructions || ""}
               onChange={(event) => patch({ instructions: event.target.value })}
-            />
-          </QueryField>
-          <QueryField className="md:col-span-2" label="量表特点">
-            <textarea
-              className={textareaClass}
-              disabled={disabled}
-              value={definition.features || ""}
-              onChange={(event) => patch({ features: event.target.value })}
             />
           </QueryField>
           <QueryField className="md:col-span-2" label="报告引导文案">
@@ -1587,7 +1584,8 @@ function DimensionEditor({
                     min: 0,
                     max: 1,
                     level: "",
-                    description: "",
+                    visitorDescription: "",
+                    analystDescription: "",
                     suggestions: [],
                   },
                 ],
@@ -2198,7 +2196,8 @@ function ScoreRangeEditor({
                 min: ranges.length ? Math.max(...ranges.map((item) => item.max)) + 1 : 0,
                 max: ranges.length ? Math.max(...ranges.map((item) => item.max)) + 2 : 1,
                 level: "",
-                description: "",
+                visitorDescription: "",
+                analystDescription: "",
                 suggestions: [],
               },
             ])
@@ -2213,7 +2212,7 @@ function ScoreRangeEditor({
             key={rangeIndex}
             className="rounded-xl border border-[var(--lxxl-border)] bg-[#FCFBF8] p-3"
           >
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[0.7fr_0.7fr_1fr_2fr_auto]">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[0.7fr_0.7fr_1fr_auto]">
               <CompactField label="最低分">
                 <input
                   className={compactInputClass}
@@ -2263,21 +2262,6 @@ function ScoreRangeEditor({
                   }
                 />
               </CompactField>
-              <CompactField label="结果说明">
-                <textarea
-                  className={compactTextareaClass}
-                  disabled={disabled}
-                  value={range.description}
-                  onChange={(event) =>
-                    onChange(
-                      replaceAt(ranges, rangeIndex, {
-                        ...range,
-                        description: event.target.value,
-                      }),
-                    )
-                  }
-                />
-              </CompactField>
               <div className="flex items-end justify-end pb-1">
                 <RemoveButton
                   disabled={disabled || ranges.length <= 1}
@@ -2286,6 +2270,36 @@ function ScoreRangeEditor({
                 />
               </div>
             </div>
+            <CompactField className="mt-3" label="面向来访结果说明" required>
+              <textarea
+                className={compactTextareaClass}
+                disabled={disabled}
+                value={range.visitorDescription}
+                onChange={(event) =>
+                  onChange(
+                    replaceAt(ranges, rangeIndex, {
+                      ...range,
+                      visitorDescription: event.target.value,
+                    }),
+                  )
+                }
+              />
+            </CompactField>
+            <CompactField className="mt-3" label="面向分析方结果说明" required>
+              <textarea
+                className={compactTextareaClass}
+                disabled={disabled}
+                value={range.analystDescription}
+                onChange={(event) =>
+                  onChange(
+                    replaceAt(ranges, rangeIndex, {
+                      ...range,
+                      analystDescription: event.target.value,
+                    }),
+                  )
+                }
+              />
+            </CompactField>
             <CompactField className="mt-3" label="建议（每行一条）">
               <LinesTextarea
                 disabled={disabled}
@@ -2541,15 +2555,20 @@ function EditorSection({
 function CompactField({
   label,
   className = "",
+  required = false,
   children,
 }: {
   label: string;
   className?: string;
+  required?: boolean;
   children: ReactNode;
 }) {
   return (
     <label className={`block min-w-0 ${className}`}>
-      <span className="mb-1.5 block text-xs font-medium text-[var(--lxxl-muted)]">{label}</span>
+      <span className="mb-1.5 block text-xs font-medium text-[var(--lxxl-muted)]">
+        {label}
+        {required && <span className="ml-1 text-[#B34B43]">*</span>}
+      </span>
       {children}
     </label>
   );

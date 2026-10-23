@@ -53,6 +53,20 @@ function findRange(score: number, ranges?: ScoreRange[]) {
   return ranges?.find((r) => score >= r.min && score <= r.max);
 }
 
+function rangeDescription(
+  range: ScoreRange | undefined,
+  audience: "visitor" | "analyst" = "visitor",
+): string {
+  if (!range) {
+    return audience === "analyst" ? "" : "暂无解读";
+  }
+  const legacy = range.description?.trim() || "";
+  if (audience === "analyst") {
+    return range.analystDescription?.trim() || legacy;
+  }
+  return range.visitorDescription?.trim() || legacy || "暂无解读";
+}
+
 function renderReportTemplate(
   template: string,
   variables: Record<string, string | number>
@@ -108,7 +122,9 @@ function calculateSumScore(
     type: "sum",
     totalScore,
     level: range?.level ?? "未知",
-    description: range?.description ?? "暂无解读",
+    description: rangeDescription(range),
+    visitorDescription: rangeDescription(range, "visitor"),
+    analystDescription: rangeDescription(range, "analyst"),
     suggestions: range?.suggestions ?? [],
   };
 }
@@ -148,7 +164,9 @@ function scoreDimension(
     title: dimension.title,
     score: rounded,
     level: range?.level ?? "未知",
-    description: range?.description ?? "暂无解读",
+    description: rangeDescription(range),
+    visitorDescription: rangeDescription(range, "visitor"),
+    analystDescription: rangeDescription(range, "analyst"),
     suggestions: range?.suggestions ?? [],
   };
 }
@@ -257,7 +275,9 @@ function calculatePsqiScore(
     type: "sum",
     totalScore,
     level: range?.level ?? "未知",
-    description: range?.description ?? "暂无解读",
+    description: rangeDescription(range),
+    visitorDescription: rangeDescription(range, "visitor"),
+    analystDescription: rangeDescription(range, "analyst"),
     suggestions: range?.suggestions ?? [],
   };
 }

@@ -131,14 +131,16 @@
           "min": 0,
           "max": 1,
           "level": "需要关注",
-          "description": "近期情绪状态可能受到一定影响。",
+          "visitorDescription": "近期情绪状态可能受到一定影响。",
+          "analystDescription": "近期情绪状态可能受到一定影响。分析时可关注压力恢复与情绪波动。",
           "suggestions": ["保持规律作息", "必要时寻求专业支持"]
         },
         {
           "min": 2,
           "max": 4,
           "level": "状态平稳",
-          "description": "近期情绪状态整体较为平稳。",
+          "visitorDescription": "近期情绪状态整体较为平稳。",
+          "analystDescription": "近期情绪状态整体较为平稳。",
           "suggestions": ["继续保持当前的生活节奏"]
         }
       ]
@@ -155,14 +157,16 @@
           "min": 0,
           "max": 0,
           "level": "需要休息",
-          "description": "近期精力可能不足。",
+          "visitorDescription": "近期精力可能不足。",
+          "analystDescription": "近期精力可能不足。",
           "suggestions": ["优先保证休息和睡眠"]
         },
         {
           "min": 1,
           "max": 2,
           "level": "精力尚可",
-          "description": "近期精力基本能够支持日常事务。",
+          "visitorDescription": "近期精力基本能够支持日常事务。",
+          "analystDescription": "近期精力基本能够支持日常事务。",
           "suggestions": ["保持适度运动和规律睡眠"]
         }
       ]

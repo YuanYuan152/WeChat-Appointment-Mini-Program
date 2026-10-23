@@ -78,7 +78,10 @@ export interface AssessmentScoreRange {
   min: number;
   max: number;
   level: string;
-  description: string;
+  /** 面向来访结果说明；旧数据仅有 description 时由编辑器回填。 */
+  visitorDescription: string;
+  /** 面向分析方结果说明。 */
+  analystDescription: string;
   suggestions: string[];
 }
 

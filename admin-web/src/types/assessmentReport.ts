@@ -84,6 +84,8 @@ export interface SumAssessmentScoreResult {
   totalScore: number;
   level: string;
   description: string;
+  visitorDescription?: string;
+  analystDescription?: string;
   suggestions: string[];
 }
 
@@ -102,6 +104,8 @@ export interface DimensionAssessmentScoreItem {
   score: number;
   level: string;
   description: string;
+  visitorDescription?: string;
+  analystDescription?: string;
   suggestions: string[];
 }
 

@@ -155,6 +155,8 @@ function ScoreResult({
             <div>
               <ResultText
                 description={result.description}
+                visitorDescription={result.visitorDescription}
+                analystDescription={result.analystDescription}
                 suggestions={result.suggestions}
               />
               {assessment.scoreRanges?.length ? (
@@ -262,17 +264,31 @@ function ScoreRing({
 
 function ResultText({
   description,
+  visitorDescription,
+  analystDescription,
   suggestions,
 }: {
   description: string;
+  visitorDescription?: string;
+  analystDescription?: string;
   suggestions: string[];
 }) {
+  const visitorText = visitorDescription?.trim() || description.trim();
+  const analystText = analystDescription?.trim() || "";
   return (
     <div>
-      <h5 className="font-semibold">结果解读</h5>
+      <h5 className="font-semibold">面向来访结果说明</h5>
       <p className="mt-2 whitespace-pre-line text-sm leading-7 text-[var(--lxxl-muted)]">
-        {description || "暂无结果解读"}
+        {visitorText || "暂无结果解读"}
       </p>
+      {analystText ? (
+        <div className="mt-5">
+          <h5 className="font-semibold">面向分析方结果说明</h5>
+          <p className="mt-2 whitespace-pre-line text-sm leading-7 text-[var(--lxxl-muted)]">
+            {analystText}
+          </p>
+        </div>
+      ) : null}
       {suggestions.length > 0 && (
         <div className="mt-5">
           <h5 className="font-semibold">建议</h5>
@@ -372,6 +388,8 @@ function DimensionResult({
       <div className="mt-4">
         <ResultText
           description={dimension.description}
+          visitorDescription={dimension.visitorDescription}
+          analystDescription={dimension.analystDescription}
           suggestions={dimension.suggestions}
         />
       </div>

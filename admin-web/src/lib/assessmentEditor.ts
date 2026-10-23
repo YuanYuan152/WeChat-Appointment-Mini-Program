@@ -150,6 +150,59 @@ function cloneDefinition(
   return structuredClone(definition);
 }
 
+function rangeText(
+  range: Partial<AssessmentScoreRange> & Record<string, unknown>,
+  key: "visitorDescription" | "analystDescription",
+): string {
+  const current = range[key];
+  if (typeof current === "string" && current.trim()) {
+    return current;
+  }
+  return typeof range.description === "string" ? range.description : "";
+}
+
+function normalizeScoreRange(
+  range: Partial<AssessmentScoreRange> & Record<string, unknown>,
+): AssessmentScoreRange {
+  const visitorDescription = rangeText(range, "visitorDescription");
+  const analystDescription = rangeText(range, "analystDescription");
+  return {
+    min: Number(range.min),
+    max: Number(range.max),
+    level: typeof range.level === "string" ? range.level : "",
+    visitorDescription,
+    analystDescription,
+    suggestions: Array.isArray(range.suggestions)
+      ? range.suggestions.filter((item): item is string => typeof item === "string")
+      : [],
+  };
+}
+
+function normalizeScoreRanges(
+  ranges?: Array<Partial<AssessmentScoreRange> & Record<string, unknown>> | null,
+): AssessmentScoreRange[] | undefined {
+  if (!Array.isArray(ranges)) {
+    return undefined;
+  }
+  return ranges.map((range) => normalizeScoreRange(range));
+}
+
+export function normalizeAssessmentDefinition(
+  definition: AssessmentDefinition,
+): AssessmentDefinition {
+  const next = cloneDefinition(definition);
+  if (Array.isArray(next.scoreRanges)) {
+    next.scoreRanges = normalizeScoreRanges(next.scoreRanges);
+  }
+  if (Array.isArray(next.dimensions)) {
+    next.dimensions = next.dimensions.map((dimension) => ({
+      ...dimension,
+      scoreRanges: normalizeScoreRanges(dimension.scoreRanges) || dimension.scoreRanges,
+    }));
+  }
+  return next;
+}
+
 function isGenericScoringType(
   type: AssessmentScoringType,
 ): type is GenericScoringType {
@@ -205,7 +258,8 @@ function createDefaultScoreRanges(
       min: minimum,
       max: maximum,
       level: "待配置结果",
-      description: "请填写该分数区间对应的报告内容。",
+      visitorDescription: "请填写面向来访的结果说明。",
+      analystDescription: "请填写面向分析方的结果说明。",
       suggestions: [],
     },
   ];
@@ -265,7 +319,6 @@ export function createDefaultAssessmentDefinition(
     subtitle: "",
     description: "",
     instructions: "",
-    features: "",
     cover: "",
     duration: 5,
     sortOrder: 0,
@@ -781,10 +834,17 @@ function validateRanges(
         severity: "error",
       });
     }
-    if (!range.description?.trim()) {
+    if (!range.visitorDescription?.trim()) {
       issues.push({
-        path: `${itemPath}.description`,
-        message: "请填写结果说明",
+        path: `${itemPath}.visitorDescription`,
+        message: "请填写面向来访结果说明",
+        severity: "error",
+      });
+    }
+    if (!range.analystDescription?.trim()) {
+      issues.push({
+        path: `${itemPath}.analystDescription`,
+        message: "请填写面向分析方结果说明",
         severity: "error",
       });
     }
@@ -840,6 +900,7 @@ export function validateAssessmentDefinition(
   definition: AssessmentDefinition,
   coverageSummaries = getAssessmentScoreCoverageSummaries(definition),
 ): AssessmentValidationIssue[] {
+  definition = normalizeAssessmentDefinition(definition);
   const issues: AssessmentValidationIssue[] = [];
   const addRequired = (path: string, label: string, value: unknown) => {
     if (typeof value !== "string" || !value.trim()) {

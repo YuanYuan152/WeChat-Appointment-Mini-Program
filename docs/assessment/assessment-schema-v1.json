@@ -393,7 +393,7 @@
     "scoreRange": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["min", "max", "level", "description", "suggestions"],
+      "required": ["min", "max", "level", "visitorDescription", "analystDescription", "suggestions"],
       "properties": {
         "min": {
           "type": "number"
@@ -406,10 +406,17 @@
           "minLength": 1,
           "maxLength": 100
         },
-        "description": {
+        "visitorDescription": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 10000
+          "maxLength": 10000,
+          "description": "面向来访结果说明。"
+        },
+        "analystDescription": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 10000,
+          "description": "面向分析方结果说明。"
         },
         "suggestions": {
           "type": "array",

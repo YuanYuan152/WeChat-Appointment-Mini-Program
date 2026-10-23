@@ -89,7 +89,9 @@ export interface ScoreRange {
   min: number;
   max: number;
   level: string;
-  description: string;
+  description?: string;
+  visitorDescription?: string;
+  analystDescription?: string;
   suggestions: string[];
 }
 
@@ -204,6 +206,8 @@ export interface SumScoreResult {
   totalScore: number;
   level: string;
   description: string;
+  visitorDescription?: string;
+  analystDescription?: string;
   suggestions: string[];
 }
 
@@ -222,6 +226,8 @@ export interface DimensionScoreItem {
   score: number;
   level: string;
   description: string;
+  visitorDescription?: string;
+  analystDescription?: string;
   suggestions: string[];
 }
 

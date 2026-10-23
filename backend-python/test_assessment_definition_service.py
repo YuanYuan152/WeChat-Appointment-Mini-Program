@@ -725,6 +725,32 @@ class AssessmentDefinitionStoreTests(unittest.TestCase):
         with self.assertRaisesRegex(AssessmentValidationError, "无法完成精确校验"):
             validate_definition(definition, allow_fixed_scoring=False)
 
+    def test_score_range_requires_visitor_and_analyst_descriptions(self) -> None:
+        legacy = self.example_definition()
+        legacy["id"] = "legacy-range-description"
+        for dimension in legacy["dimensions"]:
+            for item in dimension["scoreRanges"]:
+                item["description"] = item.get("visitorDescription") or item.get(
+                    "description", "历史说明"
+                )
+                item.pop("visitorDescription", None)
+                item.pop("analystDescription", None)
+        validate_definition(legacy, allow_fixed_scoring=False)
+        first_range = legacy["dimensions"][0]["scoreRanges"][0]
+        self.assertNotIn("description", first_range)
+        self.assertTrue(first_range["visitorDescription"])
+        self.assertTrue(first_range["analystDescription"])
+
+        missing = self.example_definition()
+        missing["id"] = "missing-analyst-description"
+        missing["dimensions"][0]["scoreRanges"][0]["visitorDescription"] = "来访说明"
+        missing["dimensions"][0]["scoreRanges"][0]["analystDescription"] = ""
+        missing["dimensions"][0]["scoreRanges"][0].pop("description", None)
+        with self.assertRaisesRegex(
+            AssessmentValidationError, "analystDescription必须是非空字符串"
+        ):
+            validate_definition(missing, allow_fixed_scoring=False)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -279,24 +279,76 @@ def _assert_unique_ids(items: Any, label: str) -> set[str]:
     return result
 
 
-def _validate_ranges(ranges: Any, label: str) -> None:
+SCORE_RANGE_CORE_FIELDS = {"min", "max", "level", "suggestions"}
+SCORE_RANGE_DESCRIPTION_FIELDS = {
+    "visitorDescription",
+    "analystDescription",
+}
+LEGACY_SCORE_RANGE_DESCRIPTION_FIELD = "description"
+
+
+def _range_description_text(item: dict[str, Any], key: str) -> str:
+    current = item.get(key)
+    if isinstance(current, str) and current.strip():
+        return current
+    fallback = item.get(LEGACY_SCORE_RANGE_DESCRIPTION_FIELD)
+    return fallback if isinstance(fallback, str) else ""
+
+
+def _normalize_score_range(item: dict[str, Any]) -> dict[str, Any]:
+    visitor_description = _range_description_text(item, "visitorDescription")
+    analyst_description = _range_description_text(item, "analystDescription")
+    normalized = dict(item)
+    normalized["visitorDescription"] = visitor_description
+    normalized["analystDescription"] = analyst_description
+    normalized.pop(LEGACY_SCORE_RANGE_DESCRIPTION_FIELD, None)
+    return normalized
+
+
+def _normalize_score_ranges(ranges: Any) -> None:
+    if not isinstance(ranges, list):
+        return
+    for index, raw in enumerate(ranges):
+        if isinstance(raw, dict):
+            ranges[index] = _normalize_score_range(raw)
+
+
+def _normalize_definition_score_ranges(definition: dict[str, Any]) -> None:
+    _normalize_score_ranges(definition.get("scoreRanges"))
+    dimensions = definition.get("dimensions")
+    if isinstance(dimensions, list):
+        for dimension in dimensions:
+            if isinstance(dimension, dict):
+                _normalize_score_ranges(dimension.get("scoreRanges"))
+
+
+def _validate_ranges(ranges: Any, label: str, *, require_split_descriptions: bool) -> None:
     if not isinstance(ranges, list) or not ranges:
         raise AssessmentValidationError(f"{label}至少需要一个分数区间")
     ordered: list[tuple[float, float]] = []
     for index, raw in enumerate(ranges):
         item = _assert_object(raw, f"{label}[{index}]")
-        required = {"min", "max", "level", "description", "suggestions"}
-        missing = required - item.keys()
+        allowed = SCORE_RANGE_CORE_FIELDS | SCORE_RANGE_DESCRIPTION_FIELDS
+        if not require_split_descriptions:
+            allowed = allowed | {LEGACY_SCORE_RANGE_DESCRIPTION_FIELD}
+        missing = SCORE_RANGE_CORE_FIELDS - item.keys()
         if missing:
             raise AssessmentValidationError(f"{label}[{index}]缺少字段：{sorted(missing)}")
-        if item.keys() - required:
+        extra = item.keys() - allowed
+        if extra:
             raise AssessmentValidationError(f"{label}[{index}]包含未知字段")
         low = _assert_number(item["min"], f"{label}[{index}].min")
         high = _assert_number(item["max"], f"{label}[{index}].max")
         if low > high:
             raise AssessmentValidationError(f"{label}[{index}]的 min 不能大于 max")
         _assert_string(item["level"], f"{label}[{index}].level")
-        _assert_string(item["description"], f"{label}[{index}].description")
+        visitor_description = _range_description_text(item, "visitorDescription")
+        analyst_description = _range_description_text(item, "analystDescription")
+        if require_split_descriptions:
+            _assert_string(visitor_description, f"{label}[{index}].visitorDescription")
+            _assert_string(analyst_description, f"{label}[{index}].analystDescription")
+        elif not visitor_description.strip() and not analyst_description.strip():
+            raise AssessmentValidationError(f"{label}[{index}]缺少结果说明")
         if not isinstance(item["suggestions"], list) or any(
             not isinstance(value, str) or not value.strip() for value in item["suggestions"]
         ):
@@ -439,6 +491,7 @@ def validate_definition(
     """
 
     _assert_object(definition, "definition")
+    _normalize_definition_score_ranges(definition)
     missing = REQUIRED_TOP_LEVEL_FIELDS - definition.keys()
     if missing:
         raise AssessmentValidationError(f"量表缺少字段：{sorted(missing)}")
@@ -632,7 +685,11 @@ def validate_definition(
 
     if scoring_type in {"sum", "psqi"}:
         score_ranges = definition.get("scoreRanges")
-        _validate_ranges(score_ranges, "scoreRanges")
+        _validate_ranges(
+            score_ranges,
+            "scoreRanges",
+            require_split_descriptions=strict_scoring,
+        )
         if strict_scoring and scoring_type == "sum":
             is_sum_v2 = scoring_preset == "generic-sum-v2"
             reachable_scores = _reachable_scores(
@@ -723,7 +780,11 @@ def validate_definition(
                     )
             range_label = f"dimensions[{index}].scoreRanges"
             score_ranges = dimension.get("scoreRanges")
-            _validate_ranges(score_ranges, range_label)
+            _validate_ranges(
+                score_ranges,
+                range_label,
+                require_split_descriptions=strict_scoring,
+            )
             if strict_scoring:
                 reachable_scores = _reachable_scores(
                     questions,

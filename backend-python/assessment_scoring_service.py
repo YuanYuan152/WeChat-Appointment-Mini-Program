@@ -203,6 +203,24 @@ def _find_range(score: float | int, ranges: list[dict[str, Any]] | None):
     )
 
 
+def _range_text(range_item: dict[str, Any] | None, key: str, fallback: str = "暂无解读") -> str:
+    if not range_item:
+        return fallback
+    current = range_item.get(key)
+    if isinstance(current, str) and current.strip():
+        return current
+    legacy = range_item.get("description")
+    if isinstance(legacy, str) and legacy.strip():
+        return legacy
+    return fallback
+
+
+def _range_result_text(range_item: dict[str, Any] | None) -> tuple[str, str]:
+    visitor = _range_text(range_item, "visitorDescription")
+    analyst = _range_text(range_item, "analystDescription", fallback="")
+    return visitor, analyst
+
+
 _TEMPLATE_PATTERN = re.compile(r"\{\{([A-Za-z][A-Za-z0-9]*)\}\}")
 
 
@@ -257,13 +275,14 @@ def _sum_result(definition: dict[str, Any], answers: dict[str, str]):
     if is_v2:
         total = _js_round_2(float(total))
     range_item = _find_range(total, definition.get("scoreRanges"))
+    visitor_description, analyst_description = _range_result_text(range_item)
     return {
         "type": "sum",
         "totalScore": total,
         "level": range_item.get("level", "未知") if range_item else "未知",
-        "description": (
-            range_item.get("description", "暂无解读") if range_item else "暂无解读"
-        ),
+        "description": visitor_description,
+        "visitorDescription": visitor_description,
+        "analystDescription": analyst_description,
         "suggestions": list(range_item.get("suggestions", [])) if range_item else [],
     }
 
@@ -310,11 +329,9 @@ def _dimension_result(definition: dict[str, Any], answers: dict[str, str]):
                 "title": dimension["title"],
                 "score": score,
                 "level": range_item.get("level", "未知") if range_item else "未知",
-                "description": (
-                    range_item.get("description", "暂无解读")
-                    if range_item
-                    else "暂无解读"
-                ),
+                "description": _range_result_text(range_item)[0],
+                "visitorDescription": _range_result_text(range_item)[0],
+                "analystDescription": _range_result_text(range_item)[1],
                 "suggestions": (
                     list(range_item.get("suggestions", [])) if range_item else []
                 ),
@@ -396,13 +413,14 @@ def _psqi_result(definition: dict[str, Any], answers: dict[str, str]):
     )
     total = value("q6") + component_2 + value("q4") + component_5 + value("q7") + component_7
     range_item = _find_range(total, definition.get("scoreRanges"))
+    visitor_description, analyst_description = _range_result_text(range_item)
     return {
         "type": "sum",
         "totalScore": total,
         "level": range_item.get("level", "未知") if range_item else "未知",
-        "description": (
-            range_item.get("description", "暂无解读") if range_item else "暂无解读"
-        ),
+        "description": visitor_description,
+        "visitorDescription": visitor_description,
+        "analystDescription": analyst_description,
         "suggestions": list(range_item.get("suggestions", [])) if range_item else [],
     }
 

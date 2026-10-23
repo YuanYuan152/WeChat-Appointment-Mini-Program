@@ -43,6 +43,9 @@ test("creates defaults for all generic scoring types", () => {
   const sum = editor.createDefaultAssessmentDefinition("sum");
   assert.equal(sum.scoringPreset, "generic-sum-v2");
   assert.equal(sum.scoreRanges.length, 1);
+  assert.equal(sum.features, undefined);
+  assert.equal(sum.scoreRanges[0].visitorDescription, "请填写面向来访的结果说明。");
+  assert.equal(sum.scoreRanges[0].analystDescription, "请填写面向分析方的结果说明。");
   assert.equal(sum.dimensions, undefined);
 
   const dimension = editor.createDefaultAssessmentDefinition("dimension");
@@ -152,6 +155,23 @@ test("validates a complete default definition", () => {
   const definition = completeRequiredFields(
     editor.createDefaultAssessmentDefinition("sum"),
   );
+  assert.deepEqual(editor.validateAssessmentDefinition(definition), []);
+});
+
+test("requires visitor and analyst score range descriptions", () => {
+  const definition = completeRequiredFields(
+    editor.createDefaultAssessmentDefinition("sum"),
+  );
+  definition.scoreRanges[0].visitorDescription = "";
+  definition.scoreRanges[0].analystDescription = "";
+
+  const messages = editor
+    .validateAssessmentDefinition(definition)
+    .map((issue) => issue.message);
+  assert.ok(messages.includes("请填写面向来访结果说明"));
+  assert.ok(messages.includes("请填写面向分析方结果说明"));
+
+  definition.scoreRanges[0].description = "旧说明";
   assert.deepEqual(editor.validateAssessmentDefinition(definition), []);
 });
 
