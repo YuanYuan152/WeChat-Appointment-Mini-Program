@@ -150,8 +150,13 @@ function cloneDefinition(
   return structuredClone(definition);
 }
 
+/** 兼容已规范区间，以及旧 JSON 仅有 description、字段残缺的脏数据。 */
+type ScoreRangeInput = Partial<AssessmentScoreRange> & {
+  description?: unknown;
+};
+
 function rangeText(
-  range: Partial<AssessmentScoreRange> & Record<string, unknown>,
+  range: ScoreRangeInput,
   key: "visitorDescription" | "analystDescription",
 ): string {
   const current = range[key];
@@ -161,9 +166,7 @@ function rangeText(
   return typeof range.description === "string" ? range.description : "";
 }
 
-function normalizeScoreRange(
-  range: Partial<AssessmentScoreRange> & Record<string, unknown>,
-): AssessmentScoreRange {
+function normalizeScoreRange(range: ScoreRangeInput): AssessmentScoreRange {
   const visitorDescription = rangeText(range, "visitorDescription");
   const analystDescription = rangeText(range, "analystDescription");
   return {
@@ -179,7 +182,13 @@ function normalizeScoreRange(
 }
 
 function normalizeScoreRanges(
-  ranges?: Array<Partial<AssessmentScoreRange> & Record<string, unknown>> | null,
+  ranges: readonly ScoreRangeInput[],
+): AssessmentScoreRange[];
+function normalizeScoreRanges(
+  ranges?: readonly ScoreRangeInput[] | null,
+): AssessmentScoreRange[] | undefined;
+function normalizeScoreRanges(
+  ranges?: readonly ScoreRangeInput[] | null,
 ): AssessmentScoreRange[] | undefined {
   if (!Array.isArray(ranges)) {
     return undefined;
