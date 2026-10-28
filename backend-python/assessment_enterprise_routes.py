@@ -300,6 +300,11 @@ def submit_enterprise_assessment_reports(
                     "assessmentId": item.assessmentId,
                     "publicId": detail.get("publicId") or detail.get("reportId"),
                     "assessmentTitle": detail.get("assessmentTitle"),
+                    "assessmentSubtitle": detail.get("assessmentSubtitle"),
+                    "scoringType": detail.get("scoringType"),
+                    "resultSummary": detail.get("resultSummary"),
+                    # 企业站单量表提交后需立即展示结果（无需再鉴权拉报告）
+                    "result": detail.get("result"),
                 }
             )
     except (AssessmentReportError, AssessmentDefinitionError) as exc:
