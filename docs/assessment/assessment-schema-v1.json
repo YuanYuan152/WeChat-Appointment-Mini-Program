@@ -19,6 +19,8 @@
     "scoringType",
     "scoringPreset",
     "questions",
+    "instructions",
+    "reportIntro",
     "disclaimer"
   ],
   "properties": {
@@ -59,7 +61,9 @@
     },
     "instructions": {
       "type": "string",
-      "maxLength": 20000
+      "minLength": 1,
+      "maxLength": 20000,
+      "description": "指导语，必填。"
     },
     "features": {
       "type": "string",
@@ -140,7 +144,9 @@
     },
     "reportIntro": {
       "type": "string",
-      "maxLength": 20000
+      "minLength": 1,
+      "maxLength": 20000,
+      "description": "报告引导文案，必填。"
     },
     "reportProfiles": {
       "type": "array",

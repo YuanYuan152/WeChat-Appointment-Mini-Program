@@ -620,7 +620,7 @@ function BasicFields({
         </QueryField>
       </EditorSection>
 
-      <EditorSection description="这些内容会显示在 EAP 量表列表和答题引导页。" title="展示信息">
+      <EditorSection description="这些内容会显示在 EAP 量表列表和答题引导页。" title="量表信息">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <QueryField className="md:col-span-2" label="量表名称" required>
             <input
@@ -673,7 +673,7 @@ function BasicFields({
               onChange={(event) => patch({ duration: numberValue(event.target.value, 1) })}
             />
           </QueryField>
-          <QueryField className="md:col-span-2" label="答题说明">
+          <QueryField className="md:col-span-2" label="指导语" required>
             <textarea
               className={textareaClass}
               disabled={disabled}
@@ -681,7 +681,7 @@ function BasicFields({
               onChange={(event) => patch({ instructions: event.target.value })}
             />
           </QueryField>
-          <QueryField className="md:col-span-2" label="报告引导文案">
+          <QueryField className="md:col-span-2" label="报告引导文案" required>
             <textarea
               className={textareaClass}
               disabled={disabled}

@@ -594,8 +594,13 @@ def validate_definition(
             allow_empty=False,
         )
     _assert_string(definition.get("disclaimer"), "disclaimer")
-    for field in ("instructions", "features", "reportIntro"):
-        _assert_optional_string(definition.get(field), field)
+    if strict_scoring:
+        _assert_string(definition.get("instructions"), "instructions")
+        _assert_string(definition.get("reportIntro"), "reportIntro")
+    else:
+        _assert_optional_string(definition.get("instructions"), "instructions")
+        _assert_optional_string(definition.get("reportIntro"), "reportIntro")
+    _assert_optional_string(definition.get("features"), "features")
     for field in ("createdAt", "updatedAt"):
         _assert_optional_string(definition.get(field), field)
     if definition.get("publishedAt") is not None:

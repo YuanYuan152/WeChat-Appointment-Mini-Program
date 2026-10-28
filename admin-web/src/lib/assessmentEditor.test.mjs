@@ -36,6 +36,8 @@ function completeRequiredFields(definition) {
     id: "editor-test",
     title: "编辑器测试量表",
     cover: "/static/assessments/editor-test.jpg",
+    instructions: definition.instructions || "请认真阅读并按真实情况作答。",
+    reportIntro: definition.reportIntro || "以下是根据你的作答生成的结果说明。",
   };
 }
 

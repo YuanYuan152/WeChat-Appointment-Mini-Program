@@ -1076,6 +1076,8 @@ export function validateAssessmentDefinition(
       });
     }
   }
+  addRequired("instructions", "指导语", definition.instructions);
+  addRequired("reportIntro", "报告引导文案", definition.reportIntro);
   addRequired("disclaimer", "免责声明", definition.disclaimer);
 
   if (!Number.isInteger(definition.version) || definition.version < 1) {
