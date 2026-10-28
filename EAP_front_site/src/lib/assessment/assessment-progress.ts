@@ -1,6 +1,10 @@
-import type { AssessmentQuestion } from "@/lib/api/types";
+import type {
+  AssessmentAnswerValue,
+  AssessmentQuestion,
+} from "@/lib/api/types";
+import { isAssessmentAnswerPresent } from "@/lib/assessment/assessment-answer";
 
-type ProgressQuestion = Pick<AssessmentQuestion, "id" | "required">;
+type ProgressQuestion = AssessmentQuestion;
 
 export function shouldCreateFreshAssessmentAttempt({
   started,
@@ -15,45 +19,47 @@ export function shouldCreateFreshAssessmentAttempt({
 }
 
 export function isRequiredAssessmentQuestion(
-  question: ProgressQuestion,
+  question: Pick<AssessmentQuestion, "required">,
 ): boolean {
   return question.required !== false;
 }
 
 export function areRequiredAssessmentQuestionsAnswered(
   questions: ProgressQuestion[],
-  answers: Record<string, string>,
+  answers: Record<string, AssessmentAnswerValue>,
 ): boolean {
   return (
     questions.length > 0 &&
     questions.every(
       (question) =>
-        !isRequiredAssessmentQuestion(question) || Boolean(answers[question.id]),
+        !isRequiredAssessmentQuestion(question) ||
+        isAssessmentAnswerPresent(question, answers[question.id]),
     )
   );
 }
 
 export function findAssessmentResumeQuestionIndex(
   questions: ProgressQuestion[],
-  answers: Record<string, string>,
+  answers: Record<string, AssessmentAnswerValue>,
   currentIndex: number,
 ): number {
   if (
     currentIndex >= 0 &&
     currentIndex < questions.length &&
-    !answers[questions[currentIndex].id]
+    !isAssessmentAnswerPresent(questions[currentIndex], answers[questions[currentIndex].id])
   ) {
     return currentIndex;
   }
   const requiredIndex = questions.findIndex(
     (question) =>
-      isRequiredAssessmentQuestion(question) && !answers[question.id],
+      isRequiredAssessmentQuestion(question) &&
+      !isAssessmentAnswerPresent(question, answers[question.id]),
   );
   if (requiredIndex >= 0) {
     return requiredIndex;
   }
   const unansweredIndex = questions.findIndex(
-    (question) => !answers[question.id],
+    (question) => !isAssessmentAnswerPresent(question, answers[question.id]),
   );
   return unansweredIndex >= 0
     ? unansweredIndex

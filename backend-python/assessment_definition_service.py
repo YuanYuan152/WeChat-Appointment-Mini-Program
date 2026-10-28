@@ -360,12 +360,78 @@ def _validate_ranges(ranges: Any, label: str, *, require_split_descriptions: boo
             raise AssessmentValidationError(f"{label}存在重叠区间")
 
 
+def _question_input_type(question: dict[str, Any]) -> str:
+    return str(question.get("inputType") or "choice")
+
+
+def _follow_up_score_values(follow_up: dict[str, Any]) -> set[float]:
+    score_mode = str(follow_up.get("scoreMode") or "filled")
+    completed = float(follow_up.get("completedScore") or 0)
+    empty = float(follow_up.get("emptyScore") or 0)
+    if score_mode == "value":
+        if follow_up.get("inputType") != "number":
+            raise AssessmentValidationError("追问 scoreMode=value 仅支持数字输入")
+        validation = follow_up.get("validation") or {}
+        if "min" not in validation or "max" not in validation:
+            raise AssessmentValidationError("按数字计分的追问必须设置 validation.min/max")
+        low = float(validation["min"])
+        high = float(validation["max"])
+        if high < low:
+            raise AssessmentValidationError("追问 validation.max 必须 >= min")
+        if high - low > 500:
+            raise AssessmentValidationError("按数字计分的追问取值跨度过大，请缩小 min/max")
+        if low == int(low) and high == int(high):
+            return {float(item) for item in range(int(low), int(high) + 1)}
+        return {low, high}
+    values = {completed}
+    if not follow_up.get("required"):
+        values.add(empty)
+    return values
+
+
 def _question_score_values(
     question: dict[str, Any],
     *,
     reverse: bool,
 ) -> set[float]:
-    values = {float(option["value"]) for option in question["options"]}
+    input_type = _question_input_type(question)
+    if input_type in {"text", "number"}:
+        score_mode = str(question.get("scoreMode") or "filled")
+        completed = float(question.get("completedScore") or 0)
+        empty = float(question.get("emptyScore") or 0)
+        if score_mode == "value":
+            if input_type != "number":
+                raise AssessmentValidationError("scoreMode=value 仅支持数字题")
+            validation = question.get("validation") or {}
+            if "min" not in validation or "max" not in validation:
+                raise AssessmentValidationError("按数字计分的题目必须设置 validation.min/max")
+            low = float(validation["min"])
+            high = float(validation["max"])
+            if high < low:
+                raise AssessmentValidationError("validation.max 必须 >= min")
+            if high - low > 500:
+                raise AssessmentValidationError("按数字计分的取值跨度过大，请缩小 min/max")
+            if low == int(low) and high == int(high):
+                values = {float(item) for item in range(int(low), int(high) + 1)}
+            else:
+                values = {low, high}
+        else:
+            values = {completed}
+            if not question.get("required", True):
+                values.add(empty)
+        return values
+
+    values: set[float] = set()
+    for option in question.get("options") or []:
+        base = float(option["value"])
+        follow_up = option.get("followUp")
+        if isinstance(follow_up, dict):
+            for extra in _follow_up_score_values(follow_up):
+                values.add(base + extra)
+        else:
+            values.add(base)
+    if not values:
+        raise AssessmentValidationError("选择题缺少可计分选项")
     if reverse:
         minimum = min(values)
         maximum = max(values)
@@ -562,7 +628,18 @@ def validate_definition(
     option_ids: set[str] = set()
     for question_index, raw_question in enumerate(questions):
         question = _assert_object(raw_question, f"questions[{question_index}]")
-        allowed_question_fields = {"id", "text", "helpText", "required", "options"}
+        allowed_question_fields = {
+            "id",
+            "text",
+            "helpText",
+            "required",
+            "options",
+            "inputType",
+            "scoreMode",
+            "completedScore",
+            "emptyScore",
+            "validation",
+        }
         if question.keys() - allowed_question_fields:
             raise AssessmentValidationError(
                 f"questions[{question_index}]包含未知字段"
@@ -573,6 +650,72 @@ def validate_definition(
         )
         if not isinstance(question.get("required"), bool):
             raise AssessmentValidationError(f"questions[{question_index}].required 必须是布尔值")
+        input_type = question.get("inputType", "choice")
+        if input_type not in {"choice", "text", "number"}:
+            raise AssessmentValidationError(
+                f"questions[{question_index}].inputType 不合法"
+            )
+        score_mode = question.get("scoreMode", "filled")
+        if score_mode not in {"filled", "value"}:
+            raise AssessmentValidationError(
+                f"questions[{question_index}].scoreMode 不合法"
+            )
+        if "completedScore" in question:
+            _assert_number(
+                question.get("completedScore"),
+                f"questions[{question_index}].completedScore",
+            )
+        if "emptyScore" in question:
+            _assert_number(
+                question.get("emptyScore"),
+                f"questions[{question_index}].emptyScore",
+            )
+        validation = question.get("validation")
+        if validation is not None:
+            validation_obj = _assert_object(
+                validation, f"questions[{question_index}].validation"
+            )
+            if validation_obj.keys() - {"min", "max", "minLength", "maxLength"}:
+                raise AssessmentValidationError(
+                    f"questions[{question_index}].validation 包含未知字段"
+                )
+            for key in ("min", "max"):
+                if key in validation_obj:
+                    _assert_number(
+                        validation_obj[key],
+                        f"questions[{question_index}].validation.{key}",
+                    )
+            for key in ("minLength", "maxLength"):
+                if key in validation_obj and (
+                    isinstance(validation_obj[key], bool)
+                    or not isinstance(validation_obj[key], int)
+                    or validation_obj[key] < 0
+                ):
+                    raise AssessmentValidationError(
+                        f"questions[{question_index}].validation.{key} 必须是非负整数"
+                    )
+        if input_type in {"text", "number"}:
+            if score_mode == "value" and input_type != "number":
+                raise AssessmentValidationError(
+                    f"questions[{question_index}] 仅数字题支持按填写数字计分"
+                )
+            if score_mode == "value":
+                validation_obj = question.get("validation") or {}
+                if "min" not in validation_obj or "max" not in validation_obj:
+                    raise AssessmentValidationError(
+                        f"questions[{question_index}] 按数字计分必须设置 validation.min/max"
+                    )
+            options = question.get("options", [])
+            if not isinstance(options, list):
+                raise AssessmentValidationError(
+                    f"questions[{question_index}].options 必须是数组"
+                )
+            if options:
+                raise AssessmentValidationError(
+                    f"questions[{question_index}] 填空/数字题不能配置选项"
+                )
+            continue
+
         options = question.get("options")
         current_ids = _assert_unique_ids(options, f"questions[{question_index}].options")
         if len(current_ids) < 2:
@@ -586,7 +729,7 @@ def validate_definition(
                 raw_option,
                 f"questions[{question_index}].options[{option_index}]",
             )
-            if option.keys() - {"id", "text", "value", "matchTags"}:
+            if option.keys() - {"id", "text", "value", "matchTags", "followUp"}:
                 raise AssessmentValidationError(
                     f"questions[{question_index}].options[{option_index}]包含未知字段"
                 )
@@ -606,6 +749,84 @@ def validate_definition(
                     if not STABLE_ID_PATTERN.fullmatch(str(tag)):
                         raise AssessmentValidationError(f"matchTags 包含非法 ID：{tag}")
                     _assert_number(weight, f"matchTags.{tag}")
+            follow_up = option.get("followUp")
+            if follow_up is not None:
+                follow = _assert_object(
+                    follow_up,
+                    f"questions[{question_index}].options[{option_index}].followUp",
+                )
+                if follow.keys() - {
+                    "inputType",
+                    "label",
+                    "required",
+                    "scoreMode",
+                    "completedScore",
+                    "emptyScore",
+                    "validation",
+                }:
+                    raise AssessmentValidationError(
+                        f"questions[{question_index}].options[{option_index}].followUp 包含未知字段"
+                    )
+                if follow.get("inputType") not in {"text", "number"}:
+                    raise AssessmentValidationError(
+                        f"questions[{question_index}].options[{option_index}].followUp.inputType 不合法"
+                    )
+                if follow.get("scoreMode") not in {"filled", "value"}:
+                    raise AssessmentValidationError(
+                        f"questions[{question_index}].options[{option_index}].followUp.scoreMode 不合法"
+                    )
+                if follow.get("scoreMode") == "value" and follow.get("inputType") != "number":
+                    raise AssessmentValidationError(
+                        f"questions[{question_index}].options[{option_index}].followUp 仅数字追问支持按填写数字计分"
+                    )
+                if "required" in follow and not isinstance(follow.get("required"), bool):
+                    raise AssessmentValidationError(
+                        f"questions[{question_index}].options[{option_index}].followUp.required 必须是布尔值"
+                    )
+                _assert_optional_string(
+                    follow.get("label"),
+                    f"questions[{question_index}].options[{option_index}].followUp.label",
+                )
+                if "completedScore" in follow:
+                    _assert_number(
+                        follow.get("completedScore"),
+                        f"questions[{question_index}].options[{option_index}].followUp.completedScore",
+                    )
+                if "emptyScore" in follow:
+                    _assert_number(
+                        follow.get("emptyScore"),
+                        f"questions[{question_index}].options[{option_index}].followUp.emptyScore",
+                    )
+                follow_validation = follow.get("validation")
+                if follow_validation is not None:
+                    follow_validation_obj = _assert_object(
+                        follow_validation,
+                        f"questions[{question_index}].options[{option_index}].followUp.validation",
+                    )
+                    if follow_validation_obj.keys() - {
+                        "min",
+                        "max",
+                        "minLength",
+                        "maxLength",
+                    }:
+                        raise AssessmentValidationError(
+                            f"questions[{question_index}].options[{option_index}].followUp.validation 包含未知字段"
+                        )
+                    for key in ("min", "max"):
+                        if key in follow_validation_obj:
+                            _assert_number(
+                                follow_validation_obj[key],
+                                f"questions[{question_index}].options[{option_index}].followUp.validation.{key}",
+                            )
+                if follow.get("scoreMode") == "value":
+                    follow_validation_obj = follow.get("validation") or {}
+                    if (
+                        "min" not in follow_validation_obj
+                        or "max" not in follow_validation_obj
+                    ):
+                        raise AssessmentValidationError(
+                            f"questions[{question_index}].options[{option_index}].followUp 按数字计分必须设置 validation.min/max"
+                        )
 
     demographic_questions = definition.get("demographicQuestions", [])
     if not isinstance(demographic_questions, list):

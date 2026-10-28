@@ -49,7 +49,7 @@ class AssessmentReportSubmitPayload(BaseModel):
     assessmentId: str = Field(..., min_length=1, max_length=80)
     assessmentVersion: int = Field(..., ge=1)
     demographicAnswers: dict[str, Any] = Field(default_factory=dict)
-    answers: dict[str, str]
+    answers: dict[str, Any]
     entrySource: Literal["web", "mini-webview", "qr", "direct"] = "web"
     shareCode: Optional[str] = Field(None, max_length=120)
     consentVersion: str = Field(..., min_length=1, max_length=50)

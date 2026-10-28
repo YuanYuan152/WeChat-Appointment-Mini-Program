@@ -31,11 +31,136 @@ def _same_scalar(left: Any, right: Any) -> bool:
     return type(left) is type(right) and left == right
 
 
+def _question_input_type(question: dict[str, Any]) -> str:
+    return str(question.get("inputType") or "choice")
+
+
+def _is_filled_text(value: Any) -> bool:
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _is_filled_number(value: Any) -> bool:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    return math.isfinite(float(value))
+
+
+def _parse_choice_answer(answer: Any) -> tuple[str | None, Any]:
+    """返回 (optionId, followUp)。旧数据直接用选项 ID 字符串。"""
+    if isinstance(answer, str):
+        return answer, None
+    if isinstance(answer, dict):
+        option_id = answer.get("optionId")
+        if not isinstance(option_id, str):
+            return None, None
+        return option_id, answer.get("followUp")
+    return None, None
+
+
+def _validate_follow_up_value(
+    follow_up: dict[str, Any],
+    value: Any,
+    *,
+    question_id: str,
+) -> Any:
+    input_type = follow_up.get("inputType")
+    required = bool(follow_up.get("required"))
+    if input_type == "text":
+        if value is None or value == "":
+            if required:
+                raise AssessmentAnswerError(f"题目 {question_id} 需要填写追问内容")
+            return None
+        if not isinstance(value, str):
+            raise AssessmentAnswerError(f"题目 {question_id} 的追问必须是文本")
+        validation = follow_up.get("validation") or {}
+        if "minLength" in validation and len(value) < int(validation["minLength"]):
+            raise AssessmentAnswerError(f"题目 {question_id} 的追问内容过短")
+        if "maxLength" in validation and len(value) > int(validation["maxLength"]):
+            raise AssessmentAnswerError(f"题目 {question_id} 的追问内容过长")
+        return value
+    if input_type == "number":
+        if value is None or value == "":
+            if required:
+                raise AssessmentAnswerError(f"题目 {question_id} 需要填写追问数字")
+            return None
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise AssessmentAnswerError(f"题目 {question_id} 的追问必须是数字")
+        if not math.isfinite(float(value)):
+            raise AssessmentAnswerError(f"题目 {question_id} 的追问数字不合法")
+        number = float(value) if isinstance(value, float) else value
+        validation = follow_up.get("validation") or {}
+        if "min" in validation and float(number) < float(validation["min"]):
+            raise AssessmentAnswerError(f"题目 {question_id} 的追问小于最小值")
+        if "max" in validation and float(number) > float(validation["max"]):
+            raise AssessmentAnswerError(f"题目 {question_id} 的追问大于最大值")
+        return number
+    raise AssessmentAnswerError(f"题目 {question_id} 的追问类型不受支持")
+
+
+def _normalize_question_answer(
+    question: dict[str, Any],
+    answer: Any,
+    *,
+    question_id: str,
+) -> Any:
+    input_type = _question_input_type(question)
+    if input_type == "text":
+        if not isinstance(answer, dict) or "text" not in answer:
+            raise AssessmentAnswerError(f"题目 {question_id} 的答案格式错误")
+        text = answer.get("text")
+        if not isinstance(text, str):
+            raise AssessmentAnswerError(f"题目 {question_id} 必须是文本")
+        if not text.strip():
+            raise AssessmentAnswerError(f"题目 {question_id} 不能为空")
+        validation = question.get("validation") or {}
+        if "minLength" in validation and len(text) < int(validation["minLength"]):
+            raise AssessmentAnswerError(f"题目 {question_id} 内容过短")
+        if "maxLength" in validation and len(text) > int(validation["maxLength"]):
+            raise AssessmentAnswerError(f"题目 {question_id} 内容过长")
+        return {"text": text}
+    if input_type == "number":
+        if not isinstance(answer, dict) or "number" not in answer:
+            raise AssessmentAnswerError(f"题目 {question_id} 的答案格式错误")
+        number = answer.get("number")
+        if isinstance(number, bool) or not isinstance(number, (int, float)):
+            raise AssessmentAnswerError(f"题目 {question_id} 必须是数字")
+        if not math.isfinite(float(number)):
+            raise AssessmentAnswerError(f"题目 {question_id} 数值不合法")
+        validation = question.get("validation") or {}
+        if "min" in validation and float(number) < float(validation["min"]):
+            raise AssessmentAnswerError(f"题目 {question_id} 小于最小值")
+        if "max" in validation and float(number) > float(validation["max"]):
+            raise AssessmentAnswerError(f"题目 {question_id} 大于最大值")
+        return {"number": float(number) if isinstance(number, float) else number}
+
+    option_id, follow_up_value = _parse_choice_answer(answer)
+    if not option_id:
+        raise AssessmentAnswerError(f"题目 {question_id} 的答案格式错误")
+    options = {str(option["id"]): option for option in question.get("options", [])}
+    option = options.get(option_id)
+    if not option:
+        raise AssessmentAnswerError(f"题目 {question_id} 的选项不存在")
+    follow_up = option.get("followUp")
+    if not isinstance(follow_up, dict):
+        if isinstance(answer, str):
+            return answer
+        return option_id
+    normalized_follow_up = _validate_follow_up_value(
+        follow_up,
+        follow_up_value,
+        question_id=question_id,
+    )
+    payload: dict[str, Any] = {"optionId": option_id}
+    if normalized_follow_up is not None:
+        payload["followUp"] = normalized_follow_up
+    return payload
+
+
 def validate_submission_answers(
     definition: dict[str, Any],
     demographic_answers: dict[str, Any],
-    answers: dict[str, str],
-) -> tuple[dict[str, Any], dict[str, str]]:
+    answers: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
     """校验并返回可安全序列化的答案，不接受未知题目或选项。"""
     if not isinstance(demographic_answers, dict):
         raise AssessmentAnswerError("人口学答案必须是对象")
@@ -43,23 +168,22 @@ def validate_submission_answers(
         raise AssessmentAnswerError("量表答案必须是对象")
 
     questions = {str(item["id"]): item for item in definition.get("questions", [])}
-    unknown_questions = sorted(set(answers) - set(questions))
+    unknown_questions = sorted(set(str(key) for key in answers) - set(questions))
     if unknown_questions:
         raise AssessmentAnswerError(f"包含未知题目：{unknown_questions}")
 
-    normalized_answers: dict[str, str] = {}
+    normalized_answers: dict[str, Any] = {}
     for question_id, question in questions.items():
         answer = answers.get(question_id)
         if answer is None:
             if question.get("required", True):
                 raise AssessmentAnswerError(f"请完成题目：{question.get('text', question_id)}")
             continue
-        if not isinstance(answer, str):
-            raise AssessmentAnswerError(f"题目 {question_id} 的答案格式错误")
-        option_ids = {str(option["id"]) for option in question.get("options", [])}
-        if answer not in option_ids:
-            raise AssessmentAnswerError(f"题目 {question_id} 的选项不存在")
-        normalized_answers[question_id] = answer
+        normalized_answers[question_id] = _normalize_question_answer(
+            question,
+            answer,
+            question_id=question_id,
+        )
 
     demographic_questions = {
         str(item["id"]): item for item in definition.get("demographicQuestions", [])
@@ -163,33 +287,78 @@ def validate_submission_answers(
     return normalized_demographics, normalized_answers
 
 
+def _follow_up_score(follow_up: dict[str, Any], value: Any) -> float:
+    score_mode = str(follow_up.get("scoreMode") or "filled")
+    completed_score = float(follow_up.get("completedScore") or 0)
+    empty_score = float(follow_up.get("emptyScore") or 0)
+    input_type = follow_up.get("inputType")
+    filled = (
+        _is_filled_text(value)
+        if input_type == "text"
+        else _is_filled_number(value)
+    )
+    if score_mode == "value":
+        return float(value) if filled else empty_score
+    return completed_score if filled else empty_score
+
+
 def _option_value(
     definition: dict[str, Any],
-    answers: dict[str, str],
+    answers: dict[str, Any],
     question_id: str,
     reverse_ids: set[str] | None = None,
 ) -> float | int:
+    """计算单题得分；兼容旧函数名，供各计分模板调用。"""
     question = next(
         (item for item in definition.get("questions", []) if item.get("id") == question_id),
         None,
     )
     if not question:
         return 0
+    answer = answers.get(question_id)
+    if answer is None:
+        return 0
+
+    input_type = _question_input_type(question)
+    if input_type in {"text", "number"}:
+        score_mode = str(question.get("scoreMode") or "filled")
+        completed_score = float(question.get("completedScore") or 0)
+        empty_score = float(question.get("emptyScore") or 0)
+        if input_type == "text":
+            filled = isinstance(answer, dict) and _is_filled_text(answer.get("text"))
+            return completed_score if filled else empty_score
+        number = answer.get("number") if isinstance(answer, dict) else None
+        filled = _is_filled_number(number)
+        if score_mode == "value":
+            return float(number) if filled else empty_score
+        return completed_score if filled else empty_score
+
+    option_id, follow_up_value = _parse_choice_answer(answer)
     option = next(
         (
             item
             for item in question.get("options", [])
-            if item.get("id") == answers.get(question_id)
+            if item.get("id") == option_id
         ),
         None,
     )
     if not option:
         return 0
-    value = option.get("value", 0)
+    value = float(option.get("value", 0))
     if reverse_ids and question_id in reverse_ids:
-        values = [item.get("value", 0) for item in question.get("options", [])]
-        return max(values) + min(values) - value
+        values = [float(item.get("value", 0)) for item in question.get("options", [])]
+        value = max(values) + min(values) - value
+    follow_up = option.get("followUp")
+    if isinstance(follow_up, dict):
+        value += _follow_up_score(follow_up, follow_up_value)
+    if value == int(value):
+        return int(value)
     return value
+
+
+def _selected_option_id(answer: Any) -> str | None:
+    option_id, _ = _parse_choice_answer(answer)
+    return option_id
 
 
 def _find_range(score: float | int, ranges: list[dict[str, Any]] | None):
@@ -256,7 +425,7 @@ def _report_profile(
     return result
 
 
-def _sum_result(definition: dict[str, Any], answers: dict[str, str]):
+def _sum_result(definition: dict[str, Any], answers: dict[str, Any]):
     is_v2 = definition.get("scoringPreset") == "generic-sum-v2"
     reverse_ids = (
         set(definition.get("reverseQuestionIds", []))
@@ -291,7 +460,7 @@ def _js_round_2(value: float) -> float:
     return math.floor(value * 100 + 0.5) / 100
 
 
-def _dimension_result(definition: dict[str, Any], answers: dict[str, str]):
+def _dimension_result(definition: dict[str, Any], answers: dict[str, Any]):
     dimensions = []
     for dimension in definition.get("dimensions", []):
         reverse_ids = set(dimension.get("reverseQuestionIds", []))
@@ -340,14 +509,15 @@ def _dimension_result(definition: dict[str, Any], answers: dict[str, str]):
     return {"type": "dimension", "dimensions": dimensions}
 
 
-def _match_result(definition: dict[str, Any], answers: dict[str, str]):
+def _match_result(definition: dict[str, Any], answers: dict[str, Any]):
     tag_scores: dict[str, float] = {}
     for question in definition.get("questions", []):
+        selected_id = _selected_option_id(answers.get(str(question.get("id"))))
         option = next(
             (
                 item
                 for item in question.get("options", [])
-                if item.get("id") == answers.get(question.get("id"))
+                if item.get("id") == selected_id
             ),
             None,
         )
@@ -368,7 +538,7 @@ def _match_result(definition: dict[str, Any], answers: dict[str, str]):
     }
 
 
-def _aas_result(definition: dict[str, Any], answers: dict[str, str]):
+def _aas_result(definition: dict[str, Any], answers: dict[str, Any]):
     reverse = set(definition.get("reverseQuestionIds", []))
 
     def average(ids: list[str]) -> float:
@@ -399,7 +569,7 @@ def _aas_result(definition: dict[str, Any], answers: dict[str, str]):
     }
 
 
-def _psqi_result(definition: dict[str, Any], answers: dict[str, str]):
+def _psqi_result(definition: dict[str, Any], answers: dict[str, Any]):
     value = lambda item: _option_value(definition, answers, item)
     latency = value("q2") + value("q5a")
     component_2 = 0 if latency == 0 else 1 if latency <= 2 else 2 if latency <= 4 else 3
@@ -427,7 +597,7 @@ def _psqi_result(definition: dict[str, Any], answers: dict[str, str]):
 
 def _sum_questions(
     definition: dict[str, Any],
-    answers: dict[str, str],
+    answers: dict[str, Any],
     ids: list[str],
     reverse_ids: list[str] | None = None,
 ):
@@ -457,7 +627,7 @@ def _pbi_style(care: float, control: float, is_mother: bool) -> str:
     return "放任型"
 
 
-def _pbi_result(definition: dict[str, Any], answers: dict[str, str]):
+def _pbi_result(definition: dict[str, Any], answers: dict[str, Any]):
     mother_care = _sum_questions(
         definition,
         answers,
@@ -584,7 +754,7 @@ _CBCL_DIMENSIONS = [
 ]
 
 
-def _cbcl_result(definition: dict[str, Any], answers: dict[str, str]):
+def _cbcl_result(definition: dict[str, Any], answers: dict[str, Any]):
     dimensions = []
     for dimension_id, title, items, cutoff in _CBCL_DIMENSIONS:
         score = sum(_option_value(definition, answers, f"q{item}") for item in items)
@@ -645,7 +815,7 @@ def _dark_level(score: float, low_max: float, middle_max: float) -> str:
     return "高"
 
 
-def _dark_result(definition: dict[str, Any], answers: dict[str, str]):
+def _dark_result(definition: dict[str, Any], answers: dict[str, Any]):
     dimensions = []
     for dimension_id, title, items in _DARK_GROUPS:
         score = sum(_option_value(definition, answers, item) for item in items)
@@ -691,7 +861,7 @@ def _dark_result(definition: dict[str, Any], answers: dict[str, str]):
 
 
 def calculate_assessment_result(
-    definition: dict[str, Any], answers: dict[str, str]
+    definition: dict[str, Any], answers: dict[str, Any]
 ) -> dict[str, Any]:
     scoring_type = str(definition.get("scoringType"))
     if definition.get("scoringPreset") not in ALLOWED_SCORING_PRESETS.get(
@@ -722,10 +892,38 @@ def validate_generated_scoring_examples(definition: dict[str, Any]) -> None:
     """
 
     questions = definition.get("questions", [])
-    samples: list[tuple[str, dict[str, str]]] = []
+    samples: list[tuple[str, dict[str, Any]]] = []
+
+    def _sample_answer(question: dict[str, Any], option_index: int) -> Any:
+        input_type = str(question.get("inputType") or "choice")
+        if input_type == "text":
+            return {"text": "样例"}
+        if input_type == "number":
+            validation = question.get("validation") or {}
+            if "min" in validation:
+                return {"number": validation["min"]}
+            if "max" in validation:
+                return {"number": validation["max"]}
+            return {"number": 0}
+        options = question.get("options") or []
+        option = options[option_index]
+        follow_up = option.get("followUp")
+        if not isinstance(follow_up, dict):
+            return str(option["id"])
+        payload: dict[str, Any] = {"optionId": str(option["id"])}
+        if follow_up.get("inputType") == "number":
+            validation = follow_up.get("validation") or {}
+            if "min" in validation:
+                payload["followUp"] = validation["min"]
+            elif follow_up.get("required"):
+                payload["followUp"] = 0
+        elif follow_up.get("required") or follow_up.get("scoreMode") == "filled":
+            payload["followUp"] = "样例"
+        return payload
+
     for label, option_index in (("首选项", 0), ("末选项", -1)):
         answers = {
-            str(question["id"]): str(question["options"][option_index]["id"])
+            str(question["id"]): _sample_answer(question, option_index)
             for question in questions
         }
         if not samples or answers != samples[-1][1]:

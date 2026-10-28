@@ -1,5 +1,6 @@
 import type {
   Assessment,
+  AssessmentAnswerValue,
   AssessmentReportDetail,
   AssessmentReportPage,
   AssessmentSummary,
@@ -115,7 +116,7 @@ export interface SubmitAssessmentReportInput {
   assessmentId: string;
   assessmentVersion: number;
   demographicAnswers: Record<string, unknown>;
-  answers: Record<string, string>;
+  answers: Record<string, AssessmentAnswerValue>;
   entrySource: "web" | "mini-webview" | "qr" | "direct";
   shareCode: string | null;
   consentVersion: string;

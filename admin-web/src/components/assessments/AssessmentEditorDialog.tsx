@@ -9,6 +9,7 @@ import {
   changeAssessmentScoringType,
   createDefaultAssessmentDefinition,
   createStableId,
+  getQuestionInputType,
   normalizeAssessmentDefinition,
   formatLines,
   getAssessmentScoreCoverageSummaries,
@@ -33,8 +34,12 @@ import type {
   AssessmentDemographicQuestion,
   AssessmentDimension,
   AssessmentMatchResult,
+  AssessmentOption,
+  AssessmentOptionFollowUp,
   AssessmentQuestion,
+  AssessmentQuestionInputType,
   AssessmentReportProfile,
+  AssessmentScoreMode,
   AssessmentScoreRange,
   AssessmentScoringType,
 } from "@/types/assessment";
@@ -1115,7 +1120,9 @@ function QuestionFields({
 
   function addQuestion() {
     const id = createStableId("q", questions.map((item) => item.id));
-    const optionIds = new Set(questions.flatMap((item) => item.options.map((option) => option.id)));
+    const optionIds = new Set(
+      questions.flatMap((item) => (item.options || []).map((option) => option.id)),
+    );
     const firstId = createStableId(`${id}-a`, Array.from(optionIds));
     optionIds.add(firstId);
     const secondId = createStableId(`${id}-b`, Array.from(optionIds));
@@ -1125,12 +1132,49 @@ function QuestionFields({
         id,
         text: "",
         required: true,
+        inputType: "choice",
         options: [
           { id: firstId, text: "", value: 0 },
           { id: secondId, text: "", value: 1 },
         ],
       },
     ]);
+  }
+
+  function changeInputType(index: number, inputType: AssessmentQuestionInputType) {
+    const question = questions[index];
+    if (inputType === "choice") {
+      const optionIds = new Set(
+        questions.flatMap((item) => (item.options || []).map((option) => option.id)),
+      );
+      const firstId = createStableId(`${question.id}-a`, Array.from(optionIds));
+      optionIds.add(firstId);
+      const secondId = createStableId(`${question.id}-b`, Array.from(optionIds));
+      updateQuestion(index, {
+        ...question,
+        inputType,
+        scoreMode: undefined,
+        completedScore: undefined,
+        emptyScore: undefined,
+        validation: undefined,
+        options:
+          question.options && question.options.length >= 2
+            ? question.options
+            : [
+                { id: firstId, text: "", value: 0 },
+                { id: secondId, text: "", value: 1 },
+              ],
+      });
+      return;
+    }
+    updateQuestion(index, {
+      ...question,
+      inputType,
+      scoreMode: question.scoreMode || "filled",
+      completedScore: Number.isFinite(question.completedScore) ? question.completedScore : 1,
+      emptyScore: Number.isFinite(question.emptyScore) ? question.emptyScore : 0,
+      options: [],
+    });
   }
 
   return (
@@ -1143,12 +1187,14 @@ function QuestionFields({
       description={
         fixedStructure
           ? "固定计分量表可修改题目和选项文案，但题目 ID、选项 ID、分值及题目数量保持锁定。"
-          : "选项 ID 在整份量表内必须唯一；匹配型量表可分别填写每个报告结果的权重。"
+          : "题目可为选择题、填空题或数字题。填空/数字题可按是否填写或填写数字计分；选择题可在选项上配置追问计分。"
       }
       title="正式题目与选项"
     >
       <div className="space-y-4">
-        {questions.map((question, questionIndex) => (
+        {questions.map((question, questionIndex) => {
+          const inputType = getQuestionInputType(question);
+          return (
           <div
             key={questionIndex}
             className="rounded-xl border border-[var(--lxxl-border)] bg-[#FCFBF8] p-4"
@@ -1168,7 +1214,24 @@ function QuestionFields({
                   onChange={(event) => changeQuestionId(questionIndex, event.target.value)}
                 />
               </CompactField>
-              <CompactField className="md:col-span-3" label="题目内容">
+              <CompactField label="题目类型">
+                <select
+                  className={compactInputClass}
+                  disabled={disabled || fixedStructure}
+                  value={inputType}
+                  onChange={(event) =>
+                    changeInputType(
+                      questionIndex,
+                      event.target.value as AssessmentQuestionInputType,
+                    )
+                  }
+                >
+                  <option value="choice">选择题</option>
+                  <option value="text">填空题</option>
+                  <option value="number">数字题</option>
+                </select>
+              </CompactField>
+              <CompactField className="md:col-span-2" label="题目内容">
                 <textarea
                   className={compactTextareaClass}
                   disabled={disabled}
@@ -1201,6 +1264,108 @@ function QuestionFields({
               </label>
             </div>
 
+            {(inputType === "text" || inputType === "number") && (
+              <div className="mt-4 grid grid-cols-1 gap-3 rounded-xl border border-[var(--lxxl-border)] bg-white p-4 md:grid-cols-4">
+                <CompactField label="计分方式">
+                  <select
+                    className={compactInputClass}
+                    disabled={disabled || fixedStructure}
+                    value={question.scoreMode || "filled"}
+                    onChange={(event) =>
+                      updateQuestion(questionIndex, {
+                        ...question,
+                        scoreMode: event.target.value as AssessmentScoreMode,
+                      })
+                    }
+                  >
+                    <option value="filled">按是否填写</option>
+                    {inputType === "number" && <option value="value">按填写数字</option>}
+                  </select>
+                </CompactField>
+                {(question.scoreMode || "filled") === "filled" && (
+                  <>
+                    <CompactField label="已填写得分">
+                      <input
+                        className={compactInputClass}
+                        disabled={disabled || fixedStructure}
+                        step="any"
+                        type="number"
+                        value={question.completedScore ?? 1}
+                        onChange={(event) =>
+                          updateQuestion(questionIndex, {
+                            ...question,
+                            completedScore: numberValue(event.target.value, 1),
+                          })
+                        }
+                      />
+                    </CompactField>
+                    <CompactField label="未填写得分">
+                      <input
+                        className={compactInputClass}
+                        disabled={disabled || fixedStructure || question.required}
+                        step="any"
+                        type="number"
+                        value={question.emptyScore ?? 0}
+                        onChange={(event) =>
+                          updateQuestion(questionIndex, {
+                            ...question,
+                            emptyScore: numberValue(event.target.value, 0),
+                          })
+                        }
+                      />
+                    </CompactField>
+                  </>
+                )}
+                {inputType === "number" && (
+                  <>
+                    <CompactField label="数字最小值">
+                      <input
+                        className={compactInputClass}
+                        disabled={disabled || fixedStructure}
+                        step="any"
+                        type="number"
+                        value={question.validation?.min ?? ""}
+                        onChange={(event) =>
+                          updateQuestion(questionIndex, {
+                            ...question,
+                            validation: {
+                              ...question.validation,
+                              min:
+                                event.target.value === ""
+                                  ? undefined
+                                  : numberValue(event.target.value, 0),
+                            },
+                          })
+                        }
+                      />
+                    </CompactField>
+                    <CompactField label="数字最大值">
+                      <input
+                        className={compactInputClass}
+                        disabled={disabled || fixedStructure}
+                        step="any"
+                        type="number"
+                        value={question.validation?.max ?? ""}
+                        onChange={(event) =>
+                          updateQuestion(questionIndex, {
+                            ...question,
+                            validation: {
+                              ...question.validation,
+                              max:
+                                event.target.value === ""
+                                  ? undefined
+                                  : numberValue(event.target.value, 0),
+                            },
+                          })
+                        }
+                      />
+                    </CompactField>
+                  </>
+                )}
+              </div>
+            )}
+
+            {inputType === "choice" && (
             <div className="mt-4 rounded-xl border border-[var(--lxxl-border)] bg-white p-4">
               <div className="flex items-center justify-between gap-3">
                 <div className="text-sm font-medium">选项</div>
@@ -1208,12 +1373,15 @@ function QuestionFields({
                   disabled={disabled || fixedStructure}
                   onClick={() => {
                     const allOptionIds = questions.flatMap((item) =>
-                      item.options.map((option) => option.id),
+                      (item.options || []).map((option) => option.id),
                     );
                     const id = createStableId(`${question.id}-option`, allOptionIds);
                     updateQuestion(questionIndex, {
                       ...question,
-                      options: [...question.options, { id, text: "", value: question.options.length }],
+                      options: [
+                        ...(question.options || []),
+                        { id, text: "", value: question.options?.length || 0 },
+                      ],
                     });
                   }}
                 >
@@ -1221,9 +1389,12 @@ function QuestionFields({
                 </SmallButton>
               </div>
               <div className="mt-3 space-y-3">
-                {question.options.map((option, optionIndex) => (
+                {(question.options || []).map((option, optionIndex) => (
                   <div
                     key={optionIndex}
+                    className="space-y-2 rounded-lg border border-[var(--lxxl-border)] bg-[#FCFBF8] p-3"
+                  >
+                  <div
                     className={`grid grid-cols-1 gap-2 ${
                       definition.scoringType === "match"
                         ? "lg:grid-cols-[1fr_1.5fr_0.7fr_1.3fr_auto]"
@@ -1307,13 +1478,236 @@ function QuestionFields({
                       }
                     />
                   </div>
+                  <OptionFollowUpEditor
+                    disabled={disabled || fixedStructure}
+                    option={option}
+                    onChange={(nextOption) =>
+                      updateQuestion(questionIndex, {
+                        ...question,
+                        options: replaceAt(question.options, optionIndex, nextOption),
+                      })
+                    }
+                  />
+                  </div>
                 ))}
               </div>
             </div>
+            )}
           </div>
-        ))}
+          );
+        })}
       </div>
     </EditorSection>
+  );
+}
+
+function OptionFollowUpEditor({
+  disabled,
+  option,
+  onChange,
+}: {
+  disabled: boolean;
+  option: AssessmentOption;
+  onChange: (option: AssessmentOption) => void;
+}) {
+  const followUp = option.followUp;
+  return (
+    <div className="space-y-2">
+      <label className="flex items-center gap-2 text-sm text-[var(--lxxl-muted)]">
+        <input
+          checked={Boolean(followUp)}
+          disabled={disabled}
+          type="checkbox"
+          onChange={(event) => {
+            if (!event.target.checked) {
+              const { followUp: _removed, ...rest } = option;
+              onChange(rest);
+              return;
+            }
+            onChange({
+              ...option,
+              followUp: {
+                inputType: "number",
+                label: "",
+                required: false,
+                scoreMode: "filled",
+                completedScore: 1,
+                emptyScore: 0,
+              },
+            });
+          }}
+        />
+        选择后需要追问（填空/数字），并按填写情况计分
+      </label>
+      {followUp && (
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-5">
+          <CompactField label="追问类型">
+            <select
+              className={compactInputClass}
+              disabled={disabled}
+              value={followUp.inputType}
+              onChange={(event) => {
+                const inputType = event.target.value as AssessmentOptionFollowUp["inputType"];
+                onChange({
+                  ...option,
+                  followUp: {
+                    ...followUp,
+                    inputType,
+                    scoreMode:
+                      inputType === "text" && followUp.scoreMode === "value"
+                        ? "filled"
+                        : followUp.scoreMode,
+                  },
+                });
+              }}
+            >
+              <option value="text">填空</option>
+              <option value="number">数字</option>
+            </select>
+          </CompactField>
+          <CompactField label="追问提示">
+            <input
+              className={compactInputClass}
+              disabled={disabled}
+              placeholder="如：请填写天数"
+              value={followUp.label || ""}
+              onChange={(event) =>
+                onChange({
+                  ...option,
+                  followUp: { ...followUp, label: event.target.value },
+                })
+              }
+            />
+          </CompactField>
+          <CompactField label="计分方式">
+            <select
+              className={compactInputClass}
+              disabled={disabled}
+              value={followUp.scoreMode}
+              onChange={(event) =>
+                onChange({
+                  ...option,
+                  followUp: {
+                    ...followUp,
+                    scoreMode: event.target.value as AssessmentScoreMode,
+                  },
+                })
+              }
+            >
+              <option value="filled">按是否填写</option>
+              {followUp.inputType === "number" && (
+                <option value="value">按填写数字</option>
+              )}
+            </select>
+          </CompactField>
+          {followUp.scoreMode === "filled" ? (
+            <>
+              <CompactField label="已填得分">
+                <input
+                  className={compactInputClass}
+                  disabled={disabled}
+                  step="any"
+                  type="number"
+                  value={followUp.completedScore ?? 1}
+                  onChange={(event) =>
+                    onChange({
+                      ...option,
+                      followUp: {
+                        ...followUp,
+                        completedScore: numberValue(event.target.value, 1),
+                      },
+                    })
+                  }
+                />
+              </CompactField>
+              <CompactField label="未填得分">
+                <input
+                  className={compactInputClass}
+                  disabled={disabled || Boolean(followUp.required)}
+                  step="any"
+                  type="number"
+                  value={followUp.emptyScore ?? 0}
+                  onChange={(event) =>
+                    onChange({
+                      ...option,
+                      followUp: {
+                        ...followUp,
+                        emptyScore: numberValue(event.target.value, 0),
+                      },
+                    })
+                  }
+                />
+              </CompactField>
+            </>
+          ) : (
+            <>
+              <CompactField label="数字最小">
+                <input
+                  className={compactInputClass}
+                  disabled={disabled}
+                  step="any"
+                  type="number"
+                  value={followUp.validation?.min ?? ""}
+                  onChange={(event) =>
+                    onChange({
+                      ...option,
+                      followUp: {
+                        ...followUp,
+                        validation: {
+                          ...followUp.validation,
+                          min:
+                            event.target.value === ""
+                              ? undefined
+                              : numberValue(event.target.value, 0),
+                        },
+                      },
+                    })
+                  }
+                />
+              </CompactField>
+              <CompactField label="数字最大">
+                <input
+                  className={compactInputClass}
+                  disabled={disabled}
+                  step="any"
+                  type="number"
+                  value={followUp.validation?.max ?? ""}
+                  onChange={(event) =>
+                    onChange({
+                      ...option,
+                      followUp: {
+                        ...followUp,
+                        validation: {
+                          ...followUp.validation,
+                          max:
+                            event.target.value === ""
+                              ? undefined
+                              : numberValue(event.target.value, 0),
+                        },
+                      },
+                    })
+                  }
+                />
+              </CompactField>
+            </>
+          )}
+          <label className="flex items-end gap-2 pb-2 text-sm md:col-span-5">
+            <input
+              checked={Boolean(followUp.required)}
+              disabled={disabled}
+              type="checkbox"
+              onChange={(event) =>
+                onChange({
+                  ...option,
+                  followUp: { ...followUp, required: event.target.checked },
+                })
+              }
+            />
+            追问必填
+          </label>
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -334,6 +334,56 @@
         }
       ]
     },
+    "assessmentQuestionValidation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "min": {
+          "type": "number"
+        },
+        "max": {
+          "type": "number"
+        },
+        "minLength": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxLength": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "assessmentOptionFollowUp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["inputType", "scoreMode"],
+      "properties": {
+        "inputType": {
+          "enum": ["text", "number"]
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "scoreMode": {
+          "enum": ["filled", "value"],
+          "description": "filled=按是否填写计分；value=按填写数字计分（仅 number）。"
+        },
+        "completedScore": {
+          "type": "number"
+        },
+        "emptyScore": {
+          "type": "number"
+        },
+        "validation": {
+          "$ref": "#/$defs/assessmentQuestionValidation"
+        }
+      }
+    },
     "assessmentOption": {
       "type": "object",
       "additionalProperties": false,
@@ -358,6 +408,9 @@
           "additionalProperties": {
             "type": "number"
           }
+        },
+        "followUp": {
+          "$ref": "#/$defs/assessmentOptionFollowUp"
         }
       }
     },
@@ -381,14 +434,79 @@
         "required": {
           "type": "boolean"
         },
+        "inputType": {
+          "enum": ["choice", "text", "number"],
+          "description": "缺省 choice。text/number 按是否填写或填写数字计分。"
+        },
+        "scoreMode": {
+          "enum": ["filled", "value"],
+          "description": "仅 text/number 使用；缺省 filled。"
+        },
+        "completedScore": {
+          "type": "number"
+        },
+        "emptyScore": {
+          "type": "number"
+        },
+        "validation": {
+          "$ref": "#/$defs/assessmentQuestionValidation"
+        },
         "options": {
           "type": "array",
-          "minItems": 2,
           "items": {
             "$ref": "#/$defs/assessmentOption"
           }
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "inputType": {
+                "const": "choice"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "options": {
+                "minItems": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "inputType": {
+                "enum": ["text", "number"]
+              }
+            },
+            "required": ["inputType"]
+          },
+          "then": {
+            "properties": {
+              "options": {
+                "maxItems": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "not": {
+              "required": ["inputType"]
+            }
+          },
+          "then": {
+            "properties": {
+              "options": {
+                "minItems": 2
+              }
+            }
+          }
+        }
+      ]
     },
     "scoreRange": {
       "type": "object",

@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
+import type { AssessmentAnswerValue } from "@/lib/api/types";
 
 interface QuizShareAttribution {
   shareCode: string;
@@ -11,7 +12,7 @@ interface QuizShareAttribution {
 
 interface QuizSessionState {
   ownerAccountId: number | null;
-  answers: Record<string, Record<string, string>>;
+  answers: Record<string, Record<string, AssessmentAnswerValue>>;
   currentIndex: Record<string, number>;
   attemptIds: Record<string, string>;
   shareAttributions: Record<string, QuizShareAttribution>;
@@ -20,14 +21,21 @@ interface QuizSessionState {
   started: Record<string, boolean>;
   /** 用户已完成当前作答流程，可进入报告页。 */
   readyToSubmit: Record<string, boolean>;
-  setAnswer: (assessmentId: string, questionId: string, optionId: string) => void;
+  setAnswer: (
+    assessmentId: string,
+    questionId: string,
+    value: AssessmentAnswerValue,
+  ) => void;
   setCurrentIndex: (assessmentId: string, index: number) => void;
   markStarted: (assessmentId: string) => void;
   markReadyToSubmit: (assessmentId: string, version: number) => void;
   ensureAccount: (accountId: number) => void;
   ensureVersion: (assessmentId: string, version: number) => void;
   isAccountSessionOwner: (accountId: number) => boolean;
-  getAnswers: (assessmentId: string, version?: number) => Record<string, string>;
+  getAnswers: (
+    assessmentId: string,
+    version?: number,
+  ) => Record<string, AssessmentAnswerValue>;
   getCurrentIndex: (assessmentId: string, version?: number) => number;
   getAttemptId: (assessmentId: string, version?: number) => string | undefined;
   setShareCode: (
@@ -90,13 +98,13 @@ export const useQuizSession = create<QuizSessionState>()(
       started: {},
       readyToSubmit: {},
 
-      setAnswer: (assessmentId, questionId, optionId) =>
+      setAnswer: (assessmentId, questionId, value) =>
         set((state) => ({
           answers: {
             ...state.answers,
             [assessmentId]: {
               ...state.answers[assessmentId],
-              [questionId]: optionId,
+              [questionId]: value,
             },
           },
         })),

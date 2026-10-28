@@ -1,12 +1,21 @@
 import type {
   AssessmentDefinition,
+  AssessmentOptionFollowUp,
   AssessmentQuestion,
+  AssessmentQuestionInputType,
+  AssessmentScoreMode,
   AssessmentScoreRange,
   AssessmentScoringPreset,
   AssessmentScoringType,
   AssessmentValidationIssue,
 } from "@/types/assessment";
 import { compileDimensionFormula } from "@/lib/assessmentFormula";
+
+export function getQuestionInputType(
+  question: Pick<AssessmentQuestion, "inputType">,
+): AssessmentQuestionInputType {
+  return question.inputType || "choice";
+}
 
 const STABLE_ID_PATTERN = /^[A-Za-z0-9]+(?:[-_.][A-Za-z0-9]+)*$/;
 const ASSESSMENT_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -224,12 +233,41 @@ function createDefaultQuestions(): AssessmentQuestion[] {
       id: "q1",
       text: "题目 1",
       required: true,
+      inputType: "choice",
       options: [
         { id: "q1-a", text: "选项 1", value: 0 },
         { id: "q1-b", text: "选项 2", value: 1 },
       ],
     },
   ];
+}
+
+function followUpScoreValues(followUp: AssessmentOptionFollowUp): number[] {
+  const completed = Number.isFinite(followUp.completedScore)
+    ? Number(followUp.completedScore)
+    : 0;
+  const empty = Number.isFinite(followUp.emptyScore)
+    ? Number(followUp.emptyScore)
+    : 0;
+  if (followUp.scoreMode === "value") {
+    const min = followUp.validation?.min;
+    const max = followUp.validation?.max;
+    if (!Number.isFinite(min) || !Number.isFinite(max) || max! < min!) {
+      return [];
+    }
+    if (max! - min! > 500) {
+      return [];
+    }
+    if (Number.isInteger(min) && Number.isInteger(max)) {
+      const values: number[] = [];
+      for (let value = min!; value <= max!; value += 1) {
+        values.push(value);
+      }
+      return values;
+    }
+    return [min!, max!];
+  }
+  return followUp.required ? [completed] : [completed, empty];
 }
 
 function getQuestionScoreBounds(
@@ -244,10 +282,8 @@ function getQuestionScoreBounds(
     if (selectedIds && !selectedIds.has(question.id)) {
       continue;
     }
-    const values = question.options
-      .map((option) => option.value)
-      .filter((value) => Number.isFinite(value));
-    if (values.length === 0) {
+    const values = questionScoreValues(question, false);
+    if (!values || values.length === 0) {
       continue;
     }
     minimum += Math.min(...values);
@@ -374,13 +410,27 @@ export function createDefaultAssessmentDefinition(
         shareText: "",
       },
     ];
-    definition.questions = questions.map((question) => ({
-      ...question,
-      options: question.options.map((option, index) => ({
-        ...option,
-        matchTags: { [`result-${(index % 2) + 1}`]: 1 },
-      })),
-    }));
+    definition.questions = questions.map((question) => {
+      const options =
+        getQuestionInputType(question) === "choice" && question.options.length >= 2
+          ? question.options
+          : [
+              { id: `${question.id}-a`, text: "选项 1", value: 0 },
+              { id: `${question.id}-b`, text: "选项 2", value: 1 },
+            ];
+      return {
+        ...question,
+        inputType: "choice",
+        scoreMode: undefined,
+        completedScore: undefined,
+        emptyScore: undefined,
+        validation: undefined,
+        options: options.map((option, index) => ({
+          ...option,
+          matchTags: { [`result-${(index % 2) + 1}`]: 1 },
+        })),
+      };
+    });
   }
 
   return definition;
@@ -417,7 +467,7 @@ export function changeAssessmentScoringType(
   delete next.reverseQuestionIds;
   next.questions = next.questions.map((question) => ({
     ...question,
-    options: question.options.map((option) => {
+    options: (question.options || []).map((option) => {
       const withoutMatchTags = { ...option };
       delete withoutMatchTags.matchTags;
       return withoutMatchTags;
@@ -460,13 +510,28 @@ export function changeAssessmentScoringType(
         shareText: "",
       },
     ];
-    next.questions = next.questions.map((question) => ({
-      ...question,
-      options: question.options.map((option, index) => ({
-        ...option,
-        matchTags: { [`result-${(index % 2) + 1}`]: 1 },
-      })),
-    }));
+    next.questions = next.questions.map((question) => {
+      const options =
+        getQuestionInputType(question) === "choice" &&
+        (question.options || []).length >= 2
+          ? question.options
+          : [
+              { id: `${question.id}-a`, text: "选项 1", value: 0 },
+              { id: `${question.id}-b`, text: "选项 2", value: 1 },
+            ];
+      return {
+        ...question,
+        inputType: "choice",
+        scoreMode: undefined,
+        completedScore: undefined,
+        emptyScore: undefined,
+        validation: undefined,
+        options: options.map((option, index) => ({
+          ...option,
+          matchTags: { [`result-${(index % 2) + 1}`]: 1 },
+        })),
+      };
+    });
   }
 
   return next;
@@ -551,12 +616,69 @@ function questionScoreValues(
   question: AssessmentQuestion,
   reverse: boolean,
 ): number[] | undefined {
-  if (!Array.isArray(question.options)) {
+  const inputType = getQuestionInputType(question);
+  if (inputType === "text" || inputType === "number") {
+    const scoreMode: AssessmentScoreMode = question.scoreMode || "filled";
+    const completed = Number.isFinite(question.completedScore)
+      ? Number(question.completedScore)
+      : 0;
+    const empty = Number.isFinite(question.emptyScore)
+      ? Number(question.emptyScore)
+      : 0;
+    if (scoreMode === "value") {
+      if (inputType !== "number") {
+        return undefined;
+      }
+      const min = question.validation?.min;
+      const max = question.validation?.max;
+      if (!Number.isFinite(min) || !Number.isFinite(max) || max! < min!) {
+        return undefined;
+      }
+      if (max! - min! > 500) {
+        return undefined;
+      }
+      if (Number.isInteger(min) && Number.isInteger(max)) {
+        const values: number[] = [];
+        for (let value = min!; value <= max!; value += 1) {
+          values.push(value);
+        }
+        if (!question.required) {
+          values.push(empty);
+        }
+        return [...new Set(values)];
+      }
+      const values = [min!, max!];
+      if (!question.required) {
+        values.push(empty);
+      }
+      return [...new Set(values)];
+    }
+    const values = [completed];
+    if (!question.required) {
+      values.push(empty);
+    }
+    return [...new Set(values)];
+  }
+
+  if (!Array.isArray(question.options) || question.options.length === 0) {
     return undefined;
   }
-  const values = question.options.map((option) => option.value);
-  if (values.length === 0 || values.some((value) => !Number.isFinite(value))) {
-    return undefined;
+  const values: number[] = [];
+  for (const option of question.options) {
+    if (!Number.isFinite(option.value)) {
+      return undefined;
+    }
+    if (option.followUp) {
+      const extras = followUpScoreValues(option.followUp);
+      if (extras.length === 0) {
+        return undefined;
+      }
+      for (const extra of extras) {
+        values.push(option.value + extra);
+      }
+    } else {
+      values.push(option.value);
+    }
   }
   const minimum = Math.min(...values);
   const maximum = Math.max(...values);
@@ -1026,10 +1148,62 @@ export function validateAssessmentDefinition(
     });
     questionIds.add(question.id);
 
+    const inputType = getQuestionInputType(question);
+    if (!["choice", "text", "number"].includes(inputType)) {
+      issues.push({
+        path: `${questionPath}.inputType`,
+        message: "题目类型不合法",
+        severity: "error",
+      });
+    }
+    const scoreMode = question.scoreMode || "filled";
+    if (!["filled", "value"].includes(scoreMode)) {
+      issues.push({
+        path: `${questionPath}.scoreMode`,
+        message: "计分方式不合法",
+        severity: "error",
+      });
+    }
+    if (inputType === "text" || inputType === "number") {
+      if (scoreMode === "value" && inputType !== "number") {
+        issues.push({
+          path: `${questionPath}.scoreMode`,
+          message: "仅数字题支持按填写数字计分",
+          severity: "error",
+        });
+      }
+      if (scoreMode === "value") {
+        if (
+          !Number.isFinite(question.validation?.min) ||
+          !Number.isFinite(question.validation?.max)
+        ) {
+          issues.push({
+            path: `${questionPath}.validation`,
+            message: "按数字计分必须设置最小值和最大值",
+            severity: "error",
+          });
+        } else if ((question.validation?.max ?? 0) < (question.validation?.min ?? 0)) {
+          issues.push({
+            path: `${questionPath}.validation`,
+            message: "最大值必须大于等于最小值",
+            severity: "error",
+          });
+        }
+      }
+      if (Array.isArray(question.options) && question.options.length > 0) {
+        issues.push({
+          path: `${questionPath}.options`,
+          message: "填空/数字题不能配置选项",
+          severity: "error",
+        });
+      }
+      return;
+    }
+
     if (!Array.isArray(question.options) || question.options.length < 2) {
       issues.push({
         path: `${questionPath}.options`,
-        message: "每道题至少需要两个选项",
+        message: "选择题至少需要两个选项",
         severity: "error",
       });
       return;
@@ -1053,6 +1227,43 @@ export function validateAssessmentDefinition(
         });
       }
       optionEntries.push({ id: option.id, path: `${optionPath}.id` });
+      const followUp = option.followUp;
+      if (!followUp) {
+        return;
+      }
+      if (!["text", "number"].includes(followUp.inputType)) {
+        issues.push({
+          path: `${optionPath}.followUp.inputType`,
+          message: "追问类型不合法",
+          severity: "error",
+        });
+      }
+      if (!["filled", "value"].includes(followUp.scoreMode)) {
+        issues.push({
+          path: `${optionPath}.followUp.scoreMode`,
+          message: "追问计分方式不合法",
+          severity: "error",
+        });
+      }
+      if (followUp.scoreMode === "value" && followUp.inputType !== "number") {
+        issues.push({
+          path: `${optionPath}.followUp.scoreMode`,
+          message: "仅数字追问支持按填写数字计分",
+          severity: "error",
+        });
+      }
+      if (followUp.scoreMode === "value") {
+        if (
+          !Number.isFinite(followUp.validation?.min) ||
+          !Number.isFinite(followUp.validation?.max)
+        ) {
+          issues.push({
+            path: `${optionPath}.followUp.validation`,
+            message: "按数字计分的追问必须设置最小值和最大值",
+            severity: "error",
+          });
+        }
+      }
     });
   });
   addDuplicateIssues(questionEntries, issues, "题目 ID 重复");

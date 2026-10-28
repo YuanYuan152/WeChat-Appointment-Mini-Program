@@ -99,7 +99,7 @@ class EnterpriseReportItemPayload(BaseModel):
     clientSubmissionId: UUID
     assessmentId: str = Field(..., min_length=1, max_length=80)
     assessmentVersion: int = Field(..., ge=1)
-    answers: dict[str, str]
+    answers: dict[str, Any]
 
 
 class ArticlePayload(BaseModel):

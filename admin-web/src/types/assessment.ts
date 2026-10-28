@@ -59,11 +59,40 @@ export interface AssessmentDemographicQuestion {
   validation?: AssessmentDemographicValidation;
 }
 
+/** 正式题目输入类型；缺省视为 choice，兼容旧数据。 */
+export type AssessmentQuestionInputType = "choice" | "text" | "number";
+
+/**
+ * 填空/数字题，或选择题选项追问的计分方式：
+ * - filled：按是否填写计分（completedScore / emptyScore）
+ * - value：按填写的数字本身计分（仅 number）
+ */
+export type AssessmentScoreMode = "filled" | "value";
+
+export interface AssessmentQuestionValidation {
+  min?: number;
+  max?: number;
+  minLength?: number;
+  maxLength?: number;
+}
+
+/** 选择题选中后的追问（填空或数字），可单独参与计分。 */
+export interface AssessmentOptionFollowUp {
+  inputType: "text" | "number";
+  label?: string;
+  required?: boolean;
+  scoreMode: AssessmentScoreMode;
+  completedScore?: number;
+  emptyScore?: number;
+  validation?: AssessmentQuestionValidation;
+}
+
 export interface AssessmentOption {
   id: string;
   text: string;
   value: number;
   matchTags?: Record<string, number>;
+  followUp?: AssessmentOptionFollowUp;
 }
 
 export interface AssessmentQuestion {
@@ -71,6 +100,16 @@ export interface AssessmentQuestion {
   text: string;
   helpText?: string;
   required: boolean;
+  /** 缺省为 choice。 */
+  inputType?: AssessmentQuestionInputType;
+  /** text/number 题计分方式，缺省 filled。 */
+  scoreMode?: AssessmentScoreMode;
+  /** scoreMode=filled 且已填写时的得分。 */
+  completedScore?: number;
+  /** 未填写时的得分（可选题留空），缺省 0。 */
+  emptyScore?: number;
+  validation?: AssessmentQuestionValidation;
+  /** choice 题必填；text/number 题可为空数组。 */
   options: AssessmentOption[];
 }
 

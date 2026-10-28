@@ -182,7 +182,7 @@ def submit_report(
     assessment_id: str,
     assessment_version: int,
     demographic_answers: dict[str, Any],
-    answers: dict[str, str],
+    answers: dict[str, Any],
     entry_source: str,
     share_code: Optional[str],
     consent_version: str,

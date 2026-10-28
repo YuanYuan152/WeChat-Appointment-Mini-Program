@@ -44,11 +44,32 @@ export interface Consultant {
   availableSlots: string[];
 }
 
+export type AssessmentQuestionInputType = "choice" | "text" | "number";
+export type AssessmentScoreMode = "filled" | "value";
+
+export interface AssessmentQuestionValidation {
+  min?: number;
+  max?: number;
+  minLength?: number;
+  maxLength?: number;
+}
+
+export interface AssessmentOptionFollowUp {
+  inputType: "text" | "number";
+  label?: string;
+  required?: boolean;
+  scoreMode: AssessmentScoreMode;
+  completedScore?: number;
+  emptyScore?: number;
+  validation?: AssessmentQuestionValidation;
+}
+
 export interface AssessmentOption {
   id: string;
   text: string;
   value: number;
   matchTags?: Record<string, number>;
+  followUp?: AssessmentOptionFollowUp;
 }
 
 export interface AssessmentQuestion {
@@ -56,8 +77,20 @@ export interface AssessmentQuestion {
   text: string;
   helpText?: string;
   required?: boolean;
+  inputType?: AssessmentQuestionInputType;
+  scoreMode?: AssessmentScoreMode;
+  completedScore?: number;
+  emptyScore?: number;
+  validation?: AssessmentQuestionValidation;
   options: AssessmentOption[];
 }
+
+/** 作答值：旧选择题为选项 ID 字符串；新题型为结构化对象。 */
+export type AssessmentAnswerValue =
+  | string
+  | { optionId: string; followUp?: string | number }
+  | { text: string }
+  | { number: number };
 
 export type DemographicValue = string | number | boolean;
 
@@ -278,7 +311,7 @@ export interface AssessmentReportDetail extends AssessmentReportListItem {
   result: AssessmentScoreResult;
   reportSnapshot: AssessmentReportSnapshot;
   demographicAnswers?: Record<string, unknown>;
-  answers?: Record<string, string>;
+  answers?: Record<string, AssessmentAnswerValue>;
 }
 
 export interface AssessmentReportPage {

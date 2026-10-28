@@ -1,5 +1,6 @@
 import type {
   Assessment,
+  AssessmentAnswerValue,
   AssessmentScoreResult,
   AssessmentOption,
   DimensionDefinition,
@@ -7,9 +8,26 @@ import type {
 } from "@/lib/api/types";
 import { evaluateDimensionFormula } from "@/lib/assessment/dimension-formula";
 
+type AnswerMap = Record<string, AssessmentAnswerValue>;
+
+function parseChoiceAnswer(
+  answer: AssessmentAnswerValue | undefined,
+): { optionId?: string; followUp?: string | number } {
+  if (typeof answer === "string") {
+    return { optionId: answer };
+  }
+  if (answer && typeof answer === "object" && "optionId" in answer) {
+    return {
+      optionId: answer.optionId,
+      followUp: answer.followUp,
+    };
+  }
+  return {};
+}
+
 export function calculateScore(
   assessment: Assessment,
-  answers: Record<string, string>
+  answers: AnswerMap
 ): AssessmentScoreResult {
   switch (assessment.scoringType) {
     case "match":
@@ -33,20 +51,58 @@ export function calculateScore(
 
 function getOptionValue(
   assessment: Assessment,
-  answers: Record<string, string>,
+  answers: AnswerMap,
   questionId: string,
   reverseQuestionIds: string[] = []
 ): number {
   const question = assessment.questions.find((q) => q.id === questionId);
   if (!question) return 0;
-  const option = question.options.find((o) => o.id === answers[questionId]);
+  const answer = answers[questionId];
+  if (answer == null) return 0;
+
+  const inputType = question.inputType || "choice";
+  if (inputType === "text" || inputType === "number") {
+    const scoreMode = question.scoreMode || "filled";
+    const completed = question.completedScore ?? 0;
+    const empty = question.emptyScore ?? 0;
+    if (inputType === "text") {
+      const filled =
+        typeof answer === "object" &&
+        "text" in answer &&
+        Boolean(String(answer.text || "").trim());
+      return filled ? completed : empty;
+    }
+    const number =
+      typeof answer === "object" && "number" in answer ? answer.number : undefined;
+    const filled = typeof number === "number" && Number.isFinite(number);
+    if (scoreMode === "value") {
+      return filled ? Number(number) : empty;
+    }
+    return filled ? completed : empty;
+  }
+
+  const { optionId, followUp } = parseChoiceAnswer(answer);
+  const option = question.options.find((o) => o.id === optionId);
   if (!option) return 0;
+  let value = option.value;
   if (reverseQuestionIds.includes(questionId)) {
     const max = Math.max(...question.options.map((o) => o.value));
     const min = Math.min(...question.options.map((o) => o.value));
-    return max + min - option.value;
+    value = max + min - option.value;
   }
-  return option.value;
+  if (option.followUp) {
+    const cfg = option.followUp;
+    const filled =
+      cfg.inputType === "text"
+        ? typeof followUp === "string" && Boolean(followUp.trim())
+        : typeof followUp === "number" && Number.isFinite(followUp);
+    if (cfg.scoreMode === "value") {
+      value += filled ? Number(followUp) : cfg.emptyScore ?? 0;
+    } else {
+      value += filled ? cfg.completedScore ?? 0 : cfg.emptyScore ?? 0;
+    }
+  }
+  return value;
 }
 
 function findRange(score: number, ranges?: ScoreRange[]) {
@@ -95,7 +151,7 @@ function reportProfile(
 
 function calculateSumScore(
   assessment: Assessment,
-  answers: Record<string, string>
+  answers: AnswerMap
 ): AssessmentScoreResult {
   const isV2 = assessment.scoringPreset === "generic-sum-v2";
   const reverseQuestionIds = isV2
@@ -131,7 +187,7 @@ function calculateSumScore(
 
 function scoreDimension(
   assessment: Assessment,
-  answers: Record<string, string>,
+  answers: AnswerMap,
   dimension: DimensionDefinition
 ) {
   const reverseIds = dimension.reverseQuestionIds ?? [];
@@ -173,7 +229,7 @@ function scoreDimension(
 
 function calculateDimensionScore(
   assessment: Assessment,
-  answers: Record<string, string>
+  answers: AnswerMap
 ): AssessmentScoreResult {
   const dimensions = (assessment.dimensions ?? []).map((dim) =>
     scoreDimension(assessment, answers, dim)
@@ -183,12 +239,12 @@ function calculateDimensionScore(
 
 function calculateMatchScore(
   assessment: Assessment,
-  answers: Record<string, string>
+  answers: AnswerMap
 ): AssessmentScoreResult {
   const tagScores: Record<string, number> = {};
 
   for (const question of assessment.questions) {
-    const selectedOptionId = answers[question.id];
+    const selectedOptionId = parseChoiceAnswer(answers[question.id]).optionId;
     const option = question.options.find((o) => o.id === selectedOptionId);
     if (option?.matchTags) {
       for (const [tag, weight] of Object.entries(option.matchTags)) {
@@ -213,7 +269,7 @@ function calculateMatchScore(
 
 function calculateAasScore(
   assessment: Assessment,
-  answers: Record<string, string>
+  answers: AnswerMap
 ): AssessmentScoreResult {
   const reverse = assessment.reverseQuestionIds ?? [];
   const avg = (ids: string[]) => {
@@ -248,7 +304,7 @@ function calculateAasScore(
 
 function calculatePsqiScore(
   assessment: Assessment,
-  answers: Record<string, string>
+  answers: AnswerMap
 ): AssessmentScoreResult {
   const val = (id: string) => getOptionValue(assessment, answers, id);
 
@@ -284,7 +340,7 @@ function calculatePsqiScore(
 
 function sumQuestions(
   assessment: Assessment,
-  answers: Record<string, string>,
+  answers: AnswerMap,
   ids: string[],
   reverseIds: string[] = []
 ) {
@@ -323,7 +379,7 @@ const PBI_STYLE_PROFILE: Record<string, string> = {
 
 function calculatePbiScore(
   assessment: Assessment,
-  answers: Record<string, string>
+  answers: AnswerMap
 ): AssessmentScoreResult {
   const motherCare = sumQuestions(
     assessment,
@@ -502,7 +558,7 @@ const CBCL_BELOW = "得分处于参考范围内，该方面暂未发现明显问
 
 function calculateCbclScore(
   assessment: Assessment,
-  answers: Record<string, string>
+  answers: AnswerMap
 ): AssessmentScoreResult {
   const itemScore = (num: number) => getOptionValue(assessment, answers, `q${num}`);
 
@@ -568,7 +624,7 @@ function darkLightLevel(score: number, lowMax: number, midMax: number) {
 
 function calculateDarkLightScore(
   assessment: Assessment,
-  answers: Record<string, string>
+  answers: AnswerMap
 ): AssessmentScoreResult {
   const darkGroups = [
     {

@@ -14,7 +14,12 @@ import {
   isRequiredAssessmentQuestion,
   shouldCreateFreshAssessmentAttempt,
 } from "@/lib/assessment/assessment-progress";
-import type { Assessment } from "@/lib/api/types";
+import {
+  canAutoAdvanceAfterAnswer,
+  getQuestionInputType,
+  isAssessmentAnswerPresent,
+} from "@/lib/assessment/assessment-answer";
+import type { Assessment, AssessmentAnswerValue } from "@/lib/api/types";
 
 interface QuizClientProps {
   assessment: Assessment;
@@ -62,7 +67,7 @@ export function QuizClient({ assessment, type }: QuizClientProps) {
   const answers = getAnswers(assessment.id, version);
   const currentIndex = getCurrentIndex(assessment.id, version);
   const question = assessment.questions[currentIndex];
-  const selectedOption = question ? answers[question.id] : undefined;
+  const currentAnswer = question ? answers[question.id] : undefined;
   const isFirst = currentIndex === 0;
   const isLast = currentIndex === assessment.questions.length - 1;
   const canResume =
@@ -70,6 +75,10 @@ export function QuizClient({ assessment, type }: QuizClientProps) {
     !isReadyToSubmit(assessment.id, version);
   const isComplete = isReadyToSubmit(assessment.id, version);
   const answeredCount = getAnsweredCount(assessment.id, version);
+  const inputType = question ? getQuestionInputType(question) : "choice";
+  const answeredCurrent = question
+    ? isAssessmentAnswerPresent(question, currentAnswer)
+    : false;
 
   const goResult = () => {
     router.push(`/assessment/${type}/${assessment.id}/result`);
@@ -101,18 +110,13 @@ export function QuizClient({ assessment, type }: QuizClientProps) {
     setPhase("quiz");
   };
 
-  const handleSelect = (optionId: string) => {
+  const advanceAfterAnswer = (
+    nextAnswers: Record<string, AssessmentAnswerValue>,
+  ) => {
     if (!question || advancingRef.current) return;
-    setAnswer(assessment.id, question.id, optionId);
-
-    // 点选后自动进入下一题；最后一题进入结果页
     advancingRef.current = true;
     window.setTimeout(() => {
       if (isLast) {
-        const nextAnswers = {
-          ...answers,
-          [question.id]: optionId,
-        };
         if (
           areRequiredAssessmentQuestionsAnswered(
             assessment.questions,
@@ -136,6 +140,33 @@ export function QuizClient({ assessment, type }: QuizClientProps) {
       }
       advancingRef.current = false;
     }, 220);
+  };
+
+  const handleAnswer = (value: AssessmentAnswerValue) => {
+    if (!question || advancingRef.current) return;
+    // 数字题清空时不落无效 NaN
+    if (
+      typeof value === "object" &&
+      "number" in value &&
+      !Number.isFinite(value.number)
+    ) {
+      return;
+    }
+    setAnswer(assessment.id, question.id, value);
+    if (canAutoAdvanceAfterAnswer(question, value)) {
+      advanceAfterAnswer({
+        ...answers,
+        [question.id]: value,
+      });
+    }
+  };
+
+  const handleNext = () => {
+    if (!question || !answeredCurrent || advancingRef.current) return;
+    advanceAfterAnswer({
+      ...answers,
+      [question.id]: currentAnswer!,
+    });
   };
 
   const handlePrev = () => {
@@ -199,13 +230,27 @@ export function QuizClient({ assessment, type }: QuizClientProps) {
     );
   }
 
+  const needsManualNext =
+    inputType !== "choice" ||
+    Boolean(
+      typeof currentAnswer === "object" &&
+        "optionId" in (currentAnswer || {}) &&
+        question.options.find(
+          (option) =>
+            option.id ===
+            (typeof currentAnswer === "object" && "optionId" in currentAnswer
+              ? currentAnswer.optionId
+              : undefined),
+        )?.followUp,
+    );
+
   return (
     <div className="mx-auto max-w-2xl">
       <QuizProgress current={currentIndex} total={assessment.questions.length} />
       <QuestionCard
         question={question}
-        selectedOptionId={selectedOption}
-        onSelect={handleSelect}
+        answer={currentAnswer}
+        onAnswer={handleAnswer}
         index={currentIndex}
       />
       <div className="mt-8 flex items-center justify-between gap-3">
@@ -213,15 +258,21 @@ export function QuizClient({ assessment, type }: QuizClientProps) {
           上一题
         </Button>
         <p className="text-center text-xs text-muted-foreground">
-          {isRequiredAssessmentQuestion(question)
-            ? "点选选项后自动进入下一题"
-            : "本题为选答，可选择答案或直接跳过"}
+          {needsManualNext
+            ? "填写完成后点击下一题"
+            : isRequiredAssessmentQuestion(question)
+              ? "点选选项后自动进入下一题"
+              : "本题为选答，可选择答案或直接跳过"}
         </p>
-        {!isRequiredAssessmentQuestion(question) && !selectedOption ? (
+        {!isRequiredAssessmentQuestion(question) && !answeredCurrent ? (
           <Button variant="outline" onClick={handleSkip}>
             {isLast ? "跳过并查看结果" : "跳过此题"}
           </Button>
-        ) : isLast && selectedOption ? (
+        ) : needsManualNext && answeredCurrent ? (
+          <Button onClick={handleNext}>
+            {isLast ? "查看结果" : "下一题"}
+          </Button>
+        ) : isLast && answeredCurrent ? (
           <Button
             onClick={() => {
               if (
