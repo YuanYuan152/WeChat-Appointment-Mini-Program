@@ -2462,10 +2462,14 @@ function ComposedSourceReportEditor({
             const detailsOpen = expandedKeys.includes(detailsKey);
             const calculationMode = dimension.calculationMode ?? "simple";
             const reverseIds = dimension.reverseQuestionIds || [];
-            const formulaError =
-              calculationMode === "formula"
-                ? compileDimensionFormula(dimension.formula || "", allQuestionIds).error
-                : null;
+            let formulaError = "";
+            if (calculationMode === "formula") {
+              try {
+                compileDimensionFormula(dimension.formula || "", allQuestionIds);
+              } catch (error) {
+                formulaError = error instanceof Error ? error.message : "公式不合法";
+              }
+            }
             return (
               <div
                 key={dimension.id || dimensionIndex}
