@@ -7,10 +7,14 @@ import { useRouter } from "next/navigation";
 import { AppRoute, useAppRoute } from "@/components/AppRoute";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
 import { ApiError } from "@/lib/api";
+import { composeAssessmentDefinition } from "@/lib/assessmentEditor";
+import { AssessmentComposerBar } from "@/panels/AssessmentComposerBar";
 import { AssessmentsPanel } from "@/panels/AssessmentsPanel";
+import { fetchAssessmentEnterprises } from "@/services/assessmentEnterprises";
 import {
   archiveAssessment,
   createAssessment,
+  deleteArchivedAssessment,
   fetchAssessmentDetail,
   fetchAssessments,
   publishAssessment,
@@ -73,13 +77,14 @@ export interface AssessmentsPanelPropsContract {
   ) => Promise<AssessmentAdminDetail | undefined>;
 }
 
-function getInitialFilters(): AssessmentListFilters {
+function getInitialFilters(variant: "parent" | "composed"): AssessmentListFilters {
   return {
     page: 1,
     pageSize: DEFAULT_PAGE_SIZE,
     category: "",
     status: "",
     keyword: "",
+    origin: variant === "composed" ? "composed" : "parent",
   };
 }
 
@@ -99,6 +104,7 @@ function isSameQuery(
     first.pageSize === second.pageSize &&
     first.category === second.category &&
     first.status === second.status &&
+    first.origin === second.origin &&
     (first.keyword?.trim() || "") === (second.keyword?.trim() || "")
   );
 }
@@ -107,22 +113,26 @@ function isConflictError(error: unknown) {
   return error instanceof ApiError && error.status === 409;
 }
 
-export function AssessmentsScreen() {
+export function AssessmentsScreen({
+  variant = "parent",
+}: {
+  variant?: "parent" | "composed";
+}) {
   return (
-    <AppRoute sectionId="assessments">
-      <AssessmentsScreenContent />
+    <AppRoute sectionId={variant === "composed" ? "assessmentCompose" : "assessments"}>
+      <AssessmentsScreenContent variant={variant} />
     </AppRoute>
   );
 }
 
-function AssessmentsScreenContent() {
+function AssessmentsScreenContent({ variant }: { variant: "parent" | "composed" }) {
   const router = useRouter();
   const { clearNotice, refreshKey, showNotice } = useAppRoute();
-  const [draftFilters, setDraftFilters] = useState<AssessmentListFilters>(
-    getInitialFilters,
+  const [draftFilters, setDraftFilters] = useState<AssessmentListFilters>(() =>
+    getInitialFilters(variant),
   );
-  const [queryFilters, setQueryFilters] = useState<AssessmentListFilters>(
-    getInitialFilters,
+  const [queryFilters, setQueryFilters] = useState<AssessmentListFilters>(() =>
+    getInitialFilters(variant),
   );
   const [items, setItems] = useState<AssessmentListItem[]>([]);
   const [total, setTotal] = useState(0);
@@ -132,6 +142,8 @@ function AssessmentsScreenContent() {
   const [selectedDetail, setSelectedDetail] =
     useState<AssessmentAdminDetail>();
   const [editorMode, setEditorMode] = useState<AssessmentEditorMode>(null);
+  const [startOnQuestions, setStartOnQuestions] = useState(false);
+  const [boundEnterprises, setBoundEnterprises] = useState<Record<string, string[]>>({});
   const listRequestSequence = useRef(0);
   const detailRequestSequence = useRef(0);
 
@@ -169,6 +181,29 @@ function AssessmentsScreenContent() {
     void loadList();
   }, [clearNotice, loadList, refreshKey]);
 
+  const loadBindings = useCallback(async () => {
+    if (variant !== "composed") {
+      return;
+    }
+    try {
+      const enterprises = await fetchAssessmentEnterprises();
+      const next: Record<string, string[]> = {};
+      for (const enterprise of enterprises) {
+        const name = enterprise.companyName || enterprise.siteName || enterprise.id;
+        for (const assessmentId of enterprise.assessmentIds || []) {
+          next[assessmentId] = [...(next[assessmentId] || []), name];
+        }
+      }
+      setBoundEnterprises(next);
+    } catch {
+      setBoundEnterprises({});
+    }
+  }, [variant]);
+
+  useEffect(() => {
+    void loadBindings();
+  }, [loadBindings, refreshKey]);
+
   const search = useCallback(() => {
     const nextFilters = normalizeFilters({
       ...draftFilters,
@@ -185,7 +220,7 @@ function AssessmentsScreenContent() {
   }, [clearNotice, draftFilters, loadList, queryFilters]);
 
   const resetFilters = useCallback(() => {
-    const initialFilters = getInitialFilters();
+    const initialFilters = getInitialFilters(variant);
     initialFilters.pageSize = queryFilters.pageSize;
     setDraftFilters(initialFilters);
     if (isSameQuery(initialFilters, queryFilters)) {
@@ -194,7 +229,7 @@ function AssessmentsScreenContent() {
       return;
     }
     setQueryFilters(initialFilters);
-  }, [clearNotice, loadList, queryFilters]);
+  }, [clearNotice, loadList, queryFilters, variant]);
 
   const changePage = useCallback((page: number) => {
     const nextPage = Math.max(1, page);
@@ -212,6 +247,7 @@ function AssessmentsScreenContent() {
     clearNotice();
     setSelectedDetail(undefined);
     setDetailLoading(false);
+    setStartOnQuestions(false);
     setEditorMode("create");
   }, [clearNotice]);
 
@@ -246,6 +282,7 @@ function AssessmentsScreenContent() {
       const requestSequence = ++detailRequestSequence.current;
       clearNotice();
       setSelectedDetail(undefined);
+      setStartOnQuestions(false);
       setEditorMode(mode);
       setDetailLoading(true);
       try {
@@ -295,6 +332,7 @@ function AssessmentsScreenContent() {
     detailRequestSequence.current += 1;
     setSelectedDetail(undefined);
     setEditorMode(null);
+    setStartOnQuestions(false);
     setDetailLoading(false);
   }, []);
 
@@ -420,6 +458,27 @@ function AssessmentsScreenContent() {
     [runMutation],
   );
 
+  const deleteItem = useCallback(
+    async (assessmentId: string) => {
+      setActionLoading(true);
+      clearNotice();
+      try {
+        await deleteArchivedAssessment(assessmentId);
+        const refreshed = await loadList(false);
+        await loadBindings();
+        showNotice(
+          "success",
+          refreshed ? "量表已删除" : "量表已删除，但列表刷新失败，请稍后手动刷新。",
+        );
+      } catch (error) {
+        showNotice("error", error instanceof Error ? error.message : "量表删除失败");
+      } finally {
+        setActionLoading(false);
+      }
+    },
+    [clearNotice, loadBindings, loadList, showNotice],
+  );
+
   const restoreVersion = useCallback(
     async (detail: AssessmentAdminDetail, version: number) => {
       return runMutation(
@@ -432,33 +491,79 @@ function AssessmentsScreenContent() {
     [runMutation],
   );
 
+  const composeFromParents = useCallback(
+    async (title: string, assessmentIds: string[]) => {
+      setActionLoading(true);
+      clearNotice();
+      try {
+        const details = await Promise.all(
+          assessmentIds.map((assessmentId) => fetchAssessmentDetail(assessmentId)),
+        );
+        const definition = composeAssessmentDefinition(
+          title,
+          details.map((detail) => detail.definition),
+        );
+        const created = await createAssessment(definition);
+        const refreshed = await loadList(false);
+        setSelectedDetail(created);
+        setStartOnQuestions(true);
+        setEditorMode("edit");
+        showNotice(
+          "success",
+          refreshed
+            ? "已复制组合为新量表草稿，尚未发布。"
+            : "已复制组合为新量表草稿，但列表刷新失败，请稍后手动刷新。",
+        );
+      } finally {
+        setActionLoading(false);
+      }
+    },
+    [clearNotice, loadList, showNotice],
+  );
+
   return (
-    <AssessmentsPanel
-      items={items}
-      total={total}
-      page={queryFilters.page}
-      pageSize={queryFilters.pageSize}
-      listLoading={listLoading}
-      detailLoading={detailLoading}
-      actionLoading={actionLoading}
-      draftFilters={draftFilters}
-      setDraftFilters={setDraftFilters}
-      selectedDetail={selectedDetail}
-      editorMode={editorMode}
-      onSearch={search}
-      onReset={resetFilters}
-      onPageChange={changePage}
-      onPageSizeChange={changePageSize}
-      onOpenCreate={openCreate}
-      onOpenReports={openReports}
-      onOpenShareStats={openShareStats}
-      onOpenDetail={openDetail}
-      onCloseEditor={closeEditor}
-      onSaveDefinition={saveDefinition}
-      onPublish={publish}
-      onArchive={archive}
-      onArchiveItem={archiveItem}
-      onRestoreVersion={restoreVersion}
-    />
+    <div className="space-y-6">
+      {variant === "composed" && (
+        <AssessmentComposerBar disabled={actionLoading} onCompose={composeFromParents} />
+      )}
+      <AssessmentsPanel
+        items={items}
+        total={total}
+        page={queryFilters.page}
+        pageSize={queryFilters.pageSize}
+        listLoading={listLoading}
+        detailLoading={detailLoading}
+        actionLoading={actionLoading}
+        draftFilters={draftFilters}
+        setDraftFilters={setDraftFilters}
+        selectedDetail={selectedDetail}
+        editorMode={editorMode}
+        heading={variant === "composed" ? "已生成量表" : "母量表管理"}
+        description={
+          variant === "composed"
+            ? "由母量表复制组合而成。可查看报告、数据统计、编辑、版本和归档，操作方式与母量表管理一致。保存草稿不会自动发布。"
+            : "管理 EAP 专业量表和趣味量表的草稿、发布版本及报告内容。发布后历史版本保持不变。"
+        }
+        showCreate={variant === "parent"}
+        startOnQuestions={startOnQuestions}
+        showComposeExtras={variant === "composed"}
+        boundEnterprises={boundEnterprises}
+        onSearch={search}
+        onReset={resetFilters}
+        onPageChange={changePage}
+        onPageSizeChange={changePageSize}
+        onOpenCreate={openCreate}
+        onOpenReports={openReports}
+        onOpenShareStats={openShareStats}
+        onOpenDetail={openDetail}
+        onCloseEditor={closeEditor}
+        onSaveDefinition={saveDefinition}
+        onPublish={publish}
+        onArchive={archive}
+        onArchiveItem={archiveItem}
+        onDeleteItem={variant === "composed" ? deleteItem : undefined}
+        onRestoreVersion={restoreVersion}
+      />
+    </div>
   );
 }

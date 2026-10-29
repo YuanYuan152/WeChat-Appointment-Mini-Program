@@ -26,6 +26,9 @@ export function fetchAssessments(filters: AssessmentListFilters) {
   if (filters.keyword?.trim()) {
     params.set("keyword", filters.keyword.trim());
   }
+  if (filters.origin) {
+    params.set("origin", filters.origin);
+  }
 
   return apiRequest<AssessmentListResponse>(
     `/api/mini/admin/assessments?${params.toString()}`,
@@ -65,6 +68,13 @@ export function archiveAssessment(assessmentId: string) {
   return apiRequest<AssessmentAdminDetail>(`${assessmentPath(assessmentId)}/archive`, {
     method: "POST",
   });
+}
+
+export function deleteArchivedAssessment(assessmentId: string) {
+  return apiRequest<{ detachedEnterprises: Array<{ id: string; companyName: string }> }>(
+    assessmentPath(assessmentId),
+    { method: "DELETE" },
+  );
 }
 
 export function fetchAssessmentVersions(assessmentId: string) {

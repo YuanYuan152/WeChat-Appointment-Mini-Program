@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 
 import { AssessmentEditorDialog } from "@/components/assessments/AssessmentEditorDialog";
@@ -36,6 +37,13 @@ export function AssessmentsPanel({
   setDraftFilters,
   selectedDetail,
   editorMode,
+  heading = "母量表管理",
+  description = "管理 EAP 专业量表和趣味量表的草稿、发布版本及报告内容。发布后历史版本保持不变。",
+  showCreate = true,
+  startOnQuestions = false,
+  showComposeExtras = false,
+  boundEnterprises = {},
+  onDeleteItem,
   onSearch,
   onReset,
   onPageChange,
@@ -62,6 +70,13 @@ export function AssessmentsPanel({
   setDraftFilters: Dispatch<SetStateAction<AssessmentListFilters>>;
   selectedDetail?: AssessmentAdminDetail;
   editorMode: AssessmentEditorMode;
+  heading?: string;
+  description?: string;
+  showCreate?: boolean;
+  startOnQuestions?: boolean;
+  showComposeExtras?: boolean;
+  boundEnterprises?: Record<string, string[]>;
+  onDeleteItem?: (assessmentId: string) => Promise<void>;
   onSearch: () => void;
   onReset: () => void;
   onPageChange: (page: number) => void;
@@ -80,6 +95,8 @@ export function AssessmentsPanel({
     version: number,
   ) => Promise<AssessmentAdminDetail | undefined>;
 }) {
+  const [pendingDelete, setPendingDelete] = useState<AssessmentListItem | null>(null);
+  const pendingCompanies = pendingDelete ? boundEnterprises[pendingDelete.id] || [] : [];
   return (
     <>
       <section className="overflow-hidden rounded-xl border border-[var(--lxxl-border)] bg-white">
@@ -92,10 +109,8 @@ export function AssessmentsPanel({
         >
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <h2 className="text-xl font-semibold tracking-normal">量表管理</h2>
-              <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">
-                管理 EAP 专业量表和趣味量表的草稿、发布版本及报告内容。发布后历史版本保持不变。
-              </p>
+              <h2 className="text-xl font-semibold tracking-normal">{heading}</h2>
+              <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">{description}</p>
             </div>
             <div className="flex flex-wrap gap-3">
               <button
@@ -105,13 +120,15 @@ export function AssessmentsPanel({
               >
                 量表报告
               </button>
-              <button
-                className="h-10 rounded-xl bg-[var(--lxxl-green)] px-4 text-sm font-medium text-white transition hover:bg-[var(--lxxl-green-dark)]"
-                type="button"
-                onClick={onOpenCreate}
-              >
-                新增量表
-              </button>
+              {showCreate && (
+                <button
+                  className="h-10 rounded-xl bg-[var(--lxxl-green)] px-4 text-sm font-medium text-white transition hover:bg-[var(--lxxl-green-dark)]"
+                  type="button"
+                  onClick={onOpenCreate}
+                >
+                  新增量表
+                </button>
+              )}
             </div>
           </div>
 
@@ -178,7 +195,7 @@ export function AssessmentsPanel({
           ) : (
             <>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[1120px] border-collapse text-sm">
+                <table className={`w-full border-collapse text-sm ${showComposeExtras ? "min-w-[1240px]" : "min-w-[1120px]"}`}>
                   <thead className="bg-[#FAF8F4] text-left text-[var(--lxxl-muted)]">
                     <tr>
                       <th className="px-5 py-3 font-medium">量表</th>
@@ -187,6 +204,9 @@ export function AssessmentsPanel({
                       <th className="px-5 py-3 font-medium">状态</th>
                       <th className="px-5 py-3 font-medium">内容</th>
                       <th className="px-5 py-3 font-medium">使用数据</th>
+                      {showComposeExtras && (
+                        <th className="px-5 py-3 font-medium">绑定企业数量</th>
+                      )}
                       <th className="px-5 py-3 font-medium">版本</th>
                       <th className="px-5 py-3 font-medium">更新时间</th>
                       <th className="px-5 py-3 text-right font-medium">操作</th>
@@ -206,7 +226,27 @@ export function AssessmentsPanel({
                       return (
                         <tr key={item.id} className="border-t border-[var(--lxxl-border)] align-top">
                           <td className="max-w-[320px] px-5 py-4">
-                            <div className="font-medium">{item.title}</div>
+                            <div className="group relative inline-block max-w-full">
+                              <div
+                                className="font-medium"
+                                title={
+                                  showComposeExtras
+                                    ? (item.composedFrom || []).length > 0
+                                      ? `使用的母量表：${item.composedFrom?.map((source) => source.title).join("、")}`
+                                      : "未记录母量表"
+                                    : undefined
+                                }
+                              >
+                                {item.title}
+                              </div>
+                              {showComposeExtras && (
+                                <div className="pointer-events-none absolute left-0 top-full z-20 mt-1 hidden w-72 rounded-lg bg-[#243028] px-3 py-2 text-left text-xs font-normal leading-5 text-white shadow-lg group-hover:block">
+                                  {(item.composedFrom || []).length > 0
+                                    ? `使用的母量表：${item.composedFrom?.map((source) => source.title).join("、")}`
+                                    : "未记录母量表"}
+                                </div>
+                              )}
+                            </div>
                             <div className="mt-1 text-xs text-[var(--lxxl-muted)]">{item.id}</div>
                             {item.subtitle && (
                               <div className="mt-1 line-clamp-2 text-xs leading-5 text-[var(--lxxl-muted)]">
@@ -253,6 +293,27 @@ export function AssessmentsPanel({
                               二维码扫码 {item.scanCount.toLocaleString("zh-CN")} 次
                             </div>
                           </td>
+                          {showComposeExtras && (
+                            <td className="px-5 py-4">
+                              <span
+                                className="group relative inline-flex"
+                                title={
+                                  (boundEnterprises[item.id] || []).length > 0
+                                    ? boundEnterprises[item.id].join("、")
+                                    : "还没有企业勾选这份量表"
+                                }
+                              >
+                                <span className="font-medium">
+                                  {(boundEnterprises[item.id] || []).length}
+                                </span>
+                                <span className="pointer-events-none absolute bottom-full left-0 z-20 mb-2 hidden w-64 rounded-lg bg-[#243028] px-3 py-2 text-left text-xs font-normal leading-5 text-white shadow-lg group-hover:block">
+                                  {(boundEnterprises[item.id] || []).length > 0
+                                    ? boundEnterprises[item.id].join("、")
+                                    : "还没有企业勾选这份量表"}
+                                </span>
+                              </span>
+                            </td>
+                          )}
                           <td className="px-5 py-4">
                             <div>发布：{item.publishedVersion ? `v${item.publishedVersion}` : "-"}</div>
                             <div className="mt-1 text-xs text-[var(--lxxl-muted)]">
@@ -301,6 +362,15 @@ export function AssessmentsPanel({
                                   归档
                                 </TableActionButton>
                               )}
+                              {showComposeExtras && hiddenByArchive && (
+                                <TableActionButton
+                                  disabled={actionLoading}
+                                  tone="danger"
+                                  onClick={() => setPendingDelete(item)}
+                                >
+                                  删除
+                                </TableActionButton>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -327,12 +397,49 @@ export function AssessmentsPanel({
           detail={selectedDetail}
           detailLoading={detailLoading}
           initialMode={editorMode}
+          startOnQuestions={startOnQuestions}
           onArchive={onArchive}
           onClose={onCloseEditor}
           onPublish={onPublish}
           onRestoreVersion={onRestoreVersion}
           onSave={onSaveDefinition}
         />
+      )}
+      {pendingDelete && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-semibold">删除「{pendingDelete.title}」</h3>
+            <p className="mt-3 text-sm leading-6 text-[var(--lxxl-ink)]">
+              {pendingCompanies.length > 0
+                ? `该量表当前绑定了以下企业：${pendingCompanies.join("、")}。删除后这些企业的定制页面不再显示该量表，作答和报告数据也会删除。`
+                : "该量表当前没有绑定企业。确认删除后，量表及其作答、报告数据会被删除。"}
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                className="h-10 rounded-xl border border-[var(--lxxl-border)] px-4 text-sm"
+                type="button"
+                onClick={() => setPendingDelete(null)}
+              >
+                取消
+              </button>
+              <button
+                className="h-10 rounded-xl bg-[#A13F37] px-4 text-sm text-white disabled:opacity-60"
+                disabled={actionLoading || !onDeleteItem}
+                type="button"
+                onClick={() => {
+                  if (!onDeleteItem) {
+                    return;
+                  }
+                  const target = pendingDelete;
+                  setPendingDelete(null);
+                  void onDeleteItem(target.id);
+                }}
+              >
+                确认删除
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

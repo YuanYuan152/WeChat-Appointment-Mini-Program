@@ -1,5 +1,7 @@
 import type {
   AssessmentDefinition,
+  AssessmentDemographicQuestion,
+  AssessmentDimension,
   AssessmentOptionFollowUp,
   AssessmentQuestion,
   AssessmentQuestionInputType,
@@ -7,9 +9,14 @@ import type {
   AssessmentScoreRange,
   AssessmentScoringPreset,
   AssessmentScoringType,
+  AssessmentSourceReport,
   AssessmentValidationIssue,
 } from "@/types/assessment";
-import { compileDimensionFormula } from "@/lib/assessmentFormula";
+import {
+  compileDimensionFormula,
+  removeFormulaQuestionId,
+  replaceFormulaQuestionId,
+} from "@/lib/assessmentFormula";
 
 export function getQuestionInputType(
   question: Pick<AssessmentQuestion, "inputType">,
@@ -175,12 +182,23 @@ function rangeText(
   return typeof range.description === "string" ? range.description : "";
 }
 
+function finiteScoreBound(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
 function normalizeScoreRange(range: ScoreRangeInput): AssessmentScoreRange {
   const visitorDescription = rangeText(range, "visitorDescription");
   const analystDescription = rangeText(range, "analystDescription");
   return {
-    min: Number(range.min),
-    max: Number(range.max),
+    min: finiteScoreBound(range.min),
+    max: finiteScoreBound(range.max),
     level: typeof range.level === "string" ? range.level : "",
     visitorDescription,
     analystDescription,
@@ -799,8 +817,8 @@ function buildCoverageSummary(
     (score) =>
       !ranges?.some(
         (range) =>
-          Number.isFinite(range.min) &&
-          Number.isFinite(range.max) &&
+          typeof range.min === "number" &&
+          typeof range.max === "number" &&
           range.min <= score &&
           score <= range.max,
       ),
@@ -943,20 +961,22 @@ function validateRanges(
   const ordered: Array<{ min: number; max: number; path: string }> = [];
   ranges.forEach((range, index) => {
     const itemPath = `${path}[${index}]`;
-    if (!Number.isFinite(range.min) || !Number.isFinite(range.max)) {
+    const low = finiteScoreBound(range.min);
+    const high = finiteScoreBound(range.max);
+    if (low === null || high === null) {
       issues.push({
         path: itemPath,
-        message: "分数区间上下限必须是数字",
+        message: "请填写最低分和最高分",
         severity: "error",
       });
-    } else if (range.min > range.max) {
+    } else if (low > high) {
       issues.push({
         path: itemPath,
         message: "分数区间下限不能大于上限",
         severity: "error",
       });
     } else {
-      ordered.push({ min: range.min, max: range.max, path: itemPath });
+      ordered.push({ min: low, max: high, path: itemPath });
     }
     if (!range.level?.trim()) {
       issues.push({
@@ -1705,4 +1725,552 @@ export function validateAssessmentDefinition(
   });
 
   return issues;
+}
+
+function allocateStableId(preferred: string, used: Set<string>) {
+  const nextId = createStableId(preferred, used);
+  used.add(nextId);
+  return nextId;
+}
+
+function createComposedAssessmentId() {
+  const bytes = new Uint8Array(4);
+  crypto.getRandomValues(bytes);
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `combo-${hex}`;
+}
+
+/** 删除题目后，把已有结果说明的分数区间扩到剩余题目可达范围。 */
+export function fitAssessmentScoreRanges(
+  definition: AssessmentDefinition,
+): AssessmentDefinition {
+  if (definition.scoringType === "sum") {
+    const ranges = createDefaultScoreRanges(definition.questions);
+    const current = definition.scoreRanges?.[0];
+    return {
+      ...definition,
+      scoreRanges: current
+        ? [{ ...current, min: ranges[0].min, max: ranges[0].max }]
+        : ranges,
+    };
+  }
+  if (definition.scoringType === "dimension" && definition.dimensions) {
+    return {
+      ...definition,
+      dimensions: definition.dimensions.map((dimension) => {
+        const ranges = createDefaultScoreRanges(
+          definition.questions,
+          dimension.questionIds,
+        );
+        const current = dimension.scoreRanges?.[0];
+        return {
+          ...dimension,
+          scoreRanges: current
+            ? [{ ...current, min: ranges[0].min, max: ranges[0].max }]
+            : ranges,
+        };
+      }),
+    };
+  }
+  return definition;
+}
+
+function mergeDemographicQuestions(
+  sources: AssessmentDefinition[],
+): AssessmentDemographicQuestion[] {
+  const usedIds = new Set<string>();
+  const questions: AssessmentDemographicQuestion[] = [];
+  for (const source of sources) {
+    for (const question of source.demographicQuestions || []) {
+      questions.push({
+        ...structuredClone(question),
+        id: allocateStableId(question.id, usedIds),
+      });
+    }
+  }
+  return questions;
+}
+
+const DARK_TRAIT_GROUPS: Array<{
+  id: string;
+  title: string;
+  questionIds: string[];
+}> = [
+  {
+    id: "machiavellianism",
+    title: "维度一：马基雅维利主义倾向",
+    questionIds: ["d1", "d2", "d3", "d4"],
+  },
+  {
+    id: "psychopathy",
+    title: "维度二：精神病态倾向",
+    questionIds: ["d5", "d6", "d7", "d8"],
+  },
+  {
+    id: "narcissism",
+    title: "维度三：自恋倾向",
+    questionIds: ["d9", "d10", "d11", "d12"],
+  },
+];
+
+function remapQuestionIds(ids: string[] | undefined, idMap: Map<string, string>) {
+  return (ids || [])
+    .map((questionId) => idMap.get(questionId))
+    .filter((questionId): questionId is string => Boolean(questionId));
+}
+
+function darkTraitDimensions(idMap: Map<string, string>): AssessmentDimension[] {
+  const traits = DARK_TRAIT_GROUPS.map((group) => {
+    const questionIds = remapQuestionIds(group.questionIds, idMap);
+    return {
+      id: group.id,
+      title: group.title,
+      questionIds,
+      reverseQuestionIds: [] as string[],
+      calculationMode: "simple" as const,
+      aggregate: "sum" as const,
+      scoreRanges: [
+        { min: 4, max: 12, level: "低", visitorDescription: "低", analystDescription: "低", suggestions: [] },
+        { min: 13, max: 20, level: "中", visitorDescription: "中", analystDescription: "中", suggestions: [] },
+        { min: 21, max: 28, level: "高", visitorDescription: "高", analystDescription: "高", suggestions: [] },
+      ],
+    };
+  });
+  const totalQuestionIds = traits.flatMap((dimension) => dimension.questionIds);
+  return [
+    ...traits,
+    {
+      id: "dark-total",
+      title: "黑暗人格总分",
+      questionIds: totalQuestionIds,
+      reverseQuestionIds: [],
+      calculationMode: "simple",
+      aggregate: "sum",
+      scoreRanges: [
+        { min: 12, max: 36, level: "低", visitorDescription: "低", analystDescription: "低", suggestions: [] },
+        { min: 37, max: 60, level: "中", visitorDescription: "中", analystDescription: "中", suggestions: [] },
+        { min: 61, max: 84, level: "高", visitorDescription: "高", analystDescription: "高", suggestions: [] },
+      ],
+    },
+  ];
+}
+
+/**
+ * 按母量表把原来的维度和记分题目拼进组合量表。
+ * 已从组合量表删掉的题目不会再出现在对应维度里。
+ */
+export function buildSourceReports(
+  definition: AssessmentDefinition,
+  parents: AssessmentDefinition[],
+): AssessmentSourceReport[] {
+  const sources = definition.composedFrom || [];
+  return sources.map((source) => {
+    const parent = parents.find((item) => item.id === source.id);
+    const owned = definition.questions.filter(
+      (question) => question.sourceAssessmentId === source.id,
+    );
+    const idMap = new Map(
+      owned.map((question) => [question.sourceQuestionId || question.id, question.id]),
+    );
+    const questionIds = owned.map((question) => question.id);
+    let dimensions: AssessmentDimension[] | undefined;
+    if (parent?.dimensions?.length) {
+      dimensions = parent.dimensions.map((dimension) => ({
+        ...structuredClone(dimension),
+        questionIds: remapQuestionIds(dimension.questionIds, idMap),
+        reverseQuestionIds: remapQuestionIds(dimension.reverseQuestionIds, idMap),
+        scoreRanges:
+          normalizeScoreRanges(dimension.scoreRanges) ||
+          createDefaultScoreRanges(definition.questions, remapQuestionIds(dimension.questionIds, idMap)),
+      }));
+    } else if (parent?.scoringType === "dark-light") {
+      dimensions = darkTraitDimensions(idMap);
+    } else if (parent?.matchResults?.length) {
+      dimensions = parent.matchResults.map((result) => ({
+        id: result.id,
+        title: result.title,
+        intro: result.description,
+        questionIds,
+        reverseQuestionIds: [] as string[],
+        calculationMode: "simple" as const,
+        aggregate: "sum" as const,
+        scoreRanges: createDefaultScoreRanges(definition.questions, questionIds),
+      }));
+    } else {
+      dimensions = [
+        {
+          id: `${source.id}-total`,
+          title: "总分",
+          questionIds,
+          reverseQuestionIds: remapQuestionIds(parent?.reverseQuestionIds, idMap),
+          calculationMode: "simple",
+          aggregate: "sum",
+          scoreRanges:
+            parent?.scoreRanges && parent.scoreRanges.length > 0
+              ? normalizeScoreRanges(parent.scoreRanges) || parent.scoreRanges
+              : createDefaultScoreRanges(definition.questions, questionIds),
+        },
+      ];
+    }
+    return {
+      sourceId: source.id,
+      sourceTitle: source.title || parent?.title || source.id,
+      scoringType: parent?.scoringType || "sum",
+      scoringPreset: parent?.scoringPreset || "generic-sum-v2",
+      questionIds,
+      dimensions,
+      scoreRanges: parent?.scoreRanges
+        ? normalizeScoreRanges(parent.scoreRanges)
+        : undefined,
+      reverseQuestionIds: remapQuestionIds(parent?.reverseQuestionIds, idMap),
+      matchResults: parent?.matchResults ? structuredClone(parent.matchResults) : undefined,
+      reportProfiles: parent?.reportProfiles ? structuredClone(parent.reportProfiles) : undefined,
+    };
+  });
+}
+
+export const COMPOSED_MULTI_SOURCE_PLACEHOLDERS = {
+  instructions: "请填写指导语。",
+  reportIntro: "请填写报告引导文案。",
+  disclaimer: "请填写免责声明。",
+} as const;
+
+/** 组合量表「合并结果」在 sourceReports 中的固定标识。 */
+export const COMPOSED_MERGED_SOURCE_ID = "__merged__";
+export const COMPOSED_MERGED_SOURCE_TITLE = "合并结果";
+
+export type ComposedQuestionRemovalMode = "clear-explanations" | "clear-bounds";
+
+function rewriteScoreRangesForRemoval(
+  ranges: AssessmentScoreRange[] | undefined,
+  mode: ComposedQuestionRemovalMode,
+): AssessmentScoreRange[] | undefined {
+  if (!ranges) {
+    return ranges;
+  }
+  return ranges.map((range) =>
+    mode === "clear-explanations"
+      ? {
+          ...range,
+          visitorDescription: "",
+          analystDescription: "",
+          suggestions: [],
+        }
+      : {
+          ...range,
+          min: null,
+          max: null,
+        },
+  );
+}
+
+function withoutRemovedQuestionLinks(
+  dimension: AssessmentDimension,
+  removedIds: Set<string>,
+  knownQuestionIds: string[],
+): AssessmentDimension {
+  let formula = dimension.formula;
+  if (dimension.calculationMode === "formula" && formula) {
+    for (const id of removedIds) {
+      formula = removeFormulaQuestionId(formula, id, knownQuestionIds);
+    }
+  }
+  return {
+    ...dimension,
+    questionIds: dimension.questionIds.filter((id) => !removedIds.has(id)),
+    reverseQuestionIds: dimension.reverseQuestionIds?.filter((id) => !removedIds.has(id)),
+    formula,
+  };
+}
+
+/**
+ * 从组合量表草稿中去掉题目，并按所选方式处理平铺窗格里的报告结果。
+ * 不自动改写分数区间。题目不足一道时返回 null。
+ */
+export function removeComposedQuestions(
+  definition: AssessmentDefinition,
+  removedIds: Iterable<string>,
+  mode: ComposedQuestionRemovalMode,
+): AssessmentDefinition | null {
+  const ids = new Set(removedIds);
+  const questions = definition.questions.filter((question) => !ids.has(question.id));
+  if (ids.size === 0 || questions.length < 1) {
+    return ids.size === 0 ? definition : null;
+  }
+  const knownQuestionIds = definition.questions.map((question) => question.id);
+  return {
+    ...definition,
+    questions,
+    reverseQuestionIds: definition.reverseQuestionIds?.filter((id) => !ids.has(id)),
+    dimensions: definition.dimensions?.map((dimension) =>
+      withoutRemovedQuestionLinks(dimension, ids, knownQuestionIds),
+    ),
+    sourceReports: definition.sourceReports?.map((report) => ({
+      ...report,
+      questionIds: report.questionIds.filter((id) => !ids.has(id)),
+      reverseQuestionIds: report.reverseQuestionIds?.filter((id) => !ids.has(id)),
+      scoreRanges: rewriteScoreRangesForRemoval(report.scoreRanges, mode),
+      dimensions: report.dimensions?.map((dimension) => ({
+        ...withoutRemovedQuestionLinks(dimension, ids, knownQuestionIds),
+        scoreRanges:
+          rewriteScoreRangesForRemoval(dimension.scoreRanges, mode) || dimension.scoreRanges,
+      })),
+    })),
+  };
+}
+
+/**
+ * 发布前把平铺窗格中的结果同步成真正参与计分的报告。
+ * 只有一个覆盖全部题目的求和维度时保持总分计分，其余情况改为维度计分。
+ */
+export function syncComposedSourceReports(
+  definition: AssessmentDefinition,
+): AssessmentDefinition {
+  const reports = definition.sourceReports;
+  if (!definition.composedFrom?.length || !reports?.length) {
+    return definition;
+  }
+  const usedIds = new Set<string>();
+  const dimensions: AssessmentDimension[] = [];
+  for (const report of reports) {
+    const owned = definition.questions.filter(
+      (question) => question.sourceAssessmentId === report.sourceId,
+    );
+    const idMap = new Map(
+      owned.map((question) => [question.sourceQuestionId || question.id, question.id]),
+    );
+    for (const dimension of report.dimensions || []) {
+      let formula = dimension.formula || "";
+      if (dimension.calculationMode === "formula" && formula) {
+        const knownIds = [...idMap.keys(), ...dimension.questionIds];
+        for (const [previousId, nextId] of idMap) {
+          if (previousId !== nextId) {
+            formula = replaceFormulaQuestionId(formula, previousId, nextId, knownIds);
+          }
+        }
+      }
+      const preferredId = dimension.id || "dimension";
+      const id = usedIds.has(preferredId)
+        ? createStableId(preferredId, usedIds)
+        : preferredId;
+      usedIds.add(id);
+      dimensions.push({
+        ...structuredClone(dimension),
+        id,
+        formula: dimension.calculationMode === "formula" ? formula : dimension.formula,
+        scoreRanges: (dimension.scoreRanges || []).map((range) => ({ ...range })),
+      });
+    }
+  }
+  if (dimensions.length === 0) {
+    return definition;
+  }
+  const questionIds = new Set(definition.questions.map((question) => question.id));
+  if (dimensions.length === 1) {
+    const only = dimensions[0];
+    const selected = new Set(only.questionIds);
+    const coversAll =
+      questionIds.size > 0 &&
+      selected.size === questionIds.size &&
+      [...questionIds].every((id) => selected.has(id));
+    const simpleSum =
+      (only.calculationMode || "simple") !== "formula" && (only.aggregate || "sum") === "sum";
+    if (coversAll && simpleSum) {
+      return {
+        ...definition,
+        scoringType: "sum",
+        scoringPreset:
+          definition.scoringPreset === "generic-sum-v1" ? "generic-sum-v1" : "generic-sum-v2",
+        scoreRanges: only.scoreRanges,
+        reverseQuestionIds: only.reverseQuestionIds || [],
+        dimensions: undefined,
+      };
+    }
+  }
+  return {
+    ...definition,
+    scoringType: "dimension",
+    scoringPreset: "generic-dimension-v1",
+    dimensions,
+    scoreRanges: undefined,
+    reverseQuestionIds: undefined,
+  };
+}
+
+/**
+ * 把多份母量表的题目复制进一份新的通用计分草稿。
+ * 母量表本身不会被修改。题目保留来源，便于之后按母量表批量删除。
+ */
+export function composeAssessmentDefinition(
+  title: string,
+  sources: AssessmentDefinition[],
+): AssessmentDefinition {
+  const trimmedTitle = title.trim();
+  if (!trimmedTitle) {
+    throw new Error("请填写新量表名称");
+  }
+  if (sources.length === 0) {
+    throw new Error("请至少选择一个母量表");
+  }
+
+  const usedQuestionIds = new Set<string>();
+  const usedOptionIds = new Set<string>();
+  const questions: AssessmentQuestion[] = [];
+  const sourceMaps: Array<{
+    definition: AssessmentDefinition;
+    idMap: Map<string, string>;
+  }> = [];
+
+  for (const source of sources) {
+    const idMap = new Map<string, string>();
+    for (const question of source.questions || []) {
+      const nextId = allocateStableId(question.id, usedQuestionIds);
+      idMap.set(question.id, nextId);
+      const options = (question.options || []).map((option) => {
+        const next = structuredClone(option);
+        next.id = allocateStableId(option.id, usedOptionIds);
+        delete next.matchTags;
+        return next;
+      });
+      questions.push({
+        ...structuredClone(question),
+        id: nextId,
+        options,
+        sourceAssessmentId: source.id,
+        sourceAssessmentTitle: source.title || source.id,
+        sourceQuestionId: question.id,
+      });
+    }
+    sourceMaps.push({ definition: source, idMap });
+  }
+
+  if (questions.length === 0) {
+    throw new Error("所选母量表没有可复制的题目");
+  }
+
+  const scoringTypes = new Set(sources.map((source) => source.scoringType));
+  const sharedType = scoringTypes.size === 1 ? sources[0].scoringType : null;
+  const scoringType: AssessmentScoringType =
+    sharedType === "dimension" ? "dimension" : "sum";
+  const primary = sources[0];
+  const singleSource = sources.length === 1;
+  const cover =
+    primary.cover?.trim() || sources.map((source) => source.cover?.trim()).find(Boolean);
+  if (!cover) {
+    throw new Error("所选母量表没有可用封面，无法组合");
+  }
+  const inheritedText = (value: string | undefined, fallback: string) => {
+    const trimmed = value?.trim();
+    return trimmed || fallback;
+  };
+
+  const definition: AssessmentDefinition = {
+    schemaVersion: 1,
+    id: createComposedAssessmentId(),
+    version: 1,
+    status: "draft",
+    category: sources.some((source) => source.category === "professional")
+      ? "professional"
+      : "fun",
+    visibility: sources.every((source) => source.visibility === "private")
+      ? "private"
+      : "public",
+    title: trimmedTitle,
+    subtitle: singleSource
+      ? "由母量表组合生成"
+      : primary.subtitle?.trim() || "",
+    description: singleSource
+      ? `题目来自母量表：${sources.map((source) => source.title || source.id).join("、")}`
+      : primary.description?.trim() || "",
+    instructions: singleSource
+      ? inheritedText(primary.instructions, COMPOSED_MULTI_SOURCE_PLACEHOLDERS.instructions)
+      : COMPOSED_MULTI_SOURCE_PLACEHOLDERS.instructions,
+    cover,
+    duration: Math.min(
+      240,
+      Math.max(
+        1,
+        sources.reduce((total, source) => total + (Number(source.duration) || 0), 0),
+      ),
+    ),
+    sortOrder: 0,
+    demographicQuestions: singleSource ? mergeDemographicQuestions(sources) : [],
+    scoringType,
+    scoringPreset:
+      scoringType === "dimension" ? "generic-dimension-v1" : "generic-sum-v2",
+    questions,
+    reportIntro: singleSource
+      ? inheritedText(primary.reportIntro, COMPOSED_MULTI_SOURCE_PLACEHOLDERS.reportIntro)
+      : COMPOSED_MULTI_SOURCE_PLACEHOLDERS.reportIntro,
+    disclaimer: singleSource
+      ? inheritedText(primary.disclaimer, COMPOSED_MULTI_SOURCE_PLACEHOLDERS.disclaimer)
+      : COMPOSED_MULTI_SOURCE_PLACEHOLDERS.disclaimer,
+    composedFrom: sources.map((source) => ({
+      id: source.id,
+      title: source.title || source.id,
+    })),
+  };
+
+  const features = singleSource
+    ? sources
+        .map((source) => source.features?.trim())
+        .filter(Boolean)
+        .join("\n\n")
+    : primary.features?.trim() || "";
+  if (features) {
+    definition.features = features;
+  }
+
+  if (scoringType === "dimension") {
+    const usedDimensionIds = new Set<string>();
+    const dimensions: AssessmentDimension[] = [];
+    for (const { definition: source, idMap } of sourceMaps) {
+      for (const dimension of source.dimensions || []) {
+        const questionIds = dimension.questionIds
+          .map((questionId) => idMap.get(questionId))
+          .filter((questionId): questionId is string => Boolean(questionId));
+        if (questionIds.length === 0) {
+          continue;
+        }
+        let formula = dimension.formula || "";
+        const knownIds = [...idMap.keys(), ...questionIds];
+        if (dimension.calculationMode === "formula" && formula) {
+          for (const [previousId, nextId] of idMap) {
+            if (previousId !== nextId) {
+              formula = replaceFormulaQuestionId(formula, previousId, nextId, knownIds);
+            }
+          }
+        }
+        dimensions.push({
+          ...structuredClone(dimension),
+          id: allocateStableId(dimension.id, usedDimensionIds),
+          questionIds,
+          reverseQuestionIds: (dimension.reverseQuestionIds || [])
+            .map((questionId) => idMap.get(questionId))
+            .filter((questionId): questionId is string => Boolean(questionId)),
+          formula: dimension.calculationMode === "formula" ? formula : dimension.formula,
+          scoreRanges: createDefaultScoreRanges(questions, questionIds),
+        });
+      }
+    }
+    if (dimensions.length === 0) {
+      throw new Error("所选维度量表没有可复制的维度题目");
+    }
+    definition.dimensions = dimensions;
+  } else {
+    const reverseQuestionIds = new Set<string>();
+    for (const { definition: source, idMap } of sourceMaps) {
+      for (const questionId of source.reverseQuestionIds || []) {
+        const nextId = idMap.get(questionId);
+        if (nextId) {
+          reverseQuestionIds.add(nextId);
+        }
+      }
+    }
+    definition.reverseQuestionIds = [...reverseQuestionIds];
+    definition.scoreRanges = createDefaultScoreRanges(questions);
+  }
+
+  definition.sourceReports = buildSourceReports(definition, sources);
+  return definition;
 }

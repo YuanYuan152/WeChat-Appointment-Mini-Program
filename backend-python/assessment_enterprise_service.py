@@ -294,6 +294,33 @@ def slug_from_url(url: str) -> str:
     return slug
 
 
+def detach_assessment_from_enterprises(assessment_id: str) -> list[dict[str, str]]:
+    """从企业定制勾选中移除量表。返回解除前绑定的企业。"""
+    bound: list[dict[str, str]] = []
+    with _lock:
+        items = _read()
+        changed = False
+        for item in items:
+            current_ids = [value for value in (item.get("assessmentIds") or []) if isinstance(value, str)]
+            if assessment_id not in current_ids:
+                continue
+            bound.append(
+                {
+                    "id": str(item.get("id") or ""),
+                    "companyName": str(item.get("companyName") or item.get("siteName") or item.get("id") or ""),
+                }
+            )
+            item["assessmentIds"] = [value for value in current_ids if value != assessment_id]
+            titles = item.get("assessmentTitles")
+            if isinstance(titles, dict):
+                titles.pop(assessment_id, None)
+                item["assessmentTitles"] = titles
+            changed = True
+        if changed:
+            _write(items)
+    return bound
+
+
 def list_enterprises() -> list[dict[str, Any]]:
     with _lock:
         return sorted(

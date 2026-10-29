@@ -7,16 +7,22 @@ import { AssessmentImageField } from "@/components/assessments/AssessmentImageFi
 import { Badge, QueryField, queryControlClass } from "@/components/ui";
 import {
   changeAssessmentScoringType,
+  buildSourceReports,
+  COMPOSED_MERGED_SOURCE_ID,
+  COMPOSED_MERGED_SOURCE_TITLE,
   createDefaultAssessmentDefinition,
   createStableId,
-  getQuestionInputType,
-  normalizeAssessmentDefinition,
-  formatLines,
   getAssessmentScoreCoverageSummaries,
   getDimensionParentId,
+  getQuestionInputType,
   isFixedScoringType,
+  normalizeAssessmentDefinition,
+  formatLines,
   parseLines,
+  removeComposedQuestions,
+  syncComposedSourceReports,
   type AssessmentScoreCoverageSummary,
+  type ComposedQuestionRemovalMode,
   validateAssessmentDefinition,
 } from "@/lib/assessmentEditor";
 import {
@@ -26,6 +32,7 @@ import {
   replaceFormulaQuestionId,
 } from "@/lib/assessmentFormula";
 import { formatFullDateTime } from "@/lib/format";
+import { fetchAssessmentDetail } from "@/services/assessments";
 import type { AssessmentEditorMode } from "@/panels/AssessmentsPanel";
 import type {
   AssessmentAdminDetail,
@@ -42,6 +49,7 @@ import type {
   AssessmentScoreMode,
   AssessmentScoreRange,
   AssessmentScoringType,
+  AssessmentValidationIssue,
 } from "@/types/assessment";
 
 type EditorTab = "basic" | "demographics" | "questions" | "results" | "advanced" | "versions";
@@ -56,6 +64,7 @@ export function AssessmentEditorDialog({
   detailLoading,
   actionLoading,
   initialMode,
+  startOnQuestions = false,
   onClose,
   onSave,
   onPublish,
@@ -66,6 +75,7 @@ export function AssessmentEditorDialog({
   detailLoading: boolean;
   actionLoading: boolean;
   initialMode: Exclude<AssessmentEditorMode, null>;
+  startOnQuestions?: boolean;
   onClose: () => void;
   onSave: (definition: AssessmentDefinition) => Promise<AssessmentAdminDetail | undefined>;
   onPublish: (detail: AssessmentAdminDetail) => Promise<AssessmentAdminDetail | undefined>;
@@ -87,7 +97,7 @@ export function AssessmentEditorDialog({
   const [definition, setDefinition] = useState<AssessmentDefinition>(initialDefinition);
   const [baseline, setBaseline] = useState(() => serializeDefinition(initialDefinition));
   const [activeTab, setActiveTab] = useState<EditorTab>(
-    initialMode === "versions" ? "versions" : "basic",
+    initialMode === "versions" ? "versions" : startOnQuestions ? "questions" : "basic",
   );
   const [jsonDraft, setJsonDraft] = useState(() => serializeDefinition(initialDefinition));
   const [localError, setLocalError] = useState("");
@@ -95,6 +105,10 @@ export function AssessmentEditorDialog({
   const closeRef = useRef<() => void>(() => undefined);
   const dialogRef = useRef<HTMLElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const undoStackRef = useRef<string[]>([]);
+  const coalesceFieldRef = useRef<string | null>(null);
+  const [undoCount, setUndoCount] = useState(0);
+  const [publishIssues, setPublishIssues] = useState<AssessmentValidationIssue[]>([]);
 
   const serializedDefinition = useMemo(() => serializeDefinition(definition), [definition]);
   const dirty = serializedDefinition !== baseline;
@@ -109,11 +123,19 @@ export function AssessmentEditorDialog({
   const blockingIssues = issues.filter((issue) => issue.severity === "error");
   const fixedScoring = isFixedScoringType(definition.scoringType);
   const archived = currentDetail?.lifecycleStatus === "archived";
+  const composeMode = Boolean(definition.composedFrom?.length);
+  const visibleIssues = publishIssues.length > 0 ? publishIssues : composeMode ? [] : blockingIssues;
   const uploading = activeUploads > 0;
   const editorDisabled = Boolean(archived || actionLoading || uploading);
 
   const handleUploadStateChange = useCallback((delta: number) => {
     setActiveUploads((count) => Math.max(0, count + delta));
+  }, []);
+
+  const resetUndoHistory = useCallback(() => {
+    undoStackRef.current = [];
+    coalesceFieldRef.current = null;
+    setUndoCount(0);
   }, []);
 
   useEffect(() => {
@@ -127,7 +149,8 @@ export function AssessmentEditorDialog({
     setBaseline(nextBaseline);
     setJsonDraft(nextBaseline);
     setLocalError("");
-  }, [currentDetail?.revision, detail]);
+    resetUndoHistory();
+  }, [currentDetail?.revision, detail, resetUndoHistory]);
 
   const attemptClose = useCallback(() => {
     if (actionLoading || uploading) {
@@ -138,6 +161,38 @@ export function AssessmentEditorDialog({
     }
     onClose();
   }, [actionLoading, dirty, onClose, uploading]);
+
+  useEffect(() => {
+    if (!composeMode || definition.sourceReports?.length || !definition.composedFrom?.length) {
+      return;
+    }
+    let cancelled = false;
+    void Promise.all(
+      definition.composedFrom.map((source) =>
+        fetchAssessmentDetail(source.id).then((detail) => detail.definition).catch(() => null),
+      ),
+    ).then((parents) => {
+      if (cancelled) {
+        return;
+      }
+      const loaded = parents.filter((item): item is AssessmentDefinition => Boolean(item));
+      if (loaded.length === 0) {
+        return;
+      }
+      setDefinition((current) => {
+        if (current.sourceReports?.length) {
+          return current;
+        }
+        const next = { ...current, sourceReports: buildSourceReports(current, loaded) };
+        setBaseline(serializeDefinition(next));
+        setJsonDraft(serializeDefinition(next));
+        return next;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [composeMode, definition.composedFrom, definition.sourceReports?.length]);
 
   useEffect(() => {
     closeRef.current = attemptClose;
@@ -178,18 +233,62 @@ export function AssessmentEditorDialog({
       }
     };
     document.addEventListener("keydown", handleKeyDown);
+    const clearCoalesce = () => {
+      coalesceFieldRef.current = null;
+    };
+    document.addEventListener("focusout", clearCoalesce);
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("focusout", clearCoalesce);
       document.body.style.overflow = originalOverflow;
       previousActiveElement?.focus();
     };
   }, []);
 
+  const draftUndoOffered =
+    composeMode && currentDetail?.lifecycleStatus === "draft" && !archived;
+  const canTrackUndo =
+    draftUndoOffered &&
+    (!definition.composedFrom?.length || Boolean(definition.sourceReports?.length));
+
   function updateDefinition(next: AssessmentDefinition) {
+    const serializedNext = serializeDefinition(next);
+    const previous = serializeDefinition(definition);
+    if (serializedNext === previous) {
+      return;
+    }
+    if (canTrackUndo) {
+      const signature = changeSignature(definition, next);
+      const sameTextBurst =
+        Boolean(signature) &&
+        !signature?.structural &&
+        signature?.path === coalesceFieldRef.current;
+      if (!sameTextBurst) {
+        undoStackRef.current = [...undoStackRef.current, previous].slice(-50);
+        setUndoCount(undoStackRef.current.length);
+      }
+      coalesceFieldRef.current = signature && !signature.structural ? signature.path : null;
+    }
     setDefinition(next);
     if (activeTab !== "advanced") {
-      setJsonDraft(serializeDefinition(next));
+      setJsonDraft(serializedNext);
     }
+    setLocalError("");
+    setPublishIssues([]);
+  }
+
+  function undoLastEdit() {
+    const previous = undoStackRef.current.pop();
+    if (!previous || !draftUndoOffered || editorDisabled) {
+      if (previous) {
+        undoStackRef.current.push(previous);
+      }
+      return;
+    }
+    coalesceFieldRef.current = null;
+    setUndoCount(undoStackRef.current.length);
+    setDefinition(JSON.parse(previous) as AssessmentDefinition);
+    setJsonDraft(previous);
     setLocalError("");
   }
 
@@ -200,31 +299,77 @@ export function AssessmentEditorDialog({
     setBaseline(nextBaseline);
     setJsonDraft(nextBaseline);
     setLocalError("");
+    resetUndoHistory();
   }
 
-  async function save() {
+  async function save(nextDefinition: AssessmentDefinition = definition) {
     if (uploading) {
       setLocalError("图片仍在上传，请等待上传完成后再保存。");
-      return;
+      return undefined;
     }
-    if (blockingIssues.length > 0) {
-      setLocalError(`请先处理 ${blockingIssues.length} 项校验问题，再保存草稿。`);
-      return;
+    if (composeMode) {
+      if (nextDefinition.questions.length < 1) {
+        updateDefinition(nextDefinition);
+        setLocalError("至少需要一道量表题目，再保存草稿。");
+        return undefined;
+      }
+      const result = await onSave(nextDefinition);
+      if (result) {
+        applyDetail(result);
+        setPublishIssues([]);
+      }
+      return result;
     }
-    const result = await onSave(definition);
+    const summaries = getAssessmentScoreCoverageSummaries(nextDefinition);
+    const nextBlocking = validateAssessmentDefinition(nextDefinition, summaries).filter(
+      (issue) => issue.severity === "error",
+    );
+    if (nextBlocking.length > 0) {
+      updateDefinition(nextDefinition);
+      setLocalError(`请先处理 ${nextBlocking.length} 项校验问题，再保存草稿。`);
+      return undefined;
+    }
+    const result = await onSave(nextDefinition);
     if (result) {
       applyDetail(result);
     }
+    return result;
   }
 
   async function publish() {
     if (uploading || !currentDetail || dirty || !currentDetail.draftVersion) {
       return;
     }
+    const prepared = composeMode ? syncComposedSourceReports(definition) : definition;
+    const summaries = getAssessmentScoreCoverageSummaries(prepared);
+    const nextBlocking = validateAssessmentDefinition(prepared, summaries).filter(
+      (issue) => issue.severity === "error",
+    );
+    if (nextBlocking.length > 0) {
+      setPublishIssues(nextBlocking);
+      setLocalError(
+        composeMode
+          ? `发布前需要补齐 ${nextBlocking.length} 项。请到报告结果中点击对应结果项打开详细信息，补全解释和分数区间，并完善题目内容。`
+          : `发布前需要处理 ${nextBlocking.length} 项校验问题。`,
+      );
+      if (composeMode) {
+        setActiveTab("results");
+      }
+      return;
+    }
     if (!window.confirm(`确定发布 ${definition.title || definition.id} 的 v${currentDetail.draftVersion} 草稿吗？`)) {
       return;
     }
-    const result = await onPublish(currentDetail);
+    let detailToPublish = currentDetail;
+    if (composeMode && serializeDefinition(prepared) !== serializeDefinition(definition)) {
+      const saved = await onSave(prepared);
+      if (!saved) {
+        return;
+      }
+      applyDetail(saved);
+      detailToPublish = saved;
+    }
+    const result = await onPublish(detailToPublish);
     if (result) {
       applyDetail(result);
     }
@@ -234,7 +379,13 @@ export function AssessmentEditorDialog({
     if (uploading || !currentDetail || archived) {
       return;
     }
-    if (!window.confirm("归档后 EAP 用户将无法继续打开该量表，确定归档吗？")) {
+    if (
+      !window.confirm(
+        composeMode
+          ? "撤销前端展示后，EAP 用户将无法继续打开该量表，确定继续吗？"
+          : "归档后 EAP 用户将无法继续打开该量表，确定归档吗？",
+      )
+    ) {
       return;
     }
     const result = await onArchive(currentDetail);
@@ -383,10 +534,12 @@ export function AssessmentEditorDialog({
                   disabled={editorDisabled}
                   fixedStructure={fixedScoring}
                   onChange={updateDefinition}
+                  onPersist={save}
                 />
               )}
               {activeTab === "results" && (
                 <ResultFields
+                  composeMode={composeMode}
                   coverageSummaries={coverageSummaries}
                   definition={definition}
                   disabled={editorDisabled}
@@ -422,18 +575,18 @@ export function AssessmentEditorDialog({
               图片上传中，请等待上传完成后再保存、发布或关闭窗口。
             </div>
           )}
-          {(localError || blockingIssues.length > 0) && (
+          {(localError || visibleIssues.length > 0) && (
             <div className="mb-3 rounded-xl bg-[#FFF5F4] px-4 py-3 text-sm text-[#A13F37]">
-              {localError || `当前有 ${blockingIssues.length} 项内容需要完善。`}
-              {blockingIssues.length > 0 && (
+              {localError || `当前有 ${visibleIssues.length} 项内容需要完善。`}
+              {visibleIssues.length > 0 && (
                 <ul className="mt-2 list-disc space-y-1 pl-5 text-xs leading-5">
-                  {blockingIssues.slice(0, 6).map((issue) => (
+                  {visibleIssues.slice(0, 6).map((issue) => (
                     <li key={`${issue.path}-${issue.message}`}>
                       {issue.path ? `${issue.path}：` : ""}
                       {issue.message}
                     </li>
                   ))}
-                  {blockingIssues.length > 6 && <li>另有 {blockingIssues.length - 6} 项未显示</li>}
+                  {visibleIssues.length > 6 && <li>另有 {visibleIssues.length - 6} 项未显示</li>}
                 </ul>
               )}
             </div>
@@ -447,55 +600,107 @@ export function AssessmentEditorDialog({
                 : "新量表首次保存后生成 v1 草稿"}
             </div>
             <div className="flex flex-wrap justify-end gap-3">
-              <button
-                className="h-10 rounded-xl border border-[var(--lxxl-border)] px-4 text-sm font-medium text-[var(--lxxl-muted)] transition hover:border-[var(--lxxl-green)] hover:text-[var(--lxxl-green)] disabled:opacity-40"
-                disabled={actionLoading || uploading}
-                type="button"
-                onClick={attemptClose}
+              {draftUndoOffered && (
+                <ActionHint
+                  hint={
+                    undoCount > 0
+                      ? "退回这次打开后还没保存的上一步。撤回只改页面上的草稿，需要再点保存才会写入。"
+                      : "还没有可撤回的修改。保存或重新打开后，之前的撤回记录不会保留。"
+                  }
+                >
+                  <button
+                    className={`h-10 rounded-xl border px-4 text-sm font-medium transition ${
+                      undoCount > 0 && !editorDisabled
+                        ? "border-[var(--lxxl-green)] bg-[#F2F7F4] text-[var(--lxxl-green)] hover:bg-[var(--lxxl-green)] hover:text-white"
+                        : "cursor-not-allowed border-[var(--lxxl-border)] text-[var(--lxxl-muted)] opacity-40"
+                    }`}
+                    disabled={undoCount === 0 || editorDisabled}
+                    type="button"
+                    onClick={undoLastEdit}
+                  >
+                    撤回
+                  </button>
+                </ActionHint>
+              )}
+              <ActionHint
+                hint={
+                  composeMode
+                    ? "关闭当前编辑窗口。如果还有未保存的修改，会先询问是否放弃。"
+                    : undefined
+                }
               >
-                关闭
-              </button>
-              {currentDetail && !archived && (
                 <button
-                  className="h-10 rounded-xl border border-[#E8B7B2] px-4 text-sm font-medium text-[#A13F37] transition hover:bg-[#FFF5F4] disabled:opacity-40"
+                  className="h-10 rounded-xl border border-[var(--lxxl-border)] px-4 text-sm font-medium text-[var(--lxxl-muted)] transition hover:border-[var(--lxxl-green)] hover:text-[var(--lxxl-green)] disabled:opacity-40"
                   disabled={actionLoading || uploading}
                   type="button"
-                  onClick={() => void archive()}
+                  onClick={attemptClose}
                 >
-                  取消前端展示
+                  {composeMode ? "关闭窗口" : "关闭"}
                 </button>
+              </ActionHint>
+              {currentDetail && !archived && (
+                <ActionHint
+                  hint={
+                    composeMode
+                      ? "让这份量表从 EAP 前端下线，用户将不能继续打开。后台仍可查看已保存内容。"
+                      : undefined
+                  }
+                >
+                  <button
+                    className="h-10 rounded-xl border border-[#E8B7B2] px-4 text-sm font-medium text-[#A13F37] transition hover:bg-[#FFF5F4] disabled:opacity-40"
+                    disabled={actionLoading || uploading}
+                    type="button"
+                    onClick={() => void archive()}
+                  >
+                    {composeMode ? "撤销前端展示" : "取消前端展示"}
+                  </button>
+                </ActionHint>
               )}
               {!archived && (
-                <button
-                  className="h-10 rounded-xl border border-[var(--lxxl-green)] px-4 text-sm font-medium text-[var(--lxxl-green)] transition hover:bg-[#F2F7F4] disabled:cursor-not-allowed disabled:opacity-40"
-                  disabled={actionLoading || uploading || !currentDetail?.draftVersion || dirty}
-                  title={
-                    dirty
-                      ? "请先保存当前修改"
-                      : currentDetail?.draftVersion
-                        ? "发布当前草稿"
-                        : "当前没有可发布草稿"
+                <ActionHint
+                  hint={
+                    composeMode
+                      ? "把当前已保存的草稿发布到前端。若还有未保存修改，需要先点保存。"
+                      : undefined
                   }
-                  type="button"
-                  onClick={() => void publish()}
                 >
-                  发布版本
-                </button>
+                  <button
+                    className="h-10 rounded-xl border border-[var(--lxxl-green)] px-4 text-sm font-medium text-[var(--lxxl-green)] transition hover:bg-[#F2F7F4] disabled:cursor-not-allowed disabled:opacity-40"
+                    disabled={actionLoading || uploading || !currentDetail?.draftVersion || dirty}
+                    title={
+                      composeMode
+                        ? undefined
+                        : dirty
+                          ? "请先保存当前修改"
+                          : currentDetail?.draftVersion
+                            ? "发布当前草稿"
+                            : "当前没有可发布草稿"
+                    }
+                    type="button"
+                    onClick={() => void publish()}
+                  >
+                    发布版本
+                  </button>
+                </ActionHint>
               )}
               {!archived && activeTab !== "versions" && (
-                <button
-                  className="h-10 rounded-xl bg-[var(--lxxl-green)] px-5 text-sm font-medium text-white transition hover:bg-[var(--lxxl-green-dark)] disabled:cursor-not-allowed disabled:opacity-40"
-                  disabled={
-                    actionLoading ||
-                    uploading ||
-                    blockingIssues.length > 0 ||
-                    (!dirty && Boolean(currentDetail))
-                  }
-                  type="button"
-                  onClick={() => void save()}
+                <ActionHint
+                  hint={composeMode ? "把当前编辑内容存为草稿，不会发布到前端。" : undefined}
                 >
-                  {actionLoading ? "处理中..." : isCreate && !currentDetail ? "创建草稿" : "保存"}
-                </button>
+                  <button
+                    className="h-10 rounded-xl bg-[var(--lxxl-green)] px-5 text-sm font-medium text-white transition hover:bg-[var(--lxxl-green-dark)] disabled:cursor-not-allowed disabled:opacity-40"
+                    disabled={
+                      actionLoading ||
+                      uploading ||
+                      (!composeMode && blockingIssues.length > 0) ||
+                      (!dirty && Boolean(currentDetail))
+                    }
+                    type="button"
+                    onClick={() => void save()}
+                  >
+                    {actionLoading ? "处理中..." : isCreate && !currentDetail ? "创建草稿" : "保存"}
+                  </button>
+                </ActionHint>
               )}
             </div>
           </div>
@@ -1047,13 +1252,22 @@ function QuestionFields({
   disabled,
   fixedStructure,
   onChange,
+  onPersist,
 }: {
   definition: AssessmentDefinition;
   disabled: boolean;
   fixedStructure: boolean;
   onChange: (definition: AssessmentDefinition) => void;
+  onPersist: (definition: AssessmentDefinition) => Promise<AssessmentAdminDetail | undefined>;
 }) {
   const questions = definition.questions;
+  const composeMode = Boolean(definition.composedFrom?.length);
+  const [optionsExpanded, setOptionsExpanded] = useState(false);
+  const [checkMode, setCheckMode] = useState(false);
+  const [checkedIds, setCheckedIds] = useState<string[]>([]);
+  const [pendingRemoval, setPendingRemoval] = useState<AssessmentQuestion[] | null>(null);
+  const [pendingSave, setPendingSave] = useState<AssessmentDefinition | null>(null);
+  const [savingBatch, setSavingBatch] = useState(false);
 
   function setQuestions(next: AssessmentQuestion[]) {
     onChange({ ...definition, questions: next });
@@ -1118,6 +1332,52 @@ function QuestionFields({
     });
   }
 
+  function requestRemoval(selected: AssessmentQuestion[]) {
+    if (selected.length === 0) {
+      return;
+    }
+    if (questions.length - selected.length < 1) {
+      window.alert("至少需要保留一道题目。");
+      return;
+    }
+    setPendingRemoval(selected);
+  }
+
+  function confirmRemoval(mode: ComposedQuestionRemovalMode) {
+    if (!pendingRemoval) {
+      return;
+    }
+    const next = removeComposedQuestions(
+      definition,
+      pendingRemoval.map((question) => question.id),
+      mode,
+    );
+    setPendingRemoval(null);
+    if (!next) {
+      window.alert("至少需要保留一道题目。");
+      return;
+    }
+    onChange(next);
+    setCheckedIds([]);
+    setCheckMode(false);
+    setPendingSave(next);
+  }
+
+  async function confirmBatchSave() {
+    if (!pendingSave || savingBatch) {
+      return;
+    }
+    setSavingBatch(true);
+    try {
+      const saved = await onPersist(pendingSave);
+      if (saved) {
+        setPendingSave(null);
+      }
+    } finally {
+      setSavingBatch(false);
+    }
+  }
+
   function addQuestion() {
     const id = createStableId("q", questions.map((item) => item.id));
     const optionIds = new Set(
@@ -1180,31 +1440,111 @@ function QuestionFields({
   return (
     <EditorSection
       action={
-        <AddButton disabled={disabled || fixedStructure} onClick={addQuestion}>
-          新增题目
-        </AddButton>
+        <div className="flex flex-wrap justify-end gap-2">
+          {composeMode && (
+            <>
+              <button
+                className={`h-9 rounded-xl border px-4 text-sm font-medium transition ${
+                  optionsExpanded
+                    ? "border-[var(--lxxl-green)] bg-[#F2F7F4] text-[var(--lxxl-green)]"
+                    : "border-[var(--lxxl-border)] bg-white text-[var(--lxxl-ink)] hover:border-[var(--lxxl-green)]"
+                }`}
+                type="button"
+                onClick={() => setOptionsExpanded(true)}
+              >
+                全部展开
+              </button>
+              <button
+                className={`h-9 rounded-xl border px-4 text-sm font-medium transition ${
+                  checkMode
+                    ? "border-[var(--lxxl-green)] bg-[#F2F7F4] text-[var(--lxxl-green)]"
+                    : "border-[var(--lxxl-border)] bg-white text-[var(--lxxl-ink)] hover:border-[var(--lxxl-green)]"
+                }`}
+                type="button"
+                onClick={() => {
+                  setCheckMode((active) => {
+                    if (!active && optionsExpanded) {
+                      setOptionsExpanded(false);
+                    }
+                    if (active) {
+                      setCheckedIds([]);
+                    }
+                    return !active;
+                  });
+                }}
+              >
+                勾选删除
+              </button>
+            </>
+          )}
+          <AddButton disabled={disabled || fixedStructure} onClick={addQuestion}>
+            新增题目
+          </AddButton>
+        </div>
       }
       description={
-        fixedStructure
-          ? "固定计分量表可修改题目和选项文案，但题目 ID、选项 ID、分值及题目数量保持锁定。"
-          : "题目可为选择题、填空题或数字题。填空/数字题可按是否填写或填写数字计分；选择题可在选项上配置追问计分。"
+        composeMode
+          ? "默认只显示题目，选项收起。删除题目时要选择如何处理报告结果。正式题目可以先保存；发布版本时才会核对报告结果和题目内容是否补齐。"
+          : fixedStructure
+            ? "固定计分量表可修改题目和选项文案，但题目 ID、选项 ID、分值及题目数量保持锁定。"
+            : "题目可为选择题、填空题或数字题。填空/数字题可按是否填写或填写数字计分；选择题可在选项上配置追问计分。"
       }
       title="正式题目与选项"
     >
       <div className="space-y-4">
         {questions.map((question, questionIndex) => {
           const inputType = getQuestionInputType(question);
+          const checked = checkedIds.includes(question.id);
+          const showDetails = !composeMode || optionsExpanded;
           return (
           <div
-            key={questionIndex}
-            className="rounded-xl border border-[var(--lxxl-border)] bg-[#FCFBF8] p-4"
+            key={question.id || questionIndex}
+            className={`rounded-xl border border-[var(--lxxl-border)] bg-[#FCFBF8] p-4 ${
+              showDetails ? "" : "[&>:not(:first-child)]:hidden"
+            }`}
           >
-            <CardHeader
-              index={questionIndex}
-              label={question.text || question.id || "未命名题目"}
-              removeDisabled={disabled || fixedStructure || questions.length <= 1}
-              onRemove={() => removeQuestion(questionIndex)}
-            />
+            <div className="flex items-start gap-3">
+              {composeMode && checkMode && (
+                <button
+                  aria-checked={checked}
+                  aria-label={`勾选${question.text || question.id}`}
+                  className={`mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${
+                    checked
+                      ? "border-[var(--lxxl-green)] bg-[var(--lxxl-green)]"
+                      : "border-[var(--lxxl-border)] bg-white"
+                  }`}
+                  role="checkbox"
+                  type="button"
+                  onClick={() =>
+                    setCheckedIds((current) =>
+                      current.includes(question.id)
+                        ? current.filter((id) => id !== question.id)
+                        : [...current, question.id],
+                    )
+                  }
+                >
+                  {checked && <span className="h-2 w-2 rounded-full bg-white" />}
+                </button>
+              )}
+              <div className="min-w-0 flex-1">
+                <CardHeader
+                  index={questionIndex}
+                  label={question.text || question.id || "未命名题目"}
+                  removeDisabled={disabled || fixedStructure || questions.length <= 1}
+                  onRemove={() =>
+                    composeMode
+                      ? requestRemoval([question])
+                      : removeQuestion(questionIndex)
+                  }
+                />
+                {composeMode && question.sourceAssessmentTitle && (
+                  <div className="mt-1 text-xs text-[var(--lxxl-muted)]">
+                    来自母量表 {question.sourceAssessmentTitle}
+                    {question.sourceQuestionId ? ` · ${question.sourceQuestionId}` : ""}
+                  </div>
+                )}
+              </div>
+            </div>
             <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4">
               <CompactField label="题目 ID">
                 <input
@@ -1497,6 +1837,90 @@ function QuestionFields({
           );
         })}
       </div>
+      {composeMode && (
+        <div className="mt-4 flex justify-end">
+          <button
+            className="h-10 rounded-xl border border-[#E8B7B2] px-4 text-sm font-medium text-[#A13F37] transition hover:bg-[#FFF5F4] disabled:cursor-not-allowed disabled:border-[var(--lxxl-border)] disabled:bg-[#F7F5F2] disabled:text-[var(--lxxl-muted)]"
+            disabled={disabled || !checkMode || checkedIds.length === 0}
+            type="button"
+            onClick={() =>
+              requestRemoval(questions.filter((question) => checkedIds.includes(question.id)))
+            }
+          >
+            一键批量删除
+          </button>
+        </div>
+      )}
+      {pendingRemoval && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/35 px-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
+            <h3 className="text-base font-semibold">删除题目</h3>
+            <div className="mt-4 space-y-2 text-sm leading-6 text-[var(--lxxl-ink)]">
+              {groupQuestionsBySource(pendingRemoval).map((group) => (
+                <p key={group.name}>
+                  将删除{group.name}下的题目（{group.labels.join("、")}）。参与记分的题目会去掉这些题。
+                </p>
+              ))}
+              <p className="text-[var(--lxxl-muted)]">
+                正式题目可以先保存。发布版本时，如果报告结果没有补齐，就不能发布。
+              </p>
+            </div>
+            <div className="mt-5 space-y-3">
+              <button
+                className="w-full rounded-xl border border-[#E8B7B2] px-4 py-3 text-left text-sm leading-6 text-[#A13F37] transition hover:bg-[#FFF5F4]"
+                type="button"
+                onClick={() => confirmRemoval("clear-explanations")}
+              >
+                <span className="font-medium">
+                  A. 去掉该题，并删除报告结果中所有解释
+                </span>
+                <span className="mt-1 block text-xs leading-5 text-[#8F3832]">
+                  清除各结果项的面向来访说明、面向分析方说明和建议，保留结果等级。请到报告结果中点击对应结果项打开详细信息后重新编辑。
+                </span>
+              </button>
+              <button
+                className="w-full rounded-xl border border-[var(--lxxl-border)] px-4 py-3 text-left text-sm leading-6 text-[var(--lxxl-ink)] transition hover:border-[var(--lxxl-green)]"
+                type="button"
+                onClick={() => confirmRemoval("clear-bounds")}
+              >
+                <span className="font-medium">
+                  B. 去掉该题，保留解释，并清空全部分数
+                </span>
+                <span className="mt-1 block text-xs leading-5 text-[var(--lxxl-muted)]">
+                  保留各结果项的说明和建议，清空每个区间的最低分和最高分。发布前需要把这些数字补回。
+                </span>
+              </button>
+            </div>
+            <div className="mt-5 flex justify-end">
+              <button
+                className="h-10 rounded-xl border border-[var(--lxxl-border)] px-4 text-sm font-medium text-[var(--lxxl-muted)]"
+                type="button"
+                onClick={() => setPendingRemoval(null)}
+              >
+                取消
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {pendingSave && (
+        <ConfirmOverlay
+          confirmLabel={savingBatch ? "保存中..." : "保存"}
+          cancelLabel="暂不保存"
+          disabled={savingBatch}
+          title="保存草稿"
+          onCancel={() => {
+            if (!savingBatch) {
+              setPendingSave(null);
+            }
+          }}
+          onConfirm={() => void confirmBatchSave()}
+        >
+          <p className="text-sm leading-6 text-[var(--lxxl-ink)]">
+            题目已从当前编辑内容中移除，报告结果已按所选方式处理。是否保存？保存后不会发布。发布版本前需要把报告结果补齐。
+          </p>
+        </ConfirmOverlay>
+      )}
     </EditorSection>
   );
 }
@@ -1711,7 +2135,621 @@ function OptionFollowUpEditor({
   );
 }
 
+function createEmptyMergedDimension(existingIds: string[]): AssessmentDimension {
+  const id = createStableId("merged", existingIds);
+  return {
+    id,
+    title: "新合并结果",
+    questionIds: [],
+    reverseQuestionIds: [],
+    calculationMode: "simple",
+    aggregate: "sum",
+    scoreRanges: [
+      {
+        min: 0,
+        max: 1,
+        level: "新结果",
+        visitorDescription: "",
+        analystDescription: "",
+        suggestions: [],
+      },
+    ],
+  };
+}
+
+function ComposedSourceReportEditor({
+  definition,
+  disabled,
+  onChange,
+}: {
+  definition: AssessmentDefinition;
+  disabled: boolean;
+  onChange: (definition: AssessmentDefinition) => void;
+}) {
+  const [expandedKeys, setExpandedKeys] = useState<string[]>([]);
+  const reports = definition.sourceReports || [];
+  const parentReports = reports.filter((report) => report.sourceId !== COMPOSED_MERGED_SOURCE_ID);
+  const mergedReport = reports.find((report) => report.sourceId === COMPOSED_MERGED_SOURCE_ID);
+  const mergedDimensions = mergedReport?.dimensions || [];
+  const allQuestions = definition.questions;
+  const allQuestionIds = allQuestions.map((question) => question.id);
+
+  function setReports(
+    next: NonNullable<AssessmentDefinition["sourceReports"]>,
+  ) {
+    onChange({
+      ...definition,
+      sourceReports: next,
+    });
+  }
+
+  function updateReport(
+    sourceId: string,
+    next: NonNullable<AssessmentDefinition["sourceReports"]>[number],
+  ) {
+    setReports(reports.map((item) => (item.sourceId === sourceId ? next : item)));
+  }
+
+  function ensureMergedReport() {
+    if (mergedReport) {
+      return mergedReport;
+    }
+    return {
+      sourceId: COMPOSED_MERGED_SOURCE_ID,
+      sourceTitle: COMPOSED_MERGED_SOURCE_TITLE,
+      scoringType: "dimension" as const,
+      scoringPreset: "generic-dimension-v1" as const,
+      questionIds: allQuestionIds,
+      dimensions: [] as AssessmentDimension[],
+    };
+  }
+
+  function updateMergedDimensions(dimensions: AssessmentDimension[]) {
+    const nextMerged = {
+      ...ensureMergedReport(),
+      questionIds: allQuestionIds,
+      dimensions,
+    };
+    if (mergedReport) {
+      updateReport(COMPOSED_MERGED_SOURCE_ID, nextMerged);
+      return;
+    }
+    setReports([...reports, nextMerged]);
+  }
+
+  function toggleDetails(key: string) {
+    setExpandedKeys((current) =>
+      current.includes(key) ? current.filter((item) => item !== key) : [...current, key],
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      <p className="text-sm leading-6 text-[var(--lxxl-muted)]">
+        每张母量表的报告结果按原结构拼接；底部「合并结果」可跨母量表选题记分。默认只显示结果名称；点击某一项可打开详细信息。删题后请补齐解释或分数，未补齐时不能发布版本。
+      </p>
+      {parentReports.length === 0 && (
+        <p className="text-sm text-[var(--lxxl-muted)]">正在读取母量表的报告结果...</p>
+      )}
+      {parentReports.map((report) => {
+        const owned = definition.questions.filter(
+          (question) => question.sourceAssessmentId === report.sourceId,
+        );
+        const questions = owned.length
+          ? owned
+          : definition.questions.filter((question) => report.questionIds.includes(question.id));
+        const dimensions = report.dimensions || [];
+        return (
+          <EditorSection
+            key={report.sourceId}
+            description="与该母量表原来的报告结果一致。计算方式沿用母量表，不可改。"
+            title={report.sourceTitle}
+          >
+            <div className="space-y-4">
+              {dimensions.length === 0 && (
+                <p className="text-sm text-[var(--lxxl-muted)]">这一段还没有结果项。</p>
+              )}
+              {dimensions.map((dimension, dimensionIndex) => {
+                const detailsKey = `${report.sourceId}:${dimension.id || dimensionIndex}`;
+                const detailsOpen = expandedKeys.includes(detailsKey);
+                return (
+                  <div
+                    key={dimension.id || dimensionIndex}
+                    className={`rounded-xl border bg-[#FCFBF8] p-4 transition ${
+                      detailsOpen
+                        ? "border-[var(--lxxl-green)]"
+                        : "border-[var(--lxxl-border)]"
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <button
+                        aria-expanded={detailsOpen}
+                        className="min-w-0 flex-1 rounded-lg text-left outline-none transition hover:bg-white/70 focus-visible:ring-2 focus-visible:ring-[var(--lxxl-green)]"
+                        type="button"
+                        onClick={() => toggleDetails(detailsKey)}
+                      >
+                        <div className="flex items-center gap-2 px-1 py-0.5">
+                          <span className="text-sm font-medium text-[var(--lxxl-muted)]">
+                            {dimensionIndex + 1}.
+                          </span>
+                          <span className="truncate text-sm font-semibold text-[var(--lxxl-ink)]">
+                            {dimension.title || dimension.id || "未命名结果"}
+                          </span>
+                          <span className="ml-auto shrink-0 text-xs text-[var(--lxxl-muted)]">
+                            {detailsOpen ? "收起详细信息" : "打开详细信息"}
+                          </span>
+                        </div>
+                      </button>
+                      <RemoveButton
+                        disabled={disabled}
+                        label="删除结果项"
+                        onClick={() =>
+                          updateReport(report.sourceId, {
+                            ...report,
+                            dimensions: dimensions.filter((_, index) => index !== dimensionIndex),
+                          })
+                        }
+                      />
+                    </div>
+                    {detailsOpen && (
+                      <div className="mt-4 space-y-4">
+                        <CompactField label="计算方式">
+                          <div className="rounded-lg border border-[var(--lxxl-border)] bg-[#F7F5F2] px-3 py-2 text-sm text-[var(--lxxl-muted)]">
+                            {(dimension.calculationMode || "simple") === "formula"
+                              ? "设置公式计算（沿用母量表，不可修改）"
+                              : `${
+                                  dimension.aggregate === "product"
+                                    ? "全部相乘"
+                                    : dimension.aggregate === "average"
+                                      ? "平均数"
+                                      : "全部相加"
+                                }（沿用母量表，不可修改）`}
+                          </div>
+                        </CompactField>
+                        {(dimension.calculationMode || "simple") === "formula" && (
+                          <CompactField label="计算公式">
+                            <div className="rounded-lg border border-[var(--lxxl-border)] bg-[#F7F5F2] px-3 py-2 font-mono text-sm text-[var(--lxxl-muted)]">
+                              {dimension.formula?.trim() || "（无公式）"}
+                            </div>
+                          </CompactField>
+                        )}
+                        <div className="rounded-xl border border-[var(--lxxl-border)] bg-white p-4">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="text-sm font-medium">参与记分的题目</div>
+                            <span className="text-xs text-[var(--lxxl-muted)]">
+                              已选 {dimension.questionIds.length}/{questions.length}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-xs leading-5 text-[var(--lxxl-muted)]">
+                            勾选表示参与该结果项记分；勾选后可再勾「反向计分」。计算方式沿用母量表，不可改。
+                          </p>
+                          <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
+                            {questions.map((question) => {
+                              const selected = dimension.questionIds.includes(question.id);
+                              const reverseIds = dimension.reverseQuestionIds || [];
+                              const knownIds = questions.map((item) => item.id);
+                              return (
+                                <div
+                                  key={question.id}
+                                  className="rounded-lg border border-[var(--lxxl-border)] px-3 py-2"
+                                >
+                                  <label className="flex items-start gap-2 text-xs leading-5">
+                                    <input
+                                      checked={selected}
+                                      className="mt-1"
+                                      disabled={disabled}
+                                      type="checkbox"
+                                      onChange={(event) => {
+                                        const questionIds = event.target.checked
+                                          ? [...dimension.questionIds, question.id]
+                                          : dimension.questionIds.filter((id) => id !== question.id);
+                                        const currentFormula = dimension.formula ?? "";
+                                        const formula =
+                                          (dimension.calculationMode || "simple") !== "formula"
+                                            ? dimension.formula
+                                            : event.target.checked
+                                              ? currentFormula.trim()
+                                                ? `${currentFormula.trim()} + ${question.id}`
+                                                : question.id
+                                              : removeFormulaQuestionId(
+                                                  currentFormula,
+                                                  question.id,
+                                                  knownIds,
+                                                );
+                                        updateReport(report.sourceId, {
+                                          ...report,
+                                          dimensions: dimensions.map((item, index) =>
+                                            index === dimensionIndex
+                                              ? {
+                                                  ...item,
+                                                  questionIds,
+                                                  formula,
+                                                  reverseQuestionIds: reverseIds.filter((id) =>
+                                                    questionIds.includes(id),
+                                                  ),
+                                                }
+                                              : item,
+                                          ),
+                                        });
+                                      }}
+                                    />
+                                    <span>
+                                      <span className="font-medium">
+                                        {question.sourceQuestionId || question.id}
+                                      </span>
+                                      <span className="ml-2 text-[var(--lxxl-muted)]">
+                                        {question.text || "未命名题目"}
+                                      </span>
+                                    </span>
+                                  </label>
+                                  {selected && (
+                                    <label className="mt-2 flex items-center gap-2 pl-5 text-xs text-[var(--lxxl-muted)]">
+                                      <input
+                                        checked={reverseIds.includes(question.id)}
+                                        disabled={disabled}
+                                        type="checkbox"
+                                        onChange={(event) =>
+                                          updateReport(report.sourceId, {
+                                            ...report,
+                                            dimensions: dimensions.map((item, index) =>
+                                              index === dimensionIndex
+                                                ? {
+                                                    ...item,
+                                                    reverseQuestionIds: event.target.checked
+                                                      ? [...reverseIds, question.id]
+                                                      : reverseIds.filter((id) => id !== question.id),
+                                                  }
+                                                : item,
+                                            ),
+                                          })
+                                        }
+                                      />
+                                      反向计分
+                                    </label>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        <ScoreRangeEditor
+                          disabled={disabled}
+                          ranges={dimension.scoreRanges || []}
+                          onChange={(scoreRanges) =>
+                            updateReport(report.sourceId, {
+                              ...report,
+                              dimensions: dimensions.map((item, index) =>
+                                index === dimensionIndex ? { ...item, scoreRanges } : item,
+                              ),
+                            })
+                          }
+                        />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </EditorSection>
+        );
+      })}
+
+      <EditorSection
+        action={
+          <AddButton
+            disabled={disabled}
+            onClick={() =>
+              updateMergedDimensions([
+                ...mergedDimensions,
+                createEmptyMergedDimension(mergedDimensions.map((item) => item.id)),
+              ])
+            }
+          >
+            新增维度
+          </AddButton>
+        }
+        description="可跨所有参与组合的题目新建结果项。新增后默认不勾选题目；展开详细信息后，每道题都可勾选参与记分和反向计分。"
+        title={COMPOSED_MERGED_SOURCE_TITLE}
+      >
+        <div className="space-y-4">
+          {mergedDimensions.length === 0 && (
+            <p className="text-sm text-[var(--lxxl-muted)]">
+              还没有合并结果。点击右上角「新增维度」开始配置。
+            </p>
+          )}
+          {mergedDimensions.map((dimension, dimensionIndex) => {
+            const detailsKey = `${COMPOSED_MERGED_SOURCE_ID}:${dimension.id || dimensionIndex}`;
+            const detailsOpen = expandedKeys.includes(detailsKey);
+            const calculationMode = dimension.calculationMode ?? "simple";
+            const reverseIds = dimension.reverseQuestionIds || [];
+            const formulaError =
+              calculationMode === "formula"
+                ? compileDimensionFormula(dimension.formula || "", allQuestionIds).error
+                : null;
+            return (
+              <div
+                key={dimension.id || dimensionIndex}
+                className={`rounded-xl border bg-[#FCFBF8] p-4 transition ${
+                  detailsOpen ? "border-[var(--lxxl-green)]" : "border-[var(--lxxl-border)]"
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <button
+                    aria-expanded={detailsOpen}
+                    className="min-w-0 flex-1 rounded-lg text-left outline-none transition hover:bg-white/70 focus-visible:ring-2 focus-visible:ring-[var(--lxxl-green)]"
+                    type="button"
+                    onClick={() => toggleDetails(detailsKey)}
+                  >
+                    <div className="flex items-center gap-2 px-1 py-0.5">
+                      <span className="text-sm font-medium text-[var(--lxxl-muted)]">
+                        {dimensionIndex + 1}.
+                      </span>
+                      <span className="truncate text-sm font-semibold text-[var(--lxxl-ink)]">
+                        {dimension.title || dimension.id || "未命名合并结果"}
+                      </span>
+                      <span className="ml-auto shrink-0 text-xs text-[var(--lxxl-muted)]">
+                        {detailsOpen ? "收起详细信息" : "打开详细信息"}
+                      </span>
+                    </div>
+                  </button>
+                  <RemoveButton
+                    disabled={disabled}
+                    label="删除合并结果"
+                    onClick={() =>
+                      updateMergedDimensions(
+                        mergedDimensions.filter((_, index) => index !== dimensionIndex),
+                      )
+                    }
+                  />
+                </div>
+                {detailsOpen && (
+                  <div className="mt-4 space-y-4">
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                      <CompactField label="结果名称">
+                        <input
+                          className={compactInputClass}
+                          disabled={disabled}
+                          value={dimension.title}
+                          onChange={(event) =>
+                            updateMergedDimensions(
+                              mergedDimensions.map((item, index) =>
+                                index === dimensionIndex
+                                  ? { ...item, title: event.target.value }
+                                  : item,
+                              ),
+                            )
+                          }
+                        />
+                      </CompactField>
+                      <CompactField label="计算方式">
+                        <div className="flex h-9 items-center gap-4 rounded-lg border border-[var(--lxxl-border)] bg-white px-3 text-sm">
+                          {(["simple", "formula"] as const).map((mode) => (
+                            <label className="flex cursor-pointer items-center gap-1.5" key={mode}>
+                              <input
+                                checked={calculationMode === mode}
+                                disabled={disabled}
+                                name={`merged-calculation-${dimensionIndex}`}
+                                type="radio"
+                                onChange={() =>
+                                  updateMergedDimensions(
+                                    mergedDimensions.map((item, index) =>
+                                      index === dimensionIndex
+                                        ? {
+                                            ...item,
+                                            calculationMode: mode,
+                                            formula:
+                                              mode === "formula"
+                                                ? item.formula ?? item.questionIds.join(" + ")
+                                                : undefined,
+                                          }
+                                        : item,
+                                    ),
+                                  )
+                                }
+                              />
+                              {mode === "simple" ? "简单计算" : "设置公式计算"}
+                            </label>
+                          ))}
+                        </div>
+                      </CompactField>
+                      {calculationMode === "simple" ? (
+                        <CompactField className="md:col-span-2" label="简单计算">
+                          <select
+                            className={compactInputClass}
+                            disabled={disabled}
+                            value={dimension.aggregate}
+                            onChange={(event) =>
+                              updateMergedDimensions(
+                                mergedDimensions.map((item, index) =>
+                                  index === dimensionIndex
+                                    ? {
+                                        ...item,
+                                        aggregate: event.target
+                                          .value as AssessmentDimension["aggregate"],
+                                      }
+                                    : item,
+                                ),
+                              )
+                            }
+                          >
+                            <option value="sum">全部相加</option>
+                            <option value="product">全部相乘</option>
+                            <option value="average">平均数</option>
+                          </select>
+                        </CompactField>
+                      ) : (
+                        <CompactField className="md:col-span-2" label="计算公式">
+                          <input
+                            className={compactInputClass}
+                            disabled={disabled}
+                            placeholder="例如：(q1 + q2) / q3"
+                            value={dimension.formula ?? ""}
+                            onChange={(event) => {
+                              const formula = event.target.value;
+                              const questionIds = formulaQuestionIds(formula, allQuestionIds);
+                              updateMergedDimensions(
+                                mergedDimensions.map((item, index) =>
+                                  index === dimensionIndex
+                                    ? {
+                                        ...item,
+                                        formula,
+                                        questionIds,
+                                        reverseQuestionIds: reverseIds.filter((id) =>
+                                          questionIds.includes(id),
+                                        ),
+                                      }
+                                    : item,
+                                ),
+                              );
+                            }}
+                          />
+                          <p
+                            className={`mt-1 text-xs ${
+                              formulaError ? "text-[#A13F37]" : "text-[var(--lxxl-muted)]"
+                            }`}
+                          >
+                            {formulaError || "仅支持题目 ID、+、-、*、/ 和英文括号 ()。"}
+                          </p>
+                        </CompactField>
+                      )}
+                    </div>
+                    <div className="rounded-xl border border-[var(--lxxl-border)] bg-white p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="text-sm font-medium">参与记分的题目</div>
+                        <span className="text-xs text-[var(--lxxl-muted)]">
+                          已选 {dimension.questionIds.length}/{allQuestions.length}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs leading-5 text-[var(--lxxl-muted)]">
+                        可选全部参与组合的题目；每道题都可单独勾选「反向计分」。勾选反向计分时会自动纳入参与记分。
+                      </p>
+                      <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
+                        {allQuestions.map((question) => {
+                          const selected = dimension.questionIds.includes(question.id);
+                          const isReverse = reverseIds.includes(question.id);
+                          return (
+                            <div
+                              key={question.id}
+                              className="rounded-lg border border-[var(--lxxl-border)] px-3 py-2"
+                            >
+                              <label className="flex items-start gap-2 text-xs leading-5">
+                                <input
+                                  checked={selected}
+                                  className="mt-1"
+                                  disabled={disabled}
+                                  type="checkbox"
+                                  onChange={(event) => {
+                                    const questionIds = event.target.checked
+                                      ? [...dimension.questionIds, question.id]
+                                      : dimension.questionIds.filter((id) => id !== question.id);
+                                    const currentFormula = dimension.formula ?? "";
+                                    const formula =
+                                      calculationMode !== "formula"
+                                        ? dimension.formula
+                                        : event.target.checked
+                                          ? currentFormula.trim()
+                                            ? `${currentFormula.trim()} + ${question.id}`
+                                            : question.id
+                                          : removeFormulaQuestionId(
+                                              currentFormula,
+                                              question.id,
+                                              allQuestionIds,
+                                            );
+                                    updateMergedDimensions(
+                                      mergedDimensions.map((item, index) =>
+                                        index === dimensionIndex
+                                          ? {
+                                              ...item,
+                                              questionIds,
+                                              formula,
+                                              reverseQuestionIds: reverseIds.filter((id) =>
+                                                questionIds.includes(id),
+                                              ),
+                                            }
+                                          : item,
+                                      ),
+                                    );
+                                  }}
+                                />
+                                <span>
+                                  <span className="font-medium">
+                                    {question.sourceQuestionId || question.id}
+                                  </span>
+                                  {question.sourceAssessmentTitle && (
+                                    <span className="ml-1 text-[var(--lxxl-muted)]">
+                                      （{question.sourceAssessmentTitle}）
+                                    </span>
+                                  )}
+                                  <span className="ml-2 text-[var(--lxxl-muted)]">
+                                    {question.text || "未命名题目"}
+                                  </span>
+                                </span>
+                              </label>
+                              <label className="mt-2 flex items-center gap-2 pl-5 text-xs text-[var(--lxxl-muted)]">
+                                <input
+                                  checked={isReverse}
+                                  disabled={disabled}
+                                  type="checkbox"
+                                  onChange={(event) => {
+                                    const enableReverse = event.target.checked;
+                                    let questionIds = dimension.questionIds;
+                                    let formula = dimension.formula;
+                                    if (enableReverse && !selected) {
+                                      questionIds = [...dimension.questionIds, question.id];
+                                      if (calculationMode === "formula") {
+                                        const currentFormula = dimension.formula ?? "";
+                                        formula = currentFormula.trim()
+                                          ? `${currentFormula.trim()} + ${question.id}`
+                                          : question.id;
+                                      }
+                                    }
+                                    updateMergedDimensions(
+                                      mergedDimensions.map((item, index) =>
+                                        index === dimensionIndex
+                                          ? {
+                                              ...item,
+                                              questionIds,
+                                              formula,
+                                              reverseQuestionIds: enableReverse
+                                                ? [...new Set([...reverseIds, question.id])]
+                                                : reverseIds.filter((id) => id !== question.id),
+                                            }
+                                          : item,
+                                      ),
+                                    );
+                                  }}
+                                />
+                                反向计分
+                              </label>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <ScoreRangeEditor
+                      disabled={disabled}
+                      ranges={dimension.scoreRanges || []}
+                      onChange={(scoreRanges) =>
+                        updateMergedDimensions(
+                          mergedDimensions.map((item, index) =>
+                            index === dimensionIndex ? { ...item, scoreRanges } : item,
+                          ),
+                        )
+                      }
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </EditorSection>
+    </div>
+  );
+}
+
 function ResultFields({
+  composeMode = false,
   coverageSummaries,
   definition,
   disabled,
@@ -1719,6 +2757,7 @@ function ResultFields({
   onChange,
   onUploadStateChange,
 }: {
+  composeMode?: boolean;
   coverageSummaries: AssessmentScoreCoverageSummary[];
   definition: AssessmentDefinition;
   disabled: boolean;
@@ -1726,6 +2765,15 @@ function ResultFields({
   onChange: (definition: AssessmentDefinition) => void;
   onUploadStateChange: (delta: number) => void;
 }) {
+  if (composeMode) {
+    return (
+      <ComposedSourceReportEditor
+        definition={definition}
+        disabled={disabled}
+        onChange={onChange}
+      />
+    );
+  }
   const hasScoreRanges = definition.scoringType === "sum" || definition.scoringType === "psqi";
   const hasDimensions = definition.scoringType === "dimension";
   const hasMatchResults = definition.scoringType === "match" || definition.scoringType === "aas";
@@ -2587,8 +3635,12 @@ function ScoreRangeEditor({
             onChange([
               ...ranges,
               {
-                min: ranges.length ? Math.max(...ranges.map((item) => item.max)) + 1 : 0,
-                max: ranges.length ? Math.max(...ranges.map((item) => item.max)) + 2 : 1,
+                min: ranges.length
+                  ? Math.max(...ranges.map((item) => (typeof item.max === "number" ? item.max : 0))) + 1
+                  : 0,
+                max: ranges.length
+                  ? Math.max(...ranges.map((item) => (typeof item.max === "number" ? item.max : 0))) + 2
+                  : 1,
                 level: "",
                 visitorDescription: "",
                 analystDescription: "",
@@ -2613,12 +3665,12 @@ function ScoreRangeEditor({
                   disabled={disabled}
                   step="any"
                   type="number"
-                  value={range.min}
+                  value={range.min ?? ""}
                   onChange={(event) =>
                     onChange(
                       replaceAt(ranges, rangeIndex, {
                         ...range,
-                        min: numberValue(event.target.value, 0),
+                        min: event.target.value === "" ? null : numberValue(event.target.value, 0),
                       }),
                     )
                   }
@@ -2630,12 +3682,12 @@ function ScoreRangeEditor({
                   disabled={disabled}
                   step="any"
                   type="number"
-                  value={range.max}
+                  value={range.max ?? ""}
                   onChange={(event) =>
                     onChange(
                       replaceAt(ranges, rangeIndex, {
                         ...range,
-                        max: numberValue(event.target.value, 0),
+                        max: event.target.value === "" ? null : numberValue(event.target.value, 0),
                       }),
                     )
                   }
@@ -2990,6 +4042,89 @@ function CardHeader({
   );
 }
 
+function ActionHint({
+  hint,
+  children,
+}: {
+  hint?: string;
+  children: ReactNode;
+}) {
+  if (!hint) {
+    return <>{children}</>;
+  }
+  return (
+    <span className="group relative inline-flex">
+      {children}
+      <span
+        className="pointer-events-none absolute bottom-full right-0 z-30 mb-2 hidden w-64 rounded-lg bg-[#243028] px-3 py-2 text-left text-xs font-normal leading-5 text-white shadow-lg group-hover:block"
+        role="tooltip"
+      >
+        {hint}
+      </span>
+    </span>
+  );
+}
+
+function ConfirmOverlay({
+  title,
+  confirmLabel,
+  cancelLabel = "取消",
+  disabled = false,
+  children,
+  onCancel,
+  onConfirm,
+}: {
+  title: string;
+  confirmLabel: string;
+  cancelLabel?: string;
+  disabled?: boolean;
+  children: ReactNode;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/35 px-4">
+      <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
+        <h3 className="text-base font-semibold">{title}</h3>
+        <div className="mt-4">{children}</div>
+        <div className="mt-6 flex justify-end gap-3">
+          <button
+            className="h-10 rounded-xl border border-[var(--lxxl-border)] px-4 text-sm font-medium text-[var(--lxxl-muted)]"
+            disabled={disabled}
+            type="button"
+            onClick={onCancel}
+          >
+            {cancelLabel}
+          </button>
+          <button
+            className="h-10 rounded-xl bg-[var(--lxxl-green)] px-4 text-sm font-medium text-white disabled:opacity-40"
+            disabled={disabled}
+            type="button"
+            onClick={onConfirm}
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function groupQuestionsBySource(questions: AssessmentQuestion[]) {
+  const groups: Array<{ name: string; labels: string[] }> = [];
+  for (const question of questions) {
+    const name = question.sourceAssessmentTitle || "未标注来源";
+    const label = question.sourceQuestionId || question.id;
+    const current = groups.find((group) => group.name === name);
+    if (current) {
+      current.labels.push(label);
+    } else {
+      groups.push({ name, labels: [label] });
+    }
+  }
+  return groups;
+}
+
 function AddButton({
   children,
   disabled,
@@ -3073,6 +4208,48 @@ function numberValue(value: string, fallback: number) {
 
 function serializeDefinition(definition: AssessmentDefinition) {
   return JSON.stringify(definition, null, 2);
+}
+
+function changeSignature(
+  previous: unknown,
+  next: unknown,
+  path = "",
+): { path: string; structural: boolean } | null {
+  if (Object.is(previous, next)) {
+    return null;
+  }
+  const previousObject = previous !== null && typeof previous === "object";
+  const nextObject = next !== null && typeof next === "object";
+  if (!previousObject || !nextObject) {
+    return { path: path || "value", structural: false };
+  }
+  if (Array.isArray(previous) || Array.isArray(next)) {
+    if (!Array.isArray(previous) || !Array.isArray(next) || previous.length !== next.length) {
+      return { path: path || "list", structural: true };
+    }
+    for (let index = 0; index < previous.length; index += 1) {
+      const child = changeSignature(previous[index], next[index], `${path}[${index}]`);
+      if (child) {
+        return child;
+      }
+    }
+    return null;
+  }
+  const keys = new Set([
+    ...Object.keys(previous as Record<string, unknown>),
+    ...Object.keys(next as Record<string, unknown>),
+  ]);
+  for (const key of keys) {
+    const child = changeSignature(
+      (previous as Record<string, unknown>)[key],
+      (next as Record<string, unknown>)[key],
+      path ? `${path}.${key}` : key,
+    );
+    if (child) {
+      return child;
+    }
+  }
+  return null;
 }
 
 function lifecycleLabel(status: AssessmentAdminDetail["lifecycleStatus"]) {

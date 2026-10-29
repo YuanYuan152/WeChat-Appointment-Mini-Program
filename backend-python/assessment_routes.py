@@ -27,6 +27,8 @@ from assessment_share_service import (
 )
 from config import settings
 from database import get_db
+from models import AppAssessmentReport, AppAssessmentShareScan, assessment_utc_now
+from assessment_enterprise_service import detach_assessment_from_enterprises
 
 
 public_router = APIRouter(prefix="/api/web/assessments", tags=["Web Assessments"])
@@ -198,6 +200,7 @@ def register_assessment_admin_routes(
         category: Optional[str] = Query(None),
         status: Optional[str] = Query(None),
         keyword: Optional[str] = Query(None),
+        origin: Optional[str] = Query(None),
         _actor: Any = Depends(require_assessment_editor),
         db: Session = Depends(get_db),
     ):
@@ -208,6 +211,7 @@ def register_assessment_admin_routes(
                 category=category,
                 status=status,
                 keyword=keyword,
+                origin=origin,
             )
             stats = assessment_admin_list_stats(
                 db,
@@ -324,6 +328,47 @@ def register_assessment_admin_routes(
                 assessment_version=None,
                 metadata=None,
                 operation=lambda: get_assessment_store().archive(assessment_id),
+            )
+        except AssessmentDefinitionError as exc:
+            _raise_http_error(exc)
+
+    @router.delete("/assessments/{assessment_id}", summary="删除已归档的组合量表")
+    def delete_admin_assessment(
+        assessment_id: str,
+        request: Request,
+        actor: Any = Depends(require_assessment_editor),
+        db: Session = Depends(get_db),
+    ):
+        def _delete() -> dict[str, Any]:
+            detached = detach_assessment_from_enterprises(assessment_id)
+            removed = get_assessment_store().delete_archived(assessment_id)
+            now = assessment_utc_now()
+            db.query(AppAssessmentReport).filter(
+                AppAssessmentReport.AssessmentId == assessment_id,
+                AppAssessmentReport.DeletedAt.is_(None),
+            ).update({AppAssessmentReport.DeletedAt: now}, synchronize_session=False)
+            db.query(AppAssessmentShareScan).filter(
+                AppAssessmentShareScan.AssessmentId == assessment_id,
+            ).delete(synchronize_session=False)
+            return {
+                "definition": {
+                    "id": removed["id"],
+                    "version": 1,
+                    "status": "archived",
+                },
+                "detachedEnterprises": detached,
+            }
+
+        try:
+            return _run_audited_definition_mutation(
+                db,
+                actor=actor,
+                request=request,
+                action="DEFINITION_DELETE",
+                assessment_id=assessment_id,
+                assessment_version=None,
+                metadata=None,
+                operation=_delete,
             )
         except AssessmentDefinitionError as exc:
             _raise_http_error(exc)

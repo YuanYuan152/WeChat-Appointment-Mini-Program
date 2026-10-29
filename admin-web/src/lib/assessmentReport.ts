@@ -151,7 +151,8 @@ export function getScoreRangeBounds(
   ranges: readonly AssessmentScoreRange[] | null | undefined,
 ): ScoreRangeBounds {
   const validRanges = (ranges ?? []).filter(
-    (range) => Number.isFinite(range.min) && Number.isFinite(range.max),
+    (range): range is AssessmentScoreRange & { min: number; max: number } =>
+      typeof range.min === "number" && typeof range.max === "number",
   );
   if (validRanges.length === 0) {
     return { ...DEFAULT_SCORE_BOUNDS };

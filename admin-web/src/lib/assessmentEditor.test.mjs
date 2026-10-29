@@ -767,3 +767,165 @@ test("rejects orphaned or deeper-than-second-level dimensions", () => {
       .some((issue) => issue.message.includes("最多支持两级")),
   );
 });
+
+function parentScale(overrides) {
+  return {
+    schemaVersion: 1,
+    id: overrides.id,
+    version: 1,
+    status: "draft",
+    category: overrides.category || "fun",
+    visibility: overrides.visibility || "private",
+    title: overrides.title,
+    subtitle: overrides.subtitle || "",
+    description: overrides.description || "",
+    instructions: overrides.instructions,
+    features: overrides.features,
+    cover: overrides.cover || "/static/assessments/parent-a.jpg",
+    duration: overrides.duration,
+    demographicQuestions: overrides.demographicQuestions || [],
+    scoringType: "sum",
+    scoringPreset: "generic-sum-v2",
+    questions: [
+      {
+        id: "q1",
+        text: "第一题",
+        required: true,
+        options: [
+          { id: "q1-a", text: "否", value: 0 },
+          { id: "q1-b", text: "是", value: 1 },
+        ],
+      },
+      {
+        id: "q2",
+        text: "第二题",
+        required: true,
+        options: [
+          { id: "q2-a", text: "否", value: 0 },
+          { id: "q2-b", text: "是", value: 1 },
+        ],
+      },
+    ],
+    scoreRanges: [
+      {
+        min: 0,
+        max: 2,
+        level: "低",
+        visitorDescription: "来访说明",
+        analystDescription: "分析说明",
+        suggestions: ["建议一"],
+      },
+    ],
+    reportIntro: overrides.reportIntro,
+    disclaimer: overrides.disclaimer,
+    reverseQuestionIds: [],
+  };
+}
+
+test("one parent scale is inherited and several parents keep only a draft skeleton", () => {
+  const first = parentScale({
+    id: "parent-a",
+    title: "母量表甲",
+    subtitle: "甲副标题",
+    description: "甲说明",
+    instructions: "甲指导语",
+    features: "甲特点",
+    cover: "/static/assessments/parent-a.jpg",
+    duration: 4,
+    reportIntro: "甲引导",
+    disclaimer: "甲声明",
+    demographicQuestions: [
+      {
+        id: "gender",
+        text: "性别",
+        inputType: "single",
+        required: false,
+        options: [
+          { id: "female", text: "女", value: "female" },
+          { id: "male", text: "男", value: "male" },
+        ],
+      },
+    ],
+  });
+  const single = editor.composeAssessmentDefinition("单张新名", [first]);
+  assert.equal(single.title, "单张新名");
+  assert.equal(single.instructions, "甲指导语");
+  assert.equal(single.reportIntro, "甲引导");
+  assert.equal(single.disclaimer, "甲声明");
+  assert.equal(single.cover, "/static/assessments/parent-a.jpg");
+  assert.equal(single.duration, 4);
+  assert.equal(single.demographicQuestions.length, 1);
+  assert.equal(single.demographicQuestions[0].text, "性别");
+
+  const second = parentScale({
+    id: "parent-b",
+    title: "母量表乙",
+    subtitle: "乙副标题",
+    description: "乙说明",
+    instructions: "乙指导语",
+    features: "乙特点",
+    cover: "/static/assessments/parent-b.jpg",
+    duration: 6,
+    category: "professional",
+    visibility: "public",
+    reportIntro: "乙引导",
+    disclaimer: "乙声明",
+  });
+  const combined = editor.composeAssessmentDefinition("组合新名", [first, second]);
+  assert.equal(combined.title, "组合新名");
+  assert.equal(combined.instructions, editor.COMPOSED_MULTI_SOURCE_PLACEHOLDERS.instructions);
+  assert.equal(combined.reportIntro, editor.COMPOSED_MULTI_SOURCE_PLACEHOLDERS.reportIntro);
+  assert.equal(combined.disclaimer, editor.COMPOSED_MULTI_SOURCE_PLACEHOLDERS.disclaimer);
+  assert.equal(combined.demographicQuestions.length, 0);
+  assert.equal(combined.cover, "/static/assessments/parent-a.jpg");
+  assert.equal(combined.duration, 10);
+  assert.equal(combined.subtitle, "甲副标题");
+  assert.equal(combined.description, "甲说明");
+  assert.equal(combined.features, "甲特点");
+  assert.equal(combined.category, "professional");
+  assert.equal(combined.visibility, "public");
+});
+
+test("removing a composed question clears report text or score bounds until publish", () => {
+  const source = parentScale({
+    id: "parent-a",
+    title: "母量表甲",
+    instructions: "甲指导语",
+    duration: 4,
+    reportIntro: "甲引导",
+    disclaimer: "甲声明",
+  });
+  const composed = editor.composeAssessmentDefinition("新量表", [source]);
+  const removedId = composed.questions[0].id;
+  const clearedText = editor.removeComposedQuestions(
+    composed,
+    [removedId],
+    "clear-explanations",
+  );
+  assert.equal(clearedText.questions.length, 1);
+  const clearedRange = clearedText.sourceReports[0].dimensions[0].scoreRanges[0];
+  assert.equal(clearedRange.visitorDescription, "");
+  assert.equal(clearedRange.analystDescription, "");
+  assert.deepEqual(clearedRange.suggestions, []);
+  assert.equal(clearedRange.level, "低");
+  assert.equal(
+    clearedText.sourceReports[0].dimensions[0].questionIds.includes(removedId),
+    false,
+  );
+  const textIssues = editor.validateAssessmentDefinition(
+    editor.syncComposedSourceReports(clearedText),
+  );
+  assert.ok(textIssues.some((issue) => issue.message.includes("面向来访结果说明")));
+
+  const clearedBounds = editor.removeComposedQuestions(composed, [removedId], "clear-bounds");
+  const boundRange = clearedBounds.sourceReports[0].dimensions[0].scoreRanges[0];
+  assert.equal(boundRange.visitorDescription, "来访说明");
+  assert.equal(boundRange.analystDescription, "分析说明");
+  assert.deepEqual(boundRange.suggestions, ["建议一"]);
+  assert.equal(boundRange.min, null);
+  assert.equal(boundRange.max, null);
+  const boundIssues = editor.validateAssessmentDefinition(
+    editor.syncComposedSourceReports(clearedBounds),
+  );
+  assert.ok(boundIssues.some((issue) => issue.message.includes("最低分和最高分")));
+});

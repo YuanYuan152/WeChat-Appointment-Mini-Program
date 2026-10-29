@@ -57,9 +57,16 @@ export const sections: NavigationSection[] = [
   },
   {
     id: "assessments",
-    label: "量表管理",
-    desc: "新增、编辑、发布与归档 EAP 量表",
+    label: "母量表管理",
+    desc: "新增、编辑、发布与归档 EAP 母量表",
     path: "/assessments",
+    allowedRoles: ["Admin", "Research"],
+  },
+  {
+    id: "assessmentCompose",
+    label: "量表生成与管理",
+    desc: "勾选母量表并复制组合为新量表",
+    path: "/assessment-compose",
     allowedRoles: ["Admin", "Research"],
   },
   {
@@ -151,6 +158,7 @@ export const navigationGroups: NavigationGroup[] = [
     sectionIds: [
       "content",
       "assessments",
+      "assessmentCompose",
       "assessmentReports",
       "assessmentEnterprises",
       "schedules",

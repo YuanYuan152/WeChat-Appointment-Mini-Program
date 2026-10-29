@@ -895,14 +895,14 @@ function AssessmentSelectionPanel({
       {expanded && (
         <div className="mt-4">
           <p className="mb-4 text-sm text-[var(--lxxl-muted)]">
-            勾选后点保存，只对当前企业页面生效。勾选后可点 🖊 修改本企业的量表展示名，不会改量表管理中的原名称。
+            勾选后点保存，只对当前企业页面生效。勾选后可点 🖊 修改本企业的量表展示名，不会改母量表管理中的原名称。
           </p>
           <div className="grid gap-4 xl:grid-cols-2">
             <div>
               <div className="mb-2 text-sm font-medium text-[var(--lxxl-ink)]">私有量表</div>
               <AssessmentOptionList
                 displayTitles={draftTitles}
-                emptyText="暂无已发布私有量表，请先在量表管理中设置并发布。"
+                emptyText="暂无已发布私有量表，请先在母量表管理中设置并发布。"
                 options={privateOptions}
                 selectedIds={draftIds}
                 onDisplayTitleChange={updateDraftTitle}
@@ -913,7 +913,7 @@ function AssessmentSelectionPanel({
               <div className="mb-2 text-sm font-medium text-[var(--lxxl-ink)]">公有量表</div>
               <AssessmentOptionList
                 displayTitles={draftTitles}
-                emptyText="暂无已发布公有量表，请先在量表管理中设置并发布。"
+                emptyText="暂无已发布公有量表，请先在母量表管理中设置并发布。"
                 options={publicOptions}
                 selectedIds={draftIds}
                 onDisplayTitleChange={updateDraftTitle}

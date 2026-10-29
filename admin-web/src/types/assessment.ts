@@ -111,11 +111,35 @@ export interface AssessmentQuestion {
   validation?: AssessmentQuestionValidation;
   /** choice 题必填；text/number 题可为空数组。 */
   options: AssessmentOption[];
+  /** 组合量表记录题目来自哪份母量表，供批量删除时提示。 */
+  sourceAssessmentId?: string;
+  sourceAssessmentTitle?: string;
+  sourceQuestionId?: string;
+}
+
+export interface AssessmentCompositionSource {
+  id: string;
+  title: string;
+}
+
+export interface AssessmentSourceReport {
+  sourceId: string;
+  sourceTitle: string;
+  scoringType: AssessmentScoringType;
+  scoringPreset: AssessmentScoringPreset;
+  questionIds: string[];
+  dimensions?: AssessmentDimension[];
+  scoreRanges?: AssessmentScoreRange[];
+  reverseQuestionIds?: string[];
+  matchResults?: AssessmentMatchResult[];
+  reportProfiles?: AssessmentReportProfile[];
 }
 
 export interface AssessmentScoreRange {
-  min: number;
-  max: number;
+  /** 删题后可暂为空，发布前必须补回数字。 */
+  min: number | null;
+  /** 删题后可暂为空，发布前必须补回数字。 */
+  max: number | null;
   level: string;
   /** 面向来访结果说明；旧数据仅有 description 时由编辑器回填。 */
   visitorDescription: string;
@@ -188,6 +212,10 @@ export interface AssessmentDefinition {
   createdAt?: string;
   updatedAt?: string;
   publishedAt?: string | null;
+  /** 非空表示这份量表由母量表复制组合而来。 */
+  composedFrom?: AssessmentCompositionSource[];
+  /** 组合量表按母量表拼接的报告结构，供报告结果页编辑。 */
+  sourceReports?: AssessmentSourceReport[];
 }
 
 export interface AssessmentVersionSummary {
@@ -218,6 +246,7 @@ export interface AssessmentListItem {
   scoringType: AssessmentScoringType;
   completedCount: number;
   scanCount: number;
+  composedFrom?: AssessmentCompositionSource[];
 }
 
 export interface AssessmentListResponse {
@@ -242,6 +271,7 @@ export interface AssessmentListFilters {
   category?: AssessmentCategory | "";
   status?: AssessmentLifecycleStatus | "";
   keyword?: string;
+  origin?: "parent" | "composed";
 }
 
 export interface AssessmentValidationIssue {

@@ -751,6 +751,85 @@ class AssessmentDefinitionStoreTests(unittest.TestCase):
         ):
             validate_definition(missing, allow_fixed_scoring=False)
 
+    def test_composed_draft_is_listed_separately_from_parent_scales(self) -> None:
+        definition = self.example_definition()
+        definition["id"] = "composed-sample"
+        definition["composedFrom"] = [{"id": "parent-scale", "title": "母量表甲"}]
+        definition["questions"][0]["sourceAssessmentId"] = "parent-scale"
+        definition["questions"][0]["sourceAssessmentTitle"] = "母量表甲"
+        definition["questions"][0]["sourceQuestionId"] = "q1"
+        created = self.store.create_draft(definition)
+        self.assertEqual(created["definition"]["composedFrom"][0]["id"], "parent-scale")
+
+        parents = self.store.list_admin(page=1, page_size=100, origin="parent")
+        composed = self.store.list_admin(page=1, page_size=100, origin="composed")
+        self.assertFalse(any(item["id"] == "composed-sample" for item in parents["items"]))
+        self.assertTrue(any(item["id"] == "composed-sample" for item in composed["items"]))
+
+    def test_composed_draft_saves_incomplete_report_and_publish_requires_it(self) -> None:
+        definition = self.example_definition()
+        definition["id"] = "composed-incomplete"
+        definition["composedFrom"] = [{"id": "parent-scale", "title": "母量表甲"}]
+        report_dimensions = copy.deepcopy(definition["dimensions"])
+        for dimension in report_dimensions:
+            for item in dimension["scoreRanges"]:
+                item["visitorDescription"] = ""
+                item["analystDescription"] = ""
+                item["suggestions"] = []
+                item["min"] = None
+                item["max"] = None
+        definition["sourceReports"] = [
+            {
+                "sourceId": "parent-scale",
+                "sourceTitle": "母量表甲",
+                "scoringType": "dimension",
+                "scoringPreset": "generic-dimension-v1",
+                "questionIds": ["q1", "q2", "q3"],
+                "dimensions": report_dimensions,
+            }
+        ]
+        definition["questions"][0]["text"] = ""
+        created = self.store.create_draft(definition)
+        self.assertEqual("", created["definition"]["questions"][0]["text"])
+        with self.assertRaises(AssessmentValidationError):
+            self.store.publish(
+                created["definition"]["id"],
+                expected_revision=created["revision"],
+            )
+
+        fixed_text = copy.deepcopy(created["definition"])
+        fixed_text["questions"][0]["text"] = "我能够保持稳定的情绪"
+        updated = self.store.update_draft(
+            fixed_text["id"],
+            fixed_text,
+            expected_revision=created["revision"],
+        )
+        with self.assertRaises(AssessmentValidationError):
+            self.store.publish(
+                updated["definition"]["id"],
+                expected_revision=updated["revision"],
+            )
+
+        restored = copy.deepcopy(updated["definition"])
+        restored["sourceReports"][0]["dimensions"] = copy.deepcopy(
+            self.example_definition()["dimensions"]
+        )
+        ready = self.store.update_draft(
+            restored["id"],
+            restored,
+            expected_revision=updated["revision"],
+        )
+        published = self.store.publish(
+            ready["definition"]["id"],
+            expected_revision=ready["revision"],
+        )
+        emotion = published["definition"]["dimensions"][0]
+        self.assertEqual("情绪状态", emotion["title"])
+        self.assertEqual(
+            "近期情绪状态可能受到一定影响。",
+            emotion["scoreRanges"][0]["visitorDescription"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -12,6 +12,7 @@ import json
 import math
 import os
 import re
+import shutil
 import threading
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -150,6 +151,8 @@ TOP_LEVEL_FIELDS = {
     "createdAt",
     "updatedAt",
     "publishedAt",
+    "composedFrom",
+    "sourceReports",
 }
 REQUIRED_TOP_LEVEL_FIELDS = {
     "schemaVersion",
@@ -227,6 +230,67 @@ def _assert_number(value: Any, label: str) -> float:
     ):
         raise AssessmentValidationError(f"{label}必须是数字")
     return float(value)
+
+
+def _validate_composed_from(value: Any) -> None:
+    if value is None:
+        return
+    if not isinstance(value, list) or not value:
+        raise AssessmentValidationError("composedFrom 必须是非空数组")
+    seen: set[str] = set()
+    for index, raw in enumerate(value):
+        item = _assert_object(raw, f"composedFrom[{index}]")
+        if item.keys() - {"id", "title"}:
+            raise AssessmentValidationError(f"composedFrom[{index}]包含未知字段")
+        source_id = _assert_string(item.get("id"), f"composedFrom[{index}].id")
+        if not ASSESSMENT_ID_PATTERN.fullmatch(source_id):
+            raise AssessmentValidationError(f"composedFrom[{index}].id 不合法")
+        _assert_string(item.get("title"), f"composedFrom[{index}].title")
+        if source_id in seen:
+            raise AssessmentValidationError(f"composedFrom 包含重复母量表：{source_id}")
+        seen.add(source_id)
+
+
+def _validate_source_reports(value: Any, questions: Any) -> None:
+    """组合量表按母量表拼接的报告结构。不参与总分覆盖校验。"""
+    if value is None:
+        return
+    if not isinstance(value, list):
+        raise AssessmentValidationError("sourceReports 必须是数组")
+    question_ids = set()
+    if isinstance(questions, list):
+        for question in questions:
+            if isinstance(question, dict) and isinstance(question.get("id"), str):
+                question_ids.add(question["id"])
+    allowed = {
+        "sourceId",
+        "sourceTitle",
+        "scoringType",
+        "scoringPreset",
+        "questionIds",
+        "dimensions",
+        "scoreRanges",
+        "reverseQuestionIds",
+        "matchResults",
+        "reportProfiles",
+    }
+    for index, raw in enumerate(value):
+        item = _assert_object(raw, f"sourceReports[{index}]")
+        if item.keys() - allowed:
+            raise AssessmentValidationError(f"sourceReports[{index}]包含未知字段")
+        _assert_string(item.get("sourceId"), f"sourceReports[{index}].sourceId")
+        _assert_string(item.get("sourceTitle"), f"sourceReports[{index}].sourceTitle")
+        listed = item.get("questionIds", [])
+        if not isinstance(listed, list) or any(not isinstance(question_id, str) for question_id in listed):
+            raise AssessmentValidationError(f"sourceReports[{index}].questionIds 必须是字符串数组")
+        unknown = [question_id for question_id in listed if question_id not in question_ids]
+        if unknown:
+            raise AssessmentValidationError(
+                f"sourceReports[{index}] 引用了不存在的题目：{unknown[:8]}"
+            )
+        dimensions = item.get("dimensions")
+        if dimensions is not None and not isinstance(dimensions, list):
+            raise AssessmentValidationError(f"sourceReports[{index}].dimensions 必须是数组")
 
 
 def _assert_optional_string(value: Any, label: str) -> None:
@@ -543,12 +607,110 @@ def _validate_range_coverage(
     )
 
 
+def _allocate_stable_id(preferred: str, used: set[str]) -> str:
+    normalized = re.sub(r"[^a-z0-9]+", "-", preferred.strip().lower()).strip("-") or "item"
+    if normalized not in used:
+        used.add(normalized)
+        return normalized
+    suffix = 2
+    while f"{normalized}-{suffix}" in used:
+        suffix += 1
+    candidate = f"{normalized}-{suffix}"
+    used.add(candidate)
+    return candidate
+
+
+def _remap_formula_question_ids(formula: str, id_map: dict[str, str]) -> str:
+    remapped = formula
+    for previous, current in sorted(id_map.items(), key=lambda item: len(item[0]), reverse=True):
+        if previous == current:
+            continue
+        remapped = re.sub(
+            rf"(?<![A-Za-z0-9]){re.escape(previous)}(?![A-Za-z0-9])",
+            current,
+            remapped,
+        )
+    return remapped
+
+
+def _sync_composed_source_reports(definition: dict[str, Any]) -> None:
+    """发布前把组合量表平铺窗格中的结果同步成真正计分结构。"""
+    if not definition.get("composedFrom"):
+        return
+    reports = definition.get("sourceReports")
+    if not isinstance(reports, list) or not reports:
+        return
+    questions = definition.get("questions") or []
+    question_ids = [
+        str(question.get("id"))
+        for question in questions
+        if isinstance(question, dict) and isinstance(question.get("id"), str)
+    ]
+    used: set[str] = set()
+    dimensions: list[dict[str, Any]] = []
+    for report in reports:
+        if not isinstance(report, dict):
+            continue
+        source_id = report.get("sourceId")
+        id_map: dict[str, str] = {}
+        for question in questions:
+            if not isinstance(question, dict) or question.get("sourceAssessmentId") != source_id:
+                continue
+            previous = question.get("sourceQuestionId") or question.get("id")
+            current = question.get("id")
+            if isinstance(previous, str) and isinstance(current, str):
+                id_map[previous] = current
+        raw_dimensions = report.get("dimensions") or []
+        if not isinstance(raw_dimensions, list):
+            continue
+        for raw in raw_dimensions:
+            if not isinstance(raw, dict):
+                continue
+            dimension = copy.deepcopy(raw)
+            formula = dimension.get("formula") or ""
+            if dimension.get("calculationMode") == "formula" and isinstance(formula, str):
+                dimension["formula"] = _remap_formula_question_ids(formula, id_map)
+            preferred_id = str(dimension.get("id") or "dimension")
+            if preferred_id in used:
+                dimension["id"] = _allocate_stable_id(preferred_id, used)
+            else:
+                used.add(preferred_id)
+                dimension["id"] = preferred_id
+            dimensions.append(dimension)
+    if not dimensions:
+        return
+    if len(dimensions) == 1:
+        only = dimensions[0]
+        selected = only.get("questionIds") or []
+        covers_all = isinstance(selected, list) and set(selected) == set(question_ids) and bool(
+            question_ids
+        )
+        simple_sum = (
+            only.get("calculationMode", "simple") != "formula"
+            and only.get("aggregate", "sum") == "sum"
+        )
+        if covers_all and simple_sum:
+            definition["scoringType"] = "sum"
+            if definition.get("scoringPreset") != "generic-sum-v1":
+                definition["scoringPreset"] = "generic-sum-v2"
+            definition["scoreRanges"] = only.get("scoreRanges") or []
+            definition["reverseQuestionIds"] = list(only.get("reverseQuestionIds") or [])
+            definition.pop("dimensions", None)
+            return
+    definition["scoringType"] = "dimension"
+    definition["scoringPreset"] = "generic-dimension-v1"
+    definition["dimensions"] = dimensions
+    definition.pop("scoreRanges", None)
+    definition.pop("reverseQuestionIds", None)
+
+
 def validate_definition(
     definition: dict[str, Any],
     *,
     allow_fixed_scoring: bool,
     strict_scoring: bool = True,
     strict_assets: bool = True,
+    allow_incomplete: bool = False,
 ) -> None:
     """Validate the v1 contract and semantic references.
 
@@ -583,6 +745,8 @@ def validate_definition(
         raise AssessmentValidationError("category 不合法")
     if definition.get("visibility", "public") not in {"public", "private"}:
         raise AssessmentValidationError("visibility 仅支持 public 或 private")
+    _validate_composed_from(definition.get("composedFrom"))
+    _validate_source_reports(definition.get("sourceReports"), definition.get("questions"))
     _assert_string(definition.get("title"), "title")
     _assert_string(definition.get("subtitle"), "subtitle", allow_empty=True)
     _assert_string(definition.get("description"), "description", allow_empty=True)
@@ -645,11 +809,36 @@ def validate_definition(
             "emptyScore",
             "validation",
         }
+        allowed_question_fields |= {
+            "sourceAssessmentId",
+            "sourceAssessmentTitle",
+            "sourceQuestionId",
+        }
         if question.keys() - allowed_question_fields:
             raise AssessmentValidationError(
                 f"questions[{question_index}]包含未知字段"
             )
-        _assert_string(question.get("text"), f"questions[{question_index}].text")
+        for source_field in (
+            "sourceAssessmentId",
+            "sourceAssessmentTitle",
+            "sourceQuestionId",
+        ):
+            if source_field in question:
+                _assert_string(
+                    question.get(source_field),
+                    f"questions[{question_index}].{source_field}",
+                )
+        if "sourceAssessmentId" in question and not ASSESSMENT_ID_PATTERN.fullmatch(
+            str(question.get("sourceAssessmentId"))
+        ):
+            raise AssessmentValidationError(
+                f"questions[{question_index}].sourceAssessmentId 不合法"
+            )
+        _assert_string(
+            question.get("text"),
+            f"questions[{question_index}].text",
+            allow_empty=allow_incomplete,
+        )
         _assert_optional_string(
             question.get("helpText"), f"questions[{question_index}].helpText"
         )
@@ -722,8 +911,14 @@ def validate_definition(
             continue
 
         options = question.get("options")
+        if not isinstance(options, list):
+            raise AssessmentValidationError(f"questions[{question_index}].options 必须是数组")
+        if len(options) < 2 and not allow_incomplete:
+            raise AssessmentValidationError(f"questions[{question_index}]至少需要两个选项")
+        if not options:
+            continue
         current_ids = _assert_unique_ids(options, f"questions[{question_index}].options")
-        if len(current_ids) < 2:
+        if len(current_ids) < 2 and not allow_incomplete:
             raise AssessmentValidationError(f"questions[{question_index}]至少需要两个选项")
         duplicates = current_ids & option_ids
         if duplicates:
@@ -741,6 +936,7 @@ def validate_definition(
             _assert_string(
                 option.get("text"),
                 f"questions[{question_index}].options[{option_index}].text",
+                allow_empty=allow_incomplete,
             )
             _assert_number(
                 option.get("value"),
@@ -916,7 +1112,7 @@ def validate_definition(
             "scoreRanges",
             require_split_descriptions=strict_scoring,
         )
-        if strict_scoring and scoring_type == "sum":
+        if strict_scoring and not allow_incomplete and scoring_type == "sum":
             is_sum_v2 = scoring_preset == "generic-sum-v2"
             reachable_scores = _reachable_scores(
                 questions,
@@ -927,7 +1123,7 @@ def validate_definition(
                 round_final_score=is_sum_v2,
             )
             _validate_range_coverage(score_ranges, reachable_scores, "scoreRanges")
-        elif strict_scoring:
+        elif strict_scoring and not allow_incomplete:
             # PSQI 固定计分程序的六个成分均可达 0..3，总分可达 0..18。
             reachable_scores = {float(score) for score in range(19)}
             _validate_range_coverage(score_ranges, reachable_scores, "scoreRanges")
@@ -965,13 +1161,15 @@ def validate_definition(
             references = _validate_id_list(
                 dimension.get("questionIds"),
                 f"dimensions[{index}].questionIds",
-                allow_empty=False,
+                allow_empty=allow_incomplete,
             )
             dimension_reverse = _validate_id_list(
                 dimension.get("reverseQuestionIds", []),
                 f"dimensions[{index}].reverseQuestionIds",
             )
-            if not references or not references <= question_ids:
+            if (not allow_incomplete and not references) or (
+                references and not references <= question_ids
+            ):
                 raise AssessmentValidationError(f"dimensions[{index}]包含不存在的题目")
             if not dimension_reverse <= references:
                 raise AssessmentValidationError(
@@ -989,7 +1187,7 @@ def validate_definition(
                 raise AssessmentValidationError(
                     f"dimensions[{index}].formula 必须是字符串"
                 )
-            if calculation_mode == "formula":
+            if calculation_mode == "formula" and not allow_incomplete:
                 try:
                     formula_node = parse_dimension_formula(
                         formula or "",
@@ -1011,7 +1209,7 @@ def validate_definition(
                 range_label,
                 require_split_descriptions=strict_scoring,
             )
-            if strict_scoring:
+            if strict_scoring and not allow_incomplete:
                 reachable_scores = _reachable_scores(
                     questions,
                     list(dimension.get("questionIds", [])),
@@ -1166,7 +1364,7 @@ def validate_definition(
             if result_ids != expected_result_ids:
                 raise AssessmentValidationError("aas 固定计分结果 ID 不匹配")
 
-    if strict_scoring:
+    if strict_scoring and not allow_incomplete:
         try:
             from assessment_scoring_service import validate_generated_scoring_examples
 
@@ -1410,6 +1608,7 @@ class AssessmentDefinitionStore:
             "draftRevision": draft_revision,
             "updatedAt": definition.get("updatedAt") or _utc_now(),
             "archivedAt": archived_at,
+            "composed": bool(definition.get("composedFrom")),
         }
 
     @staticmethod
@@ -1427,6 +1626,11 @@ class AssessmentDefinitionStore:
             "duration": definition["duration"],
             "scoringType": definition["scoringType"],
             "sortOrder": definition.get("sortOrder", 0),
+            "composedFrom": [
+                {"id": item.get("id"), "title": item.get("title")}
+                for item in definition.get("composedFrom") or []
+                if isinstance(item, dict)
+            ],
         }
 
     def list_published(
@@ -1513,12 +1717,15 @@ class AssessmentDefinitionStore:
         category: Optional[str] = None,
         status: Optional[str] = None,
         keyword: Optional[str] = None,
+        origin: Optional[str] = None,
     ) -> dict[str, Any]:
         self.ensure_seeded()
         if category and category not in {"professional", "fun"}:
             raise AssessmentValidationError("category 不合法")
         if status and status not in {"draft", "published", "archived"}:
             raise AssessmentValidationError("status 不合法")
+        if origin and origin not in {"parent", "composed"}:
+            raise AssessmentValidationError("origin 不合法")
         normalized_keyword = (keyword or "").strip().casefold()
         entries = list(self._read_index()["assessments"].values())
         filtered = [
@@ -1526,6 +1733,14 @@ class AssessmentDefinitionStore:
             for entry in entries
             if (not category or entry.get("category") == category)
             and (not status or entry.get("status") == status)
+            and (
+                origin != "parent"
+                or not entry.get("composed")
+            )
+            and (
+                origin != "composed"
+                or bool(entry.get("composed"))
+            )
             and (
                 not normalized_keyword
                 or normalized_keyword
@@ -1584,7 +1799,11 @@ class AssessmentDefinitionStore:
         draft["createdAt"] = now
         draft["updatedAt"] = now
         draft["publishedAt"] = None
-        validate_definition(draft, allow_fixed_scoring=False)
+        validate_definition(
+            draft,
+            allow_fixed_scoring=False,
+            allow_incomplete=bool(draft.get("composedFrom")),
+        )
         assessment_id = draft["id"]
         with self._write_lock():
             index = self._read_index()
@@ -1639,7 +1858,11 @@ class AssessmentDefinitionStore:
             allow_fixed = draft.get("scoringType") in FIXED_SCORING_PRESETS
             if allow_fixed and draft.get("scoringType") != current.get("scoringType"):
                 raise AssessmentValidationError("固定计分量表不能更换计分模板")
-            validate_definition(draft, allow_fixed_scoring=allow_fixed)
+            validate_definition(
+                draft,
+                allow_fixed_scoring=allow_fixed,
+                allow_incomplete=bool(draft.get("composedFrom")),
+            )
             self._backup_draft(assessment_id)
             revision = definition_revision(draft)
             self._atomic_write(self._draft_path(assessment_id), draft)
@@ -1673,6 +1896,8 @@ class AssessmentDefinitionStore:
             if expected_revision != current_revision:
                 raise AssessmentConflict("量表已被其他管理员修改，请刷新后重试")
             allow_fixed = draft.get("scoringType") in FIXED_SCORING_PRESETS
+            if draft.get("composedFrom"):
+                _sync_composed_source_reports(draft)
             validate_definition(draft, allow_fixed_scoring=allow_fixed)
             version = int(entry["draftVersion"])
             published_path = self._published_path(assessment_id, version)
@@ -1709,6 +1934,33 @@ class AssessmentDefinitionStore:
             index["assessments"][assessment_id] = entry
             self._write_index(index)
         return self.get_admin(assessment_id)
+
+    def delete_archived(self, assessment_id: str) -> dict[str, Any]:
+        """删除已归档的组合量表定义文件。调用方负责解除企业绑定和作答数据。"""
+        self.ensure_seeded()
+        with self._write_lock():
+            index = self._read_index()
+            entry = index["assessments"].get(assessment_id)
+            if not entry:
+                raise AssessmentNotFound("量表不存在")
+            if entry.get("status") != "archived" and not entry.get("archivedAt"):
+                raise AssessmentValidationError("请先归档，再删除量表")
+            if not entry.get("composed"):
+                definition = self._editable_definition(entry)
+                if not definition.get("composedFrom"):
+                    raise AssessmentValidationError("只能删除量表生成中的组合量表")
+            removed = index["assessments"].pop(assessment_id)
+            self._write_index(index)
+            draft_path = self._draft_path(assessment_id)
+            if draft_path.exists():
+                draft_path.unlink()
+            published_dir = self.published_dir / assessment_id
+            if published_dir.exists():
+                shutil.rmtree(published_dir)
+            backup_dir = self.backups_dir / assessment_id
+            if backup_dir.exists():
+                shutil.rmtree(backup_dir)
+        return {"id": assessment_id, "title": removed.get("title")}
 
     def list_versions(self, assessment_id: str) -> list[dict[str, Any]]:
         directory = self.published_dir / assessment_id
