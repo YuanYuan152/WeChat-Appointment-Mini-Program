@@ -15,13 +15,17 @@ import {
 } from "@/components/ui";
 import {
   deleteAssessmentEnterprise,
+  deleteEnterprisePersonnel,
+  exportEnterprisePersonnel,
   fetchAssessmentEnterprises,
   fetchAssessmentEnterpriseDefault,
   fetchEmployeeInfoFieldCatalog,
   fetchEnterpriseEapArticles,
+  fetchEnterprisePersonnel,
   fetchPrivateAssessmentOptions,
   fetchSharedEapArticles,
   generateAssessmentEnterpriseQrCode,
+  generateEnterprisePersonnel,
   saveAssessmentEnterprise,
   saveAssessmentEnterpriseDefault,
 } from "@/services/assessmentEnterprises";
@@ -32,6 +36,9 @@ import type {
   CustomEmployeeInfoField,
   EapArticle,
   EmployeeInfoFieldOption,
+  EnterprisePersonnelAccountMode,
+  EnterprisePersonnelPasswordMode,
+  EnterprisePersonnelSummary,
   PrivateAssessmentOption,
 } from "@/types/api";
 
@@ -47,6 +54,21 @@ function generateSecureSuffix() {
   return Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
 }
 
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
+function personnelTotal(item: AssessmentEnterprise) {
+  return Number(item.personnelTotalCount || 0);
+}
+
 export function AssessmentEnterprisesScreen() {
   return (
     <AppRoute sectionId="assessmentEnterprises">
@@ -56,7 +78,7 @@ export function AssessmentEnterprisesScreen() {
 }
 
 function AssessmentEnterprisesContent() {
-  const { clearNotice, refreshKey, setBreadcrumbTail, showNotice } = useAppRoute();
+  const { clearNotice, isAdmin, refreshKey, setBreadcrumbTail, showNotice } = useAppRoute();
   const [items, setItems] = useState<AssessmentEnterprise[]>([]);
   const [assessmentOptions, setAssessmentOptions] = useState<PrivateAssessmentOption[]>([]);
   const [employeeInfoFieldCatalog, setEmployeeInfoFieldCatalog] = useState<EmployeeInfoFieldOption[]>([]);
@@ -65,6 +87,7 @@ function AssessmentEnterprisesContent() {
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState<AssessmentEnterprise | null | undefined>(undefined);
   const [qr, setQr] = useState<{ companyName: string; url: string; svg: string }>();
+  const [personnelTarget, setPersonnelTarget] = useState<AssessmentEnterprise>();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -112,8 +135,10 @@ function AssessmentEnterprisesContent() {
         <EnterpriseEditor
           defaultHeroSlides={normalizeHeroSlides(defaultBranding?.heroSlides)}
           employeeInfoFieldCatalog={employeeInfoFieldCatalog}
+          isAdmin={isAdmin}
           item={editing}
           options={assessmentOptions}
+          showNotice={showNotice}
           onClose={() => setEditing(undefined)}
           onSave={async (input) => {
             try {
@@ -139,6 +164,18 @@ function AssessmentEnterprisesContent() {
           }}
         />
         {qr && <QrDialog value={qr} onClose={() => setQr(undefined)} />}
+        {personnelTarget && (
+          <GeneratePersonnelDialog
+            companyName={personnelTarget.companyName}
+            onClose={() => setPersonnelTarget(undefined)}
+            onGenerate={async (input) => {
+              await generateEnterprisePersonnel(personnelTarget.id, input);
+              showNotice("success", "人员表已生成，请导出后发给企业");
+              setPersonnelTarget(undefined);
+              await load();
+            }}
+          />
+        )}
       </>
     );
   }
@@ -190,6 +227,7 @@ function AssessmentEnterprisesContent() {
                     <th className="px-5 py-3 font-medium">公司</th>
                     <th className="px-5 py-3 font-medium">专属链接</th>
                     <th className="px-5 py-3 font-medium">授权量表</th>
+                    <th className="px-5 py-3 font-medium">人员表</th>
                     <th className="px-5 py-3 text-right font-medium">操作</th>
                   </tr>
                 </thead>
@@ -215,8 +253,13 @@ function AssessmentEnterprisesContent() {
                           })
                           .join("、")}
                       </td>
+                      <td className="px-5 py-4 text-sm text-[var(--lxxl-muted)]">
+                        {personnelTotal(item) > 0
+                          ? `员工 ${item.personnelEmployeeCount || 0} / 管理员 ${item.personnelAdminCount || 0}`
+                          : "未生成"}
+                      </td>
                       <td className="px-5 py-4">
-                        <div className="flex justify-end gap-3">
+                        <div className="flex flex-wrap justify-end gap-3">
                           <TableActionButton onClick={() => setEditing(item)}>编辑</TableActionButton>
                           <TableActionButton
                             onClick={() => {
@@ -227,8 +270,55 @@ function AssessmentEnterprisesContent() {
                           >
                             生成二维码
                           </TableActionButton>
+                          {personnelTotal(item) === 0 ? (
+                            <TableActionButton onClick={() => setPersonnelTarget(item)}>生成人员表</TableActionButton>
+                          ) : (
+                            <>
+                              <TableActionButton
+                                onClick={() => {
+                                  void exportEnterprisePersonnel(item.id, "employee")
+                                    .then((file) => downloadBlob(file.blob, file.filename || `${item.companyName}-员工账号.xlsx`))
+                                    .catch((error) => showNotice("error", error instanceof Error ? error.message : "导出失败"));
+                                }}
+                              >
+                                导出员工表
+                              </TableActionButton>
+                              <TableActionButton
+                                onClick={() => {
+                                  void exportEnterprisePersonnel(item.id, "admin")
+                                    .then((file) => downloadBlob(file.blob, file.filename || `${item.companyName}-后台管理员账号.xlsx`))
+                                    .catch((error) => showNotice("error", error instanceof Error ? error.message : "导出失败"));
+                                }}
+                              >
+                                导出后台管理员表
+                              </TableActionButton>
+                              <TableActionButton
+                                disabled={!isAdmin}
+                                tone="danger"
+                                title={isAdmin ? "删除后才能删除企业链接" : "删除人员表需要管理员权限"}
+                                onClick={() => {
+                                  if (!isAdmin) return;
+                                  if (!window.confirm(`确认删除“${item.companyName}”的全部人员数据？此操作不可恢复。`)) return;
+                                  void deleteEnterprisePersonnel(item.id)
+                                    .then(() => {
+                                      showNotice("success", "人员数据已删除");
+                                      return load();
+                                    })
+                                    .catch((error) => showNotice("error", error instanceof Error ? error.message : "删除人员表失败"));
+                                }}
+                              >
+                                删除人员表
+                              </TableActionButton>
+                            </>
+                          )}
                           <TableActionButton
+                            disabled={personnelTotal(item) > 0}
+                            title={personnelTotal(item) > 0 ? "请先删除人员数据后再删除企业链接" : undefined}
                             onClick={() => {
+                              if (personnelTotal(item) > 0) {
+                                showNotice("error", "请先删除人员数据后再删除企业链接");
+                                return;
+                              }
                               if (!window.confirm(`确认删除“${item.companyName}”的企业链接？`)) return;
                               void deleteAssessmentEnterprise(item.id)
                                 .then(() => {
@@ -252,6 +342,18 @@ function AssessmentEnterprisesContent() {
       </section>
 
       {qr && <QrDialog value={qr} onClose={() => setQr(undefined)} />}
+      {personnelTarget && (
+        <GeneratePersonnelDialog
+          companyName={personnelTarget.companyName}
+          onClose={() => setPersonnelTarget(undefined)}
+          onGenerate={async (input) => {
+            await generateEnterprisePersonnel(personnelTarget.id, input);
+            showNotice("success", "人员表已生成，请导出后发给企业");
+            setPersonnelTarget(undefined);
+            await load();
+          }}
+        />
+      )}
     </>
   );
 }
@@ -950,6 +1052,8 @@ function EnterpriseEditor({
   options,
   employeeInfoFieldCatalog,
   defaultHeroSlides,
+  isAdmin,
+  showNotice,
   onClose,
   onSave,
   onPersist,
@@ -957,6 +1061,8 @@ function EnterpriseEditor({
   item: AssessmentEnterprise | null;
   options: PrivateAssessmentOption[];
   employeeInfoFieldCatalog: EmployeeInfoFieldOption[];
+  isAdmin: boolean;
+  showNotice: (type: "info" | "error" | "success", text: string) => void;
   defaultHeroSlides: AssessmentEnterpriseHeroSlide[];
   onClose: () => void;
   onSave: (input: {
@@ -1147,6 +1253,13 @@ function EnterpriseEditor({
             </QueryField>
           </div>
           <div className="lg:col-span-2 border-t border-[var(--lxxl-border)] pt-6">
+            <EnterprisePersonnelPanel
+              enterpriseId={enterpriseId}
+              isAdmin={isAdmin}
+              onNotice={showNotice}
+            />
+          </div>
+          <div className="lg:col-span-2 border-t border-[var(--lxxl-border)] pt-6">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h3 className="text-base font-semibold">首页轮播图</h3>
@@ -1275,6 +1388,238 @@ function EnterpriseEditor({
         </div>
       </div>
     </section>
+  );
+}
+
+function EnterprisePersonnelPanel({
+  enterpriseId,
+  isAdmin,
+  onNotice,
+}: {
+  enterpriseId?: string;
+  isAdmin: boolean;
+  onNotice: (type: "info" | "error" | "success", text: string) => void;
+}) {
+  const [summary, setSummary] = useState<EnterprisePersonnelSummary>();
+  const [generating, setGenerating] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const reload = useCallback(async () => {
+    if (!enterpriseId) {
+      setSummary(undefined);
+      return;
+    }
+    setLoading(true);
+    try {
+      setSummary(await fetchEnterprisePersonnel(enterpriseId));
+    } catch (error) {
+      onNotice("error", error instanceof Error ? error.message : "人员表加载失败");
+    } finally {
+      setLoading(false);
+    }
+  }, [enterpriseId, onNotice]);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  const total = summary?.totalCount || 0;
+
+  return (
+    <div>
+      <h3 className="text-base font-semibold">人员表</h3>
+      <p className="mt-1 text-sm text-[var(--lxxl-muted)]">
+        仅用于这家企业的定制站点登录。数据存在独立表，不会写入小程序/自有 EAP 的人员或客户表。
+      </p>
+      {!enterpriseId ? (
+        <p className="mt-3 text-sm text-[var(--lxxl-muted)]">请先保存企业链接后再生成人员表。</p>
+      ) : loading && !summary ? (
+        <p className="mt-3 text-sm text-[var(--lxxl-muted)]">正在读取人员表...</p>
+      ) : total === 0 ? (
+        <div className="mt-4">
+          <QueryButton className="!w-auto px-4" onClick={() => setGenerating(true)}>生成人员表</QueryButton>
+        </div>
+      ) : (
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <span className="text-sm text-[var(--lxxl-muted)]">
+            员工 {summary?.employeeCount || 0} / 管理员 {summary?.adminCount || 0}
+          </span>
+          <TableActionButton
+            onClick={() => {
+              void exportEnterprisePersonnel(enterpriseId, "employee")
+                .then((file) => downloadBlob(file.blob, file.filename || "员工账号.xlsx"))
+                .catch((error) => onNotice("error", error instanceof Error ? error.message : "导出失败"));
+            }}
+          >
+            导出员工表
+          </TableActionButton>
+          <TableActionButton
+            onClick={() => {
+              void exportEnterprisePersonnel(enterpriseId, "admin")
+                .then((file) => downloadBlob(file.blob, file.filename || "后台管理员账号.xlsx"))
+                .catch((error) => onNotice("error", error instanceof Error ? error.message : "导出失败"));
+            }}
+          >
+            导出后台管理员表
+          </TableActionButton>
+          <TableActionButton
+            disabled={!isAdmin}
+            tone="danger"
+            title={isAdmin ? undefined : "删除人员表需要管理员权限"}
+            onClick={() => {
+              if (!isAdmin) return;
+              if (!window.confirm("确认删除该企业的全部人员数据？删除后才能删除企业链接。")) return;
+              void deleteEnterprisePersonnel(enterpriseId)
+                .then(() => {
+                  onNotice("success", "人员数据已删除");
+                  return reload();
+                })
+                .catch((error) => onNotice("error", error instanceof Error ? error.message : "删除失败"));
+            }}
+          >
+            删除人员表
+          </TableActionButton>
+        </div>
+      )}
+      {generating && enterpriseId && (
+        <GeneratePersonnelDialog
+          companyName="当前企业"
+          onClose={() => setGenerating(false)}
+          onGenerate={async (input) => {
+            await generateEnterprisePersonnel(enterpriseId, input);
+            onNotice("success", "人员表已生成");
+            setGenerating(false);
+            await reload();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function GeneratePersonnelDialog({
+  companyName,
+  onClose,
+  onGenerate,
+}: {
+  companyName: string;
+  onClose: () => void;
+  onGenerate: (input: {
+    employeeCount: number;
+    adminCount: number;
+    accountMode: EnterprisePersonnelAccountMode;
+    accountPrefix?: string;
+    passwordMode: EnterprisePersonnelPasswordMode;
+    unifiedPassword?: string;
+  }) => Promise<void>;
+}) {
+  const [employeeCount, setEmployeeCount] = useState("10");
+  const [adminCount, setAdminCount] = useState("1");
+  const [accountMode, setAccountMode] = useState<EnterprisePersonnelAccountMode>("custom");
+  const [accountPrefix, setAccountPrefix] = useState("");
+  const [passwordMode, setPasswordMode] = useState<EnterprisePersonnelPasswordMode>("unified");
+  const [unifiedPassword, setUnifiedPassword] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  return (
+    <div className="fixed inset-0 z-[60] grid place-items-center bg-black/30 p-6">
+      <section className="w-full max-w-lg rounded-2xl bg-white p-6">
+        <h3 className="text-lg font-semibold">生成人员表</h3>
+        <p className="mt-2 text-sm text-[var(--lxxl-muted)]">
+          为「{companyName}」生成独立账号。生成后请立刻导出 Excel 发给企业；已有人员表时需先删除再重新生成。
+        </p>
+        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+          <QueryField label="员工数量" required>
+            <input
+              className={queryControlClass}
+              min={1}
+              max={2000}
+              type="number"
+              value={employeeCount}
+              onChange={(event) => setEmployeeCount(event.target.value)}
+            />
+          </QueryField>
+          <QueryField label="后台管理员数量" required>
+            <input
+              className={queryControlClass}
+              min={0}
+              max={200}
+              type="number"
+              value={adminCount}
+              onChange={(event) => setAdminCount(event.target.value)}
+            />
+          </QueryField>
+          <QueryField className="sm:col-span-2" label="账号设置" required>
+            <div className="flex flex-col gap-3">
+              <select
+                className={queryControlClass}
+                value={accountMode}
+                onChange={(event) => setAccountMode(event.target.value as EnterprisePersonnelAccountMode)}
+              >
+                <option value="custom">定制生成（前缀 + 00001 递增）</option>
+                <option value="random">随机数生成</option>
+              </select>
+              {accountMode === "custom" && (
+                <input
+                  className={queryControlClass}
+                  maxLength={20}
+                  placeholder="自定义前缀，例如 acme"
+                  value={accountPrefix}
+                  onChange={(event) => setAccountPrefix(event.target.value)}
+                />
+              )}
+            </div>
+          </QueryField>
+          <QueryField className="sm:col-span-2" label="密码设置" required>
+            <div className="flex flex-col gap-3">
+              <select
+                className={queryControlClass}
+                value={passwordMode}
+                onChange={(event) => setPasswordMode(event.target.value as EnterprisePersonnelPasswordMode)}
+              >
+                <option value="unified">统一密码</option>
+                <option value="account_last4">账号后 4 位</option>
+                <option value="random">随机生成</option>
+              </select>
+              {passwordMode === "unified" && (
+                <input
+                  className={queryControlClass}
+                  maxLength={32}
+                  placeholder="6–32 位统一密码"
+                  value={unifiedPassword}
+                  onChange={(event) => setUnifiedPassword(event.target.value)}
+                />
+              )}
+            </div>
+          </QueryField>
+        </div>
+        {error && <p className="mt-3 text-sm text-[#A13F37]">{error}</p>}
+        <div className="mt-5 flex justify-end gap-3">
+          <QueryResetButton disabled={saving} onClick={onClose}>取消</QueryResetButton>
+          <QueryButton
+            className="!w-auto px-4"
+            disabled={saving}
+            onClick={() => {
+              setError("");
+              setSaving(true);
+              void onGenerate({
+                employeeCount: Number(employeeCount),
+                adminCount: Number(adminCount),
+                accountMode,
+                accountPrefix: accountPrefix.trim(),
+                passwordMode,
+                unifiedPassword: unifiedPassword.trim(),
+              })
+                .catch((err) => setError(err instanceof Error ? err.message : "生成失败"))
+                .finally(() => setSaving(false));
+            }}
+          >
+            {saving ? "生成中..." : "生成"}
+          </QueryButton>
+        </div>
+      </section>
+    </div>
   );
 }
 

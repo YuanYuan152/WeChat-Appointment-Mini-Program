@@ -377,8 +377,32 @@ export interface AssessmentEnterprise {
   hideConsultation?: boolean;
   /** 为 true 时，仅当前企业页面隐藏心理知识库（图文与音频） */
   hideLibrary?: boolean;
+  /** 定制站点独立人员表：员工数量，不计入 AppAccount */
+  personnelEmployeeCount?: number;
+  /** 定制站点独立人员表：后台管理员数量 */
+  personnelAdminCount?: number;
+  personnelTotalCount?: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export type EnterprisePersonnelAccountMode = "random" | "custom";
+export type EnterprisePersonnelPasswordMode = "unified" | "account_last4" | "random";
+export type EnterprisePersonnelRole = "employee" | "admin";
+
+export interface EnterprisePersonnelSummary {
+  employeeCount: number;
+  adminCount: number;
+  totalCount: number;
+}
+
+export interface GenerateEnterprisePersonnelInput {
+  employeeCount: number;
+  adminCount: number;
+  accountMode: EnterprisePersonnelAccountMode;
+  accountPrefix?: string;
+  passwordMode: EnterprisePersonnelPasswordMode;
+  unifiedPassword?: string;
 }
 
 export interface CustomEmployeeInfoField {

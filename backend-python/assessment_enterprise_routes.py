@@ -10,7 +10,7 @@ from uuid import UUID
 
 import qrcode
 import qrcode.image.svg
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -29,6 +29,7 @@ from assessment_enterprise_service import (
     EnterpriseConfigError,
     delete_enterprise,
     get_default_branding,
+    get_enterprise_by_id,
     get_enterprise_by_slug,
     resolve_enterprise_hero_slides,
     list_employee_info_field_catalog,
@@ -37,10 +38,27 @@ from assessment_enterprise_service import (
     save_enterprise,
     save_default_branding,
 )
+from enterprise_site_personnel_service import (
+    EnterprisePersonnelError,
+    ROLE_ADMIN,
+    ROLE_EMPLOYEE,
+    assert_enterprise_deletable,
+    auth_status,
+    delete_personnel,
+    export_personnel_xlsx,
+    generate_personnel,
+    login_personnel,
+    login_required as site_login_required,
+    personnel_summaries_by_enterprise_id,
+    personnel_summary,
+    resolve_personnel_from_authorization,
+    sync_personnel_enterprise_slug,
+)
 from assessment_report_service import (
     AssessmentReportError,
     submit_report,
 )
+from assessment_definition_service import AssessmentDefinitionError
 from assessment_routes import get_assessment_store
 from config import settings
 from database import get_db
@@ -116,6 +134,20 @@ class EnterpriseReportsSubmitPayload(BaseModel):
     visitorKey: str = Field(..., min_length=8, max_length=64)
     employeeInfo: dict[str, Any] = Field(default_factory=dict)
     reports: list[EnterpriseReportItemPayload] = Field(..., min_length=1, max_length=20)
+
+
+class EnterpriseSiteLoginPayload(BaseModel):
+    username: str = Field(..., min_length=1, max_length=80)
+    password: str = Field(..., min_length=1, max_length=128)
+
+
+class GenerateEnterprisePersonnelPayload(BaseModel):
+    employeeCount: int = Field(..., ge=1, le=2000)
+    adminCount: int = Field(..., ge=0, le=200)
+    accountMode: str = Field(..., pattern="^(random|custom)$")
+    accountPrefix: str = Field(default="", max_length=20)
+    passwordMode: str = Field(..., pattern="^(unified|account_last4|random)$")
+    unifiedPassword: str = Field(default="", max_length=32)
 
 
 def _enterprise_source_label(enterprise: dict[str, Any]) -> str:
@@ -205,13 +237,62 @@ def get_public_default_branding():
     return payload
 
 
-@public_router.get("/{slug}", summary="按企业链接后缀读取企业网站配置及已授权量表")
-def get_public_enterprise_assessments(slug: str):
+@public_router.get("/{slug}/auth/status", summary="定制企业站点是否需要人员表登录")
+def get_enterprise_site_auth_status(
+    slug: str,
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
     try:
         enterprise = get_enterprise_by_slug(slug)
-        definitions = _published_assessments(
-            enterprise.get("assessmentIds", []),
-            enterprise.get("assessmentTitles") or {},
+    except EnterpriseConfigError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return auth_status(
+        db,
+        slug=enterprise["slug"],
+        authorization=authorization,
+        branding=enterprise,
+    )
+
+
+@public_router.post("/{slug}/auth/login", summary="定制企业站点人员登录")
+def login_enterprise_site(
+    slug: str,
+    body: EnterpriseSiteLoginPayload,
+    db: Session = Depends(get_db),
+):
+    try:
+        enterprise = get_enterprise_by_slug(slug)
+        return login_personnel(
+            db,
+            slug=enterprise["slug"],
+            username=body.username,
+            password=body.password,
+        )
+    except EnterpriseConfigError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except EnterprisePersonnelError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+
+@public_router.get("/{slug}", summary="按企业链接后缀读取企业网站配置及已授权量表")
+def get_public_enterprise_assessments(
+    slug: str,
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    try:
+        enterprise = get_enterprise_by_slug(slug)
+        person = resolve_personnel_from_authorization(db, authorization, enterprise["slug"])
+        required = site_login_required(db, enterprise["slug"])
+        authorized = (not required) or bool(person)
+        definitions = (
+            _published_assessments(
+                enterprise.get("assessmentIds", []),
+                enterprise.get("assessmentTitles") or {},
+            )
+            if authorized
+            else []
         )
         default_branding = get_default_branding()
         return {
@@ -225,6 +306,18 @@ def get_public_enterprise_assessments(slug: str):
             ),
             "heroSlides": resolve_enterprise_hero_slides(enterprise),
             "slug": enterprise["slug"],
+            "loginRequired": required,
+            "authenticated": authorized,
+            "sessionUser": (
+                {
+                    "username": person.Username,
+                    "role": person.Role,
+                    "realName": person.RealName or "",
+                    "empNo": person.EmpNo or "",
+                }
+                if person
+                else None
+            ),
             "employeeInfoFields": resolve_employee_info_fields(
                 enterprise.get("employeeInfoFields"),
                 enterprise.get("customEmployeeInfoFields"),
@@ -233,7 +326,7 @@ def get_public_enterprise_assessments(slug: str):
             "hideConsultation": bool(enterprise.get("hideConsultation")),
             "hideLibrary": bool(enterprise.get("hideLibrary")),
             "assessments": definitions,
-            "articles": resolve_enterprise_articles(enterprise),
+            "articles": resolve_enterprise_articles(enterprise) if authorized else [],
         }
     except EnterpriseConfigError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -243,12 +336,17 @@ def get_public_enterprise_assessments(slug: str):
 def submit_enterprise_assessment_reports(
     slug: str,
     body: EnterpriseReportsSubmitPayload,
+    authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db),
 ):
     try:
         enterprise = get_enterprise_by_slug(slug)
     except EnterpriseConfigError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if site_login_required(db, enterprise["slug"]):
+        person = resolve_personnel_from_authorization(db, authorization, enterprise["slug"])
+        if not person:
+            raise HTTPException(status_code=401, detail="请先登录后再提交测评")
 
     allowed_ids = {
         str(item).strip()
@@ -326,10 +424,25 @@ def register_assessment_enterprise_admin_routes(
     router: APIRouter,
     *,
     require_assessment_editor: Callable[..., Any],
+    require_admin: Callable[..., Any],
 ) -> None:
     @router.get("/assessment-enterprises", summary="企业定制量表配置")
-    def list_admin_enterprises(_actor: Any = Depends(require_assessment_editor)):
-        return list_enterprises()
+    def list_admin_enterprises(
+        db: Session = Depends(get_db),
+        _actor: Any = Depends(require_assessment_editor),
+    ):
+        items = list_enterprises()
+        summaries = personnel_summaries_by_enterprise_id(
+            db,
+            [str(item.get("id") or "") for item in items],
+        )
+        empty = {"employeeCount": 0, "adminCount": 0, "totalCount": 0}
+        for item in items:
+            summary = summaries.get(str(item.get("id") or ""), empty)
+            item["personnelEmployeeCount"] = summary["employeeCount"]
+            item["personnelAdminCount"] = summary["adminCount"]
+            item["personnelTotalCount"] = summary["totalCount"]
+        return items
 
     @router.get("/assessment-enterprises/default", summary="默认网站品牌配置")
     def get_admin_default_branding(_actor: Any = Depends(require_assessment_editor)):
@@ -454,14 +567,22 @@ def register_assessment_enterprise_admin_routes(
         except EnterpriseConfigError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
+    def _save_and_sync_personnel_slug(db: Session, **kwargs: Any) -> dict[str, Any]:
+        saved = save_enterprise(**kwargs)
+        if saved.get("id") and saved.get("slug"):
+            sync_personnel_enterprise_slug(db, saved["id"], saved["slug"])
+        return saved
+
     @router.post("/assessment-enterprises", summary="新增企业定制链接")
     def create_admin_enterprise(
         body: EnterprisePayload,
+        db: Session = Depends(get_db),
         _actor: Any = Depends(require_assessment_editor),
     ):
         try:
             _published_assessments(body.assessmentIds, body.assessmentTitles)
-            return save_enterprise(
+            return _save_and_sync_personnel_slug(
+                db,
                 enterprise_id=None,
                 company_name=body.companyName,
                 url=body.url,
@@ -491,11 +612,13 @@ def register_assessment_enterprise_admin_routes(
     def update_admin_enterprise(
         enterprise_id: str,
         body: EnterprisePayload,
+        db: Session = Depends(get_db),
         _actor: Any = Depends(require_assessment_editor),
     ):
         try:
             _published_assessments(body.assessmentIds, body.assessmentTitles)
-            return save_enterprise(
+            return _save_and_sync_personnel_slug(
+                db,
                 enterprise_id=enterprise_id,
                 company_name=body.companyName,
                 url=body.url,
@@ -521,14 +644,99 @@ def register_assessment_enterprise_admin_routes(
         except EnterpriseConfigError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    @router.delete("/assessment-enterprises/{enterprise_id}", summary="删除企业定制链接")
-    def delete_admin_enterprise(
+    @router.get(
+        "/assessment-enterprises/{enterprise_id}/personnel",
+        summary="定制企业人员表摘要",
+    )
+    def get_admin_enterprise_personnel(
         enterprise_id: str,
+        db: Session = Depends(get_db),
         _actor: Any = Depends(require_assessment_editor),
     ):
         try:
+            get_enterprise_by_id(enterprise_id)
+        except EnterpriseConfigError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        return personnel_summary(db, enterprise_id)
+
+    @router.post(
+        "/assessment-enterprises/{enterprise_id}/personnel/generate",
+        summary="生成定制企业人员表",
+    )
+    def generate_admin_enterprise_personnel(
+        enterprise_id: str,
+        body: GenerateEnterprisePersonnelPayload,
+        db: Session = Depends(get_db),
+        _actor: Any = Depends(require_assessment_editor),
+    ):
+        try:
+            enterprise = get_enterprise_by_id(enterprise_id)
+            return generate_personnel(
+                db,
+                enterprise_id=enterprise["id"],
+                enterprise_slug=enterprise["slug"],
+                employee_count=body.employeeCount,
+                admin_count=body.adminCount,
+                account_mode=body.accountMode,
+                account_prefix=body.accountPrefix,
+                password_mode=body.passwordMode,
+                unified_password=body.unifiedPassword,
+            )
+        except EnterpriseConfigError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except EnterprisePersonnelError as exc:
+            raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+    @router.get(
+        "/assessment-enterprises/{enterprise_id}/personnel/export",
+        summary="导出定制企业员工表或后台管理员表",
+    )
+    def export_admin_enterprise_personnel(
+        enterprise_id: str,
+        role: str = ROLE_EMPLOYEE,
+        db: Session = Depends(get_db),
+        _actor: Any = Depends(require_assessment_editor),
+    ):
+        try:
+            get_enterprise_by_id(enterprise_id)
+            if role not in {ROLE_EMPLOYEE, ROLE_ADMIN}:
+                raise HTTPException(status_code=422, detail="导出类型无效")
+            return export_personnel_xlsx(db, enterprise_id, role)
+        except EnterpriseConfigError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except EnterprisePersonnelError as exc:
+            raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+    @router.delete(
+        "/assessment-enterprises/{enterprise_id}/personnel",
+        summary="删除定制企业人员表（需管理员）",
+    )
+    def delete_admin_enterprise_personnel(
+        enterprise_id: str,
+        db: Session = Depends(get_db),
+        _actor: Any = Depends(require_admin),
+    ):
+        try:
+            get_enterprise_by_id(enterprise_id)
+            deleted = delete_personnel(db, enterprise_id)
+            return {"message": "人员数据已删除", "deletedCount": deleted}
+        except EnterpriseConfigError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except EnterprisePersonnelError as exc:
+            raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+    @router.delete("/assessment-enterprises/{enterprise_id}", summary="删除企业定制链接")
+    def delete_admin_enterprise(
+        enterprise_id: str,
+        db: Session = Depends(get_db),
+        _actor: Any = Depends(require_assessment_editor),
+    ):
+        try:
+            assert_enterprise_deletable(db, enterprise_id)
             delete_enterprise(enterprise_id)
             return {"message": "企业配置已删除"}
+        except EnterprisePersonnelError as exc:
+            raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
         except EnterpriseConfigError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 

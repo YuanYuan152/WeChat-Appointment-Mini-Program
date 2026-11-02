@@ -890,3 +890,36 @@ class AppSystemSetting(Base):
     UpdatedByAccountId = Column(Integer, nullable=True)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
     UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
+
+
+class EnterpriseSitePersonnel(Base):
+    """定制化企业站点人员表。
+
+    与 AppAccount / AppRoleBinding 等自有人员、来访客户表完全隔离：
+    不共用主键、不写外键、不参与小程序登录。仅供企业定制链接的站点登录
+    与后台「企业定制」模块生成/导出/删除。
+    """
+
+    __tablename__ = "EnterpriseSitePersonnel"
+    __table_args__ = (
+        UniqueConstraint(
+            "EnterpriseId",
+            "Username",
+            name="UQ_EnterpriseSitePersonnel_Ent_User",
+        ),
+        Index("IX_EnterpriseSitePersonnel_Slug_User", "EnterpriseSlug", "Username"),
+        Index("IX_EnterpriseSitePersonnel_EnterpriseId", "EnterpriseId"),
+    )
+
+    Id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    EnterpriseId = Column(String(64), nullable=False)
+    EnterpriseSlug = Column(String(80), nullable=False)
+    Role = Column(String(20), nullable=False)  # employee | admin
+    Username = Column(String(80), nullable=False)
+    PasswordHash = Column(String(255), nullable=False)
+    PasswordExport = Column(String(128), nullable=False)
+    Phone = Column(String(20), nullable=True)
+    EmpNo = Column(String(40), nullable=True)
+    RealName = Column(Unicode(50), nullable=True)
+    CreatedAt = Column(DateTime, default=func.now(), nullable=False)
+    UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())

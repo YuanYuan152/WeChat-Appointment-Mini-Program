@@ -1,4 +1,4 @@
-import { apiRequest } from "@/lib/api";
+import { apiFileRequest, apiRequest } from "@/lib/api";
 import type {
   AssessmentEnterprise,
   AssessmentEnterpriseBranding,
@@ -7,6 +7,9 @@ import type {
   EapArticle,
   EapArticleInput,
   EmployeeInfoFieldOption,
+  EnterprisePersonnelRole,
+  EnterprisePersonnelSummary,
+  GenerateEnterprisePersonnelInput,
   PrivateAssessmentOption,
 } from "@/types/api";
 
@@ -129,6 +132,45 @@ export function updateEnterpriseEapArticle(
 export function deleteEnterpriseEapArticle(enterpriseId: string, articleId: string) {
   return apiRequest<{ message: string }>(
     `${BASE_PATH}/${encodeURIComponent(enterpriseId)}/articles/${encodeURIComponent(articleId)}`,
+    { method: "DELETE" },
+  );
+}
+
+export function fetchEnterprisePersonnel(enterpriseId: string) {
+  return apiRequest<EnterprisePersonnelSummary>(
+    `${BASE_PATH}/${encodeURIComponent(enterpriseId)}/personnel`,
+  );
+}
+
+export function generateEnterprisePersonnel(
+  enterpriseId: string,
+  input: GenerateEnterprisePersonnelInput,
+) {
+  return apiRequest<EnterprisePersonnelSummary>(
+    `${BASE_PATH}/${encodeURIComponent(enterpriseId)}/personnel/generate`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        employeeCount: input.employeeCount,
+        adminCount: input.adminCount,
+        accountMode: input.accountMode,
+        accountPrefix: input.accountPrefix || "",
+        passwordMode: input.passwordMode,
+        unifiedPassword: input.unifiedPassword || "",
+      }),
+    },
+  );
+}
+
+export function exportEnterprisePersonnel(enterpriseId: string, role: EnterprisePersonnelRole) {
+  return apiFileRequest(
+    `${BASE_PATH}/${encodeURIComponent(enterpriseId)}/personnel/export?role=${encodeURIComponent(role)}`,
+  );
+}
+
+export function deleteEnterprisePersonnel(enterpriseId: string) {
+  return apiRequest<{ message: string; deletedCount: number }>(
+    `${BASE_PATH}/${encodeURIComponent(enterpriseId)}/personnel`,
     { method: "DELETE" },
   );
 }

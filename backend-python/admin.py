@@ -3330,6 +3330,7 @@ register_assessment_share_admin_routes(
 register_assessment_enterprise_admin_routes(
     router,
     require_assessment_editor=require_assessment_editor,
+    require_admin=require_admin,
 )
 
 register_system_settings_routes(

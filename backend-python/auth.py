@@ -301,11 +301,17 @@ def get_current_account(
         raise HTTPException(status_code=401, detail="未提供有效的 Authorization 头")
     token = authorization[7:]
     payload = decode_token(token)
+    if payload.get("typ") == "enterprise_site":
+        raise HTTPException(status_code=401, detail="Token 无效")
     account_id = payload.get("sub")
     if not account_id:
         raise HTTPException(status_code=401, detail="Token 无效：缺少 sub 字段")
+    try:
+        account_pk = int(account_id)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=401, detail="Token 无效") from exc
 
-    account = db.query(AppAccount).filter(AppAccount.Id == int(account_id)).first()
+    account = db.query(AppAccount).filter(AppAccount.Id == account_pk).first()
     if not account:
         raise HTTPException(status_code=401, detail="用户不存在")
     # 注销后的账号即使持有未过期 JWT 也应被拒绝（升级方案 §6 合规要求）
@@ -324,10 +330,16 @@ def get_optional_account(
     try:
         token = authorization[7:]
         payload = decode_token(token)
+        if payload.get("typ") == "enterprise_site":
+            return None
         account_id = payload.get("sub")
         if not account_id:
             return None
-        account = db.query(AppAccount).filter(AppAccount.Id == int(account_id)).first()
+        try:
+            account_pk = int(account_id)
+        except (TypeError, ValueError):
+            return None
+        account = db.query(AppAccount).filter(AppAccount.Id == account_pk).first()
         if not account or getattr(account, "IsActive", True) is False:
             return None
         return account
