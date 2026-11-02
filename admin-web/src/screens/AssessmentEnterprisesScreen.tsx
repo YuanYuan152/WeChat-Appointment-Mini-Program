@@ -972,6 +972,7 @@ function EnterpriseEditor({
     customEmployeeInfoFields?: CustomEmployeeInfoField[];
     heroSlides: AssessmentEnterpriseHeroSlide[];
     hideConsultation?: boolean;
+    hideLibrary?: boolean;
   }) => Promise<void>;
   onPersist: (input: {
     id?: string;
@@ -986,6 +987,7 @@ function EnterpriseEditor({
     customEmployeeInfoFields?: CustomEmployeeInfoField[];
     heroSlides: AssessmentEnterpriseHeroSlide[];
     hideConsultation?: boolean;
+    hideLibrary?: boolean;
   }, notice?: string) => Promise<{ id: string }>;
 }) {
   const [companyName, setCompanyName] = useState(item?.companyName || "");
@@ -1004,6 +1006,7 @@ function EnterpriseEditor({
     () => (item?.customEmployeeInfoFields || []).map((field) => ({ id: field.id, label: field.label })),
   );
   const [hideConsultation, setHideConsultation] = useState(Boolean(item?.hideConsultation));
+  const [hideLibrary, setHideLibrary] = useState(Boolean(item?.hideLibrary));
   const [enterpriseId, setEnterpriseId] = useState(item?.id);
   const [heroSlides, setHeroSlides] = useState<AssessmentEnterpriseHeroSlide[]>(() =>
     normalizeHeroSlides(item?.heroSlides?.length ? item.heroSlides : defaultHeroSlides),
@@ -1056,6 +1059,7 @@ function EnterpriseEditor({
       employeeInfoFields: fields,
       customEmployeeInfoFields: customFields ?? customEmployeeInfoFields,
       hideConsultation,
+      hideLibrary,
       heroSlides: heroSlides.map((slide) => ({
         imageUrl: slide.imageUrl.trim(),
         title: slide.title.trim(),
@@ -1226,8 +1230,22 @@ function EnterpriseEditor({
             />
           </div>
           <div className="mt-8 border-b border-[var(--lxxl-border)] pb-6 lg:col-span-2">
-            <h3 className="text-base font-semibold">预约心理咨询</h3>
+            <h3 className="text-base font-semibold">页面模块显示</h3>
             <label className="mt-4 flex cursor-pointer items-start gap-3">
+              <input
+                checked={hideLibrary}
+                className="mt-1"
+                type="checkbox"
+                onChange={(event) => setHideLibrary(event.target.checked)}
+              />
+              <span>
+                <span className="block text-sm font-medium text-[var(--lxxl-ink)]">隐藏心理图文和音频</span>
+                <span className="mt-1 block text-sm text-[var(--lxxl-muted)]">
+                  勾选后点确认保存，当前企业页面不再显示心理知识库入口、心理图文与疗愈音频内容。只对这家企业生效。
+                </span>
+              </span>
+            </label>
+            <label className="mt-5 flex cursor-pointer items-start gap-3">
               <input
                 checked={hideConsultation}
                 className="mt-1"

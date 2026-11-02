@@ -375,6 +375,8 @@ export interface AssessmentEnterprise {
   heroSlides?: AssessmentEnterpriseHeroSlide[] | null;
   /** 为 true 时，仅当前企业页面隐藏预约心理咨询及相关图片 */
   hideConsultation?: boolean;
+  /** 为 true 时，仅当前企业页面隐藏心理知识库（图文与音频） */
+  hideLibrary?: boolean;
   createdAt: string;
   updatedAt: string;
 }

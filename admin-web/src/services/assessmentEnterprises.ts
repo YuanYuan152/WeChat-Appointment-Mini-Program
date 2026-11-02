@@ -48,6 +48,7 @@ export function saveAssessmentEnterprise(input: {
   customEmployeeInfoFields?: CustomEmployeeInfoField[];
   heroSlides?: AssessmentEnterpriseHeroSlide[] | null;
   hideConsultation?: boolean;
+  hideLibrary?: boolean;
 }) {
   return apiRequest<AssessmentEnterprise>(input.id ? `${BASE_PATH}/${input.id}` : BASE_PATH, {
     method: input.id ? "PUT" : "POST",
@@ -63,6 +64,7 @@ export function saveAssessmentEnterprise(input: {
       customEmployeeInfoFields: input.customEmployeeInfoFields ?? [],
       heroSlides: input.heroSlides ?? null,
       hideConsultation: Boolean(input.hideConsultation),
+      hideLibrary: Boolean(input.hideLibrary),
     }),
   });
 }

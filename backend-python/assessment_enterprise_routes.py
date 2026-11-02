@@ -84,6 +84,8 @@ class EnterprisePayload(BaseModel):
     heroSlides: Optional[list[HeroSlidePayload]] = None
     # 仅隐藏当前企业页面上的预约心理咨询，不影响其他企业
     hideConsultation: bool = False
+    # 仅隐藏当前企业页面上的心理知识库（图文与音频），不影响其他企业
+    hideLibrary: bool = False
 
 
 class BrandingPayload(BaseModel):
@@ -229,6 +231,7 @@ def get_public_enterprise_assessments(slug: str):
             ),
             "customEmployeeInfoFields": enterprise.get("customEmployeeInfoFields") or [],
             "hideConsultation": bool(enterprise.get("hideConsultation")),
+            "hideLibrary": bool(enterprise.get("hideLibrary")),
             "assessments": definitions,
             "articles": resolve_enterprise_articles(enterprise),
         }
@@ -479,6 +482,7 @@ def register_assessment_enterprise_admin_routes(
                     else None
                 ),
                 hide_consultation=body.hideConsultation,
+                hide_library=body.hideLibrary,
             )
         except EnterpriseConfigError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -512,6 +516,7 @@ def register_assessment_enterprise_admin_routes(
                     else None
                 ),
                 hide_consultation=body.hideConsultation,
+                hide_library=body.hideLibrary,
             )
         except EnterpriseConfigError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc

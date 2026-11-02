@@ -233,6 +233,7 @@ def _normalized_enterprise(item: dict[str, Any]) -> dict[str, Any]:
         _normalize_hero_slides(stored_slides) if isinstance(stored_slides, list) else None
     )
     result["hideConsultation"] = bool(item.get("hideConsultation"))
+    result["hideLibrary"] = bool(item.get("hideLibrary"))
     parsed = urlparse(str(result.get("url") or ""))
     slug = str(result.get("slug") or "")
     if parsed.scheme in {"http", "https"} and parsed.netloc and slug:
@@ -374,6 +375,7 @@ def save_enterprise(
     hero_slides: list[dict[str, str]] | None = None,
     custom_employee_info_fields: list[dict[str, Any]] | None = None,
     hide_consultation: bool | None = None,
+    hide_library: bool | None = None,
 ) -> dict[str, Any]:
     name = (company_name or "").strip()
     if not name:
@@ -418,6 +420,11 @@ def save_enterprise(
             if hide_consultation is None and current
             else bool(hide_consultation)
         )
+        hide_library_value = (
+            bool(current.get("hideLibrary"))
+            if hide_library is None and current
+            else bool(hide_library)
+        )
         if current:
             current.update(
                 url=normalized_url,
@@ -440,6 +447,7 @@ def save_enterprise(
             else:
                 current["heroSlides"] = persisted_slides
             current["hideConsultation"] = hide_consultation_value
+            current["hideLibrary"] = hide_library_value
             result = current
         else:
             result = {
@@ -459,6 +467,7 @@ def save_enterprise(
             if persisted_slides is not None:
                 result["heroSlides"] = persisted_slides
             result["hideConsultation"] = hide_consultation_value
+            result["hideLibrary"] = hide_library_value
             items.append(result)
         _write(items)
         return _normalized_enterprise(result)
