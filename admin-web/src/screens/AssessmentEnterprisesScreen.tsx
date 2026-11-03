@@ -143,11 +143,17 @@ function AssessmentEnterprisesContent() {
           onSave={async (input) => {
             try {
               await saveAssessmentEnterprise(input);
-              showNotice("success", input.id ? "企业配置已更新" : "企业配置已新增");
               setEditing(undefined);
               await load();
+              showNotice(
+                "success",
+                input.id ? "保存成功：企业配置已更新" : "保存成功：企业配置已新增",
+              );
             } catch (error) {
-              showNotice("error", error instanceof Error ? error.message : "企业配置保存失败");
+              showNotice(
+                "error",
+                error instanceof Error ? `保存失败：${error.message}` : "保存失败：企业配置未能保存",
+              );
               throw error;
             }
           }}
@@ -155,10 +161,13 @@ function AssessmentEnterprisesContent() {
             try {
               const saved = await saveAssessmentEnterprise(input);
               await load();
-              showNotice("success", notice || "已保存，已应用到当前企业页面");
+              showNotice("success", notice || "保存成功：已应用到当前企业页面");
               return saved;
             } catch (error) {
-              showNotice("error", error instanceof Error ? error.message : "保存失败");
+              showNotice(
+                "error",
+                error instanceof Error ? `保存失败：${error.message}` : "保存失败",
+              );
               throw error;
             }
           }}
@@ -1138,9 +1147,33 @@ function EnterpriseEditor({
     );
   };
   const url = `${DEFAULT_BASE_URL}/${suffix}`;
-  const formReady = Boolean(
-    companyName.trim() && siteName.trim() && logoUrl.trim() && slogan.trim() && suffix.length >= 20 && assessmentIds.length > 0 && heroReady,
-  );
+  const formGaps = (() => {
+    const gaps: string[] = [];
+    if (!companyName.trim()) gaps.push("公司名");
+    if (!siteName.trim()) gaps.push("网站名");
+    if (!logoUrl.trim()) gaps.push("网站 Logo");
+    if (!slogan.trim()) gaps.push("口号");
+    if (suffix.length < 20) gaps.push("专属 URL 后缀（至少 20 位）");
+    if (assessmentIds.length === 0) gaps.push("至少勾选一个量表");
+    if (!heroReady) {
+      const incomplete = heroSlides
+        .map((slide, index) => {
+          const missing: string[] = [];
+          if (!slide.imageUrl.trim()) missing.push("图片");
+          if (!slide.title.trim()) missing.push("标题");
+          if (!slide.desc.trim()) missing.push("说明");
+          return missing.length ? `第 ${index + 1} 张轮播（缺${missing.join("、")}）` : "";
+        })
+        .filter(Boolean);
+      if (incomplete.length) {
+        gaps.push(...incomplete);
+      } else {
+        gaps.push("首页轮播图");
+      }
+    }
+    return gaps;
+  })();
+  const formReady = formGaps.length === 0;
   const buildInput = (
     fields: string[] | null,
     assessments?: { ids: string[]; titles: Record<string, string> },
@@ -1374,17 +1407,30 @@ function EnterpriseEditor({
             </label>
           </div>
         </div>
-        <div className="mt-6 flex gap-3">
-          <QueryButton
-            disabled={saving || !formReady}
-            onClick={() => {
-              setSaving(true);
-              void onSave(buildInput(employeeInfoFields)).finally(() => setSaving(false));
-            }}
-          >
-            {saving ? "保存中..." : "确认保存"}
-          </QueryButton>
-          <QueryResetButton disabled={saving} onClick={onClose}>取消</QueryResetButton>
+        <div className="mt-6 space-y-3">
+          {!formReady && (
+            <p className="text-sm leading-6 text-[#A13F37]">
+              尚不能保存，请补全：{formGaps.join("、")}
+            </p>
+          )}
+          <div className="flex gap-3">
+            <QueryButton
+              disabled={saving}
+              onClick={() => {
+                if (!formReady) {
+                  showNotice("error", `保存失败：请先补全 ${formGaps.join("、")}`);
+                  return;
+                }
+                setSaving(true);
+                void onSave(buildInput(employeeInfoFields))
+                  .catch(() => undefined)
+                  .finally(() => setSaving(false));
+              }}
+            >
+              {saving ? "保存中..." : "确认保存"}
+            </QueryButton>
+            <QueryResetButton disabled={saving} onClick={onClose}>取消</QueryResetButton>
+          </div>
         </div>
       </div>
     </section>
