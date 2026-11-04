@@ -7,6 +7,8 @@ import type {
   EapArticle,
   EapArticleInput,
   EmployeeInfoFieldOption,
+  EnterpriseCounselorEditor,
+  EnterpriseCounselorSaveItem,
   EnterprisePersonnelRole,
   EnterprisePersonnelSummary,
   GenerateEnterprisePersonnelInput,
@@ -133,6 +135,34 @@ export function deleteEnterpriseEapArticle(enterpriseId: string, articleId: stri
   return apiRequest<{ message: string }>(
     `${BASE_PATH}/${encodeURIComponent(enterpriseId)}/articles/${encodeURIComponent(articleId)}`,
     { method: "DELETE" },
+  );
+}
+
+export function fetchEnterpriseCounselors(enterpriseId: string) {
+  return apiRequest<EnterpriseCounselorEditor>(
+    `${BASE_PATH}/${encodeURIComponent(enterpriseId)}/counselors`,
+  );
+}
+
+export function saveEnterpriseCounselors(enterpriseId: string, counselors: EnterpriseCounselorSaveItem[]) {
+  return apiRequest<EnterpriseCounselorEditor>(
+    `${BASE_PATH}/${encodeURIComponent(enterpriseId)}/counselors`,
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        counselors: counselors.map((item) => ({
+          accountId: item.accountId,
+          pinned: item.pinned,
+          sortOrder: item.sortOrder,
+          introduce: item.introduce,
+          qualification: item.qualification,
+          specialty: item.specialty,
+          field: item.field,
+          trainingExperience: item.trainingExperience,
+          targetGroup: item.targetGroup,
+        })),
+      }),
+    },
   );
 }
 

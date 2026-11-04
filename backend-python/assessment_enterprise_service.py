@@ -130,6 +130,96 @@ class EnterpriseConfigError(ValueError):
     pass
 
 
+# 介绍页可覆盖的文案，与咨询师介绍页主档字段一一对应。
+# 简介、从业资质、咨询流派、咨询领域、受训背景、擅长人群。
+ENTERPRISE_COUNSELOR_COPY_FIELDS = (
+    "introduce",
+    "qualification",
+    "specialty",
+    "field",
+    "trainingExperience",
+    "targetGroup",
+)
+ENTERPRISE_COUNSELOR_COPY_LIMIT = 20000
+
+
+def _counselor_sort_key(item: dict[str, Any]) -> tuple[int, int, int]:
+    """本企业置顶在前，同一档再按本企业 sortOrder。不读取主档 IsPinned。"""
+    pinned = 0 if item.get("pinned") else 1
+    try:
+        sort_order = int(item.get("sortOrder") or 0)
+    except (TypeError, ValueError):
+        sort_order = 0
+    try:
+        account_id = int(item.get("accountId") or 0)
+    except (TypeError, ValueError):
+        account_id = 0
+    return (pinned, sort_order, account_id)
+
+
+def normalize_enterprise_counselors(value: Any) -> list[dict[str, Any]]:
+    """只保留账号、本企业置顶、本企业顺序，以及改过的介绍文案。"""
+    if not isinstance(value, list):
+        return []
+    result: list[dict[str, Any]] = []
+    seen: set[int] = set()
+    for raw in value:
+        if not isinstance(raw, dict):
+            continue
+        try:
+            account_id = int(raw.get("accountId") or 0)
+        except (TypeError, ValueError):
+            continue
+        if account_id <= 0 or account_id in seen:
+            continue
+        seen.add(account_id)
+        try:
+            sort_order = int(raw.get("sortOrder") or 0)
+        except (TypeError, ValueError):
+            sort_order = 0
+        if sort_order < 0:
+            sort_order = 0
+        item: dict[str, Any] = {
+            "accountId": account_id,
+            "pinned": bool(raw.get("pinned")),
+            "sortOrder": sort_order,
+        }
+        for key in ENTERPRISE_COUNSELOR_COPY_FIELDS:
+            if key not in raw or raw.get(key) is None:
+                continue
+            item[key] = str(raw.get(key)).strip()[:ENTERPRISE_COUNSELOR_COPY_LIMIT]
+        result.append(item)
+    result.sort(key=_counselor_sort_key)
+    return result
+
+
+def build_stored_counselor(raw: dict[str, Any], master: dict[str, str]) -> dict[str, Any]:
+    """和主档相同的文案不落库，这样主档以后改了，企业页会跟着变。"""
+    stored = normalize_enterprise_counselors([raw])
+    if not stored:
+        raise EnterpriseConfigError("咨询师账号无效")
+    item = {
+        "accountId": stored[0]["accountId"],
+        "pinned": stored[0]["pinned"],
+        "sortOrder": stored[0]["sortOrder"],
+    }
+    for key in ENTERPRISE_COUNSELOR_COPY_FIELDS:
+        if key not in raw or raw.get(key) is None:
+            continue
+        text = str(raw.get(key)).strip()[:ENTERPRISE_COUNSELOR_COPY_LIMIT]
+        master_text = str(master.get(key) or "").strip()
+        if text == master_text:
+            continue
+        item[key] = text
+    return item
+
+
+def effective_counselor_copy(stored: dict[str, Any], key: str, master_text: str) -> str:
+    if key in stored:
+        return str(stored.get(key) or "")
+    return str(master_text or "")
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
@@ -234,6 +324,8 @@ def _normalized_enterprise(item: dict[str, Any]) -> dict[str, Any]:
     )
     result["hideConsultation"] = bool(item.get("hideConsultation"))
     result["hideLibrary"] = bool(item.get("hideLibrary"))
+    # 缺省为空列表，不把主档咨询师抄进企业配置
+    result["counselors"] = normalize_enterprise_counselors(item.get("counselors"))
     parsed = urlparse(str(result.get("url") or ""))
     slug = str(result.get("slug") or "")
     if parsed.scheme in {"http", "https"} and parsed.netloc and slug:
@@ -471,6 +563,23 @@ def save_enterprise(
             items.append(result)
         _write(items)
         return _normalized_enterprise(result)
+
+
+def save_enterprise_counselor_config(
+    enterprise_id: str,
+    counselors: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """只改这一家的咨询师勾选和介绍文案，不动主档，也不改企业其他字段。"""
+    normalized = normalize_enterprise_counselors(counselors)
+    with _lock:
+        items = _read()
+        current = next((item for item in items if item.get("id") == enterprise_id), None)
+        if not current:
+            raise EnterpriseConfigError("企业配置不存在")
+        current["counselors"] = normalized
+        current["updatedAt"] = _now()
+        _write(items)
+    return normalized
 
 
 def mutate_enterprises(mutator) -> None:

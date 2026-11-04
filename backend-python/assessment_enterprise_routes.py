@@ -11,7 +11,7 @@ from uuid import UUID
 import qrcode
 import qrcode.image.svg
 from fastapi import APIRouter, Depends, Header, HTTPException, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from assessment_article_service import (
@@ -37,6 +37,12 @@ from assessment_enterprise_service import (
     resolve_employee_info_fields,
     save_enterprise,
     save_default_branding,
+)
+from enterprise_counselor_service import (
+    editor_counselor_payload,
+    list_counselor_candidates,
+    resolve_enterprise_counselors,
+    save_enterprise_counselors,
 )
 from enterprise_site_personnel_service import (
     EnterprisePersonnelError,
@@ -139,6 +145,28 @@ class EnterpriseReportsSubmitPayload(BaseModel):
 class EnterpriseSiteLoginPayload(BaseModel):
     username: str = Field(..., min_length=1, max_length=80)
     password: str = Field(..., min_length=1, max_length=128)
+
+
+class EnterpriseCounselorInput(BaseModel):
+    """介绍保存只收勾选、本企业置顶、顺序，以及介绍页六份文案。"""
+
+    model_config = ConfigDict(extra="ignore")
+
+    accountId: int = Field(..., ge=1)
+    pinned: bool = False
+    sortOrder: int = Field(default=0, ge=0)
+    introduce: Optional[str] = Field(default=None, max_length=20000)
+    qualification: Optional[str] = Field(default=None, max_length=20000)
+    specialty: Optional[str] = Field(default=None, max_length=20000)
+    field: Optional[str] = Field(default=None, max_length=20000)
+    trainingExperience: Optional[str] = Field(default=None, max_length=20000)
+    targetGroup: Optional[str] = Field(default=None, max_length=20000)
+
+
+class EnterpriseCounselorsSavePayload(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    counselors: list[EnterpriseCounselorInput] = Field(default_factory=list)
 
 
 class GenerateEnterprisePersonnelPayload(BaseModel):
@@ -273,6 +301,16 @@ def login_enterprise_site(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except EnterprisePersonnelError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+
+@public_router.get("/{slug}/counselors", summary="企业页咨询师：只返回这家勾选的人")
+def get_public_enterprise_counselors(slug: str, db: Session = Depends(get_db)):
+    try:
+        enterprise = get_enterprise_by_slug(slug)
+    except EnterpriseConfigError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    items = resolve_enterprise_counselors(db, enterprise)
+    return {"items": items, "total": len(items)}
 
 
 @public_router.get("/{slug}", summary="按企业链接后缀读取企业网站配置及已授权量表")
@@ -477,6 +515,41 @@ def register_assessment_enterprise_admin_routes(
     )
     def list_employee_info_fields(_actor: Any = Depends(require_assessment_editor)):
         return list_employee_info_field_catalog()
+
+    @router.get("/assessment-enterprises/counselor-candidates", summary="当前库在职且对外可见的咨询师")
+    def list_admin_counselor_candidates(
+        db: Session = Depends(get_db),
+        _actor: Any = Depends(require_assessment_editor),
+    ):
+        return list_counselor_candidates(db)
+
+    @router.get("/assessment-enterprises/{enterprise_id}/counselors", summary="企业咨询师勾选与介绍覆盖")
+    def get_admin_enterprise_counselors(
+        enterprise_id: str,
+        db: Session = Depends(get_db),
+        _actor: Any = Depends(require_assessment_editor),
+    ):
+        try:
+            return editor_counselor_payload(db, enterprise_id)
+        except EnterpriseConfigError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    @router.put("/assessment-enterprises/{enterprise_id}/counselors", summary="保存企业咨询师勾选与介绍文案")
+    def update_admin_enterprise_counselors(
+        enterprise_id: str,
+        body: EnterpriseCounselorsSavePayload,
+        db: Session = Depends(get_db),
+        _actor: Any = Depends(require_assessment_editor),
+    ):
+        try:
+            return save_enterprise_counselors(
+                db,
+                enterprise_id,
+                [item.model_dump() for item in body.counselors],
+            )
+        except EnterpriseConfigError as exc:
+            status = 404 if str(exc) == "企业配置不存在" else 422
+            raise HTTPException(status_code=status, detail=str(exc)) from exc
 
     @router.get("/assessment-enterprises/articles", summary="通用心理图文")
     def list_admin_articles(_actor: Any = Depends(require_assessment_editor)):

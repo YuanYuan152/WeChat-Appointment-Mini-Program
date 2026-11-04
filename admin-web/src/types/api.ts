@@ -375,6 +375,8 @@ export interface AssessmentEnterprise {
   heroSlides?: AssessmentEnterpriseHeroSlide[] | null;
   /** 为 true 时，仅当前企业页面隐藏预约心理咨询及相关图片 */
   hideConsultation?: boolean;
+  /** 本企业勾选的咨询师。文案覆盖只存在这里，不回写主档 */
+  counselors?: EnterpriseCounselorStored[];
   /** 为 true 时，仅当前企业页面隐藏心理知识库（图文与音频） */
   hideLibrary?: boolean;
   /** 定制站点独立人员表：员工数量，不计入 AppAccount */
@@ -384,6 +386,66 @@ export interface AssessmentEnterprise {
   personnelTotalCount?: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface EnterpriseCounselorCandidate {
+  accountId: number;
+  name: string;
+  avatarUrl?: string;
+  title?: string;
+  specialty?: string;
+  field?: string;
+  workYears?: number;
+  workYearsLabel?: string;
+  consultHours?: number;
+  introduce?: string;
+  qualification?: string;
+  trainingExperience?: string;
+  targetGroup?: string;
+}
+
+export interface EnterpriseCounselorStored {
+  accountId: number;
+  pinned: boolean;
+  sortOrder: number;
+  introduce?: string;
+  qualification?: string;
+  specialty?: string;
+  field?: string;
+  trainingExperience?: string;
+  targetGroup?: string;
+}
+
+export interface EnterpriseCounselorSelection {
+  accountId: number;
+  pinned: boolean;
+  sortOrder: number;
+  eligible: boolean;
+  introduce: string | null;
+  qualification: string | null;
+  specialty: string | null;
+  field: string | null;
+  trainingExperience: string | null;
+  targetGroup: string | null;
+  profile: EnterpriseCounselorCandidate | null;
+}
+
+export interface EnterpriseCounselorEditor {
+  candidates: EnterpriseCounselorCandidate[];
+  selected: EnterpriseCounselorSelection[];
+}
+
+/** 介绍保存只提交勾选、本企业置顶、顺序和介绍页六份文案 */
+export interface EnterpriseCounselorSaveItem {
+  accountId: number;
+  pinned: boolean;
+  sortOrder: number;
+  introduce: string;
+  qualification: string;
+  specialty: string;
+  field: string;
+  trainingExperience: string;
+  targetGroup: string;
 }
 
 export type EnterprisePersonnelAccountMode = "random" | "custom";

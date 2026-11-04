@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AppRoute, useAppRoute } from "@/components/AppRoute";
 import { ContentImageUpload } from "@/components/content/ContentImageUpload";
 import { EapArticleSection } from "@/components/enterprises/EapArticleSection";
+import { EnterpriseCounselorSection } from "@/components/enterprises/EnterpriseCounselorSection";
 import {
   EmptyState,
   QueryButton,
@@ -1374,6 +1375,9 @@ function EnterpriseEditor({
               selectedIds={assessmentIds}
               onSave={persistAssessments}
             />
+          </div>
+          <div className="mt-8 border-b border-[var(--lxxl-border)] pb-6 lg:col-span-2">
+            <EnterpriseCounselorSection enterpriseId={enterpriseId} />
           </div>
           <div className="mt-8 border-b border-[var(--lxxl-border)] pb-6 lg:col-span-2">
             <h3 className="text-base font-semibold">页面模块显示</h3>
