@@ -24,7 +24,7 @@ interface QuizSessionState {
   setAnswer: (
     assessmentId: string,
     questionId: string,
-    value: AssessmentAnswerValue,
+    value: AssessmentAnswerValue | undefined,
   ) => void;
   setCurrentIndex: (assessmentId: string, index: number) => void;
   markStarted: (assessmentId: string) => void;
@@ -99,15 +99,20 @@ export const useQuizSession = create<QuizSessionState>()(
       readyToSubmit: {},
 
       setAnswer: (assessmentId, questionId, value) =>
-        set((state) => ({
-          answers: {
-            ...state.answers,
-            [assessmentId]: {
-              ...state.answers[assessmentId],
-              [questionId]: value,
+        set((state) => {
+          const current = { ...(state.answers[assessmentId] ?? {}) };
+          if (value === undefined) {
+            delete current[questionId];
+          } else {
+            current[questionId] = value;
+          }
+          return {
+            answers: {
+              ...state.answers,
+              [assessmentId]: current,
             },
-          },
-        })),
+          };
+        }),
 
       setCurrentIndex: (assessmentId, index) =>
         set((state) => ({

@@ -10,7 +10,7 @@ import type {
 interface QuestionCardProps {
   question: AssessmentQuestion;
   answer?: AssessmentAnswerValue;
-  onAnswer: (value: AssessmentAnswerValue) => void;
+  onAnswer: (value: AssessmentAnswerValue | undefined) => void;
   index: number;
 }
 
@@ -54,12 +54,17 @@ export function QuestionCard({
         <textarea
           className="min-h-28 w-full rounded-xl border border-border bg-card px-4 py-3 text-sm outline-none focus:border-primary"
           placeholder={question.helpText || "请填写"}
+          minLength={question.validation?.minLength}
+          maxLength={question.validation?.maxLength}
           value={
             answer && typeof answer === "object" && "text" in answer
               ? answer.text
               : ""
           }
-          onChange={(event) => onAnswer({ text: event.target.value })}
+          onChange={(event) => {
+            const text = event.target.value;
+            onAnswer(text.trim() ? { text } : undefined);
+          }}
         />
       )}
 
@@ -71,17 +76,21 @@ export function QuestionCard({
           min={question.validation?.min}
           max={question.validation?.max}
           value={
-            answer && typeof answer === "object" && "number" in answer
+            answer &&
+            typeof answer === "object" &&
+            "number" in answer &&
+            Number.isFinite(answer.number)
               ? answer.number
               : ""
           }
           onChange={(event) => {
             const raw = event.target.value;
             if (raw === "") {
-              onAnswer({ number: Number.NaN });
+              onAnswer(undefined);
               return;
             }
-            onAnswer({ number: Number(raw) });
+            const parsed = Number(raw);
+            onAnswer(Number.isFinite(parsed) ? { number: parsed } : undefined);
           }}
         />
       )}
@@ -98,7 +107,7 @@ export function QuestionCard({
                     if (option.followUp) {
                       onAnswer({
                         optionId: option.id,
-                        followUp: followUpValue(answer),
+                        followUp: selected ? followUpValue(answer) : undefined,
                       });
                       return;
                     }
@@ -141,17 +150,20 @@ export function QuestionCard({
                     ) : (
                       <input
                         className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm outline-none focus:border-primary"
+                        minLength={option.followUp.validation?.minLength}
+                        maxLength={option.followUp.validation?.maxLength}
                         value={
                           typeof followUpValue(answer) === "string"
                             ? (followUpValue(answer) as string)
                             : ""
                         }
-                        onChange={(event) =>
+                        onChange={(event) => {
+                          const raw = event.target.value;
                           onAnswer({
                             optionId: option.id,
-                            followUp: event.target.value,
-                          })
-                        }
+                            followUp: raw === "" ? undefined : raw,
+                          });
+                        }}
                       />
                     )}
                   </div>

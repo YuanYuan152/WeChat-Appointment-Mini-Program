@@ -19,6 +19,8 @@ def _base_definition(**overrides):
         "title": "题型演示",
         "subtitle": "",
         "description": "demo",
+        "instructions": "请根据实际情况作答",
+        "reportIntro": "结果仅供参考",
         "cover": "/static/assessments/demo.jpg",
         "duration": 5,
         "scoringType": "sum",

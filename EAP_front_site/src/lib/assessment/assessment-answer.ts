@@ -1,12 +1,43 @@
 import type {
   AssessmentAnswerValue,
   AssessmentQuestion,
+  AssessmentQuestionValidation,
 } from "@/lib/api/types";
 
 export function getQuestionInputType(
   question: Pick<AssessmentQuestion, "inputType">,
 ): "choice" | "text" | "number" {
   return question.inputType || "choice";
+}
+
+function isValidTextAnswer(
+  value: unknown,
+  validation?: AssessmentQuestionValidation,
+): boolean {
+  if (typeof value !== "string" || !value.trim()) return false;
+  if (
+    validation?.minLength != null &&
+    value.length < Number(validation.minLength)
+  ) {
+    return false;
+  }
+  if (
+    validation?.maxLength != null &&
+    value.length > Number(validation.maxLength)
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function isValidNumberAnswer(
+  value: unknown,
+  validation?: AssessmentQuestionValidation,
+): boolean {
+  if (typeof value !== "number" || !Number.isFinite(value)) return false;
+  if (validation?.min != null && value < Number(validation.min)) return false;
+  if (validation?.max != null && value > Number(validation.max)) return false;
+  return true;
 }
 
 export function isAssessmentAnswerPresent(
@@ -19,31 +50,32 @@ export function isAssessmentAnswerPresent(
     return (
       typeof answer === "object" &&
       "text" in answer &&
-      Boolean(String(answer.text || "").trim())
+      isValidTextAnswer(answer.text, question.validation)
     );
   }
   if (inputType === "number") {
     return (
       typeof answer === "object" &&
       "number" in answer &&
-      typeof answer.number === "number" &&
-      Number.isFinite(answer.number)
+      isValidNumberAnswer(answer.number, question.validation)
     );
   }
 
   if (typeof answer === "string") {
     const option = question.options.find((item) => item.id === answer);
-    return Boolean(option) && !option?.followUp;
+    return Boolean(option) && !option?.followUp?.required;
   }
   if (typeof answer === "object" && "optionId" in answer) {
     const option = question.options.find((item) => item.id === answer.optionId);
     if (!option) return false;
     if (!option.followUp) return true;
-    if (!option.followUp.required) return true;
+    const followUp = answer.followUp;
+    const isEmpty = followUp == null || followUp === "";
+    if (isEmpty) return !option.followUp.required;
     if (option.followUp.inputType === "text") {
-      return typeof answer.followUp === "string" && Boolean(answer.followUp.trim());
+      return isValidTextAnswer(followUp, option.followUp.validation);
     }
-    return typeof answer.followUp === "number" && Number.isFinite(answer.followUp);
+    return isValidNumberAnswer(followUp, option.followUp.validation);
   }
   return false;
 }

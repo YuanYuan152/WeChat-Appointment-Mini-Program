@@ -142,18 +142,10 @@ export function QuizClient({ assessment, type }: QuizClientProps) {
     }, 220);
   };
 
-  const handleAnswer = (value: AssessmentAnswerValue) => {
+  const handleAnswer = (value: AssessmentAnswerValue | undefined) => {
     if (!question || advancingRef.current) return;
-    // 数字题清空时不落无效 NaN
-    if (
-      typeof value === "object" &&
-      "number" in value &&
-      !Number.isFinite(value.number)
-    ) {
-      return;
-    }
     setAnswer(assessment.id, question.id, value);
-    if (canAutoAdvanceAfterAnswer(question, value)) {
+    if (value !== undefined && canAutoAdvanceAfterAnswer(question, value)) {
       advanceAfterAnswer({
         ...answers,
         [question.id]: value,
