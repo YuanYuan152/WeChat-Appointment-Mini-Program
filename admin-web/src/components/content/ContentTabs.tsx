@@ -9,6 +9,7 @@ export const CONTENT_TABS: Array<{ kind: ContentKind; label: string }> = [
   { kind: "consultation_guide", label: "关于咨询" },
   { kind: "charity", label: "公益咨询" },
   { kind: "contact", label: "联系我们" },
+  { kind: "appointment_form", label: "来访预约表" },
 ];
 
 export function getContentKindLabel(kind: ContentKind) {
@@ -16,7 +17,13 @@ export function getContentKindLabel(kind: ContentKind) {
 }
 
 export function isSitePageKind(kind: ContentKind) {
-  return kind === "brand" || kind === "charity" || kind === "contact" || kind === "home_cover";
+  return (
+    kind === "brand"
+    || kind === "charity"
+    || kind === "contact"
+    || kind === "home_cover"
+    || kind === "appointment_form"
+  );
 }
 
 export function sitePageKeyForKind(kind: ContentKind): string | null {
@@ -24,6 +31,7 @@ export function sitePageKeyForKind(kind: ContentKind): string | null {
   if (kind === "brand") return "brand";
   if (kind === "charity") return "charity";
   if (kind === "contact") return "contact";
+  if (kind === "appointment_form") return "appointment_form";
   return null;
 }
 

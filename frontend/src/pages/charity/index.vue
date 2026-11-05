@@ -11,10 +11,7 @@
 
     <view class="action-row">
       <view class="action-btn" @tap="goContact">
-        <text class="action-text">咨询助理</text>
-      </view>
-      <view class="action-btn outline" @tap="goBooking">
-        <text class="action-text">预约咨询</text>
+        <text class="action-text">联系咨询助理了解</text>
       </view>
     </view>
   </view>
@@ -43,10 +40,6 @@ const goContact = () => {
       uni.showToast({ title: '页面打开失败，请稍后重试', icon: 'none' })
     },
   })
-}
-
-const goBooking = () => {
-  uni.switchTab({ url: '/pages/consultant/list' })
 }
 </script>
 
@@ -102,18 +95,9 @@ const goBooking = () => {
   padding: 24rpx 0;
 }
 
-.action-btn.outline {
-  background: #F0EDE8;
-  border: 1rpx solid #E8E4DE;
-}
-
 .action-text {
   font-size: 28rpx;
   font-weight: 600;
   color: #fff;
-}
-
-.action-btn.outline .action-text {
-  color: #3D5A4E;
 }
 </style>

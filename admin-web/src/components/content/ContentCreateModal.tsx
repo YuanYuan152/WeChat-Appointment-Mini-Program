@@ -32,6 +32,14 @@ function canSubmitDraft(activeKind: ContentKind, draft: ContentDraft) {
   if (activeKind === "brand" || activeKind === "charity" || activeKind === "contact") {
     return draft.subtitle.trim() && draft.body.trim();
   }
+  if (activeKind === "appointment_form") {
+    if (draft.appointmentFormMode === "wjx") {
+      return /^https:\/\/[^\s]+$/i.test(draft.body.trim());
+    }
+    return (
+      draft.appointmentFormMode === "builtin" || draft.appointmentFormMode === "none"
+    );
+  }
   if (activeKind === "consultation_guide") {
     return draft.title.trim() && draft.body.trim();
   }
@@ -96,6 +104,7 @@ export function ContentCreateModal({
   const showChannelIconFields = activeKind === "live" && draft.liveDisplayMode === "CHANNELS";
   const showAssistantQrcodeField = activeKind === "contact";
   const showHomeCoverField = activeKind === "home_cover";
+  const showAppointmentFormFields = activeKind === "appointment_form";
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -120,6 +129,8 @@ export function ContentCreateModal({
           <p className="mt-1 text-sm text-[var(--lxxl-muted)]">
             {activeKind === "live"
               ? "保存后会展示在小程序首页「最新动态 → 直播预告」，可选择图文日历、视频号入口或普通链接。"
+              : activeKind === "appointment_form"
+                ? "控制首次预约联系助理弹层中是否展示「咨询预约表填写」入口，以及跳转问卷星或内置登记表。"
               : mode === "edit"
                 ? "保存后会同步到小程序前端。"
                 : "保存后会创建并同步到小程序前端。"}
@@ -127,6 +138,73 @@ export function ContentCreateModal({
         </div>
 
         <div className="max-h-[60vh] space-y-4 overflow-y-auto px-6 py-5">
+          {showAppointmentFormFields && (
+            <>
+              <fieldset className="block">
+                <legend className="text-sm font-medium">
+                  收集方式<span className="ml-1 text-[#B94A48]">*</span>
+                </legend>
+                <div className="mt-3 space-y-2">
+                  {(
+                    [
+                      { value: "wjx", label: "问卷星链接" },
+                      { value: "builtin", label: "内置程序" },
+                      { value: "none", label: "不放预约表" },
+                    ] as const
+                  ).map((option) => (
+                    <label
+                      key={option.value}
+                      className="flex cursor-pointer items-center gap-3 rounded-xl border border-[var(--lxxl-border)] px-4 py-3 text-sm"
+                    >
+                      <input
+                        type="radio"
+                        name="appointment-form-mode"
+                        checked={draft.appointmentFormMode === option.value}
+                        onChange={() =>
+                          setDraft((prev) => ({
+                            ...prev,
+                            appointmentFormMode: option.value,
+                            body:
+                              option.value === "wjx" && !prev.body.trim()
+                                ? "https://jixinli.wjx.cn/vm/O0QmW8T.aspx#"
+                                : prev.body,
+                          }))
+                        }
+                      />
+                      <span>{option.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+              {draft.appointmentFormMode === "wjx" && (
+                <label className="block">
+                  <span className="text-sm font-medium">
+                    问卷星链接<span className="ml-1 text-[#B94A48]">*</span>
+                  </span>
+                  <input
+                    className="mt-2 h-11 w-full rounded-xl border border-[var(--lxxl-border)] px-3 text-sm outline-none transition focus:border-[var(--lxxl-green)]"
+                    placeholder="https://jixinli.wjx.cn/vm/O0QmW8T.aspx#"
+                    type="url"
+                    value={draft.body}
+                    onChange={(event) =>
+                      setDraft((prev) => ({ ...prev, body: event.target.value }))
+                    }
+                  />
+                </label>
+              )}
+              {draft.appointmentFormMode === "builtin" && (
+                <p className="rounded-xl bg-[#FAF8F4] px-4 py-3 text-sm leading-6 text-[var(--lxxl-muted)]">
+                  小程序将跳转到内置「心理登记表」页面（/pages/patient/registration/edit）。
+                </p>
+              )}
+              {draft.appointmentFormMode === "none" && (
+                <p className="rounded-xl bg-[#FAF8F4] px-4 py-3 text-sm leading-6 text-[var(--lxxl-muted)]">
+                  联系助理弹层中不展示「咨询预约表填写」按钮。
+                </p>
+              )}
+            </>
+          )}
+
           {showTitleField && (
             <label className="block">
               <span className="text-sm font-medium">

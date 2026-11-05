@@ -1,5 +1,9 @@
 <template>
   <view class="contact-us" :class="{ compact: compact }">
+    <view v-if="showAppointmentFormEntry" class="appointment-form-entry">
+      <button class="appointment-form-btn" @tap="openAppointmentForm">咨询预约表填写</button>
+    </view>
+
     <view v-if="showCenters" class="block">
       <text class="block-title">咨询中心地址</text>
       <view v-for="center in centers" :key="center.id" class="center-item">
@@ -46,7 +50,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { ASSISTANT_CONTACT, CONTACT_CENTERS, type ContactCenter } from '@/constants/contactInfo'
-import { fetchPublicSiteContent } from '@/utils/siteContentApi'
+import {
+  fetchPublicSiteContent,
+  resolveAppointmentFormConfig,
+  type AppointmentFormConfig,
+} from '@/utils/siteContentApi'
 import { fixImageUrl } from '@/utils/image'
 
 const props = withDefaults(
@@ -66,12 +74,22 @@ const props = withDefaults(
 const assistant = ASSISTANT_CONTACT
 const qrLoadFailed = ref(false)
 const remoteQrcodeSrc = ref('')
+const appointmentForm = ref<AppointmentFormConfig>(resolveAppointmentFormConfig())
+
+const showAppointmentFormEntry = computed(
+  () =>
+    props.compact
+    && (appointmentForm.value.mode === 'wjx' || appointmentForm.value.mode === 'builtin'),
+)
 
 onMounted(async () => {
+  const payload = await fetchPublicSiteContent()
+  if (payload?.pages) {
+    appointmentForm.value = resolveAppointmentFormConfig(payload.pages)
+  }
   if (props.qrcodeSrc?.trim()) {
     return
   }
-  const payload = await fetchPublicSiteContent()
   const url = payload?.pages?.contact?.assistantQrcodeUrl
   if (url?.trim()) {
     remoteQrcodeSrc.value = url.trim()
@@ -94,6 +112,33 @@ const callAssistant = () => {
 const onQrError = () => {
   qrLoadFailed.value = true
 }
+
+const openAppointmentForm = () => {
+  const config = appointmentForm.value
+  if (config.mode === 'builtin') {
+    uni.navigateTo({
+      url: '/pages/patient/registration/edit',
+      fail: () => {
+        uni.showToast({ title: '无法打开预约表', icon: 'none' })
+      },
+    })
+    return
+  }
+  if (config.mode !== 'wjx') {
+    return
+  }
+  const link = config.url.trim()
+  if (!link) {
+    uni.showToast({ title: '预约表链接未配置', icon: 'none' })
+    return
+  }
+  uni.navigateTo({
+    url: `/pages/test/webview?url=${encodeURIComponent(link)}&title=${encodeURIComponent('咨询预约表')}`,
+    fail: () => {
+      uni.showToast({ title: '无法打开预约表', icon: 'none' })
+    },
+  })
+}
 </script>
 
 <style scoped lang="scss">
@@ -103,6 +148,26 @@ const onQrError = () => {
   display: flex;
   flex-direction: column;
   gap: 28rpx;
+}
+
+.appointment-form-entry {
+  margin-bottom: 4rpx;
+}
+
+.appointment-form-btn {
+  width: 100%;
+  height: 88rpx;
+  line-height: 88rpx;
+  border-radius: 20rpx;
+  background: #3D5A4E;
+  color: #fff;
+  font-size: 30rpx;
+  font-weight: 600;
+  border: none;
+}
+
+.appointment-form-btn::after {
+  border: none;
 }
 
 .block {

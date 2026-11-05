@@ -9,13 +9,18 @@ from sqlalchemy.orm import Session
 
 from models import AppSiteGuideItem, AppSitePage
 
-SITE_PAGE_KEYS = frozenset({"brand", "charity", "contact", "home"})
+SITE_PAGE_KEYS = frozenset({"brand", "charity", "contact", "home", "appointment_form"})
 SITE_PAGE_LABELS = {
     "brand": "品牌介绍",
     "charity": "公益咨询",
     "contact": "联系我们",
     "home": "首页封面",
+    "appointment_form": "来访预约表",
 }
+
+APPOINTMENT_FORM_MODES = frozenset({"wjx", "builtin", "none"})
+DEFAULT_APPOINTMENT_FORM_MODE = "wjx"
+DEFAULT_APPOINTMENT_FORM_URL = "https://jixinli.wjx.cn/vm/O0QmW8T.aspx#"
 
 DEFAULT_HOME_COVER = "/static/images-opt/slide11.jpg"
 DEFAULT_HOME_CROP = {"x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0}
@@ -24,6 +29,7 @@ DEFAULT_PAGE_SUBTITLES: Dict[str, str] = {
     "brand": "同心理 · 专业.温暖的心理服务平台",
     "charity": "低价专业支持 · 督导师全程把关",
     "contact": "上海连心心理咨询有限公司",
+    "appointment_form": DEFAULT_APPOINTMENT_FORM_MODE,
 }
 
 DEFAULT_PAGE_BODIES: Dict[str, str] = {
@@ -44,7 +50,20 @@ DEFAULT_PAGE_BODIES: Dict[str, str] = {
         "咨询助理工作时间为工作日 9:00–18:00，我们会在工作时间内尽快回复您的留言。"
     ),
     "home": "专业.温暖的心理服务平台",
+    "appointment_form": DEFAULT_APPOINTMENT_FORM_URL,
 }
+
+
+def _normalize_appointment_form_mode(value: Optional[str]) -> str:
+    mode = (value or "").strip().lower()
+    if mode in APPOINTMENT_FORM_MODES:
+        return mode
+    return DEFAULT_APPOINTMENT_FORM_MODE
+
+
+def _normalize_appointment_form_url(value: Optional[str]) -> str:
+    return (value or "").strip()
+
 
 DEFAULT_GUIDE_ITEMS: List[Dict[str, str]] = [
     {
@@ -110,6 +129,13 @@ def _page_to_dict(row: AppSitePage) -> Dict[str, Any]:
     if row.PageKey == "home":
         out["coverImageUrl"] = row.CoverImageUrl or None
         out["coverCrop"] = _parse_cover_crop(row.CoverCropJson)
+    if row.PageKey == "appointment_form":
+        mode = _normalize_appointment_form_mode(getattr(row, "Subtitle", None))
+        url = _normalize_appointment_form_url(row.Body)
+        out["subtitle"] = mode
+        out["body"] = url
+        out["appointmentFormMode"] = mode
+        out["appointmentFormUrl"] = url
     return out
 
 
@@ -200,6 +226,25 @@ def upsert_site_page(
                 raise ValueError("请上传首页封面图片")
             row.CoverImageUrl = image
             row.CoverCropJson = _serialize_cover_crop(cover_crop or DEFAULT_HOME_CROP)
+    elif key == "appointment_form":
+        mode = _normalize_appointment_form_mode(
+            subtitle if subtitle is not None else getattr(row, "Subtitle", None)
+        )
+        if subtitle is not None and (subtitle or "").strip().lower() not in APPOINTMENT_FORM_MODES:
+            raise ValueError("无效的预约表收集方式")
+        url = _normalize_appointment_form_url(
+            body if body is not None else row.Body
+        )
+        if mode == "wjx":
+            if not url:
+                raise ValueError("请填写问卷星链接")
+            if not url.lower().startswith("https://"):
+                raise ValueError("问卷星链接必须是完整的 HTTPS 地址")
+        else:
+            url = url if mode == "builtin" else ""
+        row.Title = SITE_PAGE_LABELS[key]
+        row.Subtitle = mode
+        row.Body = url
     else:
         if body is not None:
             text = (body or "").strip()

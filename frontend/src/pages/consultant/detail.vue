@@ -449,7 +449,7 @@
             class="btn-fill full-width"
             :class="{ disabled: !payRulesAgreed }"
             @click="confirmPayment"
-          >确认支付</button>
+          >{{ payRulesAgreed ? '确认支付' : '下滑阅读后付款' }}</button>
         </view>
       </view>
     </view>

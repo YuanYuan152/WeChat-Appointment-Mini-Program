@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 
 import type {
+  AppointmentFormMode,
   BannerLinkType,
   ContentDraft,
   ContentKind,
@@ -54,8 +55,15 @@ export function ContentPanel({
     activeKind === "live" ||
     activeKind === "consultation_guide";
   const hideImageColumn =
-    activeKind === "brand" || activeKind === "charity" || activeKind === "consultation_guide";
-  const isSiteSectionPage = activeKind === "brand" || activeKind === "charity" || activeKind === "contact";
+    activeKind === "brand"
+    || activeKind === "charity"
+    || activeKind === "consultation_guide"
+    || activeKind === "appointment_form";
+  const isSiteSectionPage =
+    activeKind === "brand"
+    || activeKind === "charity"
+    || activeKind === "contact"
+    || activeKind === "appointment_form";
   const createLabel =
     activeKind === "home_cover"
       ? activeItems.length > 0
@@ -75,7 +83,7 @@ export function ContentPanel({
       kind: activeKind,
       title: "",
       subtitle: "",
-      body: "",
+      body: activeKind === "appointment_form" ? "https://jixinli.wjx.cn/vm/O0QmW8T.aspx#" : "",
       summary: "",
       imageUrl: "",
       assistantQrcodeUrl: "",
@@ -84,6 +92,7 @@ export function ContentPanel({
       bannerLinkType: "NONE",
       bannerLinkValue: "",
       liveDisplayMode: "CALENDAR",
+      appointmentFormMode: "wjx",
       jixinliIconUrl: "",
       tongxinliIconUrl: "",
       coverCrop: { x: 0, y: 0, width: 1, height: 1 },
@@ -98,7 +107,10 @@ export function ContentPanel({
       kind: activeKind,
       title: target?.title || "",
       subtitle: target?.subtitle || "",
-      body: target?.body || target?.summary || "",
+      body:
+        activeKind === "appointment_form"
+          ? target?.appointmentFormUrl || target?.body || "https://jixinli.wjx.cn/vm/O0QmW8T.aspx#"
+          : target?.body || target?.summary || "",
       summary: "",
       imageUrl: target?.imageUrl || "",
       assistantQrcodeUrl: target?.assistantQrcodeUrl || "",
@@ -107,6 +119,10 @@ export function ContentPanel({
       bannerLinkType: "NONE",
       bannerLinkValue: "",
       liveDisplayMode: "CALENDAR",
+      appointmentFormMode:
+        activeKind === "appointment_form"
+          ? normalizeAppointmentFormMode(target?.appointmentFormMode || target?.subtitle)
+          : "wjx",
       jixinliIconUrl: "",
       tongxinliIconUrl: "",
       coverCrop: target?.coverCrop || { x: 0, y: 0, width: 1, height: 1 },
@@ -136,6 +152,7 @@ export function ContentPanel({
         bannerLinkType: item.bannerLinkType || "NONE",
         bannerLinkValue: item.bannerLinkValue || "",
         liveDisplayMode: item.liveDisplayMode || "CALENDAR",
+        appointmentFormMode: "wjx",
         jixinliIconUrl: item.jixinliIconUrl || "",
         tongxinliIconUrl: item.tongxinliIconUrl || "",
         coverCrop: item.coverCrop || { x: 0, y: 0, width: 1, height: 1 },
@@ -194,6 +211,9 @@ export function ContentPanel({
               bannerLinkType: item.bannerLinkType || "NONE",
               bannerLinkValue: item.bannerLinkValue || "",
               liveDisplayMode: item.liveDisplayMode || "CALENDAR",
+              appointmentFormMode: normalizeAppointmentFormMode(
+                item.appointmentFormMode || item.subtitle,
+              ),
               jixinliIconUrl: item.jixinliIconUrl || "",
               tongxinliIconUrl: item.tongxinliIconUrl || "",
               coverCrop: item.coverCrop || { x: 0, y: 0, width: 1, height: 1 },
@@ -296,6 +316,31 @@ function getContentItems(data: ScreenData, kind: ContentKind): ContentListItem[]
     }));
   }
 
+  if (kind === "appointment_form") {
+    return (data.sitePages || []).map((item) => {
+      const mode = normalizeAppointmentFormMode(
+        item.appointmentFormMode || item.subtitle,
+      );
+      return {
+        id: item.id,
+        title: item.title || "来访预约表",
+        subtitle: mode,
+        meta: appointmentFormModeLabel(mode),
+        date: item.updatedAt,
+        summary:
+          mode === "wjx"
+            ? previewText(item.appointmentFormUrl || item.body)
+            : mode === "builtin"
+              ? "跳转小程序内置心理登记表"
+              : "不展示预约表入口",
+        body: item.appointmentFormUrl || item.body || "",
+        pageKey: item.pageKey,
+        appointmentFormMode: mode,
+        appointmentFormUrl: item.appointmentFormUrl || item.body || "",
+      };
+    });
+  }
+
   return (data.siteGuideItems || []).map((item) => ({
     id: item.id,
     title: item.title,
@@ -338,4 +383,18 @@ function liveModeLabel(value: LiveDisplayMode) {
   if (value === "CHANNELS") return "视频号入口";
   if (value === "WEB") return "普通链接";
   return "图文日历";
+}
+
+function normalizeAppointmentFormMode(value?: string | null): AppointmentFormMode {
+  const normalized = (value || "").trim().toLowerCase();
+  if (normalized === "wjx" || normalized === "builtin" || normalized === "none") {
+    return normalized;
+  }
+  return "wjx";
+}
+
+function appointmentFormModeLabel(value: AppointmentFormMode) {
+  if (value === "builtin") return "内置程序";
+  if (value === "none") return "不放预约表";
+  return "问卷星链接";
 }

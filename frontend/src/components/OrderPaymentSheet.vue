@@ -197,7 +197,13 @@
             :class="{ disabled: !agreed || paying }"
             :disabled="!agreed || paying"
             @tap="onConfirm"
-          >{{ paying ? (isFreeOrder ? '确认中...' : '支付中...') : (isFreeOrder ? '确认预约' : '确认支付') }}</button>
+          >{{
+            paying
+              ? (isFreeOrder ? '确认中...' : '支付中...')
+              : !agreed
+                ? '下滑阅读后付款'
+                : (isFreeOrder ? '确认预约' : '确认支付')
+          }}</button>
         </view>
       </template>
     </view>

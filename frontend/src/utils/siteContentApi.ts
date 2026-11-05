@@ -6,6 +6,8 @@ import {
   CONSULTATION_GUIDE_CARDS,
 } from '@/constants/siteContent'
 
+export type AppointmentFormMode = 'wjx' | 'builtin' | 'none'
+
 export interface SitePagePayload {
   id?: number
   pageKey: string
@@ -20,7 +22,31 @@ export interface SitePagePayload {
     width: number
     height: number
   } | null
+  appointmentFormMode?: AppointmentFormMode | string | null
+  appointmentFormUrl?: string | null
   updatedAt?: string
+}
+
+export interface AppointmentFormConfig {
+  mode: AppointmentFormMode
+  url: string
+}
+
+const DEFAULT_APPOINTMENT_FORM_URL = 'https://jixinli.wjx.cn/vm/O0QmW8T.aspx#'
+
+export function resolveAppointmentFormConfig(
+  pages?: Record<string, SitePagePayload>,
+): AppointmentFormConfig {
+  const page = pages?.appointment_form
+  const rawMode = (
+    page?.appointmentFormMode || page?.subtitle || 'wjx'
+  ).toString().trim().toLowerCase()
+  const mode: AppointmentFormMode =
+    rawMode === 'builtin' || rawMode === 'none' || rawMode === 'wjx' ? rawMode : 'wjx'
+  const url = (
+    page?.appointmentFormUrl || page?.body || DEFAULT_APPOINTMENT_FORM_URL
+  ).trim()
+  return { mode, url }
 }
 
 export interface SiteGuideItemPayload {

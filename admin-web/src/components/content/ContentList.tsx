@@ -20,6 +20,8 @@ export interface ContentListItem {
   bannerLinkType?: "NONE" | "PAGE" | "URL";
   bannerLinkValue?: string | null;
   liveDisplayMode?: "CALENDAR" | "CHANNELS" | "WEB";
+  appointmentFormMode?: "wjx" | "builtin" | "none";
+  appointmentFormUrl?: string | null;
   jixinliIconUrl?: string | null;
   tongxinliIconUrl?: string | null;
   coverCrop?: {

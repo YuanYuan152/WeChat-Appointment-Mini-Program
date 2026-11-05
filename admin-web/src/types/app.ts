@@ -155,10 +155,12 @@ export type ContentKind =
   | "brand"
   | "consultation_guide"
   | "charity"
-  | "contact";
+  | "contact"
+  | "appointment_form";
 
 export type BannerLinkType = "NONE" | "PAGE" | "URL";
 export type LiveDisplayMode = "CALENDAR" | "CHANNELS" | "WEB";
+export type AppointmentFormMode = "wjx" | "builtin" | "none";
 
 export interface ContentDraft {
   kind: ContentKind;
@@ -173,6 +175,7 @@ export interface ContentDraft {
   bannerLinkType: BannerLinkType;
   bannerLinkValue: string;
   liveDisplayMode: LiveDisplayMode;
+  appointmentFormMode: AppointmentFormMode;
   jixinliIconUrl: string;
   tongxinliIconUrl: string;
   coverCrop: {

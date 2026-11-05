@@ -319,6 +319,8 @@ export interface SitePage {
     width: number;
     height: number;
   } | null;
+  appointmentFormMode?: string | null;
+  appointmentFormUrl?: string | null;
   updatedAt?: string | null;
 }
 

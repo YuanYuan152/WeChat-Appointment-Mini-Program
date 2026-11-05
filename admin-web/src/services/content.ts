@@ -21,6 +21,24 @@ function buildSiteSectionPayload(kind: "brand" | "charity" | "contact", draft: C
   };
 }
 
+function buildAppointmentFormPayload(draft: ContentDraft) {
+  const mode = draft.appointmentFormMode;
+  if (mode !== "wjx" && mode !== "builtin" && mode !== "none") {
+    throw new Error("请选择收集方式");
+  }
+  if (mode === "wjx") {
+    const url = draft.body.trim();
+    if (!url) {
+      throw new Error("请填写问卷星链接");
+    }
+    if (!/^https:\/\/[^\s]+$/i.test(url)) {
+      throw new Error("问卷星链接必须是完整的 HTTPS 地址");
+    }
+    return { subtitle: mode, body: url };
+  }
+  return { subtitle: mode, body: mode === "builtin" ? draft.body.trim() : "" };
+}
+
 function activityTypeForKind(kind: ContentKind) {
   return kind === "live" ? "LIVE" : "NOTICE";
 }
@@ -110,7 +128,13 @@ export async function fetchContentData(kind: ContentKind, _articlePagination: Pa
     return { activities: filtered };
   }
 
-  if (kind === "brand" || kind === "charity" || kind === "contact" || kind === "home_cover") {
+  if (
+    kind === "brand"
+    || kind === "charity"
+    || kind === "contact"
+    || kind === "home_cover"
+    || kind === "appointment_form"
+  ) {
     const sitePages = await apiRequest<SitePage[]>("/api/mini/ops/site-pages/manage");
     const pageKey = sitePageKeyForKind(kind);
     return { sitePages: sitePages.filter((page) => page.pageKey === pageKey) };
@@ -162,6 +186,17 @@ export function createContent(draft: ContentDraft) {
     return apiRequest(`/api/mini/ops/site-pages/${pageKey}`, {
       method: "PUT",
       body: JSON.stringify(buildSiteSectionPayload(draft.kind, draft)),
+    });
+  }
+
+  if (draft.kind === "appointment_form") {
+    const pageKey = sitePageKeyForKind(draft.kind);
+    if (!pageKey) {
+      throw new Error("无效的站点页类型");
+    }
+    return apiRequest(`/api/mini/ops/site-pages/${pageKey}`, {
+      method: "PUT",
+      body: JSON.stringify(buildAppointmentFormPayload(draft)),
     });
   }
 
@@ -222,6 +257,17 @@ export function updateContent(kind: ContentKind, id: number, draft: ContentDraft
     return apiRequest(`/api/mini/ops/site-pages/${pageKey}`, {
       method: "PUT",
       body: JSON.stringify(buildSiteSectionPayload(kind, draft)),
+    });
+  }
+
+  if (kind === "appointment_form") {
+    const pageKey = sitePageKeyForKind(kind);
+    if (!pageKey) {
+      throw new Error("无效的站点页类型");
+    }
+    return apiRequest(`/api/mini/ops/site-pages/${pageKey}`, {
+      method: "PUT",
+      body: JSON.stringify(buildAppointmentFormPayload(draft)),
     });
   }
 

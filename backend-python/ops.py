@@ -328,6 +328,8 @@ class SitePageOut(BaseModel):
     assistantQrcodeUrl: Optional[str] = None
     coverImageUrl: Optional[str] = None
     coverCrop: Optional[Dict[str, float]] = None
+    appointmentFormMode: Optional[str] = None
+    appointmentFormUrl: Optional[str] = None
     updatedAt: Optional[datetime] = None
 
 
