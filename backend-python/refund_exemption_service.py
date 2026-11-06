@@ -59,7 +59,9 @@ def validate_exemption_submission(
         raise ValueError("无权为该预约申请取消")
     if not can_visitor_cancel(consultation.Status):
         raise ValueError("当前状态不可申请取消")
-    if not offline and is_refund_eligible(consultation.StartTime):
+    if is_refund_eligible(consultation.StartTime):
+        if offline:
+            raise ValueError("距咨询开始超过24小时，请直接取消预约，无需另行申请，取消不退款")
         raise ValueError("距咨询开始超过24小时，请直接取消预约即可退款，无需另行申请")
     if not (reason or "").strip():
         raise ValueError("请填写申请原因")
@@ -76,17 +78,17 @@ def validate_uploaded_screenshot_url(screenshot_url: str) -> str:
     """仅接受统一上传 API 生成的图片地址。"""
     value = (screenshot_url or "").strip()
     if not value:
-        raise ValueError("请上传退款申请凭证")
+        raise ValueError("请上传申请凭证")
     if len(value) > 500:
-        raise ValueError("退款申请凭证地址过长")
+        raise ValueError("申请凭证地址过长")
 
     parsed = urlsplit(value)
     if parsed.scheme and parsed.scheme.lower() not in ("http", "https"):
-        raise ValueError("退款申请凭证地址无效")
+        raise ValueError("申请凭证地址无效")
     if (parsed.scheme and not parsed.netloc) or (not parsed.scheme and parsed.netloc):
-        raise ValueError("退款申请凭证地址无效")
+        raise ValueError("申请凭证地址无效")
     if parsed.query or parsed.fragment:
-        raise ValueError("退款申请凭证地址无效")
+        raise ValueError("申请凭证地址无效")
 
     path = unquote(parsed.path)
     if (
@@ -96,7 +98,7 @@ def validate_uploaded_screenshot_url(screenshot_url: str) -> str:
         or "\x00" in path
         or any(part in ("", ".", "..") for part in path[len("/static/uploads/"):].split("/"))
     ):
-        raise ValueError("请使用上传接口返回的退款申请凭证地址")
+        raise ValueError("请使用上传接口返回的申请凭证地址")
     return value
 
 

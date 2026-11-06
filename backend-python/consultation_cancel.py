@@ -67,9 +67,8 @@ def visitor_must_apply_to_cancel(
     start_time: Optional[datetime],
     order: Optional[AppOrder],
 ) -> bool:
-    """不足 24 小时的订单，以及任何线下支付单，都不能直接取消。"""
-    if order_is_offline_payment(order):
-        return True
+    """距咨询开始不足 24 小时时，线上单和线下支付单都要提交申请后才能取消。"""
+    del order
     return not is_refund_eligible(start_time)
 
 
@@ -151,7 +150,7 @@ def cancel_consultation_for_visitor(
     offline = order_is_offline_payment(primary_order)
     if not force_refund and visitor_must_apply_to_cancel(consultation.StartTime, primary_order):
         if offline:
-            raise ValueError("线下支付单请提交取消预约申请，审核通过后才会取消")
+            raise ValueError("距咨询开始不足24小时，请提交取消申请，审核通过后才会取消")
         raise ValueError("距咨询开始不足24小时，请提交取消申请")
 
     if not force_refund:

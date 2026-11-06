@@ -232,13 +232,13 @@
 
           </view>
 
-          <view v-if="!cancelTarget?.isOfflinePaymentOrder" class="cancel-row">
+          <view class="cancel-row">
 
             <text class="cancel-label">是否全额退款</text>
 
-            <text class="cancel-value" :class="cancelTarget?.refundEligible ? 'refund-yes' : 'refund-no'">
+            <text class="cancel-value" :class="refundValueClass(cancelTarget)">
 
-              {{ cancelTarget?.refundEligible ? '是，取消后原路全额退款' : '否' }}
+              {{ refundValueText(cancelTarget) }}
 
             </text>
 
@@ -277,7 +277,7 @@
               @tap="goExemption"
             >
 
-              {{ cancelTarget?.exemptionStatus === 'PENDING' ? '正在审核' : '提交取消申请' }}
+              {{ cancelTarget?.exemptionStatus === 'PENDING' ? '正在审核' : (cancelTarget?.isOfflinePaymentOrder ? '申请取消' : '申请退款') }}
 
             </button>
 
@@ -326,6 +326,7 @@ import CenterAddressRow from '@/components/CenterAddressRow.vue'
 import { fetchSystemSettings, formatProxyOrderTtlHint } from '@/utils/systemSettings'
 import { resolveCounselorPublicAvatar } from '@/utils/image'
 import { copyContactCenterAddress, getContactCenterAddress } from '@/constants/contactInfo'
+import { parseChinaDateTime } from '@/utils/dateTime'
 
 const proxyOrderTtlMinutes = ref(120)
 const proxyOrderPatientHint = computed(() => formatProxyOrderTtlHint(proxyOrderTtlMinutes.value))
@@ -363,6 +364,8 @@ interface Consultation {
   canCancel?: boolean
 
   refundEligible?: boolean
+
+  mustApplyToCancel?: boolean
 
   orderAmount?: number
 
@@ -676,13 +679,33 @@ const switchTab = (v: RecordTab) => {
 
 
 
-const mustApplyToCancel = (r: Consultation) =>
-  !!r.isOfflinePaymentOrder || !r.refundEligible
+const withinCancelApplyWindow = (startTime?: string) => {
+  const start = parseChinaDateTime(startTime)
+  if (!start) return false
+  return start.getTime() - Date.now() < 24 * 60 * 60 * 1000
+}
+
+const mustApplyToCancel = (r: Consultation) => {
+  if (typeof r.mustApplyToCancel === 'boolean') return r.mustApplyToCancel
+  return withinCancelApplyWindow(r.startTime)
+}
+
+const refundValueText = (r?: Consultation | null) => {
+  if (r?.isOfflinePaymentOrder) return '无需退款'
+  if (r?.refundEligible) return '是，取消后原路全额退款'
+  return '否'
+}
+
+const refundValueClass = (r?: Consultation | null) => {
+  if (r?.isOfflinePaymentOrder) return 'refund-none'
+  return r?.refundEligible ? 'refund-yes' : 'refund-no'
+}
 
 const cancelHint = (r: Consultation) => {
-  if (r.isOfflinePaymentOrder) return '线下支付单需提交取消申请，不涉及线上退款'
+  if (r.isOfflinePaymentOrder && mustApplyToCancel(r)) return '距咨询不足24小时，需申请取消，不涉及线上退款'
+  if (r.isOfflinePaymentOrder) return '线下支付，取消无需退款'
   if (r.refundEligible) return '距咨询超过24小时，取消可退款'
-  return '距咨询不足24小时，需提交取消申请'
+  return '距咨询不足24小时，需申请退款'
 }
 
 const openCancelModal = (r: Consultation) => {
@@ -714,7 +737,12 @@ const goExemption = () => {
     return
   }
   if (!mustApplyToCancel(r)) {
-    uni.showToast({ title: '超过24小时可直接取消并退款，无需另行申请', icon: 'none' })
+    uni.showToast({
+      title: r.isOfflinePaymentOrder
+        ? '超过24小时可直接取消，取消不退款'
+        : '超过24小时可直接取消并退款，无需另行申请',
+      icon: 'none',
+    })
     return
   }
   const slotText = formatSlotRange(r.startTime, r.endTime)
@@ -727,7 +755,7 @@ const goExemption = () => {
   uni.navigateTo({
     url,
     fail: () => {
-      uni.showToast({ title: '无法打开申请退款页，请重新编译小程序', icon: 'none' })
+      uni.showToast({ title: r.isOfflinePaymentOrder ? '无法打开申请取消页，请重新编译小程序' : '无法打开申请退款页，请重新编译小程序', icon: 'none' })
     },
   })
 }
@@ -754,7 +782,10 @@ const confirmCancel = async () => {
   if (!r || cancellingId.value) return
 
   if (mustApplyToCancel(r)) {
-    uni.showToast({ title: '请提交取消申请，审核通过后才会取消', icon: 'none' })
+    uni.showToast({
+      title: r.isOfflinePaymentOrder ? '请提交取消申请，审核通过后才会取消' : '请提交退款申请，审核通过后才会取消',
+      icon: 'none',
+    })
     return
   }
   if (r.exemptionStatus === 'PENDING') {
@@ -1141,6 +1172,8 @@ defineExpose({ refresh })
 }
 
 .cancel-value.highlight { color: #3D5A4E; }
+
+.cancel-value.refund-none { color: #6B7280; }
 
 .cancel-value.refund-yes { color: #3D5A4E; }
 

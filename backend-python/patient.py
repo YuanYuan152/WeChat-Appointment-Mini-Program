@@ -21,6 +21,7 @@ from consultation_cancel import (
     cancel_consultation_for_visitor,
     is_refund_eligible,
     refund_ineligible_reason,
+    visitor_must_apply_to_cancel,
 )
 from database import get_db
 from model_compat import optional_model_value
@@ -325,6 +326,7 @@ class ConsultationOut(BaseModel):
     centerName: Optional[str] = None
     canCancel: bool = False
     refundEligible: bool = False
+    mustApplyToCancel: bool = False
     orderAmount: Optional[int] = None
     refundReason: Optional[str] = None
     exemptionStatus: Optional[str] = None
@@ -496,6 +498,7 @@ def get_my_consultations(
             centerName=center_name,
             canCancel=cancelable,
             refundEligible=refund_ok,
+            mustApplyToCancel=cancelable and visitor_must_apply_to_cancel(start_time, order),
             orderAmount=order_amount,
             refundReason=None if refund_ok or offline else refund_ineligible_reason(start_time),
             exemptionStatus=exemption.Status if exemption else None,

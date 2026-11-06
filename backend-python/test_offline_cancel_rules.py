@@ -21,20 +21,20 @@ class OfflineCancelRuleTests(unittest.TestCase):
         self.assertFalse(order_is_offline_payment(SimpleNamespace(ProxyIsOfflinePayment=False, TransactionId="WX1")))
         self.assertFalse(order_is_offline_payment(None))
 
-    def test_offline_and_within_24h_must_apply(self):
+    def test_only_within_24h_must_apply(self):
         soon = china_now() + timedelta(hours=2)
         later = china_now() + timedelta(hours=48)
         offline = SimpleNamespace(ProxyIsOfflinePayment=True, TransactionId="OFFLINE_1")
         online = SimpleNamespace(ProxyIsOfflinePayment=False, TransactionId="WX1")
-        self.assertTrue(visitor_must_apply_to_cancel(later, offline))
+        self.assertFalse(visitor_must_apply_to_cancel(later, offline))
         self.assertTrue(visitor_must_apply_to_cancel(soon, offline))
         self.assertTrue(visitor_must_apply_to_cancel(soon, online))
         self.assertFalse(visitor_must_apply_to_cancel(later, online))
 
-    def test_offline_application_allows_zero_amount_even_beyond_24h(self):
-        later = china_now() + timedelta(hours=48)
+    def test_offline_within_24h_allows_zero_amount(self):
+        soon = china_now() + timedelta(hours=2)
         validate_exemption_submission(
-            _consultation(start=later),
+            _consultation(start=soon),
             patient_id=7,
             amount=0,
             reason="临时有事",
@@ -42,6 +42,19 @@ class OfflineCancelRuleTests(unittest.TestCase):
             pending=None,
             offline=True,
         )
+
+    def test_offline_beyond_24h_cancels_directly_without_application(self):
+        later = china_now() + timedelta(hours=48)
+        with self.assertRaisesRegex(ValueError, "直接取消预约"):
+            validate_exemption_submission(
+                _consultation(start=later),
+                patient_id=7,
+                amount=0,
+                reason="临时有事",
+                screenshot_url="/static/uploads/proof.png",
+                pending=None,
+                offline=True,
+            )
 
     def test_online_beyond_24h_cannot_apply(self):
         later = china_now() + timedelta(hours=48)
