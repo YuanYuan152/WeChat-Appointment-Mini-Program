@@ -134,6 +134,8 @@ export const API_ENDPOINTS = {
     detail: (id: number | string) => `/api/mini/message/${id}`,
     unreadCount: '/api/mini/message/unread-count',
     markRead: (id: number | string) => `/api/mini/message/${id}/read`,
+    todayDigest: '/api/mini/message/today-digest',
+    confirmOfflineReceipt: (id: number | string) => `/api/mini/message/${id}/confirm-offline-receipt`,
     subscribe: '/api/mini/message/subscribe',
     subscribePreference: '/api/mini/message/subscribe-preference',
     subscribeHint: '/api/mini/message/subscribe-hint',

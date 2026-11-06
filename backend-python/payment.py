@@ -285,18 +285,38 @@ def _is_free_order(order: AppOrder) -> bool:
     return int(order.TotalFee or 0) <= 0
 
 
+def _is_offline_payment_order(order: AppOrder) -> bool:
+    return bool(getattr(order, "ProxyIsOfflinePayment", False))
+
+
+def _skips_wechat_pay(order: AppOrder) -> bool:
+    """免费单和助理/管理员推送的线下支付单都不走微信支付。"""
+    return _is_free_order(order) or _is_offline_payment_order(order)
+
+
 def _complete_free_order(db: Session, order: AppOrder) -> dict:
-    """0 元订单直接入账，不调微信支付。"""
+    """免费单或线下支付单直接完成预约，不调微信支付。"""
+    if _is_offline_payment_order(order):
+        prefix = "OFFLINE_"
+    else:
+        prefix = "FREE_"
     complete_paid_order(
         db,
         order,
         center_id=_center_id_from_order(order),
-        transaction_id=f"FREE_{order.OutTradeNo}",
+        transaction_id=f"{prefix}{order.OutTradeNo}",
     )
-    return {"free": True, "already_paid": True, "order_id": order.Id}
+    return {
+        "free": _is_free_order(order),
+        "offline": _is_offline_payment_order(order),
+        "already_paid": True,
+        "order_id": order.Id,
+    }
 
 
 def _resolve_pay_params(order: AppOrder, account: AppAccount, description: str) -> dict:
+    if _is_offline_payment_order(order):
+        raise HTTPException(status_code=400, detail="线下支付单请确认预约，无需微信支付")
     if _is_free_order(order):
         raise HTTPException(status_code=400, detail="免费单请走免费确认，无需微信支付")
     time_expire = None
@@ -468,7 +488,7 @@ def pay_existing_order(
     db.commit()
     db.refresh(order)
 
-    if _is_free_order(order):
+    if _skips_wechat_pay(order):
         try:
             pay_params = _complete_free_order(db, order)
         except ValueError as e:
@@ -559,7 +579,7 @@ def simulate_pay_existing_order(
 ):
     order = _load_payable_order(db, current_account, req.order_id)
     # 免费单即使开启真实支付，也允许走本地确认
-    if is_real_wechat_pay_configured() and not _is_free_order(order):
+    if is_real_wechat_pay_configured() and not _skips_wechat_pay(order):
         raise HTTPException(status_code=403, detail="已配置真实支付，请使用微信支付流程")
     try:
         _attach_order_agreement_if_needed(
@@ -580,7 +600,13 @@ def simulate_pay_existing_order(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     try:
-        tx_prefix = "FREE_" if _is_free_order(order) else "SIM_"
+        tx_prefix = (
+            "OFFLINE_"
+            if _is_offline_payment_order(order)
+            else "FREE_"
+            if _is_free_order(order)
+            else "SIM_"
+        )
         complete_paid_order(
             db,
             order,
@@ -594,7 +620,7 @@ def simulate_pay_existing_order(
     db.refresh(order)
     return {
         "code": 0,
-        "msg": "预约成功" if _is_free_order(order) else "支付成功",
+        "msg": "预约成功" if _skips_wechat_pay(order) else "支付成功",
         "data": {"order_id": order.Id, "out_trade_no": order.OutTradeNo, "status": order.Status},
     }
 

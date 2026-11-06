@@ -17,7 +17,7 @@
       <view v-for="order in orders" :key="order.Id" class="order-card" @click="goDetail(order)">
         <view class="order-header">
           <text class="order-no">{{ order.OutTradeNo }}</text>
-          <text class="order-status" :class="order.Status.toLowerCase()">{{ statusLabel(order.Status) }}</text>
+          <text class="order-status" :class="order.Status.toLowerCase()">{{ statusLabel(order) }}</text>
         </view>
         <view class="order-body">
           <text class="order-desc">{{ orderSummary(order) }}</text>
@@ -33,13 +33,13 @@
         <view class="order-footer">
           <text class="order-time">{{ formatOrderClock(orderDisplayTime(order)) }}</text>
           <text v-if="order.ExpiresAt && order.Status === 'PENDING'" class="order-expire">
-            {{ expireHint(order.ExpiresAt) }}
+            {{ expireHint(order) }}
           </text>
           <button
             v-if="order.Status === 'PENDING'"
             class="pay-btn"
             @click.stop="openPaySheet(order)"
-            >{{ isFreeOrderFee(order.TotalFee) ? '去确认' : '去支付' }}</button>
+            >{{ isConfirmInsteadOfPay(order) ? '去确认' : '去支付' }}</button>
         </view>
       </view>
     </view>
@@ -62,7 +62,7 @@ import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
 import OrderPaymentSheet from '@/components/OrderPaymentSheet.vue'
 import { ensureLoggedInOrRedirect } from '@/utils/auth'
-import { type PatientOrder, expireHintText, formatOrderFeeCents, formatOrderTime, isFreeOrderFee, orderDisplayTime, formatOrderClock } from '@/utils/orderPayment'
+import { type PatientOrder, expireHintText, formatOrderFeeCents, formatOrderTime, isConfirmInsteadOfPay, orderDisplayTime, formatOrderClock } from '@/utils/orderPayment'
 import { copyContactCenterAddress, getContactCenterAddress } from '@/constants/contactInfo'
 
 const orders = ref<PatientOrder[]>([])
@@ -83,17 +83,19 @@ const payOrderId = ref<number | null>(null)
 const payOrder = ref<PatientOrder | null>(null)
 const pendingPayOrderId = ref(0)
 
-const statusLabel = (status: string) => {
+const statusLabel = (order: PatientOrder) => {
+  if (order.Status === 'PENDING' && isConfirmInsteadOfPay(order)) return '待确认'
   const map: Record<string, string> = {
     PENDING: '待支付',
     PAID: '已支付',
     CANCELLED: '已取消',
     REFUNDED: '已退款',
   }
-  return map[status] || status
+  return map[order.Status] || order.Status
 }
 
-const expireHint = (expiresAt: string) => expireHintText(expiresAt)
+const expireHint = (order: PatientOrder) =>
+  expireHintText(order.ExpiresAt, isConfirmInsteadOfPay(order) ? '确认' : '支付')
 
 const orderCenterAddress = (order: PatientOrder) => getContactCenterAddress(order.centerId)
 

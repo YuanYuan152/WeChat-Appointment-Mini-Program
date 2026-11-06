@@ -60,6 +60,9 @@ class ProxyPushOrderRequest(BaseModel):
     )
     is_free_experience_order: bool = False
     free_order_reason: Optional[str] = Field(None, max_length=500)
+    is_offline_payment_order: bool = False
+    offline_payment_operator: Optional[str] = Field(None, max_length=100)
+    offline_payment_reason: Optional[str] = Field(None, max_length=500)
 
 
 class ScheduleCalendarOut(BaseModel):
@@ -194,11 +197,20 @@ def proxy_push_order(
     staff: AppAccount = Depends(require_staff_workbench),
     db: Session = Depends(get_db),
 ):
+    if body.is_free_experience_order and body.is_offline_payment_order:
+        raise HTTPException(status_code=400, detail="免费体验单和线下支付单不能同时推送")
     if body.is_free_experience_order:
         if get_account_role(db, staff.Id) not in {"Admin", "Assistant"}:
             raise HTTPException(status_code=403, detail="仅管理员和咨询助理可推送免费体验单")
         if not (body.free_order_reason or "").strip():
             raise HTTPException(status_code=400, detail="免费订单推送理由不能为空")
+    if body.is_offline_payment_order:
+        if get_account_role(db, staff.Id) not in {"Admin", "Assistant"}:
+            raise HTTPException(status_code=403, detail="仅管理员和咨询助理可推送线下支付单")
+        if not (body.offline_payment_operator or "").strip():
+            raise HTTPException(status_code=400, detail="线下支付单操作人不能为空")
+        if not (body.offline_payment_reason or "").strip():
+            raise HTTPException(status_code=400, detail="线下支付单推送理由不能为空")
     try:
         result = push_proxy_order(
             db,
@@ -214,6 +226,9 @@ def proxy_push_order(
             agreement_type=body.agreement_type,
             is_free_experience_order=body.is_free_experience_order,
             free_order_reason=body.free_order_reason,
+            is_offline_payment_order=body.is_offline_payment_order,
+            offline_payment_operator=body.offline_payment_operator,
+            offline_payment_reason=body.offline_payment_reason,
         )
         db.commit()
         return result

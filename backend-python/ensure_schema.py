@@ -41,6 +41,13 @@ APP_ORDER_COLUMNS = {
     "ProxyAgreementType": "NVARCHAR(20) NULL",
     "ProxyIsFreeExperience": "BIT NOT NULL CONSTRAINT DF_AppOrder_ProxyIsFreeExperience DEFAULT 0",
     "ProxyFreeExperienceReason": "NVARCHAR(500) NULL",
+    "ProxyIsOfflinePayment": "BIT NOT NULL CONSTRAINT DF_AppOrder_ProxyIsOfflinePayment DEFAULT 0",
+    "ProxyOfflinePaymentOperator": "NVARCHAR(100) NULL",
+    "ProxyOfflinePaymentReason": "NVARCHAR(500) NULL",
+    "ProxyOfflineReceiptOperator": "NVARCHAR(100) NULL",
+    "ProxyOfflineReceiptByAccountId": "INT NULL",
+    "ProxyOfflineReceiptByRole": "NVARCHAR(20) NULL",
+    "ProxyOfflineReceiptConfirmedAt": "DATETIME NULL",
     "IntakeAgreementType": "NVARCHAR(20) NULL",
 }
 

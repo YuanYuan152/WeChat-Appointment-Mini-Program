@@ -4,7 +4,7 @@
     <template v-else-if="order">
       <view class="detail-card">
         <view class="status-banner" :class="order.Status.toLowerCase()">
-          {{ statusLabel(order.Status) }}
+          {{ statusLabel(order) }}
         </view>
 
         <view v-if="order.counselorName" class="section">
@@ -39,7 +39,7 @@
             <text class="value">{{ formatOrderClock(orderDisplayTime(order)) }}</text>
           </view>
           <view v-if="order.ExpiresAt && order.Status === 'PENDING'" class="expire-row">
-            {{ expireHintText(order.ExpiresAt) }}
+            {{ expireHintText(order.ExpiresAt, isConfirmInsteadOfPay(order) ? '确认' : '支付') }}
           </view>
         </view>
       </view>
@@ -48,7 +48,7 @@
         v-if="order.Status === 'PENDING'"
         class="pay-btn"
         @tap="showPaySheet = true"
-      >{{ isFreeOrderFee(order.TotalFee) ? '去确认' : '去支付' }}</button>
+      >{{ isConfirmInsteadOfPay(order) ? '去确认' : '去支付' }}</button>
     </template>
 
     <OrderPaymentSheet
@@ -67,26 +67,27 @@ import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
 import OrderPaymentSheet from '@/components/OrderPaymentSheet.vue'
 import CenterAddressRow from '@/components/CenterAddressRow.vue'
-import { type PatientOrder, expireHintText, formatOrderFeeCents, formatOrderTime, isFreeOrderFee, orderDisplayTime, formatOrderClock } from '@/utils/orderPayment'
+import { type PatientOrder, expireHintText, formatOrderFeeCents, formatOrderTime, isConfirmInsteadOfPay, orderDisplayTime, formatOrderClock } from '@/utils/orderPayment'
 
 const order = ref<PatientOrder | null>(null)
 const loading = ref(true)
 const showPaySheet = ref(false)
 const orderId = ref(0)
 
-const statusLabel = (status: string) => {
+const statusLabel = (item: PatientOrder) => {
+  if (item.Status === 'PENDING' && isConfirmInsteadOfPay(item)) return '待确认'
   const map: Record<string, string> = {
     PENDING: '待支付',
     PAID: '已支付',
     CANCELLED: '已取消',
     REFUNDED: '已退款',
   }
-  return map[status] || status
+  return map[item.Status] || item.Status
 }
 
 const orderTimeLabel = (item: PatientOrder) => {
   if ((item.Status === 'PAID' || item.Status === 'REFUNDED') && item.PaidAt) {
-    return '支付时间'
+    return item.isOfflinePaymentOrder ? '确认时间' : '支付时间'
   }
   return '创建时间'
 }

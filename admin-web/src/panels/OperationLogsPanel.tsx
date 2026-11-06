@@ -27,6 +27,8 @@ const actionTypeLabels: Record<string, string> = {
   ROOM: "咨询室管理",
   CONTENT: "内容管理",
   ROLE_SWITCH: "角色切换",
+  OFFLINE_PAYMENT_PUSH: "推送线下支付单",
+  OFFLINE_RECEIPT: "确认线下收款",
 };
 
 const targetTypeLabels: Record<string, string> = {
@@ -266,6 +268,8 @@ export function OperationLogsPanel({
               <option value="ROOM">咨询室管理</option>
               <option value="CONTENT">内容管理</option>
               <option value="ROLE_SWITCH">角色切换</option>
+              <option value="OFFLINE_PAYMENT_PUSH">推送线下支付单</option>
+              <option value="OFFLINE_RECEIPT">确认线下收款</option>
             </select>
           </QueryField>
           <QueryField label="操作人 ID">

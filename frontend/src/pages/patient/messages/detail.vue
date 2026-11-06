@@ -394,7 +394,7 @@
           <text class="label">订单金额</text>
           <text class="value">{{ detail.feeLabel || (detail.totalFeeYuan === 0 ? '免费' : `¥${detail.totalFeeYuan}`) }}</text>
         </view>
-        <button v-if="proxyOrderId" class="review-btn" @click="goProxyOrderPay">去支付</button>
+        <button v-if="proxyOrderId" class="review-btn" @click="goProxyOrderPay">{{ detail.isFreeOrder || detail.isOfflinePaymentOrder ? '去确认' : '去支付' }}</button>
       </view>
 
       <view v-else-if="isPatientMessage" class="detail-body">
@@ -556,6 +556,62 @@
         </view>
       </view>
 
+      <view v-else-if="relatedType === 'OFFLINE_PAYMENT_DUE'" class="detail-body">
+        <view class="detail-row">
+          <text class="label">来访者</text>
+          <text class="value">{{ patientNameFromDetail(detail) }}</text>
+        </view>
+        <view class="detail-row">
+          <text class="label">联系电话</text>
+          <text class="value">{{ detail.patientPhone || '未填写' }}</text>
+        </view>
+        <view class="detail-row">
+          <text class="label">咨询师</text>
+          <text class="value">{{ detail.counselorName }}</text>
+        </view>
+        <view class="detail-row">
+          <text class="label">预约时间</text>
+          <text class="value">{{ formatTime(detail.startTime) }}<text v-if="detail.endTime"> - {{ formatEndTime(detail.endTime) }}</text></text>
+        </view>
+        <view class="detail-row">
+          <text class="label">预约地点</text>
+          <text class="value">{{ detail.location }}</text>
+        </view>
+        <view class="detail-row">
+          <text class="label">订单金额</text>
+          <text class="value">{{ formatMessageAmount(detail) }}</text>
+        </view>
+        <view v-if="detail.offlinePaymentOperator" class="detail-row">
+          <text class="label">推送操作人</text>
+          <text class="value">{{ detail.offlinePaymentOperator }}</text>
+        </view>
+        <view v-if="detail.offlinePaymentReason" class="detail-row">
+          <text class="label">推送理由</text>
+          <text class="value">{{ detail.offlinePaymentReason }}</text>
+        </view>
+        <view v-if="detail.tip" class="tip-box pending">
+          <text class="tip-text">{{ detail.tip }}</text>
+        </view>
+        <view v-if="message.OfflineReceiptPending && canConfirmOfflineReceipt" class="receipt-box">
+          <button v-if="!showReceiptForm" class="receipt-btn" @tap="showReceiptForm = true">已在线下支付</button>
+          <view v-else>
+            <text class="receipt-label">确认收款操作人</text>
+            <input
+              v-model="receiptOperator"
+              class="receipt-input"
+              maxlength="100"
+              placeholder="请填写确认收款操作人"
+            />
+            <button class="receipt-btn" :disabled="receiptSubmitting" @tap="submitOfflineReceipt">
+              {{ receiptSubmitting ? '提交中...' : '确认收款' }}
+            </button>
+          </view>
+        </view>
+        <view v-else-if="message.OfflineReceiptOperator" class="tip-box">
+          <text class="tip-text">已确认线下收款，操作人：{{ message.OfflineReceiptOperator }}</text>
+        </view>
+      </view>
+
       <view v-else class="detail-body">
         <text class="fallback-text">{{ payload.summary || message.Content || '暂无详情' }}</text>
       </view>
@@ -573,7 +629,7 @@ import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
-import { COUNSELOR_MESSAGE_TYPES, PATIENT_MESSAGE_TYPES, CASE_RECORD_AMENDMENT_REVIEW_PATH, caseRecordCrisisReportViewPath, isCaseRecordAmendmentPendingMessage, isExemptionPendingMessage, messageDisplayTitle, parseMessageContent, type MessageItem } from '@/utils/message'
+import { COUNSELOR_MESSAGE_TYPES, PATIENT_MESSAGE_TYPES, CASE_RECORD_AMENDMENT_REVIEW_PATH, caseRecordCrisisReportViewPath, isCaseRecordAmendmentPendingMessage, isExemptionPendingMessage, isStaffWorkbenchMessageInbox, messageDisplayTitle, parseMessageContent, type MessageItem } from '@/utils/message'
 import { RISK_ASSESSMENT_ITEMS } from '@/constants/caseRecordRiskAssessment'
 import { patientNameFromDetail } from '@/utils/patientContract'
 import { formatChinaClock, formatChinaDateTime } from '@/utils/dateTime'
@@ -600,6 +656,11 @@ interface AffectedAppointment {
 const message = ref<MessageItem | null>(null)
 const loading = ref(true)
 const messageId = ref(0)
+const activeRole = ref('')
+const showReceiptForm = ref(false)
+const receiptOperator = ref('')
+const receiptSubmitting = ref(false)
+const canConfirmOfflineReceipt = computed(() => isStaffWorkbenchMessageInbox(activeRole.value))
 
 const payload = computed(() => parseMessageContent(message.value?.Content))
 const detail = computed(() => (payload.value.detail || {}) as Record<string, any>)
@@ -830,6 +891,29 @@ const goCaseRecordView = () => {
   })
 }
 
+const submitOfflineReceipt = async () => {
+  const operatorName = receiptOperator.value.trim()
+  if (!operatorName) {
+    uni.showToast({ title: '请填写确认收款操作人', icon: 'none' })
+    return
+  }
+  if (!message.value || receiptSubmitting.value) return
+  receiptSubmitting.value = true
+  try {
+    const res = await httpV2.post<MessageItem>(
+      API_ENDPOINTS.message.confirmOfflineReceipt(message.value.Id),
+      { operator_name: operatorName },
+      { showLoading: false },
+    )
+    if (res.code !== 0) return
+    uni.showToast({ title: '已确认收款', icon: 'success' })
+    showReceiptForm.value = false
+    await loadDetail()
+  } finally {
+    receiptSubmitting.value = false
+  }
+}
+
 const goProxyOrderPay = () => {
   if (!proxyOrderId.value) {
     uni.showToast({ title: '缺少订单编号', icon: 'none' })
@@ -839,6 +923,7 @@ const goProxyOrderPay = () => {
 }
 
 onLoad((options) => {
+  activeRole.value = uni.getStorageSync('active_role') || ''
   messageId.value = Number(options?.id || 0)
   loadDetail()
 })
@@ -1003,6 +1088,41 @@ onLoad((options) => {
 .rejected-text {
   color: #DC2626;
   font-weight: 600;
+}
+
+.receipt-box {
+  margin-top: 28rpx;
+}
+
+.receipt-label {
+  display: block;
+  margin-bottom: 12rpx;
+  font-size: 26rpx;
+  color: #9A3412;
+}
+
+.receipt-input {
+  width: 100%;
+  height: 80rpx;
+  padding: 0 20rpx;
+  margin-bottom: 16rpx;
+  border: 1rpx solid #FDBA74;
+  border-radius: 16rpx;
+  background: #fff;
+  font-size: 28rpx;
+  box-sizing: border-box;
+}
+
+.receipt-btn {
+  width: 100%;
+  height: 88rpx;
+  line-height: 88rpx;
+  background: #EA580C;
+  color: #fff;
+  border-radius: 16rpx;
+  font-size: 30rpx;
+  font-weight: 600;
+  border: none;
 }
 
 .review-btn {

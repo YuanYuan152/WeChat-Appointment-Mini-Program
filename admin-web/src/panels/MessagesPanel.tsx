@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import { DetailDrawer } from "@/components/boards/DetailDrawer";
 import { formatDateTime, formatFullDateTime, statusLabel } from "@/lib/format";
 import type { MessageActionTarget } from "@/lib/messageNavigation";
@@ -32,6 +34,14 @@ export type MessageBusinessDetail =
   | null;
 
 export type MessageReadFilter = "ALL" | "UNREAD" | "READ";
+
+export type TodayDigest = {
+  cancelledCount: number;
+  newBookingCount: number;
+  leavePendingCount: number;
+  visitorCancelPendingCount: number;
+  recordAmendmentPendingCount: number;
+};
 export type MessageCategoryFilter =
   | "ALL"
   | "case_record_crisis"
@@ -49,7 +59,8 @@ export type MessageCategoryFilter =
   | "charity_milestone"
   | "professional_pair_milestone"
   | "pricing"
-  | "proxy_booking";
+  | "proxy_booking"
+  | "offline_payment";
 
 /** 管理工作台（助理/主任/管理员）共用消息类型，与小程序保持一致 */
 const staffWorkbenchMessageCategoryOptions: Array<{ value: MessageCategoryFilter; label: string }> = [
@@ -64,6 +75,7 @@ const staffWorkbenchMessageCategoryOptions: Array<{ value: MessageCategoryFilter
   { value: "professional_pair_milestone", label: "正价咨询30次提示" },
   { value: "pricing", label: "定价与抽成" },
   { value: "proxy_booking", label: "代理预约" },
+  { value: "offline_payment", label: "待付款" },
 ];
 
 const counselorMessageCategoryOptions: Array<{ value: MessageCategoryFilter; label: string }> = [
@@ -91,7 +103,9 @@ export function MessagesPanel({
   selectedMessage,
   showCrisisBanner,
   showStaffReviewCategories,
+  showTodayDigest,
   statusFilter,
+  todayDigest,
   onCloseDetail,
   onKeywordChange,
   onCategoryFilterChange,
@@ -100,6 +114,7 @@ export function MessagesPanel({
   onPageChange,
   onPageSizeChange,
   onReset,
+  onConfirmOfflineReceipt,
   onSearch,
   onStatusFilterChange,
 }: {
@@ -116,7 +131,9 @@ export function MessagesPanel({
   selectedMessage?: MessageItem | null;
   showCrisisBanner?: boolean;
   showStaffReviewCategories?: boolean;
+  showTodayDigest?: boolean;
   statusFilter: MessageReadFilter;
+  todayDigest?: TodayDigest;
   onCloseDetail: () => void;
   onKeywordChange: (value: string) => void;
   onCategoryFilterChange: (value: MessageCategoryFilter) => void;
@@ -124,11 +141,17 @@ export function MessagesPanel({
   onOpen: (message: MessageItem) => void;
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
+  onConfirmOfflineReceipt?: (message: MessageItem, operatorName: string) => Promise<void>;
   onReset: () => void;
   onSearch: () => void;
   onStatusFilterChange: (value: MessageReadFilter) => void;
 }) {
-  const items = messages || [];
+  const items = [...(messages || [])].sort(
+    (left, right) => Number(Boolean(right.IsPinned)) - Number(Boolean(left.IsPinned)),
+  );
+  const digestText = todayDigest
+    ? `今日预约取消${todayDigest.cancelledCount}单，今日新增预约${todayDigest.newBookingCount}单，今天新发起的咨询师请假待审核${todayDigest.leavePendingCount}个、来访取消预约申请待审核${todayDigest.visitorCancelPendingCount}个、咨询记录修改申请待审核${todayDigest.recordAmendmentPendingCount}个`
+    : "";
   const { currentPage, items: pageItems } = getPageItems(items, page, pageSize);
   const crisisMessages = items.filter(isCrisisReportMessage);
   const currentListCrisisCount = crisisMessages.length;
@@ -216,6 +239,18 @@ export function MessagesPanel({
           </div>
         </div>
       )}
+      {showTodayDigest && digestText && (
+        <div className="overflow-hidden border-b border-[#FDBA74] bg-[#FFF7ED]">
+          <style>{`@keyframes lxxlDigestScroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }`}</style>
+          <div
+            className="inline-block whitespace-nowrap py-2.5 text-sm font-semibold text-[#C2410C]"
+            style={{ animation: "lxxlDigestScroll 18s linear infinite" }}
+          >
+            <span className="inline-block px-10">{digestText}</span>
+            <span className="inline-block px-10">{digestText}</span>
+          </div>
+        </div>
+      )}
       <div className="relative">
         {listLoading && items.length > 0 && (
           <div className="absolute inset-x-0 top-0 z-10 border-t border-[var(--lxxl-border)] bg-white/80 px-5 py-3 text-sm text-[var(--lxxl-muted)] backdrop-blur-sm">
@@ -252,7 +287,7 @@ export function MessagesPanel({
                   <tr
                     key={item.Id}
                     className={`border-t border-[var(--lxxl-border)] align-top ${
-                      isCrisis ? "bg-[#FFF8F3]" : ""
+                      item.IsPinned ? "bg-[#FFF7ED] text-[#C2410C]" : isCrisis ? "bg-[#FFF8F3]" : ""
                     }`}
                   >
                     <td className="px-5 py-4">
@@ -264,7 +299,7 @@ export function MessagesPanel({
                     <td className="break-words px-5 py-4">
                       <div className="space-y-2">
                         <Badge tone={isCrisis ? "red" : "green"}>{display.categoryLabel}</Badge>
-                        <div className={`font-medium ${isCrisis ? "text-[#A94616]" : ""}`}>
+                        <div className={`font-medium ${item.IsPinned ? "text-[#C2410C]" : isCrisis ? "text-[#A94616]" : ""}`}>
                           {display.title}
                         </div>
                       </div>
@@ -316,8 +351,96 @@ export function MessagesPanel({
           loading={detailLoading}
           message={selectedMessage}
           onClose={onCloseDetail}
+          onConfirmOfflineReceipt={onConfirmOfflineReceipt}
           onNavigateTarget={onNavigateTarget}
         />
+      )}
+    </section>
+  );
+}
+
+function OfflineReceiptConfirm({
+  message,
+  onConfirm,
+}: {
+  message: MessageItem;
+  onConfirm?: (message: MessageItem, operatorName: string) => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [operatorName, setOperatorName] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  if (message.RelatedType !== "OFFLINE_PAYMENT_DUE") {
+    return null;
+  }
+  if (!message.OfflineReceiptPending) {
+    if (!message.OfflineReceiptOperator) {
+      return null;
+    }
+    return (
+      <section className="rounded-lg border border-[#F3D2B3] bg-[#FFF8F3] px-4 py-3 text-sm text-[#9A3412]">
+        已确认线下收款，操作人：{message.OfflineReceiptOperator}
+      </section>
+    );
+  }
+  if (!onConfirm) {
+    return null;
+  }
+  return (
+    <section className="rounded-lg border border-[#FDBA74] bg-[#FFF7ED] px-4 py-4">
+      <h4 className="text-sm font-semibold text-[#C2410C]">线下收款确认</h4>
+      <p className="mt-2 text-sm leading-6 text-[#9A3412]">
+        填写确认收款操作人并提交后，管理员、咨询助理、咨询主任的这条待付款消息会同时取消置顶。
+      </p>
+      {!open ? (
+        <button
+          className="mt-3 rounded-lg bg-[#EA580C] px-5 py-2 text-sm font-medium text-white"
+          type="button"
+          onClick={() => setOpen(true)}
+        >
+          已在线下支付
+        </button>
+      ) : (
+        <form
+          className="mt-3 space-y-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const name = operatorName.trim();
+            if (!name) {
+              setError("请填写确认收款操作人");
+              return;
+            }
+            setSubmitting(true);
+            setError("");
+            void onConfirm(message, name)
+              .then(() => {
+                setOpen(false);
+                setOperatorName("");
+              })
+              .catch((confirmError: unknown) => {
+                setError(confirmError instanceof Error ? confirmError.message : "确认收款失败");
+              })
+              .finally(() => setSubmitting(false));
+          }}
+        >
+          <label className="block text-sm text-[#9A3412]">
+            确认收款操作人
+            <input
+              className="mt-2 w-full rounded-lg border border-[#FDBA74] bg-white px-3 py-2 text-[var(--lxxl-text)]"
+              maxLength={100}
+              value={operatorName}
+              onChange={(event) => setOperatorName(event.target.value)}
+            />
+          </label>
+          {error && <p className="text-sm text-[#DC2626]">{error}</p>}
+          <button
+            className="rounded-lg bg-[#EA580C] px-5 py-2 text-sm font-medium text-white disabled:opacity-60"
+            disabled={submitting}
+            type="submit"
+          >
+            {submitting ? "提交中..." : "确认收款"}
+          </button>
+        </form>
       )}
     </section>
   );
@@ -329,6 +452,7 @@ function MessageDetailDrawer({
   loading,
   message,
   onClose,
+  onConfirmOfflineReceipt,
   onNavigateTarget,
 }: {
   actionTarget?: MessageActionTarget | null;
@@ -336,6 +460,7 @@ function MessageDetailDrawer({
   loading?: boolean;
   message: MessageItem;
   onClose: () => void;
+  onConfirmOfflineReceipt?: (message: MessageItem, operatorName: string) => Promise<void>;
   onNavigateTarget?: (target: MessageActionTarget) => void;
 }) {
   const display = getMessageDisplay(message);
@@ -374,6 +499,7 @@ function MessageDetailDrawer({
   return (
     <DetailDrawer title={`${display.title}详情`} footer={footer} onClose={onClose}>
       <div className="space-y-6">
+        <OfflineReceiptConfirm message={message} onConfirm={onConfirmOfflineReceipt} />
         {loading && (
           <div className="rounded-lg border border-[var(--lxxl-border)] bg-[#FAF8F4] px-4 py-3 text-sm text-[var(--lxxl-muted)]">
             正在加载最新消息详情...
@@ -935,6 +1061,7 @@ function relatedTypeLabel(type?: string | null) {
     SCHEDULE: "排期",
     COUNSELOR_LEAVE: "咨询师请假",
     APPOINTMENT_NEW: "新增预约",
+    OFFLINE_PAYMENT_DUE: "待付款",
     APPOINTMENT_CANCEL: "预约取消",
     COUNSELOR_APPOINTMENT_NEW: "新预约",
     COUNSELOR_APPOINTMENT_CANCEL: "预约取消",

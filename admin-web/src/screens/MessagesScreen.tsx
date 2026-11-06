@@ -11,13 +11,16 @@ import type { MessageBusinessDetail } from "@/panels/MessagesPanel";
 import type { MessageCategoryFilter } from "@/panels/MessagesPanel";
 import type { MessageReadFilter } from "@/panels/MessagesPanel";
 import {
+  confirmOfflinePaymentReceipt,
   fetchMessageDetail,
   fetchMessageLeaveRequestDetail,
   fetchMessages,
+  fetchTodayMessageDigest,
   fetchUnreadMessageCount,
   markMessageRead,
   MESSAGE_UNREAD_CHANGED_EVENT,
 } from "@/services/messages";
+import type { TodayDigest } from "@/panels/MessagesPanel";
 import type { MessageItem } from "@/types/api";
 import type { ScreenData } from "@/types/app";
 
@@ -47,9 +50,20 @@ function MessagesScreenContent() {
   const [selectedActionTarget, setSelectedActionTarget] = useState<MessageActionTarget | null>(null);
   const [listLoading, setListLoading] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [todayDigest, setTodayDigest] = useState<TodayDigest>({
+    cancelledCount: 0,
+    newBookingCount: 0,
+    leavePendingCount: 0,
+    visitorCancelPendingCount: 0,
+    recordAmendmentPendingCount: 0,
+  });
   const showCrisisBanner =
     currentUser.activeRole === "Admin" || currentUser.activeRole === "Ops";
   const showStaffReviewCategories = currentUser.activeRole === "Assistant";
+  const showTodayDigest =
+    currentUser.activeRole === "Admin" ||
+    currentUser.activeRole === "Ops" ||
+    currentUser.activeRole === "Assistant";
 
   const loadCrisisUnreadCount = useCallback(async () => {
     if (!showCrisisBanner) {
@@ -64,9 +78,21 @@ function MessagesScreenContent() {
     }
   }, [showCrisisBanner]);
 
-  const loadData = useCallback(async () => {
-    setListLoading(true);
-    clearNotice();
+  const loadDigest = useCallback(async () => {
+    if (!showTodayDigest) return;
+    try {
+      setTodayDigest(await fetchTodayMessageDigest());
+    } catch {
+      // 保留上一次成功读到的数字，避免轮询失败把滚动条清空。
+    }
+  }, [showTodayDigest]);
+
+  const loadData = useCallback(async (options?: { silent?: boolean }) => {
+    const silent = options?.silent === true;
+    if (!silent) {
+      setListLoading(true);
+      clearNotice();
+    }
     try {
       const unreadOnly = appliedStatusFilter === "UNREAD";
       const messages = await fetchMessages({
@@ -74,21 +100,47 @@ function MessagesScreenContent() {
         keyword: appliedKeyword,
         category: appliedCategoryFilter === "ALL" ? undefined : appliedCategoryFilter,
       });
+      const nextMessages = appliedStatusFilter === "READ" ? messages.filter((message) => message.IsRead) : messages;
       setData((prev) => ({
         ...prev,
-        messages: appliedStatusFilter === "READ" ? messages.filter((message) => message.IsRead) : messages,
+        messages: nextMessages,
       }));
+      setSelectedMessage((current) => {
+        if (!current) return current;
+        const next = nextMessages.find((item) => item.Id === current.Id);
+        if (!next) return current;
+        return {
+          ...current,
+          IsRead: next.IsRead,
+          IsPinned: next.IsPinned,
+          OfflineReceiptPending: next.OfflineReceiptPending,
+          OfflineReceiptOperator: next.OfflineReceiptOperator,
+          OfflineReceiptConfirmedAt: next.OfflineReceiptConfirmedAt,
+        };
+      });
     } catch (error) {
-      showNotice("error", error instanceof Error ? error.message : "消息加载失败");
+      if (!silent) {
+        showNotice("error", error instanceof Error ? error.message : "消息加载失败");
+      }
     } finally {
-      setListLoading(false);
+      if (!silent) setListLoading(false);
     }
   }, [appliedCategoryFilter, appliedKeyword, appliedStatusFilter, clearNotice, showNotice]);
 
   useEffect(() => {
     void loadData();
     void loadCrisisUnreadCount();
-  }, [loadData, loadCrisisUnreadCount, refreshKey]);
+    void loadDigest();
+  }, [loadData, loadCrisisUnreadCount, loadDigest, refreshKey]);
+
+  useEffect(() => {
+    if (!showTodayDigest) return;
+    const timer = window.setInterval(() => {
+      void loadDigest();
+      void loadData({ silent: true });
+    }, 15000);
+    return () => window.clearInterval(timer);
+  }, [loadData, loadDigest, showTodayDigest]);
 
   const openMessage = useCallback(
     async (message: MessageItem) => {
@@ -135,6 +187,23 @@ function MessagesScreenContent() {
     [router],
   );
 
+  const confirmOfflineReceipt = useCallback(
+    async (message: MessageItem, operatorName: string) => {
+      clearNotice();
+      try {
+        const detail = await confirmOfflinePaymentReceipt(message.Id, operatorName);
+        setSelectedMessage(detail);
+        showNotice("success", "已确认线下收款，置顶已取消");
+        await loadData({ silent: true });
+      } catch (error) {
+        const messageText = error instanceof Error ? error.message : "确认收款失败";
+        showNotice("error", messageText);
+        throw error instanceof Error ? error : new Error(messageText);
+      }
+    },
+    [clearNotice, loadData, showNotice],
+  );
+
   const searchMessages = useCallback(() => {
     setPage(1);
     setAppliedKeyword(keyword.trim());
@@ -167,13 +236,16 @@ function MessagesScreenContent() {
       selectedMessage={selectedMessage}
       showCrisisBanner={showCrisisBanner}
       showStaffReviewCategories={showStaffReviewCategories}
+      showTodayDigest={showTodayDigest}
       statusFilter={statusFilter}
+      todayDigest={todayDigest}
       onCloseDetail={() => {
         setSelectedMessage(null);
         setSelectedBusinessDetail(null);
         setSelectedActionTarget(null);
       }}
       onCategoryFilterChange={setCategoryFilter}
+      onConfirmOfflineReceipt={showTodayDigest ? confirmOfflineReceipt : undefined}
       onKeywordChange={setKeyword}
       onOpen={openMessage}
       onNavigateTarget={navigateMessageTarget}

@@ -49,6 +49,9 @@ export interface AgentBookingDraft {
   agreementType: "TONGXIN" | "YANGFAN" | "QIHANG" | null;
   isFreeExperienceOrder: boolean;
   freeOrderReason: string;
+  isOfflinePaymentOrder: boolean;
+  offlinePaymentOperator: string;
+  offlinePaymentReason: string;
 }
 
 export function AgentBookingPanel({
@@ -797,6 +800,8 @@ function ProxyBookingModal({
       !selectedSlot.past &&
       !selectedSlot.counselorOccupied &&
       (!draft.isFreeExperienceOrder || Boolean(draft.freeOrderReason.trim())) &&
+      (!draft.isOfflinePaymentOrder ||
+        (Boolean(draft.offlinePaymentOperator.trim()) && Boolean(draft.offlinePaymentReason.trim()))) &&
       (patient?.isContractSigned || draft.agreementType !== null) &&
       (needsRoom
         ? selectedRoom?.available && !selectedRoom.occupiedByOther
@@ -1130,7 +1135,13 @@ function ProxyBookingModal({
                     }
                     const confirmed = window.confirm("是否将本次代理预约推送为 0 元免费体验订单？");
                     if (confirmed) {
-                      setDraft((prev) => ({ ...prev, isFreeExperienceOrder: true }));
+                      setDraft((prev) => ({
+                        ...prev,
+                        isFreeExperienceOrder: true,
+                        isOfflinePaymentOrder: false,
+                        offlinePaymentOperator: "",
+                        offlinePaymentReason: "",
+                      }));
                     }
                   }}
                 />
@@ -1151,6 +1162,69 @@ function ProxyBookingModal({
             </div>
           )}
 
+          {canPushFreeExperienceOrder && (
+            <div className="mt-5 rounded-xl border border-[var(--lxxl-border)] bg-[#FAF8F4] p-4">
+              <label className="flex cursor-pointer items-start justify-between gap-4">
+                <span>
+                  <span className="block text-sm font-medium">线下支付单</span>
+                  <span className="mt-1 block text-xs leading-5 text-[var(--lxxl-muted)]">
+                    来访在订单里确认预约即可成功，不需要在线支付。金额仍按当前定价记录。
+                  </span>
+                </span>
+                <input
+                  checked={draft.isOfflinePaymentOrder}
+                  className="mt-1 h-4 w-4 accent-[var(--lxxl-green)]"
+                  type="checkbox"
+                  onChange={(event) => {
+                    if (!event.target.checked) {
+                      setDraft((prev) => ({
+                        ...prev,
+                        isOfflinePaymentOrder: false,
+                        offlinePaymentOperator: "",
+                        offlinePaymentReason: "",
+                      }));
+                      return;
+                    }
+                    const confirmed = window.confirm("是否将本次推送为线下支付单？来访确认预约后即成功，无需在线支付。");
+                    if (!confirmed) return;
+                    setDraft((prev) => ({
+                      ...prev,
+                      isOfflinePaymentOrder: true,
+                      isFreeExperienceOrder: false,
+                      freeOrderReason: "",
+                    }));
+                  }}
+                />
+              </label>
+              {draft.isOfflinePaymentOrder && (
+                <div className="mt-4 space-y-4">
+                  <QueryField label="操作人" required>
+                    <input
+                      className={queryControlClass}
+                      maxLength={100}
+                      placeholder="请填写推送订单的操作人"
+                      value={draft.offlinePaymentOperator}
+                      onChange={(event) =>
+                        setDraft((prev) => ({ ...prev, offlinePaymentOperator: event.target.value }))
+                      }
+                    />
+                  </QueryField>
+                  <QueryField label="推送理由" required>
+                    <textarea
+                      className={`${queryControlClass} min-h-24 resize-y`}
+                      maxLength={500}
+                      placeholder="请输入线下支付单推送理由"
+                      value={draft.offlinePaymentReason}
+                      onChange={(event) =>
+                        setDraft((prev) => ({ ...prev, offlinePaymentReason: event.target.value }))
+                      }
+                    />
+                  </QueryField>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="mt-5 rounded-xl border border-[#D1E7DD] bg-[#F4FBF7] px-4 py-4">
             <div className="text-sm font-medium text-[var(--lxxl-ink)]">推送金额</div>
             <div
@@ -1161,7 +1235,9 @@ function ProxyBookingModal({
               {feeLoading ? "计算中..." : feeError || feeLabel || "—"}
             </div>
             <p className="mt-2 text-xs leading-5 text-[var(--lxxl-muted)]">
-              按当前来访与绑定咨询师的定价计算；勾选免费体验单后为 0 元。
+              {draft.isOfflinePaymentOrder
+                ? "金额仍按当前定价计算。来访确认预约后即成功，无需在线支付。"
+                : "按当前来访与绑定咨询师的定价计算；勾选免费体验单后为 0 元。"}
             </p>
           </div>
         </div>
@@ -1239,6 +1315,9 @@ function slotHint(slot: ProxySlotOption) {
 }
 
 export function proxyOrderSuccessText(result: ProxyPushOrderResult) {
+  if (result.isOfflinePaymentOrder) {
+    return `${result.message || "已推送线下支付单"}，金额 ${formatMoneyFromCents(result.totalFee)}`;
+  }
   if ((result.totalFee ?? 0) <= 0 || result.isFreeOrder) {
     return `${result.message || "已推送免费单"}`;
   }

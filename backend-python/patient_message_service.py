@@ -556,11 +556,15 @@ def notify_patient_proxy_order_pending(
     center_name = center_display_name(center_id) if center_id else "待定"
     time_text = _format_datetime(schedule.StartTime)
     fee_cents = int(order.TotalFee or 0)
+    offline = bool(getattr(order, "ProxyIsOfflinePayment", False))
     fee_label = "免费" if fee_cents <= 0 else f"¥{fee_cents // 100}"
     from system_setting_service import get_proxy_order_ttl_minutes, proxy_order_ttl_patient_tip
 
     ttl_minutes = get_proxy_order_ttl_minutes(db)
     summary = f"{counselor_name} · {time_text} · {fee_label}"
+    tip = proxy_order_ttl_patient_tip(ttl_minutes)
+    if offline:
+        tip = f"本单为线下支付，确认预约即可，无需在线付款。{tip}"
     detail = {
         "counselorName": counselor_name,
         "startTime": time_text,
@@ -571,15 +575,16 @@ def notify_patient_proxy_order_pending(
         "totalFeeYuan": fee_cents // 100,
         "feeLabel": fee_label,
         "isFreeOrder": fee_cents <= 0,
+        "isOfflinePaymentOrder": offline,
         "expiresAt": order.ExpiresAt.isoformat() if order.ExpiresAt else None,
         "proxyOrderTtlMinutes": ttl_minutes,
-        "tip": proxy_order_ttl_patient_tip(ttl_minutes),
+        "tip": tip,
     }
     _notify_patient(
         db,
         patient.Id,
         type_="ORDER",
-        title="待支付预约",
+        title="待确认预约" if offline else "待支付预约",
         content=_message_payload(summary, detail),
         related_type="PATIENT_PROXY_ORDER_PENDING",
         related_id=order.Id,

@@ -24,6 +24,8 @@ export interface PatientOrder {
   proxyAgreementIsAdult?: boolean | null
   proxyAgreementType?: string | null
   proxyAgreementLabel?: string | null
+  /** 助理/管理员推送的线下支付单：来访确认即可，不走在线支付 */
+  isOfflinePaymentOrder?: boolean
 }
 
 /** 列表/详情展示用时间：已支付（含已退款）优先支付时间 */
@@ -44,6 +46,15 @@ export const useRealWechatPay = () => import.meta.env.VITE_ENABLE_REAL_PAY === '
 
 export function isFreeOrderFee(cents?: number | null) {
   return cents != null && !Number.isNaN(Number(cents)) && Number(cents) <= 0
+}
+
+export function isOfflinePaymentOrder(order?: { isOfflinePaymentOrder?: boolean } | null) {
+  return Boolean(order?.isOfflinePaymentOrder)
+}
+
+/** 免费单和线下支付单都是确认预约，不发起微信支付。 */
+export function isConfirmInsteadOfPay(order?: { TotalFee?: number | null; isOfflinePaymentOrder?: boolean } | null) {
+  return isFreeOrderFee(order?.TotalFee) || isOfflinePaymentOrder(order)
 }
 
 /** 订单金额展示：0 元显示「免费」 */
@@ -103,9 +114,9 @@ async function confirmFreeOrder(orderId: number): Promise<{ ok: boolean; msg?: s
 
 export async function executeOrderPayment(
   orderId: number,
-  options?: { totalFeeCents?: number },
+  options?: { totalFeeCents?: number; offlinePayment?: boolean },
 ): Promise<{ ok: boolean; msg?: string }> {
-  if (isFreeOrderFee(options?.totalFeeCents)) {
+  if (isFreeOrderFee(options?.totalFeeCents) || options?.offlinePayment) {
     return confirmFreeOrder(orderId)
   }
 
@@ -168,10 +179,10 @@ export const formatOrderTime = (start?: string, end?: string) => {
   return `${s} – ${endClock}`
 }
 
-export const expireHintText = (expiresAt?: string) => {
+export const expireHintText = (expiresAt?: string, action: '支付' | '确认' = '支付') => {
   if (!expiresAt) return ''
   const end = new Date(expiresAt.includes('T') ? expiresAt : expiresAt.replace(' ', 'T')).getTime()
   const left = Math.max(0, Math.floor((end - Date.now()) / 60000))
-  if (left <= 0) return '订单即将过期，请尽快支付'
-  return `请在 ${left} 分钟内完成支付，逾期将自动取消`
+  if (left <= 0) return `订单即将过期，请尽快${action}`
+  return `请在 ${left} 分钟内完成${action}，逾期将自动取消`
 }

@@ -78,6 +78,9 @@ export function pushProxyOrder(input: {
   agreementType?: "TONGXIN" | "YANGFAN" | "QIHANG";
   isFreeExperienceOrder?: boolean;
   freeOrderReason?: string;
+  isOfflinePaymentOrder?: boolean;
+  offlinePaymentOperator?: string;
+  offlinePaymentReason?: string;
 }) {
   return apiRequest<ProxyPushOrderResult>(`${BASE_PATH}/push-order`, {
     method: "POST",
@@ -93,6 +96,9 @@ export function pushProxyOrder(input: {
       agreement_type: input.agreementType,
       is_free_experience_order: input.isFreeExperienceOrder || false,
       free_order_reason: input.freeOrderReason || undefined,
+      is_offline_payment_order: input.isOfflinePaymentOrder || false,
+      offline_payment_operator: input.offlinePaymentOperator || undefined,
+      offline_payment_reason: input.offlinePaymentReason || undefined,
     }),
   });
 }

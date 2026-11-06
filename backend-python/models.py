@@ -110,6 +110,13 @@ class AppOrder(Base):
     ProxyAgreementType = Column(String(20), nullable=True)
     ProxyIsFreeExperience = Column(Boolean, nullable=False, default=False)
     ProxyFreeExperienceReason = Column(Unicode(500), nullable=True)
+    ProxyIsOfflinePayment = Column(Boolean, nullable=False, default=False)
+    ProxyOfflinePaymentOperator = Column(Unicode(100), nullable=True)
+    ProxyOfflinePaymentReason = Column(Unicode(500), nullable=True)
+    ProxyOfflineReceiptOperator = Column(Unicode(100), nullable=True)
+    ProxyOfflineReceiptByAccountId = Column(Integer, nullable=True)
+    ProxyOfflineReceiptByRole = Column(String(20), nullable=True)
+    ProxyOfflineReceiptConfirmedAt = Column(DateTime, nullable=True)
     IntakeAgreementType = Column(String(20), nullable=True)
     UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
 

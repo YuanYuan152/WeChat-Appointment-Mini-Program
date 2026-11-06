@@ -69,6 +69,13 @@
       </view>
     </view>
 
+    <view v-if="showTodayDigest" class="digest-bar">
+      <view class="digest-track">
+        <text class="digest-text">{{ digestText }}</text>
+        <text class="digest-text">{{ digestText }}</text>
+      </view>
+    </view>
+
     <view
       v-if="showCrisisUnreadBanner"
       class="crisis-unread-banner"
@@ -101,7 +108,7 @@
         v-for="item in messages"
         :key="item.Id"
         class="message-card"
-        :class="{ unread: !item.IsRead }"
+        :class="{ unread: !item.IsRead, pinned: item.IsPinned }"
         @click="openMessage(item)"
       >
         <view class="msg-main">
@@ -131,6 +138,7 @@ import {
   getMessageCategoriesForRole,
   hasAdminOpsMessageInbox,
   isCrisisReportMessage,
+  isStaffWorkbenchMessageInbox,
   messageCategoryLabel,
   messageDisplayTitle,
   messageSummary,
@@ -162,6 +170,17 @@ let searchTimer: ReturnType<typeof setTimeout> | null = null
 
 const inboxRole = computed(() => resolveMessageInboxRole(activeRole.value, userRoles.value))
 const isAdminOpsInbox = computed(() => hasAdminOpsMessageInbox(activeRole.value, userRoles.value))
+const showTodayDigest = computed(() => isStaffWorkbenchMessageInbox(inboxRole.value))
+const digest = ref({
+  cancelledCount: 0,
+  newBookingCount: 0,
+  leavePendingCount: 0,
+  visitorCancelPendingCount: 0,
+  recordAmendmentPendingCount: 0,
+})
+const digestText = computed(
+  () => `今日预约取消${digest.value.cancelledCount}单，今日新增预约${digest.value.newBookingCount}单，今天新发起的咨询师请假待审核${digest.value.leavePendingCount}个、来访取消预约申请待审核${digest.value.visitorCancelPendingCount}个、咨询记录修改申请待审核${digest.value.recordAmendmentPendingCount}个`,
+)
 const categories = computed(() => getMessageCategoriesForRole(inboxRole.value))
 const showSearch = computed(() => canSearchMessages(inboxRole.value))
 const showCrisisUnreadBanner = computed(() => isAdminOpsInbox.value)
@@ -309,6 +328,49 @@ const refreshMessageBadges = () => {
   void loadUnreadCrisisCount()
 }
 
+const loadDigest = async () => {
+  if (!showTodayDigest.value) return
+  try {
+    const res = await httpV2.get<{
+      cancelledCount: number
+      newBookingCount: number
+      leavePendingCount: number
+      visitorCancelPendingCount: number
+      recordAmendmentPendingCount: number
+    }>(
+      API_ENDPOINTS.message.todayDigest,
+      undefined,
+      { showLoading: false, showError: false },
+    )
+    if (res.code === 0 && res.data) {
+      digest.value = {
+        cancelledCount: Number(res.data.cancelledCount) || 0,
+        newBookingCount: Number(res.data.newBookingCount) || 0,
+        leavePendingCount: Number(res.data.leavePendingCount) || 0,
+        visitorCancelPendingCount: Number(res.data.visitorCancelPendingCount) || 0,
+        recordAmendmentPendingCount: Number(res.data.recordAmendmentPendingCount) || 0,
+      }
+    }
+  } catch {
+    // 滚动条保留上一次成功读到的数字
+  }
+}
+
+const reloadMessagesQuietly = async () => {
+  try {
+    const res = await httpV2.get<MessageItem[]>(
+      API_ENDPOINTS.message.list,
+      buildListParams(),
+      { showLoading: false, showError: false },
+    )
+    if (res.code === 0 && Array.isArray(res.data)) {
+      messages.value = res.data
+    }
+  } catch {
+    // 静默刷新失败时保留当前列表
+  }
+}
+
 const loadMessages = async () => {
   const requestId = loadGuard.start()
   loading.value = true
@@ -417,11 +479,13 @@ const openMessage = async (item: MessageItem) => {
 let pageDisposed = false
 let showGeneration = 0
 let showTimer: ReturnType<typeof setTimeout> | undefined
+let digestTimer: ReturnType<typeof setInterval> | undefined
 onUnload(() => {
   pageDisposed = true
   showGeneration++
   loadGuard.dispose()
   if (showTimer !== undefined) clearTimeout(showTimer)
+  if (digestTimer !== undefined) clearInterval(digestTimer)
   if (searchTimer) clearTimeout(searchTimer)
 })
 
@@ -431,6 +495,15 @@ const refreshOnShow = async (generation: number) => {
   activeCategory.value = sanitizeMessageCategoryForRole(inboxRole.value, activeCategory.value)
   // 先出列表，危机角标后台刷新，避免部分安卓上串行请求把灰字 loading 拖死
   await loadMessages()
+  if (pageDisposed || generation !== showGeneration) return
+  await loadDigest()
+  if (pageDisposed || generation !== showGeneration) return
+  if (digestTimer !== undefined) clearInterval(digestTimer)
+  digestTimer = setInterval(() => {
+    if (pageDisposed) return
+    void loadDigest()
+    void reloadMessagesQuietly()
+  }, 15000)
 }
 
 onShow(() => {
@@ -741,6 +814,45 @@ onShow(() => {
 
 .message-card.unread {
   border-left-color: #3D5A4E;
+}
+
+.message-card.pinned {
+  background: #FFF7ED;
+  border: 1rpx solid #FDBA74;
+  border-left: 8rpx solid #EA580C;
+}
+
+.message-card.pinned .msg-title,
+.message-card.pinned .msg-type-tag {
+  color: #C2410C;
+}
+
+.digest-bar {
+  overflow: hidden;
+  margin-bottom: 18rpx;
+  height: 72rpx;
+  border-radius: 16rpx;
+  background: #FFF7ED;
+  border: 1rpx solid #FDBA74;
+}
+
+.digest-track {
+  display: inline-flex;
+  white-space: nowrap;
+  animation: digest-scroll 18s linear infinite;
+}
+
+.digest-text {
+  padding: 0 48rpx;
+  line-height: 72rpx;
+  font-size: 26rpx;
+  font-weight: 700;
+  color: #C2410C;
+}
+
+@keyframes digest-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
 }
 
 .msg-main {

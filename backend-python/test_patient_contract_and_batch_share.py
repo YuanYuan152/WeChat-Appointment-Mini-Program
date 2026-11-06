@@ -760,6 +760,74 @@ class PatientContractTests(BackendServiceTestCase):
                 free_order_reason="主任申请",
             )
 
+    def test_proxy_offline_payment_order_keeps_price_and_requires_operator(self):
+        self.patient.BoundCounselorId = 10
+        self.patient.IsContractSigned = True
+        self.db.add_all(
+            [
+                AppAccount(Id=96, Mobile="13800000096", IsActive=True),
+                AppRoleBinding(AccountId=96, RoleType="Assistant"),
+                AppAccount(Id=95, Mobile="13800000095", IsActive=True),
+                AppRoleBinding(AccountId=95, RoleType="Counselor"),
+            ]
+        )
+        self.db.flush()
+
+        with self.assertRaisesRegex(ValueError, "操作人不能为空"):
+            push_proxy_order(
+                self.db,
+                staff_account_id=96,
+                patient_id=self.patient.Id,
+                counselor_id=10,
+                center_id="video",
+                start_time=datetime(2099, 12, 4, 9, 0),
+                end_time=datetime(2099, 12, 4, 9, 50),
+                is_offline_payment_order=True,
+                offline_payment_reason="来访已线下付款",
+            )
+
+        with self.assertRaisesRegex(ValueError, "仅管理员和咨询助理"):
+            push_proxy_order(
+                self.db,
+                staff_account_id=95,
+                patient_id=self.patient.Id,
+                counselor_id=10,
+                center_id="video",
+                start_time=datetime(2099, 12, 4, 10, 0),
+                end_time=datetime(2099, 12, 4, 10, 50),
+                is_offline_payment_order=True,
+                offline_payment_operator="王助理",
+                offline_payment_reason="来访已线下付款",
+            )
+
+        with (
+            patch("proxy_booking_service.validate_slot_in_rolling_window"),
+            patch("proxy_booking_service.resolve_display_price_cents", return_value=60_000),
+            patch("proxy_booking_notify.notify_proxy_order_created"),
+            patch("system_setting_service.get_proxy_order_ttl_minutes", return_value=30),
+        ):
+            result = push_proxy_order(
+                self.db,
+                staff_account_id=96,
+                patient_id=self.patient.Id,
+                counselor_id=10,
+                center_id="video",
+                start_time=datetime(2099, 12, 4, 11, 0),
+                end_time=datetime(2099, 12, 4, 11, 50),
+                is_offline_payment_order=True,
+                offline_payment_operator=" 王助理 ",
+                offline_payment_reason=" 来访已线下付款 ",
+            )
+
+        order = self.db.query(AppOrder).filter(AppOrder.Id == result["orderId"]).one()
+        self.assertEqual(order.TotalFee, 60_000)
+        self.assertFalse(order.ProxyIsFreeExperience)
+        self.assertTrue(order.ProxyIsOfflinePayment)
+        self.assertEqual(order.ProxyOfflinePaymentOperator, "王助理")
+        self.assertEqual(order.ProxyOfflinePaymentReason, "来访已线下付款")
+        self.assertTrue(result["isOfflinePaymentOrder"])
+        self.assertFalse(result["isFreeOrder"])
+
     def test_staff_proxy_push_notifies_target_counselor(self):
         schedule = self.db.query(AppSchedule).filter(AppSchedule.Id == 101).one()
         self.add_order(16, schedule.Id, "PENDING")

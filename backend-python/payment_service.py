@@ -184,6 +184,9 @@ def complete_paid_order(
         from consultation_status_service import schedule_consultation_auto_done
 
         notify_staff_new_appointment(db, existing, order)
+        from staff_message_service import notify_staff_offline_payment_due
+
+        notify_staff_offline_payment_due(db, existing, order)
         notify_counselor_new_appointment(db, existing)
         schedule_counselor_consultation_reminder(db, existing)
         schedule_counselor_consultation_done_notice(db, existing)
@@ -221,6 +224,9 @@ def complete_paid_order(
     from consultation_status_service import schedule_consultation_auto_done
 
     notify_staff_new_appointment(db, consultation, order)
+    from staff_message_service import notify_staff_offline_payment_due
+
+    notify_staff_offline_payment_due(db, consultation, order)
     notify_counselor_new_appointment(db, consultation)
     schedule_counselor_consultation_reminder(db, consultation)
     schedule_counselor_consultation_done_notice(db, consultation)

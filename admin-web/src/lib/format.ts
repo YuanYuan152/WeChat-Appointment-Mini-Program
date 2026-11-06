@@ -149,6 +149,7 @@ export function statusLabel(status?: string | null) {
     CREATED: "已创建",
     UPDATED: "已更新",
     CONFIRMED: "已确认",
+    RECEIPT_CONFIRMED: "已确认收款",
     BOOKED: "已预约",
     AVAILABLE: "可用",
     MAINTENANCE: "维护中",

@@ -353,6 +353,36 @@
               </view>
             </view>
 
+            <view v-if="canPushFreeExperienceOrder" class="form-item">
+              <view class="free-order-row">
+                <view>
+                  <text class="form-label">线下支付单</text>
+                  <text class="form-hint">来访确认预约即可成功，不需要在线支付</text>
+                </view>
+                <switch
+                  color="#3D5A4E"
+                  :checked="form.isOfflinePaymentOrder"
+                  @change="onOfflinePaymentChange"
+                />
+              </view>
+              <view v-if="form.isOfflinePaymentOrder" class="free-reason-wrap">
+                <text class="form-label">操作人 <text class="required">*</text></text>
+                <input
+                  v-model="form.offlinePaymentOperator"
+                  class="free-reason-input"
+                  :maxlength="100"
+                  placeholder="请填写推送订单的操作人"
+                />
+                <text class="form-label">推送理由 <text class="required">*</text></text>
+                <textarea
+                  v-model="form.offlinePaymentReason"
+                  class="free-reason-input"
+                  :maxlength="500"
+                  placeholder="请输入线下支付单推送理由"
+                />
+              </view>
+            </view>
+
             <view class="form-item push-fee-card">
               <text class="form-label">推送金额</text>
               <text v-if="pushFeeLoading" class="push-fee-value muted">计算中...</text>
@@ -360,7 +390,7 @@
               <text v-else class="push-fee-value" :class="{ free: pushFeeIsFree }">
                 {{ pushFeeLabel || '—' }}
               </text>
-              <text class="form-hint">按当前来访与绑定咨询师的定价计算；勾选免费体验单后为 0 元</text>
+              <text class="form-hint">{{ form.isOfflinePaymentOrder ? '金额仍按当前定价计算。来访确认预约后即成功，无需在线支付。' : '按当前来访与绑定咨询师的定价计算；勾选免费体验单后为 0 元' }}</text>
             </view>
           </view>
         </scroll-view>
@@ -552,6 +582,10 @@ const canPushOrder = computed(() => {
   if (!isVideoCenterSelected.value && !form.value.roomId) return false
   if (!patientContractSigned.value && !form.value.agreementType) return false
   if (form.value.isFreeExperienceOrder && !form.value.freeOrderReason.trim()) return false
+  if (
+    form.value.isOfflinePaymentOrder
+    && (!form.value.offlinePaymentOperator.trim() || !form.value.offlinePaymentReason.trim())
+  ) return false
   return true
 })
 const isVideoCenterSelected = computed(() => isVideoCenter(form.value.centerId))
@@ -591,6 +625,9 @@ const form = ref({
   agreementType: null as ConsultationAgreementType | null,
   isFreeExperienceOrder: false,
   freeOrderReason: '',
+  isOfflinePaymentOrder: false,
+  offlinePaymentOperator: '',
+  offlinePaymentReason: '',
 })
 
 let patientSearchTimer: ReturnType<typeof setTimeout> | null = null
@@ -1011,6 +1048,9 @@ const openAddModal = () => {
     agreementType: null,
     isFreeExperienceOrder: false,
     freeOrderReason: '',
+    isOfflinePaymentOrder: false,
+    offlinePaymentOperator: '',
+    offlinePaymentReason: '',
   }
   resetVideoRoomPrefUi()
   showAdd.value = true
@@ -1116,6 +1156,36 @@ const onFreeExperienceChange = (e: { detail: { value: boolean } }) => {
     success: ({ confirm }) => {
       form.value.isFreeExperienceOrder = confirm
       if (!confirm) form.value.freeOrderReason = ''
+      if (confirm) {
+        form.value.isOfflinePaymentOrder = false
+        form.value.offlinePaymentOperator = ''
+        form.value.offlinePaymentReason = ''
+      }
+      void loadPushFee()
+    },
+  })
+}
+
+const onOfflinePaymentChange = (e: { detail: { value: boolean } }) => {
+  if (!e.detail.value) {
+    form.value.isOfflinePaymentOrder = false
+    form.value.offlinePaymentOperator = ''
+    form.value.offlinePaymentReason = ''
+    return
+  }
+  uni.showModal({
+    title: '推送线下支付单',
+    content: '来访确认预约后即成功，无需在线支付。是否继续？',
+    confirmText: '确认推送',
+    success: ({ confirm }) => {
+      form.value.isOfflinePaymentOrder = confirm
+      if (!confirm) {
+        form.value.offlinePaymentOperator = ''
+        form.value.offlinePaymentReason = ''
+        return
+      }
+      form.value.isFreeExperienceOrder = false
+      form.value.freeOrderReason = ''
       void loadPushFee()
     },
   })
@@ -1147,6 +1217,14 @@ const submitProxyOrder = () => {
     uni.showToast({ title: '请填写免费订单推送理由', icon: 'none' })
     return
   }
+  if (form.value.isOfflinePaymentOrder && !form.value.offlinePaymentOperator.trim()) {
+    uni.showToast({ title: '请填写操作人', icon: 'none' })
+    return
+  }
+  if (form.value.isOfflinePaymentOrder && !form.value.offlinePaymentReason.trim()) {
+    uni.showToast({ title: '请填写线下支付单推送理由', icon: 'none' })
+    return
+  }
   const subscribeDone = tryOfficialRoleSubscribeInGesture('workbench')
   submitting.value = true
   void (async () => {
@@ -1163,6 +1241,13 @@ const submitProxyOrder = () => {
         free_order_reason: form.value.isFreeExperienceOrder
           ? form.value.freeOrderReason.trim()
           : undefined,
+        is_offline_payment_order: form.value.isOfflinePaymentOrder,
+        offline_payment_operator: form.value.isOfflinePaymentOrder
+          ? form.value.offlinePaymentOperator.trim()
+          : undefined,
+        offline_payment_reason: form.value.isOfflinePaymentOrder
+          ? form.value.offlinePaymentReason.trim()
+          : undefined,
       }
       if (!patientContractSigned.value) {
         payload.agreement_type = form.value.agreementType
@@ -1173,10 +1258,18 @@ const submitProxyOrder = () => {
         uni.showToast({ title: res.msg || '推送失败', icon: 'none' })
         return
       }
-      const pushData = res.data as { isFreeOrder?: boolean; totalFee?: number; message?: string } | undefined
+      const pushData = res.data as {
+        isFreeOrder?: boolean
+        isOfflinePaymentOrder?: boolean
+        totalFee?: number
+        message?: string
+      } | undefined
+      const offline = Boolean(pushData?.isOfflinePaymentOrder)
       const free = Boolean(pushData?.isFreeOrder || (pushData?.totalFee != null && pushData.totalFee <= 0))
       uni.showToast({
-        title: free ? (pushData?.message || '已推送免费单') : '订单已推送',
+        title: offline
+          ? (pushData?.message || '已推送线下支付单')
+          : (free ? (pushData?.message || '已推送免费单') : '订单已推送'),
         icon: 'success',
       })
       showAdd.value = false

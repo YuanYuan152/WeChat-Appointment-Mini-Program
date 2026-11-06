@@ -120,7 +120,7 @@
               class="confirm-btn"
               :class="{ disabled: !canSubmitAgreement || submittingAgreement }"
               @tap="submitAgreement"
-            >{{ submittingAgreement ? '提交中...' : (isFreeOrder ? '同意协议并继续确认' : '同意协议并继续支付') }}</button>
+            >{{ submittingAgreement ? '提交中...' : (isConfirmOrder ? '同意协议并继续确认' : '同意协议并继续支付') }}</button>
           </view>
         </template>
       </template>
@@ -134,7 +134,7 @@
           :style="scrollAreaStyle"
         >
           <view class="amount-box">
-            <template v-if="isFreeOrder">
+            <template v-if="isFreeOrder && !isOfflineOrder">
               <text class="amount-value">免费</text>
             </template>
             <template v-else>
@@ -168,15 +168,16 @@
             </view>
             <view class="detail-row">
               <text class="label">订单状态</text>
-              <text class="value pending">待支付</text>
+              <text class="value pending">{{ isConfirmOrder ? '待确认' : '待支付' }}</text>
             </view>
+            <view v-if="isOfflineOrder" class="expire-tip">本单为线下支付，确认预约即可，无需在线付款。</view>
             <view v-if="expireText" class="expire-tip">{{ expireText }}</view>
           </view>
 
           <view class="tips-block">
             <text class="tips-title">温馨提示</text>
             <text class="tips-line">· 咨询采用预约制，请确认参加本次咨询的时间，费用，地点，咨询师将为您预留出相应时间；</text>
-            <text class="tips-line">· {{ isFreeOrder ? '确认后预约立即生效；' : '支付成功后预约立即生效；' }}</text>
+            <text class="tips-line">· {{ isConfirmOrder ? '确认后预约立即生效；' : '支付成功后预约立即生效；' }}</text>
             <text class="tips-line">· 如需改约或取消，也请至少提前24小时联系我们；</text>
             <text class="tips-line">· 在咨询开始前24小时内临时取消咨询或爽约，将计为一节正式咨询，不予退款，除非双方另行协商一致；</text>
             <text class="tips-line">· 请注意预定的咨询时间，如有迟到，咨询时间不做延长；</text>
@@ -199,10 +200,10 @@
             @tap="onConfirm"
           >{{
             paying
-              ? (isFreeOrder ? '确认中...' : '支付中...')
+              ? (isConfirmOrder ? '确认中...' : '支付中...')
               : !agreed
-                ? '下滑阅读后付款'
-                : (isFreeOrder ? '确认预约' : '确认支付')
+                ? (isConfirmOrder ? '下滑阅读后确认' : '下滑阅读后付款')
+                : (isConfirmOrder ? '确认预约' : '确认支付')
           }}</button>
         </view>
       </template>
@@ -263,7 +264,9 @@ import {
   executeOrderPayment,
   expireHintText,
   formatOrderTime,
+  isConfirmInsteadOfPay,
   isFreeOrderFee,
+  isOfflinePaymentOrder,
 } from '@/utils/orderPayment'
 import CenterAddressRow from '@/components/CenterAddressRow.vue'
 import {
@@ -324,8 +327,10 @@ const resolveSigCanvasHeight = () => {
   }
 }
 
-const expireText = computed(() => expireHintText(order.value?.ExpiresAt))
+const expireText = computed(() => expireHintText(order.value?.ExpiresAt, isConfirmOrder.value ? '确认' : '支付'))
 const isFreeOrder = computed(() => isFreeOrderFee(order.value?.TotalFee))
+const isOfflineOrder = computed(() => isOfflinePaymentOrder(order.value))
+const isConfirmOrder = computed(() => isConfirmInsteadOfPay(order.value))
 const emergencyPayload = computed(() => ({
   name: emergencyName.value.trim(),
   relation: emergencyRelation.value.trim(),
@@ -364,7 +369,7 @@ const hasPresetAgreement = computed(() =>
 
 const presetAgreementTip = computed(() => {
   if (hasPresetAgreement.value && order.value?.proxyAgreementLabel) {
-    return `助理已为您选定《${order.value.proxyAgreementLabel}》，请阅读协议并完成电子签名后再${isFreeOrderFee(order.value.TotalFee) ? '确认' : '支付'}。`
+    return `助理已为您选定《${order.value.proxyAgreementLabel}》，请阅读协议并完成电子签名后再${isConfirmInsteadOfPay(order.value) ? '确认' : '支付'}。`
   }
   return '您与该咨询师尚未签约，确认前请先选择协议并完成电子签名。'
 })
@@ -376,7 +381,9 @@ const effectiveAgreementType = computed((): ConsultationAgreementType | null => 
 })
 
 const sheetTitle = computed(() =>
-  showAgreementStep.value ? '签署协议' : (isFreeOrder.value ? '确认免费预约' : '确认预约与支付'),
+  showAgreementStep.value
+    ? '签署协议'
+    : (isOfflineOrder.value ? '确认预约' : (isFreeOrder.value ? '确认免费预约' : '确认预约与支付')),
 )
 
 /** 真机：底部绝对定位 + 像素高度字符串（协议约 4/5，支付约 3/4） */
@@ -675,24 +682,25 @@ const onConfirm = () => {
       await subscribePromise
       const result = await executeOrderPayment(orderId, {
         totalFeeCents: order.value?.TotalFee,
+        offlinePayment: isOfflinePaymentOrder(order.value),
       })
       if (result.ok) {
         uni.showToast({
-          title: isFreeOrderFee(order.value?.TotalFee) ? '预约成功' : '支付成功',
+          title: isConfirmOrder.value ? '预约成功' : '支付成功',
           icon: 'success',
         })
         emit('paid')
         emit('close')
       } else {
         uni.showToast({
-          title: result.msg || (isFreeOrderFee(order.value?.TotalFee) ? '确认失败' : '支付失败'),
+          title: result.msg || (isConfirmOrder.value ? '确认失败' : '支付失败'),
           icon: 'none',
         })
       }
     } catch (error) {
       console.error('[payment] confirm flow failed', error)
       uni.showToast({
-        title: isFreeOrderFee(order.value?.TotalFee) ? '确认失败' : '支付失败',
+        title: isConfirmOrder.value ? '确认失败' : '支付失败',
         icon: 'none',
       })
     } finally {

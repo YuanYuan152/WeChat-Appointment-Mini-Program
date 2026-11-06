@@ -635,6 +635,9 @@ def push_proxy_order(
     agreement_type: Optional[str] = None,
     is_free_experience_order: bool = False,
     free_order_reason: Optional[str] = None,
+    is_offline_payment_order: bool = False,
+    offline_payment_operator: Optional[str] = None,
+    offline_payment_reason: Optional[str] = None,
     notify_target_counselor: bool = True,
 ) -> Dict[str, Any]:
     from system_setting_service import get_proxy_order_ttl_minutes, proxy_order_ttl_push_message
@@ -646,6 +649,10 @@ def push_proxy_order(
     acquire_patient_contract_lock(db, patient_id)
     ttl_minutes = get_proxy_order_ttl_minutes(db)
     normalized_free_order_reason = (free_order_reason or "").strip()
+    normalized_offline_operator = (offline_payment_operator or "").strip()
+    normalized_offline_reason = (offline_payment_reason or "").strip()
+    if is_free_experience_order and is_offline_payment_order:
+        raise ValueError("免费体验单和线下支付单不能同时推送")
     if is_free_experience_order:
         if get_account_role(db, staff_account_id) not in {"Admin", "Assistant"}:
             raise ValueError("仅管理员和咨询助理可推送免费体验单")
@@ -653,6 +660,16 @@ def push_proxy_order(
             raise ValueError("免费订单推送理由不能为空")
     else:
         normalized_free_order_reason = ""
+    if is_offline_payment_order:
+        if get_account_role(db, staff_account_id) not in {"Admin", "Assistant"}:
+            raise ValueError("仅管理员和咨询助理可推送线下支付单")
+        if not normalized_offline_operator:
+            raise ValueError("线下支付单操作人不能为空")
+        if not normalized_offline_reason:
+            raise ValueError("线下支付单推送理由不能为空")
+    else:
+        normalized_offline_operator = ""
+        normalized_offline_reason = ""
 
     patient = db.query(AppAccount).filter(AppAccount.Id == patient_id, AppAccount.IsActive == True).first()
     if not patient:
@@ -828,6 +845,9 @@ def push_proxy_order(
         ProxyAgreementType=resolved_agreement_type if needs_agreement else None,
         ProxyIsFreeExperience=is_free_experience_order,
         ProxyFreeExperienceReason=normalized_free_order_reason or None,
+        ProxyIsOfflinePayment=is_offline_payment_order,
+        ProxyOfflinePaymentOperator=normalized_offline_operator or None,
+        ProxyOfflinePaymentReason=normalized_offline_reason or None,
     )
     db.add(order)
     db.flush()
@@ -852,11 +872,16 @@ def push_proxy_order(
         "totalFeeYuan": total_fee / 100,
         "isFreeOrder": int(total_fee or 0) <= 0,
         "isFreeExperienceOrder": bool(is_free_experience_order),
+        "isOfflinePaymentOrder": bool(is_offline_payment_order),
         "expiresAt": expires_at.isoformat(),
         "message": (
-            "已推送免费单"
-            if int(total_fee or 0) <= 0
-            else proxy_order_ttl_push_message(ttl_minutes)
+            "已推送线下支付单，来访确认后即预约成功"
+            if is_offline_payment_order
+            else (
+                "已推送免费单"
+                if int(total_fee or 0) <= 0
+                else proxy_order_ttl_push_message(ttl_minutes)
+            )
         ),
         "proxyOrderTtlMinutes": ttl_minutes,
     }

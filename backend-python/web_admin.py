@@ -964,6 +964,57 @@ def operation_records(
             "createdAt": row.CreatedAt,
             "updatedAt": row.UpdatedAt,
         })
+        if getattr(row, "ProxyIsOfflinePayment", False):
+            if row.ProxyCreatedByAccountId:
+                account_ids.add(row.ProxyCreatedByAccountId)
+            records.append({
+                "id": f"offline-payment-push-{row.Id}",
+                "occurredAt": row.CreatedAt,
+                "actionType": "OFFLINE_PAYMENT_PUSH",
+                "actionLabel": "推送线下支付单",
+                "operatorId": row.ProxyCreatedByAccountId,
+                "operatorRole": None,
+                "targetType": "Order",
+                "targetId": row.Id,
+                "targetName": row.Description,
+                "summary": (
+                    f"操作人：{row.ProxyOfflinePaymentOperator or '-'}；"
+                    f"推送理由：{row.ProxyOfflinePaymentReason or '-'}；"
+                    f"{row.OutTradeNo}"
+                ),
+                "amount": row.TotalFee,
+                "status": row.Status,
+                "relatedOrderId": row.Id,
+                "patientId": row.AccountId,
+                "scheduleId": row.SlotId,
+                "createdAt": row.CreatedAt,
+                "updatedAt": row.UpdatedAt,
+            })
+        if getattr(row, "ProxyOfflineReceiptConfirmedAt", None):
+            if row.ProxyOfflineReceiptByAccountId:
+                account_ids.add(row.ProxyOfflineReceiptByAccountId)
+            records.append({
+                "id": f"offline-receipt-{row.Id}",
+                "occurredAt": row.ProxyOfflineReceiptConfirmedAt,
+                "actionType": "OFFLINE_RECEIPT",
+                "actionLabel": "确认线下收款",
+                "operatorId": row.ProxyOfflineReceiptByAccountId,
+                "operatorRole": row.ProxyOfflineReceiptByRole,
+                "targetType": "Order",
+                "targetId": row.Id,
+                "targetName": row.Description,
+                "summary": (
+                    f"确认收款操作人：{row.ProxyOfflineReceiptOperator or '-'}；"
+                    f"{row.OutTradeNo}"
+                ),
+                "amount": row.TotalFee,
+                "status": "RECEIPT_CONFIRMED",
+                "relatedOrderId": row.Id,
+                "patientId": row.AccountId,
+                "scheduleId": row.SlotId,
+                "createdAt": row.ProxyOfflineReceiptConfirmedAt,
+                "updatedAt": row.ProxyOfflineReceiptConfirmedAt,
+            })
 
     for row in all_consultations:
         account_ids.update({row.PatientId, row.CounselorId})

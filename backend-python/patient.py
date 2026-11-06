@@ -84,6 +84,7 @@ class OrderOut(BaseModel):
     proxyAgreementIsAdult: Optional[bool] = None
     proxyAgreementType: Optional[str] = None
     proxyAgreementLabel: Optional[str] = None
+    isOfflinePaymentOrder: bool = False
 
     class Config:
         from_attributes = True
@@ -116,6 +117,7 @@ def _order_contract_fields(
         "proxyAgreementIsAdult": preset,
         "proxyAgreementType": preset_type,
         "proxyAgreementLabel": preset_label,
+        "isOfflinePaymentOrder": bool(getattr(order, "ProxyIsOfflinePayment", False)),
     }
 
 
@@ -336,6 +338,7 @@ class ConsultationOut(BaseModel):
     feedbackGoalScore: Optional[int] = None
     feedbackRhythmScore: Optional[int] = None
     feedbackImprovements: Optional[List[str]] = None
+    isOfflinePaymentOrder: bool = False
 
 
 class ConsultationFeedbackCreate(BaseModel):
@@ -569,6 +572,7 @@ def get_my_consultations(
                     refundEligible=False,
                     orderAmount=order.TotalFee,
                     orderStatus="PENDING",
+                    isOfflinePaymentOrder=bool(getattr(order, "ProxyIsOfflinePayment", False)),
                 )
             )
     result.sort(key=lambda x: (x.startTime or x.createdAt), reverse=True)

@@ -21,6 +21,7 @@ from models import (
     AppAccount,
     AppMessage,
     AppMessageLog,
+    AppOrder,
     AppRemindTask,
     AppSubscribeTemplate,
 )
@@ -66,11 +67,15 @@ class MessageOut(BaseModel):
     IsRead: bool
     CreatedAt: datetime
     ReadAt: Optional[datetime] = None
+    IsPinned: bool = False
+    OfflineReceiptPending: bool = False
+    OfflineReceiptOperator: Optional[str] = None
+    OfflineReceiptConfirmedAt: Optional[datetime] = None
 
     class Config:
         from_attributes = True
 
-    @field_serializer("CreatedAt", "ReadAt")
+    @field_serializer("CreatedAt", "ReadAt", "OfflineReceiptConfirmedAt")
     def _serialize_china_wall_clock(self, value: Optional[datetime]) -> Optional[str]:
         """API 固定输出北京时间 ISO（带 +08:00），避免前端按 UTC/本地时区误读。"""
         if value is None:
@@ -137,9 +142,39 @@ def create_message(
     return msg
 
 
-def _message_response(msg: AppMessage, db: Session) -> dict:
+def _offline_orders_by_id(db: Session, rows: List[AppMessage]) -> dict:
+    order_ids = {
+        int(row.RelatedId)
+        for row in rows
+        if row.RelatedType == "OFFLINE_PAYMENT_DUE" and row.RelatedId
+    }
+    if not order_ids:
+        return {}
+    return {
+        int(order.Id): order
+        for order in db.query(AppOrder).filter(AppOrder.Id.in_(order_ids)).all()
+    }
+
+
+def _message_response(
+    msg: AppMessage,
+    db: Session,
+    *,
+    orders_by_id: Optional[dict] = None,
+) -> dict:
     """统一消息 API 的时间出口为 Asia/Shanghai（UTC+8）。"""
     enriched = enrich_message(msg, db)
+    order = None
+    if enriched.RelatedType == "OFFLINE_PAYMENT_DUE" and enriched.RelatedId:
+        if orders_by_id is None:
+            order = db.query(AppOrder).filter(AppOrder.Id == enriched.RelatedId).first()
+        else:
+            order = orders_by_id.get(int(enriched.RelatedId))
+    pending = bool(
+        order is not None
+        and order.ProxyIsOfflinePayment
+        and order.ProxyOfflineReceiptConfirmedAt is None
+    )
     return {
         "Id": enriched.Id,
         "AccountId": enriched.AccountId,
@@ -151,7 +186,53 @@ def _message_response(msg: AppMessage, db: Session) -> dict:
         "IsRead": enriched.IsRead,
         "CreatedAt": utc_to_china(enriched.CreatedAt),
         "ReadAt": utc_to_china(enriched.ReadAt),
+        "IsPinned": pending,
+        "OfflineReceiptPending": pending,
+        "OfflineReceiptOperator": order.ProxyOfflineReceiptOperator if order else None,
+        "OfflineReceiptConfirmedAt": utc_to_china(order.ProxyOfflineReceiptConfirmedAt) if order else None,
     }
+
+
+def _merge_pinned_offline_messages(query, rows: List[AppMessage], db: Session) -> tuple:
+    """未确认收款的待付款消息始终排在列表最前，不受最近 100 条截断影响。"""
+    seen = {row.Id for row in rows}
+    candidates = (
+        query.filter(AppMessage.RelatedType == "OFFLINE_PAYMENT_DUE")
+        .order_by(AppMessage.CreatedAt.desc())
+        .all()
+    )
+    merged = list(rows)
+    for row in candidates:
+        if row.Id not in seen:
+            merged.append(row)
+            seen.add(row.Id)
+    orders_by_id = _offline_orders_by_id(db, merged)
+
+    def pin_rank(row: AppMessage):
+        order = orders_by_id.get(int(row.RelatedId)) if row.RelatedId else None
+        pending = (
+            row.RelatedType == "OFFLINE_PAYMENT_DUE"
+            and order is not None
+            and order.ProxyIsOfflinePayment
+            and order.ProxyOfflineReceiptConfirmedAt is None
+        )
+        created = row.CreatedAt.timestamp() if row.CreatedAt else 0
+        return (0 if pending else 1, -created)
+
+    pinned_only = []
+    rest = []
+    for row in merged:
+        order = orders_by_id.get(int(row.RelatedId)) if row.RelatedType == "OFFLINE_PAYMENT_DUE" and row.RelatedId else None
+        pending = bool(
+            order is not None
+            and order.ProxyIsOfflinePayment
+            and order.ProxyOfflineReceiptConfirmedAt is None
+        )
+        if pending or row.Id in {item.Id for item in rows}:
+            (pinned_only if pending else rest).append(row)
+    pinned_only.sort(key=pin_rank)
+    rest.sort(key=pin_rank)
+    return pinned_only + rest, orders_by_id
 
 
 def log_subscribe_event(
@@ -205,7 +286,8 @@ def list_messages(
         )
     query = apply_message_search(query, q)
     rows = query.order_by(AppMessage.CreatedAt.desc()).limit(100).all()
-    return [_message_response(m, db) for m in rows]
+    merged, orders_by_id = _merge_pinned_offline_messages(query, rows, db)
+    return [_message_response(m, db, orders_by_id=orders_by_id) for m in merged]
 
 
 @router.get("/unread-count", summary="未读消息数")
@@ -230,6 +312,24 @@ def unread_count(
     return {"count": count}
 
 
+@router.get("/today-digest", summary="管理工作台今日预约滚动条")
+def today_digest(
+    current_account: AppAccount = Depends(get_current_account),
+    db: Session = Depends(get_db),
+):
+    if not account_has_staff_workbench(
+        db, current_account.Id, getattr(current_account, "ActiveRole", None)
+    ):
+        raise HTTPException(status_code=403, detail="仅管理员、咨询助理、咨询主任可查看")
+    from message_digest_service import today_message_digest
+
+    return today_message_digest(db)
+
+
+class OfflineReceiptConfirmRequest(BaseModel):
+    operator_name: str
+
+
 @router.put("/{message_id}/read", response_model=MessageOut, summary="标记消息已读")
 def mark_read(
     message_id: int,
@@ -246,6 +346,34 @@ def mark_read(
     msg.IsRead = True
     msg.ReadAt = datetime.utcnow()
     db.commit()
+    db.refresh(msg)
+    return _message_response(msg, db)
+
+
+@router.post(
+    "/{message_id}/confirm-offline-receipt",
+    response_model=MessageOut,
+    summary="确认线下支付单已收款并取消置顶",
+)
+def confirm_offline_receipt(
+    message_id: int,
+    body: OfflineReceiptConfirmRequest,
+    current_account: AppAccount = Depends(get_current_account),
+    db: Session = Depends(get_db),
+):
+    msg = (
+        db.query(AppMessage)
+        .filter(AppMessage.Id == message_id, AppMessage.AccountId == current_account.Id)
+        .first()
+    )
+    if not msg:
+        raise HTTPException(status_code=404, detail="消息不存在")
+    from offline_payment_receipt_service import OfflineReceiptError, confirm_offline_payment_receipt
+
+    try:
+        confirm_offline_payment_receipt(db, current_account, msg, body.operator_name)
+    except OfflineReceiptError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     db.refresh(msg)
     return _message_response(msg, db)
 

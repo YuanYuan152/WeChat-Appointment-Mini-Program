@@ -447,6 +447,70 @@ def notify_staff_proxy_order_pushed(
     )
 
 
+def notify_staff_offline_payment_due(
+    db: Session,
+    consultation: AppConsultation,
+    order: Optional[AppOrder] = None,
+) -> None:
+    """来访确认线下支付单后，向管理员、咨询助理、咨询主任投递同一条待付款消息。"""
+    if order is None or not getattr(order, "ProxyIsOfflinePayment", False):
+        return
+    ctx = _consultation_context(db, consultation)
+    patient = ctx["patientContact"]
+    time_text = _format_datetime(ctx["startTime"])
+    patient_label = (
+        f"{patient['name']} {patient['contractTag']}"
+        if patient.get("contractTag")
+        else patient["name"]
+    )
+    fee_cents = int(order.TotalFee or 0)
+    amount_yuan = f"{fee_cents / 100:.2f}"
+    summary = f"线下支付待确认收款 · {patient_label} · {ctx['counselorName']} · {time_text} · ¥{amount_yuan}"
+    detail = {
+        "patientName": patient["name"],
+        "patientContractTag": patient.get("contractTag") or None,
+        "patientPhone": patient["phone"],
+        "emergencyContact": patient["emergencyContact"],
+        "emergencyPhone": patient["emergencyPhone"],
+        "counselorName": ctx["counselorName"],
+        "startTime": time_text,
+        "endTime": _format_datetime(ctx["endTime"]),
+        "location": ctx["location"],
+        "amountYuan": amount_yuan,
+        "feeLabel": f"¥{amount_yuan}",
+        "orderId": order.Id,
+        "outTradeNo": order.OutTradeNo,
+        "consultationId": consultation.Id,
+        "isOfflinePaymentOrder": True,
+        "offlinePaymentOperator": order.ProxyOfflinePaymentOperator,
+        "offlinePaymentReason": order.ProxyOfflinePaymentReason,
+        "tip": "来访已确认预约。请在核实线下收款后填写确认收款操作人，置顶才会取消。",
+    }
+    content = _message_payload(summary, detail)
+    for account_id in staff_workbench_account_ids(db):
+        exists = (
+            db.query(AppMessage)
+            .filter(
+                AppMessage.AccountId == account_id,
+                AppMessage.RelatedType == "OFFLINE_PAYMENT_DUE",
+                AppMessage.RelatedId == order.Id,
+            )
+            .first()
+        )
+        if exists:
+            continue
+        create_message(
+            db,
+            account_id,
+            "ORDER",
+            "待付款",
+            content,
+            related_type="OFFLINE_PAYMENT_DUE",
+            related_id=order.Id,
+        )
+        db.flush()
+
+
 def notify_staff_workbench_inbox(
     db: Session,
     *,

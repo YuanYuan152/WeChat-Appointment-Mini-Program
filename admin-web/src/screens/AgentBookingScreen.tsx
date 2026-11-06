@@ -39,6 +39,9 @@ const INITIAL_DRAFT = (): AgentBookingDraft => ({
   agreementType: null,
   isFreeExperienceOrder: false,
   freeOrderReason: "",
+  isOfflinePaymentOrder: false,
+  offlinePaymentOperator: "",
+  offlinePaymentReason: "",
 });
 
 export function AgentBookingScreen() {
@@ -461,6 +464,13 @@ function AgentBookingScreenContent() {
             : draft.agreementType || undefined,
           isFreeExperienceOrder: draft.isFreeExperienceOrder,
           freeOrderReason: draft.isFreeExperienceOrder ? draft.freeOrderReason.trim() : undefined,
+          isOfflinePaymentOrder: draft.isOfflinePaymentOrder,
+          offlinePaymentOperator: draft.isOfflinePaymentOrder
+            ? draft.offlinePaymentOperator.trim()
+            : undefined,
+          offlinePaymentReason: draft.isOfflinePaymentOrder
+            ? draft.offlinePaymentReason.trim()
+            : undefined,
         });
         const successText = proxyOrderSuccessText(result);
         showNotice("success", successText);
@@ -487,6 +497,9 @@ function AgentBookingScreenContent() {
       draft.centerId,
       draft.freeOrderReason,
       draft.isFreeExperienceOrder,
+      draft.isOfflinePaymentOrder,
+      draft.offlinePaymentOperator,
+      draft.offlinePaymentReason,
       loadCalendar,
       refreshPatientContract,
       showNotice,

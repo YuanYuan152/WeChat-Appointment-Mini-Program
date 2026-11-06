@@ -151,7 +151,7 @@
             class="pay-btn"
             @click="goPayOrder(r)"
           >
-            去支付
+            {{ r.isOfflinePaymentOrder ? '去确认' : '去支付' }}
           </button>
           <button
             v-else-if="r.status === 'DONE' && !r.hasFeedback"
@@ -361,6 +361,8 @@ interface Consultation {
 
   orderAmount?: number
 
+  isOfflinePaymentOrder?: boolean
+
   refundReason?: string
 
   exemptionStatus?: string
@@ -441,7 +443,7 @@ const statusLabel = (r: Consultation) => {
 
   if (r.exemptionStatus === 'PENDING') return '正在审核'
 
-  if (r.status === 'PENDING_PAYMENT') return '待支付'
+  if (r.status === 'PENDING_PAYMENT') return r.isOfflinePaymentOrder ? '待确认' : '待支付'
 
   if (r.status === 'DONE' && r.hasFeedback) return '已反馈'
 

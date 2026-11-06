@@ -819,6 +819,10 @@ export interface MessageItem {
   IsRead: boolean;
   CreatedAt: string;
   ReadAt?: string | null;
+  IsPinned?: boolean;
+  OfflineReceiptPending?: boolean;
+  OfflineReceiptOperator?: string | null;
+  OfflineReceiptConfirmedAt?: string | null;
 }
 
 export interface FeedbackItem {
@@ -1354,6 +1358,7 @@ export interface ProxyPushOrderResult {
   totalFeeYuan: number;
   isFreeOrder?: boolean;
   isFreeExperienceOrder?: boolean;
+  isOfflinePaymentOrder?: boolean;
   expiresAt?: string | null;
   message: string;
   proxyOrderTtlMinutes?: number;
