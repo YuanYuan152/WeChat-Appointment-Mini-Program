@@ -35,6 +35,25 @@ const FIXED_TIME_SLOTS = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20
     (minute) => `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`,
   ),
 ).filter((time) => time !== "23:30");
+
+function timeLabelToMinutes(value: string) {
+  const [hour, minute] = value.split(":").map(Number);
+  return hour * 60 + minute;
+}
+
+function minutesToTimeLabel(totalMinutes: number) {
+  const hour = Math.floor(totalMinutes / 60);
+  const minute = totalMinutes % 60;
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+/** 批量占用：起始可选时刻（半小时格起点）。 */
+const OCCUPY_START_TIMES = FIXED_TIME_SLOTS;
+/** 批量占用：终止时间点（占用区间为 [起始, 终止)）。 */
+const OCCUPY_END_TIMES = Array.from(
+  new Set(FIXED_TIME_SLOTS.map((slot) => minutesToTimeLabel(timeLabelToMinutes(slot) + 30))),
+).sort((a, b) => timeLabelToMinutes(a) - timeLabelToMinutes(b));
+
 type RoomEditableStatus = Exclude<RoomSlotManualStatus, "MAINTENANCE">;
 /** 咨询室全局状态：不含占用（占用按时段设置）。 */
 const ROOM_GLOBAL_STATUS_OPTIONS: Array<Exclude<RoomEditableStatus, "OCCUPIED">> = [
@@ -363,8 +382,8 @@ export function RoomDetailPanel({
   const [targetRoomCode, setTargetRoomCode] = useState("");
   const [slotStatusDrafts, setSlotStatusDrafts] = useState<Record<string, SlotDraft>>({});
   const [occupyDate, setOccupyDate] = useState(() => room.days[0]?.date || getLocalDateValue());
-  const [occupyStart, setOccupyStart] = useState(FIXED_TIME_SLOTS[0] || "06:00");
-  const [occupyEnd, setOccupyEnd] = useState(FIXED_TIME_SLOTS[1] || "09:30");
+  const [occupyStart, setOccupyStart] = useState(OCCUPY_START_TIMES[0] || "06:00");
+  const [occupyEnd, setOccupyEnd] = useState(OCCUPY_END_TIMES[1] || "07:00");
   const [occupyNote, setOccupyNote] = useState("");
   const [occupyError, setOccupyError] = useState("");
 
@@ -433,13 +452,30 @@ export function RoomDetailPanel({
       setOccupyError("所选日期不在可编辑范围内");
       return;
     }
-    const startIndex = FIXED_TIME_SLOTS.indexOf(occupyStart);
-    const endIndex = FIXED_TIME_SLOTS.indexOf(occupyEnd);
-    if (startIndex < 0 || endIndex < 0 || endIndex < startIndex) {
-      setOccupyError("请选择连续的开始与结束时段（结束不早于开始）");
+    const startMinutes = timeLabelToMinutes(occupyStart);
+    const endMinutes = timeLabelToMinutes(occupyEnd);
+    if (
+      !OCCUPY_START_TIMES.includes(occupyStart)
+      || !OCCUPY_END_TIMES.includes(occupyEnd)
+      || !Number.isFinite(startMinutes)
+      || !Number.isFinite(endMinutes)
+    ) {
+      setOccupyError("请选择有效的起始时间与终止时间");
       return;
     }
-    const selectedKeys = FIXED_TIME_SLOTS.slice(startIndex, endIndex + 1);
+    if (endMinutes <= startMinutes) {
+      setOccupyError("终止时间必须晚于起始时间");
+      return;
+    }
+    // 半小时格按 [起始, 终止) 纳入：如 09:00–10:30 → 09:00、09:30、10:00
+    const selectedKeys = FIXED_TIME_SLOTS.filter((slot) => {
+      const minutes = timeLabelToMinutes(slot);
+      return minutes >= startMinutes && minutes < endMinutes;
+    });
+    if (selectedKeys.length === 0) {
+      setOccupyError("所选时间范围内没有可占用的半小时格");
+      return;
+    }
     const editableSlots = day.slots.filter(
       (slot) =>
         slot.startTime
@@ -448,17 +484,23 @@ export function RoomDetailPanel({
         && selectedKeys.includes(slot.key),
     );
     if (editableSlots.length === 0) {
-      setOccupyError("所选连续时段内没有可调整的空闲时段");
+      setOccupyError("所选时间范围内没有可调整的空闲时段");
       return;
     }
-    const editableKeys = editableSlots.map((slot) => slot.key).sort();
+    const editableKeys = editableSlots
+      .map((slot) => slot.key)
+      .sort((a, b) => timeLabelToMinutes(a) - timeLabelToMinutes(b));
     for (let index = 1; index < editableKeys.length; index += 1) {
-      const prev = FIXED_TIME_SLOTS.indexOf(editableKeys[index - 1]);
-      const curr = FIXED_TIME_SLOTS.indexOf(editableKeys[index]);
-      if (curr !== prev + 1) {
+      const prev = timeLabelToMinutes(editableKeys[index - 1]);
+      const curr = timeLabelToMinutes(editableKeys[index]);
+      if (curr !== prev + 30) {
         setOccupyError("占用时段必须连续；所选范围内存在已预约或不可调整时段，请缩小区间");
         return;
       }
+    }
+    if (editableKeys.length !== selectedKeys.length) {
+      setOccupyError("占用时段必须连续；所选范围内存在已预约或不可调整时段，请缩小区间");
+      return;
     }
     const note = occupyNote.trim();
     setSlotStatusDrafts((prev) => {
@@ -577,7 +619,7 @@ export function RoomDetailPanel({
               <div>
                 <h4 className="text-sm font-semibold">按时段调整状态</h4>
                 <p className="mt-1 text-xs text-[var(--lxxl-muted)]">
-                  以半小时为单位维护可用/停用/占用；占用需选择连续时段并可填写备注。一次预约对应“50 分钟咨询 + 10 分钟打扫”两个半小时时段。
+                  以半小时为单位维护可用/停用/占用；批量占用按起始时间点与终止时间点选择连续区间，并可填写备注。一次预约对应“50 分钟咨询 + 10 分钟打扫”两个半小时时段。
                 </p>
               </div>
             </div>
@@ -606,26 +648,35 @@ export function RoomDetailPanel({
                     onChange={(event) => setOccupyNote(event.target.value)}
                   />
                 </QueryField>
-                <QueryField label="开始时段">
+                <QueryField label="起始时间">
                   <select
                     className={queryControlClass}
                     value={occupyStart}
-                    onChange={(event) => setOccupyStart(event.target.value)}
+                    onChange={(event) => {
+                      const nextStart = event.target.value;
+                      setOccupyStart(nextStart);
+                      if (timeLabelToMinutes(occupyEnd) <= timeLabelToMinutes(nextStart)) {
+                        const nextEnd = OCCUPY_END_TIMES.find(
+                          (point) => timeLabelToMinutes(point) > timeLabelToMinutes(nextStart),
+                        );
+                        if (nextEnd) setOccupyEnd(nextEnd);
+                      }
+                    }}
                   >
-                    {FIXED_TIME_SLOTS.map((slot) => (
+                    {OCCUPY_START_TIMES.map((slot) => (
                       <option key={slot} value={slot}>
                         {slot}
                       </option>
                     ))}
                   </select>
                 </QueryField>
-                <QueryField label="结束时段（含）">
+                <QueryField label="终止时间">
                   <select
                     className={queryControlClass}
                     value={occupyEnd}
                     onChange={(event) => setOccupyEnd(event.target.value)}
                   >
-                    {FIXED_TIME_SLOTS.map((slot) => (
+                    {OCCUPY_END_TIMES.map((slot) => (
                       <option key={slot} value={slot}>
                         {slot}
                       </option>
@@ -637,7 +688,7 @@ export function RoomDetailPanel({
                 <p className="mt-2 text-xs text-[#B42318]">{occupyError}</p>
               ) : (
                 <p className="mt-2 text-xs text-[var(--lxxl-muted)]">
-                  将把所选连续半小时时段设为「占用」，并写入相同备注；仍需点击底部“确认并保存”提交。
+                  按起始–终止时间点占用（含起始、不含终止）。例如 09:00–10:30 会占用 09:00、09:30、10:00 三格；仍需点击底部“确认并保存”提交。
                 </p>
               )}
               <button

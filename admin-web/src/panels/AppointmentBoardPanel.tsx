@@ -33,7 +33,10 @@ type BoardRoom = {
 const START_MINUTES = 6 * 60;
 const END_MINUTES = 24 * 60;
 const SLOT_MINUTES = 30;
-const SLOT_HEIGHT = 52;
+/** 一格纵向可完整放下两个预约条（含内边距与间距）。 */
+const SLOT_HEIGHT = 78;
+const BASE_COLUMN_WIDTH = 156;
+const TIME_COLUMN_WIDTH = 136;
 type BoardDisplayStatus =
   | "PENDING_PAYMENT"
   | "BOOKED"
@@ -218,8 +221,25 @@ function RoomBoard({
 }) {
   const timeSlots = buildTimeSlots();
   const groups = groupRooms(rooms);
-  const columnWidth = 156;
+  const roomWidths = rooms.map((room) => {
+    if (room.centerId !== "video") return BASE_COLUMN_WIDTH;
+    const roomAppointments = appointments.filter(
+      (item) => appointmentRoomKey(item, sourceRooms) === room.key,
+    );
+    let maxInSlot = 0;
+    for (const slot of timeSlots) {
+      const slotStart = minutesFromSlotLabel(slot);
+      const count = roomAppointments.filter((appointment) =>
+        appointmentOverlapsSlot(appointment, slotStart),
+      ).length;
+      if (count > maxInSlot) maxInSlot = count;
+    }
+    const columns = Math.max(1, Math.ceil(maxInSlot / 2));
+    return BASE_COLUMN_WIDTH * columns;
+  });
+  const roomsWidth = roomWidths.reduce((sum, width) => sum + width, 0);
   const bodyHeight = timeSlots.length * SLOT_HEIGHT;
+  const roomsGridTemplate = roomWidths.map((width) => `${width}px`).join(" ");
 
   return (
     <div className="border-t border-[var(--lxxl-border)]">
@@ -240,58 +260,67 @@ function RoomBoard({
         </div>
       </div>
       <div className="max-h-[calc(100vh-190px)] overflow-auto">
-        <div style={{ minWidth: 136 + rooms.length * columnWidth }}>
+        <div style={{ minWidth: TIME_COLUMN_WIDTH + roomsWidth }}>
           <div className="sticky top-0 z-30 flex border-b border-[var(--lxxl-border)] bg-[#FAF8F4] shadow-sm">
-            <div className="flex w-[136px] shrink-0 items-center justify-center border-r border-[var(--lxxl-border)] px-3 py-4 text-center text-sm font-medium">
+            <div
+              className="sticky left-0 z-40 flex shrink-0 items-center justify-center border-r border-[var(--lxxl-border)] bg-[#FAF8F4] px-3 py-4 text-center text-sm font-medium"
+              style={{ width: TIME_COLUMN_WIDTH }}
+            >
               <span>{date}</span>
             </div>
-            <div
-              className="grid flex-1"
-              style={{ gridTemplateColumns: `repeat(${rooms.length}, minmax(${columnWidth}px, 1fr))` }}
-            >
-              {groups.map((group) => (
-                <div
-                  key={group.centerId}
-                  className="border-r border-[var(--lxxl-border)]"
-                  style={{ gridColumn: `span ${group.rooms.length}` }}
-                >
-                  <div className="border-b border-[var(--lxxl-border)] px-3 py-3 text-center text-sm font-semibold">
-                    {group.centerName}
-                  </div>
+            <div className="flex">
+              {groups.map((group) => {
+                const groupWidths = group.rooms.map((room) => {
+                  const index = rooms.findIndex((item) => item.key === room.key);
+                  return roomWidths[index] || BASE_COLUMN_WIDTH;
+                });
+                return (
                   <div
-                    className="grid"
-                    style={{ gridTemplateColumns: `repeat(${group.rooms.length}, minmax(${columnWidth}px, 1fr))` }}
+                    key={group.centerId}
+                    className="border-r border-[var(--lxxl-border)]"
+                    style={{ width: groupWidths.reduce((sum, width) => sum + width, 0) }}
                   >
-                    {group.rooms.map((room) => (
-                      <div
-                        key={room.key}
-                        className="border-r border-[var(--lxxl-border)] px-2 py-3 text-center text-sm last:border-r-0"
-                      >
-                        {room.centerId === "video" || room.centerId === "unassigned" ? (
-                          room.roomName
-                        ) : (
-                          <button
-                            type="button"
-                            className="w-full rounded-lg border border-[var(--lxxl-border)] bg-white px-2 py-1.5 font-medium transition hover:border-[var(--lxxl-green)] hover:text-[var(--lxxl-green)]"
-                            onClick={() => onOpenRoom(boardRoomToRoom(room))}
-                          >
-                            {room.roomName}
-                          </button>
-                        )}
-                      </div>
-                    ))}
+                    <div className="border-b border-[var(--lxxl-border)] px-3 py-3 text-center text-sm font-semibold">
+                      {group.centerName}
+                    </div>
+                    <div
+                      className="grid"
+                      style={{ gridTemplateColumns: groupWidths.map((width) => `${width}px`).join(" ") }}
+                    >
+                      {group.rooms.map((room) => (
+                        <div
+                          key={room.key}
+                          className="border-r border-[var(--lxxl-border)] px-2 py-3 text-center text-sm last:border-r-0"
+                        >
+                          {room.centerId === "video" || room.centerId === "unassigned" ? (
+                            room.roomName
+                          ) : (
+                            <button
+                              type="button"
+                              className="w-full rounded-lg border border-[var(--lxxl-border)] bg-white px-2 py-1.5 font-medium transition hover:border-[var(--lxxl-green)] hover:text-[var(--lxxl-green)]"
+                              onClick={() => onOpenRoom(boardRoomToRoom(room))}
+                            >
+                              {room.roomName}
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
           <div className="flex">
-            <div className="relative w-[136px] shrink-0 border-r border-[var(--lxxl-border)]" style={{ height: bodyHeight }}>
+            <div
+              className="sticky left-0 z-20 shrink-0 border-r border-[var(--lxxl-border)] bg-white"
+              style={{ width: TIME_COLUMN_WIDTH, height: bodyHeight }}
+            >
               {timeSlots.map((slot, index) => (
                 <div
                   key={slot}
-                  className="absolute inset-x-0 border-b border-[var(--lxxl-border)] px-3 pt-4 text-center text-sm text-[var(--lxxl-muted)]"
+                  className="absolute inset-x-0 flex items-start justify-center border-b border-[var(--lxxl-border)] bg-white px-3 pt-3 text-center text-sm text-[var(--lxxl-muted)]"
                   style={{ top: index * SLOT_HEIGHT, height: SLOT_HEIGHT }}
                 >
                   {slot}
@@ -299,9 +328,10 @@ function RoomBoard({
               ))}
             </div>
             <div
-              className="grid flex-1"
+              className="grid"
               style={{
-                gridTemplateColumns: `repeat(${rooms.length}, minmax(${columnWidth}px, 1fr))`,
+                gridTemplateColumns: roomsGridTemplate,
+                width: roomsWidth,
                 height: bodyHeight,
               }}
             >
@@ -309,6 +339,7 @@ function RoomBoard({
                 const roomAppointments = appointments.filter(
                   (item) => appointmentRoomKey(item, sourceRooms) === room.key,
                 );
+                const isVideoColumn = room.centerId === "video";
                 return (
                   <div
                     key={room.key}
@@ -322,17 +353,34 @@ function RoomBoard({
                       const slotMeta = roomSlotMeta(roomDayStatus, room, slotStart);
                       const unavailable = slotMeta.status !== "AVAILABLE";
                       const occupied = slotMeta.status === "OCCUPIED";
+                      const useMultiColumnLayout =
+                        isVideoColumn && slotAppointments.length > 2;
                       return (
                         <div
                           key={`${room.key}-${slot}`}
-                          className={`flex flex-col justify-center gap-1 overflow-hidden border-b border-[var(--lxxl-border)] px-1.5 py-1 ${
+                          className={`overflow-hidden border-b border-[var(--lxxl-border)] px-1.5 py-1 ${
                             occupied
                               ? "bg-[#F3E8FF]"
                               : unavailable
                                 ? "bg-[#F6F3EE]"
                                 : ""
+                          } ${
+                            slotAppointments.length > 0
+                              ? useMultiColumnLayout
+                                ? "grid gap-1"
+                                : "flex flex-col justify-center gap-1"
+                              : "flex flex-col justify-center gap-1"
                           }`}
-                          style={{ height: SLOT_HEIGHT }}
+                          style={{
+                            height: SLOT_HEIGHT,
+                            ...(useMultiColumnLayout
+                              ? {
+                                  gridTemplateRows: "repeat(2, minmax(0, 1fr))",
+                                  gridAutoFlow: "column",
+                                  gridAutoColumns: "minmax(0, 1fr)",
+                                }
+                              : {}),
+                          }}
                         >
                           {slotAppointments.length > 0 ? (
                             slotAppointments.map((appointment) => (
@@ -392,7 +440,7 @@ function AppointmentSlotBar({
   return (
     <button
       type="button"
-      className="min-h-7 w-full truncate rounded-full border border-black/5 px-2 py-1 text-center text-xs font-medium leading-5 shadow-sm transition hover:brightness-95"
+      className="min-h-0 w-full truncate rounded-full border border-black/5 px-2 py-1 text-center text-xs font-medium leading-5 shadow-sm transition hover:brightness-95"
       style={{ background: meta.background, color: meta.color }}
       title={`${appointment.counselorName} - ${patient} ${timeText(appointment.startTime)}-${timeText(appointment.endTime)}`}
       onClick={onClick}
