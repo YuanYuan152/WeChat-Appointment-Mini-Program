@@ -362,7 +362,7 @@
         <view class="reason-box">
           <text class="reason-label">详情说明</text>
           <text class="reason-text">{{ detail.resultText || payload.summary || message.Content }}</text>
-          <text v-if="detail.amountYuan" class="reason-text">退款金额：¥{{ detail.amountYuan }}</text>
+          <text v-if="detail.amountYuan && !detail.isOfflinePaymentOrder" class="reason-text">退款金额：¥{{ detail.amountYuan }}</text>
           <text v-if="detail.rejectReason" class="reason-text">拒绝理由：{{ detail.rejectReason }}</text>
         </view>
         <image

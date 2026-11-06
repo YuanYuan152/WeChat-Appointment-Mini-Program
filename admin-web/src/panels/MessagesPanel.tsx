@@ -78,6 +78,12 @@ const staffWorkbenchMessageCategoryOptions: Array<{ value: MessageCategoryFilter
   { value: "offline_payment", label: "待付款" },
 ];
 
+function operationTimestamp(value?: string | null) {
+  if (!value) return 0;
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
 const counselorMessageCategoryOptions: Array<{ value: MessageCategoryFilter; label: string }> = [
   { value: "ALL", label: "全部类型" },
   { value: "appointment_new", label: "新预约" },
@@ -146,9 +152,13 @@ export function MessagesPanel({
   onSearch: () => void;
   onStatusFilterChange: (value: MessageReadFilter) => void;
 }) {
-  const items = [...(messages || [])].sort(
-    (left, right) => Number(Boolean(right.IsPinned)) - Number(Boolean(left.IsPinned)),
-  );
+  const items = [...(messages || [])].sort((left, right) => {
+    const pinDelta = Number(Boolean(right.IsPinned)) - Number(Boolean(left.IsPinned));
+    if (pinDelta !== 0) return pinDelta;
+    const timeDelta = operationTimestamp(right.CreatedAt) - operationTimestamp(left.CreatedAt);
+    if (timeDelta !== 0) return timeDelta;
+    return right.Id - left.Id;
+  });
   const digestText = todayDigest
     ? `今日预约取消${todayDigest.cancelledCount}单，今日新增预约${todayDigest.newBookingCount}单，今天新发起的咨询师请假待审核${todayDigest.leavePendingCount}个、来访取消预约申请待审核${todayDigest.visitorCancelPendingCount}个、咨询记录修改申请待审核${todayDigest.recordAmendmentPendingCount}个`
     : "";

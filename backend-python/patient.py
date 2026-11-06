@@ -48,6 +48,7 @@ from consultation_feedback import (
     feedback_detail,
     feedback_summary,
 )
+from consultation_cancel import order_is_offline_payment
 from refund_exemption_service import (
     latest_exemptions_by_consultation,
     notify_admins_new_exemption,
@@ -455,22 +456,25 @@ def get_my_consultations(
         center_id = parse_center_id(center_note_text)
         center_name = center_display_name(center_id)
         cancelable = can_visitor_cancel(r.Status)
-        refund_ok = cancelable and is_refund_eligible(start_time)
         order = order_map.get(r.OrderId) if r.OrderId else None
+        offline = order_is_offline_payment(order)
         order_status = order.Status if order else None
-        if order and order.Status in ("PAID", "REFUNDED", "CANCELLED"):
+        if order and order.Status in ("PAID", "REFUNDED", "CANCELLED") and not offline:
             order_amount = order.TotalFee
         else:
             order_amount = None
+        refund_ok = cancelable and is_refund_eligible(start_time) and not offline
         cancel_summary = None
         if r.Status == "CANCELLED":
-            if order_status == "REFUNDED":
+            if offline:
+                cancel_summary = "预约已取消"
+            elif order_status == "REFUNDED":
                 cancel_summary = "预约已取消，款项将原路退回"
             else:
                 cancel_summary = "预约已取消，按规定不予退款"
         exemption = exemption_map.get(r.Id)
         if exemption and exemption.Status == "PENDING":
-            # 退款审核中：来访可见状态，但不可取消/再申请操作
+            # 取消/退款审核中：来访可见状态，但不可取消/再申请操作
             cancelable = False
             refund_ok = False
         feedback = feedback_map.get(r.Id)
@@ -493,7 +497,7 @@ def get_my_consultations(
             canCancel=cancelable,
             refundEligible=refund_ok,
             orderAmount=order_amount,
-            refundReason=None if refund_ok else refund_ineligible_reason(start_time),
+            refundReason=None if refund_ok or offline else refund_ineligible_reason(start_time),
             exemptionStatus=exemption.Status if exemption else None,
             exemptionRejectReason=(
                 optional_model_value(exemption, "RejectReason")
@@ -503,6 +507,7 @@ def get_my_consultations(
             exemptionId=exemption.Id if exemption else None,
             exemptionScreenshotUrl=exemption.ScreenshotUrl if exemption else None,
             orderStatus=order_status,
+            isOfflinePaymentOrder=offline,
             cancelSummary=cancel_summary,
             hasFeedback=bool(feedback),
             feedbackContent=feedback_summary(feedback.Content) if feedback else None,
@@ -705,6 +710,8 @@ def submit_refund_exemption(
         )
         .first()
     )
+    order = db.query(AppOrder).filter(AppOrder.Id == row.OrderId).first() if row.OrderId else None
+    offline = order_is_offline_payment(order)
     try:
         validate_exemption_submission(
             row,
@@ -713,6 +720,7 @@ def submit_refund_exemption(
             reason=body.reason or "",
             screenshot_url=body.screenshot_url,
             pending=pending,
+            offline=offline,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -720,7 +728,7 @@ def submit_refund_exemption(
     exemption = AppRefundExemption(
         ConsultationId=consultation_id,
         AccountId=current_account.Id,
-        Amount=body.amount,
+        Amount=0 if offline else body.amount,
         Reason=(body.reason or "").strip(),
         ScreenshotUrl=body.screenshot_url.strip(),
         Status="PENDING",

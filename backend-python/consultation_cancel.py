@@ -54,6 +54,33 @@ def can_visitor_cancel(status: str) -> bool:
     return status in ("PENDING", "CONFIRMED", "ONGOING")
 
 
+def order_is_offline_payment(order: Optional[AppOrder]) -> bool:
+    """助理/管理员推送并由来访确认的线下支付单，没有微信在线收款。"""
+    if order is None:
+        return False
+    if bool(getattr(order, "ProxyIsOfflinePayment", False)):
+        return True
+    return str(getattr(order, "TransactionId", None) or "").startswith("OFFLINE_")
+
+
+def visitor_must_apply_to_cancel(
+    start_time: Optional[datetime],
+    order: Optional[AppOrder],
+) -> bool:
+    """不足 24 小时的订单，以及任何线下支付单，都不能直接取消。"""
+    if order_is_offline_payment(order):
+        return True
+    return not is_refund_eligible(start_time)
+
+
+def cancellation_refund_text(*, refunded: bool, offline: bool) -> str:
+    if offline:
+        return "线下支付，不涉及线上退款"
+    if refunded:
+        return "款项将原路退回"
+    return "按规定不予退款"
+
+
 def _refund_paid_order(order: AppOrder, *, reason: str) -> None:
     """
     已支付订单退款：
@@ -62,12 +89,21 @@ def _refund_paid_order(order: AppOrder, *, reason: str) -> None:
     - 模拟：仅更新本地订单为 REFUNDED。
     """
     from wechat_pay_service import (
+        WeChatPayV3Error,
         apply_local_refund,
         refund_status_accepted,
         request_wechat_refund,
     )
 
-    result = request_wechat_refund(order, reason=reason)
+    if order_is_offline_payment(order):
+        order.Status = "CANCELLED"
+        order.UpdatedAt = datetime.utcnow()
+        return
+
+    try:
+        result = request_wechat_refund(order, reason=reason)
+    except WeChatPayV3Error as exc:
+        raise ValueError("微信退款未受理，请稍后重试") from exc
     if result is not None and not refund_status_accepted(result):
         status = (result.get("status") or "未知")
         raise ValueError(f"微信退款未受理成功（{status}），请稍后重试")
@@ -81,6 +117,10 @@ def refund_order_for_counselor_leave(db: Session, consultation: AppConsultation)
         return False
     order = db.query(AppOrder).filter(AppOrder.Id == consultation.OrderId).first()
     if order and order.Status == "PAID":
+        if order_is_offline_payment(order):
+            order.Status = "CANCELLED"
+            order.UpdatedAt = datetime.utcnow()
+            return False
         _refund_paid_order(order, reason="咨询师请假取消预约")
         return True
     return bool(order and order.Status == "REFUNDED")
@@ -103,6 +143,17 @@ def cancel_consultation_for_visitor(
     if not can_visitor_cancel(consultation.Status):
         raise ValueError("当前状态不可取消")
 
+    primary_order = (
+        db.query(AppOrder).filter(AppOrder.Id == consultation.OrderId).first()
+        if consultation.OrderId
+        else None
+    )
+    offline = order_is_offline_payment(primary_order)
+    if not force_refund and visitor_must_apply_to_cancel(consultation.StartTime, primary_order):
+        if offline:
+            raise ValueError("线下支付单请提交取消预约申请，审核通过后才会取消")
+        raise ValueError("距咨询开始不足24小时，请提交取消申请")
+
     if not force_refund:
         from models import AppRefundExemption
 
@@ -115,9 +166,9 @@ def cancel_consultation_for_visitor(
             .first()
         )
         if pending:
-            raise ValueError("退款申请正在审核中，请等待审核结果")
+            raise ValueError("取消申请正在审核中，请等待审核结果")
 
-    refund = force_refund or is_refund_eligible(consultation.StartTime)
+    refund = (not offline) and (force_refund or is_refund_eligible(consultation.StartTime))
     consultation.Status = "CANCELLED"
     consultation.UpdatedAt = datetime.utcnow()
 
@@ -150,7 +201,10 @@ def cancel_consultation_for_visitor(
             seen_order_ids.add(int(order.Id))
 
     for order in paid_orders:
-        if refund:
+        if order_is_offline_payment(order):
+            order.Status = "CANCELLED"
+            order.UpdatedAt = datetime.utcnow()
+        elif refund:
             _refund_paid_order(order, reason="用户取消预约退款")
         else:
             # 不退款：预约取消但款项不退；本地关单避免仍被当成未完成预约
@@ -164,7 +218,9 @@ def cancel_consultation_for_visitor(
             schedule.Status = "AVAILABLE"
             schedule.UpdatedAt = datetime.utcnow()
 
-    if refund:
+    if offline:
+        msg = "预约已取消"
+    elif refund:
         msg = "预约已取消，款项将原路退回"
     else:
         msg = "预约已取消；距咨询不足24小时，不予退款"

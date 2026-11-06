@@ -608,14 +608,22 @@ def notify_counselor_appointment_cancelled(
     exemption_map = latest_exemptions_by_consultation(db, [consultation.Id])
     exemption = exemption_map.get(consultation.Id)
     exemption_status = exemption.Status if exemption else None
+    from consultation_cancel import cancellation_refund_text, order_is_offline_payment
+
+    order = (
+        db.query(AppOrder).filter(AppOrder.Id == consultation.OrderId).first()
+        if consultation.OrderId
+        else None
+    )
+    offline = order_is_offline_payment(order)
 
     detail = {
         **_patient_detail_fields(ctx),
         "startTime": time_text,
         "endTime": _format_datetime(ctx["endTime"]),
         "location": ctx["location"],
-        "refunded": refunded,
-        "refundText": "款项将原路退回" if refunded else "按规定不予退款",
+        "refunded": bool(refunded) and not offline,
+        "refundText": cancellation_refund_text(refunded=bool(refunded), offline=offline),
         "exemptionStatus": exemption_status,
         "exemptionLabel": _exemption_label(exemption_status),
         "consultationId": consultation.Id,

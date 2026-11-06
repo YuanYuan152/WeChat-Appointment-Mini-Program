@@ -121,10 +121,16 @@ def _affected_patients(
     note = consultation.Note or (schedule.Note if schedule else None)
     loc = _location(db, note, status=schedule.Status if schedule else "BOOKED")
     refunded = False
+    offline = False
     if consultation.OrderId:
         order = db.query(AppOrder).filter(AppOrder.Id == consultation.OrderId).first()
+        from consultation_cancel import order_is_offline_payment
+
+        offline = order_is_offline_payment(order)
         refunded = bool(order and order.Status == "REFUNDED")
-    if refunded:
+    if offline:
+        refund_text = "本单为线下支付，不涉及线上退款"
+    elif refunded:
         refund_text = "款项已原路全额退回"
     elif leave_status == "REJECTED":
         refund_text = "审核未通过，款项不作变更"

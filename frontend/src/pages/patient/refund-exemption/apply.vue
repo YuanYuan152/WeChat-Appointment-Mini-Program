@@ -1,19 +1,19 @@
 <template>
   <view class="page-exemption">
     <view class="tip-card">
-      <text class="tip-title">申请退款</text>
-      <text class="tip-desc">距咨询开始不足24小时时，可提交退款申请由管理员审核。审核通过前预约与订单维持不变。</text>
+      <text class="tip-title">{{ offline ? '申请取消预约' : '申请退款' }}</text>
+      <text class="tip-desc">{{ offline ? '线下支付单取消需提交申请。审核通过后预约取消，不涉及线上退款。审核完成前预约维持不变。' : '距咨询开始不足24小时时，可提交退款申请由管理员审核。审核通过前预约与订单维持不变。' }}</text>
     </view>
 
     <view v-if="counselorName || slotText" class="info-card">
       <text class="info-title">关联预约</text>
       <text v-if="counselorName" class="info-line">咨询师：{{ counselorName }}</text>
       <text v-if="slotText" class="info-line">咨询时段：{{ slotText }}</text>
-      <text v-if="orderAmountYuan" class="info-line">订单金额：￥{{ orderAmountYuan }}</text>
+      <text v-if="!offline && orderAmountYuan" class="info-line">订单金额：￥{{ orderAmountYuan }}</text>
     </view>
 
     <view class="form-card">
-      <view class="form-item">
+      <view v-if="!offline" class="form-item">
         <text class="label">退款金额</text>
         <text class="amount-readonly">￥{{ orderAmountYuan || '--' }}</text>
         <text class="amount-hint">按订单实付金额全额退款，不可修改</text>
@@ -31,7 +31,7 @@
       </view>
 
       <view class="form-item">
-        <text class="label">申请凭证（必填）</text>
+        <text class="label">{{ offline ? '取消凭证（必填）' : '申请凭证（必填）' }}</text>
         <view v-if="screenshotUrl" class="screenshot-preview">
           <image
             class="screenshot-image"
@@ -69,6 +69,7 @@ interface ConsultationItem {
   startTime?: string
   endTime?: string
   orderAmount?: number
+  isOfflinePaymentOrder?: boolean
 }
 
 const consultationId = ref(0)
@@ -76,6 +77,7 @@ const counselorName = ref('')
 const slotText = ref('')
 const orderAmountCents = ref(0)
 const orderAmountYuan = ref('')
+const offline = ref(false)
 
 const form = ref({ reason: '' })
 const screenshotUrl = ref('')
@@ -137,7 +139,8 @@ const applyConsultation = (item: ConsultationItem) => {
   consultationId.value = item.id
   counselorName.value = item.counselorName || ''
   slotText.value = formatSlotRange(item.startTime, item.endTime)
-  setOrderAmount(item.orderAmount)
+  if (item.isOfflinePaymentOrder) offline.value = true
+  if (!offline.value) setOrderAmount(item.orderAmount)
 }
 
 const loadConsultation = async (id: number) => {
@@ -163,9 +166,10 @@ onLoad(async (options: Record<string, string | undefined>) => {
   consultationId.value = id
   counselorName.value = decodeURIComponent(options?.counselorName || '')
   slotText.value = decodeURIComponent(options?.slotText || '')
-  setOrderAmount(Number(options?.orderAmount || 0))
+  offline.value = options?.offline === '1'
+  if (!offline.value) setOrderAmount(Number(options?.orderAmount || 0))
 
-  if (!counselorName.value || !slotText.value || !orderAmountCents.value) {
+  if (!counselorName.value || !slotText.value || (!offline.value && !orderAmountCents.value)) {
     await loadConsultation(id)
   }
 })
@@ -175,7 +179,7 @@ const submit = async () => {
     uni.showToast({ title: '预约信息无效', icon: 'none' })
     return
   }
-  if (!orderAmountCents.value || orderAmountCents.value <= 0) {
+  if (!offline.value && (!orderAmountCents.value || orderAmountCents.value <= 0)) {
     uni.showToast({ title: '订单金额无效，无法申请退款', icon: 'none' })
     return
   }
@@ -185,14 +189,14 @@ const submit = async () => {
     return
   }
   if (!screenshotUrl.value) {
-    uni.showToast({ title: '请上传退款申请凭证', icon: 'none' })
+    uni.showToast({ title: offline.value ? '请上传取消凭证' : '请上传退款申请凭证', icon: 'none' })
     return
   }
 
   submitting.value = true
   try {
     const res = await httpV2.post(API_ENDPOINTS.patient.refundExemption(consultationId.value), {
-      amount: orderAmountCents.value,
+      amount: offline.value ? 0 : orderAmountCents.value,
       reason,
       screenshot_url: screenshotUrl.value,
     })

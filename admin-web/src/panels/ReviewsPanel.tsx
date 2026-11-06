@@ -295,7 +295,9 @@ function ExemptionDetail({ item }: { item: RefundExemption }) {
           ],
           ["咨询师", item.counselorName],
           ["咨询时间", formatFullDateTime(item.consultationStartTime)],
-          ["申请金额", formatMoneyFromCents(item.amount)],
+          ...(item.isOfflinePaymentOrder
+            ? ([["支付方式", "线下支付，不涉及线上退款"]] as Array<[string, string]>)
+            : ([["申请金额", formatMoneyFromCents(item.amount)]] as Array<[string, string]>)),
           ["审核状态", reviewStatusLabel(item.status)],
           ["提交时间", formatFullDateTime(item.createdAt)],
           ["处理时间", formatFullDateTime(item.reviewedAt)],
@@ -423,7 +425,13 @@ function ReviewDrawerFooter({
           <textarea
             className="mt-2 min-h-24 w-full resize-y rounded-xl border border-[var(--lxxl-border)] px-3 py-3 text-sm outline-none focus:border-[var(--lxxl-green)]"
             maxLength={500}
-            placeholder={item.kind === "EXEMPTION" ? "请说明不予豁免的原因" : "请说明请假未通过的原因"}
+            placeholder={
+              item.kind === "EXEMPTION"
+                ? item.data.isOfflinePaymentOrder
+                  ? "请说明不予取消的原因"
+                  : "请说明不予豁免的原因"
+                : "请说明请假未通过的原因"
+            }
             value={rejectReason}
             onChange={(event) => setRejectReason(event.target.value)}
           />
@@ -476,7 +484,13 @@ function ReviewDrawerFooter({
         disabled={processing}
         onClick={() => onApprove(item)}
       >
-        {processing ? "正在处理..." : item.kind === "EXEMPTION" ? "同意豁免" : "通过请假并全额退款"}
+        {processing
+          ? "正在处理..."
+          : item.kind === "EXEMPTION"
+            ? item.data.isOfflinePaymentOrder
+              ? "同意取消"
+              : "同意豁免"
+            : "通过请假并全额退款"}
       </button>
     </div>
   );
@@ -535,7 +549,9 @@ function reviewSummary(item: ReviewItem) {
         item.data.patientName,
         item.data.patientContractTag,
       ),
-      related: `${item.data.counselorName} · ${formatMoneyFromCents(item.data.amount)} · ${formatFullDateTime(item.data.consultationStartTime)}`,
+      related: item.data.isOfflinePaymentOrder
+        ? `${item.data.counselorName} · 线下支付 · ${formatFullDateTime(item.data.consultationStartTime)}`
+        : `${item.data.counselorName} · ${formatMoneyFromCents(item.data.amount)} · ${formatFullDateTime(item.data.consultationStartTime)}`,
       reason: item.data.reason,
       status: item.data.status,
       createdAt: item.data.createdAt,

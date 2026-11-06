@@ -217,7 +217,7 @@ def _merge_pinned_offline_messages(query, rows: List[AppMessage], db: Session) -
             and order.ProxyOfflineReceiptConfirmedAt is None
         )
         created = row.CreatedAt.timestamp() if row.CreatedAt else 0
-        return (0 if pending else 1, -created)
+        return (0 if pending else 1, -created, -(row.Id or 0))
 
     pinned_only = []
     rest = []
@@ -285,7 +285,7 @@ def list_messages(
             query, category, active_role, db=db, account_id=current_account.Id
         )
     query = apply_message_search(query, q)
-    rows = query.order_by(AppMessage.CreatedAt.desc()).limit(100).all()
+    rows = query.order_by(AppMessage.CreatedAt.desc(), AppMessage.Id.desc()).limit(100).all()
     merged, orders_by_id = _merge_pinned_offline_messages(query, rows, db)
     return [_message_response(m, db, orders_by_id=orders_by_id) for m in merged]
 

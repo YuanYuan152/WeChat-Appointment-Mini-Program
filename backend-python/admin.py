@@ -34,6 +34,7 @@ from models import (
     AppCounselorProfile,
     AppLeaveRequest,
     AppLoginSession,
+    AppOrder,
     AppRefundExemption,
     AppRoleBinding,
     AppRoleSwitchLog,
@@ -496,6 +497,7 @@ class RefundExemptionAdminOut(BaseModel):
     rejectReason: Optional[str] = None
     consultationStartTime: Optional[datetime] = None
     consultationStatus: Optional[str] = None
+    isOfflinePaymentOrder: bool = False
     createdAt: datetime
     reviewedAt: Optional[datetime] = None
 
@@ -933,6 +935,12 @@ def _build_exemption_admin_out(
         or (patient.Mobile if patient else None)
         or "未留姓名用户"
     )
+    order = None
+    if consultation and consultation.OrderId:
+        order = db.query(AppOrder).filter(AppOrder.Id == consultation.OrderId).first()
+    from consultation_cancel import order_is_offline_payment
+
+    offline = order_is_offline_payment(order)
     return RefundExemptionAdminOut(
         id=row.Id,
         consultationId=row.ConsultationId,
@@ -942,13 +950,14 @@ def _build_exemption_admin_out(
         patientContractTag=patient_contract_extras(db, patient).get("contractTag"),
         counselorId=counselor_id,
         counselorName=counselor_name,
-        amount=row.Amount,
+        amount=0 if offline else row.Amount,
         reason=row.Reason,
         screenshotUrl=row.ScreenshotUrl,
         status=row.Status,
         rejectReason=optional_model_value(row, "RejectReason"),
         consultationStartTime=consultation.StartTime if consultation else None,
         consultationStatus=consultation.Status if consultation else None,
+        isOfflinePaymentOrder=offline,
         createdAt=row.CreatedAt,
         reviewedAt=row.ReviewedAt,
     )

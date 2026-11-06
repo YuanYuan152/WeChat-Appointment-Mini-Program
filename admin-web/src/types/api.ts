@@ -52,6 +52,7 @@ export interface RefundExemption {
   rejectReason?: string | null;
   consultationStartTime?: string | null;
   consultationStatus?: string | null;
+  isOfflinePaymentOrder?: boolean;
   createdAt: string;
   reviewedAt?: string | null;
 }

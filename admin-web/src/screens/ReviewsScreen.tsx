@@ -189,7 +189,11 @@ function ReviewsScreenContent() {
             : await approveLeaveRequest(item.id);
         const successMessage = getMessage(
           result,
-          item.kind === "EXEMPTION" ? "已同意豁免" : "已通过请假申请",
+          item.kind === "EXEMPTION"
+            ? item.data.isOfflinePaymentOrder
+              ? "已同意取消"
+              : "已同意豁免"
+            : "已通过请假申请",
         );
         const refreshed = await refreshAfterAction();
         showNotice(

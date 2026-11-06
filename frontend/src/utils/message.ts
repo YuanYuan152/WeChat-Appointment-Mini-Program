@@ -1,5 +1,6 @@
 import { getDevWorkbenchRole, isMockLoginEnabled } from '@/utils/auth'
 import { resolveAccountRole, STAFF_OPS_WORKBENCH_ROLES, usesOpsWorkbench } from '@/constants/roles'
+import { parseChinaDateTime } from '@/utils/dateTime'
 
 export interface MessageItem {
   Id: number
@@ -60,6 +61,18 @@ export function canReviewAsOpsAdmin(activeRole: string): boolean {
   } catch {
     return false
   }
+}
+
+/** 列表按消息产生时间（CreatedAt）新到旧，不按咨询发生时间。置顶的待付款仍在最前。 */
+export function sortInboxMessages<T extends Pick<MessageItem, 'Id' | 'CreatedAt' | 'IsPinned'>>(items: T[]): T[] {
+  const operationTime = (item: T) => parseChinaDateTime(item.CreatedAt)?.getTime() ?? 0
+  return [...items].sort((left, right) => {
+    const pinDelta = Number(Boolean(right.IsPinned)) - Number(Boolean(left.IsPinned))
+    if (pinDelta !== 0) return pinDelta
+    const timeDelta = operationTime(right) - operationTime(left)
+    if (timeDelta !== 0) return timeDelta
+    return right.Id - left.Id
+  })
 }
 
 export function messageDisplayTitle(item: MessageItem): string {

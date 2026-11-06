@@ -142,6 +142,7 @@ import {
   messageCategoryLabel,
   messageDisplayTitle,
   messageSummary,
+  sortInboxMessages,
   resolveMessageInboxRole,
   resolveMessageNavigation,
   sanitizeMessageCategoryForRole,
@@ -364,7 +365,7 @@ const reloadMessagesQuietly = async () => {
       { showLoading: false, showError: false },
     )
     if (res.code === 0 && Array.isArray(res.data)) {
-      messages.value = res.data
+      messages.value = sortInboxMessages(res.data)
     }
   } catch {
     // 静默刷新失败时保留当前列表
@@ -383,7 +384,7 @@ const loadMessages = async () => {
     )
     if (!loadGuard.isCurrent(requestId)) return
     if (res.code === 0 && Array.isArray(res.data)) {
-      messages.value = res.data
+      messages.value = sortInboxMessages(res.data)
       if (isAdminOpsInbox.value && !crisisUnreadView.value) {
         const fromList = countUnreadCrisis(res.data)
         unreadCrisisCount.value = Math.max(unreadCrisisCount.value, fromList)

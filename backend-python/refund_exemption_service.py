@@ -10,12 +10,14 @@ from consultation_cancel import (
     can_visitor_cancel,
     cancel_consultation_for_visitor,
     is_refund_eligible,
+    order_is_offline_payment,
 )
 from message import create_message
 from models import (
     AppAccount,
     AppConsultation,
     AppCounselorProfile,
+    AppOrder,
     AppRefundExemption,
     AppRoleBinding,
 )
@@ -51,20 +53,23 @@ def validate_exemption_submission(
     reason: str,
     screenshot_url: str,
     pending: Optional[AppRefundExemption],
+    offline: bool = False,
 ) -> None:
     if consultation.PatientId != patient_id:
-        raise ValueError("无权为该预约申请退款")
+        raise ValueError("无权为该预约申请取消")
     if not can_visitor_cancel(consultation.Status):
-        raise ValueError("当前状态不可申请退款")
-    if is_refund_eligible(consultation.StartTime):
+        raise ValueError("当前状态不可申请取消")
+    if not offline and is_refund_eligible(consultation.StartTime):
         raise ValueError("距咨询开始超过24小时，请直接取消预约即可退款，无需另行申请")
     if not (reason or "").strip():
         raise ValueError("请填写申请原因")
-    if amount <= 0:
+    if not offline and amount <= 0:
         raise ValueError("申请金额须大于 0")
+    if offline and amount < 0:
+        raise ValueError("申请金额无效")
     validate_uploaded_screenshot_url(screenshot_url)
     if pending:
-        raise ValueError("该预约已有待审核的退款申请")
+        raise ValueError("该预约已有待审核的取消申请")
 
 
 def validate_uploaded_screenshot_url(screenshot_url: str) -> str:
@@ -128,14 +133,25 @@ def notify_admins_new_exemption(
     patient_tag = patient_contract_extras(db, patient).get("contractTag")
     patient_label = f"{patient_name} {patient_tag}" if patient_tag else patient_name
     counselor_name = _counselor_display_name(db, consultation.CounselorId)
-    amount_yuan = f"{exemption.Amount / 100:.2f}"
-    title = "新的退款豁免申请待审核"
-    summary = f"{patient_label} · {counselor_name} · ¥{amount_yuan}"
+    order = (
+        db.query(AppOrder).filter(AppOrder.Id == consultation.OrderId).first()
+        if consultation.OrderId
+        else None
+    )
+    offline = order_is_offline_payment(order)
+    amount_yuan = None if offline else f"{exemption.Amount / 100:.2f}"
+    title = "新的取消预约申请待审核" if offline else "新的退款豁免申请待审核"
+    summary = (
+        f"{patient_label} · {counselor_name}"
+        if offline
+        else f"{patient_label} · {counselor_name} · ¥{amount_yuan}"
+    )
     detail = {
         "patientName": patient_name,
         "patientContractTag": patient_tag,
         "counselorName": counselor_name,
         "amountYuan": amount_yuan,
+        "isOfflinePaymentOrder": offline,
         "reason": exemption.Reason,
         "screenshotUrl": exemption.ScreenshotUrl,
         "exemptionId": exemption.Id,
@@ -158,7 +174,7 @@ def notify_admins_new_exemption(
     push_staff_approval_subscribe(
         db,
         applicant=patient_name,
-        biz_type="退款申请",
+        biz_type="取消预约" if offline else "退款申请",
         apply_time=getattr(exemption, "CreatedAt", None),
     )
 

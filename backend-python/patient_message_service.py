@@ -246,18 +246,29 @@ def notify_patient_appointment_cancelled(
     center_name = _appointment_center_name(note)
     time_text = _format_datetime(ctx["startTime"])
     summary = f"{ctx['counselorName']} · {time_text} · {center_name}"
-    if refunded:
+    from consultation_cancel import cancellation_refund_text, order_is_offline_payment
+
+    order = (
+        db.query(AppOrder).filter(AppOrder.Id == consultation.OrderId).first()
+        if consultation.OrderId
+        else None
+    )
+    offline = order_is_offline_payment(order)
+    if offline:
+        tip = "您的预约已取消。本单为线下支付，不涉及线上退款。"
+    elif refunded:
         tip = "您的预约已取消，款项将原路退回"
     else:
         tip = "您的预约已取消；距咨询开始不足24小时，按规定不予退款"
+    refund_text = cancellation_refund_text(refunded=refunded, offline=offline)
     detail = {
         "counselorName": ctx["counselorName"],
         "startTime": time_text,
         "endTime": _format_datetime(ctx["endTime"]),
         "location": center_name,
         "centerName": center_name,
-        "refunded": refunded,
-        "refundText": "款项将原路退回" if refunded else "按规定不予退款",
+        "refunded": refunded and not offline,
+        "refundText": refund_text,
         "cancelledBy": cancelled_by,
         "consultationId": consultation.Id,
         "tip": tip,
@@ -439,18 +450,35 @@ def notify_patient_refund_exemption_pending(
     exemption: AppRefundExemption,
     consultation: AppConsultation,
 ) -> None:
-    amount_yuan = f"{exemption.Amount / 100:.2f}"
-    title = "退款申请待审核"
-    summary = f"您的退款申请已提交，金额 ¥{amount_yuan}，请等待审核"
+    from consultation_cancel import order_is_offline_payment
+
+    order = (
+        db.query(AppOrder).filter(AppOrder.Id == consultation.OrderId).first()
+        if consultation.OrderId
+        else None
+    )
+    offline = order_is_offline_payment(order)
+    amount_yuan = None if offline else f"{exemption.Amount / 100:.2f}"
+    title = "取消预约申请待审核" if offline else "退款申请待审核"
+    summary = (
+        "您的取消预约申请已提交，请等待审核"
+        if offline
+        else f"您的退款申请已提交，金额 ¥{amount_yuan}，请等待审核"
+    )
     detail = {
         "status": "PENDING",
         "amountYuan": amount_yuan,
+        "isOfflinePaymentOrder": offline,
         "reason": exemption.Reason,
         "screenshotUrl": exemption.ScreenshotUrl,
         "exemptionId": exemption.Id,
         "consultationId": exemption.ConsultationId,
         "counselorName": _counselor_display_name(db, consultation.CounselorId),
-        "resultText": "您的退款申请正在审核中，审核结果将在此通知。",
+        "resultText": (
+            "您的取消预约申请正在审核中，审核结果将在此通知。"
+            if offline
+            else "您的退款申请正在审核中，审核结果将在此通知。"
+        ),
     }
     _notify_patient(
         db,
@@ -470,7 +498,30 @@ def notify_patient_refund_exemption_result(
     approved: bool,
     reject_reason: Optional[str] = None,
 ) -> None:
-    if approved:
+    from consultation_cancel import order_is_offline_payment
+
+    consultation = (
+        db.query(AppConsultation).filter(AppConsultation.Id == exemption.ConsultationId).first()
+    )
+    order = (
+        db.query(AppOrder).filter(AppOrder.Id == consultation.OrderId).first()
+        if consultation and consultation.OrderId
+        else None
+    )
+    offline = order_is_offline_payment(order)
+    if approved and offline:
+        title = "取消预约申请已通过"
+        summary = "取消预约申请已通过，预约已取消"
+        detail = {
+            "status": "APPROVED",
+            "approved": True,
+            "isOfflinePaymentOrder": True,
+            "resultText": "您的取消预约申请已审核通过，预约已取消。",
+            "screenshotUrl": exemption.ScreenshotUrl,
+            "exemptionId": exemption.Id,
+            "consultationId": exemption.ConsultationId,
+        }
+    elif approved:
         title = "退款申请已通过"
         summary = f"退款 {exemption.Amount / 100:.2f} 元将原路退回"
         detail = {
@@ -515,6 +566,7 @@ def notify_patient_refund_exemption_result(
         primary.RelatedType = "REFUND_EXEMPTION"
         primary.IsRead = False
         primary.ReadAt = None
+        primary.CreatedAt = datetime.utcnow()
         for duplicate in existing_rows[1:]:
             db.delete(duplicate)
         return

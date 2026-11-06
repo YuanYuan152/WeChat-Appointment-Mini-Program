@@ -477,6 +477,7 @@ def _update_admin_pending_messages(
         row.RelatedType = "CASE_RECORD_AMENDMENT"
         row.IsRead = False
         row.ReadAt = None
+        row.CreatedAt = datetime.utcnow()
 
 
 def notify_counselor_amendment_result(

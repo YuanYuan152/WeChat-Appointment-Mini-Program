@@ -175,7 +175,8 @@ def request_wechat_refund(
         tx.startswith("SIM_")
         or tx.startswith("DEV_")
         or tx.startswith("MOCK_")
-        or tx.startswith("FREE_")
+        or         tx.startswith("FREE_")
+        or tx.startswith("OFFLINE_")
     ):
         return None
 
