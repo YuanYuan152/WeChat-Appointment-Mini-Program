@@ -81,16 +81,16 @@
 
         <view v-if="r.exemptionStatus === 'PENDING'" class="exemption-banner pending">
           <text class="exemption-title">正在审核</text>
-          <text class="exemption-desc">{{ r.isOfflinePaymentOrder ? '取消预约申请审核中，请耐心等待；审核完成前不可再次申请' : '退款申请审核中，请耐心等待；审核完成前不可取消预约或再次申请' }}</text>
+          <text class="exemption-desc">{{ isNoRefundOrder(r) ? '取消预约申请审核中，请耐心等待；审核完成前不可再次申请' : '退款申请审核中，请耐心等待；审核完成前不可取消预约或再次申请' }}</text>
         </view>
         <view v-else-if="r.exemptionStatus === 'REJECTED'" class="exemption-banner rejected">
-          <text class="exemption-title">{{ r.isOfflinePaymentOrder ? '取消申请未通过' : '退款申请未通过' }}</text>
+          <text class="exemption-title">{{ isNoRefundOrder(r) ? '取消申请未通过' : '退款申请未通过' }}</text>
           <text v-if="r.exemptionRejectReason" class="exemption-desc">拒绝理由：{{ r.exemptionRejectReason }}</text>
-          <text class="exemption-desc">{{ r.isOfflinePaymentOrder ? '预约维持不变，您可以重新提交取消申请' : '预约与订单维持不变，您仍可按原订单前来咨询或自行取消（不退款）' }}</text>
+          <text class="exemption-desc">{{ isNoRefundOrder(r) ? '预约维持不变，您可以重新提交取消申请' : '预约与订单维持不变，您仍可按原订单前来咨询或自行取消（不退款）' }}</text>
         </view>
         <view v-else-if="r.exemptionStatus === 'APPROVED'" class="exemption-banner approved">
-          <text class="exemption-title">{{ r.isOfflinePaymentOrder ? '取消申请已通过' : '退款申请已通过' }}</text>
-          <text class="exemption-desc">{{ r.isOfflinePaymentOrder ? '预约已取消' : '预约已取消，款项将原路退回' }}</text>
+          <text class="exemption-title">{{ isNoRefundOrder(r) ? '取消申请已通过' : '退款申请已通过' }}</text>
+          <text class="exemption-desc">{{ isNoRefundOrder(r) ? '预约已取消' : '预约已取消，款项将原路退回' }}</text>
         </view>
 
         <view v-else-if="r.status === 'CANCELLED' && r.cancelSummary" class="cancel-summary">
@@ -151,7 +151,7 @@
             class="pay-btn"
             @click="goPayOrder(r)"
           >
-            {{ r.isOfflinePaymentOrder ? '去确认' : '去支付' }}
+            {{ isNoRefundOrder(r) ? '去确认' : '去支付' }}
           </button>
           <button
             v-else-if="r.status === 'DONE' && !r.hasFeedback"
@@ -277,7 +277,7 @@
               @tap="goExemption"
             >
 
-              {{ cancelTarget?.exemptionStatus === 'PENDING' ? '正在审核' : (cancelTarget?.isOfflinePaymentOrder ? '申请取消' : '申请退款') }}
+              {{ cancelTarget?.exemptionStatus === 'PENDING' ? '正在审核' : (isNoRefundOrder(cancelTarget) ? '申请取消' : '申请退款') }}
 
             </button>
 
@@ -370,6 +370,7 @@ interface Consultation {
   orderAmount?: number
 
   isOfflinePaymentOrder?: boolean
+  isConfirmOrder?: boolean
 
   refundReason?: string
 
@@ -451,7 +452,7 @@ const statusLabel = (r: Consultation) => {
 
   if (r.exemptionStatus === 'PENDING') return '正在审核'
 
-  if (r.status === 'PENDING_PAYMENT') return r.isOfflinePaymentOrder ? '待确认' : '待支付'
+  if (r.status === 'PENDING_PAYMENT') return isNoRefundOrder(r) ? '待确认' : '待支付'
 
   if (r.status === 'DONE' && r.hasFeedback) return '已反馈'
 
@@ -685,25 +686,29 @@ const withinCancelApplyWindow = (startTime?: string) => {
   return start.getTime() - Date.now() < 24 * 60 * 60 * 1000
 }
 
+const isNoRefundOrder = (r?: Consultation | null) =>
+  Boolean(r?.isConfirmOrder || r?.isOfflinePaymentOrder)
+
 const mustApplyToCancel = (r: Consultation) => {
   if (typeof r.mustApplyToCancel === 'boolean') return r.mustApplyToCancel
   return withinCancelApplyWindow(r.startTime)
 }
 
 const refundValueText = (r?: Consultation | null) => {
-  if (r?.isOfflinePaymentOrder) return '无需退款'
+  if (isNoRefundOrder(r)) return '无需退款'
   if (r?.refundEligible) return '是，取消后原路全额退款'
   return '否'
 }
 
 const refundValueClass = (r?: Consultation | null) => {
-  if (r?.isOfflinePaymentOrder) return 'refund-none'
+  if (isNoRefundOrder(r)) return 'refund-none'
   return r?.refundEligible ? 'refund-yes' : 'refund-no'
 }
 
 const cancelHint = (r: Consultation) => {
-  if (r.isOfflinePaymentOrder && mustApplyToCancel(r)) return '距咨询不足24小时，需申请取消，不涉及线上退款'
+  if (isNoRefundOrder(r) && mustApplyToCancel(r)) return '距咨询不足24小时，需申请取消，不涉及退款'
   if (r.isOfflinePaymentOrder) return '线下支付，取消无需退款'
+  if (isNoRefundOrder(r)) return '免费体验，取消无需退款'
   if (r.refundEligible) return '距咨询超过24小时，取消可退款'
   return '距咨询不足24小时，需申请退款'
 }
@@ -738,7 +743,7 @@ const goExemption = () => {
   }
   if (!mustApplyToCancel(r)) {
     uni.showToast({
-      title: r.isOfflinePaymentOrder
+      title: isNoRefundOrder(r)
         ? '超过24小时可直接取消，取消不退款'
         : '超过24小时可直接取消并退款，无需另行申请',
       icon: 'none',
@@ -749,13 +754,13 @@ const goExemption = () => {
   const url = `/pages/patient/refund-exemption/apply?consultationId=${r.id}`
     + `&counselorName=${encodeURIComponent(r.counselorName || '')}`
     + `&slotText=${encodeURIComponent(slotText)}`
-    + `&orderAmount=${r.isOfflinePaymentOrder ? 0 : (r.orderAmount || 0)}`
-    + `&offline=${r.isOfflinePaymentOrder ? 1 : 0}`
+    + `&orderAmount=${isNoRefundOrder(r) ? 0 : (r.orderAmount || 0)}`
+    + `&offline=${isNoRefundOrder(r) ? 1 : 0}`
   closeCancelModal()
   uni.navigateTo({
     url,
     fail: () => {
-      uni.showToast({ title: r.isOfflinePaymentOrder ? '无法打开申请取消页，请重新编译小程序' : '无法打开申请退款页，请重新编译小程序', icon: 'none' })
+      uni.showToast({ title: isNoRefundOrder(r) ? '无法打开申请取消页，请重新编译小程序' : '无法打开申请退款页，请重新编译小程序', icon: 'none' })
     },
   })
 }
@@ -783,7 +788,7 @@ const confirmCancel = async () => {
 
   if (mustApplyToCancel(r)) {
     uni.showToast({
-      title: r.isOfflinePaymentOrder ? '请提交取消申请，审核通过后才会取消' : '请提交退款申请，审核通过后才会取消',
+      title: isNoRefundOrder(r) ? '请提交取消申请，审核通过后才会取消' : '请提交退款申请，审核通过后才会取消',
       icon: 'none',
     })
     return

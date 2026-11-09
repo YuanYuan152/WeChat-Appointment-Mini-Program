@@ -12,17 +12,24 @@ import hashlib
 import logging
 import random
 import string
+import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
 from sqlalchemy.orm import Session
 
 from models import AppOrder
 from wechat_pay_credentials import pay_credentials
+from wechat_pay_metrics import inc as inc_pay_metric
 from wechat_pay_v3 import WeChatPayV3Error, get_wechat_pay_client
 
 logger = logging.getLogger(__name__)
+
+_UNPAID_TRADE_STATES = {"NOTPAY", "CLOSED", "REVOKED", "PAYERROR"}
+RECONCILE_INTERVAL_SECONDS = 10 * 60
+RECONCILE_LOOKBACK = timedelta(days=7)
+_reconcile_started = False
 
 
 def is_real_wechat_pay_configured() -> bool:
@@ -126,17 +133,286 @@ def sync_paid_order_from_wechat(db: Session, order: AppOrder) -> bool:
     return True
 
 
-def close_wechat_order_quietly(out_trade_no: str) -> None:
+def wechat_error_already_paid(exc: WeChatPayV3Error) -> bool:
+    blob = f"{exc}\n{exc.body}"
+    upper = blob.upper()
+    return "ORDERPAID" in upper or "ORDER_PAID" in upper or "已支付" in blob
+
+
+def wechat_error_order_missing(exc: WeChatPayV3Error) -> bool:
+    upper = f"{exc}\n{exc.body}".upper()
+    return (
+        "ORDERNOTEXIST" in upper
+        or "ORDER_NOT_EXIST" in upper
+        or exc.status_code == 404
+    )
+
+
+def close_wechat_order_quietly(out_trade_no: str) -> str:
     """
     超时/取消待支付时关闭微信侧订单。
-    已支付、已关闭等错误忽略，避免打断本地关单。
+    返回 closed / already_paid / skipped / error。
+    已支付必须交给入账后退款，不能当成关单成功。
     """
     if not out_trade_no or not is_real_wechat_pay_configured():
-        return
+        return "skipped"
     try:
         get_wechat_pay_client().close_order(out_trade_no)
+        return "closed"
     except WeChatPayV3Error as exc:
+        if wechat_error_already_paid(exc):
+            inc_pay_metric("close_already_paid")
+            logger.error(
+                "close_already_paid out_trade_no=%s status=%s",
+                out_trade_no,
+                exc.status_code,
+            )
+            return "already_paid"
         logger.info("微信关单跳过 out_trade_no=%s: %s", out_trade_no, exc)
+        return "error"
+
+
+def lookup_wechat_trade(out_trade_no: str) -> Optional[dict]:
+    """未配置真实支付时返回 None。订单不存在视为未支付。查单异常为 QUERY_FAILED。"""
+    if not out_trade_no or not is_real_wechat_pay_configured():
+        return None
+    try:
+        data = get_wechat_pay_client().query_by_out_trade_no(out_trade_no)
+    except WeChatPayV3Error as exc:
+        if wechat_error_order_missing(exc):
+            return {"trade_state": "NOTPAY"}
+        logger.error(
+            "wechat query failed out_trade_no=%s status=%s",
+            out_trade_no,
+            exc.status_code,
+        )
+        return {"trade_state": "QUERY_FAILED"}
+    if not isinstance(data, dict):
+        return {"trade_state": "QUERY_FAILED"}
+    return data
+
+
+def _mark_paid_from_trade(order: AppOrder, trade: dict) -> None:
+    """只记录收款，不创建咨询、不占用排期。"""
+    if order.Status != "PAID":
+        order.Status = "PAID"
+    if order.PaidAt is None:
+        order.PaidAt = datetime.utcnow()
+    transaction_id = str(trade.get("transaction_id") or "").strip()
+    if transaction_id:
+        order.TransactionId = transaction_id
+    order.UpdatedAt = datetime.utcnow()
+
+
+def _refund_recorded_payment(order: AppOrder) -> str:
+    try:
+        result = request_wechat_refund(
+            order,
+            reason="本地过期但微信已支付，自动退款",
+        )
+        if not refund_status_accepted(result):
+            raise WeChatPayV3Error("退款未受理", body=str(result))
+        apply_local_refund(order)
+        logger.warning(
+            "pay_desync auto refunded out_trade_no=%s order_id=%s",
+            order.OutTradeNo,
+            order.Id,
+        )
+        return "refunded"
+    except Exception as exc:
+        inc_pay_metric("pay_desync")
+        logger.error(
+            "pay_desync refund failed out_trade_no=%s order_id=%s status=%s err=%s",
+            order.OutTradeNo,
+            order.Id,
+            order.Status,
+            type(exc).__name__,
+        )
+        return "paid_refund_failed"
+
+
+def refund_if_wechat_paid(
+    db: Session,
+    order: AppOrder,
+    *,
+    assume_paid: bool = False,
+) -> str:
+    """
+    微信已收款：先记 PAID，再走现有退款，最终 REFUNDED。
+    返回 refunded / paid_refund_failed / sync_failed / unpaid。
+    入账或退款失败时保留可人工处理状态，调用方不得改成未支付取消。
+    """
+    _ = db
+    if int(order.TotalFee or 0) <= 0 or bool(getattr(order, "ProxyIsOfflinePayment", False)):
+        return "unpaid"
+    tx = (order.TransactionId or "").strip()
+    if tx.startswith("OFFLINE_") or tx.startswith("FREE_"):
+        return "unpaid"
+
+    trade = lookup_wechat_trade(order.OutTradeNo)
+    if trade is None:
+        return "unpaid"
+    state = str(trade.get("trade_state") or "").upper()
+    if state == "QUERY_FAILED":
+        inc_pay_metric("pay_desync")
+        logger.error(
+            "pay_desync query failed out_trade_no=%s order_id=%s",
+            order.OutTradeNo,
+            order.Id,
+        )
+        return "sync_failed"
+    if state == "REFUND":
+        _mark_paid_from_trade(order, trade)
+        apply_local_refund(order)
+        inc_pay_metric("pay_desync")
+        logger.warning(
+            "pay_desync wechat REFUND local marked REFUNDED out_trade_no=%s order_id=%s",
+            order.OutTradeNo,
+            order.Id,
+        )
+        return "refunded"
+    if state != "SUCCESS":
+        if assume_paid or state not in _UNPAID_TRADE_STATES:
+            inc_pay_metric("pay_desync")
+            logger.error(
+                "pay_desync refuse local cancel out_trade_no=%s order_id=%s trade_state=%s",
+                order.OutTradeNo,
+                order.Id,
+                state or "empty",
+            )
+            return "sync_failed"
+        return "unpaid"
+
+    amount = (trade.get("amount") or {}).get("total")
+    if amount is not None:
+        try:
+            amount_ok = int(amount) == int(order.TotalFee)
+        except (TypeError, ValueError):
+            amount_ok = False
+        if not amount_ok:
+            inc_pay_metric("pay_desync")
+            logger.error(
+                "pay_desync amount mismatch out_trade_no=%s order_id=%s",
+                order.OutTradeNo,
+                order.Id,
+            )
+            return "sync_failed"
+
+    inc_pay_metric("pay_desync")
+    logger.error(
+        "pay_desync wechat SUCCESS local status=%s out_trade_no=%s order_id=%s",
+        order.Status,
+        order.OutTradeNo,
+        order.Id,
+    )
+    _mark_paid_from_trade(order, trade)
+    return _refund_recorded_payment(order)
+
+
+def settle_expired_pending_order(db: Session, order: AppOrder) -> str:
+    """关单前先查单。已支付则入账并退款；仅未支付/已关闭才交给本地取消。"""
+    outcome = refund_if_wechat_paid(db, order)
+    if outcome != "unpaid":
+        return outcome
+    close_result = close_wechat_order_quietly(order.OutTradeNo)
+    if close_result == "already_paid":
+        return refund_if_wechat_paid(db, order, assume_paid=True)
+    return "unpaid"
+
+
+def reconcile_wechat_paid_desync(db: Session) -> int:
+    """
+    每轮扫描近 7 天、未写 PaidAt、金额大于 0、状态为待支付或已取消的订单。
+    已过期或已本地取消且微信 SUCCESS：入账后立即退款。
+    仍在支付窗口内且微信 SUCCESS：走现有查单入账，避免把刚付完的订单退掉。
+    """
+    if not is_real_wechat_pay_configured():
+        return 0
+    from app_time import china_now
+
+    cutoff = datetime.utcnow() - RECONCILE_LOOKBACK
+    now_cn = china_now()
+    rows = (
+        db.query(AppOrder)
+        .filter(
+            AppOrder.Status.in_(("PENDING", "CANCELLED")),
+            AppOrder.PaidAt.is_(None),
+            AppOrder.TotalFee > 0,
+            AppOrder.CreatedAt >= cutoff,
+        )
+        .order_by(AppOrder.Id.asc())
+        .all()
+    )
+    refunded = 0
+    for order in rows:
+        try:
+            tx = (order.TransactionId or "").strip()
+            if order.ProxyIsOfflinePayment or tx.startswith("OFFLINE_") or tx.startswith("FREE_"):
+                continue
+            expired = bool(order.ExpiresAt and order.ExpiresAt < now_cn)
+            if order.Status == "PENDING" and not expired:
+                trade = lookup_wechat_trade(order.OutTradeNo)
+                state = str((trade or {}).get("trade_state") or "").upper()
+                if state == "SUCCESS":
+                    inc_pay_metric("pay_desync")
+                    logger.error(
+                        "pay_desync unexpired pending wechat SUCCESS fulfill out_trade_no=%s order_id=%s",
+                        order.OutTradeNo,
+                        order.Id,
+                    )
+                    sync_paid_order_from_wechat(db, order)
+                db.commit()
+                continue
+            outcome = refund_if_wechat_paid(db, order)
+            if outcome in ("refunded", "paid_refund_failed"):
+                from proxy_booking_service import release_unfulfilled_proxy_schedule
+
+                release_unfulfilled_proxy_schedule(db, order)
+            if outcome == "refunded":
+                refunded += 1
+            db.commit()
+        except Exception:
+            db.rollback()
+            inc_pay_metric("pay_desync")
+            logger.exception(
+                "pay_desync reconcile failed out_trade_no=%s order_id=%s",
+                order.OutTradeNo,
+                order.Id,
+            )
+    return refunded
+
+
+def start_wechat_pay_reconcile_loop() -> None:
+    """后台每 10 分钟对账一次。"""
+    global _reconcile_started
+    if _reconcile_started:
+        return
+    _reconcile_started = True
+
+    def _loop() -> None:
+        while True:
+            time.sleep(RECONCILE_INTERVAL_SECONDS)
+            db = None
+            try:
+                from database import SessionLocal
+
+                db = SessionLocal()
+                count = reconcile_wechat_paid_desync(db)
+                if count:
+                    logger.warning("pay_desync reconcile refunded count=%s", count)
+            except Exception:
+                logger.exception("pay_desync reconcile loop failed")
+                if db is not None:
+                    db.rollback()
+            finally:
+                if db is not None:
+                    db.close()
+
+    threading.Thread(
+        target=_loop,
+        name="wechat-pay-reconcile",
+        daemon=True,
+    ).start()
 
 
 def make_out_refund_no(order: AppOrder) -> str:

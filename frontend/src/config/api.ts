@@ -87,6 +87,7 @@ export const API_ENDPOINTS = {
     simulatePay: '/api/payment/wechat/simulate-pay',
     simulatePayOrder: '/api/payment/wechat/simulate-pay-order',
     payOrder: '/api/payment/wechat/pay-order',
+    confirmOrder: '/api/payment/orders/confirm',
     syncOrder: '/api/payment/wechat/sync-order',
     attachOrderAgreement: '/api/payment/wechat/attach-order-agreement',
     confirmDev: '/api/payment/wechat/confirm-dev',

@@ -246,7 +246,11 @@ def notify_patient_appointment_cancelled(
     center_name = _appointment_center_name(note)
     time_text = _format_datetime(ctx["startTime"])
     summary = f"{ctx['counselorName']} · {time_text} · {center_name}"
-    from consultation_cancel import cancellation_refund_text, order_is_offline_payment
+    from consultation_cancel import (
+        cancellation_refund_text,
+        order_is_confirm_only,
+        order_is_offline_payment,
+    )
 
     order = (
         db.query(AppOrder).filter(AppOrder.Id == consultation.OrderId).first()
@@ -254,20 +258,25 @@ def notify_patient_appointment_cancelled(
         else None
     )
     offline = order_is_offline_payment(order)
+    confirm_only = order_is_confirm_only(order)
     if offline:
         tip = "您的预约已取消。本单为线下支付，不涉及线上退款。"
+    elif confirm_only:
+        tip = "您的预约已取消。本单为免费体验，不涉及退款。"
     elif refunded:
         tip = "您的预约已取消，款项将原路退回"
     else:
         tip = "您的预约已取消；距咨询开始不足24小时，按规定不予退款"
-    refund_text = cancellation_refund_text(refunded=refunded, offline=offline)
+    refund_text = cancellation_refund_text(
+        refunded=refunded, offline=offline, confirm_only=confirm_only,
+    )
     detail = {
         "counselorName": ctx["counselorName"],
         "startTime": time_text,
         "endTime": _format_datetime(ctx["endTime"]),
         "location": center_name,
         "centerName": center_name,
-        "refunded": refunded and not offline,
+        "refunded": refunded and not confirm_only,
         "refundText": refund_text,
         "cancelledBy": cancelled_by,
         "consultationId": consultation.Id,
@@ -450,7 +459,7 @@ def notify_patient_refund_exemption_pending(
     exemption: AppRefundExemption,
     consultation: AppConsultation,
 ) -> None:
-    from consultation_cancel import order_is_offline_payment
+    from consultation_cancel import order_is_confirm_only, order_is_offline_payment
 
     order = (
         db.query(AppOrder).filter(AppOrder.Id == consultation.OrderId).first()
@@ -458,11 +467,12 @@ def notify_patient_refund_exemption_pending(
         else None
     )
     offline = order_is_offline_payment(order)
-    amount_yuan = None if offline else f"{exemption.Amount / 100:.2f}"
-    title = "取消预约申请待审核" if offline else "退款申请待审核"
+    no_refund = order_is_confirm_only(order)
+    amount_yuan = None if no_refund else f"{exemption.Amount / 100:.2f}"
+    title = "取消预约申请待审核" if no_refund else "退款申请待审核"
     summary = (
         "您的取消预约申请已提交，请等待审核"
-        if offline
+        if no_refund
         else f"您的退款申请已提交，金额 ¥{amount_yuan}，请等待审核"
     )
     detail = {
@@ -476,7 +486,7 @@ def notify_patient_refund_exemption_pending(
         "counselorName": _counselor_display_name(db, consultation.CounselorId),
         "resultText": (
             "您的取消预约申请正在审核中，审核结果将在此通知。"
-            if offline
+            if no_refund
             else "您的退款申请正在审核中，审核结果将在此通知。"
         ),
     }
@@ -498,7 +508,7 @@ def notify_patient_refund_exemption_result(
     approved: bool,
     reject_reason: Optional[str] = None,
 ) -> None:
-    from consultation_cancel import order_is_offline_payment
+    from consultation_cancel import order_is_confirm_only, order_is_offline_payment
 
     consultation = (
         db.query(AppConsultation).filter(AppConsultation.Id == exemption.ConsultationId).first()
@@ -509,13 +519,15 @@ def notify_patient_refund_exemption_result(
         else None
     )
     offline = order_is_offline_payment(order)
-    if approved and offline:
+    no_refund = order_is_confirm_only(order)
+    if approved and no_refund:
         title = "取消预约申请已通过"
         summary = "取消预约申请已通过，预约已取消"
         detail = {
             "status": "APPROVED",
             "approved": True,
-            "isOfflinePaymentOrder": True,
+            "isOfflinePaymentOrder": offline,
+            "isConfirmOrder": True,
             "resultText": "您的取消预约申请已审核通过，预约已取消。",
             "screenshotUrl": exemption.ScreenshotUrl,
             "exemptionId": exemption.Id,
@@ -535,12 +547,16 @@ def notify_patient_refund_exemption_result(
         }
     else:
         reason_text = (reject_reason or "").strip() or "未说明具体原因"
-        title = "退款申请未通过"
+        title = "取消申请未通过" if no_refund else "退款申请未通过"
         summary = f"拒绝理由：{reason_text}"
         detail = {
             "status": "REJECTED",
             "approved": False,
-            "resultText": "您的退款申请未通过审核，预约与订单维持不变。",
+            "resultText": (
+                "您的取消申请未通过审核，预约维持不变。"
+                if no_refund
+                else "您的退款申请未通过审核，预约与订单维持不变。"
+            ),
             "rejectReason": reason_text,
             "screenshotUrl": exemption.ScreenshotUrl,
             "exemptionId": exemption.Id,

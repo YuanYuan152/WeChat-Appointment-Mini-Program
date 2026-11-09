@@ -8,6 +8,7 @@ from sqlalchemy.orm import sessionmaker
 from app_time import china_now
 from consultation_cancel import (
     cancel_consultation_for_visitor,
+    order_is_confirm_only,
     order_is_offline_payment,
     visitor_must_apply_to_cancel,
 )
@@ -26,6 +27,11 @@ class OfflineCancelRuleTests(unittest.TestCase):
         self.assertTrue(order_is_offline_payment(SimpleNamespace(ProxyIsOfflinePayment=False, TransactionId="OFFLINE_abc")))
         self.assertFalse(order_is_offline_payment(SimpleNamespace(ProxyIsOfflinePayment=False, TransactionId="WX1")))
         self.assertFalse(order_is_offline_payment(None))
+        free = SimpleNamespace(ProxyIsOfflinePayment=False, ProxyIsFreeExperience=True, TotalFee=0, TransactionId=None)
+        priced = SimpleNamespace(ProxyIsOfflinePayment=False, ProxyIsFreeExperience=False, TotalFee=100, TransactionId="WX1")
+        self.assertTrue(order_is_confirm_only(free))
+        self.assertTrue(order_is_confirm_only(SimpleNamespace(ProxyIsOfflinePayment=True, ProxyIsFreeExperience=False, TotalFee=100, TransactionId="WX1")))
+        self.assertFalse(order_is_confirm_only(priced))
 
     def test_only_within_24h_must_apply(self):
         soon = china_now() + timedelta(hours=2)
@@ -134,6 +140,47 @@ class VisitorCancelScheduleReleaseTests(unittest.TestCase):
     def test_pushed_new_slot_is_not_returned_to_counselor_schedule(self):
         schedule = self._cancel_booked(description="proxy:3|center:yangpu|schedule:new")
         self.assertEqual(schedule.Status, "CANCELLED")
+
+    def test_free_experience_cancel_is_cancelled_not_refunded(self):
+        start = china_now() + timedelta(days=3)
+        schedule = AppSchedule(
+            CounselorId=10,
+            StartTime=start,
+            EndTime=start + timedelta(minutes=50),
+            Status="BOOKED",
+            Note="center:yangpu",
+        )
+        self.db.add(schedule)
+        self.db.flush()
+        order = AppOrder(
+            AccountId=7,
+            SlotId=schedule.Id,
+            OutTradeNo="FREE-EXPERIENCE",
+            TotalFee=0,
+            Status="PAID",
+            Description="proxy:3|center:yangpu|schedule:existing",
+            ProxyIsFreeExperience=True,
+            TransactionId="FREE_FREE-EXPERIENCE",
+        )
+        self.db.add(order)
+        self.db.flush()
+        consultation = AppConsultation(
+            OrderId=order.Id,
+            PatientId=7,
+            CounselorId=10,
+            ScheduleId=schedule.Id,
+            Status="CONFIRMED",
+            StartTime=start,
+            EndTime=start + timedelta(minutes=50),
+        )
+        self.db.add(consultation)
+        self.db.commit()
+        refunded, message = cancel_consultation_for_visitor(self.db, consultation, patient_id=7)
+        self.db.commit()
+        self.db.refresh(order)
+        self.assertFalse(refunded)
+        self.assertEqual(message, "预约已取消")
+        self.assertEqual(order.Status, "CANCELLED")
 
     def test_existing_counselor_slot_returns_to_schedule(self):
         schedule = self._cancel_booked(description="proxy:3|center:yangpu|schedule:existing")

@@ -124,12 +124,17 @@ def _affected_patients(
     offline = False
     if consultation.OrderId:
         order = db.query(AppOrder).filter(AppOrder.Id == consultation.OrderId).first()
-        from consultation_cancel import order_is_offline_payment
+        from consultation_cancel import order_is_confirm_only, order_is_offline_payment
 
         offline = order_is_offline_payment(order)
+        confirm_only = order_is_confirm_only(order)
         refunded = bool(order and order.Status == "REFUNDED")
+    else:
+        confirm_only = False
     if offline:
         refund_text = "本单为线下支付，不涉及线上退款"
+    elif confirm_only:
+        refund_text = "本单为免费体验，不涉及退款"
     elif refunded:
         refund_text = "款项已原路全额退回"
     elif leave_status == "REJECTED":

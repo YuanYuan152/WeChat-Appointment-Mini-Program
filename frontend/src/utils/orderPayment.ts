@@ -26,6 +26,8 @@ export interface PatientOrder {
   proxyAgreementLabel?: string | null
   /** 助理/管理员推送的线下支付单：来访确认即可，不走在线支付 */
   isOfflinePaymentOrder?: boolean
+  isConfirmOrder?: boolean
+  TransactionId?: string | null
 }
 
 /** 列表/详情展示用时间：已支付（含已退款）优先支付时间 */
@@ -48,19 +50,23 @@ export function isFreeOrderFee(cents?: number | null) {
   return cents != null && !Number.isNaN(Number(cents)) && Number(cents) <= 0
 }
 
-export function isOfflinePaymentOrder(order?: { isOfflinePaymentOrder?: boolean } | null) {
-  return Boolean(order?.isOfflinePaymentOrder)
+export function isOfflinePaymentOrder(order?: { isOfflinePaymentOrder?: boolean; TransactionId?: string | null } | null) {
+  if (Boolean(order?.isOfflinePaymentOrder)) return true
+  // 确认后交易号为 OFFLINE_。远程接口未带回标记时，仍按线下支付单显示「已确认」。
+  return String(order?.TransactionId || '').startsWith('OFFLINE_')
 }
 
 /** 免费单和线下支付单都是确认预约，不发起微信支付。 */
-export function isConfirmInsteadOfPay(order?: { TotalFee?: number | null; isOfflinePaymentOrder?: boolean } | null) {
-  return isFreeOrderFee(order?.TotalFee) || isOfflinePaymentOrder(order)
+export function isConfirmInsteadOfPay(order?: { TotalFee?: number | null; isOfflinePaymentOrder?: boolean; isConfirmOrder?: boolean } | null) {
+  return Boolean(order?.isConfirmOrder) || isFreeOrderFee(order?.TotalFee) || isOfflinePaymentOrder(order)
 }
 
 /** 来访订单状态：免费单、线下支付单确认后显示「已确认」，只有在线付费单显示「已支付」。 */
 export function orderStatusLabel(order: Pick<PatientOrder, 'Status' | 'TotalFee' | 'isOfflinePaymentOrder'>) {
   if (order.Status === 'PENDING' && isConfirmInsteadOfPay(order)) return '待确认'
-  if (order.Status === 'PAID' && isConfirmInsteadOfPay(order)) return '已确认'
+  if (isConfirmInsteadOfPay(order) && (order.Status === 'PAID' || order.Status === 'REFUNDED')) {
+    return order.Status === 'REFUNDED' ? '已取消' : '已确认'
+  }
   const map: Record<string, string> = {
     PENDING: '待支付',
     PAID: '已支付',
@@ -109,7 +115,7 @@ async function syncOrderAfterPay(orderId: number | string): Promise<void> {
 async function confirmFreeOrder(orderId: number): Promise<{ ok: boolean; msg?: string }> {
   safeShowLoading('确认中...')
   try {
-    const orderRes = await httpV2.post(API_ENDPOINTS.payment.payOrder, { order_id: orderId })
+    const orderRes = await httpV2.post(API_ENDPOINTS.payment.confirmOrder, { order_id: orderId })
     safeHideLoading()
     if (orderRes.code !== 0 || !orderRes.data) {
       return { ok: false, msg: orderRes.msg || '确认失败' }

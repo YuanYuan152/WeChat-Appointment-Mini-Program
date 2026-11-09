@@ -70,6 +70,17 @@ def order_is_offline_payment(order: Optional[AppOrder]) -> bool:
     return str(getattr(order, "TransactionId", None) or "").startswith("OFFLINE_")
 
 
+def order_is_confirm_only(order: Optional[AppOrder]) -> bool:
+    """免费体验单和线下支付单只确认预约，取消时不产生退款。"""
+    if order is None:
+        return False
+    if order_is_offline_payment(order):
+        return True
+    if bool(getattr(order, "ProxyIsFreeExperience", False)):
+        return True
+    return int(getattr(order, "TotalFee", 0) or 0) <= 0
+
+
 def visitor_must_apply_to_cancel(
     start_time: Optional[datetime],
     order: Optional[AppOrder],
@@ -79,9 +90,11 @@ def visitor_must_apply_to_cancel(
     return not is_refund_eligible(start_time)
 
 
-def cancellation_refund_text(*, refunded: bool, offline: bool) -> str:
+def cancellation_refund_text(*, refunded: bool, offline: bool, confirm_only: bool = False) -> str:
     if offline:
         return "线下支付，不涉及线上退款"
+    if confirm_only:
+        return "免费体验，不涉及退款"
     if refunded:
         return "款项将原路退回"
     return "按规定不予退款"
@@ -123,7 +136,7 @@ def refund_order_for_counselor_leave(db: Session, consultation: AppConsultation)
         return False
     order = db.query(AppOrder).filter(AppOrder.Id == consultation.OrderId).first()
     if order and order.Status == "PAID":
-        if order_is_offline_payment(order):
+        if order_is_confirm_only(order):
             order.Status = "CANCELLED"
             order.UpdatedAt = datetime.utcnow()
             return False
@@ -154,9 +167,9 @@ def cancel_consultation_for_visitor(
         if consultation.OrderId
         else None
     )
-    offline = order_is_offline_payment(primary_order)
+    confirm_only = order_is_confirm_only(primary_order)
     if not force_refund and visitor_must_apply_to_cancel(consultation.StartTime, primary_order):
-        if offline:
+        if confirm_only:
             raise ValueError("距咨询开始不足24小时，请提交取消申请，审核通过后才会取消")
         raise ValueError("距咨询开始不足24小时，请提交取消申请")
 
@@ -174,7 +187,7 @@ def cancel_consultation_for_visitor(
         if pending:
             raise ValueError("取消申请正在审核中，请等待审核结果")
 
-    refund = (not offline) and (force_refund or is_refund_eligible(consultation.StartTime))
+    refund = (not confirm_only) and (force_refund or is_refund_eligible(consultation.StartTime))
     consultation.Status = "CANCELLED"
     consultation.UpdatedAt = datetime.utcnow()
 
@@ -207,7 +220,7 @@ def cancel_consultation_for_visitor(
             seen_order_ids.add(int(order.Id))
 
     for order in paid_orders:
-        if order_is_offline_payment(order):
+        if order_is_confirm_only(order):
             order.Status = "CANCELLED"
             order.UpdatedAt = datetime.utcnow()
         elif refund:
@@ -228,7 +241,7 @@ def cancel_consultation_for_visitor(
             schedule.Status = "CANCELLED" if created_by_push else "AVAILABLE"
             schedule.UpdatedAt = datetime.utcnow()
 
-    if offline:
+    if confirm_only:
         msg = "预约已取消"
     elif refund:
         msg = "预约已取消，款项将原路退回"

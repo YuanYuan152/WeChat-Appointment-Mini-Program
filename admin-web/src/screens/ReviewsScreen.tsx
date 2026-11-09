@@ -190,7 +190,7 @@ function ReviewsScreenContent() {
         const successMessage = getMessage(
           result,
           item.kind === "EXEMPTION"
-            ? item.data.isOfflinePaymentOrder
+            ? item.data.isConfirmOrder || item.data.isOfflinePaymentOrder
               ? "已同意取消"
               : "已同意豁免"
             : "已通过请假申请",

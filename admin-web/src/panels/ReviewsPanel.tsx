@@ -295,8 +295,11 @@ function ExemptionDetail({ item }: { item: RefundExemption }) {
           ],
           ["咨询师", item.counselorName],
           ["咨询时间", formatFullDateTime(item.consultationStartTime)],
-          ...(item.isOfflinePaymentOrder
-            ? ([["支付方式", "线下支付，不涉及线上退款"]] as Array<[string, string]>)
+          ...(item.isConfirmOrder || item.isOfflinePaymentOrder
+            ? ([[
+                "支付方式",
+                item.isOfflinePaymentOrder ? "线下支付，不涉及线上退款" : "免费体验，不涉及退款",
+              ]] as Array<[string, string]>)
             : ([["申请金额", formatMoneyFromCents(item.amount)]] as Array<[string, string]>)),
           ["审核状态", reviewStatusLabel(item.status)],
           ["提交时间", formatFullDateTime(item.createdAt)],
@@ -427,7 +430,7 @@ function ReviewDrawerFooter({
             maxLength={500}
             placeholder={
               item.kind === "EXEMPTION"
-                ? item.data.isOfflinePaymentOrder
+                ? item.data.isConfirmOrder || item.data.isOfflinePaymentOrder
                   ? "请说明不予取消的原因"
                   : "请说明不予豁免的原因"
                 : "请说明请假未通过的原因"
@@ -487,7 +490,7 @@ function ReviewDrawerFooter({
         {processing
           ? "正在处理..."
           : item.kind === "EXEMPTION"
-            ? item.data.isOfflinePaymentOrder
+            ? item.data.isConfirmOrder || item.data.isOfflinePaymentOrder
               ? "同意取消"
               : "同意豁免"
             : "通过请假并全额退款"}
@@ -549,8 +552,8 @@ function reviewSummary(item: ReviewItem) {
         item.data.patientName,
         item.data.patientContractTag,
       ),
-      related: item.data.isOfflinePaymentOrder
-        ? `${item.data.counselorName} · 线下支付 · ${formatFullDateTime(item.data.consultationStartTime)}`
+      related: item.data.isConfirmOrder || item.data.isOfflinePaymentOrder
+        ? `${item.data.counselorName} · ${item.data.isOfflinePaymentOrder ? "线下支付" : "免费体验"} · ${formatFullDateTime(item.data.consultationStartTime)}`
         : `${item.data.counselorName} · ${formatMoneyFromCents(item.data.amount)} · ${formatFullDateTime(item.data.consultationStartTime)}`,
       reason: item.data.reason,
       status: item.data.status,
