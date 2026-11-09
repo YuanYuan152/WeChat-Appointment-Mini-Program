@@ -54,6 +54,13 @@ def can_visitor_cancel(status: str) -> bool:
     return status in ("PENDING", "CONFIRMED", "ONGOING")
 
 
+def order_created_proxy_schedule(order: Optional[AppOrder]) -> bool:
+    """助理/管理员推送时新建的时段，不是咨询师原先放出的排期。"""
+    if order is None:
+        return False
+    return "schedule:new" in (order.Description or "")
+
+
 def order_is_offline_payment(order: Optional[AppOrder]) -> bool:
     """助理/管理员推送并由来访确认的线下支付单，没有微信在线收款。"""
     if order is None:
@@ -213,8 +220,12 @@ def cancel_consultation_for_visitor(
     if consultation.ScheduleId:
         schedule = db.query(AppSchedule).filter(AppSchedule.Id == consultation.ScheduleId).first()
         if schedule and schedule.Status == "BOOKED":
+            # 推送时新建的时段取消后不再回到咨询师排期；咨询师原排期仍释放为空闲。
+            created_by_push = order_created_proxy_schedule(primary_order) or any(
+                order_created_proxy_schedule(order) for order in paid_orders
+            )
             schedule.Note = release_assigned_room(schedule.Note)
-            schedule.Status = "AVAILABLE"
+            schedule.Status = "CANCELLED" if created_by_push else "AVAILABLE"
             schedule.UpdatedAt = datetime.utcnow()
 
     if offline:

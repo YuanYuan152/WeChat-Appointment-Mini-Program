@@ -2,11 +2,17 @@ import unittest
 from datetime import datetime, timedelta
 from types import SimpleNamespace
 
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
 from app_time import china_now
 from consultation_cancel import (
+    cancel_consultation_for_visitor,
     order_is_offline_payment,
     visitor_must_apply_to_cancel,
 )
+from database import Base
+from models import AppConsultation, AppOrder, AppRefundExemption, AppRemindTask, AppSchedule
 from refund_exemption_service import validate_exemption_submission
 
 
@@ -68,6 +74,70 @@ class OfflineCancelRuleTests(unittest.TestCase):
                 pending=None,
                 offline=False,
             )
+
+
+class VisitorCancelScheduleReleaseTests(unittest.TestCase):
+    def setUp(self):
+        self.engine = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(
+            self.engine,
+            tables=[
+                AppOrder.__table__,
+                AppSchedule.__table__,
+                AppConsultation.__table__,
+                AppRemindTask.__table__,
+                AppRefundExemption.__table__,
+            ],
+        )
+        self.db = sessionmaker(bind=self.engine)()
+
+    def tearDown(self):
+        self.db.close()
+
+    def _cancel_booked(self, *, description: str):
+        start = china_now() + timedelta(days=3)
+        schedule = AppSchedule(
+            CounselorId=10,
+            StartTime=start,
+            EndTime=start + timedelta(minutes=50),
+            Status="BOOKED",
+            Note="center:yangpu;room:A",
+        )
+        self.db.add(schedule)
+        self.db.flush()
+        order = AppOrder(
+            AccountId=7,
+            SlotId=schedule.Id,
+            OutTradeNo=f"PROXY-{schedule.Id}",
+            TotalFee=60000,
+            Status="PAID",
+            Description=description,
+            ProxyIsOfflinePayment=True,
+        )
+        self.db.add(order)
+        self.db.flush()
+        consultation = AppConsultation(
+            OrderId=order.Id,
+            PatientId=7,
+            CounselorId=10,
+            ScheduleId=schedule.Id,
+            Status="CONFIRMED",
+            StartTime=start,
+            EndTime=start + timedelta(minutes=50),
+        )
+        self.db.add(consultation)
+        self.db.commit()
+        cancel_consultation_for_visitor(self.db, consultation, patient_id=7)
+        self.db.commit()
+        return self.db.query(AppSchedule).filter(AppSchedule.Id == schedule.Id).one()
+
+    def test_pushed_new_slot_is_not_returned_to_counselor_schedule(self):
+        schedule = self._cancel_booked(description="proxy:3|center:yangpu|schedule:new")
+        self.assertEqual(schedule.Status, "CANCELLED")
+
+    def test_existing_counselor_slot_returns_to_schedule(self):
+        schedule = self._cancel_booked(description="proxy:3|center:yangpu|schedule:existing")
+        self.assertEqual(schedule.Status, "AVAILABLE")
 
 
 if __name__ == "__main__":
