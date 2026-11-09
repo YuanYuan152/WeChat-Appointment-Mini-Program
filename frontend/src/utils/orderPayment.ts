@@ -57,6 +57,19 @@ export function isConfirmInsteadOfPay(order?: { TotalFee?: number | null; isOffl
   return isFreeOrderFee(order?.TotalFee) || isOfflinePaymentOrder(order)
 }
 
+/** 来访订单状态：免费单、线下支付单确认后显示「已确认」，只有在线付费单显示「已支付」。 */
+export function orderStatusLabel(order: Pick<PatientOrder, 'Status' | 'TotalFee' | 'isOfflinePaymentOrder'>) {
+  if (order.Status === 'PENDING' && isConfirmInsteadOfPay(order)) return '待确认'
+  if (order.Status === 'PAID' && isConfirmInsteadOfPay(order)) return '已确认'
+  const map: Record<string, string> = {
+    PENDING: '待支付',
+    PAID: '已支付',
+    CANCELLED: '已取消',
+    REFUNDED: '已退款',
+  }
+  return map[order.Status] || order.Status
+}
+
 /** 订单金额展示：0 元显示「免费」 */
 export function formatOrderFeeCents(cents?: number | null) {
   if (cents == null || Number.isNaN(Number(cents))) return '—'
