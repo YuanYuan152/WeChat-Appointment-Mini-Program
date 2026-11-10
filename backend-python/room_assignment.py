@@ -49,7 +49,9 @@ def _acquire_center_slot_lock(
             {"resource": resource},
         ).scalar()
         if result is None or int(result) < 0:
-            raise ValueError("该时段正在处理其他预约，请稍后重试")
+            from booking_errors import BookingBusyError
+
+            raise BookingBusyError("该时段正在处理其他预约，请稍后重试")
 
 
 def _pending_proxy_reserved_rooms(

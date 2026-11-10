@@ -2,10 +2,11 @@ import json
 import os
 import unittest
 from datetime import datetime, time, timedelta
+from itertools import count
 from unittest.mock import patch
 
 from fastapi import HTTPException
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 from account_deletion_service import cleanup_shell_accounts, hard_delete_account
@@ -27,7 +28,9 @@ from models import (
     AppConsultationRoom,
     AppCounselorProfile,
     AppMessage,
+    AppMessageLog,
     AppOrder,
+    AppRemindTask,
     AppRoleBinding,
     AppRoleSwitchLog,
     AppSchedule,
@@ -251,6 +254,48 @@ class BackendSafetyRegressionTests(unittest.TestCase):
         self.db.refresh(schedule)
         self.assertEqual(order.Status, "PENDING")
         self.assertEqual(schedule.Status, "AVAILABLE")
+
+    def test_wechat_confirmed_payment_books_inside_lead_time_until_slot_starts(self):
+        """拉起支付时满足提前量、付款完成时刚跨过 90 分钟：钱已收就照常落单，开始后才拒绝。"""
+        message_ids = count(1)
+
+        def assign_id(_mapper, _connection, target):
+            if getattr(target, "Id", None) is None:
+                target.Id = next(message_ids)
+
+        # sqlite 不会给 BIGINT 主键自增：落单时的站内消息/提醒任务在测试里补 Id
+        for model in (AppMessage, AppMessageLog, AppRemindTask):
+            event.listen(model, "before_insert", assign_id)
+            self.addCleanup(event.remove, model, "before_insert", assign_id)
+
+        self.add_counselor()
+        self.add_patient()
+        schedule, order = self.add_schedule_order()
+        started_schedule, started_order = self.add_schedule_order(schedule_id=102)
+        now = china_now()
+        schedule.StartTime = now + timedelta(minutes=89)
+        schedule.EndTime = schedule.StartTime + timedelta(minutes=50)
+        started_schedule.StartTime = now - timedelta(minutes=1)
+        started_schedule.EndTime = started_schedule.StartTime + timedelta(minutes=50)
+        self.db.commit()
+
+        complete_paid_order(self.db, order, center_id="video", enforce_lead_time=False)
+        self.db.commit()
+        self.db.refresh(order)
+        self.db.refresh(schedule)
+        self.assertEqual(order.Status, "PAID")
+        self.assertEqual(schedule.Status, "BOOKED")
+
+        with self.assertRaisesRegex(ValueError, "预约时段已开始"):
+            complete_paid_order(
+                self.db,
+                started_order,
+                center_id="video",
+                enforce_lead_time=False,
+            )
+        self.db.rollback()
+        self.db.refresh(started_order)
+        self.assertEqual(started_order.Status, "PENDING")
 
     def test_booking_availability_returns_gray_reason_under_90_minutes(self):
         now = china_now()

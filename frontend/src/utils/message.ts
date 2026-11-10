@@ -150,6 +150,8 @@ export const MESSAGE_TYPE_LABELS: Record<string, string> = {
 export const RELATED_TYPE_LABELS: Record<string, string> = {
   APPOINTMENT_NEW: '新增预约',
   OFFLINE_PAYMENT_DUE: '待付款',
+  PAYMENT_REVIEW: '支付待处理',
+  PATIENT_PAYMENT_REVIEW: '支付待确认',
   APPOINTMENT_CANCEL: '预约取消',
   COUNSELOR_LEAVE: '咨询师请假',
   COUNSELOR_LEAVE_SUBMITTED: '请假提交',
@@ -232,6 +234,7 @@ export const STAFF_WORKBENCH_MESSAGE_CATEGORIES: MessageCategoryOption[] = [
   { value: 'pricing', label: '定价与抽成' },
   { value: 'proxy_booking', label: '代理预约' },
   { value: 'offline_payment', label: '待付款' },
+  { value: 'payment_review', label: '支付待处理' },
 ]
 
 /** @deprecated 请使用 STAFF_WORKBENCH_MESSAGE_CATEGORIES */

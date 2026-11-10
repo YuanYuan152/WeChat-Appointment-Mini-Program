@@ -88,6 +88,8 @@ class OrderOut(BaseModel):
     proxyAgreementLabel: Optional[str] = None
     isOfflinePaymentOrder: bool = False
     isConfirmOrder: bool = False
+    # 微信已收款但预约未能生效，等待工作人员改约或退款（系统不会自动退款）
+    paymentPendingReview: bool = False
 
     class Config:
         from_attributes = True
@@ -138,6 +140,12 @@ def _build_order_out(
     # PaidAt 以 UTC naive 落库，导出时转为北京时间供小程序展示
     if order.PaidAt is not None:
         base = base.model_copy(update={"PaidAt": utc_to_china(order.PaidAt)})
+    if order.Status == "PAID":
+        from wechat_pay_service import order_payment_needs_review
+
+        base = base.model_copy(
+            update={"paymentPendingReview": order_payment_needs_review(db, order)}
+        )
     contract_fields = _order_contract_fields(db, account, order)
     if not order.SlotId:
         return base.model_copy(update=contract_fields)

@@ -80,28 +80,62 @@ def release_unfulfilled_proxy_schedule(db: Session, order: AppOrder) -> None:
     schedule.UpdatedAt = _now()
 
 
-def _cancel_pending_proxy_order(db: Session, order: AppOrder) -> None:
-    if order.Status != "PENDING":
-        return
-    from wechat_pay_service import settle_expired_pending_order
+PAID_ORDER_CANNOT_CANCEL_MESSAGE = (
+    "来访已完成支付，系统会按已支付确认该预约，暂不能按待支付订单取消。"
+    "请稍后刷新；如需取消，请按已预约订单的取消流程处理"
+)
+UNKNOWN_PAYMENT_CANNOT_CANCEL_MESSAGE = (
+    "暂时无法确认该订单的微信支付状态（来访可能正在支付），请稍后再试"
+)
 
-    outcome = settle_expired_pending_order(db, order)
-    if outcome in ("refunded", "paid_refund_failed"):
+
+def cancel_pending_order(db: Session, order: AppOrder, *, system: bool = False) -> str:
+    """取消待支付订单（代理推送单或来访自助单）。取消前先与微信对齐，从不发起退款。
+
+    system=True：订单过期 / 后台对账触发。微信已收款就按支付成功入账（能履约就履约，
+    不能履约就记为已收款待人工处理）；支付中或查单失败则保持待支付，等下次同步。
+    system=False：员工主动取消（取消推送、换绑、请假审批、停用咨询师）。微信已收款或
+    支付状态未知时抛 OrderPaymentConflictError，整笔操作回滚，不会在取消动作里退款。
+
+    返回 cancelled / paid / refunded / unknown / noop。
+    """
+    from booking_errors import OrderPaymentConflictError
+    from patient_contract_service import acquire_patient_contract_lock
+    from wechat_pay_service import settle_pending_order_before_cancel
+
+    acquire_patient_contract_lock(db, order.AccountId)
+    db.refresh(order)
+    if order.Status != "PENDING":
+        if not system and order.Status == "PAID":
+            # 拿到锁之前支付回调刚把订单入账：员工取消动作不能继续
+            raise OrderPaymentConflictError(PAID_ORDER_CANNOT_CANCEL_MESSAGE)
+        return "noop"
+    outcome = settle_pending_order_before_cancel(
+        db,
+        order,
+        allow_fulfill=system,
+        source="expire" if system else "staff_cancel",
+    )
+    if outcome == "unpaid":
+        order.Status = "CANCELLED"
+        order.UpdatedAt = _now()
         release_unfulfilled_proxy_schedule(db, order)
+        return "cancelled"
     if outcome == "refunded":
-        return
-    if outcome != "unpaid":
-        logger.error(
-            "pay_desync pending proxy left for manual handling out_trade_no=%s order_id=%s outcome=%s status=%s",
+        return "refunded"
+    if not system:
+        raise OrderPaymentConflictError(
+            PAID_ORDER_CANNOT_CANCEL_MESSAGE
+            if outcome == "paid"
+            else UNKNOWN_PAYMENT_CANNOT_CANCEL_MESSAGE
+        )
+    if outcome == "unknown":
+        logger.warning(
+            "pay_sync pending order kept until next sync out_trade_no=%s order_id=%s",
             order.OutTradeNo,
             order.Id,
-            outcome,
-            order.Status,
         )
-        return
-    order.Status = "CANCELLED"
-    order.UpdatedAt = _now()
-    release_unfulfilled_proxy_schedule(db, order)
+    return outcome
 
 
 def cancel_proxy_order_push(
@@ -120,6 +154,11 @@ def cancel_proxy_order_push(
         order = pending_proxy_order_for_schedule(db, int(schedule_id))
     if not order:
         raise ValueError("待支付代理订单不存在")
+    if order.Status == "PAID":
+        from booking_errors import OrderPaymentConflictError
+
+        # 过期同步刚把已付款订单入账：保留入账结果，只是不执行取消
+        raise OrderPaymentConflictError(PAID_ORDER_CANNOT_CANCEL_MESSAGE)
     if order.Status != "PENDING":
         raise ValueError("仅待支付的代理订单可以取消推送")
     if not (order.Description or "").startswith("proxy:"):
@@ -137,7 +176,17 @@ def cancel_proxy_order_push(
         if counselor:
             counselor_name = counselor.RealName or counselor.Nickname or counselor_name
 
-    _cancel_pending_proxy_order(db, order)
+    outcome = cancel_pending_order(db, order)
+    if outcome == "noop":
+        raise ValueError("订单状态已变化，请刷新后重试")
+    if outcome == "refunded":
+        # 微信侧已退款（例如商户平台人工处理），订单已同步为已退款，不再发取消通知
+        return {
+            "orderId": order.Id,
+            "scheduleId": schedule.Id if schedule else None,
+            "status": order.Status,
+            "message": "该订单在微信侧已退款，已同步为已退款",
+        }
 
     from patient_message_service import notify_patient_proxy_order_cancelled
     from counselor_message_service import notify_counselor_proxy_order_cancelled
@@ -198,8 +247,9 @@ def cancel_pending_proxy_orders_for_patient(
             and int(schedule.CounselorId) == int(keep_counselor_id)
         ):
             continue
-        _cancel_pending_proxy_order(db, order)
-        cancelled += 1
+        # 员工换绑：微信已收款/支付中会抛错并回滚换绑，不会退款
+        if cancel_pending_order(db, order) == "cancelled":
+            cancelled += 1
     if cancelled:
         db.flush()
     return cancelled
@@ -248,7 +298,16 @@ def _acquire_proxy_booking_locks(
 
 
 def expire_pending_proxy_orders(db: Session) -> int:
-    """取消超时未支付的代理预约订单并释放排期占用。"""
+    """处理超时的待支付订单：先与微信对齐，确认未支付才取消并释放排期。
+
+    会被许多接口在请求开头调用，因此：
+    - 微信已收款的订单按支付成功入账（能履约就履约，否则转人工），绝不退款；
+    - 支付中 / 查单失败 / 并发忙的订单保持待支付，等下次同步；
+    - 每笔订单在独立 SAVEPOINT 里处理，单笔异常不影响调用方请求。
+    """
+    from booking_errors import BookingBusyError
+    from patient_contract_service import acquire_patient_contract_lock
+
     now = _now()
     rows = (
         db.query(AppOrder)
@@ -261,15 +320,27 @@ def expire_pending_proxy_orders(db: Session) -> int:
         .all()
     )
     expired = 0
-    from patient_contract_service import acquire_patient_contract_lock
-
     for order in rows:
-        acquire_patient_contract_lock(db, order.AccountId)
-        db.refresh(order)
-        if order.Status != "PENDING" or not order.ExpiresAt or order.ExpiresAt >= now:
-            continue
-        _cancel_pending_proxy_order(db, order)
-        expired += 1
+        try:
+            with db.begin_nested():
+                acquire_patient_contract_lock(db, order.AccountId)
+                db.refresh(order)
+                if order.Status != "PENDING" or not order.ExpiresAt or order.ExpiresAt >= now:
+                    continue
+                if cancel_pending_order(db, order, system=True) == "cancelled":
+                    expired += 1
+        except BookingBusyError:
+            logger.warning(
+                "expire pending order busy, retry later out_trade_no=%s order_id=%s",
+                order.OutTradeNo,
+                order.Id,
+            )
+        except Exception:
+            logger.exception(
+                "expire pending order failed out_trade_no=%s order_id=%s",
+                order.OutTradeNo,
+                order.Id,
+            )
     if expired:
         db.flush()
     return expired
@@ -303,6 +374,24 @@ def pending_proxy_orders_for_schedules(
 
 def pending_proxy_order_for_schedule(db: Session, schedule_id: int) -> Optional[AppOrder]:
     return pending_proxy_orders_for_schedules(db, [schedule_id]).get(schedule_id)
+
+
+def unsettled_proxy_order_for_schedule(db: Session, schedule_id: int) -> Optional[AppOrder]:
+    """排期上仍处于待支付的代理订单，包括已过期但微信支付状态尚未确认的。
+
+    调用前应先执行 expire_pending_proxy_orders：确认未支付的过期单会被取消，
+    还留着的过期单说明来访可能已付款，排期不能再卖给其他订单。
+    """
+    return (
+        db.query(AppOrder)
+        .filter(
+            AppOrder.SlotId == schedule_id,
+            AppOrder.Status == "PENDING",
+            AppOrder.Description.like("proxy:%"),
+        )
+        .order_by(AppOrder.Id.desc())
+        .first()
+    )
 
 
 def _proxy_patient_ids(db: Session) -> set[int]:
@@ -809,7 +898,7 @@ def push_proxy_order(
             raise ValueError("排期不存在")
         if schedule.Status != "AVAILABLE":
             raise ValueError("该排期当前不可预约")
-        if pending_proxy_order_for_schedule(db, schedule.Id):
+        if unsettled_proxy_order_for_schedule(db, schedule.Id):
             raise ValueError("该时段已有待支付代理订单")
         if schedule.StartTime != start_time or schedule.EndTime != end_time:
             raise ValueError("排期时间与所选时间不一致")

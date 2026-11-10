@@ -23,6 +23,7 @@ ADMIN_OPS_INBOX_RELATED_TYPES: Tuple[str, ...] = (
     "PRICING_PATIENT_SHARE_UPDATED",
     "STAFF_PROXY_ORDER_PUSHED",
     "OFFLINE_PAYMENT_DUE",
+    "PAYMENT_REVIEW",
 )
 
 ADMIN_OPS_INBOX_CATEGORIES: Tuple[str, ...] = (
@@ -37,6 +38,7 @@ ADMIN_OPS_INBOX_CATEGORIES: Tuple[str, ...] = (
     "pricing",
     "proxy_booking",
     "offline_payment",
+    "payment_review",
 )
 
 CATEGORY_RELATED_TYPES: dict[str, list[str]] = {
@@ -70,6 +72,7 @@ CATEGORY_RELATED_TYPES: dict[str, list[str]] = {
         "COUNSELOR_PROXY_ORDER_CANCELLED",
     ],
     "offline_payment": ["OFFLINE_PAYMENT_DUE"],
+    "payment_review": ["PAYMENT_REVIEW", "PATIENT_PAYMENT_REVIEW"],
     "appointment_rescheduled": [
         "PATIENT_APPOINTMENT_RESCHEDULED",
         "COUNSELOR_APPOINTMENT_RESCHEDULED",
@@ -95,6 +98,7 @@ CATEGORY_KEYWORDS: dict[str, list[str]] = {
     "pricing": ["改价成功", "调价成功", "基础价格", "抽成比例", "价格调整", "抽成已调整"],
     "proxy_booking": ["代理预约", "代理预约已推送", "待支付预约", "推送已取消", "待支付预约已取消"],
     "offline_payment": ["待付款", "线下支付"],
+    "payment_review": ["支付待人工处理", "支付已到账，预约待确认", "支付待处理"],
     "appointment_rescheduled": ["咨询时间已修改", "调整为"],
     "charity_negotiation": ["公益咨询议价", "议价后方可再次预约"],
     "leave_notice": ["咨询师请假，预约已取消"],

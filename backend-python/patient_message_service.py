@@ -659,6 +659,56 @@ def notify_patient_proxy_order_pending(
     )
 
 
+def notify_patient_payment_needs_review(db: Session, order: AppOrder) -> None:
+    """支付已到账但预约未能自动确认：告知来访工作人员会联系处理，避免"莫名退款/莫名失败"。"""
+    from schedule_meta import center_display_name, parse_center_id
+
+    exists = (
+        db.query(AppMessage.Id)
+        .filter(
+            AppMessage.AccountId == order.AccountId,
+            AppMessage.RelatedType == "PATIENT_PAYMENT_REVIEW",
+            AppMessage.RelatedId == order.Id,
+        )
+        .first()
+    )
+    if exists:
+        return
+    schedule = (
+        db.query(AppSchedule).filter(AppSchedule.Id == order.SlotId).first()
+        if order.SlotId
+        else None
+    )
+    counselor_name = (
+        _counselor_display_name(db, schedule.CounselorId)
+        if schedule and schedule.CounselorId
+        else "咨询师"
+    )
+    time_text = _format_datetime(schedule.StartTime) if schedule else "—"
+    center_id = parse_center_id(schedule.Note) if schedule else None
+    fee_cents = int(order.TotalFee or 0)
+    summary = f"{counselor_name} · {time_text} · 支付已到账，预约待确认"
+    detail = {
+        "counselorName": counselor_name,
+        "startTime": time_text,
+        "endTime": _format_datetime(schedule.EndTime) if schedule else None,
+        "location": center_display_name(center_id) if center_id else None,
+        "orderId": order.Id,
+        "outTradeNo": order.OutTradeNo,
+        "amountYuan": f"{fee_cents / 100:.2f}",
+        "tip": "您的款项已到账，但该时段暂时无法自动确认预约。工作人员会尽快联系您改约或原路退款，请留意电话。",
+    }
+    _notify_patient(
+        db,
+        order.AccountId,
+        type_="PAYMENT",
+        title="支付已到账，预约待确认",
+        content=_message_payload(summary, detail),
+        related_type="PATIENT_PAYMENT_REVIEW",
+        related_id=order.Id,
+    )
+
+
 def notify_patient_proxy_order_cancelled(
     db: Session,
     *,

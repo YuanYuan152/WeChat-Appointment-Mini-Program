@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app_time import china_now
 from auth import get_current_account, AppAccount
+from booking_errors import OrderPaymentConflictError
 from role_active import get_account_role
 from staff_roles import account_has_staff_workbench
 from counselor import _calendar_items_for_schedules
@@ -259,6 +260,10 @@ def proxy_cancel_order(
         )
         db.commit()
         return result
+    except OrderPaymentConflictError as exc:
+        # 来访已付款/支付中：不取消、不退款；保留本次过期同步已完成的入账结果
+        db.commit()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ValueError as exc:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(exc)) from exc

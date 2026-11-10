@@ -339,11 +339,14 @@ def approve_leave_request(
             refunded=refunded,
         )
     elif pending_proxy_order:
-        from proxy_booking_service import _cancel_pending_proxy_order
+        from proxy_booking_service import cancel_pending_order
         from patient_message_service import notify_patient_pending_proxy_leave_approved
 
         patient_id = pending_proxy_order.AccountId
-        _cancel_pending_proxy_order(db, pending_proxy_order)
+        # 来访已在微信付款/支付中时抛错并回滚本次审批：等订单按已支付落单后，
+        # 再审批会走已预约分支，按请假规则全额退款，而不是在取消待支付单时退款
+        if cancel_pending_order(db, pending_proxy_order) not in ("cancelled", "refunded"):
+            raise ValueError("关联预约状态已变化，请刷新后重试")
         notify_patient_pending_proxy_leave_approved(
             db,
             patient_id=patient_id,

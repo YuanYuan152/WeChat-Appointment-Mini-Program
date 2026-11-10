@@ -1882,7 +1882,7 @@ class CounselorSafetyTests(BackendServiceTestCase):
                 required_room_id="B",
             )
 
-    def test_wechat_callback_returns_fail_when_business_validation_fails(self):
+    def test_wechat_callback_records_payment_for_review_when_business_validation_fails(self):
         class FakeHeaders(dict):
             def get(self, key, default=""):
                 return dict.get(self, key, default)
@@ -1901,41 +1901,73 @@ class CounselorSafetyTests(BackendServiceTestCase):
                     }
                 ).encode("utf-8")
 
-        class FakeQuery:
-            def filter(self, *_args):
-                return self
+        from itertools import count
 
-            def first(self):
-                return AppOrder(
-                    Id=999,
-                    AccountId=1,
-                    OutTradeNo="PROXY-FAIL",
-                    TotalFee=60_000,
-                    Status="PENDING",
-                    Description="proxy:99|center:yangpu|schedule:existing",
-                )
+        from sqlalchemy import event
 
-        class FakeDb:
-            rolled_back = False
-            committed = False
+        message_ids = count(1)
 
-            def query(self, *_args):
-                return FakeQuery()
+        def assign_message_id(_mapper, _connection, target):
+            if target.Id is None:
+                target.Id = next(message_ids)
 
-            def rollback(self):
-                self.rolled_back = True
+        # sqlite 不会给 BIGINT 主键自增，站内消息在测试里补 Id
+        event.listen(AppMessage, "before_insert", assign_message_id)
+        self.addCleanup(event.remove, AppMessage, "before_insert", assign_message_id)
 
-            def commit(self):
-                self.committed = True
+        self.add_counselor(10, "咨询师甲")
+        self.db.add(AppAccount(Id=1, Mobile="13800000001", RealName="来访甲", IsActive=True))
+        self.db.add(AppAccount(Id=50, Mobile="13800000050", RealName="助理甲", IsActive=True))
+        self.db.add(AppRoleBinding(AccountId=50, RoleType="Assistant"))
+        schedule = AppSchedule(
+            Id=901,
+            CounselorId=10,
+            StartTime=datetime(2099, 2, 1, 9, 0),
+            EndTime=datetime(2099, 2, 1, 9, 50),
+            Status="AVAILABLE",
+            Note="center:yangpu;room:B",
+        )
+        order = AppOrder(
+            Id=999,
+            AccountId=1,
+            SlotId=901,
+            OutTradeNo="PROXY-FAIL",
+            TotalFee=60_000,
+            Status="PENDING",
+            Description="proxy:99|center:yangpu|schedule:existing",
+        )
+        self.db.add_all([schedule, order])
+        self.db.commit()
 
-        fake_db = FakeDb()
-        with patch("payment.complete_paid_order", side_effect=ValueError("指定咨询室已被占用")):
-            response = asyncio.run(payment_callback(FakeRequest(), db=fake_db))
+        with patch(
+            "payment_service.complete_paid_order",
+            side_effect=ValueError("指定咨询室已被占用"),
+        ):
+            response = asyncio.run(payment_callback(FakeRequest(), db=self.db))
 
-        # 业务校验失败仍应答 204，避免微信无限重推；订单保持 PENDING 供查单/人工处理
+        # 预约落不了单也必须如实记录收款并转人工，绝不留在 PENDING 等着被对账自动退款
         self.assertEqual(response.status_code, 204)
-        self.assertTrue(fake_db.rolled_back)
-        self.assertFalse(fake_db.committed)
+        self.db.expire_all()
+        order = self.db.get(AppOrder, 999)
+        self.assertEqual(order.Status, "PAID")
+        self.assertIsNotNone(order.PaidAt)
+        self.assertEqual(order.TransactionId, "TX-FAIL")
+        schedule = self.db.get(AppSchedule, 901)
+        self.assertEqual(schedule.Status, "AVAILABLE")
+        self.assertNotIn("room:B", schedule.Note or "")
+        staff_messages = (
+            self.db.query(AppMessage)
+            .filter(AppMessage.RelatedType == "PAYMENT_REVIEW", AppMessage.RelatedId == 999)
+            .all()
+        )
+        self.assertEqual([m.AccountId for m in staff_messages], [50])
+        self.assertIn("指定咨询室已被占用", staff_messages[0].Content)
+        patient_messages = (
+            self.db.query(AppMessage)
+            .filter(AppMessage.RelatedType == "PATIENT_PAYMENT_REVIEW", AppMessage.AccountId == 1)
+            .all()
+        )
+        self.assertEqual(len(patient_messages), 1)
 
     def test_real_wechat_callback_rejects_invalid_signature(self):
         class FakeHeaders(dict):

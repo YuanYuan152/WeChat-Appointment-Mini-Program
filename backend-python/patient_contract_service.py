@@ -40,7 +40,9 @@ def acquire_patient_contract_lock(db: Session, patient_id: int) -> None:
         {"resource": f"patient-contract:{int(patient_id)}"},
     ).scalar()
     if result is None or int(result) < 0:
-        raise ValueError("该来访的签约状态正在更新，请稍后重试")
+        from booking_errors import BookingBusyError
+
+        raise BookingBusyError("该来访的签约状态正在更新，请稍后重试")
 
 
 def assert_counselor_active_for_booking(db: Session, counselor_id: int) -> None:
@@ -197,17 +199,15 @@ def retire_counselor_booking_relationships(
             .all()
         )
 
-    from proxy_booking_service import _cancel_pending_proxy_order
+    from proxy_booking_service import cancel_pending_order
 
     now = datetime.utcnow()
     cancelled_orders = 0
     for order in pending_orders:
-        if (order.Description or "").startswith("proxy:"):
-            _cancel_pending_proxy_order(db, order)
-        else:
-            order.Status = "CANCELLED"
-            order.UpdatedAt = now
-        cancelled_orders += 1
+        # 代理单和来访自助单都先与微信对齐：已付款/支付中会抛错阻止停用，
+        # 避免本地直接取消后又被当成"已取消却收了款"
+        if cancel_pending_order(db, order) == "cancelled":
+            cancelled_orders += 1
 
     for patient in patients:
         patient.BoundCounselorId = None

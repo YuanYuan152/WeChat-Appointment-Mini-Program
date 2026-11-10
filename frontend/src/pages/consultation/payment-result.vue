@@ -33,25 +33,32 @@ import { API_ENDPOINTS } from '@/config/api'
 import { formatOrderFeeCents } from '@/utils/orderPayment'
 
 const orderInfo = ref<any>(null)
-const payStatus = ref<'polling' | 'success' | 'pending' | 'failed'>('polling')
+const payStatus = ref<'polling' | 'success' | 'review' | 'pending' | 'failed'>('polling')
 let pollTimer: ReturnType<typeof setTimeout> | null = null
 let pollCount = 0
 const MAX_POLL = 5
 const POLL_INTERVAL = 2000
 
-const statusClass = computed(() => payStatus.value)
+const statusClass = computed(() => (payStatus.value === 'review' ? 'pending' : payStatus.value))
 const statusIcon = computed(() => {
-  const map = { polling: '⏳', success: '✓', pending: '⏳', failed: '✗' }
+  const map = { polling: '⏳', success: '✓', review: '✓', pending: '⏳', failed: '✗' }
   return map[payStatus.value]
 })
 const statusTitle = computed(() => {
-  const map = { polling: '查询支付结果...', success: '支付成功', pending: '等待支付确认', failed: '支付未完成' }
+  const map = {
+    polling: '查询支付结果...',
+    success: '支付成功',
+    review: '支付成功，预约待确认',
+    pending: '等待支付确认',
+    failed: '支付未完成',
+  }
   return map[payStatus.value]
 })
 const statusDesc = computed(() => {
   const map = {
     polling: '正在确认支付状态，请稍候',
     success: '您的预约已确认，咨询师将按时为您服务',
+    review: '款项已到账，但该时段暂时无法自动确认预约，工作人员会尽快联系您改约或原路退款',
     pending: '支付结果尚未到账，请稍后在订单中查看',
     failed: '如已完成支付，请稍后在订单中查看状态',
   }
@@ -69,7 +76,7 @@ const pollOrderStatus = async (orderId: string) => {
     if (res.code === 0 && res.data) {
       orderInfo.value = res.data
       if (res.data.Status === 'PAID') {
-        payStatus.value = 'success'
+        payStatus.value = res.data.paymentPendingReview ? 'review' : 'success'
         return
       }
     }

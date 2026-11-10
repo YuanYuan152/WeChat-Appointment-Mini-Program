@@ -60,7 +60,8 @@ export type MessageCategoryFilter =
   | "professional_pair_milestone"
   | "pricing"
   | "proxy_booking"
-  | "offline_payment";
+  | "offline_payment"
+  | "payment_review";
 
 /** 管理工作台（助理/主任/管理员）共用消息类型，与小程序保持一致 */
 const staffWorkbenchMessageCategoryOptions: Array<{ value: MessageCategoryFilter; label: string }> = [
@@ -76,6 +77,7 @@ const staffWorkbenchMessageCategoryOptions: Array<{ value: MessageCategoryFilter
   { value: "pricing", label: "定价与抽成" },
   { value: "proxy_booking", label: "代理预约" },
   { value: "offline_payment", label: "待付款" },
+  { value: "payment_review", label: "支付待处理" },
 ];
 
 function operationTimestamp(value?: string | null) {
@@ -1119,6 +1121,7 @@ function relatedTypeLabel(type?: string | null) {
     COUNSELOR_LEAVE: "咨询师请假",
     APPOINTMENT_NEW: "新增预约",
     OFFLINE_PAYMENT_DUE: "待付款",
+    PAYMENT_REVIEW: "支付待处理",
     APPOINTMENT_CANCEL: "预约取消",
     COUNSELOR_APPOINTMENT_NEW: "新预约",
     COUNSELOR_APPOINTMENT_CANCEL: "预约取消",

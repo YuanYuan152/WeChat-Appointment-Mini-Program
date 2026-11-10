@@ -13,6 +13,8 @@ METRIC_NAMES = (
     "signtest",
     "close_already_paid",
     "pay_desync",
+    # 微信已收款但预约未能生效，已转人工处理（不会自动退款）
+    "pay_needs_review",
 )
 
 _lock = threading.Lock()

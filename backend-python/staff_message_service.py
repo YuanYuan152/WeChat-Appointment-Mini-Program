@@ -522,6 +522,83 @@ def notify_staff_offline_payment_due(
         db.flush()
 
 
+PAYMENT_REVIEW_RELATED_TYPE = "PAYMENT_REVIEW"
+
+
+def notify_staff_payment_needs_review(
+    db: Session,
+    order: AppOrder,
+    *,
+    reason: str,
+) -> None:
+    """微信已收款但预约未能生效：通知助理、咨询主任、管理员人工处理（系统不会自动退款）。"""
+    schedule = (
+        db.query(AppSchedule).filter(AppSchedule.Id == order.SlotId).first()
+        if order.SlotId
+        else None
+    )
+    patient = _patient_contact(db, order.AccountId)
+    patient_label = (
+        f"{patient['name']} {patient['contractTag']}"
+        if patient.get("contractTag")
+        else patient["name"]
+    )
+    counselor_name = (
+        _counselor_display_name(db, schedule.CounselorId)
+        if schedule and schedule.CounselorId
+        else "—"
+    )
+    start_text = _format_datetime(schedule.StartTime) if schedule else "—"
+    fee_cents = int(order.TotalFee or 0)
+    amount_yuan = f"{fee_cents / 100:.2f}"
+    summary = f"已收款预约未生效 · {patient_label} · {counselor_name} · {start_text} · ¥{amount_yuan}"
+    detail = {
+        "patientName": patient["name"],
+        "patientContractTag": patient.get("contractTag") or None,
+        "patientPhone": patient["phone"],
+        "emergencyContact": patient["emergencyContact"],
+        "emergencyPhone": patient["emergencyPhone"],
+        "counselorName": counselor_name,
+        "startTime": start_text,
+        "endTime": _format_datetime(schedule.EndTime) if schedule else None,
+        "location": _appointment_location(db, schedule.Note, status=schedule.Status) if schedule else None,
+        "amountYuan": amount_yuan,
+        "feeLabel": f"¥{amount_yuan}",
+        "orderId": order.Id,
+        "outTradeNo": order.OutTradeNo,
+        "transactionId": order.TransactionId,
+        "reason": reason,
+        "tip": (
+            "来访已在微信支付成功，但预约未能自动生效，系统不会自动退款。"
+            "请联系来访协商改约或退款；如需退款请在微信支付商户平台操作，"
+            "退款后系统会自动把订单同步为已退款。"
+        ),
+    }
+    content = _message_payload(summary, detail)
+    for account_id in _staff_account_ids(db):
+        exists = (
+            db.query(AppMessage.Id)
+            .filter(
+                AppMessage.AccountId == account_id,
+                AppMessage.RelatedType == PAYMENT_REVIEW_RELATED_TYPE,
+                AppMessage.RelatedId == order.Id,
+            )
+            .first()
+        )
+        if exists:
+            continue
+        create_message(
+            db,
+            account_id,
+            "PAYMENT",
+            "支付待人工处理",
+            content,
+            related_type=PAYMENT_REVIEW_RELATED_TYPE,
+            related_id=order.Id,
+        )
+    db.flush()
+
+
 def notify_staff_workbench_inbox(
     db: Session,
     *,

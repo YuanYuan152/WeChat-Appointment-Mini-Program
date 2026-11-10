@@ -28,6 +28,8 @@ export interface PatientOrder {
   isOfflinePaymentOrder?: boolean
   isConfirmOrder?: boolean
   TransactionId?: string | null
+  /** 微信已收款但预约未能生效，工作人员会联系改约或退款（系统不会自动退款） */
+  paymentPendingReview?: boolean
 }
 
 /** 列表/详情展示用时间：已支付（含已退款）优先支付时间 */
@@ -62,7 +64,10 @@ export function isConfirmInsteadOfPay(order?: { TotalFee?: number | null; isOffl
 }
 
 /** 来访订单状态：免费单、线下支付单确认后显示「已确认」，只有在线付费单显示「已支付」。 */
-export function orderStatusLabel(order: Pick<PatientOrder, 'Status' | 'TotalFee' | 'isOfflinePaymentOrder'>) {
+export function orderStatusLabel(
+  order: Pick<PatientOrder, 'Status' | 'TotalFee' | 'isOfflinePaymentOrder' | 'paymentPendingReview'>,
+) {
+  if (order.Status === 'PAID' && order.paymentPendingReview) return '已支付·待确认'
   if (order.Status === 'PENDING' && isConfirmInsteadOfPay(order)) return '待确认'
   if (isConfirmInsteadOfPay(order) && (order.Status === 'PAID' || order.Status === 'REFUNDED')) {
     return order.Status === 'REFUNDED' ? '已取消' : '已确认'

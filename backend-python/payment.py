@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 
 from app_time import china_now
 from auth import get_current_account
+from booking_errors import BookingBusyError
 from database import get_db
 from intake_agreement import attach_intake_to_order
 from models import AppAccount, AppOrder, AppSchedule
@@ -41,10 +42,12 @@ from schedule_slots import validate_booking_lead_time
 from user_role_meta import counselor_visible_to_patient
 from wechat_pay_metrics import inc as inc_pay_metric
 from wechat_pay_service import (
+    apply_wechat_paid_trade,
     build_jsapi_pay_params,
     confirm_refund_success_from_callback,
     format_wechat_time_expire,
     is_real_wechat_pay_configured,
+    order_payment_needs_review,
     sync_paid_order_from_wechat,
 )
 from wechat_pay_v3 import WeChatPayV3Error, get_wechat_pay_client
@@ -135,7 +138,7 @@ def _create_pending_order(
     req: CreateOrderRequest,
     out_trade_no: str,
 ) -> tuple[AppOrder, AppSchedule]:
-    from proxy_booking_service import expire_pending_proxy_orders, pending_proxy_order_for_schedule
+    from proxy_booking_service import expire_pending_proxy_orders, unsettled_proxy_order_for_schedule
     from patient_contract_service import (
         acquire_patient_contract_lock,
         assert_counselor_active_for_booking,
@@ -158,7 +161,7 @@ def _create_pending_order(
     schedule_center = parse_center_id(schedule.Note)
     if req.center_id and schedule_center and req.center_id != schedule_center:
         raise HTTPException(status_code=400, detail="预约中心与排期不一致，请刷新后重试")
-    if pending_proxy_order_for_schedule(db, schedule.Id):
+    if unsettled_proxy_order_for_schedule(db, schedule.Id):
         raise HTTPException(status_code=400, detail="该时段已有待支付订单")
 
     from charity_milestone_service import assert_charity_patient_can_book_charity
@@ -581,11 +584,7 @@ def sync_order_payment(
         raise HTTPException(status_code=404, detail="订单不存在")
 
     if order.Status == "PAID":
-        return {
-            "code": 0,
-            "msg": "已支付",
-            "data": {"order_id": order.Id, "out_trade_no": order.OutTradeNo, "status": order.Status},
-        }
+        return _sync_order_response(db, order)
 
     if not is_real_wechat_pay_configured():
         return {
@@ -595,12 +594,16 @@ def sync_order_payment(
         }
 
     try:
-        paid = sync_paid_order_from_wechat(db, order)
-        if paid:
+        # 只按微信结果入账/同步：已付就履约，履约不了转人工处理，绝不在这里退款
+        outcome = sync_paid_order_from_wechat(db, order)
+        if outcome in ("paid", "refunded"):
             db.commit()
             db.refresh(order)
         else:
             db.rollback()
+    except BookingBusyError:
+        db.rollback()
+        outcome = "unknown"
     except ValueError as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -611,10 +614,35 @@ def sync_order_payment(
         db.rollback()
         raise HTTPException(status_code=500, detail=f"同步支付状态失败: {e}") from e
 
+    if outcome == "unknown":
+        return {
+            "code": 0,
+            "msg": "支付结果确认中，请稍后在订单中查看",
+            "data": {"order_id": order.Id, "out_trade_no": order.OutTradeNo, "status": order.Status},
+        }
+    return _sync_order_response(db, order)
+
+
+PAID_NEEDS_REVIEW_MESSAGE = "支付成功，但该时段暂时无法自动确认预约，工作人员会尽快联系您改约或退款"
+
+
+def _sync_order_response(db: Session, order: AppOrder) -> dict:
+    needs_review = order_payment_needs_review(db, order)
+    if order.Status == "PAID":
+        msg = PAID_NEEDS_REVIEW_MESSAGE if needs_review else "已支付"
+    elif order.Status == "REFUNDED":
+        msg = "订单已退款"
+    else:
+        msg = "尚未支付成功"
     return {
         "code": 0,
-        "msg": "已支付" if order.Status == "PAID" else "尚未支付成功",
-        "data": {"order_id": order.Id, "out_trade_no": order.OutTradeNo, "status": order.Status},
+        "msg": msg,
+        "data": {
+            "order_id": order.Id,
+            "out_trade_no": order.OutTradeNo,
+            "status": order.Status,
+            "needs_review": needs_review,
+        },
     }
 
 
@@ -774,19 +802,20 @@ async def payment_callback(request: Request, db: Session = Depends(get_db)):
 
     if order.Status != "PAID":
         try:
-            complete_paid_order(
-                db,
-                order,
-                center_id=_center_id_from_order(order),
-                transaction_id=result.get("transaction_id"),
-            )
+            # 统一入账：能履约就履约；预约条件已不满足或本地已取消，则记为已收款待人工处理。
+            # 不论哪种情况都不会退款。
+            outcome = apply_wechat_paid_trade(db, order, result, source="callback")
+            if outcome in ("busy", "amount_mismatch"):
+                db.rollback()
+                # 应答失败让微信稍后重推；查单/对账也会兜底
+                return _v3_callback_fail("订单处理中，请稍后重试", status_code=500)
             db.commit()
-        except ValueError:
+        except BookingBusyError:
             db.rollback()
-            # 业务失败仍应答成功，避免微信无限重试；以查单/人工处理兜底
-            return _v3_callback_success()
+            return _v3_callback_fail("订单处理中，请稍后重试", status_code=500)
         except Exception:
             db.rollback()
+            logger.exception("payment callback failed out_trade_no=%s", out_trade_no)
             return _v3_callback_fail("订单处理失败，请稍后重试", status_code=500)
 
     return _v3_callback_success()

@@ -5,6 +5,8 @@ from typing import Optional
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app_time import china_now
+from booking_errors import BookingBusyError
 from models import AppAccount, AppOrder, AppSchedule, AppConsultation
 from room_assignment import apply_room_assignment
 from schedule_meta import is_video_center, parse_center_id, parse_room_id, schedule_note
@@ -44,7 +46,7 @@ def _acquire_payment_locks(
             {"resource": resource},
         ).scalar()
         if result is None or int(result) < 0:
-            raise ValueError("该订单或预约时段正在处理，请稍后重试")
+            raise BookingBusyError("该订单或预约时段正在处理，请稍后重试")
 
 
 def _assert_order_binding_current(db: Session, account: AppAccount, order: AppOrder) -> None:
@@ -72,7 +74,14 @@ def complete_paid_order(
     *,
     center_id: Optional[str] = None,
     transaction_id: Optional[str] = None,
+    enforce_lead_time: bool = True,
 ) -> None:
+    """支付完成后落单。
+
+    enforce_lead_time=False 仅用于微信已确认收款的入账（回调/查单/对账）：
+    提前量已在下单和拉起支付时校验过，来访在支付窗口内付完款时只要求咨询尚未开始，
+    避免"付款过程中跨过 90 分钟边界"导致钱已收但预约落不了单。
+    """
     is_proxy_order = (order.Description or "").startswith("proxy:")
     if order.SlotId:
         from patient_contract_service import acquire_patient_contract_lock
@@ -100,7 +109,10 @@ def complete_paid_order(
         db.refresh(schedule)
         if schedule.Status != "AVAILABLE":
             raise ValueError("预约时段已被占用，请重新预约")
-        validate_booking_lead_time(schedule.StartTime)
+        if enforce_lead_time:
+            validate_booking_lead_time(schedule.StartTime)
+        elif schedule.StartTime is None or schedule.StartTime <= china_now():
+            raise ValueError("预约时段已开始，无法自动确认预约")
         schedule_center = parse_center_id(schedule.Note)
         if center_id and schedule_center and center_id != schedule_center:
             raise ValueError("订单预约中心与排期不一致，请重新预约")
