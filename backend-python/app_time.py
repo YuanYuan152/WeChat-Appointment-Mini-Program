@@ -36,6 +36,33 @@ def as_china_api_time(value: Optional[datetime]) -> Optional[datetime]:
     return value.astimezone(CHINA_TIMEZONE)
 
 
+def db_clock_utc_offset(db) -> timedelta:
+    """数据库服务器时钟（GETDATE() / CURRENT_TIMESTAMP）相对 UTC 的偏移。
+
+    模型里 default/onupdate=func.now() 的列由数据库按服务器本地时间写入：本地
+    Windows 东八区的 SQL Server 写北京时间，Docker 里未设 TZ 的 SQL Server 写 UTC。
+    因此按当前连接实时查询，不写死。SQLite 的 CURRENT_TIMESTAMP 本身就是 UTC。
+    """
+    if db.get_bind().dialect.name != "mssql":
+        return timedelta(0)
+    from sqlalchemy import text
+
+    minutes = db.execute(text("SELECT DATEPART(TZOFFSET, SYSDATETIMEOFFSET())")).scalar()
+    return timedelta(minutes=int(minutes or 0))
+
+
+def db_local_to_china(value: Optional[datetime], db_utc_offset: timedelta) -> Optional[datetime]:
+    """func.now()（数据库服务器本地时间）写入的列转为带 +08:00 的中国标准时间。
+
+    db_utc_offset 取 db_clock_utc_offset(db)：先还原成 UTC，再转东八区。
+    """
+    if value is None:
+        return None
+    if value.tzinfo is not None:
+        return value.astimezone(CHINA_TIMEZONE)
+    return utc_to_china(value - db_utc_offset)
+
+
 def format_china_business_time(
     value: Optional[datetime],
     fmt: str = "%Y-%m-%d %H:%M",

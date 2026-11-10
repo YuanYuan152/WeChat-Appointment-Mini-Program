@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import exists, or_
 from sqlalchemy.orm import Session
 
+from api_time_clock import ApiTimeClock, approved_amendment_review_times
 from database import get_db
 from models import (
     AppAccount,
@@ -132,7 +133,9 @@ def _user_summary(
     account: AppAccount,
     roles: list[str],
     staff_remark: Optional[str] = None,
+    clock: Optional[ApiTimeClock] = None,
 ) -> dict[str, Any]:
+    clock = clock or ApiTimeClock.for_session(db)
     orders = db.query(AppOrder).filter(AppOrder.AccountId == account.Id).all()
     consultations = db.query(AppConsultation).filter(AppConsultation.PatientId == account.Id).all()
     exemptions = db.query(AppRefundExemption).filter(AppRefundExemption.AccountId == account.Id).all()
@@ -164,7 +167,8 @@ def _user_summary(
             [c for c in consultations if c.Status in ("CANCELLED", "CANCELED")]
         ),
         "latestConsultationAt": max([c.StartTime for c in consultations if c.StartTime] or [None]),
-        "createdAt": account.CreatedAt,
+        # 账号创建时间由数据库 func.now() 写入，按数据库时钟换算为北京时间
+        "createdAt": clock.db(account.CreatedAt),
         "staffRemark": staff_remark if staff_remark is not None else get_staff_remark(db, account.Id),
     }
     if is_visitor:
@@ -259,12 +263,14 @@ def register_admin_board_routes(
         )
         roles_by_account = _roles_for_accounts(db, {a.Id for a in accounts})
         staff_remarks = get_staff_remarks_map(db, [account.Id for account in accounts])
+        clock = ApiTimeClock.for_session(db)
         items = [
             _user_summary(
                 db,
                 account,
                 roles_by_account.get(account.Id, []),
                 staff_remarks.get(account.Id, ""),
+                clock=clock,
             )
             for account in accounts
         ]
@@ -312,9 +318,13 @@ def register_admin_board_routes(
             .order_by(AppRefundExemption.CreatedAt.desc())
             .all()
         )
+        # 系统操作时间按各列写入口径统一换算为 +08:00：订单 CreatedAt 为数据库时钟，
+        # PaidAt/UpdatedAt 与豁免审核时间为 UTC，导入订单为北京墙钟（见 api_time_clock）
+        clock = ApiTimeClock.for_session(db)
+        order_times = {o.Id: clock.order_times(o) for o in orders}
 
         return {
-            "profile": _user_summary(db, account, roles),
+            "profile": _user_summary(db, account, roles, clock=clock),
             "orders": [
                 {
                     "id": o.Id,
@@ -323,19 +333,19 @@ def register_admin_board_routes(
                     "totalFee": o.TotalFee,
                     "status": o.Status,
                     "description": o.Description,
-                    "createdAt": o.CreatedAt,
-                    "paidAt": o.PaidAt,
-                    "updatedAt": o.UpdatedAt,
+                    "createdAt": order_times[o.Id][0],
+                    "paidAt": order_times[o.Id][1],
+                    "updatedAt": order_times[o.Id][2],
                 }
                 for o in orders
             ],
             "payments": [
-                {"id": o.Id, "amount": o.TotalFee, "paidAt": o.PaidAt, "status": o.Status}
+                {"id": o.Id, "amount": o.TotalFee, "paidAt": order_times[o.Id][1], "status": o.Status}
                 for o in orders
                 if o.PaidAt or o.Status == "PAID"
             ],
             "refunds": [
-                {"id": o.Id, "amount": o.TotalFee, "updatedAt": o.UpdatedAt, "status": o.Status}
+                {"id": o.Id, "amount": o.TotalFee, "updatedAt": order_times[o.Id][2], "status": o.Status}
                 for o in orders
                 if o.Status == "REFUNDED"
             ],
@@ -347,8 +357,8 @@ def register_admin_board_routes(
                     "reason": e.Reason,
                     "status": e.Status,
                     "rejectReason": getattr(e, "RejectReason", None),
-                    "reviewedAt": e.ReviewedAt,
-                    "createdAt": e.CreatedAt,
+                    "reviewedAt": clock.utc(e.ReviewedAt),
+                    "createdAt": clock.db(e.CreatedAt),
                 }
                 for e in exemptions
             ],
@@ -650,6 +660,10 @@ def register_admin_board_routes(
             visitors.append(visitor)
         visitors.sort(key=lambda item: (-item["consultationCount"], item["patientName"]))
 
+        # 创建时间为数据库时钟，UpdatedAt 为 UTC；旧版审核通过写入的咨询记录 UpdatedAt 为北京墙钟
+        clock = ApiTimeClock.for_session(db)
+        approved_review_times = approved_amendment_review_times(db, [r.Id for r in records])
+
         return {
             "profile": _counselor_summary(db, account),
             "visitors": visitors,
@@ -675,8 +689,8 @@ def register_admin_board_routes(
                 {
                     "id": r.Id,
                     "consultationId": r.ConsultationId,
-                    "createdAt": r.CreatedAt,
-                    "updatedAt": r.UpdatedAt,
+                    "createdAt": clock.db(r.CreatedAt),
+                    "updatedAt": clock.case_record_updated_at(r, approved_review_times.get(r.Id, [])),
                     "preview": (r.Subjective or r.Assessment or r.Plan or "")[:120],
                     **consultation_business_payload(consultations_by_id.get(r.ConsultationId)),
                 }
@@ -688,8 +702,8 @@ def register_admin_board_routes(
                     "scheduleId": r.ScheduleId,
                     "reason": r.Reason,
                     "status": r.Status,
-                    "createdAt": r.CreatedAt,
-                    "updatedAt": r.UpdatedAt,
+                    "createdAt": clock.db(r.CreatedAt),
+                    "updatedAt": clock.utc(r.UpdatedAt),
                     **schedule_business_payload(schedule_map.get(r.ScheduleId)),
                 }
                 for r in leave_requests
@@ -717,7 +731,7 @@ def register_admin_board_routes(
                     "scheduleId": r.ScheduleId,
                     "consultationId": r.ConsultationId,
                     "screenshotUrl": r.ScreenshotUrl,
-                    "createdAt": r.CreatedAt,
+                    "createdAt": clock.db(r.CreatedAt),
                     **(
                         consultation_business_payload(consultations_by_id.get(r.ConsultationId))
                         if r.ConsultationId

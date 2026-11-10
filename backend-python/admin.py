@@ -42,6 +42,7 @@ from models import (
     AppStaffAccountRemark,
 )
 from consultation_feedback import feedback_detail, feedback_summary
+from api_time_clock import ApiTimeClock, approved_amendment_review_times
 from app_time import china_now
 from schedule_meta import (
     center_display_name,
@@ -839,6 +840,10 @@ def list_shell_users(
 ):
     """供 Web 来访管理确认删除前预览；不含当前登录管理员。"""
     items = list_shell_account_candidates(db, exclude_account_ids={int(admin.Id)})
+    # 账号创建时间由数据库 func.now() 写入，按数据库时钟换算为 +08:00
+    clock = ApiTimeClock.for_session(db)
+    for item in items:
+        item["createdAt"] = clock.db(item.get("createdAt"))
     return {
         "total": len(items),
         "deletableCount": sum(1 for item in items if item.get("canDelete")),
@@ -1805,6 +1810,9 @@ def list_counselor_consultation_records(
         .filter(AppCaseRecord.ConsultationId.in_(consultation_ids))
         .all()
     }
+    # 记录更新时间统一换算为 +08:00：UpdatedAt 为 UTC，缺省时回退的 CreatedAt 为数据库时钟
+    clock = ApiTimeClock.for_session(db)
+    approved_review_times = approved_amendment_review_times(db, [r.Id for r in records.values()])
 
     items: List[AdminConsultationRecordOut] = []
     for c in consultations:
@@ -1832,7 +1840,11 @@ def list_counselor_consultation_records(
                 endTime=c.EndTime,
                 caseRecordId=record.Id if record else None,
                 hasRecord=has_record,
-                recordUpdatedAt=record.UpdatedAt or record.CreatedAt if record else None,
+                recordUpdatedAt=(
+                    clock.case_record_latest_at(record, approved_review_times.get(record.Id, []))
+                    if record
+                    else None
+                ),
                 photoCount=photo_count,
                 subjectivePreview=preview,
             )
@@ -1863,6 +1875,8 @@ def get_admin_case_record(
         if consultation
         else None
     )
+    clock = ApiTimeClock.for_session(db)
+    approved_review_times = approved_amendment_review_times(db, [record.Id]).get(record.Id, [])
     return AdminCaseRecordViewOut(
         Id=record.Id,
         ConsultationId=record.ConsultationId,
@@ -1879,8 +1893,8 @@ def get_admin_case_record(
         RiskAssessment=case_record_risk_assessment(record),
         HeaderInfo=case_record_header_info(record),
         PhotoUrls=case_record_photo_urls(record),
-        CreatedAt=record.CreatedAt,
-        UpdatedAt=record.UpdatedAt,
+        CreatedAt=clock.db(record.CreatedAt),
+        UpdatedAt=clock.case_record_updated_at(record, approved_review_times),
     )
 
 
@@ -1915,7 +1929,8 @@ def list_admin_case_record_revisions(
             RiskAssessment=decode_risk_assessment(optional_model_value(r, "RiskAssessment")),
             HeaderInfo=decode_header_info(optional_model_value(r, "HeaderInfo")),
             PhotoUrls=decode_photo_urls(optional_model_value(r, "PhotoUrls")),
-            RevisedAt=r.RevisedAt,
+            # 历史版本时间由 save_case_record_revision 以 datetime.utcnow() 写入
+            RevisedAt=ApiTimeClock.utc(r.RevisedAt),
             RevisedBy=r.RevisedBy,
         )
         for r in rows

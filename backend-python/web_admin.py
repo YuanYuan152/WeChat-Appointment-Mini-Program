@@ -7,7 +7,7 @@
 import hashlib
 import re
 import zipfile
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from io import BytesIO
 from typing import Any, Optional
 from urllib.parse import quote
@@ -20,7 +20,8 @@ from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.orm import Session
 
 from auth import get_current_account
-from app_time import as_china_api_time
+from api_time_clock import ApiTimeClock, approved_amendment_review_times
+from app_time import as_china_api_time, db_clock_utc_offset
 from database import get_db
 from model_compat import optional_model_value
 from models import (
@@ -309,6 +310,23 @@ def _within_range(value: Optional[datetime], start_at: Optional[datetime], end_a
     if end_at and value > end_at:
         return False
     return True
+
+
+_AWARE_MIN = datetime.min.replace(tzinfo=timezone.utc)
+
+
+class _OperationClock(ApiTimeClock):
+    """操作记录聚合自多张业务表，各列写入口径不同，统一转成带 +08:00 的北京时间返回。
+
+    - db：default/onupdate=func.now() 由数据库按服务器本地时间写入（CreatedAt、SwitchedAt），
+      偏移按当前连接实时查询（本地东八区 SQL Server 与 Docker 里的 UTC 实例都能正确换算）；
+    - utc：代码显式 datetime.utcnow() 写入的系统操作时间（UpdatedAt、PaidAt、审核/确认时间）；
+    - china：china_now() 写入的列，以及排期/预约等北京墙钟业务时间。
+    换算规则见 api_time_clock.ApiTimeClock（看板、咨询记录等接口共用）。
+    """
+
+    def __init__(self, db: Session):
+        super().__init__(db_clock_utc_offset(db))
 
 
 def _schedule_action_label(schedule: AppSchedule) -> str:
@@ -884,8 +902,10 @@ def operation_records(
     _admin: AppAccount = Depends(require_ops_or_admin),
     db: Session = Depends(get_db),
 ):
-    start_dt = _day_start(start_at)
-    end_dt = _day_end(end_at)
+    clock = _OperationClock(db)
+    # 筛选日期按北京自然日，与统一后的 +08:00 时间比较
+    start_dt = clock.china(_day_start(start_at))
+    end_dt = clock.china(_day_end(end_at))
 
     records: list[dict[str, Any]] = []
     account_ids: set[int] = set()
@@ -898,7 +918,7 @@ def operation_records(
         account_ids.add(row.AccountId)
         records.append({
             "id": f"role-switch-{row.Id}",
-            "occurredAt": row.SwitchedAt,
+            "occurredAt": clock.db(row.SwitchedAt),
             "actionType": "ROLE_SWITCH",
             "actionLabel": "角色切换",
             "operatorId": row.AccountId,
@@ -919,9 +939,10 @@ def operation_records(
         account_ids.add(row.AccountId)
         if row.ReviewedBy:
             account_ids.add(row.ReviewedBy)
+        created_at = clock.db(row.CreatedAt)
         records.append({
             "id": f"refund-exemption-{row.Id}",
-            "occurredAt": row.ReviewedAt or row.CreatedAt,
+            "occurredAt": clock.utc(row.ReviewedAt) or created_at,
             "actionType": "REFUND_EXEMPTION",
             "actionLabel": "用户豁免审核",
             "operatorId": row.ReviewedBy or row.AccountId,
@@ -936,18 +957,19 @@ def operation_records(
             "patientId": consultation.PatientId if consultation else row.AccountId,
             "counselorId": consultation.CounselorId if consultation else None,
             "scheduleId": consultation.ScheduleId if consultation else None,
-            "startTime": consultation.StartTime if consultation else None,
-            "endTime": consultation.EndTime if consultation else None,
-            "createdAt": row.CreatedAt,
-            "updatedAt": row.UpdatedAt,
+            "startTime": clock.china(consultation.StartTime) if consultation else None,
+            "endTime": clock.china(consultation.EndTime) if consultation else None,
+            "createdAt": created_at,
+            "updatedAt": clock.utc(row.UpdatedAt),
             **(_consultation_room_payload(consultation, schedules_by_id) if consultation else {}),
         })
 
     for row in db.query(AppOrder).all():
         account_ids.add(row.AccountId)
+        order_created_at, order_paid_at, order_updated_at = clock.order_times(row)
         records.append({
             "id": f"order-{row.Id}",
-            "occurredAt": row.PaidAt or row.UpdatedAt or row.CreatedAt,
+            "occurredAt": order_paid_at or order_updated_at or order_created_at,
             "actionType": "ORDER",
             "actionLabel": "退款订单" if row.Status == "REFUNDED" else "取消订单" if row.Status == "CANCELLED" else "支付订单",
             "operatorId": row.AccountId,
@@ -961,15 +983,15 @@ def operation_records(
             "relatedOrderId": row.Id,
             "patientId": row.AccountId,
             "scheduleId": row.SlotId,
-            "createdAt": row.CreatedAt,
-            "updatedAt": row.UpdatedAt,
+            "createdAt": order_created_at,
+            "updatedAt": order_updated_at,
         })
         if getattr(row, "ProxyIsOfflinePayment", False):
             if row.ProxyCreatedByAccountId:
                 account_ids.add(row.ProxyCreatedByAccountId)
             records.append({
                 "id": f"offline-payment-push-{row.Id}",
-                "occurredAt": row.CreatedAt,
+                "occurredAt": order_created_at,
                 "actionType": "OFFLINE_PAYMENT_PUSH",
                 "actionLabel": "推送线下支付单",
                 "operatorId": row.ProxyCreatedByAccountId,
@@ -987,15 +1009,16 @@ def operation_records(
                 "relatedOrderId": row.Id,
                 "patientId": row.AccountId,
                 "scheduleId": row.SlotId,
-                "createdAt": row.CreatedAt,
-                "updatedAt": row.UpdatedAt,
+                "createdAt": order_created_at,
+                "updatedAt": order_updated_at,
             })
         if getattr(row, "ProxyOfflineReceiptConfirmedAt", None):
             if row.ProxyOfflineReceiptByAccountId:
                 account_ids.add(row.ProxyOfflineReceiptByAccountId)
+            receipt_confirmed_at = clock.utc(row.ProxyOfflineReceiptConfirmedAt)
             records.append({
                 "id": f"offline-receipt-{row.Id}",
-                "occurredAt": row.ProxyOfflineReceiptConfirmedAt,
+                "occurredAt": receipt_confirmed_at,
                 "actionType": "OFFLINE_RECEIPT",
                 "actionLabel": "确认线下收款",
                 "operatorId": row.ProxyOfflineReceiptByAccountId,
@@ -1012,8 +1035,8 @@ def operation_records(
                 "relatedOrderId": row.Id,
                 "patientId": row.AccountId,
                 "scheduleId": row.SlotId,
-                "createdAt": row.ProxyOfflineReceiptConfirmedAt,
-                "updatedAt": row.ProxyOfflineReceiptConfirmedAt,
+                "createdAt": receipt_confirmed_at,
+                "updatedAt": receipt_confirmed_at,
             })
 
     for row in all_consultations:
@@ -1025,9 +1048,11 @@ def operation_records(
             f"咨询时间：{row.StartTime.strftime('%Y-%m-%d %H:%M')}" if row.StartTime else None,
             f"地点：{room_payload.get('centerName') or '-'} {room_payload.get('roomName') or ''}".strip(),
         ]
+        created_at = clock.business_or(row.CreatedAt, row.StartTime, clock.db)
+        updated_at = clock.business_or(row.UpdatedAt, row.EndTime, clock.utc)
         records.append({
             "id": f"consultation-{row.Id}",
-            "occurredAt": row.UpdatedAt or row.CreatedAt,
+            "occurredAt": updated_at or created_at,
             "actionType": "CONSULTATION",
             "actionLabel": "取消预约" if is_cancelled else "预约记录",
             "operatorId": row.PatientId,
@@ -1043,18 +1068,20 @@ def operation_records(
             "patientId": row.PatientId,
             "counselorId": row.CounselorId,
             "scheduleId": row.ScheduleId,
-            "startTime": row.StartTime,
-            "endTime": row.EndTime,
-            "createdAt": row.CreatedAt,
-            "updatedAt": row.UpdatedAt,
+            "startTime": clock.china(row.StartTime),
+            "endTime": clock.china(row.EndTime),
+            "createdAt": created_at,
+            "updatedAt": updated_at,
             **room_payload,
         })
 
     for row in all_schedules:
         account_ids.add(row.CounselorId)
+        created_at = clock.business_or(row.CreatedAt, row.StartTime, clock.db)
+        updated_at = clock.utc(row.UpdatedAt)
         records.append({
             "id": f"schedule-{row.Id}",
-            "occurredAt": row.UpdatedAt or row.CreatedAt,
+            "occurredAt": updated_at or created_at,
             "actionType": "SCHEDULE",
             "actionLabel": _schedule_action_label(row),
             "operatorId": row.CounselorId,
@@ -1067,21 +1094,32 @@ def operation_records(
             "status": row.Status,
             "counselorId": row.CounselorId,
             "scheduleId": row.Id,
-            "startTime": row.StartTime,
-            "endTime": row.EndTime,
-            "createdAt": row.CreatedAt,
-            "updatedAt": row.UpdatedAt,
+            "startTime": clock.china(row.StartTime),
+            "endTime": clock.china(row.EndTime),
+            "createdAt": created_at,
+            "updatedAt": updated_at,
             **_room_payload(row),
         })
+
+    amendments = db.query(AppCaseRecordAmendmentRequest).all()
+    # 旧版修改申请审核通过时用 china_now() 同时写入 ReviewedAt 与咨询记录 UpdatedAt（现已改为
+    # UTC 写 UpdatedAt），按审核时间识别这批历史数据
+    approved_amendment_times: dict[int, list[datetime]] = {}
+    for row in amendments:
+        reviewed_at = optional_model_value(row, "ReviewedAt")
+        if row.Status == "APPROVED" and reviewed_at:
+            approved_amendment_times.setdefault(row.CaseRecordId, []).append(reviewed_at)
 
     for row in db.query(AppCaseRecord).all():
         account_ids.add(row.CounselorId)
         consultation = consultations_by_id.get(row.ConsultationId)
         if consultation:
             account_ids.update({consultation.PatientId, consultation.CounselorId})
+        created_at = clock.db(row.CreatedAt)
+        updated_at = clock.case_record_updated_at(row, approved_amendment_times.get(row.Id, []))
         records.append({
             "id": f"case-record-{row.Id}",
-            "occurredAt": row.UpdatedAt or row.CreatedAt,
+            "occurredAt": updated_at or created_at,
             "actionType": "CASE_RECORD",
             "actionLabel": "咨询记录",
             "operatorId": row.CounselorId,
@@ -1096,26 +1134,28 @@ def operation_records(
             "counselorId": row.CounselorId,
             "patientId": consultation.PatientId if consultation else None,
             "scheduleId": consultation.ScheduleId if consultation else None,
-            "startTime": consultation.StartTime if consultation else None,
-            "endTime": consultation.EndTime if consultation else None,
-            "createdAt": row.CreatedAt,
-            "updatedAt": row.UpdatedAt,
+            "startTime": clock.china(consultation.StartTime) if consultation else None,
+            "endTime": clock.china(consultation.EndTime) if consultation else None,
+            "createdAt": created_at,
+            "updatedAt": updated_at,
             **(_consultation_room_payload(consultation, schedules_by_id) if consultation else {}),
         })
 
-    for row in db.query(AppCaseRecordAmendmentRequest).all():
+    for row in amendments:
         consultation = consultations_by_id.get(row.ConsultationId)
         reviewed_by = optional_model_value(row, "ReviewedBy")
-        reviewed_at = optional_model_value(row, "ReviewedAt")
+        # 审核时间由 china_now() 写入（北京墙钟）
+        reviewed_at = clock.china(optional_model_value(row, "ReviewedAt"))
         reject_reason = optional_model_value(row, "RejectReason")
         account_ids.add(row.CounselorId)
         if reviewed_by:
             account_ids.add(reviewed_by)
         if consultation:
             account_ids.update({consultation.PatientId, consultation.CounselorId})
+        created_at = clock.db(row.CreatedAt)
         records.append({
             "id": f"case-record-amendment-{row.Id}",
-            "occurredAt": reviewed_at or row.CreatedAt,
+            "occurredAt": reviewed_at or created_at,
             "actionType": "CASE_RECORD_AMENDMENT",
             "actionLabel": "咨询记录修改审核" if reviewed_by else "咨询记录修改申请",
             "operatorId": reviewed_by or row.CounselorId,
@@ -1130,9 +1170,9 @@ def operation_records(
             "counselorId": row.CounselorId,
             "patientId": consultation.PatientId if consultation else None,
             "scheduleId": consultation.ScheduleId if consultation else None,
-            "startTime": consultation.StartTime if consultation else None,
-            "endTime": consultation.EndTime if consultation else None,
-            "createdAt": row.CreatedAt,
+            "startTime": clock.china(consultation.StartTime) if consultation else None,
+            "endTime": clock.china(consultation.EndTime) if consultation else None,
+            "createdAt": created_at,
             "updatedAt": reviewed_at,
             **(_consultation_room_payload(consultation, schedules_by_id) if consultation else {}),
         })
@@ -1140,9 +1180,11 @@ def operation_records(
     for row in db.query(AppLeaveRequest).all():
         account_ids.add(row.CounselorId)
         schedule = schedules_by_id.get(row.ScheduleId)
+        created_at = clock.db(row.CreatedAt)
+        updated_at = clock.utc(row.UpdatedAt)
         records.append({
             "id": f"leave-request-{row.Id}",
-            "occurredAt": row.UpdatedAt or row.CreatedAt,
+            "occurredAt": updated_at or created_at,
             "actionType": "LEAVE_REQUEST",
             "actionLabel": "咨询师请假",
             "operatorId": row.CounselorId,
@@ -1155,10 +1197,10 @@ def operation_records(
             "status": row.Status,
             "counselorId": row.CounselorId,
             "scheduleId": row.ScheduleId,
-            "startTime": schedule.StartTime if schedule else None,
-            "endTime": schedule.EndTime if schedule else None,
-            "createdAt": row.CreatedAt,
-            "updatedAt": row.UpdatedAt,
+            "startTime": clock.china(schedule.StartTime) if schedule else None,
+            "endTime": clock.china(schedule.EndTime) if schedule else None,
+            "createdAt": created_at,
+            "updatedAt": updated_at,
             **(_room_payload(schedule) if schedule else {}),
         })
 
@@ -1168,9 +1210,10 @@ def operation_records(
         schedule = schedules_by_id.get(row.ScheduleId)
         if consultation:
             account_ids.add(consultation.PatientId)
+        created_at = clock.db(row.CreatedAt)
         records.append({
             "id": f"schedule-cancel-{row.Id}",
-            "occurredAt": row.CreatedAt,
+            "occurredAt": created_at,
             "actionType": "SCHEDULE_CANCEL",
             "actionLabel": "咨询师取消",
             "operatorId": row.CounselorId,
@@ -1185,9 +1228,13 @@ def operation_records(
             "counselorId": row.CounselorId,
             "patientId": consultation.PatientId if consultation else None,
             "scheduleId": row.ScheduleId,
-            "startTime": consultation.StartTime if consultation else (schedule.StartTime if schedule else None),
-            "endTime": consultation.EndTime if consultation else (schedule.EndTime if schedule else None),
-            "createdAt": row.CreatedAt,
+            "startTime": clock.china(
+                consultation.StartTime if consultation else (schedule.StartTime if schedule else None)
+            ),
+            "endTime": clock.china(
+                consultation.EndTime if consultation else (schedule.EndTime if schedule else None)
+            ),
+            "createdAt": created_at,
             **(_consultation_room_payload(consultation, schedules_by_id) if consultation else _room_payload(schedule)),
         })
 
@@ -1196,9 +1243,10 @@ def operation_records(
         account_ids.add(row.AccountId)
         if consultation:
             account_ids.update({consultation.PatientId, consultation.CounselorId})
+        created_at = clock.db(row.CreatedAt)
         records.append({
             "id": f"consultation-feedback-{row.Id}",
-            "occurredAt": row.CreatedAt,
+            "occurredAt": created_at,
             "actionType": "CONSULTATION_FEEDBACK",
             "actionLabel": "咨询反馈",
             "operatorId": row.AccountId,
@@ -1213,9 +1261,9 @@ def operation_records(
             "patientId": consultation.PatientId if consultation else row.AccountId,
             "counselorId": consultation.CounselorId if consultation else None,
             "scheduleId": consultation.ScheduleId if consultation else None,
-            "startTime": consultation.StartTime if consultation else None,
-            "endTime": consultation.EndTime if consultation else None,
-            "createdAt": row.CreatedAt,
+            "startTime": clock.china(consultation.StartTime) if consultation else None,
+            "endTime": clock.china(consultation.EndTime) if consultation else None,
+            "createdAt": created_at,
             **(_consultation_room_payload(consultation, schedules_by_id) if consultation else {}),
         })
 
@@ -1226,9 +1274,11 @@ def operation_records(
         rooms = []
     rooms_by_id = {room.Id: room for room in rooms}
     for row in rooms:
+        created_at = clock.db(row.CreatedAt)
+        updated_at = clock.utc(row.UpdatedAt)
         records.append({
             "id": f"consultation-room-{row.Id}",
-            "occurredAt": row.UpdatedAt or row.CreatedAt,
+            "occurredAt": updated_at or created_at,
             "actionType": "ROOM",
             "actionLabel": "更新咨询室" if row.UpdatedAt else "新增咨询室",
             "operatorId": None,
@@ -1243,8 +1293,8 @@ def operation_records(
             "centerName": center_display_name(row.CenterId),
             "roomId": row.RoomCode,
             "roomName": row.Name,
-            "createdAt": row.CreatedAt,
-            "updatedAt": row.UpdatedAt,
+            "createdAt": created_at,
+            "updatedAt": updated_at,
         })
 
     try:
@@ -1255,9 +1305,11 @@ def operation_records(
 
     for row in room_slots:
         room = rooms_by_id.get(row.RoomId)
+        created_at = clock.db(row.CreatedAt)
+        updated_at = clock.utc(row.UpdatedAt)
         records.append({
             "id": f"consultation-room-slot-{row.Id}",
-            "occurredAt": row.UpdatedAt or row.CreatedAt,
+            "occurredAt": updated_at or created_at,
             "actionType": "ROOM",
             "actionLabel": "更新咨询室时段",
             "operatorId": None,
@@ -1275,10 +1327,10 @@ def operation_records(
             "centerName": center_display_name(room.CenterId) if room else None,
             "roomId": room.RoomCode if room else None,
             "roomName": room.Name if room else None,
-            "startTime": row.StartTime,
-            "endTime": row.StartTime + timedelta(minutes=50),
-            "createdAt": row.CreatedAt,
-            "updatedAt": row.UpdatedAt,
+            "startTime": clock.china(row.StartTime),
+            "endTime": clock.china(row.StartTime + timedelta(minutes=50)),
+            "createdAt": created_at,
+            "updatedAt": updated_at,
         })
 
     try:
@@ -1289,7 +1341,7 @@ def operation_records(
     for row in banners:
         records.append({
             "id": f"banner-{row.Id}",
-            "occurredAt": row.UpdatedAt or row.CreatedAt,
+            "occurredAt": clock.utc(row.UpdatedAt) or clock.db(row.CreatedAt),
             "actionType": "CONTENT",
             "actionLabel": "Banner 内容",
             "operatorId": None,
@@ -1311,7 +1363,7 @@ def operation_records(
     for row in activities:
         records.append({
             "id": f"activity-{row.Id}",
-            "occurredAt": row.UpdatedAt or row.CreatedAt,
+            "occurredAt": clock.utc(row.UpdatedAt) or clock.db(row.CreatedAt),
             "actionType": "CONTENT",
             "actionLabel": "活动/公告",
             "operatorId": None,
@@ -1332,7 +1384,7 @@ def operation_records(
     for row in articles:
         records.append({
             "id": f"article-{row.Id}",
-            "occurredAt": row.UpdatedAt or row.CreatedAt,
+            "occurredAt": clock.utc(row.UpdatedAt) or clock.db(row.CreatedAt),
             "actionType": "CONTENT",
             "actionLabel": "文章内容",
             "operatorId": None,
@@ -1420,7 +1472,7 @@ def operation_records(
             continue
         filtered.append(item)
 
-    filtered.sort(key=lambda x: x.get("occurredAt") or datetime.min, reverse=True)
+    filtered.sort(key=lambda x: x.get("occurredAt") or _AWARE_MIN, reverse=True)
     return _paginate(filtered, page, page_size)
 
 
@@ -1429,7 +1481,9 @@ def _user_summary(
     account: AppAccount,
     roles: list[str],
     staff_remark: Optional[str] = None,
+    clock: Optional[ApiTimeClock] = None,
 ) -> dict[str, Any]:
+    clock = clock or ApiTimeClock.for_session(db)
     orders = db.query(AppOrder).filter(AppOrder.AccountId == account.Id).all()
     consultations = db.query(AppConsultation).filter(AppConsultation.PatientId == account.Id).all()
     exemptions = db.query(AppRefundExemption).filter(AppRefundExemption.AccountId == account.Id).all()
@@ -1458,7 +1512,7 @@ def _user_summary(
         "completedConsultationCount": len([c for c in consultations if c.Status == "DONE"]),
         "cancelledConsultationCount": len([c for c in consultations if c.Status in ("CANCELLED", "CANCELED")]),
         "latestConsultationAt": max([c.StartTime for c in consultations if c.StartTime] or [None]),
-        "createdAt": account.CreatedAt,
+        "createdAt": clock.db(account.CreatedAt),
         "staffRemark": staff_remark if staff_remark is not None else get_staff_remark(db, account.Id),
     }
     if is_visitor:
@@ -1507,12 +1561,14 @@ def user_board_list(
     )
     roles_by_account = _roles_for_accounts(db, {a.Id for a in accounts})
     staff_remarks = get_staff_remarks_map(db, [account.Id for account in accounts])
+    clock = ApiTimeClock.for_session(db)
     items = [
         _user_summary(
             db,
             account,
             roles_by_account.get(account.Id, []),
             staff_remarks.get(account.Id, ""),
+            clock=clock,
         )
         for account in accounts
     ]
@@ -1556,9 +1612,12 @@ def user_board_detail(
         .order_by(AppRefundExemption.CreatedAt.desc())
         .all()
     )
+    # 系统操作时间按各列写入口径统一换算为 +08:00（与 admin_board_routes 看板一致）
+    clock = ApiTimeClock.for_session(db)
+    order_times = {o.Id: clock.order_times(o) for o in orders}
 
     return {
-        "profile": _user_summary(db, account, roles),
+        "profile": _user_summary(db, account, roles, clock=clock),
         "orders": [
             {
                 "id": o.Id,
@@ -1567,18 +1626,18 @@ def user_board_detail(
                 "totalFee": o.TotalFee,
                 "status": o.Status,
                 "description": o.Description,
-                "createdAt": o.CreatedAt,
-                "paidAt": o.PaidAt,
-                "updatedAt": o.UpdatedAt,
+                "createdAt": order_times[o.Id][0],
+                "paidAt": order_times[o.Id][1],
+                "updatedAt": order_times[o.Id][2],
             }
             for o in orders
         ],
         "payments": [
-            {"id": o.Id, "amount": o.TotalFee, "paidAt": o.PaidAt, "status": o.Status}
+            {"id": o.Id, "amount": o.TotalFee, "paidAt": order_times[o.Id][1], "status": o.Status}
             for o in orders if o.PaidAt or o.Status == "PAID"
         ],
         "refunds": [
-            {"id": o.Id, "amount": o.TotalFee, "updatedAt": o.UpdatedAt, "status": o.Status}
+            {"id": o.Id, "amount": o.TotalFee, "updatedAt": order_times[o.Id][2], "status": o.Status}
             for o in orders if o.Status == "REFUNDED"
         ],
         "exemptions": [
@@ -1589,8 +1648,8 @@ def user_board_detail(
                 "reason": e.Reason,
                 "status": e.Status,
                 "rejectReason": optional_model_value(e, "RejectReason"),
-                "reviewedAt": e.ReviewedAt,
-                "createdAt": e.CreatedAt,
+                "reviewedAt": clock.utc(e.ReviewedAt),
+                "createdAt": clock.db(e.CreatedAt),
             }
             for e in exemptions
         ],
@@ -1817,6 +1876,9 @@ def counselor_board_detail(
         visitors.append(visitor)
     visitors.sort(key=lambda item: (-item["consultationCount"], item["patientName"]))
 
+    clock = ApiTimeClock.for_session(db)
+    approved_review_times = approved_amendment_review_times(db, [r.Id for r in records])
+
     return {
         "profile": _counselor_summary(db, account),
         "visitors": visitors,
@@ -1842,8 +1904,8 @@ def counselor_board_detail(
             {
                 "id": r.Id,
                 "consultationId": r.ConsultationId,
-                "createdAt": r.CreatedAt,
-                "updatedAt": r.UpdatedAt,
+                "createdAt": clock.db(r.CreatedAt),
+                "updatedAt": clock.case_record_updated_at(r, approved_review_times.get(r.Id, [])),
                 "preview": (r.Subjective or r.Assessment or r.Plan or "")[:120],
                 **consultation_business_payload(consultations_by_id.get(r.ConsultationId)),
             }
@@ -1855,8 +1917,8 @@ def counselor_board_detail(
                 "scheduleId": r.ScheduleId,
                 "reason": r.Reason,
                 "status": r.Status,
-                "createdAt": r.CreatedAt,
-                "updatedAt": r.UpdatedAt,
+                "createdAt": clock.db(r.CreatedAt),
+                "updatedAt": clock.utc(r.UpdatedAt),
                 **schedule_business_payload(schedule_map.get(r.ScheduleId)),
             }
             for r in leave_requests
@@ -1883,7 +1945,7 @@ def counselor_board_detail(
                 "scheduleId": r.ScheduleId,
                 "consultationId": r.ConsultationId,
                 "screenshotUrl": r.ScreenshotUrl,
-                "createdAt": r.CreatedAt,
+                "createdAt": clock.db(r.CreatedAt),
                 **(
                     consultation_business_payload(consultations_by_id.get(r.ConsultationId))
                     if r.ConsultationId

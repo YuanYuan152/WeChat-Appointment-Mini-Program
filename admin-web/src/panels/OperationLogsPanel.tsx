@@ -1,6 +1,6 @@
 import type { Dispatch, FormEvent, SetStateAction } from "react";
 
-import { formatFullDateTime, formatMoneyFromCents, formatUtcFullDateTime, roleLabel, statusLabel } from "@/lib/format";
+import { formatFullDateTime, formatMoneyFromCents, roleLabel, statusLabel } from "@/lib/format";
 import type { OperationRecord, PagedResult } from "@/types/api";
 
 import type { OperationFilters } from "@/types/app";
@@ -338,11 +338,12 @@ export function OperationLogsPanel({
                     return (
                       <tr key={record.id} className="border-t border-[var(--lxxl-border)] align-top">
                         <td className="px-5 py-4">
-                          <div>{formatUtcFullDateTime(record.occurredAt)}</div>
+                          {/* 接口已按各表写入口径换算为带 +08:00 的北京时间，这里不再按 UTC 补 Z */}
+                          <div>{formatFullDateTime(record.occurredAt)}</div>
                           {(record.createdAt || record.updatedAt) && (
                             <div className="mt-1 text-xs leading-5 text-[var(--lxxl-muted)]">
-                              {record.createdAt ? <div>创建：{formatUtcFullDateTime(record.createdAt)}</div> : null}
-                              {record.updatedAt ? <div>更新：{formatUtcFullDateTime(record.updatedAt)}</div> : null}
+                              {record.createdAt ? <div>创建：{formatFullDateTime(record.createdAt)}</div> : null}
+                              {record.updatedAt ? <div>更新：{formatFullDateTime(record.updatedAt)}</div> : null}
                             </div>
                           )}
                         </td>

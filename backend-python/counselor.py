@@ -56,6 +56,7 @@ from models import (
     AppOrder,
     AppScheduleCancelLog,
 )
+from api_time_clock import ApiTimeClock, approved_amendment_review_times
 from app_time import as_china_api_time, china_now, utc_to_china
 from consultation_cancel import has_appointment_started, is_refund_eligible, refund_order_for_counselor_leave
 from schedule_meta import (
@@ -279,7 +280,11 @@ class CaseRecordOut(BaseModel):
         cls,
         record: AppCaseRecord,
         amendment: Optional[AppCaseRecordAmendmentRequest] = None,
+        *,
+        clock: ApiTimeClock,
+        approved_review_times: Optional[List[datetime]] = None,
     ) -> "CaseRecordOut":
+        """CreatedAt 为数据库时钟、UpdatedAt 为 UTC（旧版审核通过写入的为北京墙钟），统一输出 +08:00。"""
         risk_assessment = case_record_risk_assessment(record)
         header_info = case_record_header_info(record)
         photo_urls = case_record_photo_urls(record)
@@ -294,8 +299,8 @@ class CaseRecordOut(BaseModel):
             RiskAssessment=risk_assessment,
             HeaderInfo=header_info,
             PhotoUrls=photo_urls,
-            CreatedAt=record.CreatedAt,
-            UpdatedAt=record.UpdatedAt,
+            CreatedAt=clock.db(record.CreatedAt),
+            UpdatedAt=clock.case_record_updated_at(record, approved_review_times or []),
         )
         if amendment:
             out.AmendmentStatus = amendment.Status
@@ -303,6 +308,20 @@ class CaseRecordOut(BaseModel):
             if amendment.Status == "REJECTED":
                 out.AmendmentRejectReason = optional_model_value(amendment, "RejectReason")
         return out
+
+
+def _case_record_out(
+    db: Session,
+    record: AppCaseRecord,
+    amendment: Optional[AppCaseRecordAmendmentRequest] = None,
+) -> CaseRecordOut:
+    """单条咨询记录输出：按当前连接的数据库时钟与修改申请审核时间换算时间字段。"""
+    return CaseRecordOut.from_record(
+        record,
+        amendment,
+        clock=ApiTimeClock.for_session(db),
+        approved_review_times=approved_amendment_review_times(db, [record.Id]).get(record.Id),
+    )
 
 
 class CaseRecordAmendmentCreate(BaseModel):
@@ -351,7 +370,8 @@ class CaseRecordRevisionOut(BaseModel):
             RiskAssessment=risk_assessment,
             HeaderInfo=header_info,
             PhotoUrls=photo_urls,
-            RevisedAt=row.RevisedAt,
+            # save_case_record_revision 以 datetime.utcnow() 写入
+            RevisedAt=ApiTimeClock.utc(row.RevisedAt),
             RevisedBy=row.RevisedBy,
         )
 
@@ -1557,6 +1577,8 @@ def list_completed_consultations(
         )
         .all()
     }
+    clock = ApiTimeClock.for_session(db)
+    approved_review_times = approved_amendment_review_times(db, [r.Id for r in records.values()])
 
     result: List[CompletedConsultationOut] = []
     for c in consultations:
@@ -1574,7 +1596,11 @@ def list_completed_consultations(
                 Note=c.Note,
                 CaseRecordId=record.Id if record else None,
                 HasRecord=has_content,
-                RecordUpdatedAt=record.UpdatedAt or record.CreatedAt if record else None,
+                RecordUpdatedAt=(
+                    clock.case_record_latest_at(record, approved_review_times.get(record.Id, []))
+                    if record
+                    else None
+                ),
                 PhotoCount=photo_count,
             )
         )
@@ -1613,7 +1639,17 @@ def list_case_records(
         .order_by(AppCaseRecord.CreatedAt.desc())
         .all()
     )
-    return [CaseRecordOut.from_record(r, latest_amendment_for_record(db, r.Id)) for r in rows]
+    clock = ApiTimeClock.for_session(db)
+    approved_review_times = approved_amendment_review_times(db, [r.Id for r in rows])
+    return [
+        CaseRecordOut.from_record(
+            r,
+            latest_amendment_for_record(db, r.Id),
+            clock=clock,
+            approved_review_times=approved_review_times.get(r.Id),
+        )
+        for r in rows
+    ]
 
 
 @router.get("/case-records/{record_id}", response_model=CaseRecordOut, summary="获取个案记录详情")
@@ -1629,7 +1665,7 @@ def get_case_record(
     if not record:
         raise HTTPException(status_code=404, detail="个案记录不存在")
     amendment = latest_amendment_for_record(db, record.Id)
-    return CaseRecordOut.from_record(record, amendment)
+    return _case_record_out(db, record, amendment)
 
 
 @router.get(
@@ -1703,7 +1739,7 @@ def create_case_record(
         )
         db.commit()
         db.refresh(existing)
-        return CaseRecordOut.from_record(existing)
+        return _case_record_out(db, existing)
 
     record = AppCaseRecord(
         ConsultationId=body.consultation_id,
@@ -1729,7 +1765,7 @@ def create_case_record(
     )
     db.commit()
     db.refresh(record)
-    return CaseRecordOut.from_record(record)
+    return _case_record_out(db, record)
 
 
 @router.put("/case-records/{record_id}", response_model=CaseRecordOut, summary="更新个案记录")
@@ -1783,7 +1819,7 @@ def create_case_record_amendment(
     )
     db.commit()
     db.refresh(record)
-    return CaseRecordOut.from_record(record, amendment)
+    return _case_record_out(db, record, amendment)
 
 
 # ---------------------------------------------------------------------------

@@ -77,7 +77,8 @@ def release_unfulfilled_proxy_schedule(db: Session, order: AppOrder) -> None:
         schedule.Status = "CANCELLED"
     else:
         schedule.Note = release_assigned_room(schedule.Note)
-    schedule.UpdatedAt = _now()
+    # 系统操作时间按 UTC 落库（app_time 约定）；_now() 是北京墙钟，只用于业务比较
+    schedule.UpdatedAt = datetime.utcnow()
 
 
 PAID_ORDER_CANNOT_CANCEL_MESSAGE = (
@@ -118,7 +119,7 @@ def cancel_pending_order(db: Session, order: AppOrder, *, system: bool = False) 
     )
     if outcome == "unpaid":
         order.Status = "CANCELLED"
-        order.UpdatedAt = _now()
+        order.UpdatedAt = datetime.utcnow()
         release_unfulfilled_proxy_schedule(db, order)
         return "cancelled"
     if outcome == "refunded":
@@ -918,7 +919,7 @@ def push_proxy_order(
     )
     if schedule:
         schedule.Note = note
-        schedule.UpdatedAt = _now()
+        schedule.UpdatedAt = datetime.utcnow()
     else:
         schedule = AppSchedule(
             CounselorId=counselor_id,

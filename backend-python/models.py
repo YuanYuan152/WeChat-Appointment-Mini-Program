@@ -41,6 +41,16 @@ def assessment_utc_now() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
+def utc_naive_now() -> datetime:
+    """UpdatedAt 自动更新值：系统操作时间统一按 UTC naive 落库（见 app_time.py）。
+
+    业务代码显式赋值的 UpdatedAt 都是 datetime.utcnow()；未显式赋值的 UPDATE 由
+    onupdate 补写。不用 func.now()（GETDATE() 随数据库服务器时区，本地东八区与
+    Docker UTC 不一致），否则同一列会混存两种口径。
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 class AppAccount(Base):
     __tablename__ = "AppAccount"
 
@@ -76,7 +86,7 @@ class AppAccount(Base):
     IsActive = Column(Boolean, nullable=False, default=True, server_default="1")
     DeletedAt = Column(DateTime, nullable=True)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
-    UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
+    UpdatedAt = Column(DateTime, nullable=True, onupdate=utc_naive_now)
 
 
 class AppRoleBinding(Base):
@@ -118,7 +128,7 @@ class AppOrder(Base):
     ProxyOfflineReceiptByRole = Column(String(20), nullable=True)
     ProxyOfflineReceiptConfirmedAt = Column(DateTime, nullable=True)
     IntakeAgreementType = Column(String(20), nullable=True)
-    UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
+    UpdatedAt = Column(DateTime, nullable=True, onupdate=utc_naive_now)
 
 
 class AppSchedule(Base):
@@ -131,7 +141,7 @@ class AppSchedule(Base):
     Status = Column(String(20), nullable=False, default="AVAILABLE")
     Note = Column(Unicode(200), nullable=True)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
-    UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
+    UpdatedAt = Column(DateTime, nullable=True, onupdate=utc_naive_now)
 
 
 class AppConsultation(Base):
@@ -147,7 +157,7 @@ class AppConsultation(Base):
     EndTime = Column(DateTime, nullable=True)
     Note = Column(Unicode(500), nullable=True)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
-    UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
+    UpdatedAt = Column(DateTime, nullable=True, onupdate=utc_naive_now)
 
 
 class AppCaseRecord(Base):
@@ -164,7 +174,7 @@ class AppCaseRecord(Base):
     HeaderInfo = Column(UnicodeText, nullable=True)
     PhotoUrls = Column(UnicodeText, nullable=True)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
-    UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
+    UpdatedAt = Column(DateTime, nullable=True, onupdate=utc_naive_now)
 
 
 class AppCaseRecordRevision(Base):
@@ -222,7 +232,7 @@ class AppTask(Base):
     Status = Column(String(20), nullable=False, default="OPEN")
     DueAt = Column(DateTime, nullable=True)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
-    UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
+    UpdatedAt = Column(DateTime, nullable=True, onupdate=utc_naive_now)
 
 
 class AppRiskAlert(Base):
@@ -237,7 +247,7 @@ class AppRiskAlert(Base):
     HandledAt = Column(DateTime, nullable=True)
     HandlerNote = Column(Unicode(500), nullable=True)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
-    UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
+    UpdatedAt = Column(DateTime, nullable=True, onupdate=utc_naive_now)
 
 
 class AppBanner(Base):
@@ -253,7 +263,7 @@ class AppBanner(Base):
     StartAt = Column(DateTime, nullable=True)
     EndAt = Column(DateTime, nullable=True)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
-    UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
+    UpdatedAt = Column(DateTime, nullable=True, onupdate=utc_naive_now)
 
 
 class AppSitePage(Base):
@@ -270,7 +280,7 @@ class AppSitePage(Base):
     CoverCropJson = Column(String(500), nullable=True)
     UpdatedByAccountId = Column(Integer, nullable=True)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
-    UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
+    UpdatedAt = Column(DateTime, nullable=True, onupdate=utc_naive_now)
 
 
 class AppSiteGuideItem(Base):
@@ -283,7 +293,7 @@ class AppSiteGuideItem(Base):
     SortOrder = Column(Integer, nullable=False, default=0)
     IsActive = Column(Boolean, nullable=False, default=True)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
-    UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
+    UpdatedAt = Column(DateTime, nullable=True, onupdate=utc_naive_now)
 
 
 class AppActivity(Base):
@@ -303,7 +313,7 @@ class AppActivity(Base):
     EndAt = Column(DateTime, nullable=True)
     SortOrder = Column(Integer, nullable=False, default=0)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
-    UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
+    UpdatedAt = Column(DateTime, nullable=True, onupdate=utc_naive_now)
 
 
 class AppRoleSwitchLog(Base):
@@ -335,7 +345,7 @@ class AppArticle(Base):
     SortOrder = Column(Integer, nullable=False, default=0)
     PublishedAt = Column(DateTime, nullable=True)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
-    UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
+    UpdatedAt = Column(DateTime, nullable=True, onupdate=utc_naive_now)
 
 
 class AppMessage(Base):
@@ -363,7 +373,7 @@ class AppSubscribeTemplate(Base):
     RoleScope = Column(String(20), nullable=True)  # Patient / Counselor / Staff / All
     IsActive = Column(Boolean, nullable=False, default=True)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
-    UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
+    UpdatedAt = Column(DateTime, nullable=True, onupdate=utc_naive_now)
 
 
 class AppUserSubscribeAuth(Base):
@@ -377,7 +387,7 @@ class AppUserSubscribeAuth(Base):
     Status = Column(String(20), nullable=False, default="reject")
     RoleAtAuth = Column(String(20), nullable=True)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
-    UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
+    UpdatedAt = Column(DateTime, nullable=True, onupdate=utc_naive_now)
 
 
 class AppMessageLog(Base):
@@ -458,7 +468,7 @@ class AppRegistrationForm(Base):
     SelfHarmRisk = Column(UnicodeText, nullable=True)
     ConsultationGoal = Column(UnicodeText, nullable=True)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
-    UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
+    UpdatedAt = Column(DateTime, nullable=True, onupdate=utc_naive_now)
 
 
 class AppCounselorProfile(Base):
@@ -494,7 +504,7 @@ class AppCounselorProfile(Base):
     # 仅控制来访端展示/搜索；False 时管理端与角色绑定仍可见。与 IsActive（停用/退休）分离。
     IsPublicVisible = Column(Boolean, nullable=False, default=True)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
-    UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
+    UpdatedAt = Column(DateTime, nullable=True, onupdate=utc_naive_now)
 
 
 class AppContactRecord(Base):
@@ -507,7 +517,7 @@ class AppContactRecord(Base):
     Content = Column(UnicodeText, nullable=True)
     NextFollowAt = Column(DateTime, nullable=True)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
-    UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
+    UpdatedAt = Column(DateTime, nullable=True, onupdate=utc_naive_now)
 
 
 class AppLeaveRequest(Base):
@@ -522,7 +532,7 @@ class AppLeaveRequest(Base):
     ReviewedBy = Column(Integer, nullable=True)
     ReviewedAt = Column(DateTime, nullable=True)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
-    UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
+    UpdatedAt = Column(DateTime, nullable=True, onupdate=utc_naive_now)
 
 
 class AppScheduleCancelLog(Base):
@@ -573,7 +583,7 @@ class AppRefundExemption(Base):
     ReviewedBy = Column(Integer, nullable=True)
     ReviewedAt = Column(DateTime, nullable=True)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
-    UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
+    UpdatedAt = Column(DateTime, nullable=True, onupdate=utc_naive_now)
 
 
 class AppConsultationFeedback(Base):
@@ -792,7 +802,7 @@ class AppConsultationRoom(Base):
     Status = Column(String(20), nullable=False, default="AVAILABLE")
     SortOrder = Column(Integer, nullable=False, default=0)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
-    UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
+    UpdatedAt = Column(DateTime, nullable=True, onupdate=utc_naive_now)
 
 
 class AppConsultationRoomSlot(Base):
@@ -805,7 +815,7 @@ class AppConsultationRoomSlot(Base):
     Status = Column(String(20), nullable=False, default="AVAILABLE")
     Note = Column(Unicode(500), nullable=True)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
-    UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
+    UpdatedAt = Column(DateTime, nullable=True, onupdate=utc_naive_now)
 
 
 class AppLoginSession(Base):
@@ -858,7 +868,7 @@ class AppStaffAccountRemark(Base):
     Remark = Column(UnicodeText, nullable=True)
     UpdatedByAccountId = Column(Integer, nullable=True)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
-    UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
+    UpdatedAt = Column(DateTime, nullable=True, onupdate=utc_naive_now)
 
 
 class AppCounselorPatientPricing(Base):
@@ -881,7 +891,7 @@ class AppCounselorPatientPricing(Base):
     RevenueSharePercent = Column(Integer, nullable=True)
     CharityNegotiatedAt = Column(DateTime, nullable=True)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
-    UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
+    UpdatedAt = Column(DateTime, nullable=True, onupdate=utc_naive_now)
 
 
 class AppSystemSetting(Base):
@@ -896,7 +906,7 @@ class AppSystemSetting(Base):
     SettingValue = Column(String(500), nullable=False)
     UpdatedByAccountId = Column(Integer, nullable=True)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
-    UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
+    UpdatedAt = Column(DateTime, nullable=True, onupdate=utc_naive_now)
 
 
 class EnterpriseSitePersonnel(Base):
@@ -929,4 +939,4 @@ class EnterpriseSitePersonnel(Base):
     EmpNo = Column(String(40), nullable=True)
     RealName = Column(Unicode(50), nullable=True)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
-    UpdatedAt = Column(DateTime, nullable=True, onupdate=func.now())
+    UpdatedAt = Column(DateTime, nullable=True, onupdate=utc_naive_now)

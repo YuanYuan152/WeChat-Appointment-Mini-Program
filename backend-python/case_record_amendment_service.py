@@ -555,7 +555,9 @@ def approve_amendment(
         photo_urls=decode_photo_urls(optional_model_value(amendment, "PhotoUrls")),
         photo_urls_set=True,
     )
-    record.UpdatedAt = china_now()
+    # 咨询记录 UpdatedAt 与其它系统操作时间一样按 UTC 落库；
+    # 修改申请的 ReviewedAt 仍是北京墙钟（审核结果消息直接按它格式化）
+    record.UpdatedAt = datetime.utcnow()
 
     now = china_now()
     amendment.Status = "APPROVED"

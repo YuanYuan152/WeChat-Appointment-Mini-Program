@@ -81,7 +81,7 @@ export function formatFullDateTime(value?: string | null) {
   });
 }
 
-/** 数据库 UTC naive 时间：补 Z 后再转为北京时间展示（测评完成时间、操作日志等） */
+/** 数据库 UTC naive 时间：补 Z 后再转为北京时间展示（测评完成时间等）；带偏移的时间按原偏移解析 */
 export function formatUtcFullDateTime(value?: string | null) {
   if (!value) {
     return "-";

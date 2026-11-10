@@ -225,7 +225,8 @@ def retire_counselor_booking_relationships(
     )
     for schedule in future_available_schedules:
         schedule.Status = "CANCELLED"
-        schedule.UpdatedAt = business_now
+        # business_now（北京墙钟）只用于筛选未来排期；系统操作时间按 UTC 落库
+        schedule.UpdatedAt = now
 
     if patients or pending_orders or future_available_schedules:
         db.flush()
