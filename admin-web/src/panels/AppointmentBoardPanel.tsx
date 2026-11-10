@@ -239,7 +239,7 @@ function RoomBoard({
   });
   const roomsWidth = roomWidths.reduce((sum, width) => sum + width, 0);
   const bodyHeight = timeSlots.length * SLOT_HEIGHT;
-  const roomsGridTemplate = roomWidths.map((width) => `${width}px`).join(" ");
+  const roomsGridTemplate = flexibleColumns(roomWidths);
 
   return (
     <div className="border-t border-[var(--lxxl-border)]">
@@ -268,24 +268,25 @@ function RoomBoard({
             >
               <span>{date}</span>
             </div>
-            <div className="flex">
+            <div className="flex min-w-0 flex-1">
               {groups.map((group) => {
                 const groupWidths = group.rooms.map((room) => {
                   const index = rooms.findIndex((item) => item.key === room.key);
                   return roomWidths[index] || BASE_COLUMN_WIDTH;
                 });
+                const groupWidth = groupWidths.reduce((sum, width) => sum + width, 0);
                 return (
                   <div
                     key={group.centerId}
                     className="border-r border-[var(--lxxl-border)]"
-                    style={{ width: groupWidths.reduce((sum, width) => sum + width, 0) }}
+                    style={{ flex: `${groupWidth} ${groupWidth} ${groupWidth}px`, minWidth: groupWidth }}
                   >
                     <div className="border-b border-[var(--lxxl-border)] px-3 py-3 text-center text-sm font-semibold">
                       {group.centerName}
                     </div>
                     <div
                       className="grid"
-                      style={{ gridTemplateColumns: groupWidths.map((width) => `${width}px`).join(" ") }}
+                      style={{ gridTemplateColumns: flexibleColumns(groupWidths) }}
                     >
                       {group.rooms.map((room) => (
                         <div
@@ -328,10 +329,10 @@ function RoomBoard({
               ))}
             </div>
             <div
-              className="grid"
+              className="grid min-w-0 flex-1"
               style={{
                 gridTemplateColumns: roomsGridTemplate,
-                width: roomsWidth,
+                minWidth: roomsWidth,
                 height: bodyHeight,
               }}
             >
@@ -729,6 +730,11 @@ function roomSlotMeta(
     status: slot?.status || room.status || "AVAILABLE",
     note: slot?.note || "",
   };
+}
+
+/** 列宽不小于基础宽度；屏幕更宽时按基础宽度比例拉伸，铺满看板。 */
+function flexibleColumns(widths: number[]) {
+  return widths.map((width) => `minmax(${width}px, ${width}fr)`).join(" ");
 }
 
 function groupRooms(rooms: BoardRoom[]) {
