@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 
 import {
   EmptyState,
@@ -33,10 +33,17 @@ type BoardRoom = {
 const START_MINUTES = 6 * 60;
 const END_MINUTES = 24 * 60;
 const SLOT_MINUTES = 30;
-/** 一格纵向可完整放下两个预约条（含内边距与间距）。 */
+/** 每半小时一行的高度（像素）；预约块按起止时间换算纵向位置与高度。 */
 const SLOT_HEIGHT = 78;
 const BASE_COLUMN_WIDTH = 156;
 const TIME_COLUMN_WIDTH = 136;
+/** 预约块最小高度，保证短时段预约也能完整显示一行文字。 */
+const MIN_BLOCK_HEIGHT = 30;
+/** 低于该高度的预约块放不下「姓名 + 时间」两行，改为单行紧凑显示。 */
+const COMPACT_BLOCK_HEIGHT = 50;
+const PX_PER_MINUTE = SLOT_HEIGHT / SLOT_MINUTES;
+const UNASSIGNED_ROOM_KEY = "unassigned:unassigned";
+const CANCELLED_ROOM_KEY = "unassigned:cancelled";
 type BoardDisplayStatus =
   | "PENDING_PAYMENT"
   | "BOOKED"
@@ -219,24 +226,25 @@ function RoomBoard({
   onOpenOccupied: (payload: { roomName: string; timeSlot: string; note: string }) => void;
   onOpenRoom: (room: Room) => void;
 }) {
-  const timeSlots = buildTimeSlots();
-  const groups = groupRooms(rooms);
-  const roomWidths = rooms.map((room) => {
-    if (room.centerId !== "video") return BASE_COLUMN_WIDTH;
-    const roomAppointments = appointments.filter(
-      (item) => appointmentRoomKey(item, sourceRooms) === room.key,
-    );
-    let maxInSlot = 0;
-    for (const slot of timeSlots) {
-      const slotStart = minutesFromSlotLabel(slot);
-      const count = roomAppointments.filter((appointment) =>
-        appointmentOverlapsSlot(appointment, slotStart),
-      ).length;
-      if (count > maxInSlot) maxInSlot = count;
-    }
-    const columns = Math.max(1, Math.ceil(maxInSlot / 2));
-    return BASE_COLUMN_WIDTH * columns;
-  });
+  const timeSlots = useMemo(() => buildTimeSlots(), []);
+  const groups = useMemo(() => groupRooms(rooms), [rooms]);
+  /**
+   * 每一栏按日历方式排布预约：每条预约按真实起止时间定位、占满对应高度；
+   * 时间重叠的预约并排显示，栏宽随最大并排数加宽，不再挤在半小时格子里被裁掉。
+   */
+  const columns = useMemo(
+    () =>
+      rooms.map((room) => {
+        const roomAppointments = appointments.filter(
+          (item) => appointmentRoomKey(item, sourceRooms) === room.key,
+        );
+        const { placed, laneCount } = layoutAppointments(roomAppointments);
+        return { room, placed, width: BASE_COLUMN_WIDTH * Math.max(1, laneCount) };
+      }),
+    [appointments, rooms, sourceRooms],
+  );
+  const columnByKey = new Map(columns.map((column) => [column.room.key, column]));
+  const roomWidths = columns.map((column) => column.width);
   const roomsWidth = roomWidths.reduce((sum, width) => sum + width, 0);
   const bodyHeight = timeSlots.length * SLOT_HEIGHT;
   const roomsGridTemplate = flexibleColumns(roomWidths);
@@ -258,6 +266,7 @@ function RoomBoard({
           <span className="h-3 w-7 rounded-full bg-[#E5E0D8]" />
           <span>停用/不可用</span>
         </div>
+        <div className="text-xs text-[var(--lxxl-muted)]">已取消的预约统一记录在「其他 · 已取消」栏</div>
       </div>
       <div className="max-h-[calc(100vh-190px)] overflow-auto">
         <div style={{ minWidth: TIME_COLUMN_WIDTH + roomsWidth }}>
@@ -270,10 +279,9 @@ function RoomBoard({
             </div>
             <div className="flex min-w-0 flex-1">
               {groups.map((group) => {
-                const groupWidths = group.rooms.map((room) => {
-                  const index = rooms.findIndex((item) => item.key === room.key);
-                  return roomWidths[index] || BASE_COLUMN_WIDTH;
-                });
+                const groupWidths = group.rooms.map(
+                  (room) => columnByKey.get(room.key)?.width || BASE_COLUMN_WIDTH,
+                );
                 const groupWidth = groupWidths.reduce((sum, width) => sum + width, 0);
                 return (
                   <div
@@ -293,7 +301,9 @@ function RoomBoard({
                           key={room.key}
                           className="border-r border-[var(--lxxl-border)] px-2 py-3 text-center text-sm last:border-r-0"
                         >
-                          {room.centerId === "video" || room.centerId === "unassigned" ? (
+                          {room.key === CANCELLED_ROOM_KEY ? (
+                            `${room.roomName}（${columnByKey.get(room.key)?.placed.length ?? 0}）`
+                          ) : room.centerId === "video" || room.centerId === "unassigned" ? (
                             room.roomName
                           ) : (
                             <button
@@ -336,87 +346,74 @@ function RoomBoard({
                 height: bodyHeight,
               }}
             >
-              {rooms.map((room) => {
-                const roomAppointments = appointments.filter(
-                  (item) => appointmentRoomKey(item, sourceRooms) === room.key,
-                );
-                const isVideoColumn = room.centerId === "video";
-                return (
-                  <div
-                    key={room.key}
-                    className="border-r border-[var(--lxxl-border)]"
-                  >
-                    {timeSlots.map((slot) => {
-                      const slotStart = minutesFromSlotLabel(slot);
-                      const slotAppointments = roomAppointments.filter((appointment) =>
-                        appointmentOverlapsSlot(appointment, slotStart),
-                      );
-                      const slotMeta = roomSlotMeta(roomDayStatus, room, slotStart);
-                      const unavailable = slotMeta.status !== "AVAILABLE";
-                      const occupied = slotMeta.status === "OCCUPIED";
-                      const useMultiColumnLayout =
-                        isVideoColumn && slotAppointments.length > 2;
-                      return (
-                        <div
-                          key={`${room.key}-${slot}`}
-                          className={`overflow-hidden border-b border-[var(--lxxl-border)] px-1.5 py-1 ${
-                            occupied
-                              ? "bg-[#F3E8FF]"
-                              : unavailable
-                                ? "bg-[#F6F3EE]"
-                                : ""
-                          } ${
-                            slotAppointments.length > 0
-                              ? useMultiColumnLayout
-                                ? "grid gap-1"
-                                : "flex flex-col justify-center gap-1"
-                              : "flex flex-col justify-center gap-1"
-                          }`}
-                          style={{
-                            height: SLOT_HEIGHT,
-                            ...(useMultiColumnLayout
-                              ? {
-                                  gridTemplateRows: "repeat(2, minmax(0, 1fr))",
-                                  gridAutoFlow: "column",
-                                  gridAutoColumns: "minmax(0, 1fr)",
-                                }
-                              : {}),
-                          }}
-                        >
-                          {slotAppointments.length > 0 ? (
-                            slotAppointments.map((appointment) => (
-                              <AppointmentSlotBar
-                                key={`${appointment.scheduleId}-${slot}`}
-                                appointment={appointment}
-                                onClick={() => onOpenAppointment(appointment)}
-                              />
-                            ))
-                          ) : occupied ? (
-                            <button
-                              type="button"
-                              className="w-full truncate rounded-full bg-[#E9D5FF] px-2 py-1 text-center text-xs font-medium text-[#6B21A8] transition hover:brightness-95"
-                              title={slotMeta.note ? `占用：${slotMeta.note}` : "占用"}
-                              onClick={() =>
-                                onOpenOccupied({
-                                  roomName: room.roomName,
-                                  timeSlot: slot,
-                                  note: slotMeta.note || "",
-                                })
-                              }
-                            >
-                              {slotMeta.note ? `占用：${slotMeta.note}` : "占用"}
-                            </button>
-                          ) : unavailable ? (
-                            <div className="rounded-full bg-[#E5E0D8] px-2 py-1 text-center text-xs font-medium text-[#756F67]">
-                              不可用
-                            </div>
-                          ) : null}
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })}
+              {columns.map(({ room, placed }) => (
+                <div
+                  key={room.key}
+                  className="relative border-r border-[var(--lxxl-border)]"
+                >
+                  {timeSlots.map((slot) => {
+                    const slotStart = minutesFromSlotLabel(slot);
+                    const hasAppointment = placed.some(
+                      (item) => item.start < slotStart + SLOT_MINUTES && item.end > slotStart,
+                    );
+                    const slotMeta = roomSlotMeta(roomDayStatus, room, slotStart);
+                    const unavailable = slotMeta.status !== "AVAILABLE";
+                    const occupied = slotMeta.status === "OCCUPIED";
+                    return (
+                      <div
+                        key={`${room.key}-${slot}`}
+                        className={`flex flex-col justify-center overflow-hidden border-b border-[var(--lxxl-border)] px-1.5 py-1 ${
+                          occupied
+                            ? "bg-[#F3E8FF]"
+                            : unavailable
+                              ? "bg-[#F6F3EE]"
+                              : ""
+                        }`}
+                        style={{ height: SLOT_HEIGHT }}
+                      >
+                        {hasAppointment ? null : occupied ? (
+                          <button
+                            type="button"
+                            className="w-full truncate rounded-full bg-[#E9D5FF] px-2 py-1 text-center text-xs font-medium text-[#6B21A8] transition hover:brightness-95"
+                            title={slotMeta.note ? `占用：${slotMeta.note}` : "占用"}
+                            onClick={() =>
+                              onOpenOccupied({
+                                roomName: room.roomName,
+                                timeSlot: slot,
+                                note: slotMeta.note || "",
+                              })
+                            }
+                          >
+                            {slotMeta.note ? `占用：${slotMeta.note}` : "占用"}
+                          </button>
+                        ) : unavailable ? (
+                          <div className="rounded-full bg-[#E5E0D8] px-2 py-1 text-center text-xs font-medium text-[#756F67]">
+                            不可用
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                  {placed.map((item) => {
+                    const height = blockHeight(item);
+                    return (
+                      <AppointmentBlock
+                        key={`${item.appointment.scheduleId}-${item.appointment.consultationId ?? ""}`}
+                        appointment={item.appointment}
+                        compact={height < COMPACT_BLOCK_HEIGHT}
+                        showOriginalPlace={room.key === CANCELLED_ROOM_KEY}
+                        style={{
+                          top: (item.start - START_MINUTES) * PX_PER_MINUTE + 2,
+                          height,
+                          left: `calc(${(item.lane / item.groupLanes) * 100}% + 3px)`,
+                          width: `calc(${(item.span / item.groupLanes) * 100}% - 6px)`,
+                        }}
+                        onClick={() => onOpenAppointment(item.appointment)}
+                      />
+                    );
+                  })}
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -425,11 +422,19 @@ function RoomBoard({
   );
 }
 
-function AppointmentSlotBar({
+function AppointmentBlock({
   appointment,
+  compact,
+  showOriginalPlace,
+  style,
   onClick,
 }: {
   appointment: BoardAppointment;
+  /** 预约块太矮时只显示一行：开始时间 + 咨询师 - 来访。 */
+  compact: boolean;
+  /** 「已取消」栏里额外标出原预约的咨询室/中心。 */
+  showOriginalPlace: boolean;
+  style: CSSProperties;
   onClick: () => void;
 }) {
   const meta = STATUS_META[displayStatus(appointment)];
@@ -437,16 +442,32 @@ function AppointmentSlotBar({
     appointment.patientName,
     appointment.patientContractTag,
   ) || "来访";
+  const people = `${appointment.counselorName} - ${patient}`;
+  const time = `${timeText(appointment.startTime)}-${timeText(appointment.endTime)}`;
+  const place = showOriginalPlace ? appointmentPlaceLabel(appointment) : "";
+  const title = [people, time, place ? `原预约：${place}` : ""].filter(Boolean).join("\n");
 
   return (
     <button
       type="button"
-      className="min-h-0 w-full truncate rounded-full border border-black/5 px-2 py-1 text-center text-xs font-medium leading-5 shadow-sm transition hover:brightness-95"
-      style={{ background: meta.background, color: meta.color }}
-      title={`${appointment.counselorName} - ${patient} ${timeText(appointment.startTime)}-${timeText(appointment.endTime)}`}
+      className={`absolute z-10 flex flex-col overflow-hidden rounded-lg border border-black/5 px-2 text-left text-xs leading-5 shadow-sm transition hover:z-[15] hover:brightness-95 ${
+        compact ? "justify-center" : "py-1"
+      }`}
+      style={{ ...style, background: meta.background, color: meta.color }}
+      title={title}
       onClick={onClick}
     >
-      {appointment.counselorName} - {patient}
+      {compact ? (
+        <span className="truncate font-medium">
+          {timeText(appointment.startTime)} {people}
+        </span>
+      ) : (
+        <>
+          <span className="line-clamp-2 shrink-0 break-words font-medium">{people}</span>
+          <span className="truncate opacity-80">{time}</span>
+          {place ? <span className="truncate opacity-80">原：{place}</span> : null}
+        </>
+      )}
     </button>
   );
 }
@@ -655,9 +676,10 @@ function buildBoardRooms(rooms: Room[], appointments: BoardAppointment[]): Board
       status: "AVAILABLE",
     },
   ];
-  if (appointments.some((item) => !result.some((room) => room.key === appointmentRoomKey(item, rooms)))) {
+  const activeAppointments = appointments.filter((item) => !isCancelledAppointment(item));
+  if (activeAppointments.some((item) => !result.some((room) => room.key === appointmentRoomKey(item, rooms)))) {
     result.push({
-      key: "unassigned:unassigned",
+      key: UNASSIGNED_ROOM_KEY,
       databaseId: null,
       centerId: "unassigned",
       centerName: "其他",
@@ -666,6 +688,16 @@ function buildBoardRooms(rooms: Room[], appointments: BoardAppointment[]): Board
       status: "AVAILABLE",
     });
   }
+  // 已取消的预约不再占用原咨询室栏，统一记录在「其他 · 已取消」栏。
+  result.push({
+    key: CANCELLED_ROOM_KEY,
+    databaseId: null,
+    centerId: "unassigned",
+    centerName: "其他",
+    roomId: "cancelled",
+    roomName: "已取消",
+    status: "AVAILABLE",
+  });
   return result;
 }
 
@@ -685,15 +717,17 @@ function physicalCenterIdForRoom(roomId: string, rooms: Room[]): string | null {
  * - 视频咨询且未选线下室 → 线上「视频咨询」列
  * - 视频咨询且已选/已占线下室 → 对应线下咨询室列
  * - 线下预约 → 对应中心咨询室列
+ * - 已取消 → 「其他 · 已取消」列
  */
 function appointmentRoomKey(item: BoardAppointment, rooms: Room[] = []) {
+  if (isCancelledAppointment(item)) return CANCELLED_ROOM_KEY;
   if (item.centerId === "video") {
     if (!item.roomId) return "video:video";
     const physicalCenter = physicalCenterIdForRoom(item.roomId, rooms);
     if (physicalCenter) return `${physicalCenter}:${item.roomId}`;
-    return "unassigned:unassigned";
+    return UNASSIGNED_ROOM_KEY;
   }
-  if (!item.centerId || !item.roomId) return "unassigned:unassigned";
+  if (!item.centerId || !item.roomId) return UNASSIGNED_ROOM_KEY;
   return `${item.centerId}:${item.roomId}`;
 }
 
@@ -708,10 +742,107 @@ function boardRoomToRoom(room: BoardRoom): Room {
   };
 }
 
-function appointmentOverlapsSlot(appointment: BoardAppointment, slotStart: number) {
-  const appointmentStart = minutesOfDay(appointment.startTime);
-  const appointmentEnd = minutesOfDay(appointment.endTime);
-  return appointmentStart < slotStart + SLOT_MINUTES && appointmentEnd > slotStart;
+type PlacedAppointment = {
+  appointment: BoardAppointment;
+  /** 看板上的起止分钟（已截取到看板时间范围内）。 */
+  start: number;
+  end: number;
+  /** 按最小高度换算后实际占到的结束分钟，用于判断视觉上是否重叠。 */
+  visualEnd: number;
+  /** 所在重叠组内的起始泳道、横跨泳道数与该组泳道总数。 */
+  lane: number;
+  span: number;
+  groupLanes: number;
+};
+
+/**
+ * 日历式排布：时间上（含传递）重叠的预约归为一组，组内按开始时间贪心分配泳道并排显示；
+ * 宽度按所在组的泳道数均分，右侧泳道空闲时向右延展，不与他人重叠的预约独占整栏。
+ */
+function layoutAppointments(items: BoardAppointment[]): {
+  placed: PlacedAppointment[];
+  laneCount: number;
+} {
+  const placed: PlacedAppointment[] = items
+    .map((appointment) => {
+      const { start, end } = appointmentRange(appointment);
+      const visualEnd = Math.max(end, start + (MIN_BLOCK_HEIGHT + 4) / PX_PER_MINUTE);
+      return { appointment, start, end, visualEnd, lane: 0, span: 1, groupLanes: 1 };
+    })
+    .sort((a, b) => a.start - b.start || b.visualEnd - a.visualEnd);
+
+  let laneCount = 0;
+  let group: PlacedAppointment[] = [];
+  let groupEnd = -Infinity;
+  const settleGroup = () => {
+    const laneEnds: number[] = [];
+    for (const item of group) {
+      let lane = laneEnds.findIndex((laneEnd) => laneEnd <= item.start);
+      if (lane === -1) {
+        lane = laneEnds.length;
+        laneEnds.push(item.visualEnd);
+      } else {
+        laneEnds[lane] = item.visualEnd;
+      }
+      item.lane = lane;
+    }
+    for (const item of group) {
+      item.groupLanes = laneEnds.length;
+      let span = 1;
+      while (
+        item.lane + span < laneEnds.length
+        && !group.some(
+          (other) =>
+            other.lane === item.lane + span
+            && other.start < item.visualEnd
+            && other.visualEnd > item.start,
+        )
+      ) {
+        span += 1;
+      }
+      item.span = span;
+    }
+    laneCount = Math.max(laneCount, laneEnds.length);
+    group = [];
+  };
+  for (const item of placed) {
+    if (group.length > 0 && item.start >= groupEnd) settleGroup();
+    group.push(item);
+    groupEnd = group.length === 1 ? item.visualEnd : Math.max(groupEnd, item.visualEnd);
+  }
+  if (group.length > 0) settleGroup();
+  return { placed, laneCount };
+}
+
+function appointmentRange(appointment: BoardAppointment) {
+  const start = clampBoardMinutes(minutesOfDay(appointment.startTime));
+  let end = clampBoardMinutes(minutesOfDay(appointment.endTime));
+  if (end <= start) {
+    // 跨零点结束的截到看板末尾；其他异常数据至少显示半小时。
+    end = String(appointment.endTime || "").slice(0, 10) > String(appointment.startTime || "").slice(0, 10)
+      ? END_MINUTES
+      : Math.min(start + SLOT_MINUTES, END_MINUTES);
+  }
+  return { start, end };
+}
+
+function blockHeight(item: PlacedAppointment) {
+  return Math.max((item.end - item.start) * PX_PER_MINUTE - 4, MIN_BLOCK_HEIGHT);
+}
+
+function clampBoardMinutes(value: number) {
+  return Math.min(Math.max(value, START_MINUTES), END_MINUTES);
+}
+
+function isCancelledAppointment(item: BoardAppointment) {
+  return displayStatus(item) === "CANCELLED";
+}
+
+/** 已取消栏里展示的原预约位置。 */
+function appointmentPlaceLabel(item: BoardAppointment) {
+  if (item.roomName) return item.roomName;
+  if (item.centerId === "video") return "视频咨询";
+  return item.centerName || "";
 }
 
 function roomSlotMeta(
