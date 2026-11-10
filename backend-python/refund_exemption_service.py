@@ -10,6 +10,7 @@ from consultation_cancel import (
     can_visitor_cancel,
     cancel_consultation_for_visitor,
     is_refund_eligible,
+    order_is_confirm_only,
     order_is_offline_payment,
 )
 from message import create_message
@@ -54,18 +55,22 @@ def validate_exemption_submission(
     screenshot_url: str,
     pending: Optional[AppRefundExemption],
     offline: bool = False,
+    confirm_only: bool = False,
 ) -> None:
     if consultation.PatientId != patient_id:
         raise ValueError("无权为该预约申请取消")
     if not can_visitor_cancel(consultation.Status):
         raise ValueError("当前状态不可申请取消")
-    if not offline and is_refund_eligible(consultation.StartTime):
+    no_refund = offline or confirm_only
+    if is_refund_eligible(consultation.StartTime):
+        if no_refund:
+            raise ValueError("距咨询开始超过24小时，请直接取消预约，无需另行申请，取消不退款")
         raise ValueError("距咨询开始超过24小时，请直接取消预约即可退款，无需另行申请")
     if not (reason or "").strip():
         raise ValueError("请填写申请原因")
-    if not offline and amount <= 0:
+    if not no_refund and amount <= 0:
         raise ValueError("申请金额须大于 0")
-    if offline and amount < 0:
+    if no_refund and amount < 0:
         raise ValueError("申请金额无效")
     validate_uploaded_screenshot_url(screenshot_url)
     if pending:
@@ -76,17 +81,17 @@ def validate_uploaded_screenshot_url(screenshot_url: str) -> str:
     """仅接受统一上传 API 生成的图片地址。"""
     value = (screenshot_url or "").strip()
     if not value:
-        raise ValueError("请上传退款申请凭证")
+        raise ValueError("请上传申请凭证")
     if len(value) > 500:
-        raise ValueError("退款申请凭证地址过长")
+        raise ValueError("申请凭证地址过长")
 
     parsed = urlsplit(value)
     if parsed.scheme and parsed.scheme.lower() not in ("http", "https"):
-        raise ValueError("退款申请凭证地址无效")
+        raise ValueError("申请凭证地址无效")
     if (parsed.scheme and not parsed.netloc) or (not parsed.scheme and parsed.netloc):
-        raise ValueError("退款申请凭证地址无效")
+        raise ValueError("申请凭证地址无效")
     if parsed.query or parsed.fragment:
-        raise ValueError("退款申请凭证地址无效")
+        raise ValueError("申请凭证地址无效")
 
     path = unquote(parsed.path)
     if (
@@ -96,7 +101,7 @@ def validate_uploaded_screenshot_url(screenshot_url: str) -> str:
         or "\x00" in path
         or any(part in ("", ".", "..") for part in path[len("/static/uploads/"):].split("/"))
     ):
-        raise ValueError("请使用上传接口返回的退款申请凭证地址")
+        raise ValueError("请使用上传接口返回的申请凭证地址")
     return value
 
 
@@ -139,11 +144,12 @@ def notify_admins_new_exemption(
         else None
     )
     offline = order_is_offline_payment(order)
-    amount_yuan = None if offline else f"{exemption.Amount / 100:.2f}"
-    title = "新的取消预约申请待审核" if offline else "新的退款豁免申请待审核"
+    no_refund = order_is_confirm_only(order)
+    amount_yuan = None if no_refund else f"{exemption.Amount / 100:.2f}"
+    title = "新的取消预约申请待审核" if no_refund else "新的退款豁免申请待审核"
     summary = (
         f"{patient_label} · {counselor_name}"
-        if offline
+        if no_refund
         else f"{patient_label} · {counselor_name} · ¥{amount_yuan}"
     )
     detail = {
@@ -152,6 +158,7 @@ def notify_admins_new_exemption(
         "counselorName": counselor_name,
         "amountYuan": amount_yuan,
         "isOfflinePaymentOrder": offline,
+        "isConfirmOrder": no_refund,
         "reason": exemption.Reason,
         "screenshotUrl": exemption.ScreenshotUrl,
         "exemptionId": exemption.Id,
@@ -174,7 +181,7 @@ def notify_admins_new_exemption(
     push_staff_approval_subscribe(
         db,
         applicant=patient_name,
-        biz_type="取消预约" if offline else "退款申请",
+        biz_type="取消预约" if no_refund else "退款申请",
         apply_time=getattr(exemption, "CreatedAt", None),
     )
 

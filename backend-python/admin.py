@@ -498,6 +498,7 @@ class RefundExemptionAdminOut(BaseModel):
     consultationStartTime: Optional[datetime] = None
     consultationStatus: Optional[str] = None
     isOfflinePaymentOrder: bool = False
+    isConfirmOrder: bool = False
     createdAt: datetime
     reviewedAt: Optional[datetime] = None
 
@@ -938,9 +939,10 @@ def _build_exemption_admin_out(
     order = None
     if consultation and consultation.OrderId:
         order = db.query(AppOrder).filter(AppOrder.Id == consultation.OrderId).first()
-    from consultation_cancel import order_is_offline_payment
+    from consultation_cancel import order_is_confirm_only, order_is_offline_payment
 
     offline = order_is_offline_payment(order)
+    confirm_only = order_is_confirm_only(order)
     return RefundExemptionAdminOut(
         id=row.Id,
         consultationId=row.ConsultationId,
@@ -950,7 +952,7 @@ def _build_exemption_admin_out(
         patientContractTag=patient_contract_extras(db, patient).get("contractTag"),
         counselorId=counselor_id,
         counselorName=counselor_name,
-        amount=0 if offline else row.Amount,
+        amount=0 if confirm_only else row.Amount,
         reason=row.Reason,
         screenshotUrl=row.ScreenshotUrl,
         status=row.Status,
@@ -958,6 +960,7 @@ def _build_exemption_admin_out(
         consultationStartTime=consultation.StartTime if consultation else None,
         consultationStatus=consultation.Status if consultation else None,
         isOfflinePaymentOrder=offline,
+        isConfirmOrder=confirm_only,
         createdAt=row.CreatedAt,
         reviewedAt=row.ReviewedAt,
     )

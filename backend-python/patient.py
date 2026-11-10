@@ -21,6 +21,7 @@ from consultation_cancel import (
     cancel_consultation_for_visitor,
     is_refund_eligible,
     refund_ineligible_reason,
+    visitor_must_apply_to_cancel,
 )
 from database import get_db
 from model_compat import optional_model_value
@@ -48,7 +49,7 @@ from consultation_feedback import (
     feedback_detail,
     feedback_summary,
 )
-from consultation_cancel import order_is_offline_payment
+from consultation_cancel import order_is_confirm_only, order_is_offline_payment
 from refund_exemption_service import (
     latest_exemptions_by_consultation,
     notify_admins_new_exemption,
@@ -86,6 +87,7 @@ class OrderOut(BaseModel):
     proxyAgreementType: Optional[str] = None
     proxyAgreementLabel: Optional[str] = None
     isOfflinePaymentOrder: bool = False
+    isConfirmOrder: bool = False
 
     class Config:
         from_attributes = True
@@ -118,7 +120,8 @@ def _order_contract_fields(
         "proxyAgreementIsAdult": preset,
         "proxyAgreementType": preset_type,
         "proxyAgreementLabel": preset_label,
-        "isOfflinePaymentOrder": bool(getattr(order, "ProxyIsOfflinePayment", False)),
+        "isOfflinePaymentOrder": order_is_offline_payment(order),
+        "isConfirmOrder": order_is_confirm_only(order),
     }
 
 
@@ -140,7 +143,7 @@ def _build_order_out(
         return base.model_copy(update=contract_fields)
     schedule = db.query(AppSchedule).filter(AppSchedule.Id == order.SlotId).first()
     if not schedule:
-        return base
+        return base.model_copy(update=contract_fields)
     center_id = parse_center_id(schedule.Note)
     prof = (
         db.query(AppCounselorProfile)
@@ -325,6 +328,7 @@ class ConsultationOut(BaseModel):
     centerName: Optional[str] = None
     canCancel: bool = False
     refundEligible: bool = False
+    mustApplyToCancel: bool = False
     orderAmount: Optional[int] = None
     refundReason: Optional[str] = None
     exemptionStatus: Optional[str] = None
@@ -333,6 +337,7 @@ class ConsultationOut(BaseModel):
     exemptionScreenshotUrl: Optional[str] = None
     orderStatus: Optional[str] = None
     cancelSummary: Optional[str] = None
+    isConfirmOrder: bool = False
     hasFeedback: bool = False
     feedbackContent: Optional[str] = None
     feedbackAt: Optional[datetime] = None
@@ -458,15 +463,16 @@ def get_my_consultations(
         cancelable = can_visitor_cancel(r.Status)
         order = order_map.get(r.OrderId) if r.OrderId else None
         offline = order_is_offline_payment(order)
+        confirm_only = order_is_confirm_only(order)
         order_status = order.Status if order else None
-        if order and order.Status in ("PAID", "REFUNDED", "CANCELLED") and not offline:
+        if order and order.Status in ("PAID", "REFUNDED", "CANCELLED") and not confirm_only:
             order_amount = order.TotalFee
         else:
             order_amount = None
-        refund_ok = cancelable and is_refund_eligible(start_time) and not offline
+        refund_ok = cancelable and is_refund_eligible(start_time) and not confirm_only
         cancel_summary = None
         if r.Status == "CANCELLED":
-            if offline:
+            if confirm_only:
                 cancel_summary = "预约已取消"
             elif order_status == "REFUNDED":
                 cancel_summary = "预约已取消，款项将原路退回"
@@ -496,8 +502,9 @@ def get_my_consultations(
             centerName=center_name,
             canCancel=cancelable,
             refundEligible=refund_ok,
+            mustApplyToCancel=cancelable and visitor_must_apply_to_cancel(start_time, order),
             orderAmount=order_amount,
-            refundReason=None if refund_ok or offline else refund_ineligible_reason(start_time),
+            refundReason=None if refund_ok or confirm_only else refund_ineligible_reason(start_time),
             exemptionStatus=exemption.Status if exemption else None,
             exemptionRejectReason=(
                 optional_model_value(exemption, "RejectReason")
@@ -508,6 +515,7 @@ def get_my_consultations(
             exemptionScreenshotUrl=exemption.ScreenshotUrl if exemption else None,
             orderStatus=order_status,
             isOfflinePaymentOrder=offline,
+            isConfirmOrder=confirm_only,
             cancelSummary=cancel_summary,
             hasFeedback=bool(feedback),
             feedbackContent=feedback_summary(feedback.Content) if feedback else None,
@@ -577,7 +585,8 @@ def get_my_consultations(
                     refundEligible=False,
                     orderAmount=order.TotalFee,
                     orderStatus="PENDING",
-                    isOfflinePaymentOrder=bool(getattr(order, "ProxyIsOfflinePayment", False)),
+                    isOfflinePaymentOrder=order_is_offline_payment(order),
+                    isConfirmOrder=order_is_confirm_only(order),
                 )
             )
     result.sort(key=lambda x: (x.startTime or x.createdAt), reverse=True)
@@ -712,6 +721,7 @@ def submit_refund_exemption(
     )
     order = db.query(AppOrder).filter(AppOrder.Id == row.OrderId).first() if row.OrderId else None
     offline = order_is_offline_payment(order)
+    confirm_only = order_is_confirm_only(order)
     try:
         validate_exemption_submission(
             row,
@@ -721,6 +731,7 @@ def submit_refund_exemption(
             screenshot_url=body.screenshot_url,
             pending=pending,
             offline=offline,
+            confirm_only=confirm_only,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -728,7 +739,7 @@ def submit_refund_exemption(
     exemption = AppRefundExemption(
         ConsultationId=consultation_id,
         AccountId=current_account.Id,
-        Amount=0 if offline else body.amount,
+        Amount=0 if confirm_only else body.amount,
         Reason=(body.reason or "").strip(),
         ScreenshotUrl=body.screenshot_url.strip(),
         Status="PENDING",

@@ -106,6 +106,25 @@ def _ensure_db_schema():
 
 
 @app.on_event("startup")
+def _start_wechat_pay_reconcile():
+    """每 10 分钟核对本地未入账订单与微信收款。"""
+    try:
+        from wechat_pay_service import start_wechat_pay_reconcile_loop
+
+        start_wechat_pay_reconcile_loop()
+    except Exception as exc:
+        import logging
+
+        logging.getLogger("uvicorn.error").warning(
+            "pay_desync reconcile loop not started",
+            extra={
+                "event": "pay_desync",
+                "result": type(exc).__name__,
+            },
+        )
+
+
+@app.on_event("startup")
 def _ensure_assessment_definition_files():
     """首次启动时把旧 EAP JSON 初始化为可版本化的运行时定义。"""
     try:

@@ -290,6 +290,62 @@ class OfflineReceiptAndDigestTests(unittest.TestCase):
         self.assertEqual(merged[0].Id, old.Id)
         self.assertEqual(len(merged), 3)
 
+    def test_cancelled_offline_appointment_is_not_pinned(self):
+        staff = self.add_account("Assistant", "助理")
+        patient = self.add_account("Patient", "来访")
+        counselor = self.add_account("Counselor", "咨询师")
+        order = AppOrder(
+            AccountId=patient.Id,
+            OutTradeNo="CANCELLED-OFFLINE",
+            TotalFee=60000,
+            Status="CANCELLED",
+            ProxyIsOfflinePayment=True,
+        )
+        self.db.add(order)
+        self.db.flush()
+        consultation = AppConsultation(
+            OrderId=order.Id,
+            PatientId=patient.Id,
+            CounselorId=counselor.Id,
+            Status="CANCELLED",
+            StartTime=datetime(2026, 11, 8, 10, 0),
+            EndTime=datetime(2026, 11, 8, 10, 50),
+        )
+        message = AppMessage(
+            Id=8201,
+            AccountId=staff.Id,
+            Type="ORDER",
+            Title="待付款",
+            RelatedType="OFFLINE_PAYMENT_DUE",
+            RelatedId=order.Id,
+            IsRead=False,
+            CreatedAt=datetime.utcnow() - timedelta(days=1),
+        )
+        newer = AppMessage(
+            Id=8202,
+            AccountId=staff.Id,
+            Type="ORDER",
+            Title="新消息",
+            RelatedType="APPOINTMENT_NEW",
+            IsRead=False,
+            CreatedAt=datetime.utcnow(),
+        )
+        self.db.add_all([consultation, message, newer])
+        self.db.commit()
+
+        payload = _message_response(message, self.db)
+        self.assertFalse(payload["IsPinned"])
+        self.assertFalse(payload["OfflineReceiptPending"])
+
+        query = self.db.query(AppMessage).filter(AppMessage.AccountId == staff.Id)
+        page = query.order_by(AppMessage.CreatedAt.desc()).limit(1).all()
+        merged, _orders = _merge_pinned_offline_messages(query, page, self.db)
+        self.assertEqual([row.Id for row in merged], [newer.Id])
+
+        with self.assertRaises(OfflineReceiptError) as cancelled:
+            confirm_offline_payment_receipt(self.db, staff, message, "李助理")
+        self.assertEqual(cancelled.exception.status_code, 400)
+
 
 if __name__ == "__main__":
     unittest.main()

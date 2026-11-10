@@ -258,9 +258,14 @@ def notify_staff_appointment_cancelled(
         order = db.query(AppOrder).filter(AppOrder.Id == consultation.OrderId).first()
         if order:
             order_status = order.Status
-    from consultation_cancel import cancellation_refund_text, order_is_offline_payment
+    from consultation_cancel import (
+        cancellation_refund_text,
+        order_is_confirm_only,
+        order_is_offline_payment,
+    )
 
     offline = order_is_offline_payment(order)
+    confirm_only = order_is_confirm_only(order)
 
     exemption_map = latest_exemptions_by_consultation(db, [consultation.Id])
     exemption = exemption_map.get(consultation.Id)
@@ -276,8 +281,10 @@ def notify_staff_appointment_cancelled(
         "startTime": _format_datetime(ctx["startTime"]),
         "endTime": _format_datetime(ctx["endTime"]),
         "location": ctx["location"],
-        "refunded": bool(refunded) and not offline,
-        "refundText": cancellation_refund_text(refunded=bool(refunded), offline=offline),
+        "refunded": bool(refunded) and not confirm_only,
+        "refundText": cancellation_refund_text(
+            refunded=bool(refunded), offline=offline, confirm_only=confirm_only,
+        ),
         "orderStatus": order_status,
         "exemptionStatus": exemption_status,
         "exemptionLabel": _exemption_label(exemption_status),

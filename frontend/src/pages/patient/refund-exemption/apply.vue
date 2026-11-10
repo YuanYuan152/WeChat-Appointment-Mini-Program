@@ -1,8 +1,8 @@
 <template>
   <view class="page-exemption">
     <view class="tip-card">
-      <text class="tip-title">{{ offline ? '申请取消预约' : '申请退款' }}</text>
-      <text class="tip-desc">{{ offline ? '线下支付单取消需提交申请。审核通过后预约取消，不涉及线上退款。审核完成前预约维持不变。' : '距咨询开始不足24小时时，可提交退款申请由管理员审核。审核通过前预约与订单维持不变。' }}</text>
+      <text class="tip-title">{{ offline ? '申请取消' : '申请退款' }}</text>
+      <text class="tip-desc">{{ offline ? '距咨询开始不足24小时时，线下支付单需提交取消申请。审核通过后预约取消，不涉及线上退款。审核完成前预约维持不变。' : '距咨询开始不足24小时时，可提交退款申请由管理员审核。审核通过前预约与订单维持不变。' }}</text>
     </view>
 
     <view v-if="counselorName || slotText" class="info-card">
@@ -31,7 +31,7 @@
       </view>
 
       <view class="form-item">
-        <text class="label">{{ offline ? '取消凭证（必填）' : '申请凭证（必填）' }}</text>
+        <text class="label">申请凭证（必填）</text>
         <view v-if="screenshotUrl" class="screenshot-preview">
           <image
             class="screenshot-image"
@@ -139,7 +139,10 @@ const applyConsultation = (item: ConsultationItem) => {
   consultationId.value = item.id
   counselorName.value = item.counselorName || ''
   slotText.value = formatSlotRange(item.startTime, item.endTime)
-  if (item.isOfflinePaymentOrder) offline.value = true
+  if (item.isOfflinePaymentOrder) {
+    offline.value = true
+    uni.setNavigationBarTitle({ title: '申请取消' })
+  }
   if (!offline.value) setOrderAmount(item.orderAmount)
 }
 
@@ -167,6 +170,7 @@ onLoad(async (options: Record<string, string | undefined>) => {
   counselorName.value = decodeURIComponent(options?.counselorName || '')
   slotText.value = decodeURIComponent(options?.slotText || '')
   offline.value = options?.offline === '1'
+  uni.setNavigationBarTitle({ title: offline.value ? '申请取消' : '申请退款' })
   if (!offline.value) setOrderAmount(Number(options?.orderAmount || 0))
 
   if (!counselorName.value || !slotText.value || (!offline.value && !orderAmountCents.value)) {
@@ -189,7 +193,7 @@ const submit = async () => {
     return
   }
   if (!screenshotUrl.value) {
-    uni.showToast({ title: offline.value ? '请上传取消凭证' : '请上传退款申请凭证', icon: 'none' })
+    uni.showToast({ title: '请上传申请凭证', icon: 'none' })
     return
   }
 

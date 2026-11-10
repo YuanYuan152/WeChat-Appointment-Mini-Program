@@ -53,7 +53,7 @@
     <view v-if="showExemptionDetail && exemptionDetail" class="overlay" @touchmove.stop.prevent>
       <view class="detail-card" @tap.stop>
         <view class="detail-header">
-          <text class="detail-title">{{ exemptionDetail.isOfflinePaymentOrder ? '取消预约申请' : '退款申请详情' }}</text>
+          <text class="detail-title">{{ exemptionDetail.isConfirmOrder || exemptionDetail.isOfflinePaymentOrder ? '取消预约申请' : '退款申请详情' }}</text>
           <view class="detail-close-btn" @tap="closeExemptionDetail">×</view>
         </view>
         <view class="detail-body">
@@ -61,7 +61,7 @@
           <view class="detail-row"><text class="label">手机号</text><text class="value">{{ exemptionDetail.patientMobile || '-' }}</text></view>
           <view class="detail-row"><text class="label">咨询师</text><text class="value">{{ exemptionDetail.counselorName }}</text></view>
           <view class="detail-row"><text class="label">咨询时段</text><text class="value">{{ formatTime(exemptionDetail.consultationStartTime) }}</text></view>
-          <view v-if="!exemptionDetail.isOfflinePaymentOrder" class="detail-row"><text class="label">申请金额</text><text class="value highlight">￥{{ formatYuan(exemptionDetail.amount) }}</text></view>
+          <view v-if="!(exemptionDetail.isConfirmOrder || exemptionDetail.isOfflinePaymentOrder)" class="detail-row"><text class="label">申请金额</text><text class="value highlight">￥{{ formatYuan(exemptionDetail.amount) }}</text></view>
           <view v-else class="detail-row"><text class="label">支付方式</text><text class="value">线下支付，不涉及线上退款</text></view>
           <view class="reason-box">
             <text class="reason-label">申请原因</text>
@@ -83,7 +83,7 @@
         </view>
         <view v-if="exemptionDetail.status === 'PENDING'" class="actions">
           <button class="btn reject" :disabled="processing" @tap="showRejectInput = true">拒绝</button>
-          <button class="btn approve" :loading="processing" @tap="approveExemption">{{ exemptionDetail.isOfflinePaymentOrder ? '同意取消' : '同意退款' }}</button>
+          <button class="btn approve" :loading="processing" @tap="approveExemption">{{ exemptionDetail.isConfirmOrder || exemptionDetail.isOfflinePaymentOrder ? '同意取消' : '同意退款' }}</button>
         </view>
         <button v-else class="btn close" @tap="closeExemptionDetail">关闭</button>
         <view v-if="showRejectInput" class="reject-form">
@@ -164,6 +164,7 @@ interface ExemptionItem {
   consultationStartTime?: string
   createdAt: string
   isOfflinePaymentOrder?: boolean
+  isConfirmOrder?: boolean
 }
 
 interface AffectedPatient {
@@ -259,10 +260,12 @@ const toDisplayItem = (kind: ApprovalKind, raw: ExemptionItem | LeaveItem): Disp
       status: item.status,
       reason: item.reason,
       createdAt: item.createdAt,
-      offline: !!item.isOfflinePaymentOrder,
+      offline: !!(item.isConfirmOrder || item.isOfflinePaymentOrder),
       lines: [
         `咨询师：${item.counselorName}`,
-        item.isOfflinePaymentOrder ? '线下支付，不涉及线上退款' : `申请金额：￥${formatYuan(item.amount)}`,
+        item.isConfirmOrder || item.isOfflinePaymentOrder
+          ? (item.isOfflinePaymentOrder ? '线下支付，不涉及线上退款' : '免费体验，不涉及退款')
+          : `申请金额：￥${formatYuan(item.amount)}`,
         `咨询时段：${formatTime(item.consultationStartTime)}`,
       ],
       raw: item,
@@ -408,7 +411,7 @@ const approveExemption = async () => {
   try {
     const res = await httpV2.post(API_ENDPOINTS.admin.refundExemptionApprove(exemptionDetail.value.id))
     if (res.code === 0) {
-      uni.showToast({ title: exemptionDetail.value?.isOfflinePaymentOrder ? '已同意取消' : '已同意退款', icon: 'success' })
+      uni.showToast({ title: exemptionDetail.value?.isConfirmOrder || exemptionDetail.value?.isOfflinePaymentOrder ? '已同意取消' : '已同意退款', icon: 'success' })
       closeExemptionDetail()
       await load()
     } else {

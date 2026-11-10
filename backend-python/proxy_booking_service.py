@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import random
 import time
 from datetime import datetime, timedelta
@@ -48,6 +49,8 @@ from schedule_slots import (
 )
 from app_time import china_now
 
+logger = logging.getLogger(__name__)
+
 DISPLAY_PENDING_PAYMENT = "PENDING_PAYMENT"
 PROXY_SCHEDULE_NEW = "schedule:new"
 PROXY_SCHEDULE_EXISTING = "schedule:existing"
@@ -63,14 +66,8 @@ def _proxy_order_created_schedule(order: AppOrder) -> bool:
     return PROXY_SCHEDULE_NEW in description
 
 
-def _cancel_pending_proxy_order(db: Session, order: AppOrder) -> None:
-    if order.Status != "PENDING":
-        return
-    from wechat_pay_service import close_wechat_order_quietly
-
-    close_wechat_order_quietly(order.OutTradeNo)
-    order.Status = "CANCELLED"
-    order.UpdatedAt = _now()
+def release_unfulfilled_proxy_schedule(db: Session, order: AppOrder) -> None:
+    """释放仍未被履约占用的排期。新建排期改为取消，原排期交回咨询师。"""
     if not order.SlotId:
         return
     schedule = db.query(AppSchedule).filter(AppSchedule.Id == order.SlotId).first()
@@ -81,6 +78,30 @@ def _cancel_pending_proxy_order(db: Session, order: AppOrder) -> None:
     else:
         schedule.Note = release_assigned_room(schedule.Note)
     schedule.UpdatedAt = _now()
+
+
+def _cancel_pending_proxy_order(db: Session, order: AppOrder) -> None:
+    if order.Status != "PENDING":
+        return
+    from wechat_pay_service import settle_expired_pending_order
+
+    outcome = settle_expired_pending_order(db, order)
+    if outcome in ("refunded", "paid_refund_failed"):
+        release_unfulfilled_proxy_schedule(db, order)
+    if outcome == "refunded":
+        return
+    if outcome != "unpaid":
+        logger.error(
+            "pay_desync pending proxy left for manual handling out_trade_no=%s order_id=%s outcome=%s status=%s",
+            order.OutTradeNo,
+            order.Id,
+            outcome,
+            order.Status,
+        )
+        return
+    order.Status = "CANCELLED"
+    order.UpdatedAt = _now()
+    release_unfulfilled_proxy_schedule(db, order)
 
 
 def cancel_proxy_order_push(

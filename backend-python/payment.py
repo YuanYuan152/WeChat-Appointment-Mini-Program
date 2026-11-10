@@ -15,6 +15,7 @@ POST /api/payment/wechat/refund-callback → 退款结果回调通知（V3 JSON�
 from __future__ import annotations
 
 import json
+import logging
 import random
 import time
 from typing import Optional
@@ -38,15 +39,17 @@ from pricing_service import (
 from schedule_meta import parse_center_id
 from schedule_slots import validate_booking_lead_time
 from user_role_meta import counselor_visible_to_patient
+from wechat_pay_metrics import inc as inc_pay_metric
 from wechat_pay_service import (
     build_jsapi_pay_params,
-    close_wechat_order_quietly,
     confirm_refund_success_from_callback,
     format_wechat_time_expire,
     is_real_wechat_pay_configured,
     sync_paid_order_from_wechat,
 )
 from wechat_pay_v3 import WeChatPayV3Error, get_wechat_pay_client
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/payment", tags=["Payment"])
 
@@ -230,7 +233,6 @@ def _load_payable_order(
     if order.Status != "PENDING":
         raise HTTPException(status_code=400, detail="订单不可支付")
     if order.ExpiresAt and order.ExpiresAt < china_now():
-        close_wechat_order_quietly(order.OutTradeNo)
         raise HTTPException(status_code=400, detail="订单已过期，请重新预约")
     schedule = None
     if order.SlotId:
@@ -340,6 +342,8 @@ def _resolve_pay_params(order: AppOrder, account: AppAccount, description: str) 
 
 def _v3_callback_success() -> Response:
     """官方：验签通过应答 HTTP 200/204，无需应答包体。"""
+    inc_pay_metric("callback_204")
+    logger.info("callback_204 wechat notification accepted")
     return Response(status_code=204)
 
 
@@ -368,6 +372,21 @@ async def _parse_v3_notification(request: Request) -> dict:
             signature=signature,
             serial=serial,
         ):
+            if not getattr(client, "verify_failure_counted", False):
+                reason = getattr(client, "last_verify_reason", None) or "rsa_verify_failed"
+                if reason == "signtest":
+                    inc_pay_metric("signtest")
+                    logger.warning(
+                        "signtest callback rejected serial=%s signtest=true reason=signtest",
+                        serial,
+                    )
+                else:
+                    inc_pay_metric("callback_401")
+                    logger.warning(
+                        "callback_401 serial=%s signtest=false reason=%s",
+                        serial,
+                        reason,
+                    )
             raise HTTPException(status_code=401, detail="回调签名校验失败")
         envelope = json.loads(body)
         resource = envelope.get("resource") or {}
@@ -460,6 +479,44 @@ def attach_order_agreement(
     return {"code": 0, "msg": "协议已签署", "data": _build_order_out(db, order, current_account)}
 
 
+@router.post("/orders/confirm", response_model=CreateOrderResponse, summary="确认免费体验单或线下支付单")
+def confirm_existing_order(
+    req: PayExistingOrderRequest,
+    current_account: AppAccount = Depends(get_current_account),
+    db: Session = Depends(get_db),
+):
+    """免费体验单、线下支付单不走微信支付，确认后预约生效。"""
+    order = _load_payable_order(db, current_account, req.order_id)
+    if not _skips_wechat_pay(order):
+        raise HTTPException(status_code=400, detail="支付订单请走支付流程")
+    try:
+        _attach_order_agreement_if_needed(
+            db,
+            current_account,
+            order,
+            is_adult=req.is_adult,
+            agreement_type=req.agreement_type,
+            signature_url=req.signature_url,
+            real_name=req.real_name,
+            emergency_contact=req.emergency_contact,
+            emergency_relation=req.emergency_relation,
+            emergency_phone=req.emergency_phone,
+        )
+        from order_contract_agreement import assert_order_contract_agreement_ready
+
+        assert_order_contract_agreement_ready(db, current_account, order)
+        pay_params = _complete_free_order(db, order)
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    db.commit()
+    db.refresh(order)
+    return CreateOrderResponse(
+        out_trade_no=order.OutTradeNo,
+        pay_params=pay_params,
+    )
+
+
 @router.post("/wechat/pay-order", response_model=CreateOrderResponse, summary="支付已有待支付订单(V3)")
 def pay_existing_order(
     req: PayExistingOrderRequest,
@@ -489,17 +546,7 @@ def pay_existing_order(
     db.refresh(order)
 
     if _skips_wechat_pay(order):
-        try:
-            pay_params = _complete_free_order(db, order)
-        except ValueError as e:
-            db.rollback()
-            raise HTTPException(status_code=400, detail=str(e)) from e
-        db.commit()
-        db.refresh(order)
-        return CreateOrderResponse(
-            out_trade_no=order.OutTradeNo,
-            pay_params=pay_params,
-        )
+        raise HTTPException(status_code=400, detail="免费体验单和线下支付单请确认预约，无需支付")
 
     pay_params = _resolve_pay_params(
         order,
@@ -578,8 +625,9 @@ def simulate_pay_existing_order(
     db: Session = Depends(get_db),
 ):
     order = _load_payable_order(db, current_account, req.order_id)
-    # 免费单即使开启真实支付，也允许走本地确认
-    if is_real_wechat_pay_configured() and not _skips_wechat_pay(order):
+    if _skips_wechat_pay(order):
+        raise HTTPException(status_code=400, detail="免费体验单和线下支付单请确认预约，无需支付")
+    if is_real_wechat_pay_configured():
         raise HTTPException(status_code=403, detail="已配置真实支付，请使用微信支付流程")
     try:
         _attach_order_agreement_if_needed(

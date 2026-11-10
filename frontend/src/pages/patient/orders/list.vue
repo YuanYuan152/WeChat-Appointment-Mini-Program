@@ -62,7 +62,7 @@ import { httpV2 } from '@/utils/http'
 import { API_ENDPOINTS } from '@/config/api'
 import OrderPaymentSheet from '@/components/OrderPaymentSheet.vue'
 import { ensureLoggedInOrRedirect } from '@/utils/auth'
-import { type PatientOrder, expireHintText, formatOrderFeeCents, formatOrderTime, isConfirmInsteadOfPay, orderDisplayTime, formatOrderClock } from '@/utils/orderPayment'
+import { type PatientOrder, expireHintText, formatOrderFeeCents, formatOrderTime, isConfirmInsteadOfPay, orderDisplayTime, formatOrderClock, orderStatusLabel } from '@/utils/orderPayment'
 import { copyContactCenterAddress, getContactCenterAddress } from '@/constants/contactInfo'
 
 const orders = ref<PatientOrder[]>([])
@@ -83,16 +83,7 @@ const payOrderId = ref<number | null>(null)
 const payOrder = ref<PatientOrder | null>(null)
 const pendingPayOrderId = ref(0)
 
-const statusLabel = (order: PatientOrder) => {
-  if (order.Status === 'PENDING' && isConfirmInsteadOfPay(order)) return '待确认'
-  const map: Record<string, string> = {
-    PENDING: '待支付',
-    PAID: '已支付',
-    CANCELLED: '已取消',
-    REFUNDED: '已退款',
-  }
-  return map[order.Status] || order.Status
-}
+const statusLabel = (order: PatientOrder) => orderStatusLabel(order)
 
 const expireHint = (order: PatientOrder) =>
   expireHintText(order.ExpiresAt, isConfirmInsteadOfPay(order) ? '确认' : '支付')

@@ -53,15 +53,17 @@ def _sync_exemption_payload(
     exemption: AppRefundExemption,
     *,
     offline: bool = False,
+    confirm_only: bool = False,
 ) -> tuple[str, str, Optional[str]]:
+    no_refund = offline or confirm_only
     status = exemption.Status or "PENDING"
     payload = _parse_content(content)
     detail = dict(payload.get("detail") or {})
 
     if status == "PENDING":
-        title = "取消预约申请待审核" if offline else "退款申请待审核"
+        title = "取消预约申请待审核" if no_refund else "退款申请待审核"
         related_type = "REFUND_EXEMPTION_PENDING"
-        amount_yuan = None if offline else f"{exemption.Amount / 100:.2f}"
+        amount_yuan = None if no_refund else f"{exemption.Amount / 100:.2f}"
         detail.update(
             {
                 "status": "PENDING",
@@ -74,20 +76,20 @@ def _sync_exemption_payload(
                 "consultationId": exemption.ConsultationId,
                 "resultText": (
                     "您的取消预约申请正在审核中，审核结果将在此通知。"
-                    if offline
+                    if no_refund
                     else "您的退款申请正在审核中，审核结果将在此通知。"
                 ),
             }
         )
         payload["summary"] = (
             "您的取消预约申请已提交，请等待审核"
-            if offline
+            if no_refund
             else f"您的退款申请已提交，金额 ¥{amount_yuan}，请等待审核"
         )
     elif status == "APPROVED":
-        title = "取消预约申请已通过" if offline else "退款申请已通过"
+        title = "取消预约申请已通过" if no_refund else "退款申请已通过"
         related_type = "REFUND_EXEMPTION"
-        amount_yuan = None if offline else f"{exemption.Amount / 100:.2f}"
+        amount_yuan = None if no_refund else f"{exemption.Amount / 100:.2f}"
         detail.update(
             {
                 "status": "APPROVED",
@@ -99,18 +101,18 @@ def _sync_exemption_payload(
                 "consultationId": exemption.ConsultationId,
                 "resultText": (
                     "您的取消预约申请已审核通过，预约已取消。"
-                    if offline
+                    if no_refund
                     else "您的退款申请已审核通过，预约已取消。"
                 ),
             }
         )
         payload["summary"] = (
             "取消预约申请已通过，预约已取消"
-            if offline
+            if no_refund
             else f"退款 {amount_yuan} 元将原路退回"
         )
     elif status == "REJECTED":
-        title = "退款申请未通过"
+        title = "取消申请未通过" if no_refund else "退款申请未通过"
         related_type = "REFUND_EXEMPTION"
         reason = (optional_model_value(exemption, "RejectReason") or "").strip() or "未说明具体原因"
         detail.update(
@@ -121,7 +123,11 @@ def _sync_exemption_payload(
                 "screenshotUrl": exemption.ScreenshotUrl,
                 "exemptionId": exemption.Id,
                 "consultationId": exemption.ConsultationId,
-                "resultText": "您的退款申请未通过审核，预约与订单维持不变。",
+                "resultText": (
+                    "您的取消申请未通过审核，预约维持不变。"
+                    if no_refund
+                    else "您的退款申请未通过审核，预约与订单维持不变。"
+                ),
             }
         )
         payload["summary"] = f"拒绝理由：{reason}"
@@ -477,7 +483,7 @@ def enrich_message(msg: AppMessage, db: Session) -> AppMessage:
             .first()
         )
         if exemption:
-            from consultation_cancel import order_is_offline_payment
+            from consultation_cancel import order_is_confirm_only, order_is_offline_payment
 
             consultation = (
                 db.query(AppConsultation)
@@ -495,6 +501,7 @@ def enrich_message(msg: AppMessage, db: Session) -> AppMessage:
                 related_type,
                 exemption,
                 offline=order_is_offline_payment(order),
+                confirm_only=order_is_confirm_only(order),
             )
         elif related_type == "REFUND_EXEMPTION_PENDING":
             title = "退款申请待审核"

@@ -142,6 +142,27 @@ def create_message(
     return msg
 
 
+def _offline_receipt_pending(order, consultation) -> bool:
+    from offline_payment_receipt_service import receipt_is_pending
+
+    return receipt_is_pending(order, consultation)
+
+
+def _consultations_by_order_id(db: Session, orders_by_id: dict) -> dict:
+    order_ids = list(orders_by_id)
+    if not order_ids:
+        return {}
+    from models import AppConsultation
+
+    rows = (
+        db.query(AppConsultation)
+        .filter(AppConsultation.OrderId.in_(order_ids))
+        .order_by(AppConsultation.Id.asc())
+        .all()
+    )
+    return {int(row.OrderId): row for row in rows if row.OrderId}
+
+
 def _offline_orders_by_id(db: Session, rows: List[AppMessage]) -> dict:
     order_ids = {
         int(row.RelatedId)
@@ -170,11 +191,17 @@ def _message_response(
             order = db.query(AppOrder).filter(AppOrder.Id == enriched.RelatedId).first()
         else:
             order = orders_by_id.get(int(enriched.RelatedId))
-    pending = bool(
-        order is not None
-        and order.ProxyIsOfflinePayment
-        and order.ProxyOfflineReceiptConfirmedAt is None
-    )
+    consultation = None
+    if order is not None:
+        from models import AppConsultation
+
+        consultation = (
+            db.query(AppConsultation)
+            .filter(AppConsultation.OrderId == order.Id)
+            .order_by(AppConsultation.Id.desc())
+            .first()
+        )
+    pending = _offline_receipt_pending(order, consultation)
     return {
         "Id": enriched.Id,
         "AccountId": enriched.AccountId,
@@ -207,27 +234,24 @@ def _merge_pinned_offline_messages(query, rows: List[AppMessage], db: Session) -
             merged.append(row)
             seen.add(row.Id)
     orders_by_id = _offline_orders_by_id(db, merged)
+    consultations_by_order_id = _consultations_by_order_id(db, orders_by_id)
+
+    def is_pending(row: AppMessage) -> bool:
+        if row.RelatedType != "OFFLINE_PAYMENT_DUE" or not row.RelatedId:
+            return False
+        order = orders_by_id.get(int(row.RelatedId))
+        consultation = consultations_by_order_id.get(int(row.RelatedId))
+        return _offline_receipt_pending(order, consultation)
 
     def pin_rank(row: AppMessage):
-        order = orders_by_id.get(int(row.RelatedId)) if row.RelatedId else None
-        pending = (
-            row.RelatedType == "OFFLINE_PAYMENT_DUE"
-            and order is not None
-            and order.ProxyIsOfflinePayment
-            and order.ProxyOfflineReceiptConfirmedAt is None
-        )
+        pending = is_pending(row)
         created = row.CreatedAt.timestamp() if row.CreatedAt else 0
         return (0 if pending else 1, -created, -(row.Id or 0))
 
     pinned_only = []
     rest = []
     for row in merged:
-        order = orders_by_id.get(int(row.RelatedId)) if row.RelatedType == "OFFLINE_PAYMENT_DUE" and row.RelatedId else None
-        pending = bool(
-            order is not None
-            and order.ProxyIsOfflinePayment
-            and order.ProxyOfflineReceiptConfirmedAt is None
-        )
+        pending = is_pending(row)
         if pending or row.Id in {item.Id for item in rows}:
             (pinned_only if pending else rest).append(row)
     pinned_only.sort(key=pin_rank)
