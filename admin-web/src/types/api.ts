@@ -804,6 +804,8 @@ export interface AdminLeaveRequestDetail {
     endTime?: string | null;
     location?: string | null;
     refundText?: string | null;
+    isOfflinePaymentOrder?: boolean;
+    isFreeOrder?: boolean;
   }>;
   createdAt?: string | null;
   reviewedBy?: number | null;

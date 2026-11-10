@@ -332,7 +332,7 @@ function LeaveDetail({ item }: { item: AdminLeaveRequestDetail }) {
           ["处理时间", formatFullDateTime(item.reviewedAt)],
         ]}
       />
-      <LeaveReviewOutcome status={item.status} />
+      <LeaveReviewOutcome patients={item.affectedPatients} status={item.status} />
       <TextBlock title="请假原因" text={item.reason || "-"} />
       {item.status === "REJECTED" && item.rejectReason && (
         <TextBlock tone="danger" title="拒绝理由" text={item.rejectReason} />
@@ -366,7 +366,7 @@ function LeaveDetail({ item }: { item: AdminLeaveRequestDetail }) {
                   )}
                   <div>预约时间：{timeRange(patient.startTime, patient.endTime)}</div>
                   <div>地点：{patient.location || item.location || "-"}</div>
-                  <div>退款安排：{leaveRefundText(item.status, patient.refundText)}</div>
+                  <div>退款安排：{leaveRefundText(item.status, patient)}</div>
                 </div>
               </div>
             ))}
@@ -377,9 +377,21 @@ function LeaveDetail({ item }: { item: AdminLeaveRequestDetail }) {
   );
 }
 
-function LeaveReviewOutcome({ status }: { status: string }) {
-  const copy =
-    status === "APPROVED"
+function LeaveReviewOutcome({
+  status,
+  patients,
+}: {
+  status: string;
+  patients: AdminLeaveRequestDetail["affectedPatients"];
+}) {
+  const arrangement = noOnlineRefundSummary(patients);
+  const copy = arrangement
+    ? status === "APPROVED"
+      ? `请假已通过，受影响预约已取消。${arrangement}。`
+      : status === "REJECTED"
+        ? "请假未通过，预约保持不变。"
+        : `审核通过后将取消受影响预约。${arrangement}。`
+    : status === "APPROVED"
       ? "请假已通过，受影响预约已取消；已支付订单按原支付路径全额退款。"
       : status === "REJECTED"
         ? "请假未通过，预约与原支付状态保持不变。"
@@ -493,7 +505,9 @@ function ReviewDrawerFooter({
             ? item.data.isConfirmOrder || item.data.isOfflinePaymentOrder
               ? "同意取消"
               : "同意豁免"
-            : "通过请假并全额退款"}
+            : leaveIsCancelOnly(item.data.affectedPatients)
+              ? "通过咨询师请假并取消咨询"
+              : "通过请假并全额退款"}
       </button>
     </div>
   );
@@ -585,7 +599,40 @@ function timeRange(start?: string | null, end?: string | null) {
   return `${formatFullDateTime(start)} 至 ${formatFullDateTime(end)}`;
 }
 
-function leaveRefundText(status: string, backendText?: string | null) {
+type LeavePatient = AdminLeaveRequestDetail["affectedPatients"][number];
+
+function leavePatientKind(patient: LeavePatient): "offline" | "free" | "paid" {
+  const text = patient.refundText || "";
+  if (patient.isOfflinePaymentOrder || text.includes("线下支付")) return "offline";
+  if (patient.isFreeOrder || text.includes("免费")) return "free";
+  return "paid";
+}
+
+function noOnlineRefundSentence(kind: "offline" | "free") {
+  return kind === "offline"
+    ? "本单为线下支付单，未线上支付无需线上退款"
+    : "本单为免费单，未线上支付无需线上退款";
+}
+
+function noOnlineRefundSummary(patients: AdminLeaveRequestDetail["affectedPatients"]) {
+  if (patients.length === 0) return "";
+  const kinds = patients.map(leavePatientKind);
+  if (kinds.some((kind) => kind === "paid")) return "";
+  if (kinds.every((kind) => kind === "offline")) return noOnlineRefundSentence("offline");
+  if (kinds.every((kind) => kind === "free")) return noOnlineRefundSentence("free");
+  return "相关预约未线上支付，无需线上退款";
+}
+
+function leaveIsCancelOnly(patients: AdminLeaveRequestDetail["affectedPatients"]) {
+  return Boolean(noOnlineRefundSummary(patients));
+}
+
+function leaveRefundText(status: string, patient: LeavePatient) {
+  const kind = leavePatientKind(patient);
+  if (kind !== "paid") {
+    if (status === "REJECTED") return "请假未通过，预约保持不变";
+    return noOnlineRefundSentence(kind);
+  }
   if (status === "PENDING") {
     return "审核通过后，已支付款项将按原支付路径全额退回";
   }
@@ -593,11 +640,11 @@ function leaveRefundText(status: string, backendText?: string | null) {
     return "请假未通过，预约与原支付状态保持不变";
   }
   if (status === "APPROVED") {
-    return backendText?.includes("原路")
+    return patient.refundText?.includes("原路")
       ? "已支付款项已按原支付路径全额退回"
       : "本次预约无可退支付款项";
   }
-  return backendText || "-";
+  return patient.refundText || "-";
 }
 
 function resolveAssetUrl(url: string) {

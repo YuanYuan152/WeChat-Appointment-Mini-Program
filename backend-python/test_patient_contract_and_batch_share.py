@@ -1139,6 +1139,77 @@ class CounselorSafetyTests(BackendServiceTestCase):
             "款项已原路全额退回",
         )
 
+    def test_leave_review_offline_and_free_orders_do_not_promise_online_refund(self):
+        self.add_counselor(10, "咨询师甲")
+        patient = AppAccount(
+            Id=1,
+            Mobile="13800000001",
+            RealName="来访甲",
+            IsActive=True,
+        )
+        self.db.add(patient)
+        cases = (
+            (
+                "offline",
+                AppOrder(
+                    Id=311,
+                    AccountId=1,
+                    SlotId=211,
+                    OutTradeNo="LEAVE-OFFLINE-311",
+                    TotalFee=60_000,
+                    Status="PAID",
+                    TransactionId="OFFLINE_311",
+                    ProxyIsOfflinePayment=True,
+                ),
+                "本单为线下支付单，未线上支付无需线上退款",
+            ),
+            (
+                "free",
+                AppOrder(
+                    Id=312,
+                    AccountId=1,
+                    SlotId=212,
+                    OutTradeNo="LEAVE-FREE-312",
+                    TotalFee=0,
+                    Status="PAID",
+                    TransactionId="FREE_312",
+                    ProxyIsFreeExperience=True,
+                ),
+                "本单为免费单，未线上支付无需线上退款",
+            ),
+        )
+        for kind, order, expected in cases:
+            schedule = AppSchedule(
+                Id=order.SlotId,
+                CounselorId=10,
+                StartTime=datetime(2099, 2, 1, 9, 0),
+                EndTime=datetime(2099, 2, 1, 9, 50),
+                Status="BOOKED",
+                Note="center:video",
+            )
+            consultation = AppConsultation(
+                Id=order.Id + 100,
+                OrderId=order.Id,
+                PatientId=1,
+                CounselorId=10,
+                ScheduleId=order.SlotId,
+                Status="CONFIRMED",
+            )
+            leave = AppLeaveRequest(
+                Id=order.Id + 200,
+                ScheduleId=order.SlotId,
+                CounselorId=10,
+                Reason=kind,
+                Status="PENDING",
+            )
+            self.db.add_all([schedule, order, consultation, leave])
+            self.db.flush()
+            pending = build_leave_request_out(self.db, leave)
+            patient_out = pending["affectedPatients"][0]
+            self.assertEqual(patient_out["refundText"], expected)
+            self.assertEqual(patient_out["isOfflinePaymentOrder"], kind == "offline")
+            self.assertEqual(patient_out["isFreeOrder"], kind == "free")
+
     def test_counselor_proxy_search_only_returns_bound_signed_patients_before_limit(self):
         self.add_counselor(10, "咨询师甲")
         eligible = AppAccount(

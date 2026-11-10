@@ -133,7 +133,7 @@
         </scroll-view>
         <view v-if="leaveDetail.status === 'PENDING'" class="actions">
           <button class="btn reject" :disabled="processing" @tap="rejectLeave">拒绝</button>
-          <button class="btn approve" :loading="processing" @tap="approveLeave">通过请假</button>
+          <button class="btn approve" :loading="processing" @tap="approveLeave">{{ leaveApproveLabel }}</button>
         </view>
         <button v-else class="btn close" @tap="closeLeaveDetail">关闭</button>
       </view>
@@ -174,6 +174,8 @@ interface AffectedPatient {
   emergencyPhone?: string
   startTime?: string
   refundText?: string
+  isOfflinePaymentOrder?: boolean
+  isFreeOrder?: boolean
 }
 
 interface LeaveItem {
@@ -232,6 +234,14 @@ const pendingExemptionId = ref(0)
 const pendingLeaveId = ref(0)
 
 const activeStatusLabel = computed(() => statusTabs.find(t => t.value === activeStatus.value)?.label || '')
+const leaveApproveLabel = computed(() => {
+  const patients = leaveDetail.value?.affectedPatients || []
+  const cancelOnly = patients.length > 0 && patients.every((patient) => {
+    const text = patient.refundText || ''
+    return Boolean(patient.isOfflinePaymentOrder || patient.isFreeOrder || text.includes('线下支付') || text.includes('免费'))
+  })
+  return cancelOnly ? '通过咨询师请假并取消咨询' : '通过请假'
+})
 
 const formatTime = (value?: string) => (value ? value.replace('T', ' ').slice(0, 16) : '-')
 const formatEndTime = (value?: string) => {

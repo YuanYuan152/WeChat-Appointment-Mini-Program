@@ -578,7 +578,7 @@ function buildMessageBusinessSections(businessDetail?: MessageBusinessDetail): D
         { label: "拒绝理由", value: data.rejectReason || "" },
         { label: "审核人", value: data.reviewedBy ? `账号 #${data.reviewedBy}` : "" },
         { label: "处理时间", value: data.reviewedAt ? formatFullDateTime(data.reviewedAt) : "" },
-        { label: "退款安排", value: leaveReviewOutcomeText(data.status) },
+        { label: "退款安排", value: leaveReviewOutcomeText(data.status, data.affectedPatients) },
       ]),
     },
     {
@@ -614,14 +614,41 @@ function affectedLeavePatientRows(
             ? `咨询时间：${timeRangeFromValues(patient.startTime, patient.endTime)}`
             : "",
           patient.location ? `地点：${patient.location}` : "",
-          `退款安排：${leaveRefundDisplayText(status, patient.refundText)}`,
+          `退款安排：${leaveRefundDisplayText(status, patient)}`,
         ]),
       };
     })
     .filter((row) => row.value);
 }
 
-function leaveReviewOutcomeText(status: string) {
+function noOnlineRefundSentence(source?: {
+  isOfflinePaymentOrder?: boolean | null;
+  isFreeOrder?: boolean | null;
+  refundText?: string | null;
+}) {
+  const text = source?.refundText || "";
+  if (source?.isOfflinePaymentOrder || text.includes("线下支付")) {
+    return "本单为线下支付单，未线上支付无需线上退款";
+  }
+  if (source?.isFreeOrder || text.includes("免费")) {
+    return "本单为免费单，未线上支付无需线上退款";
+  }
+  return "";
+}
+
+function leaveReviewOutcomeText(
+  status: string,
+  patients: AdminLeaveRequestDetail["affectedPatients"] = [],
+) {
+  const sentences = patients.map((patient) => noOnlineRefundSentence(patient)).filter(Boolean);
+  if (patients.length > 0 && sentences.length === patients.length) {
+    const arrangement = sentences.every((item) => item === sentences[0])
+      ? sentences[0]
+      : "相关预约未线上支付，无需线上退款";
+    if (status === "APPROVED") return `请假已通过，受影响预约已取消。${arrangement}。`;
+    if (status === "REJECTED") return "请假未通过，预约保持不变。";
+    return `审核通过后将取消受影响预约。${arrangement}。`;
+  }
   if (status === "APPROVED") {
     return "请假已通过，受影响预约已取消；已支付订单按原支付路径全额退款。";
   }
@@ -631,7 +658,19 @@ function leaveReviewOutcomeText(status: string) {
   return "审核通过后将取消受影响预约，已支付订单将按原支付路径全额退款。";
 }
 
-function leaveRefundDisplayText(status: string, backendText?: string | null) {
+function leaveRefundDisplayText(
+  status: string,
+  source?: {
+    isOfflinePaymentOrder?: boolean | null;
+    isFreeOrder?: boolean | null;
+    refundText?: string | null;
+  },
+) {
+  const sentence = noOnlineRefundSentence(source);
+  if (sentence) {
+    return status === "REJECTED" ? "请假未通过，预约保持不变" : sentence;
+  }
+  const backendText = source?.refundText;
   if (status === "PENDING") {
     return "审核通过后，已支付款项将按原支付路径全额退回";
   }
@@ -697,7 +736,11 @@ function buildMessageDetailSections(
         {
           label: leaveStatus ? "退款安排" : "退款说明",
           value: leaveStatus
-            ? leaveRefundDisplayText(leaveStatus, detailText(detail, "refundText"))
+            ? leaveRefundDisplayText(leaveStatus, {
+                refundText: detailText(detail, "refundText"),
+                isOfflinePaymentOrder: detail.isOfflinePaymentOrder === true,
+                isFreeOrder: detail.isFreeOrder === true,
+              })
             : detailText(detail, "refundText"),
         },
         { label: "豁免申请", value: detailText(detail, "exemptionLabel") },
@@ -887,7 +930,11 @@ function affectedAppointmentText(appointment: Record<string, unknown>, leaveStat
   const location = detailText(appointment, "location");
   const backendRefund = detailText(appointment, "refundText");
   const refund = leaveStatus
-    ? leaveRefundDisplayText(leaveStatus, backendRefund)
+    ? leaveRefundDisplayText(leaveStatus, {
+        refundText: backendRefund,
+        isOfflinePaymentOrder: appointment.isOfflinePaymentOrder === true,
+        isFreeOrder: appointment.isFreeOrder === true,
+      })
     : backendRefund;
   const status = detailText(appointment, "orderStatus");
   return compactTextLines([
