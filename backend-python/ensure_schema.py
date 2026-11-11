@@ -110,6 +110,13 @@ APP_SITE_PAGE_COLUMNS = {
     "CoverCropJson": "NVARCHAR(500) NULL",
 }
 
+# 短信验证码错误次数上限与按最后下发时间计算的重发间隔。旧代码不读写这两列
+# （FailedAttempts 有默认值、LastSentAt 可空），可以先补列再发新版后端。
+APP_SMS_VERIFICATION_COLUMNS = {
+    "FailedAttempts": "INT NOT NULL CONSTRAINT DF_AppSmsVerification_FailedAttempts DEFAULT 0",
+    "LastSentAt": "DATETIME NULL",
+}
+
 
 # 这些表只能通过 migrate_assessment_tables.py 的目标库确认流程创建，不能在
 # FastAPI 启动或通用 init_db 中静默落库。
@@ -434,6 +441,25 @@ def ensure_app_site_page_columns():
             print(f"[OK] Added AppSitePage.{name}")
 
 
+def ensure_sms_verification_columns():
+    inspector = inspect(engine)
+    if not inspector.has_table("AppSmsVerification"):
+        return
+
+    existing = {column["name"] for column in inspector.get_columns("AppSmsVerification")}
+    missing = [
+        (name, ddl) for name, ddl in APP_SMS_VERIFICATION_COLUMNS.items() if name not in existing
+    ]
+    if not missing:
+        print("[OK] AppSmsVerification columns already complete")
+        return
+
+    with engine.begin() as conn:
+        for name, ddl in missing:
+            conn.execute(text(f"ALTER TABLE [dbo].[AppSmsVerification] ADD [{name}] {ddl}"))
+            print(f"[OK] Added AppSmsVerification.{name}")
+
+
 APP_ACTIVITY_COLUMNS = {
     "LinkUrl": "NVARCHAR(500) NULL",
     "LiveDisplayMode": "NVARCHAR(20) NULL",
@@ -503,6 +529,7 @@ def main():
     ensure_app_site_page_columns()
     ensure_app_activity_columns()
     ensure_consultation_room_slot_columns()
+    ensure_sms_verification_columns()
     from database import SessionLocal
     from charity_milestone_service import backfill_charity_negotiation_state
     db = SessionLocal()

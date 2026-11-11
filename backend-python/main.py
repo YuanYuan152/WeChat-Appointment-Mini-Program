@@ -71,6 +71,7 @@ def _ensure_db_schema():
             ensure_counselor_profile_columns,
             ensure_leave_request_columns,
             ensure_schedule_cancel_log_columns,
+            ensure_sms_verification_columns,
             ensure_subscribe_template_columns,
             ensure_tables,
             ensure_unicode_gender_columns,
@@ -85,6 +86,7 @@ def _ensure_db_schema():
         ensure_counselor_profile_columns()
         ensure_app_site_page_columns()
         ensure_consultation_room_slot_columns()
+        ensure_sms_verification_columns()
         from database import SessionLocal
         from charity_milestone_service import backfill_charity_negotiation_state
         db = SessionLocal()

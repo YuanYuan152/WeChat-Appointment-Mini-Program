@@ -840,6 +840,11 @@ class AppSmsVerification(Base):
     ExpiresAt = Column(DateTime, nullable=False)
     UsedAt = Column(DateTime, nullable=True)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
+    # 已输错次数；达到 SMS_CODE_MAX_ATTEMPTS 后该验证码作废，只能重新获取。
+    FailedAttempts = Column(Integer, nullable=False, default=0, server_default=text("0"))
+    # 最后一次下发时间：有效期内重发复用同一验证码，只刷新这一列，重发间隔按它计算。
+    # 补列前的旧记录为空，按 CreatedAt 计。
+    LastSentAt = Column(DateTime, nullable=True)
 
 
 class AppUserPreferenceTag(Base):
