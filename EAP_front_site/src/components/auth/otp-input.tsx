@@ -1,127 +1,124 @@
 "use client";
 
 import {
-  useCallback,
-  useEffect,
-  useRef,
+  useState,
+  type ChangeEvent,
   type ClipboardEvent,
-  type KeyboardEvent,
+  type Ref,
+  type SyntheticEvent,
 } from "react";
 
+import {
+  OTP_LENGTH,
+  extractOtpDigits,
+  isOtpComplete,
+  nextOtpValue,
+  pickOtpFromText,
+} from "@/lib/auth/otp";
 import { cn } from "@/lib/utils";
 
-const OTP_LENGTH = 6;
+export { isOtpComplete, OTP_LENGTH };
 
+/** 光标固定在末尾（整段全选除外），避免在中间插入/删除导致数字错位。 */
+function keepCaretAtEnd(input: HTMLInputElement) {
+  const end = input.value.length;
+  const { selectionStart, selectionEnd } = input;
+  if (selectionStart === null || selectionEnd === null) {
+    return;
+  }
+  const selectsAll = selectionStart === 0 && selectionEnd === end;
+  if (!selectsAll && (selectionStart !== end || selectionEnd !== end)) {
+    input.setSelectionRange(end, end);
+  }
+}
+
+/**
+ * 6 位短信验证码输入。
+ *
+ * 由一个透明的真实 <input> 覆盖在 6 个展示格子上承接全部输入：短信验证码
+ * 自动填充、输入法整段上屏、粘贴、拖放都能完整写入；不再是“每格一个
+ * maxLength=1 的输入框”，那种写法整段插入时只进第一位，改错时数字会错位。
+ */
 export function OtpInput({
   value,
   onChange,
   disabled = false,
   className,
+  id,
+  ref,
 }: {
   value: string;
   onChange: (next: string) => void;
   disabled?: boolean;
   className?: string;
+  id?: string;
+  ref?: Ref<HTMLInputElement>;
 }) {
-  const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
-  const digits = Array.from({ length: OTP_LENGTH }, (_, index) => value[index] || "");
+  const [focused, setFocused] = useState(false);
+  const digits = extractOtpDigits(value).slice(0, OTP_LENGTH);
+  const activeIndex = Math.min(digits.length, OTP_LENGTH - 1);
 
-  const updateAtIndex = useCallback(
-    (index: number, digit: string) => {
-      const chars = Array.from({ length: OTP_LENGTH }, (_, i) => value[i] || "");
-      chars[index] = digit;
-      onChange(chars.join("").slice(0, OTP_LENGTH));
-    },
-    [onChange, value],
-  );
-
-  const focusIndex = useCallback((index: number) => {
-    const target = inputRefs.current[index];
-    if (target) {
-      target.focus();
-      target.select();
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!value && inputRefs.current[0]) {
-      inputRefs.current[0].focus();
-    }
-  }, [value]);
-
-  const applyDigits = (raw: string, startIndex = 0) => {
-    const normalized = raw.replace(/\D/g, "").slice(0, OTP_LENGTH);
-    if (!normalized) {
-      return;
-    }
-    const chars = Array.from({ length: OTP_LENGTH }, (_, i) => value[i] || "");
-    for (let offset = 0; offset < normalized.length; offset += 1) {
-      const targetIndex = startIndex + offset;
-      if (targetIndex >= OTP_LENGTH) {
-        break;
-      }
-      chars[targetIndex] = normalized[offset] || "";
-    }
-    const next = chars.join("").slice(0, OTP_LENGTH);
-    onChange(next);
-    focusIndex(Math.min(startIndex + normalized.length, OTP_LENGTH - 1));
-  };
-
-  const handleInput = (index: number, nextValue: string) => {
-    const digit = nextValue.replace(/\D/g, "").slice(-1);
-    updateAtIndex(index, digit);
-    if (digit && index < OTP_LENGTH - 1) {
-      focusIndex(index + 1);
-    }
-  };
-
-  const handleKeyDown = (index: number, event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "Backspace" && !digits[index] && index > 0) {
-      updateAtIndex(index - 1, "");
-      focusIndex(index - 1);
-      event.preventDefault();
-      return;
-    }
-    if (event.key === "ArrowLeft" && index > 0) {
-      focusIndex(index - 1);
-      event.preventDefault();
-      return;
-    }
-    if (event.key === "ArrowRight" && index < OTP_LENGTH - 1) {
-      focusIndex(index + 1);
-      event.preventDefault();
-    }
+  const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
+    onChange(nextOtpValue(digits, event.target.value));
   };
 
   const handlePaste = (event: ClipboardEvent<HTMLInputElement>) => {
     event.preventDefault();
-    applyDigits(event.clipboardData.getData("text"));
+    const pasted = pickOtpFromText(event.clipboardData.getData("text"));
+    if (!pasted) {
+      return;
+    }
+    const input = event.currentTarget;
+    const replacesAll =
+      pasted.length >= OTP_LENGTH
+      || (input.selectionStart === 0 && input.selectionEnd === input.value.length);
+    onChange(((replacesAll ? "" : digits) + pasted).slice(0, OTP_LENGTH));
+  };
+
+  const handleSelect = (event: SyntheticEvent<HTMLInputElement>) => {
+    keepCaretAtEnd(event.currentTarget);
   };
 
   return (
-    <div className={cn("flex items-center justify-between gap-2", className)}>
-      {digits.map((digit, index) => (
-        <input
-          key={index}
-          ref={(element) => {
-            inputRefs.current[index] = element;
-          }}
-          autoComplete={index === 0 ? "one-time-code" : "off"}
-          className="h-12 w-11 rounded-xl border border-border bg-background text-center text-lg font-semibold tracking-[0.2em] outline-none ring-primary focus:ring-2 disabled:opacity-60 sm:h-14 sm:w-12"
-          disabled={disabled}
-          inputMode="numeric"
-          maxLength={1}
-          type="text"
-          value={digit}
-          onChange={(event) => handleInput(index, event.target.value)}
-          onKeyDown={(event) => handleKeyDown(index, event)}
-          onPaste={handlePaste}
-        />
-      ))}
+    <div className={cn("relative", className)}>
+      <div aria-hidden="true" className="flex items-center justify-between gap-2">
+        {Array.from({ length: OTP_LENGTH }, (_, index) => {
+          const active = focused && index === activeIndex;
+          return (
+            <div
+              key={index}
+              className={cn(
+                "flex h-12 w-11 items-center justify-center rounded-xl border border-border bg-background text-lg font-semibold transition-shadow sm:h-14 sm:w-12",
+                active && "ring-2 ring-primary",
+                disabled && "opacity-60",
+              )}
+            >
+              {digits[index] ?? (active ? (
+                <span className="h-5 w-px animate-pulse bg-foreground" />
+              ) : null)}
+            </div>
+          );
+        })}
+      </div>
+      <input
+        ref={ref}
+        id={id}
+        autoComplete="one-time-code"
+        className="absolute inset-0 h-full w-full cursor-text border-0 bg-transparent text-base text-transparent caret-transparent outline-none selection:bg-transparent disabled:cursor-not-allowed [-webkit-text-fill-color:transparent]"
+        disabled={disabled}
+        inputMode="numeric"
+        spellCheck={false}
+        type="text"
+        value={digits}
+        onBlur={() => setFocused(false)}
+        onChange={handleChange}
+        onFocus={(event) => {
+          setFocused(true);
+          keepCaretAtEnd(event.currentTarget);
+        }}
+        onPaste={handlePaste}
+        onSelect={handleSelect}
+      />
     </div>
   );
-}
-
-export function isOtpComplete(value: string) {
-  return /^\d{6}$/.test(value);
 }

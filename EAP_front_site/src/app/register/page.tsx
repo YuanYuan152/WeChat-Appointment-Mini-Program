@@ -1,9 +1,15 @@
 import { AuthPageShell } from "@/components/auth/auth-page-shell";
+import { safeRedirectPath } from "@/lib/auth/redirect";
 
-export default function RegisterPage() {
+interface RegisterPageProps {
+  searchParams: Promise<{ redirect?: string | string[] }>;
+}
+
+export default async function RegisterPage({ searchParams }: RegisterPageProps) {
+  const { redirect } = await searchParams;
   return (
     <section className="gradient-warm px-4 pb-16 pt-28 sm:px-6">
-      <AuthPageShell type="register" />
+      <AuthPageShell redirectTo={safeRedirectPath(redirect)} type="register" />
     </section>
   );
 }

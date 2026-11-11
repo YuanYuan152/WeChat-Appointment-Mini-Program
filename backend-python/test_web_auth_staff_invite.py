@@ -64,7 +64,9 @@ class WebAuthStaffInviteTests(unittest.TestCase):
         self.assertTrue(result.is_new_user)
         self.assertEqual("web_phone_" + mobile, account.OpenId)
         self.assertIsNotNone(account.PasswordHash)
-        verify_code.assert_called_once_with(self.db, mobile, "123456", "register")
+        verify_code.assert_called_once_with(
+            self.db, mobile, "123456", "register", commit=False
+        )
 
     def test_regular_registered_account_is_still_rejected(self):
         mobile = "13800000003"

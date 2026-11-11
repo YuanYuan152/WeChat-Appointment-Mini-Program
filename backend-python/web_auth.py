@@ -129,11 +129,15 @@ def _validate_login_payload(body: LoginRequest) -> None:
 @router.post("/send-code", summary="发送短信验证码")
 def web_send_code(body: SendCodeRequest, db: Session = Depends(get_db)):
     mobile = normalize_phone(body.phone)
+    existing = _find_active_account_by_mobile(db, mobile)
 
     if body.purpose == "register":
-        existing = _find_active_account_by_mobile(db, mobile)
         if existing and not _is_claimable_staff_invite(existing, mobile):
             raise HTTPException(status_code=409, detail="该手机号已注册，请直接登录")
+    elif not existing:
+        # 未注册号码的登录验证码用不上（登录接口会返回“账号不存在”），不再白发一条短信；
+        # 也避免用户随后去注册时撞上短信平台对同一号码的发送频率限制。
+        raise HTTPException(status_code=404, detail="账号不存在，请先注册")
 
     return send_verification_code(db, mobile, body.purpose)
 
@@ -145,11 +149,13 @@ def web_register(body: RegisterRequest, db: Session = Depends(get_db)):
     code = body.code.strip()
     password = body.password.strip()
 
+    # 验证码核销与账号写入在同一事务提交：后续任一步失败都会整体回滚，
+    # 验证码不会被提前消耗，用户可以直接用同一个验证码重试。
     existing = _find_active_account_by_mobile(db, mobile)
     if existing:
         if not _is_claimable_staff_invite(existing, mobile):
             raise HTTPException(status_code=409, detail="该手机号已注册，请直接登录")
-        verify_code(db, mobile, code, "register")
+        verify_code(db, mobile, code, "register", commit=False)
         existing.OpenId = f"web_phone_{mobile}"
         existing.PasswordHash = hash_password(password)
         if body.nickname:
@@ -160,7 +166,7 @@ def web_register(body: RegisterRequest, db: Session = Depends(get_db)):
         token = _issue_token(db, existing)
         return AuthTokenResponse(token=token, is_new_user=True)
 
-    verify_code(db, mobile, code, "register")
+    verify_code(db, mobile, code, "register", commit=False)
 
     account = AppAccount(
         Mobile=mobile,
@@ -169,14 +175,13 @@ def web_register(body: RegisterRequest, db: Session = Depends(get_db)):
         PasswordHash=hash_password(password),
         IsActive=True,
     )
-
     db.add(account)
-    db.commit()
-    db.refresh(account)
+    db.flush()  # 取得账号 Id，用于绑定来访角色
 
     _ensure_patient_role(db, account)
     account.UpdatedAt = datetime.utcnow()
     db.commit()
+    db.refresh(account)
 
     token = _issue_token(db, account)
     return AuthTokenResponse(token=token, is_new_user=True)

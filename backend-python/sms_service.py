@@ -161,7 +161,20 @@ def send_verification_code(db: Session, mobile: str, purpose: str = "login") -> 
     return _build_send_response(code, expires_at)
 
 
-def verify_code(db: Session, mobile: str, code: str, purpose: str = "login") -> None:
+def verify_code(
+    db: Session,
+    mobile: str,
+    code: str,
+    purpose: str = "login",
+    *,
+    commit: bool = True,
+) -> None:
+    """校验并核销验证码。
+
+    commit=False 时只在当前事务内标记已使用，由调用方与后续写入（如创建账号）
+    一起提交；后续步骤失败回滚时验证码不会被白白消耗。查询加行锁，并发重复
+    提交同一验证码时只有一个请求能核销成功。
+    """
     mobile = normalize_phone(mobile)
     code = _validate_code_format(code)
     purpose = purpose or "login"
@@ -176,10 +189,16 @@ def verify_code(db: Session, mobile: str, code: str, purpose: str = "login") -> 
             AppSmsVerification.ExpiresAt >= now,
         )
         .order_by(AppSmsVerification.Id.desc())
+        # SQLAlchemy 的 SQL Server 方言会忽略 with_for_update()，这里显式加表提示；
+        # 其他数据库（单测用的 SQLite）自动忽略该提示。
+        .with_hint(AppSmsVerification, "WITH (UPDLOCK, ROWLOCK)", "mssql")
         .first()
     )
     if not record or not secrets.compare_digest(record.Code, code):
         raise HTTPException(status_code=400, detail="验证码错误或已过期")
 
     record.UsedAt = now
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()

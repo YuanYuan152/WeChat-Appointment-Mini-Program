@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Phone, KeyRound, MessageSquare } from "lucide-react";
 import { sendCode } from "@/lib/api/auth";
+import { withRedirectQuery } from "@/lib/auth/redirect";
 import { useAuthStore } from "@/lib/stores/auth-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,8 +36,10 @@ export function AuthForm({
   const [confirmPassword, setConfirmPassword] = useState("");
   const [countdown, setCountdown] = useState(0);
   const [sendingCode, setSendingCode] = useState(false);
+  const [codeSentTo, setCodeSentTo] = useState("");
   const [error, setError] = useState("");
   const [mockHint, setMockHint] = useState("");
+  const codeInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (countdown <= 0) return;
@@ -44,17 +47,33 @@ export function AuthForm({
     return () => clearTimeout(timer);
   }, [countdown]);
 
+  const handlePhoneChange = (raw: string) => {
+    const nextPhone = raw.replace(/\D/g, "").slice(0, 11);
+    setPhone(nextPhone);
+    if (codeSentTo && nextPhone !== codeSentTo) {
+      // 验证码只对发送时的手机号有效：改号后清掉旧验证码，并允许立即给新号码发送。
+      setCodeSentTo("");
+      setCode("");
+      setCountdown(0);
+      setMockHint("");
+    }
+  };
+
   const handleSendCode = async () => {
     if (sendingCode || countdown > 0 || !phone) return;
+    const targetPhone = phone;
     setError("");
     setMockHint("");
     setSendingCode(true);
     try {
-      const res = await sendCode(phone, type);
+      const res = await sendCode(targetPhone, type);
+      setCodeSentTo(targetPhone);
       setCountdown(60);
       if (res.mockCode) {
         setMockHint(`开发环境验证码：${res.mockCode}`);
         setCode(res.mockCode);
+      } else {
+        codeInputRef.current?.focus();
       }
     } catch (e) {
       const message = e instanceof Error ? e.message : "发送失败";
@@ -165,7 +184,7 @@ export function AuthForm({
               className="pl-10"
               placeholder="请输入手机号"
               value={phone}
-              onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 11))}
+              onChange={(e) => handlePhoneChange(e.target.value)}
               maxLength={11}
             />
           </div>
@@ -185,7 +204,13 @@ export function AuthForm({
                 {sendingCode ? "发送中..." : countdown > 0 ? `${countdown}s 后重发` : "获取验证码"}
               </Button>
             </div>
-            <OtpInput disabled={loading} value={code} onChange={setCode} />
+            <OtpInput
+              disabled={loading}
+              id="code"
+              ref={codeInputRef}
+              value={code}
+              onChange={setCode}
+            />
             {mockHint ? <p className="mt-2 text-xs text-primary">{mockHint}</p> : null}
           </div>
         ) : null}
@@ -249,14 +274,20 @@ export function AuthForm({
         {type === "login" ? (
           <>
             还没有账号？
-            <Link href="/register" className="ml-1 text-primary hover:underline">
+            <Link
+              href={withRedirectQuery("/register", redirectTo)}
+              className="ml-1 text-primary hover:underline"
+            >
               立即注册
             </Link>
           </>
         ) : (
           <>
             已有账号？
-            <Link href="/login" className="ml-1 text-primary hover:underline">
+            <Link
+              href={withRedirectQuery("/login", redirectTo)}
+              className="ml-1 text-primary hover:underline"
+            >
               去登录
             </Link>
           </>

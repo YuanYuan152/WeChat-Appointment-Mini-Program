@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test src/lib/assessment/*.test.mjs"
+    "test": "node --test src/lib/assessment/*.test.mjs src/lib/auth/*.test.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",
