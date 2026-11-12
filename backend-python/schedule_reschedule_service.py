@@ -36,6 +36,9 @@ from schedule_slots import (
 )
 
 RESCHEDULABLE_CONSULTATION_STATUSES = ("PENDING", "CONFIRMED")
+# SQLAlchemy 的 SQL Server 方言把 with_for_update() 编译成空（不加任何锁），
+# 行锁必须写成表提示；SQLite 等其他方言会自动忽略该提示。
+_ROW_UPDATE_LOCK_HINT = "WITH (UPDLOCK, ROWLOCK)"
 
 
 def _validate_staff_reschedule_target(start: datetime) -> None:
@@ -53,7 +56,9 @@ def _load_reschedulable(
 ) -> tuple[AppSchedule, AppConsultation]:
     query = db.query(AppSchedule).filter(AppSchedule.Id == schedule_id)
     if for_update:
-        query = query.with_for_update()
+        # 按主键只锁源排期这一行：并发改同一条排期时后到者在这里等待，
+        # 拿到锁后读到的是已提交的新状态，下面的 BOOKED 校验会把它拦下。
+        query = query.with_hint(AppSchedule, _ROW_UPDATE_LOCK_HINT, "mssql")
     schedule = query.first()
     if not schedule:
         raise ValueError("排期不存在")
@@ -89,6 +94,10 @@ def _exact_available_target(
     *,
     exclude_schedule_id: int,
 ) -> Optional[AppSchedule]:
+    # 这里故意不加行锁：AppSchedule 没有 (CounselorId, StartTime) 索引，这条查询
+    # 是全表扫描，UPDLOCK 会对扫到的每一行申请 U 锁，两个并发改约各自锁着源排期
+    # 时会互相等待成死锁；只读的改期选项接口也会逐个时段锁住空闲排期。目标时段
+    # 的互斥由 reschedule_booked_consultation 在冲突检查前取得的 applock 保证。
     return (
         db.query(AppSchedule)
         .filter(
@@ -97,7 +106,6 @@ def _exact_available_target(
             AppSchedule.Status == "AVAILABLE",
             AppSchedule.Id != exclude_schedule_id,
         )
-        .with_for_update()
         .first()
     )
 
@@ -302,14 +310,27 @@ def reschedule_booked_consultation(
     center_id = parse_center_id(schedule.Note)
     if not center_id:
         raise ValueError("排期未指定预约中心")
+    normalized_room_id = (room_id or "").strip() or None
+    if is_video_center(center_id):
+        normalized_room_id = None
+    # 从冲突检查到写入必须在同一把锁里完成。复用代约下单的 applock 资源
+    # （booking:center / proxy:counselor / proxy:room，起点和半小时后两个点），
+    # 与代约下单、付款分配咨询室和其他改约互斥；“目标时段还没有排期、两个请求
+    # 各插一条”这种情况行锁防不住，只能靠它。非 SQL Server 时直接返回。
+    from proxy_booking_service import _acquire_proxy_booking_locks
+
+    _acquire_proxy_booking_locks(
+        db,
+        counselor_id=schedule.CounselorId,
+        center_id=center_id,
+        start_time=new_start_time,
+        room_id=normalized_room_id,
+    )
     conflict_reason = _target_conflict_reason(db, schedule, new_start_time)
     if conflict_reason:
         raise ValueError(conflict_reason)
 
-    normalized_room_id = (room_id or "").strip() or None
-    if is_video_center(center_id):
-        normalized_room_id = None
-    else:
+    if not is_video_center(center_id):
         if not normalized_room_id:
             raise ValueError("请选择咨询室")
         room = next(

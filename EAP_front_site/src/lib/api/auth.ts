@@ -39,17 +39,33 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     ...(options.headers ?? {}),
   };
 
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers,
+    });
+  } catch {
+    throw new Error("网络异常，请检查网络后重试");
+  }
 
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const detail = (data as { detail?: string }).detail ?? "请求失败";
-    throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+    throw new Error(errorMessageFrom(data));
   }
   return data as T;
+}
+
+/** 错误体同时带 FastAPI 原有的 detail 和统一的 msg；detail 为参数校验错误数组时退回 msg。 */
+function errorMessageFrom(data: unknown): string {
+  const body = (data ?? {}) as { detail?: unknown; msg?: unknown };
+  if (typeof body.detail === "string" && body.detail.trim()) {
+    return body.detail;
+  }
+  if (typeof body.msg === "string" && body.msg.trim()) {
+    return body.msg;
+  }
+  return "请求失败";
 }
 
 export function sendCode(phone: string, purpose: "login" | "register") {

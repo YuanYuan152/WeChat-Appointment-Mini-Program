@@ -3608,6 +3608,7 @@ from assessment_routes import register_assessment_admin_routes
 from assessment_report_routes import register_assessment_report_admin_routes
 from assessment_share_routes import register_assessment_share_admin_routes
 from assessment_enterprise_routes import register_assessment_enterprise_admin_routes
+from enterprise_data_routes import register_enterprise_data_admin_routes
 from system_settings_routes import register_system_settings_routes
 
 register_assessment_admin_routes(
@@ -3627,6 +3628,12 @@ register_assessment_share_admin_routes(
 )
 
 register_assessment_enterprise_admin_routes(
+    router,
+    require_assessment_editor=require_assessment_editor,
+    require_admin=require_admin,
+)
+
+register_enterprise_data_admin_routes(
     router,
     require_assessment_editor=require_assessment_editor,
     require_admin=require_admin,

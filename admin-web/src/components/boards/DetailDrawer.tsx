@@ -14,12 +14,14 @@ export function DetailDrawer({
   onClose,
   footer,
   closeDisabled = false,
+  widthClassName = "max-w-[520px]",
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
   footer?: ReactNode | null;
   closeDisabled?: boolean;
+  widthClassName?: string;
 }) {
   const [drawerId] = useState(() => {
     nextDrawerId += 1;
@@ -99,7 +101,7 @@ export function DetailDrawer({
       <aside
         aria-labelledby={titleId}
         aria-modal="true"
-        className="flex h-full w-full max-w-[520px] flex-col border-l border-[var(--lxxl-border)] bg-white shadow-2xl"
+        className={`flex h-full w-full ${widthClassName} flex-col border-l border-[var(--lxxl-border)] bg-white shadow-2xl`}
         role="dialog"
       >
         <div className="flex items-center justify-between gap-4 border-b border-[var(--lxxl-border)] px-6 py-4">

@@ -1,11 +1,9 @@
 """企业定制量表的公开解析与管理接口。"""
 from __future__ import annotations
 
-import hashlib
-import re
 import uuid
 from io import BytesIO
-from typing import Any, Callable, List, Optional
+from typing import Any, Callable, List, Literal, Optional
 from uuid import UUID
 
 import qrcode
@@ -68,10 +66,14 @@ from assessment_definition_service import AssessmentDefinitionError
 from assessment_routes import get_assessment_store
 from config import settings
 from database import get_db
-from models import AppAccount
+from enterprise_data_service import (
+    EnterpriseDataError,
+    enterprise_visitor_openid,
+    normalize_visitor_key,
+    record_learning_event,
+)
+from models import AppAccount, EnterpriseSitePersonnel
 from patient_registration import ensure_default_patient_registration
-
-_ENTERPRISE_VISITOR_OPENID_RE = re.compile(r"^eap-ent-[a-z0-9-]{8,80}-[a-f0-9]{16}$")
 
 
 public_router = APIRouter(
@@ -147,6 +149,17 @@ class EnterpriseSiteLoginPayload(BaseModel):
     password: str = Field(..., min_length=1, max_length=128)
 
 
+class EnterpriseLearningEventPayload(BaseModel):
+    """企业站知识库学习行为：图文打开/阅读时长、音频播放/听完。"""
+
+    visitorKey: str = Field(..., min_length=8, max_length=64)
+    contentType: Literal["article", "audio"]
+    contentId: str = Field(..., min_length=1, max_length=120)
+    contentTitle: str = Field(default="", max_length=200)
+    action: Literal["view", "read", "play", "complete"]
+    durationSec: Optional[int] = Field(default=None, ge=0, le=86400)
+
+
 class EnterpriseCounselorInput(BaseModel):
     """介绍保存只收勾选、本企业置顶、顺序，以及介绍页六份文案。"""
 
@@ -194,14 +207,10 @@ def _ensure_enterprise_visitor(
     visitor_key: str,
     employee_info: dict[str, Any],
 ) -> AppAccount:
-    key = re.sub(r"[^a-zA-Z0-9_-]", "", (visitor_key or "").strip())[:64]
-    if len(key) < 8:
+    key = normalize_visitor_key(visitor_key)
+    if not key:
         raise HTTPException(status_code=422, detail="访客标识无效")
-    digest = hashlib.sha256(f"{slug}:{key}".encode("utf-8")).hexdigest()[:16]
-    slug_part = re.sub(r"[^a-z0-9-]", "", slug.lower())[:40] or "enterprise"
-    openid = f"eap-ent-{slug_part}-{digest}"
-    if not _ENTERPRISE_VISITOR_OPENID_RE.fullmatch(openid):
-        openid = f"eap-ent-{digest}{digest[:8]}"
+    openid = enterprise_visitor_openid(slug, key)
 
     account = db.query(AppAccount).filter(AppAccount.OpenId == openid).first()
     display_name = str(
@@ -237,6 +246,21 @@ def _ensure_enterprise_visitor(
         db.commit()
         db.refresh(account)
     return account
+
+
+def _require_site_person(
+    db: Session,
+    enterprise: dict[str, Any],
+    authorization: Optional[str],
+    message: str,
+) -> Optional[EnterpriseSitePersonnel]:
+    """站点启用人员表登录时必须带有效登录态；未启用时返回 None。"""
+    if not site_login_required(db, enterprise["slug"]):
+        return None
+    person = resolve_personnel_from_authorization(db, authorization, enterprise["slug"])
+    if not person:
+        raise HTTPException(status_code=401, detail=message)
+    return person
 
 
 def _published_assessments(
@@ -381,10 +405,7 @@ def submit_enterprise_assessment_reports(
         enterprise = get_enterprise_by_slug(slug)
     except EnterpriseConfigError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    if site_login_required(db, enterprise["slug"]):
-        person = resolve_personnel_from_authorization(db, authorization, enterprise["slug"])
-        if not person:
-            raise HTTPException(status_code=401, detail="请先登录后再提交测评")
+    person = _require_site_person(db, enterprise, authorization, "请先登录后再提交测评")
 
     allowed_ids = {
         str(item).strip()
@@ -410,12 +431,22 @@ def submit_enterprise_assessment_reports(
     source_label = _enterprise_source_label(enterprise)
     consent_version = settings.ASSESSMENT_CONSENT_VERSION.strip() or "enterprise-onboarding"
     demographic_meta = {
+        # 企业 ID 不随链接后缀变化，企业定制数据管理据此归档答卷
+        "_enterpriseId": str(enterprise.get("id") or ""),
         "_enterpriseSlug": enterprise["slug"],
         "_enterpriseSiteName": str(enterprise.get("siteName") or "").strip(),
         "_enterpriseCompanyName": str(enterprise.get("companyName") or "").strip(),
         "_enterpriseSourceLabel": source_label,
         "_employeeInfo": body.employeeInfo or {},
     }
+    if person is not None:
+        # 人员表登录站点：按站点账号归档，同一人换设备填写也归到同一份档案
+        demographic_meta["_personnel"] = {
+            "id": person.Id,
+            "username": person.Username or "",
+            "empNo": person.EmpNo or "",
+            "realName": person.RealName or "",
+        }
 
     saved: list[dict[str, Any]] = []
     store = get_assessment_store()
@@ -456,6 +487,38 @@ def submit_enterprise_assessment_reports(
         "savedCount": len(saved),
         "reports": saved,
     }
+
+
+@public_router.post("/{slug}/learning-events", summary="企业站知识库学习行为回传")
+def record_enterprise_learning_event(
+    slug: str,
+    body: EnterpriseLearningEventPayload,
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    """图文打开、阅读时长与音频播放回传到企业定制数据管理；同一访客短时间内重复上报会去重。"""
+    try:
+        enterprise = get_enterprise_by_slug(slug)
+    except EnterpriseConfigError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    person = _require_site_person(db, enterprise, authorization, "请先登录")
+    if enterprise.get("hideLibrary"):
+        return {"recorded": False}
+    try:
+        recorded = record_learning_event(
+            db,
+            enterprise=enterprise,
+            visitor_key=body.visitorKey,
+            personnel_id=person.Id if person is not None else None,
+            content_type=body.contentType,
+            content_id=body.contentId,
+            content_title=body.contentTitle,
+            action=body.action,
+            duration_sec=body.durationSec,
+        )
+    except EnterpriseDataError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    return {"recorded": recorded}
 
 
 def register_assessment_enterprise_admin_routes(

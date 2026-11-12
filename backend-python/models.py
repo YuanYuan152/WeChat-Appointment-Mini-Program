@@ -868,6 +868,11 @@ class AppSmsVerification(Base):
     ExpiresAt = Column(DateTime, nullable=False)
     UsedAt = Column(DateTime, nullable=True)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
+    # 已输错次数；达到 SMS_CODE_MAX_ATTEMPTS 后该验证码作废，只能重新获取。
+    FailedAttempts = Column(Integer, nullable=False, default=0, server_default=text("0"))
+    # 最后一次下发时间：有效期内重发复用同一验证码，只刷新这一列，重发间隔按它计算。
+    # 补列前的旧记录为空，按 CreatedAt 计。
+    LastSentAt = Column(DateTime, nullable=True)
 
 
 class AppUserPreferenceTag(Base):
@@ -968,3 +973,87 @@ class EnterpriseSitePersonnel(Base):
     RealName = Column(Unicode(50), nullable=True)
     CreatedAt = Column(DateTime, default=func.now(), nullable=False)
     UpdatedAt = Column(DateTime, nullable=True, onupdate=utc_naive_now)
+
+
+class EnterpriseRespondentAnnotation(Base):
+    """企业定制数据管理：为企业链接下的填写者打标签、写观察记录。
+
+    只追加不覆盖：每条记录保存当时的完整标签集合，最新一条即当前标签。
+    时间列统一由 Python 写 UTC naive，不用 func.now()。
+    """
+
+    __tablename__ = "EnterpriseRespondentAnnotation"
+    __table_args__ = (
+        Index(
+            "IX_EnterpriseRespondentAnnotation_Ent_Key",
+            "EnterpriseId",
+            "RespondentKey",
+            "CreatedAt",
+        ),
+    )
+
+    Id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    EnterpriseId = Column(String(64), nullable=False)
+    RespondentKey = Column(String(40), nullable=False)
+    RespondentName = Column(Unicode(100), nullable=True)
+    Tags = Column(UnicodeText, nullable=True)
+    Note = Column(UnicodeText, nullable=True)
+    Source = Column(Unicode(100), nullable=True)
+    OperatorAccountId = Column(Integer, nullable=True)
+    OperatorName = Column(Unicode(100), nullable=True)
+    CreatedAt = Column(DateTime, default=utc_naive_now, nullable=False)
+    DeletedAt = Column(DateTime, nullable=True)
+
+
+class EnterpriseRiskFollowUp(Base):
+    """企业定制数据管理：单份答卷的风险跟进状态，可人工调整风险等级。"""
+
+    __tablename__ = "EnterpriseRiskFollowUp"
+    __table_args__ = (
+        UniqueConstraint(
+            "EnterpriseId",
+            "ReportPublicId",
+            name="UQ_EnterpriseRiskFollowUp_Ent_Report",
+        ),
+    )
+
+    Id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    EnterpriseId = Column(String(64), nullable=False)
+    ReportPublicId = Column(String(40), nullable=False)
+    Status = Column(String(20), nullable=False)
+    SeverityOverride = Column(String(10), nullable=True)
+    Owner = Column(Unicode(50), nullable=True)
+    Note = Column(UnicodeText, nullable=True)
+    HistoryJson = Column(UnicodeText, nullable=True)
+    UpdatedByAccountId = Column(Integer, nullable=True)
+    UpdatedByName = Column(Unicode(100), nullable=True)
+    CreatedAt = Column(DateTime, default=utc_naive_now, nullable=False)
+    UpdatedAt = Column(DateTime, nullable=True, default=utc_naive_now, onupdate=utc_naive_now)
+
+
+class EnterpriseLearningEvent(Base):
+    """企业定制站点知识库学习行为（图文阅读、音频播放），由企业站回传。"""
+
+    __tablename__ = "EnterpriseLearningEvent"
+    __table_args__ = (
+        Index("IX_EnterpriseLearningEvent_Ent_Time", "EnterpriseId", "CreatedAt"),
+        Index(
+            "IX_EnterpriseLearningEvent_Ent_Visitor",
+            "EnterpriseId",
+            "VisitorOpenId",
+            "ContentType",
+            "ContentId",
+        ),
+    )
+
+    Id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    EnterpriseId = Column(String(64), nullable=False)
+    EnterpriseSlug = Column(String(80), nullable=False)
+    VisitorOpenId = Column(String(100), nullable=False)
+    PersonnelId = Column(Integer, nullable=True)
+    ContentType = Column(String(20), nullable=False)
+    ContentId = Column(String(120), nullable=False)
+    ContentTitle = Column(Unicode(200), nullable=True)
+    Action = Column(String(20), nullable=False)
+    DurationSec = Column(Integer, nullable=True)
+    CreatedAt = Column(DateTime, default=utc_naive_now, nullable=False)

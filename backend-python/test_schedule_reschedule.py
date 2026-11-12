@@ -1,10 +1,12 @@
 import unittest
 from datetime import datetime
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
+from sqlalchemy.dialects import mssql
 from sqlalchemy.orm import sessionmaker
 
+import schedule_reschedule_service
 from database import Base
 from models import (
     AppAccount,
@@ -79,6 +81,17 @@ class ScheduleRescheduleTests(unittest.TestCase):
         self.db.add_all([source, order, consultation])
         self.db.flush()
         return source, order, consultation
+
+    def capture_mssql_sql(self):
+        """把本会话执行的 ORM 查询按 SQL Server 方言编译出来，用于检查锁提示。"""
+        statements = []
+
+        def capture(state):
+            statements.append(str(state.statement.compile(dialect=mssql.dialect())))
+
+        event.listen(self.db, "do_orm_execute", capture)
+        self.addCleanup(event.remove, self.db, "do_orm_execute", capture)
+        return statements
 
     def test_reschedule_moves_to_available_slot_and_restores_original(self):
         source, order, consultation = self.add_booking()
@@ -255,6 +268,92 @@ class ScheduleRescheduleTests(unittest.TestCase):
         rooms = {room["roomId"]: room for room in nine["rooms"]}
         self.assertFalse(rooms["yangpu-r1"]["available"])
         self.assertTrue(rooms["yangpu-r2"]["available"])
+
+    def test_reschedule_locks_source_row_and_target_slot_before_conflict_check(self):
+        # SQL Server 方言会忽略 with_for_update()：源排期必须带 UPDLOCK 表提示，
+        # 目标时段在冲突检查前取 applock；目标查询是全表扫描，不能带行锁。
+        source, _, _ = self.add_booking(center="yangpu")
+        self.db.add(
+            AppConsultationRoom(
+                Id=2,
+                CenterId="yangpu",
+                RoomCode="yangpu-r2",
+                Name="咨询室 B",
+                Status="AVAILABLE",
+                SortOrder=2,
+            )
+        )
+        self.db.flush()
+        statements = self.capture_mssql_sql()
+        calls = MagicMock()
+        new_start = datetime(2099, 1, 2, 14, 0)
+        with (
+            patch("schedule_reschedule_service._validate_staff_reschedule_target"),
+            patch("schedule_reschedule_service._refresh_consultation_tasks_and_messages"),
+            patch("proxy_booking_service._acquire_proxy_booking_locks") as slot_lock,
+            patch(
+                "schedule_reschedule_service._target_conflict_reason",
+                wraps=schedule_reschedule_service._target_conflict_reason,
+            ) as conflict_check,
+        ):
+            calls.attach_mock(slot_lock, "slot_lock")
+            calls.attach_mock(conflict_check, "conflict_check")
+            result = reschedule_booked_consultation(
+                self.db,
+                schedule_id=source.Id,
+                operator_account_id=99,
+                new_start_time=new_start,
+                new_end_time=datetime(2099, 1, 2, 14, 50),
+                room_id=" yangpu-r2 ",
+                reason="来访时间冲突",
+            )
+
+        self.assertEqual(result["roomId"], "yangpu-r2")
+        self.assertEqual(
+            [name for name, _, _ in calls.mock_calls],
+            ["slot_lock", "conflict_check"],
+        )
+        slot_lock.assert_called_once_with(
+            self.db,
+            counselor_id=10,
+            center_id="yangpu",
+            start_time=new_start,
+            room_id="yangpu-r2",
+        )
+        hinted = [sql for sql in statements if "UPDLOCK" in sql]
+        self.assertEqual(len(hinted), 1)
+        self.assertIn("FROM [AppSchedule] WITH (UPDLOCK, ROWLOCK)", hinted[0])
+        self.assertIn("WHERE [AppSchedule].[Id] =", hinted[0])
+
+    def test_reschedule_options_take_no_locks(self):
+        source, _, _ = self.add_booking()
+        self.db.add(
+            AppSchedule(
+                CounselorId=10,
+                StartTime=datetime(2099, 1, 2, 10, 0),
+                EndTime=datetime(2099, 1, 2, 10, 50),
+                Status="AVAILABLE",
+                Note="center:video",
+            )
+        )
+        self.db.flush()
+        statements = self.capture_mssql_sql()
+        with (
+            patch("schedule_reschedule_service.china_now", return_value=datetime(2099, 1, 1, 8, 0)),
+            patch("schedule_reschedule_service.booking_lead_time_reason", return_value=None),
+            patch("proxy_booking_service._acquire_proxy_booking_locks") as slot_lock,
+        ):
+            options = build_reschedule_options(
+                self.db,
+                schedule_id=source.Id,
+                target_date=datetime(2099, 1, 2).date(),
+            )
+
+        ten = next(item for item in options["slots"] if item["key"] == "10:00")
+        self.assertTrue(ten["selectable"])
+        slot_lock.assert_not_called()
+        self.assertTrue(statements)
+        self.assertEqual([sql for sql in statements if "UPDLOCK" in sql], [])
 
     def test_overview_searches_counselor_and_patient_nicknames(self):
         from app_time import china_now

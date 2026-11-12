@@ -100,6 +100,8 @@ class Settings(BaseSettings):
     SMS_CODE_LENGTH: int = 6
     SMS_CODE_TTL_MINUTES: int = 5
     SMS_RESEND_INTERVAL_SECONDS: int = 60
+    # 同一验证码最多可输错的次数，达到后该码作废、须重新获取（防止暴力枚举）
+    SMS_CODE_MAX_ATTEMPTS: int = 5
 
     # 腾讯云短信（SMS API 3.0 SendSms）
     TENCENT_SMS_SECRET_ID: str = ""
