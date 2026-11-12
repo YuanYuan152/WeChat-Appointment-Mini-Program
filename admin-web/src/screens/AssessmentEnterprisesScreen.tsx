@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { AppRoute, useAppRoute } from "@/components/AppRoute";
 import { ContentImageUpload } from "@/components/content/ContentImageUpload";
@@ -79,6 +80,7 @@ export function AssessmentEnterprisesScreen() {
 }
 
 function AssessmentEnterprisesContent() {
+  const router = useRouter();
   const { clearNotice, isAdmin, refreshKey, setBreadcrumbTail, showNotice } = useAppRoute();
   const [items, setItems] = useState<AssessmentEnterprise[]>([]);
   const [assessmentOptions, setAssessmentOptions] = useState<PrivateAssessmentOption[]>([]);
@@ -270,6 +272,11 @@ function AssessmentEnterprisesContent() {
                       </td>
                       <td className="px-5 py-4">
                         <div className="flex flex-wrap justify-end gap-3">
+                          <TableActionButton
+                            onClick={() => router.push(`/assessment-enterprise-data/${encodeURIComponent(item.id)}`)}
+                          >
+                            数据管理
+                          </TableActionButton>
                           <TableActionButton onClick={() => setEditing(item)}>编辑</TableActionButton>
                           <TableActionButton
                             onClick={() => {

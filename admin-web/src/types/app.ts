@@ -48,6 +48,7 @@ export type SectionId =
   | "assessments"
   | "assessmentCompose"
   | "assessmentEnterprises"
+  | "assessmentEnterpriseData"
   | "assessmentReports"
   | "appointmentBoard"
   | "schedules"
