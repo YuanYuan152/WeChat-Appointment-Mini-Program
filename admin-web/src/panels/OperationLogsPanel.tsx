@@ -29,6 +29,72 @@ const actionTypeLabels: Record<string, string> = {
   ROLE_SWITCH: "角色切换",
   OFFLINE_PAYMENT_PUSH: "推送线下支付单",
   OFFLINE_RECEIPT: "确认线下收款",
+  PROXY_PUSH_PENDING: "助理推送待支付订单",
+  PROXY_PUSH_FREE: "助理推送免费体验订单",
+  PROXY_PUSH_OFFLINE: "助理推送线下支付订单",
+  PROXY_CANCEL_PUSH: "助理取消待支付推送",
+  COUNSELOR_PUSH_ORDER: "咨询师推送订单",
+  PATIENT_PAY_ORDER: "来访预约支付",
+  PATIENT_CONFIRM_ORDER: "来访确认订单",
+  PATIENT_CANCEL_ORDER: "来访取消订单",
+  COUNSELOR_LEAVE: "咨询师请假",
+  COUNSELOR_SCHEDULE_CREATE: "咨询师新建排期",
+  COUNSELOR_SCHEDULE_UPDATE: "咨询师修改排期",
+  COUNSELOR_SCHEDULE_CANCEL: "咨询师取消排期",
+  ASSISTANT_RESCHEDULE: "助理修改预约时间",
+  ASSISTANT_CHANGE_ROOM: "助理更换咨询室",
+  CASE_RECORD_SAVE: "保存咨询记录",
+  CASE_RECORD_AMENDMENT_SUBMIT: "提交咨询记录修改",
+  LEAVE_APPROVE: "同意咨询师请假",
+  LEAVE_REJECT: "拒绝咨询师请假",
+  CONTENT_BANNER_SAVE: "保存 Banner",
+  CONTENT_BANNER_DELETE: "删除 Banner",
+  CONTENT_SITE_PAGE_SAVE: "保存站点页面",
+  CONTENT_GUIDE_SAVE: "保存引导内容",
+  CONTENT_GUIDE_DELETE: "删除引导内容",
+  CONTENT_ACTIVITY_SAVE: "保存活动公告",
+  CONTENT_ACTIVITY_DELETE: "删除活动公告",
+  CONTENT_ARTICLE_SAVE: "保存文章",
+  CONTENT_ARTICLE_DELETE: "删除文章",
+  ROOM_SAVE: "保存咨询室",
+  ROOM_DELETE: "删除咨询室",
+  ROOM_SLOT_SAVE: "保存咨询室时段",
+  PRICING_BASE: "修改咨询师基础价",
+  PRICING_DEFAULT_SHARE: "修改咨询师默认分成",
+  PRICING_PATIENT: "修改来访调价与分成",
+  USER_CREATE: "新建用户",
+  USER_ROLE_SET: "设置用户角色",
+  USER_DELETE: "删除用户",
+  USER_SHELL_CLEANUP: "清理空壳用户",
+  EXEMPTION_REVIEW: "审核退款豁免",
+  CASE_RECORD_AMENDMENT_REVIEW: "审核咨询记录修改",
+  STAFF_REMARK: "修改员工备注",
+  PATIENT_COUNSELOR_BIND: "绑定签约咨询师",
+  PATIENT_SOURCE_UPDATE: "修改来访类型",
+  COUNSELOR_VISIBILITY: "修改咨询师公开可见",
+  COUNSELOR_DISPLAY_ORDER: "调整咨询师展示顺序",
+  COUNSELOR_PROFILE_UPDATE: "修改咨询师资料",
+  STAFF_PROFILE_UPDATE: "保存我的资料",
+  ADMIN_LOGIN: "管理端登录",
+  ADMIN_PASSWORD_CHANGE: "修改管理端密码",
+  SYSTEM_FEEDBACK: "更新系统反馈状态",
+  DATA_IMPORT: "导入数据",
+  ENTERPRISE_DEFAULT_SAVE: "保存企业站默认设置",
+  ENTERPRISE_SAVE: "保存企业定制",
+  ENTERPRISE_DELETE: "删除企业定制",
+  ENTERPRISE_COUNSELOR_SAVE: "保存企业咨询师勾选",
+  ENTERPRISE_ARTICLE_SAVE: "保存企业图文",
+  ENTERPRISE_ARTICLE_DELETE: "删除企业图文",
+  ENTERPRISE_PERSONNEL_GENERATE: "生成企业人员账号",
+  ENTERPRISE_PERSONNEL_EXPORT: "导出企业人员表",
+  ENTERPRISE_PERSONNEL_DELETE: "删除企业人员表",
+  DEFINITION_CREATE: "新建量表",
+  DEFINITION_UPDATE: "保存量表草稿",
+  DEFINITION_PUBLISH: "发布量表",
+  DEFINITION_ARCHIVE: "归档量表",
+  DEFINITION_DELETE: "删除量表",
+  DEFINITION_RESTORE: "恢复量表版本",
+  REPORT_DELETE: "删除量表结果",
 };
 
 const targetTypeLabels: Record<string, string> = {
@@ -46,6 +112,15 @@ const targetTypeLabels: Record<string, string> = {
   Banner: "Banner",
   Activity: "活动公告",
   Article: "文章",
+  Enterprise: "企业定制",
+  EnterpriseArticle: "企业图文",
+  EnterpriseDefault: "企业站默认设置",
+  Pricing: "定价",
+  Feedback: "系统反馈",
+  DataImport: "数据导入",
+  DataTransfer: "数据导入",
+  SitePage: "站点页面",
+  GuideItem: "引导内容",
 };
 
 function operationGroupLabel(record: OperationRecord) {
@@ -222,7 +297,7 @@ export function OperationLogsPanel({
         <div>
           <h2 className="text-xl font-semibold tracking-normal">操作记录</h2>
           <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">
-            基于现有业务表聚合出来的记录。没有新增审计表，所以部分内容是业务记录，不是完整前后快照。
+            这个版本上线之后的写操作会逐条留下记录。更早的内容仍是当时业务数据的快照，无法补回上线前的操作过程。
           </p>
         </div>
 
@@ -256,20 +331,94 @@ export function OperationLogsPanel({
               onChange={(event) => setFilters((prev) => ({ ...prev, actionType: event.target.value }))}
             >
               <option value="">全部操作</option>
-              <option value="REFUND_EXEMPTION">用户豁免审核</option>
-              <option value="ORDER">订单</option>
-              <option value="CONSULTATION">预约/取消预约</option>
-              <option value="SCHEDULE">排期</option>
-              <option value="CASE_RECORD">咨询记录</option>
-              <option value="CASE_RECORD_AMENDMENT">咨询记录修改</option>
-              <option value="CONSULTATION_FEEDBACK">咨询反馈</option>
-              <option value="LEAVE_REQUEST">咨询师请假</option>
-              <option value="SCHEDULE_CANCEL">咨询师取消排期</option>
-              <option value="ROOM">咨询室管理</option>
-              <option value="CONTENT">内容管理</option>
-              <option value="ROLE_SWITCH">角色切换</option>
-              <option value="OFFLINE_PAYMENT_PUSH">推送线下支付单</option>
-              <option value="OFFLINE_RECEIPT">确认线下收款</option>
+              <optgroup label="预约咨询">
+                <option value="PROXY_PUSH_PENDING">助理推送待支付订单</option>
+                <option value="PROXY_PUSH_FREE">助理推送免费体验订单</option>
+                <option value="PROXY_PUSH_OFFLINE">助理推送线下支付订单</option>
+                <option value="PROXY_CANCEL_PUSH">助理取消待支付推送</option>
+                <option value="COUNSELOR_PUSH_ORDER">咨询师推送订单</option>
+                <option value="PATIENT_PAY_ORDER">来访预约支付</option>
+                <option value="PATIENT_CONFIRM_ORDER">来访确认订单</option>
+                <option value="PATIENT_CANCEL_ORDER">来访取消订单</option>
+                <option value="COUNSELOR_LEAVE">咨询师提交请假</option>
+                <option value="LEAVE_APPROVE">同意咨询师请假</option>
+                <option value="LEAVE_REJECT">拒绝咨询师请假</option>
+                <option value="ASSISTANT_RESCHEDULE">助理修改预约时间</option>
+                <option value="ASSISTANT_CHANGE_ROOM">助理更换咨询室</option>
+                <option value="COUNSELOR_SCHEDULE_CREATE">咨询师新建排期</option>
+                <option value="COUNSELOR_SCHEDULE_UPDATE">咨询师修改排期</option>
+                <option value="COUNSELOR_SCHEDULE_CANCEL">咨询师取消排期</option>
+              </optgroup>
+              <optgroup label="运营配置">
+                <option value="CONTENT_BANNER_SAVE">保存 Banner</option>
+                <option value="CONTENT_BANNER_DELETE">删除 Banner</option>
+                <option value="CONTENT_SITE_PAGE_SAVE">保存站点页面</option>
+                <option value="CONTENT_GUIDE_SAVE">保存引导内容</option>
+                <option value="CONTENT_GUIDE_DELETE">删除引导内容</option>
+                <option value="CONTENT_ACTIVITY_SAVE">保存活动公告</option>
+                <option value="CONTENT_ACTIVITY_DELETE">删除活动公告</option>
+                <option value="CONTENT_ARTICLE_SAVE">保存文章</option>
+                <option value="CONTENT_ARTICLE_DELETE">删除文章</option>
+                <option value="ROOM_SAVE">保存咨询室</option>
+                <option value="ROOM_DELETE">删除咨询室</option>
+                <option value="ROOM_SLOT_SAVE">保存咨询室时段</option>
+                <option value="PRICING_BASE">修改咨询师基础价</option>
+                <option value="PRICING_DEFAULT_SHARE">修改咨询师默认分成</option>
+                <option value="PRICING_PATIENT">修改来访调价与分成</option>
+                <option value="DEFINITION_CREATE">新建量表</option>
+                <option value="DEFINITION_UPDATE">保存量表草稿</option>
+                <option value="DEFINITION_PUBLISH">发布量表</option>
+                <option value="DEFINITION_ARCHIVE">归档量表</option>
+                <option value="DEFINITION_DELETE">删除量表</option>
+                <option value="DEFINITION_RESTORE">恢复量表版本</option>
+                <option value="REPORT_DELETE">删除量表结果</option>
+                <option value="ENTERPRISE_SAVE">保存企业定制</option>
+                <option value="ENTERPRISE_DELETE">删除企业定制</option>
+                <option value="ENTERPRISE_COUNSELOR_SAVE">保存企业咨询师勾选</option>
+                <option value="ENTERPRISE_ARTICLE_SAVE">保存企业图文</option>
+                <option value="ENTERPRISE_ARTICLE_DELETE">删除企业图文</option>
+                <option value="ENTERPRISE_PERSONNEL_GENERATE">生成企业人员账号</option>
+                <option value="ENTERPRISE_PERSONNEL_EXPORT">导出企业人员表</option>
+                <option value="ENTERPRISE_PERSONNEL_DELETE">删除企业人员表</option>
+              </optgroup>
+              <optgroup label="后台操作">
+                <option value="USER_CREATE">新建用户</option>
+                <option value="USER_ROLE_SET">设置用户角色</option>
+                <option value="USER_DELETE">删除用户</option>
+                <option value="USER_SHELL_CLEANUP">清理空壳用户</option>
+                <option value="EXEMPTION_REVIEW">审核退款豁免</option>
+                <option value="CASE_RECORD_AMENDMENT_REVIEW">审核咨询记录修改</option>
+                <option value="CASE_RECORD_SAVE">保存咨询记录</option>
+                <option value="CASE_RECORD_AMENDMENT_SUBMIT">提交咨询记录修改</option>
+                <option value="STAFF_REMARK">修改员工备注</option>
+                <option value="PATIENT_COUNSELOR_BIND">绑定签约咨询师</option>
+                <option value="PATIENT_SOURCE_UPDATE">修改来访类型</option>
+                <option value="COUNSELOR_VISIBILITY">修改咨询师公开可见</option>
+                <option value="COUNSELOR_DISPLAY_ORDER">调整咨询师展示顺序</option>
+                <option value="COUNSELOR_PROFILE_UPDATE">修改咨询师资料</option>
+                <option value="STAFF_PROFILE_UPDATE">保存我的资料</option>
+                <option value="ADMIN_LOGIN">管理端登录</option>
+                <option value="ADMIN_PASSWORD_CHANGE">修改管理端密码</option>
+                <option value="SYSTEM_FEEDBACK">更新系统反馈状态</option>
+                <option value="DATA_IMPORT">导入数据</option>
+                <option value="ENTERPRISE_DEFAULT_SAVE">保存企业站默认设置</option>
+              </optgroup>
+              <optgroup label="原有业务快照">
+                <option value="REFUND_EXEMPTION">用户豁免审核</option>
+                <option value="ORDER">订单</option>
+                <option value="CONSULTATION">预约/取消预约</option>
+                <option value="SCHEDULE">排期</option>
+                <option value="CASE_RECORD">咨询记录</option>
+                <option value="CASE_RECORD_AMENDMENT">咨询记录修改</option>
+                <option value="CONSULTATION_FEEDBACK">咨询反馈</option>
+                <option value="LEAVE_REQUEST">咨询师请假</option>
+                <option value="SCHEDULE_CANCEL">咨询师取消排期</option>
+                <option value="ROOM">咨询室管理</option>
+                <option value="CONTENT">内容管理</option>
+                <option value="ROLE_SWITCH">角色切换</option>
+                <option value="OFFLINE_PAYMENT_PUSH">推送线下支付单</option>
+                <option value="OFFLINE_RECEIPT">确认线下收款</option>
+              </optgroup>
             </select>
           </QueryField>
           <QueryField label="操作人 ID">

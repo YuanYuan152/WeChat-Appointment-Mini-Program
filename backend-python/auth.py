@@ -690,6 +690,20 @@ def update_me(
         if not getattr(current_account, "ProfileCompletedAt", None):
             current_account.ProfileCompletedAt = datetime.utcnow()
     current_account.UpdatedAt = datetime.utcnow()
+    role = get_account_role(db, current_account.Id)
+    if role and role != "Patient":
+        from operation_log_service import record_operation
+
+        record_operation(
+            db,
+            action_type="STAFF_PROFILE_UPDATE",
+            action_label="保存我的资料",
+            summary=current_account.RealName or current_account.Nickname or "",
+            actor=current_account,
+            actor_role=role,
+            target_type="Account",
+            target_id=current_account.Id,
+        )
     db.commit()
     db.refresh(current_account)
     return get_me(current_account=current_account, db=db)

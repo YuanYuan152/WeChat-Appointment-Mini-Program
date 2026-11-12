@@ -464,6 +464,31 @@ def register_assessment_enterprise_admin_routes(
     require_assessment_editor: Callable[..., Any],
     require_admin: Callable[..., Any],
 ) -> None:
+    def _audit(
+        db: Session,
+        actor: Any,
+        *,
+        action_type: str,
+        action_label: str,
+        summary: str,
+        target_type: str,
+        target_id: Any = None,
+        target_name: str | None = None,
+    ) -> None:
+        from operation_log_service import record_operation
+
+        record_operation(
+            db,
+            action_type=action_type,
+            action_label=action_label,
+            summary=summary,
+            actor=actor,
+            target_type=target_type,
+            target_id=target_id,
+            target_name=target_name,
+        )
+        db.commit()
+
     @router.get("/assessment-enterprises", summary="企业定制量表配置")
     def list_admin_enterprises(
         db: Session = Depends(get_db),
@@ -489,9 +514,23 @@ def register_assessment_enterprise_admin_routes(
     @router.put("/assessment-enterprises/default", summary="保存默认网站品牌配置")
     def update_admin_default_branding(
         body: BrandingPayload,
-        _actor: Any = Depends(require_assessment_editor),
+        actor: Any = Depends(require_assessment_editor),
+        db: Session = Depends(get_db),
     ):
-        return save_default_branding(body.model_dump())
+        saved = save_default_branding(body.model_dump())
+        from operation_log_service import record_operation
+
+        record_operation(
+            db,
+            action_type="ENTERPRISE_DEFAULT_SAVE",
+            action_label="保存企业站默认设置",
+            summary=saved.get("siteName") or "默认品牌",
+            actor=actor,
+            target_type="EnterpriseDefault",
+            target_name=saved.get("siteName"),
+        )
+        db.commit()
+        return saved
 
     @router.get("/assessment-enterprises/private-assessments", summary="可分配的已发布量表（含私有与公有）")
     def list_assignable_assessments(_actor: Any = Depends(require_assessment_editor)):
@@ -542,11 +581,24 @@ def register_assessment_enterprise_admin_routes(
         _actor: Any = Depends(require_assessment_editor),
     ):
         try:
-            return save_enterprise_counselors(
+            saved = save_enterprise_counselors(
                 db,
                 enterprise_id,
                 [item.model_dump() for item in body.counselors],
             )
+            from operation_log_service import record_operation
+
+            record_operation(
+                db,
+                action_type="ENTERPRISE_COUNSELOR_SAVE",
+                action_label="保存企业咨询师勾选",
+                summary=f"已保存 {len(body.counselors)} 位咨询师",
+                actor=_actor,
+                target_type="Enterprise",
+                target_id=enterprise_id,
+            )
+            db.commit()
+            return saved
         except EnterpriseConfigError as exc:
             status = 404 if str(exc) == "企业配置不存在" else 422
             raise HTTPException(status_code=status, detail=str(exc)) from exc
@@ -558,34 +610,71 @@ def register_assessment_enterprise_admin_routes(
     @router.post("/assessment-enterprises/articles", summary="新增通用心理图文")
     def create_admin_article(
         body: ArticlePayload,
-        _actor: Any = Depends(require_assessment_editor),
+        actor: Any = Depends(require_assessment_editor),
+        db: Session = Depends(get_db),
     ):
         try:
-            return create_shared_article(body.model_dump())
+            saved = create_shared_article(body.model_dump())
         except EnterpriseConfigError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+        from operation_log_service import record_operation
+
+        record_operation(
+            db,
+            action_type="ENTERPRISE_ARTICLE_SAVE",
+            action_label="新增通用心理图文",
+            summary=saved.get("title") or body.title,
+            actor=actor,
+            target_type="EnterpriseArticle",
+            target_id=saved.get("id"),
+            target_name=saved.get("title"),
+        )
+        db.commit()
+        return saved
 
     @router.put("/assessment-enterprises/articles/{article_id}", summary="修改通用心理图文")
     def update_admin_article(
         article_id: str,
         body: ArticlePayload,
-        _actor: Any = Depends(require_assessment_editor),
+        actor: Any = Depends(require_assessment_editor),
+        db: Session = Depends(get_db),
     ):
         try:
-            return update_shared_article(article_id, body.model_dump())
+            saved = update_shared_article(article_id, body.model_dump())
         except EnterpriseConfigError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
+        _audit(
+            db,
+            actor,
+            action_type="ENTERPRISE_ARTICLE_SAVE",
+            action_label="修改通用心理图文",
+            summary=saved.get("title") or body.title,
+            target_type="EnterpriseArticle",
+            target_id=article_id,
+            target_name=saved.get("title"),
+        )
+        return saved
 
     @router.delete("/assessment-enterprises/articles/{article_id}", summary="删除通用心理图文")
     def delete_admin_article(
         article_id: str,
-        _actor: Any = Depends(require_assessment_editor),
+        actor: Any = Depends(require_assessment_editor),
+        db: Session = Depends(get_db),
     ):
         try:
             delete_shared_article(article_id)
-            return {"message": "图文已删除"}
         except EnterpriseConfigError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
+        _audit(
+            db,
+            actor,
+            action_type="ENTERPRISE_ARTICLE_DELETE",
+            action_label="删除通用心理图文",
+            summary=article_id,
+            target_type="EnterpriseArticle",
+            target_id=article_id,
+        )
+        return {"message": "图文已删除"}
 
     @router.get("/assessment-enterprises/{enterprise_id}/articles", summary="企业可见心理图文")
     def list_admin_enterprise_articles(
@@ -601,13 +690,25 @@ def register_assessment_enterprise_admin_routes(
     def create_admin_enterprise_article(
         enterprise_id: str,
         body: ArticlePayload,
-        _actor: Any = Depends(require_assessment_editor),
+        actor: Any = Depends(require_assessment_editor),
+        db: Session = Depends(get_db),
     ):
         try:
-            return create_enterprise_article(enterprise_id, body.model_dump())
+            saved = create_enterprise_article(enterprise_id, body.model_dump())
         except EnterpriseConfigError as exc:
             status = 404 if "不存在" in str(exc) else 422
             raise HTTPException(status_code=status, detail=str(exc)) from exc
+        _audit(
+            db,
+            actor,
+            action_type="ENTERPRISE_ARTICLE_SAVE",
+            action_label="为企业新增专属图文",
+            summary=saved.get("title") or body.title,
+            target_type="EnterpriseArticle",
+            target_id=saved.get("id"),
+            target_name=saved.get("title"),
+        )
+        return saved
 
     @router.put(
         "/assessment-enterprises/{enterprise_id}/articles/{article_id}",
@@ -617,13 +718,25 @@ def register_assessment_enterprise_admin_routes(
         enterprise_id: str,
         article_id: str,
         body: ArticlePayload,
-        _actor: Any = Depends(require_assessment_editor),
+        actor: Any = Depends(require_assessment_editor),
+        db: Session = Depends(get_db),
     ):
         try:
-            return update_enterprise_article(enterprise_id, article_id, body.model_dump())
+            saved = update_enterprise_article(enterprise_id, article_id, body.model_dump())
         except EnterpriseConfigError as exc:
             status = 404 if "不存在" in str(exc) else 422
             raise HTTPException(status_code=status, detail=str(exc)) from exc
+        _audit(
+            db,
+            actor,
+            action_type="ENTERPRISE_ARTICLE_SAVE",
+            action_label="修改企业图文",
+            summary=saved.get("title") or body.title,
+            target_type="EnterpriseArticle",
+            target_id=article_id,
+            target_name=saved.get("title"),
+        )
+        return saved
 
     @router.delete(
         "/assessment-enterprises/{enterprise_id}/articles/{article_id}",
@@ -632,13 +745,23 @@ def register_assessment_enterprise_admin_routes(
     def delete_admin_enterprise_article(
         enterprise_id: str,
         article_id: str,
-        _actor: Any = Depends(require_assessment_editor),
+        actor: Any = Depends(require_assessment_editor),
+        db: Session = Depends(get_db),
     ):
         try:
             delete_enterprise_article(enterprise_id, article_id)
-            return {"message": "已从该企业页面移除"}
         except EnterpriseConfigError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
+        _audit(
+            db,
+            actor,
+            action_type="ENTERPRISE_ARTICLE_DELETE",
+            action_label="从企业页面移除图文",
+            summary=article_id,
+            target_type="EnterpriseArticle",
+            target_id=article_id,
+        )
+        return {"message": "已从该企业页面移除"}
 
     def _save_and_sync_personnel_slug(db: Session, **kwargs: Any) -> dict[str, Any]:
         saved = save_enterprise(**kwargs)
@@ -654,7 +777,7 @@ def register_assessment_enterprise_admin_routes(
     ):
         try:
             _published_assessments(body.assessmentIds, body.assessmentTitles)
-            return _save_and_sync_personnel_slug(
+            saved = _save_and_sync_personnel_slug(
                 db,
                 enterprise_id=None,
                 company_name=body.companyName,
@@ -680,6 +803,20 @@ def register_assessment_enterprise_admin_routes(
             )
         except EnterpriseConfigError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+        from operation_log_service import record_operation
+
+        record_operation(
+            db,
+            action_type="ENTERPRISE_SAVE",
+            action_label="新增企业定制链接",
+            summary=body.companyName,
+            actor=_actor,
+            target_type="Enterprise",
+            target_id=saved.get("id"),
+            target_name=body.companyName,
+        )
+        db.commit()
+        return saved
 
     @router.put("/assessment-enterprises/{enterprise_id}", summary="编辑企业定制链接")
     def update_admin_enterprise(
@@ -690,7 +827,7 @@ def register_assessment_enterprise_admin_routes(
     ):
         try:
             _published_assessments(body.assessmentIds, body.assessmentTitles)
-            return _save_and_sync_personnel_slug(
+            saved = _save_and_sync_personnel_slug(
                 db,
                 enterprise_id=enterprise_id,
                 company_name=body.companyName,
@@ -716,6 +853,20 @@ def register_assessment_enterprise_admin_routes(
             )
         except EnterpriseConfigError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+        from operation_log_service import record_operation
+
+        record_operation(
+            db,
+            action_type="ENTERPRISE_SAVE",
+            action_label="编辑企业定制链接",
+            summary=body.companyName,
+            actor=_actor,
+            target_type="Enterprise",
+            target_id=enterprise_id,
+            target_name=body.companyName,
+        )
+        db.commit()
+        return saved
 
     @router.get(
         "/assessment-enterprises/{enterprise_id}/personnel",
@@ -744,7 +895,7 @@ def register_assessment_enterprise_admin_routes(
     ):
         try:
             enterprise = get_enterprise_by_id(enterprise_id)
-            return generate_personnel(
+            saved = generate_personnel(
                 db,
                 enterprise_id=enterprise["id"],
                 enterprise_slug=enterprise["slug"],
@@ -759,6 +910,16 @@ def register_assessment_enterprise_admin_routes(
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except EnterprisePersonnelError as exc:
             raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+        _audit(
+            db,
+            _actor,
+            action_type="ENTERPRISE_PERSONNEL_GENERATE",
+            action_label="生成企业人员账号",
+            summary=f"员工 {body.employeeCount}，管理员 {body.adminCount}",
+            target_type="Enterprise",
+            target_id=enterprise_id,
+        )
+        return saved
 
     @router.get(
         "/assessment-enterprises/{enterprise_id}/personnel/export",
@@ -774,11 +935,21 @@ def register_assessment_enterprise_admin_routes(
             get_enterprise_by_id(enterprise_id)
             if role not in {ROLE_EMPLOYEE, ROLE_ADMIN}:
                 raise HTTPException(status_code=422, detail="导出类型无效")
-            return export_personnel_xlsx(db, enterprise_id, role)
+            response = export_personnel_xlsx(db, enterprise_id, role)
         except EnterpriseConfigError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except EnterprisePersonnelError as exc:
             raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+        _audit(
+            db,
+            _actor,
+            action_type="ENTERPRISE_PERSONNEL_EXPORT",
+            action_label="导出企业人员表",
+            summary="员工表" if role == ROLE_EMPLOYEE else "管理员表",
+            target_type="Enterprise",
+            target_id=enterprise_id,
+        )
+        return response
 
     @router.delete(
         "/assessment-enterprises/{enterprise_id}/personnel",
@@ -792,11 +963,20 @@ def register_assessment_enterprise_admin_routes(
         try:
             get_enterprise_by_id(enterprise_id)
             deleted = delete_personnel(db, enterprise_id)
-            return {"message": "人员数据已删除", "deletedCount": deleted}
         except EnterpriseConfigError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except EnterprisePersonnelError as exc:
             raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+        _audit(
+            db,
+            _actor,
+            action_type="ENTERPRISE_PERSONNEL_DELETE",
+            action_label="删除企业人员表",
+            summary=f"已删除 {deleted} 条",
+            target_type="Enterprise",
+            target_id=enterprise_id,
+        )
+        return {"message": "人员数据已删除", "deletedCount": deleted}
 
     @router.delete("/assessment-enterprises/{enterprise_id}", summary="删除企业定制链接")
     def delete_admin_enterprise(
@@ -807,11 +987,20 @@ def register_assessment_enterprise_admin_routes(
         try:
             assert_enterprise_deletable(db, enterprise_id)
             delete_enterprise(enterprise_id)
-            return {"message": "企业配置已删除"}
         except EnterprisePersonnelError as exc:
             raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
         except EnterpriseConfigError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
+        _audit(
+            db,
+            _actor,
+            action_type="ENTERPRISE_DELETE",
+            action_label="删除企业定制链接",
+            summary=enterprise_id,
+            target_type="Enterprise",
+            target_id=enterprise_id,
+        )
+        return {"message": "企业配置已删除"}
 
     @router.get("/assessment-enterprises/{enterprise_id}/qrcode", summary="生成企业链接二维码")
     def enterprise_qrcode(

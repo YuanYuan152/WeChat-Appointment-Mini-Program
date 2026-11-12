@@ -328,6 +328,34 @@ class AppRoleSwitchLog(Base):
     UserAgent = Column(String(200), nullable=True)
 
 
+class AppOperationLog(Base):
+    """上线后的写操作留痕。只追加，不回填历史。"""
+
+    __tablename__ = "AppOperationLog"
+
+    Id = Column(ASSESSMENT_BIGINT, primary_key=True, autoincrement=True)
+    OccurredAt = Column(DateTime, nullable=False, index=True)
+    ActorAccountId = Column(Integer, nullable=True, index=True)
+    ActorRole = Column(String(50), nullable=True)
+    ActionType = Column(String(64), nullable=False, index=True)
+    ActionLabel = Column(Unicode(100), nullable=False)
+    TargetType = Column(String(50), nullable=True)
+    TargetId = Column(String(80), nullable=True)
+    TargetName = Column(Unicode(200), nullable=True)
+    Summary = Column(Unicode(1000), nullable=True)
+    Status = Column(String(40), nullable=True)
+    Amount = Column(Integer, nullable=True)
+    PatientId = Column(Integer, nullable=True)
+    CounselorId = Column(Integer, nullable=True)
+    OrderId = Column(Integer, nullable=True)
+    ConsultationId = Column(Integer, nullable=True)
+    ScheduleId = Column(Integer, nullable=True)
+    CenterName = Column(Unicode(100), nullable=True)
+    RoomName = Column(Unicode(100), nullable=True)
+    StartTime = Column(DateTime, nullable=True)
+    EndTime = Column(DateTime, nullable=True)
+
+
 class AppArticle(Base):
     __tablename__ = "AppArticle"
 

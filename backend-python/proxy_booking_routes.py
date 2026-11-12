@@ -231,6 +231,43 @@ def proxy_push_order(
             offline_payment_operator=body.offline_payment_operator,
             offline_payment_reason=body.offline_payment_reason,
         )
+        from operation_log_service import record_operation
+
+        if body.is_free_experience_order:
+            action_type, action_label, kind = (
+                "PROXY_PUSH_FREE",
+                "助理推送免费体验单",
+                "免费体验单",
+            )
+        elif body.is_offline_payment_order:
+            action_type, action_label, kind = (
+                "PROXY_PUSH_OFFLINE",
+                "助理推送线下支付单",
+                "线下支付单",
+            )
+        else:
+            action_type, action_label, kind = (
+                "PROXY_PUSH_PENDING",
+                "助理推送待支付订单",
+                "待支付订单",
+            )
+        record_operation(
+            db,
+            action_type=action_type,
+            action_label=action_label,
+            summary=kind,
+            actor=staff,
+            target_type="Order",
+            target_id=result.get("orderId"),
+            patient_id=body.patient_id,
+            counselor_id=body.counselor_id,
+            order_id=result.get("orderId"),
+            schedule_id=result.get("scheduleId"),
+            start_time=body.start_time,
+            end_time=body.end_time,
+            amount=result.get("totalFee"),
+            status="PENDING",
+        )
         db.commit()
         return result
     except ValueError as exc:
@@ -257,6 +294,20 @@ def proxy_cancel_order(
             order_id=body.order_id,
             schedule_id=body.schedule_id,
             operator_account_id=staff.Id,
+        )
+        from operation_log_service import record_operation
+
+        record_operation(
+            db,
+            action_type="PROXY_CANCEL_PUSH",
+            action_label="助理取消待支付推送",
+            summary="取消尚未支付的代理预约",
+            actor=staff,
+            target_type="Order",
+            target_id=body.order_id,
+            order_id=body.order_id,
+            schedule_id=body.schedule_id,
+            status="CANCELLED",
         )
         db.commit()
         return result

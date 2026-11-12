@@ -271,6 +271,18 @@ def create_banner(
         EndAt=body.end_at,
     )
     db.add(banner)
+    from operation_log_service import record_operation
+
+    record_operation(
+        db,
+        action_type="CONTENT_BANNER_SAVE",
+        action_label="新增 Banner",
+        summary=body.title,
+        actor=_ops,
+        target_type="Banner",
+        target_name=body.title,
+        status="ACTIVE" if banner.IsActive else "INACTIVE",
+    )
     db.commit()
     db.refresh(banner)
     return banner
@@ -296,6 +308,19 @@ def update_banner(
         if val is not None:
             setattr(banner, dst, val)
     banner.UpdatedAt = datetime.utcnow()
+    from operation_log_service import record_operation
+
+    record_operation(
+        db,
+        action_type="CONTENT_BANNER_SAVE",
+        action_label="修改 Banner",
+        summary=banner.Title,
+        actor=_ops,
+        target_type="Banner",
+        target_id=banner.Id,
+        target_name=banner.Title,
+        status="ACTIVE" if banner.IsActive else "INACTIVE",
+    )
     db.commit()
     db.refresh(banner)
     return banner
@@ -311,6 +336,19 @@ def delete_banner(
     if not banner:
         raise HTTPException(status_code=404, detail="Banner 不存在")
     db.delete(banner)
+    from operation_log_service import record_operation
+
+    record_operation(
+        db,
+        action_type="CONTENT_BANNER_DELETE",
+        action_label="删除 Banner",
+        summary=banner.Title,
+        actor=_ops,
+        target_type="Banner",
+        target_id=banner.Id,
+        target_name=banner.Title,
+        status="DELETED",
+    )
     db.commit()
     return {"msg": "已删除"}
 
@@ -405,6 +443,18 @@ def upsert_site_page(
             cover_crop=body.cover_crop.model_dump() if body.cover_crop else None,
             update_cover=body.cover_image_url is not None or body.cover_crop is not None,
         )
+        from operation_log_service import record_operation
+
+        record_operation(
+            db,
+            action_type="CONTENT_SITE_PAGE_SAVE",
+            action_label="保存站点文案",
+            summary=body.title or page_key,
+            actor=account,
+            target_type="SitePage",
+            target_id=page_key,
+            target_name=body.title or page_key,
+        )
         db.commit()
         return row
     except ValueError as exc:
@@ -431,6 +481,17 @@ def create_site_guide_item(
 
     try:
         row = _create(db, title=body.title, body=body.body, sort_order=body.sort_order)
+        from operation_log_service import record_operation
+
+        record_operation(
+            db,
+            action_type="CONTENT_GUIDE_SAVE",
+            action_label="新增关于咨询",
+            summary=body.title,
+            actor=_ops,
+            target_type="SiteGuide",
+            target_name=body.title,
+        )
         db.commit()
         return row
     except ValueError as exc:
@@ -455,6 +516,18 @@ def update_site_guide_item(
             sort_order=body.sort_order,
             is_active=body.is_active,
         )
+        from operation_log_service import record_operation
+
+        record_operation(
+            db,
+            action_type="CONTENT_GUIDE_SAVE",
+            action_label="修改关于咨询",
+            summary=body.title or f"条目 {item_id}",
+            actor=_ops,
+            target_type="SiteGuide",
+            target_id=item_id,
+            target_name=body.title,
+        )
         db.commit()
         return row
     except ValueError as exc:
@@ -471,6 +544,18 @@ def delete_site_guide_item(
 
     try:
         _delete(db, item_id)
+        from operation_log_service import record_operation
+
+        record_operation(
+            db,
+            action_type="CONTENT_GUIDE_DELETE",
+            action_label="删除关于咨询",
+            summary=f"条目 {item_id}",
+            actor=_ops,
+            target_type="SiteGuide",
+            target_id=item_id,
+            status="DELETED",
+        )
         db.commit()
         return {"msg": "已删除"}
     except ValueError as exc:
@@ -551,6 +636,19 @@ def create_activity(
     from patient_message_service import notify_patients_new_activity
 
     notify_patients_new_activity(db, activity)
+    from operation_log_service import record_operation
+
+    record_operation(
+        db,
+        action_type="CONTENT_ACTIVITY_SAVE",
+        action_label="新增活动公告",
+        summary=activity.Title,
+        actor=_ops,
+        target_type="Activity",
+        target_id=activity.Id,
+        target_name=activity.Title,
+        status="ACTIVE" if activity.IsActive else "INACTIVE",
+    )
     db.commit()
     db.refresh(activity)
     return activity
@@ -585,6 +683,19 @@ def update_activity(
                 val = val.strip() or None
             setattr(activity, dst, val)
     activity.UpdatedAt = datetime.utcnow()
+    from operation_log_service import record_operation
+
+    record_operation(
+        db,
+        action_type="CONTENT_ACTIVITY_SAVE",
+        action_label="修改活动公告",
+        summary=activity.Title,
+        actor=_ops,
+        target_type="Activity",
+        target_id=activity.Id,
+        target_name=activity.Title,
+        status="ACTIVE" if activity.IsActive else "INACTIVE",
+    )
     db.commit()
     db.refresh(activity)
     return activity
@@ -600,6 +711,19 @@ def delete_activity(
     if not activity:
         raise HTTPException(status_code=404, detail="活动不存在")
     db.delete(activity)
+    from operation_log_service import record_operation
+
+    record_operation(
+        db,
+        action_type="CONTENT_ACTIVITY_DELETE",
+        action_label="删除活动公告",
+        summary=activity.Title,
+        actor=_ops,
+        target_type="Activity",
+        target_id=activity.Id,
+        target_name=activity.Title,
+        status="DELETED",
+    )
     db.commit()
     return {"msg": "已删除"}
 
@@ -665,6 +789,17 @@ def create_article(
         PublishedAt=body.published_at or datetime.utcnow(),
     )
     db.add(article)
+    from operation_log_service import record_operation
+
+    record_operation(
+        db,
+        action_type="CONTENT_ARTICLE_SAVE",
+        action_label="新增文章",
+        summary=body.title,
+        actor=_ops,
+        target_type="Article",
+        target_name=body.title,
+    )
     db.commit()
     db.refresh(article)
     return _article_dict(article)
@@ -690,6 +825,18 @@ def update_article(
         if val is not None:
             setattr(article, dst, val)
     article.UpdatedAt = datetime.utcnow()
+    from operation_log_service import record_operation
+
+    record_operation(
+        db,
+        action_type="CONTENT_ARTICLE_SAVE",
+        action_label="修改文章",
+        summary=article.Title,
+        actor=_ops,
+        target_type="Article",
+        target_id=article.Id,
+        target_name=article.Title,
+    )
     db.commit()
     db.refresh(article)
     return _article_dict(article)
@@ -705,6 +852,19 @@ def delete_article(
     if not article:
         raise HTTPException(status_code=404, detail="文章不存在")
     db.delete(article)
+    from operation_log_service import record_operation
+
+    record_operation(
+        db,
+        action_type="CONTENT_ARTICLE_DELETE",
+        action_label="删除文章",
+        summary=article.Title,
+        actor=_ops,
+        target_type="Article",
+        target_id=article.Id,
+        target_name=article.Title,
+        status="DELETED",
+    )
     db.commit()
     return {"msg": "已删除"}
 
@@ -1136,6 +1296,21 @@ def reschedule_schedule(
             room_id=body.room_id,
             reason=body.reason,
         )
+        from operation_log_service import record_operation
+
+        record_operation(
+            db,
+            action_type="ASSISTANT_RESCHEDULE",
+            action_label="助理修改预约时间",
+            summary=body.reason or "修改已预约时间",
+            actor=ops_account,
+            target_type="Schedule",
+            target_id=schedule_id,
+            schedule_id=schedule_id,
+            start_time=body.start_time,
+            end_time=body.end_time,
+            status="RESCHEDULED",
+        )
         db.commit()
         return result
     except ValueError as exc:
@@ -1440,6 +1615,18 @@ def save_room_slot_statuses(
     try:
         upsert_slot_statuses(db, row.Id, to_save)
         row.UpdatedAt = datetime.utcnow()
+        from operation_log_service import record_operation
+
+        record_operation(
+            db,
+            action_type="ROOM_SLOT_SAVE",
+            action_label="保存咨询室时段",
+            summary=f"{row.Name} 保存 {len(to_save)} 个时段",
+            actor=_ops,
+            target_type="ConsultationRoom",
+            target_id=row.Id,
+            target_name=row.Name,
+        )
         db.commit()
     except (ProgrammingError, OperationalError) as e:
         db.rollback()
@@ -1563,6 +1750,24 @@ def change_schedule_room(
         consultation.Note = schedule_note(center_id, new_room)
         consultation.UpdatedAt = datetime.utcnow()
 
+    from operation_log_service import record_operation
+
+    record_operation(
+        db,
+        action_type="ASSISTANT_CHANGE_ROOM",
+        action_label="助理更换咨询室",
+        summary=new_room,
+        actor=_ops,
+        target_type="Schedule",
+        target_id=schedule.Id,
+        schedule_id=schedule.Id,
+        consultation_id=consultation.Id if consultation else None,
+        patient_id=consultation.PatientId if consultation else None,
+        counselor_id=schedule.CounselorId,
+        room_name=new_room,
+        start_time=schedule.StartTime,
+        end_time=schedule.EndTime,
+    )
     db.commit()
     return {
         "code": 0,
@@ -1625,6 +1830,18 @@ def create_room(
         SortOrder=body.sort_order or 0,
     )
     db.add(row)
+    from operation_log_service import record_operation
+
+    record_operation(
+        db,
+        action_type="ROOM_SAVE",
+        action_label="新增咨询室",
+        summary=name,
+        actor=_ops,
+        target_type="ConsultationRoom",
+        target_name=name,
+        status=status,
+    )
     db.commit()
     db.refresh(row)
     return {
@@ -1667,6 +1884,19 @@ def update_room(
         row.SortOrder = body.sort_order
 
     row.UpdatedAt = datetime.utcnow()
+    from operation_log_service import record_operation
+
+    record_operation(
+        db,
+        action_type="ROOM_SAVE",
+        action_label="修改咨询室",
+        summary=row.Name,
+        actor=_ops,
+        target_type="ConsultationRoom",
+        target_id=row.Id,
+        target_name=row.Name,
+        status=row.Status,
+    )
     db.commit()
     db.refresh(row)
     return {
@@ -1766,5 +1996,18 @@ def delete_room(
 
     row.Status = "DELETED"
     row.UpdatedAt = datetime.utcnow()
+    from operation_log_service import record_operation
+
+    record_operation(
+        db,
+        action_type="ROOM_DELETE",
+        action_label="删除咨询室",
+        summary=row.Name,
+        actor=_ops,
+        target_type="ConsultationRoom",
+        target_id=row.Id,
+        target_name=row.Name,
+        status="DELETED",
+    )
     db.commit()
     return {"msg": "咨询室已删除"}

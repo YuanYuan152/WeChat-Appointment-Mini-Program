@@ -48,7 +48,34 @@ def begin_assessment_audit(
     )
     db.add(row)
     db.flush()
+    if outcome == "SUCCEEDED":
+        _mirror_succeeded_audit(row)
     return row
+
+
+def _mirror_succeeded_audit(row: AppAssessmentAuditLog) -> None:
+    if row.Action in {"REPORT_VIEW", "REPORT_VIEW_RAW", "SHARE_STATS_VIEW"}:
+        return
+    from sqlalchemy.orm import object_session
+
+    from operation_log_service import ASSESSMENT_ACTION_LABELS, record_operation
+
+    session = object_session(row)
+    if session is None:
+        return
+    label = ASSESSMENT_ACTION_LABELS.get(row.Action, row.Action)
+    record_operation(
+        session,
+        action_type=row.Action,
+        action_label=label,
+        summary=row.AssessmentId or row.TargetPublicId or label,
+        actor_id=row.ActorAccountId,
+        actor_role=row.ActorRole,
+        target_type=row.TargetType,
+        target_id=row.TargetPublicId or row.AssessmentId,
+        target_name=row.AssessmentId or row.TargetPublicId,
+        status=row.Outcome,
+    )
 
 
 def finish_assessment_audit(
@@ -60,3 +87,5 @@ def finish_assessment_audit(
     row.Outcome = outcome
     if metadata is not None:
         row.MetadataJson = _metadata_json(metadata)
+    if outcome == "SUCCEEDED":
+        _mirror_succeeded_audit(row)

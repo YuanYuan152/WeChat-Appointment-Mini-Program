@@ -144,6 +144,9 @@ def complete_paid_order(
     order.PaidAt = paid_at
     if transaction_id:
         order.TransactionId = transaction_id
+    from operation_log_service import record_patient_settlement
+
+    record_patient_settlement(db, order, schedule)
 
     if not order.SlotId:
         return

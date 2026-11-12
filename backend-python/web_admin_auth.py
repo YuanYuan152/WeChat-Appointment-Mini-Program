@@ -125,6 +125,17 @@ def admin_sms_login(body: AdminSmsLoginRequest, db: Session = Depends(get_db)):
 
     _ensure_admin_web_staff(db, account)
     account.UpdatedAt = datetime.utcnow()
+    from operation_log_service import record_operation
+
+    record_operation(
+        db,
+        action_type="ADMIN_LOGIN",
+        action_label="管理端登录",
+        summary="短信验证码登录",
+        actor=account,
+        target_type="Account",
+        target_id=account.Id,
+    )
     db.commit()
 
     token = _issue_token(db, account)
@@ -148,6 +159,17 @@ def admin_password_login(body: AdminPasswordLoginRequest, db: Session = Depends(
         raise HTTPException(status_code=401, detail="手机号或密码错误")
 
     account.UpdatedAt = datetime.utcnow()
+    from operation_log_service import record_operation
+
+    record_operation(
+        db,
+        action_type="ADMIN_LOGIN",
+        action_label="管理端登录",
+        summary="密码登录",
+        actor=account,
+        target_type="Account",
+        target_id=account.Id,
+    )
     db.commit()
     token = _issue_token(db, account)
     return AdminAuthTokenResponse(token=token)
@@ -170,6 +192,17 @@ def admin_reset_password(body: AdminResetPasswordRequest, db: Session = Depends(
 
     account.PasswordHash = hash_password(new_password)
     account.UpdatedAt = datetime.utcnow()
+    from operation_log_service import record_operation
+
+    record_operation(
+        db,
+        action_type="ADMIN_PASSWORD_CHANGE",
+        action_label="修改管理端密码",
+        summary="短信验证后设置密码",
+        actor=account,
+        target_type="Account",
+        target_id=account.Id,
+    )
     db.commit()
     return AdminMessageResponse(message="密码已更新")
 
@@ -197,5 +230,16 @@ def admin_change_password(
     verify_code(db, mobile, body.code, ADMIN_RESET_PASSWORD_PURPOSE)
     current_account.PasswordHash = hash_password(new_password)
     current_account.UpdatedAt = datetime.utcnow()
+    from operation_log_service import record_operation
+
+    record_operation(
+        db,
+        action_type="ADMIN_PASSWORD_CHANGE",
+        action_label="修改管理端密码",
+        summary="已登录后修改密码",
+        actor=current_account,
+        target_type="Account",
+        target_id=current_account.Id,
+    )
     db.commit()
     return AdminMessageResponse(message="密码已更新")

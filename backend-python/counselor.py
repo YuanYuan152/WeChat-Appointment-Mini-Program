@@ -1248,6 +1248,21 @@ def create_schedule(
         Note=_build_schedule_note(body),
     )
     db.add(schedule)
+    from operation_log_service import record_operation
+
+    record_operation(
+        db,
+        action_type="COUNSELOR_SCHEDULE_CREATE",
+        action_label="咨询师新建排期",
+        summary="新建可预约排期",
+        actor=counselor,
+        actor_role="Counselor",
+        target_type="Schedule",
+        counselor_id=counselor.Id,
+        start_time=body.start_time,
+        end_time=body.end_time,
+        status="AVAILABLE",
+    )
     db.commit()
     db.refresh(schedule)
     return schedule
@@ -1317,6 +1332,24 @@ def update_schedule(
         schedule.Note = body.note
 
     schedule.UpdatedAt = datetime.utcnow()
+    from operation_log_service import record_operation
+
+    cancelled = schedule.Status == "CANCELLED"
+    record_operation(
+        db,
+        action_type="COUNSELOR_SCHEDULE_CANCEL" if cancelled else "COUNSELOR_SCHEDULE_UPDATE",
+        action_label="咨询师取消排期" if cancelled else "咨询师修改排期",
+        summary="取消未预约排期" if cancelled else "修改排期",
+        actor=counselor,
+        actor_role="Counselor",
+        target_type="Schedule",
+        target_id=schedule.Id,
+        counselor_id=counselor.Id,
+        schedule_id=schedule.Id,
+        start_time=schedule.StartTime,
+        end_time=schedule.EndTime,
+        status=schedule.Status,
+    )
     db.commit()
     db.refresh(schedule)
     return schedule
@@ -1418,6 +1451,25 @@ def submit_leave_request(
         leave_reason=reason,
         leave_request_id=row.Id,
         consultation=consultation,
+    )
+    from operation_log_service import record_operation
+
+    record_operation(
+        db,
+        action_type="COUNSELOR_LEAVE",
+        action_label="咨询师请假",
+        summary=reason or "提交请假",
+        actor=counselor,
+        actor_role="Counselor",
+        target_type="LeaveRequest",
+        target_id=row.Id,
+        counselor_id=counselor.Id,
+        schedule_id=schedule.Id,
+        consultation_id=consultation.Id if consultation else None,
+        patient_id=consultation.PatientId if consultation else None,
+        start_time=schedule.StartTime,
+        end_time=schedule.EndTime,
+        status="PENDING",
     )
     db.commit()
     db.refresh(row)
@@ -1737,6 +1789,21 @@ def create_case_record(
         notify_admins_crisis_report_if_needed(
             db, existing, counselor_id=counselor.Id, old_crisis_choice=old_crisis_choice
         )
+        from operation_log_service import record_operation
+
+        record_operation(
+            db,
+            action_type="CASE_RECORD_SAVE",
+            action_label="填写咨询记录",
+            summary="更新未锁定的咨询记录",
+            actor=counselor,
+            actor_role="Counselor",
+            target_type="CaseRecord",
+            target_id=existing.Id,
+            counselor_id=counselor.Id,
+            consultation_id=existing.ConsultationId,
+            status="UPDATED",
+        )
         db.commit()
         db.refresh(existing)
         return _case_record_out(db, existing)
@@ -1762,6 +1829,21 @@ def create_case_record(
     db.flush()
     notify_admins_crisis_report_if_needed(
         db, record, counselor_id=counselor.Id, old_crisis_choice=""
+    )
+    from operation_log_service import record_operation
+
+    record_operation(
+        db,
+        action_type="CASE_RECORD_SAVE",
+        action_label="填写咨询记录",
+        summary="新建咨询记录",
+        actor=counselor,
+        actor_role="Counselor",
+        target_type="CaseRecord",
+        target_id=record.Id,
+        counselor_id=counselor.Id,
+        consultation_id=record.ConsultationId,
+        status="CREATED",
     )
     db.commit()
     db.refresh(record)
@@ -1816,6 +1898,21 @@ def create_case_record_amendment(
         header_info=body.header_info,
         photo_urls=body.photo_urls,
         reason=body.reason,
+    )
+    from operation_log_service import record_operation
+
+    record_operation(
+        db,
+        action_type="CASE_RECORD_AMENDMENT_SUBMIT",
+        action_label="提交咨询记录修改申请",
+        summary=body.reason or "提交修改申请",
+        actor=counselor,
+        actor_role="Counselor",
+        target_type="CaseRecordAmendment",
+        target_id=amendment.Id,
+        counselor_id=counselor.Id,
+        consultation_id=record.ConsultationId,
+        status="PENDING",
     )
     db.commit()
     db.refresh(record)
@@ -2377,6 +2474,24 @@ def counselor_proxy_push_order(
             existing_schedule_id=body.schedule_id,
             agreement_is_adult=None,
             notify_target_counselor=False,
+        )
+        from operation_log_service import record_operation
+
+        record_operation(
+            db,
+            action_type="COUNSELOR_PUSH_ORDER",
+            action_label="咨询师推送订单",
+            summary="推送待来访支付订单",
+            actor=counselor,
+            actor_role="Counselor",
+            target_type="Order",
+            target_id=(result or {}).get("orderId") or (result or {}).get("order_id"),
+            patient_id=body.patient_id,
+            counselor_id=counselor.Id,
+            schedule_id=body.schedule_id,
+            start_time=body.start_time,
+            end_time=body.end_time,
+            status="PENDING",
         )
         db.commit()
         return result

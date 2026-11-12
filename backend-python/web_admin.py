@@ -39,6 +39,7 @@ from models import (
     AppFeedback,
     AppLeaveRequest,
     AppOrder,
+    AppOperationLog,
     AppRefundExemption,
     AppRoleBinding,
     AppRoleSwitchLog,
@@ -150,7 +151,21 @@ async def data_transfer_import(
             "errors": [{"sheet": "文件", "cell": "", "message": "请上传 .xlsx 格式文件"}],
             "rows": [],
         }
-    return import_workbook(kind, await file.read(), db, current_admin.Id)
+    result = import_workbook(kind, await file.read(), db, current_admin.Id)
+    from operation_log_service import record_operation
+
+    record_operation(
+        db,
+        action_type="DATA_IMPORT",
+        action_label="导入管理数据",
+        summary=f"{kind}：成功 {result.get('importedCount') or 0} 条",
+        actor=current_admin,
+        target_type="DataTransfer",
+        target_name=kind,
+        status="IMPORTED" if result.get("importedCount") else "FINISHED",
+    )
+    db.commit()
+    return result
 
 
 @router.get("/data-transfer/{kind}/export", summary="导出管理数据")
@@ -300,6 +315,58 @@ def _paginate(items: list[dict[str, Any]], page: int, page_size: int) -> dict[st
         "pageSize": page_size,
         "items": items[start:end],
     }
+
+
+def _stored_target_id(value: Optional[str]) -> Optional[int]:
+    text = (value or "").strip()
+    if text.isdigit():
+        return int(text)
+    return None
+
+
+def _append_stored_operation_logs(
+    db: Session,
+    clock: ApiTimeClock,
+    records: list[dict[str, Any]],
+    account_ids: set[int],
+) -> None:
+    """上线后写入的操作日志。表还不存在时不影响原来的业务快照。"""
+    try:
+        rows = db.query(AppOperationLog).all()
+    except (OperationalError, ProgrammingError):
+        db.rollback()
+        return
+    for row in rows:
+        if row.ActorAccountId:
+            account_ids.add(int(row.ActorAccountId))
+        if row.PatientId:
+            account_ids.add(int(row.PatientId))
+        if row.CounselorId:
+            account_ids.add(int(row.CounselorId))
+        records.append({
+            "id": f"operation-log-{row.Id}",
+            "occurredAt": clock.utc(row.OccurredAt),
+            "actionType": row.ActionType,
+            "actionLabel": row.ActionLabel,
+            "operatorId": row.ActorAccountId,
+            "operatorRole": row.ActorRole,
+            "targetType": row.TargetType,
+            "targetId": _stored_target_id(row.TargetId),
+            "targetName": row.TargetName,
+            "summary": row.Summary,
+            "amount": row.Amount,
+            "status": row.Status,
+            "patientId": row.PatientId,
+            "counselorId": row.CounselorId,
+            "relatedOrderId": row.OrderId,
+            "relatedConsultationId": row.ConsultationId,
+            "scheduleId": row.ScheduleId,
+            "centerName": row.CenterName,
+            "roomName": row.RoomName,
+            "startTime": clock.china(row.StartTime),
+            "endTime": clock.china(row.EndTime),
+            "createdAt": clock.utc(row.OccurredAt),
+        })
 
 
 def _within_range(value: Optional[datetime], start_at: Optional[datetime], end_at: Optional[datetime]) -> bool:
@@ -879,6 +946,19 @@ async def import_completed_orders(
     imported = len([item for item in results if item["status"] == "IMPORTED"])
     skipped = len([item for item in results if item["status"] == "SKIPPED"])
     failed = len([item for item in results if item["status"] == "FAILED"])
+    from operation_log_service import record_operation
+
+    record_operation(
+        db,
+        action_type="DATA_IMPORT",
+        action_label="导入历史完成订单",
+        summary=f"成功 {imported} 条，跳过 {skipped} 条，失败 {failed} 条",
+        actor=_admin,
+        target_type="DataImport",
+        target_name=filename,
+        status="IMPORTED",
+    )
+    db.commit()
     return {
         "message": f"导入完成：成功 {imported} 条，跳过 {skipped} 条，失败 {failed} 条",
         "totalRows": len(results),
@@ -1396,6 +1476,8 @@ def operation_records(
             "amount": None,
             "status": "ACTIVE" if row.IsActive else "INACTIVE",
         })
+
+    _append_stored_operation_logs(db, clock, records, account_ids)
 
     accounts = _accounts_by_id(db, account_ids)
     roles_by_account = _roles_for_accounts(db, account_ids)
@@ -2030,6 +2112,18 @@ def update_system_feedback_status(
     if not row:
         raise HTTPException(status_code=404, detail="反馈不存在")
     row.Status = status
+    from operation_log_service import record_operation
+
+    record_operation(
+        db,
+        action_type="SYSTEM_FEEDBACK",
+        action_label="更新系统反馈状态",
+        summary=status,
+        actor=_staff,
+        target_type="Feedback",
+        target_id=feedback_id,
+        status=status,
+    )
     db.commit()
     db.refresh(row)
     account = db.query(AppAccount).filter(AppAccount.Id == row.AccountId).first()

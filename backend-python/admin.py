@@ -734,6 +734,19 @@ def create_user_by_mobile(
         _restore_counselor_on_rebind(db, account)
     invalidate_user_sessions(db, account.Id)
     account.UpdatedAt = datetime.utcnow()
+    from operation_log_service import record_operation
+
+    record_operation(
+        db,
+        action_type="USER_CREATE" if created else "USER_ROLE_SET",
+        action_label="添加用户" if created else "更换用户角色",
+        summary=f"{mobile} → {body.role}",
+        actor=admin,
+        target_type="Account",
+        target_id=account.Id,
+        target_name=account.Nickname or mobile,
+        status=body.role,
+    )
     db.commit()
     db.refresh(account)
 
@@ -773,6 +786,18 @@ def bind_user_role(
             _ensure_counselor_profile(db, user, counselor_type)
             user.UpdatedAt = datetime.utcnow()
             invalidate_user_sessions(db, user_id)
+            from operation_log_service import record_operation
+
+            record_operation(
+                db,
+                action_type="USER_ROLE_SET",
+                action_label="更新咨询师类型",
+                summary=counselor_type or "",
+                actor=admin,
+                target_type="Account",
+                target_id=user_id,
+                status="Counselor",
+            )
             db.commit()
             return {"message": "咨询师类型已更新"}
     elif new_role == "Patient":
@@ -784,6 +809,19 @@ def bind_user_role(
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         if previous_role == "Patient":
             user.UpdatedAt = datetime.utcnow()
+            from operation_log_service import record_operation
+
+            record_operation(
+                db,
+                action_type="PATIENT_SOURCE_UPDATE",
+                action_label="修改来访类别",
+                summary=user.PatientSource or "",
+                actor=admin,
+                target_type="Account",
+                target_id=user_id,
+                patient_id=user_id,
+                status="Patient",
+            )
             db.commit()
             return {"message": "来访类别已更新"}
 
@@ -812,6 +850,18 @@ def bind_user_role(
         ToRole=new_role,
     ))
     invalidate_user_sessions(db, user_id)
+    from operation_log_service import record_operation
+
+    record_operation(
+        db,
+        action_type="USER_ROLE_SET",
+        action_label="更换用户角色",
+        summary=f"{previous_role or '-'} → {new_role}",
+        actor=admin,
+        target_type="Account",
+        target_id=user_id,
+        status=new_role,
+    )
     db.commit()
     return {"message": "角色已更换，用户重新登录后生效"}
 
@@ -866,6 +916,17 @@ def cleanup_shell_users(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    from operation_log_service import record_operation
+
+    record_operation(
+        db,
+        action_type="USER_SHELL_CLEANUP",
+        action_label="清理壳用户",
+        summary=f"删除 {int(result['deletedCount'])} 个，跳过 {int(result['skippedCount'])} 个",
+        actor=admin,
+        target_type="Account",
+        status="DONE",
+    )
     db.commit()
     deleted_count = int(result["deletedCount"])
     skipped_count = int(result["skippedCount"])
@@ -899,12 +960,26 @@ def delete_user_account(
 
     user_role = get_account_role(db, user_id)
     _guard_manage_user(db, admin, user_role, target_account=account)
+    deleted_name = (account.RealName or account.Nickname or account.Mobile or str(user_id))
 
     try:
         hard_delete_account(db, user_id, purge_business=(user_role == "Tester"))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    from operation_log_service import record_operation
+
+    record_operation(
+        db,
+        action_type="USER_DELETE",
+        action_label="删除用户",
+        summary=deleted_name,
+        actor=admin,
+        target_type="Account",
+        target_id=user_id,
+        target_name=deleted_name,
+        status="DELETED",
+    )
     db.commit()
     return {"message": "用户已永久删除", "deletedUserId": user_id}
 
@@ -1028,6 +1103,21 @@ def approve_refund_exemption_request(
         refunded, message = approve_refund_exemption(db, row, admin.Id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    from operation_log_service import record_operation
+
+    record_operation(
+        db,
+        action_type="EXEMPTION_REVIEW",
+        action_label="同意退款豁免",
+        summary=message,
+        actor=admin,
+        target_type="RefundExemption",
+        target_id=exemption_id,
+        patient_id=row.AccountId,
+        consultation_id=row.ConsultationId,
+        amount=row.Amount,
+        status="APPROVED",
+    )
     db.commit()
     return {"message": message, "refunded": refunded, "status": "APPROVED"}
 
@@ -1049,6 +1139,20 @@ def reject_refund_exemption_request(
         reject_refund_exemption(db, row, admin.Id, body.reject_reason)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    from operation_log_service import record_operation
+
+    record_operation(
+        db,
+        action_type="EXEMPTION_REVIEW",
+        action_label="拒绝退款豁免",
+        summary=body.reject_reason or "已拒绝",
+        actor=admin,
+        target_type="RefundExemption",
+        target_id=exemption_id,
+        patient_id=row.AccountId,
+        consultation_id=row.ConsultationId,
+        status="REJECTED",
+    )
     db.commit()
     return {"message": "已拒绝申请，预约与订单维持不变", "status": "REJECTED"}
 
@@ -1202,6 +1306,20 @@ def approve_case_record_amendment(
         approve_amendment(db, row, admin.Id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    from operation_log_service import record_operation
+
+    record_operation(
+        db,
+        action_type="CASE_RECORD_AMENDMENT_REVIEW",
+        action_label="同意咨询记录修改",
+        summary="咨询记录已按申请更新",
+        actor=admin,
+        target_type="CaseRecordAmendment",
+        target_id=amendment_id,
+        counselor_id=row.CounselorId,
+        consultation_id=row.ConsultationId,
+        status="APPROVED",
+    )
     db.commit()
     return {"message": "已同意修改，咨询记录已更新", "status": "APPROVED"}
 
@@ -1225,6 +1343,20 @@ def reject_case_record_amendment(
         reject_amendment(db, row, admin.Id, body.reject_reason)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    from operation_log_service import record_operation
+
+    record_operation(
+        db,
+        action_type="CASE_RECORD_AMENDMENT_REVIEW",
+        action_label="驳回咨询记录修改",
+        summary=body.reject_reason or "已驳回",
+        actor=admin,
+        target_type="CaseRecordAmendment",
+        target_id=amendment_id,
+        counselor_id=row.CounselorId,
+        consultation_id=row.ConsultationId,
+        status="REJECTED",
+    )
     db.commit()
     return {"message": "已驳回修改申请，原记录维持不变", "status": "REJECTED"}
 
@@ -1382,6 +1514,18 @@ def update_staff_account_remark(
         remark = set_staff_remark(db, account_id, body.remark, admin.Id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    from operation_log_service import record_operation
+
+    record_operation(
+        db,
+        action_type="STAFF_REMARK",
+        action_label="保存内部备注",
+        summary=(remark or "")[:200],
+        actor=admin,
+        target_type="Account",
+        target_id=account_id,
+        status="SAVED",
+    )
     db.commit()
     return {"accountId": account_id, "staffRemark": remark}
 
@@ -2141,6 +2285,19 @@ def update_patient_bound_counselor(
         bind_patient_counselor(db, patient_id, body.counselorId)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    from operation_log_service import record_operation
+
+    record_operation(
+        db,
+        action_type="PATIENT_COUNSELOR_BIND",
+        action_label="绑定签约咨询师",
+        summary="解除绑定" if body.counselorId is None else f"绑定咨询师 {body.counselorId}",
+        actor=_staff,
+        target_type="Account",
+        target_id=patient_id,
+        patient_id=patient_id,
+        counselor_id=body.counselorId,
+    )
     db.commit()
     db.refresh(patient)
     return {
@@ -2567,6 +2724,19 @@ def set_counselor_public_visibility(
 
     profile.IsPublicVisible = bool(body.isPublicVisible)
     profile.UpdatedAt = datetime.utcnow()
+    from operation_log_service import record_operation
+
+    record_operation(
+        db,
+        action_type="COUNSELOR_VISIBILITY",
+        action_label="设置咨询师公开可见",
+        summary="对外可见" if profile.IsPublicVisible else "不在来访端展示",
+        actor=_admin,
+        target_type="Counselor",
+        target_id=counselor_id,
+        counselor_id=counselor_id,
+        status="VISIBLE" if profile.IsPublicVisible else "HIDDEN",
+    )
     db.commit()
 
     return {
@@ -2722,6 +2892,17 @@ def save_counselor_display_order(
         profile.ListSortRank = index
         profile.UpdatedAt = now
 
+    from operation_log_service import record_operation
+
+    record_operation(
+        db,
+        action_type="COUNSELOR_DISPLAY_ORDER",
+        action_label="保存咨询师展示顺序",
+        summary=f"调整 {len(normalized)} 位咨询师的置顶、隐藏和排序",
+        actor=_staff,
+        target_type="Counselor",
+        status="SAVED",
+    )
     db.commit()
     items = _build_counselor_display_order_items(db)
     return {
@@ -2951,6 +3132,19 @@ def update_admin_counselor(
     if body.faceBillingYuan is not None:
         profile.FaceBilling = int(body.faceBillingYuan) * 100
     profile.UpdatedAt = datetime.utcnow()
+    from operation_log_service import record_operation
+
+    record_operation(
+        db,
+        action_type="COUNSELOR_PROFILE_UPDATE",
+        action_label="修改咨询师资料",
+        summary=profile.Name or str(counselor_id),
+        actor=_admin,
+        target_type="Counselor",
+        target_id=counselor_id,
+        target_name=profile.Name,
+        counselor_id=counselor_id,
+    )
     db.commit()
     db.refresh(profile)
     return get_admin_counselor_detail(counselor_id, _admin, db)
@@ -3020,6 +3214,20 @@ def approve_leave_request_api(
         status, message = approve_leave_request(db, row, admin.Id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    from operation_log_service import record_operation
+
+    record_operation(
+        db,
+        action_type="LEAVE_APPROVE",
+        action_label="通过咨询师请假",
+        summary=message,
+        actor=admin,
+        target_type="LeaveRequest",
+        target_id=leave_id,
+        counselor_id=row.CounselorId,
+        schedule_id=row.ScheduleId,
+        status=status,
+    )
     db.commit()
     return {"message": message, "status": status}
 
@@ -3047,6 +3255,20 @@ def reject_leave_request_api(
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    from operation_log_service import record_operation
+
+    record_operation(
+        db,
+        action_type="LEAVE_REJECT",
+        action_label="拒绝咨询师请假",
+        summary=(body.rejectReason if body and body.rejectReason else "已拒绝"),
+        actor=admin,
+        target_type="LeaveRequest",
+        target_id=leave_id,
+        counselor_id=row.CounselorId,
+        schedule_id=row.ScheduleId,
+        status="REJECTED",
+    )
     db.commit()
     return {"message": "已拒绝请假申请", "status": "REJECTED"}
 
@@ -3146,6 +3368,17 @@ def update_pricing_counselor_default_share_batch(
             actor_id=actor.Id,
             result=result,
         )
+        from operation_log_service import record_operation
+
+        record_operation(
+            db,
+            action_type="PRICING_DEFAULT_SHARE",
+            action_label="批量调整默认分成",
+            summary=f"{len(body.counselorIds)} 位咨询师改为 {body.revenueSharePercent}%",
+            actor=actor,
+            target_type="Pricing",
+            status="SAVED",
+        )
         db.commit()
         return result
     except ValueError as e:
@@ -3208,6 +3441,19 @@ def update_pricing_counselor_base(
             before_share=before_share,
             after_share=after_share,
         )
+    from operation_log_service import record_operation
+
+    record_operation(
+        db,
+        action_type="PRICING_BASE",
+        action_label="修改咨询师基础价",
+        summary=f"{old_yuan} 元 → {body.basePriceYuan} 元",
+        actor=actor,
+        target_type="Counselor",
+        target_id=counselor_id,
+        counselor_id=counselor_id,
+        amount=body.basePriceYuan * 100,
+    )
     db.commit()
     return counselor_pricing_summary(db, counselor_id)
 
@@ -3257,6 +3503,18 @@ def update_pricing_counselor_default_share(
             before_share=before_share,
             after_share=after_share,
         )
+    from operation_log_service import record_operation
+
+    record_operation(
+        db,
+        action_type="PRICING_DEFAULT_SHARE",
+        action_label="修改咨询师默认分成",
+        summary="对该咨询师的全部来访生效",
+        actor=actor,
+        target_type="Counselor",
+        target_id=counselor_id,
+        counselor_id=counselor_id,
+    )
     db.commit()
     return counselor_pricing_summary(db, counselor_id)
 
@@ -3326,6 +3584,20 @@ def update_pricing_counselor_patient(
         before_manual_cents=before_manual_cents,
         before_share=before_share,
         after_breakdown=after_breakdown,
+    )
+    from operation_log_service import record_operation
+
+    record_operation(
+        db,
+        action_type="PRICING_PATIENT",
+        action_label="修改来访调价与分成",
+        summary=f"调价 {body.adjustmentYuan} 元",
+        actor=actor,
+        target_type="Pricing",
+        target_id=patient_id,
+        patient_id=patient_id,
+        counselor_id=counselor_id,
+        amount=body.adjustmentYuan * 100,
     )
     db.commit()
     return after_breakdown

@@ -692,6 +692,26 @@ def cancel_my_consultation(
     notify_staff_appointment_cancelled(db, row, refunded=refunded)
     notify_counselor_appointment_cancelled(db, row, refunded=refunded)
 
+    from operation_log_service import record_operation
+
+    record_operation(
+        db,
+        action_type="PATIENT_CANCEL_ORDER",
+        action_label="来访取消订单",
+        summary=message,
+        actor=current_account,
+        actor_role="Patient",
+        target_type="Consultation",
+        target_id=row.Id,
+        patient_id=current_account.Id,
+        counselor_id=row.CounselorId,
+        consultation_id=row.Id,
+        order_id=row.OrderId,
+        schedule_id=row.ScheduleId,
+        start_time=row.StartTime,
+        end_time=row.EndTime,
+        status="CANCELLED",
+    )
     db.commit()
     return CancelConsultationOut(refunded=refunded, message=message)
 

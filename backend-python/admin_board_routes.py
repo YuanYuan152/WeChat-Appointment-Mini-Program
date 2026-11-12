@@ -424,6 +424,18 @@ def register_admin_board_routes(
                 if not normalized_gender:
                     raise HTTPException(status_code=400, detail="性别仅支持男或女")
                 account.Gender = normalized_gender
+        from operation_log_service import record_operation
+
+        record_operation(
+            db,
+            action_type="PATIENT_SOURCE_UPDATE",
+            action_label="修改来访类型",
+            summary="更新来访类别、详细来源或性别",
+            actor=_staff,
+            target_type="Account",
+            target_id=account_id,
+            patient_id=account_id,
+        )
         db.commit()
         db.refresh(account)
         roles = _roles_for_accounts(db, {account_id}).get(account_id, [])

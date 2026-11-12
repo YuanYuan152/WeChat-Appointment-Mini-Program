@@ -199,6 +199,27 @@ class OperationRecordsTimezoneTests(unittest.TestCase):
     def test_sqlite_clock_is_utc(self):
         self.assertEqual(db_clock_utc_offset(self.db), timedelta(0))
 
+    def test_stored_operation_log_is_listed_in_china_time(self):
+        from operation_log_service import record_operation
+
+        record_operation(
+            self.db,
+            action_type="ADMIN_LOGIN",
+            action_label="管理端登录",
+            summary="密码登录",
+            actor=self.admin,
+            target_type="Account",
+            target_id=self.admin.Id,
+        )
+        self.db.commit()
+
+        items = self._records(UTC_DB, action_type="ADMIN_LOGIN")
+
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["actionLabel"], "管理端登录")
+        self.assertEqual(items[0]["operatorName"], "管理员")
+        self.assertTrue(str(items[0]["occurredAt"]).endswith("+08:00"))
+
 
 if __name__ == "__main__":
     unittest.main()
