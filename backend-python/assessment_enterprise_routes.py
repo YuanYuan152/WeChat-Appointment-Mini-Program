@@ -64,6 +64,7 @@ from assessment_report_service import (
 )
 from assessment_definition_service import AssessmentDefinitionError
 from assessment_routes import get_assessment_store
+from assessment_visibility import public_definition
 from config import settings
 from database import get_db
 from enterprise_data_service import (
@@ -272,7 +273,8 @@ def _published_assessments(
     try:
         for assessment_id in assessment_ids:
             result = get_assessment_store().get_published(assessment_id)
-            definition = dict(result["definition"])
+            # 企业站点是来访端：风险维度配置不下发
+            definition = dict(public_definition(result["definition"]))
             override = str(titles.get(assessment_id) or "").strip()
             if override:
                 definition["title"] = override

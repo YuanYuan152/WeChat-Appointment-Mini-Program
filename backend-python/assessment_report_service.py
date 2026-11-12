@@ -25,6 +25,7 @@ from assessment_share_service import (
     AssessmentShareConfigurationError,
     decode_share_code,
 )
+from assessment_visibility import public_report_snapshot, public_result
 from config import settings
 from models import AppAccount, AppAssessmentReport
 
@@ -135,7 +136,9 @@ def report_detail(
     row: AppAssessmentReport,
     *,
     include_raw_answers: bool,
+    staff_view: bool = False,
 ) -> dict[str, Any]:
+    """报告详情。默认按来访端口径输出（剥离风险维度），管理端需显式传 staff_view=True。"""
     snapshot = _load_verified_snapshot(row)
     item = _report_list_item(row, snapshot)
     result = snapshot.get("result")
@@ -146,6 +149,9 @@ def report_detail(
         result
     ):
         raise AssessmentReportError("报告计分结果与快照不一致")
+    if not staff_view:
+        snapshot = public_report_snapshot(snapshot)
+        result = public_result(result)
     item.update(
         {
             "result": result,

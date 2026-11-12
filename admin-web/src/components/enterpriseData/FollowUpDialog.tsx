@@ -76,7 +76,7 @@ export function FollowUpDialog({
             <span>·</span>
             <span>完成于 {chinaDateTimeText(report.completedAt)}</span>
             <span>·</span>
-            <span>自动识别</span>
+            <span>{report.risk?.severity ? "风险维度判定" : "自动识别"}</span>
             <SeverityChip severity={report.autoSeverity} size="xs" />
           </div>
         </div>

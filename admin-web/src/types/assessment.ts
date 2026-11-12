@@ -155,9 +155,64 @@ export interface AssessmentDimension {
   questionIds: string[];
   reverseQuestionIds?: string[];
   calculationMode?: "simple" | "formula";
-  aggregate: "sum" | "product" | "average";
+  aggregate: AssessmentAggregate;
   formula?: string;
   scoreRanges: AssessmentScoreRange[];
+}
+
+export type AssessmentAggregate = "sum" | "product" | "average";
+
+/** 「选题 + 计算方式」：维度、总分、风险计分共用的计算块。 */
+export interface AssessmentScoreCalculation {
+  questionIds: string[];
+  reverseQuestionIds?: string[];
+  calculationMode?: "simple" | "formula";
+  aggregate: AssessmentAggregate;
+  formula?: string;
+}
+
+/** 多维度量表的总分：来访端结果页会展示。 */
+export interface AssessmentTotalScore extends AssessmentScoreCalculation {
+  title: string;
+  intro?: string;
+  scoreRanges: AssessmentScoreRange[];
+}
+
+/** 风险分级，与企业定制数据管理的风险等级一致。 */
+export type AssessmentRiskSeverity = "high" | "mid" | "watch" | "ok";
+
+export interface AssessmentRiskRange {
+  min: number | null;
+  max: number | null;
+  level: string;
+  severity: AssessmentRiskSeverity;
+  analystDescription: string;
+  suggestions: string[];
+}
+
+export interface AssessmentRiskScoring extends AssessmentScoreCalculation {
+  scoreRanges: AssessmentRiskRange[];
+}
+
+/** 选中任一指定选项即稳定触发。 */
+export interface AssessmentRiskTrigger {
+  id: string;
+  level: string;
+  severity: AssessmentRiskSeverity;
+  optionIds: string[];
+  analystDescription: string;
+  suggestions: string[];
+}
+
+/**
+ * 风险维度：只在管理端显示和使用，来访端接口会剥离，来访者看不到。
+ * 计分判定与选项触发可单独或同时配置，同时配置时取风险更高的一项。
+ */
+export interface AssessmentRiskDimension {
+  title: string;
+  intro?: string;
+  scoring?: AssessmentRiskScoring;
+  triggers?: AssessmentRiskTrigger[];
 }
 
 export interface AssessmentMatchResult {
@@ -216,6 +271,10 @@ export interface AssessmentDefinition {
   composedFrom?: AssessmentCompositionSource[];
   /** 组合量表按母量表拼接的报告结构，供报告结果页编辑。 */
   sourceReports?: AssessmentSourceReport[];
+  /** 维度计分量表的总分（可选），来访端结果页展示。 */
+  totalScore?: AssessmentTotalScore;
+  /** 风险维度（可选），仅管理端可见。 */
+  riskDimension?: AssessmentRiskDimension;
 }
 
 export interface AssessmentVersionSummary {

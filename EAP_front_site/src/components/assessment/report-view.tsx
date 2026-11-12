@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Share2, RotateCcw, AlertCircle, Download, Loader2 } from "lucide-react";
@@ -9,14 +9,20 @@ import { AssessmentShareButton } from "@/components/assessment/assessment-share-
 import { Button } from "@/components/ui/button";
 import { useBeginAssessment } from "@/components/assessment/start-assessment-button";
 import { downloadAssessmentReportPdf } from "@/lib/assessment/download-report-pdf";
+import { DimensionRadar } from "@/components/assessment/report-score-visuals";
 import {
-  DimensionAxisHorizontal,
-  DimensionRadar,
-  ScoreRing,
-  getRangeMax,
-  getRangeMin,
-} from "@/components/assessment/report-score-visuals";
-import type { Assessment, AssessmentScoreResult } from "@/lib/api/types";
+  DimensionBars,
+  DimensionDetail,
+  HeroScoreCard,
+  MatchMap,
+  QuadrantChart,
+} from "@/components/assessment/report-visual-blocks";
+import {
+  buildReportVisualModel,
+  type ReportVisualModel,
+  type VisualScore,
+} from "@/lib/assessment/report-visual-model";
+import type { Assessment, AssessmentScoreResult, DimensionScoreItem } from "@/lib/api/types";
 
 interface ReportViewProps {
   assessment: Assessment;
@@ -26,9 +32,141 @@ interface ReportViewProps {
   inviteAssessment?: Assessment;
 }
 
-function dimensionParentId(id: string): string | undefined {
-  const parts = id.split(".");
-  return parts.length === 2 && parts.every(Boolean) ? parts[0] : undefined;
+function IntroCard({ text }: { text: string }) {
+  if (!text) {
+    return null;
+  }
+  return (
+    <div className="rounded-[var(--radius)] border border-border bg-card p-5 shadow-sm sm:p-6">
+      <h3 className="mb-2 text-sm font-semibold text-primary">测评说明</h3>
+      <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{text}</p>
+    </div>
+  );
+}
+
+function radarItem(item: VisualScore): DimensionScoreItem {
+  return {
+    id: item.id,
+    title: item.label,
+    score: item.score,
+    level: item.level,
+    description: item.description,
+    suggestions: item.suggestions,
+  };
+}
+
+function ProfileSections({ model }: { model: ReportVisualModel }) {
+  const radarById = useMemo(
+    () => new Map(model.radar.map((item) => [item.id, item])),
+    [model.radar],
+  );
+  const radarDimensions = useMemo(() => model.radar.map(radarItem), [model.radar]);
+  return (
+    <>
+      {model.hero ? (
+        <HeroScoreCard
+          caption={model.hero.id === "total" ? "总分" : "综合得分"}
+          eyebrow="整体结果"
+          item={model.hero}
+        />
+      ) : null}
+
+      {model.summary ? (
+        <div className="rounded-[var(--radius)] border border-border bg-card p-5 shadow-sm sm:p-6">
+          <h3 className="mb-2 font-serif text-sm font-semibold">结果概览</h3>
+          <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{model.summary}</p>
+        </div>
+      ) : null}
+
+      {model.quadrants.length ? (
+        <div className="grid gap-4 sm:grid-cols-2">
+          {model.quadrants.map((quadrant) => (
+            <QuadrantChart key={quadrant.id} quadrant={quadrant} />
+          ))}
+        </div>
+      ) : null}
+
+      {model.overview === "radar" ? (
+        <DimensionRadar
+          dimensions={radarDimensions}
+          getMax={(id) => radarById.get(id)?.max ?? 1}
+          getMin={(id) => radarById.get(id)?.min ?? 0}
+          getRanges={(id) =>
+            radarById.get(id)?.bands.map((band) => ({
+              min: band.min,
+              max: band.max,
+              level: band.level,
+              suggestions: [],
+            }))
+          }
+        />
+      ) : null}
+      {model.overview === "bars" ? <DimensionBars items={model.bars} /> : null}
+
+      {model.groups.map((group, index) => (
+        <section key={`${group.title}-${index}`} className="space-y-4">
+          {group.title ? (
+            <div className="flex items-center gap-3 pt-2">
+              <span className="h-px flex-1 bg-border" />
+              <h3 className="font-serif text-sm font-semibold text-muted-foreground">{group.title}</h3>
+              <span className="h-px flex-1 bg-border" />
+            </div>
+          ) : null}
+          {group.items.map((item) => (
+            <DimensionDetail key={item.id} item={item} />
+          ))}
+        </section>
+      ))}
+    </>
+  );
+}
+
+function MatchSections({ model, intro }: { model: ReportVisualModel; intro: string }) {
+  const match = model.match;
+  if (!match) {
+    return null;
+  }
+  return (
+    <>
+      <div className="overflow-hidden rounded-[var(--radius)] border border-border bg-card shadow-sm">
+        <div className="relative aspect-[16/9] bg-muted">
+          {match.image ? (
+            <AssessmentImage alt={match.title} className="object-cover" sizes="600px" source={match.image} />
+          ) : null}
+          <div className="absolute inset-0 bg-gradient-to-t from-foreground/70 via-foreground/20 to-transparent" />
+          <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
+            <p className="text-sm opacity-80">你的结果是</p>
+            <h2 className="font-serif text-3xl font-bold">{match.title}</h2>
+          </div>
+        </div>
+        <div className="space-y-5 p-6">
+          {match.description ? (
+            <p className="whitespace-pre-line leading-relaxed text-muted-foreground">{match.description}</p>
+          ) : null}
+          {match.suggestions.length ? (
+            <div>
+              <h3 className="mb-3 font-serif font-semibold">建议</h3>
+              <ul className="space-y-2">
+                {match.suggestions.map((suggestion, index) => (
+                  <li key={`${index}-${suggestion}`} className="flex items-start gap-2.5 text-sm leading-relaxed text-muted-foreground">
+                    <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-secondary/15 text-[11px] font-semibold text-secondary">
+                      {index + 1}
+                    </span>
+                    <span>{suggestion}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {match.shareText ? (
+            <p className="rounded-xl bg-muted p-4 text-sm italic text-muted-foreground">「{match.shareText}」</p>
+          ) : null}
+        </div>
+      </div>
+      {match.map ? <MatchMap map={match.map} /> : null}
+      <IntroCard text={intro} />
+    </>
+  );
 }
 
 export function ReportView({
@@ -40,6 +178,8 @@ export function ReportView({
 }: ReportViewProps) {
   const beginAssessment = useBeginAssessment();
   const [downloading, setDownloading] = useState(false);
+  const model = useMemo(() => buildReportVisualModel(assessment, result), [assessment, result]);
+  const intro = (assessment.reportIntro || assessment.features || "").trim();
 
   const handleShare = () => {
     if (result.type === "match") {
@@ -96,202 +236,17 @@ export function ReportView({
           </div>
         </div>
 
-        {result.type === "sum" ? (
-          <div className="rounded-[var(--radius)] border border-border bg-card p-8 shadow-sm">
-            {(assessment.reportIntro || assessment.features) && (
-              <div className="mb-6 rounded-xl bg-primary/5 p-4">
-                <h3 className="mb-2 text-sm font-semibold text-primary">测评说明</h3>
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  {assessment.reportIntro || assessment.features}
-                </p>
-              </div>
-            )}
-
-            <ScoreRing
-              score={result.totalScore}
-              max={getRangeMax(assessment.scoreRanges)}
-              level={result.level}
-              label="测评得分"
-            />
-
-            {/* 区间色带 */}
-            {assessment.scoreRanges && assessment.scoreRanges.length > 0 ? (
-              <div className="mt-8 space-y-2">
-                <p className="text-center text-xs text-muted-foreground">得分区间参考</p>
-                <div className="flex h-3 overflow-hidden rounded-full">
-                  {(() => {
-                    const min = getRangeMin(assessment.scoreRanges);
-                    const max = getRangeMax(assessment.scoreRanges);
-                    const span = Math.max(1, max - min);
-                    const colors = [
-                      "bg-emerald-400",
-                      "bg-amber-400",
-                      "bg-orange-400",
-                      "bg-rose-400",
-                    ];
-                    return assessment.scoreRanges!.map((r, i) => (
-                      <div
-                        key={`${r.min}-${r.max}`}
-                        className={colors[i % colors.length]}
-                        style={{
-                          width: `${Math.max(6, ((r.max - r.min) / span) * 100)}%`,
-                        }}
-                        title={`${r.level} ${r.min}-${r.max}`}
-                      />
-                    ));
-                  })()}
-                </div>
-                <div className="flex justify-between gap-1 text-[10px] text-muted-foreground">
-                  {assessment.scoreRanges.map((r) => (
-                    <span key={`${r.level}-${r.min}`} className="flex-1 text-center">
-                      {r.level}
-                      <br />
-                      {r.min}–{r.max}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-
-            <div className="mt-8 space-y-6">
-              <div>
-                <h3 className="mb-2 font-serif font-semibold">结果解读</h3>
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  {result.description}
-                </p>
-              </div>
-
-              {result.suggestions.length > 0 && (
-                <div>
-                  <h3 className="mb-2 font-serif font-semibold">建议</h3>
-                  <ul className="space-y-2">
-                    {result.suggestions.map((s, i) => (
-                      <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
-                        <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-secondary" />
-                        {s}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          </div>
-        ) : result.type === "dimension" ? (
-          <div className="space-y-4">
-            {(assessment.reportIntro || assessment.features) && (
-              <div className="rounded-[var(--radius)] border border-border bg-card p-6 shadow-sm">
-                <h3 className="mb-2 text-sm font-semibold text-primary">测评说明</h3>
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  {assessment.reportIntro || assessment.features}
-                </p>
-              </div>
-            )}
-
-            {result.summary && (
-              <div className="rounded-[var(--radius)] border border-border bg-card p-6 text-center shadow-sm">
-                <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
-                  {result.summary}
-                </p>
-              </div>
-            )}
-
-            <DimensionRadar
-              dimensions={result.dimensions}
-              getMax={(id) =>
-                getRangeMax(assessment.dimensions?.find((d) => d.id === id)?.scoreRanges)
-              }
-              getMin={(id) =>
-                getRangeMin(assessment.dimensions?.find((d) => d.id === id)?.scoreRanges)
-              }
-              getRanges={(id) =>
-                assessment.dimensions?.find((d) => d.id === id)?.scoreRanges
-              }
-            />
-
-            {result.dimensions.map((dim) => {
-              const dimDef = assessment.dimensions?.find((d) => d.id === dim.id);
-              const parentId = dimensionParentId(dim.id);
-              const parentDefinition = parentId
-                ? assessment.dimensions?.find((item) => item.id === parentId)
-                : undefined;
-              const max = getRangeMax(dimDef?.scoreRanges);
-              const min = getRangeMin(dimDef?.scoreRanges);
-              return (
-                <div
-                  key={dim.id}
-                  id={`dimension-${dim.id}`}
-                  className={`scroll-mt-24 rounded-[var(--radius)] border bg-card p-6 shadow-sm ${
-                    parentId
-                      ? "ml-4 border-l-4 border-l-primary"
-                      : "border-border"
-                  }`}
-                >
-                  {parentId && (
-                    <p className="mb-3 text-xs text-muted-foreground">
-                      子维度 · 从属于 {parentDefinition?.title || parentId}
-                    </p>
-                  )}
-                  <DimensionAxisHorizontal
-                    dim={dim}
-                    max={max}
-                    min={min}
-                    ranges={dimDef?.scoreRanges}
-                  />
-                  {dimDef?.intro && (
-                    <p className="mt-4 rounded-lg bg-muted/50 p-3 text-xs leading-relaxed text-muted-foreground">
-                      {dimDef.intro}
-                    </p>
-                  )}
-                  <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
-                    {dim.description}
-                  </p>
-                  {dim.suggestions.length > 0 && (
-                    <ul className="mt-3 space-y-1">
-                      {dim.suggestions.map((s, i) => (
-                        <li
-                          key={i}
-                          className="flex items-start gap-2 text-sm text-muted-foreground"
-                        >
-                          <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-secondary" />
-                          {s}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+        {model.kind === "match" ? (
+          <MatchSections intro={intro} model={model} />
         ) : (
-          <div className="overflow-hidden rounded-[var(--radius)] border border-border bg-card shadow-sm">
-            {(assessment.reportIntro || assessment.features) && (
-              <div className="border-b border-border bg-primary/5 p-5">
-                <h3 className="mb-2 text-sm font-semibold text-primary">测评说明</h3>
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  {assessment.reportIntro || assessment.features}
-                </p>
-              </div>
+          <>
+            <IntroCard text={intro} />
+            {model.kind === "score" && model.hero ? (
+              <HeroScoreCard caption="测评得分" item={model.hero} />
+            ) : (
+              <ProfileSections model={model} />
             )}
-            <div className="relative aspect-[16/9]">
-              <AssessmentImage
-                source={result.image}
-                alt={result.title}
-                className="object-cover"
-                sizes="600px"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-foreground/60 to-transparent" />
-              <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
-                <p className="text-sm opacity-80">你的结果是</p>
-                <h2 className="font-serif text-3xl font-bold">{result.title}</h2>
-              </div>
-            </div>
-            <div className="p-6">
-              <p className="leading-relaxed text-muted-foreground">{result.description}</p>
-              <p className="mt-4 rounded-xl bg-muted p-4 text-sm italic text-muted-foreground">
-                「{result.shareText}」
-              </p>
-            </div>
-          </div>
+          </>
         )}
 
         <div className="flex items-start gap-2 rounded-xl bg-muted/50 p-4 text-xs text-muted-foreground">

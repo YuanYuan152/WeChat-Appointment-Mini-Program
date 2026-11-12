@@ -145,8 +145,93 @@ def _number(value: Any) -> Optional[float | int]:
     return value
 
 
+def _severity_source_text(report: dict[str, Any], follow: dict[str, Any]) -> str:
+    """导出用：风险等级是人工调整、风险维度判定还是按等级文案推断。"""
+    if follow.get("severityOverride"):
+        return "人工调整"
+    if not report.get("severity"):
+        return ""
+    risk = report.get("risk") or {}
+    if risk.get("severity"):
+        level = risk.get("level") or ""
+        return f"风险维度：{level}" if level else "风险维度"
+    return "自动识别"
+
+
+def _risk_payload(result: dict[str, Any]) -> Optional[dict[str, Any]]:
+    risk = result.get("risk")
+    if not isinstance(risk, dict):
+        return None
+    severity = risk.get("severity")
+    triggers = []
+    for raw in risk.get("triggers") or []:
+        if not isinstance(raw, dict):
+            continue
+        triggers.append(
+            {
+                "id": str(raw.get("id") or ""),
+                "level": str(raw.get("level") or ""),
+                "severity": raw.get("severity") if raw.get("severity") in SEVERITY_ORDER else None,
+                "optionIds": [str(item) for item in raw.get("optionIds") or []],
+            }
+        )
+    return {
+        "title": str(risk.get("title") or "风险"),
+        "level": str(risk.get("level") or ""),
+        "severity": severity if severity in SEVERITY_ORDER else None,
+        "source": str(risk.get("source") or "none"),
+        "score": _number(risk.get("score")),
+        "triggers": triggers,
+    }
+
+
 def summarize_result(result: Any) -> dict[str, Any]:
-    """从计分结果里提取总分、等级、维度与触发风险的条目（不含解读长文）。"""
+    """从计分结果里提取总分、等级、维度与触发风险的条目（不含解读长文）。
+
+    量表配置了风险维度时以风险维度的分级为准（管理员明确定义的风险口径），
+    没有时才按结果等级文案的关键词推断。
+    """
+    summary = _summarize_scores(result)
+    summary["risk"] = None
+    if not isinstance(result, dict):
+        return summary
+    total = result.get("total")
+    if summary["resultType"] == "dimension" and isinstance(total, dict):
+        level = str(total.get("level") or "")
+        score = _number(total.get("score"))
+        summary["score"] = score
+        summary["level"] = level
+        severity = classify_level(level)
+        if severity in RISK_SEVERITIES:
+            summary["triggers"].insert(
+                0,
+                {
+                    "title": str(total.get("title") or "总分"),
+                    "level": level,
+                    "score": score,
+                    "severity": severity,
+                },
+            )
+        summary["autoSeverity"] = max_severity([summary["autoSeverity"], severity])
+    risk = _risk_payload(result)
+    if risk is not None:
+        summary["risk"] = risk
+        if risk["severity"] is not None:
+            summary["autoSeverity"] = risk["severity"]
+            if risk["severity"] in RISK_SEVERITIES:
+                summary["triggers"].insert(
+                    0,
+                    {
+                        "title": risk["title"],
+                        "level": risk["level"],
+                        "score": risk["score"],
+                        "severity": risk["severity"],
+                    },
+                )
+    return summary
+
+
+def _summarize_scores(result: Any) -> dict[str, Any]:
     empty = {
         "resultType": None,
         "score": None,
@@ -1196,6 +1281,7 @@ def _build_reports(
             "autoSeverity": summary["autoSeverity"],
             "severity": override or summary["autoSeverity"],
             "triggers": summary["triggers"],
+            "risk": summary["risk"],
             "isLatest": False,
             "followUp": _follow_up_payload(follow) if follow is not None else None,
             "_info": _employee_info(meta),
@@ -1582,7 +1668,7 @@ def export_enterprise_dataset_xlsx(db: Session, enterprise: dict[str, Any]) -> R
             report["level"],
             _dimension_text(report),
             SEVERITY_LABELS.get(report["severity"] or "", "未分级"),
-            "人工调整" if follow.get("severityOverride") else ("自动识别" if report["severity"] else ""),
+            _severity_source_text(report, follow),
             FOLLOW_UP_STATUSES.get(follow.get("status") or "", "") if follow else "",
             follow.get("owner", "") if follow else "",
             follow.get("note", "") if follow else "",

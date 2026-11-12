@@ -461,6 +461,40 @@ def _admin_report_items(
     return result
 
 
+def _risk_summary(result: Any) -> Optional[dict[str, Any]]:
+    risk = result.get("risk") if isinstance(result, dict) else None
+    if not isinstance(risk, dict):
+        return None
+    return {
+        "level": str(risk.get("level") or ""),
+        "severity": risk.get("severity"),
+        "source": risk.get("source"),
+    }
+
+
+def _attach_risk_summaries(db: Session, items: list[dict[str, Any]]) -> None:
+    """只给当前页的 EAP 报告补风险维度摘要，避免列表全量读取计分结果。"""
+    public_ids = [item["reportId"] for item in items if item.get("source") == "eap"]
+    if not public_ids:
+        return
+    rows = (
+        db.query(AppAssessmentReport)
+        .options(load_only(AppAssessmentReport.PublicId, AppAssessmentReport.ResultJson))
+        .filter(AppAssessmentReport.PublicId.in_(public_ids))
+        .all()
+    )
+    risks: dict[str, Optional[dict[str, Any]]] = {}
+    for row in rows:
+        try:
+            parsed = json.loads(row.ResultJson) if row.ResultJson else None
+        except (TypeError, ValueError):
+            parsed = None
+        risks[row.PublicId] = _risk_summary(parsed)
+    for item in items:
+        if item.get("source") == "eap":
+            item["risk"] = risks.get(item["reportId"])
+
+
 def _admin_source_options(
     db: Session,
     *,
@@ -540,8 +574,10 @@ def register_assessment_report_admin_routes(
             end_at=normalized_end,
         )
         start = (page - 1) * page_size
+        page_items = items[start : start + page_size]
+        _attach_risk_summaries(db, page_items)
         return {
-            "items": items[start : start + page_size],
+            "items": page_items,
             "page": page,
             "pageSize": page_size,
             "total": len(items),
@@ -601,7 +637,8 @@ def register_assessment_report_admin_routes(
             account = db.query(AppAccount).filter(AppAccount.Id == row.AccountId).first()
             result = {
                 **_eap_admin_item(row, account),
-                **report_detail(row, include_raw_answers=include_raw),
+                # 管理端可见风险维度（来访端接口会剥离）
+                **report_detail(row, include_raw_answers=include_raw, staff_view=True),
             }
             _record_report_view(
                 db,
@@ -689,8 +726,10 @@ def register_assessment_report_admin_routes(
             end_at=None,
         )
         start = (page - 1) * page_size
+        page_items = items[start : start + page_size]
+        _attach_risk_summaries(db, page_items)
         return {
-            "items": items[start : start + page_size],
+            "items": page_items,
             "page": page,
             "pageSize": page_size,
             "total": len(items),

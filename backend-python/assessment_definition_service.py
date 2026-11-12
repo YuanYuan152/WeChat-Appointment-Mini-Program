@@ -153,6 +153,10 @@ TOP_LEVEL_FIELDS = {
     "publishedAt",
     "composedFrom",
     "sourceReports",
+    # 多维度量表的总分（来访端可见）
+    "totalScore",
+    # 风险维度：仅管理端可见，来访端接口会剥离（见 assessment_visibility.py）
+    "riskDimension",
 }
 REQUIRED_TOP_LEVEL_FIELDS = {
     "schemaVersion",
@@ -384,6 +388,9 @@ def _normalize_definition_score_ranges(definition: dict[str, Any]) -> None:
         for dimension in dimensions:
             if isinstance(dimension, dict):
                 _normalize_score_ranges(dimension.get("scoreRanges"))
+    total_score = definition.get("totalScore")
+    if isinstance(total_score, dict):
+        _normalize_score_ranges(total_score.get("scoreRanges"))
 
 
 def _validate_ranges(ranges: Any, label: str, *, require_split_descriptions: bool) -> None:
@@ -607,6 +614,274 @@ def _validate_range_coverage(
     )
 
 
+# 风险等级与企业定制数据管理的风险分级一致：high > mid > watch > ok。
+RISK_SEVERITIES = ("high", "mid", "watch", "ok")
+TOTAL_SCORE_FIELDS = {
+    "title",
+    "intro",
+    "questionIds",
+    "reverseQuestionIds",
+    "calculationMode",
+    "aggregate",
+    "formula",
+    "scoreRanges",
+}
+RISK_DIMENSION_FIELDS = {"title", "intro", "scoring", "triggers"}
+RISK_SCORING_FIELDS = TOTAL_SCORE_FIELDS - {"title", "intro"}
+RISK_RANGE_REQUIRED_FIELDS = {"min", "max", "level", "severity"}
+RISK_RANGE_FIELDS = RISK_RANGE_REQUIRED_FIELDS | {"analystDescription", "suggestions"}
+RISK_TRIGGER_REQUIRED_FIELDS = {"id", "level", "severity", "optionIds"}
+RISK_TRIGGER_FIELDS = RISK_TRIGGER_REQUIRED_FIELDS | {"analystDescription", "suggestions"}
+
+
+def _validate_suggestion_list(value: Any, label: str) -> None:
+    if value is None:
+        return
+    if not isinstance(value, list) or any(
+        not isinstance(item, str) or not item.strip() for item in value
+    ):
+        raise AssessmentValidationError(f"{label} 格式错误")
+
+
+def _validate_score_calculation(
+    block: dict[str, Any],
+    label: str,
+    *,
+    questions: list[dict[str, Any]],
+    question_ids: set[str],
+    allow_incomplete: bool,
+) -> tuple[set[str], str, str]:
+    """校验总分 / 风险计分这类「选题 + 计算方式」块，返回反向题、计算方式和公式。"""
+    references = _validate_id_list(
+        block.get("questionIds"),
+        f"{label}.questionIds",
+        allow_empty=allow_incomplete,
+    )
+    reverse = _validate_id_list(
+        block.get("reverseQuestionIds", []),
+        f"{label}.reverseQuestionIds",
+    )
+    if (not allow_incomplete and not references) or (
+        references and not references <= question_ids
+    ):
+        raise AssessmentValidationError(f"{label}包含不存在的题目")
+    if not reverse <= references:
+        raise AssessmentValidationError(f"{label}.reverseQuestionIds 必须属于参与计分的题目")
+    calculation_mode = block.get("calculationMode", "simple")
+    if calculation_mode not in {"simple", "formula"}:
+        raise AssessmentValidationError(f"{label}.calculationMode 不合法")
+    if block.get("aggregate") not in {"sum", "product", "average"}:
+        raise AssessmentValidationError(f"{label}.aggregate 不合法")
+    formula = block.get("formula", "")
+    if formula is not None and not isinstance(formula, str):
+        raise AssessmentValidationError(f"{label}.formula 必须是字符串")
+    if calculation_mode == "formula" and not allow_incomplete:
+        try:
+            formula_node = parse_dimension_formula(
+                formula or "",
+                [str(question["id"]) for question in questions],
+            )
+        except AssessmentFormulaError as exc:
+            raise AssessmentValidationError(f"{label}.formula 不合法：{exc}") from exc
+        if formula_question_ids(formula_node) != references:
+            raise AssessmentValidationError(
+                f"{label}.formula 中的题目 ID 必须与 questionIds 完全一致"
+            )
+    return reverse, str(calculation_mode), str(formula or "")
+
+
+def _validate_loose_range_shape(ranges: Any, label: str, allowed: set[str]) -> None:
+    """组合量表草稿允许暂不完整：只校验结构，不要求文案与分数齐全。"""
+    if ranges is None:
+        return
+    if not isinstance(ranges, list):
+        raise AssessmentValidationError(f"{label}必须是数组")
+    for index, raw in enumerate(ranges):
+        item = _assert_object(raw, f"{label}[{index}]")
+        if item.keys() - allowed:
+            raise AssessmentValidationError(f"{label}[{index}]包含未知字段")
+        for key in ("min", "max"):
+            if item.get(key) is not None:
+                _assert_number(item[key], f"{label}[{index}].{key}")
+
+
+def _validate_risk_ranges(ranges: Any, label: str) -> None:
+    if not isinstance(ranges, list) or not ranges:
+        raise AssessmentValidationError(f"{label}至少需要一个分数区间")
+    ordered: list[tuple[float, float]] = []
+    for index, raw in enumerate(ranges):
+        item = _assert_object(raw, f"{label}[{index}]")
+        missing = RISK_RANGE_REQUIRED_FIELDS - item.keys()
+        if missing:
+            raise AssessmentValidationError(f"{label}[{index}]缺少字段：{sorted(missing)}")
+        if item.keys() - RISK_RANGE_FIELDS:
+            raise AssessmentValidationError(f"{label}[{index}]包含未知字段")
+        low = _assert_number(item["min"], f"{label}[{index}].min")
+        high = _assert_number(item["max"], f"{label}[{index}].max")
+        if low > high:
+            raise AssessmentValidationError(f"{label}[{index}]的 min 不能大于 max")
+        _assert_string(item["level"], f"{label}[{index}].level")
+        if item["severity"] not in RISK_SEVERITIES:
+            raise AssessmentValidationError(f"{label}[{index}].severity 不合法")
+        _assert_optional_string(item.get("analystDescription"), f"{label}[{index}].analystDescription")
+        _validate_suggestion_list(item.get("suggestions"), f"{label}[{index}].suggestions")
+        ordered.append((low, high))
+    ordered.sort()
+    for previous, current in zip(ordered, ordered[1:]):
+        if current[0] <= previous[1]:
+            raise AssessmentValidationError(f"{label}存在重叠区间")
+
+
+def _validate_total_score(
+    value: Any,
+    *,
+    scoring_type: Any,
+    questions: list[dict[str, Any]],
+    question_ids: set[str],
+    strict_scoring: bool,
+    allow_incomplete: bool,
+) -> None:
+    if value is None:
+        return
+    # 组合量表草稿发布前才确定是总分还是维度计分，发布时同步为求和会自动去掉总分。
+    if scoring_type != "dimension" and not allow_incomplete:
+        raise AssessmentValidationError("totalScore 仅适用于维度计分量表")
+    block = _assert_object(value, "totalScore")
+    if block.keys() - TOTAL_SCORE_FIELDS:
+        raise AssessmentValidationError("totalScore 包含未知字段")
+    _assert_string(block.get("title"), "totalScore.title", allow_empty=allow_incomplete)
+    _assert_optional_string(block.get("intro"), "totalScore.intro")
+    reverse, calculation_mode, formula = _validate_score_calculation(
+        block,
+        "totalScore",
+        questions=questions,
+        question_ids=question_ids,
+        allow_incomplete=allow_incomplete,
+    )
+    if allow_incomplete:
+        _validate_loose_range_shape(
+            block.get("scoreRanges"),
+            "totalScore.scoreRanges",
+            SCORE_RANGE_CORE_FIELDS | SCORE_RANGE_DESCRIPTION_FIELDS,
+        )
+        return
+    _validate_ranges(
+        block.get("scoreRanges"),
+        "totalScore.scoreRanges",
+        require_split_descriptions=strict_scoring,
+    )
+    if strict_scoring:
+        reachable_scores = _reachable_scores(
+            questions,
+            list(block.get("questionIds", [])),
+            reverse,
+            aggregate=str(block.get("aggregate")),
+            label="totalScore.scoreRanges",
+            round_final_score=True,
+            calculation_mode=calculation_mode,
+            formula=formula,
+        )
+        _validate_range_coverage(
+            block["scoreRanges"],
+            reachable_scores,
+            "totalScore.scoreRanges",
+        )
+
+
+def _validate_risk_dimension(
+    value: Any,
+    *,
+    questions: list[dict[str, Any]],
+    question_ids: set[str],
+    option_ids: set[str],
+    strict_scoring: bool,
+    allow_incomplete: bool,
+) -> None:
+    if value is None:
+        return
+    block = _assert_object(value, "riskDimension")
+    if block.keys() - RISK_DIMENSION_FIELDS:
+        raise AssessmentValidationError("riskDimension 包含未知字段")
+    _assert_string(block.get("title"), "riskDimension.title", allow_empty=allow_incomplete)
+    _assert_optional_string(block.get("intro"), "riskDimension.intro")
+    scoring = block.get("scoring")
+    triggers = block.get("triggers")
+    if scoring is None and not triggers and not allow_incomplete:
+        raise AssessmentValidationError("风险维度至少需要配置计分判定或选项触发规则")
+
+    if scoring is not None:
+        scoring_block = _assert_object(scoring, "riskDimension.scoring")
+        if scoring_block.keys() - RISK_SCORING_FIELDS:
+            raise AssessmentValidationError("riskDimension.scoring 包含未知字段")
+        reverse, calculation_mode, formula = _validate_score_calculation(
+            scoring_block,
+            "riskDimension.scoring",
+            questions=questions,
+            question_ids=question_ids,
+            allow_incomplete=allow_incomplete,
+        )
+        range_label = "riskDimension.scoring.scoreRanges"
+        if allow_incomplete:
+            _validate_loose_range_shape(
+                scoring_block.get("scoreRanges"),
+                range_label,
+                RISK_RANGE_FIELDS,
+            )
+        else:
+            _validate_risk_ranges(scoring_block.get("scoreRanges"), range_label)
+            if strict_scoring:
+                reachable_scores = _reachable_scores(
+                    questions,
+                    list(scoring_block.get("questionIds", [])),
+                    reverse,
+                    aggregate=str(scoring_block.get("aggregate")),
+                    label=range_label,
+                    round_final_score=True,
+                    calculation_mode=calculation_mode,
+                    formula=formula,
+                )
+                _validate_range_coverage(
+                    scoring_block["scoreRanges"],
+                    reachable_scores,
+                    range_label,
+                )
+
+    if triggers is None:
+        return
+    if not isinstance(triggers, list):
+        raise AssessmentValidationError("riskDimension.triggers 必须是数组")
+    trigger_ids: set[str] = set()
+    for index, raw in enumerate(triggers):
+        label = f"riskDimension.triggers[{index}]"
+        item = _assert_object(raw, label)
+        if item.keys() - RISK_TRIGGER_FIELDS:
+            raise AssessmentValidationError(f"{label}包含未知字段")
+        if not allow_incomplete:
+            missing = RISK_TRIGGER_REQUIRED_FIELDS - item.keys()
+            if missing:
+                raise AssessmentValidationError(f"{label}缺少字段：{sorted(missing)}")
+        trigger_id = _assert_string(item.get("id"), f"{label}.id")
+        if not STABLE_ID_PATTERN.fullmatch(trigger_id):
+            raise AssessmentValidationError(f"{label}.id 不合法")
+        if trigger_id in trigger_ids:
+            raise AssessmentValidationError(f"riskDimension.triggers 包含重复 ID：{trigger_id}")
+        trigger_ids.add(trigger_id)
+        _assert_string(item.get("level"), f"{label}.level", allow_empty=allow_incomplete)
+        severity = item.get("severity")
+        if not (allow_incomplete and severity is None) and severity not in RISK_SEVERITIES:
+            raise AssessmentValidationError(f"{label}.severity 不合法")
+        referenced = _validate_id_list(
+            item.get("optionIds", []),
+            f"{label}.optionIds",
+            allow_empty=allow_incomplete,
+        )
+        unknown = sorted(referenced - option_ids)
+        if unknown:
+            raise AssessmentValidationError(f"{label}引用了不存在的选项：{unknown[:8]}")
+        _assert_optional_string(item.get("analystDescription"), f"{label}.analystDescription")
+        _validate_suggestion_list(item.get("suggestions"), f"{label}.suggestions")
+
+
 def _allocate_stable_id(preferred: str, used: set[str]) -> str:
     normalized = re.sub(r"[^a-z0-9]+", "-", preferred.strip().lower()).strip("-") or "item"
     if normalized not in used:
@@ -696,6 +971,8 @@ def _sync_composed_source_reports(definition: dict[str, Any]) -> None:
             definition["scoreRanges"] = only.get("scoreRanges") or []
             definition["reverseQuestionIds"] = list(only.get("reverseQuestionIds") or [])
             definition.pop("dimensions", None)
+            # 只剩一个覆盖全部题目的结果时它本身就是总分，多维度总分不再适用
+            definition.pop("totalScore", None)
             return
     definition["scoringType"] = "dimension"
     definition["scoringPreset"] = "generic-dimension-v1"
@@ -1225,6 +1502,22 @@ def validate_definition(
                     reachable_scores,
                     range_label,
                 )
+    _validate_total_score(
+        definition.get("totalScore"),
+        scoring_type=scoring_type,
+        questions=questions,
+        question_ids=question_ids,
+        strict_scoring=strict_scoring,
+        allow_incomplete=allow_incomplete,
+    )
+    _validate_risk_dimension(
+        definition.get("riskDimension"),
+        questions=questions,
+        question_ids=question_ids,
+        option_ids=option_ids,
+        strict_scoring=strict_scoring,
+        allow_incomplete=allow_incomplete,
+    )
     if scoring_type in {"match", "aas"}:
         match_results = definition.get("matchResults")
         result_ids = _assert_unique_ids(match_results, "matchResults")

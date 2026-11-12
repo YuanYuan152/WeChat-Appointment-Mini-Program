@@ -1,6 +1,7 @@
 import type {
   AssessmentCategory,
   AssessmentDefinition,
+  AssessmentRiskSeverity,
   AssessmentScoringType,
 } from "@/types/assessment";
 
@@ -22,6 +23,8 @@ interface AssessmentReportListItemBase {
   /** 筛选用：mini-legacy | eap | eap:网站名.公司名 */
   sourceKey?: string | null;
   entryChannel?: string | null;
+  /** 量表配置了风险维度时的判定摘要（仅 EAP 报告，未配置为 null） */
+  risk?: AssessmentRiskSummary | null;
 }
 
 export interface AssessmentReportSourceOption {
@@ -79,6 +82,37 @@ export interface PatientAssessmentReportListFilters {
   sourceKey?: string;
 }
 
+export interface AssessmentRiskTriggerHit {
+  id: string;
+  level: string;
+  severity: AssessmentRiskSeverity;
+  /** 本次作答命中的选项 */
+  optionIds: string[];
+  description: string;
+}
+
+/** 风险维度计分结果：仅管理端接口返回。 */
+export interface AssessmentRiskResult {
+  title: string;
+  level: string;
+  /** 计分判定没有命中区间时为 null */
+  severity: AssessmentRiskSeverity | null;
+  source: "score" | "trigger" | "none";
+  description: string;
+  suggestions: string[];
+  triggers: AssessmentRiskTriggerHit[];
+  /** 配置了计分判定时才有 */
+  score?: number;
+  scoreLevel?: string;
+  scoreSeverity?: AssessmentRiskSeverity | null;
+}
+
+export interface AssessmentRiskSummary {
+  level: string;
+  severity: AssessmentRiskSeverity | null;
+  source: AssessmentRiskResult["source"];
+}
+
 export interface SumAssessmentScoreResult {
   type: "sum";
   totalScore: number;
@@ -87,6 +121,7 @@ export interface SumAssessmentScoreResult {
   visitorDescription?: string;
   analystDescription?: string;
   suggestions: string[];
+  risk?: AssessmentRiskResult;
 }
 
 export interface MatchAssessmentScoreResult {
@@ -96,6 +131,7 @@ export interface MatchAssessmentScoreResult {
   description: string;
   image: string;
   shareText: string;
+  risk?: AssessmentRiskResult;
 }
 
 export interface DimensionAssessmentScoreItem {
@@ -109,10 +145,23 @@ export interface DimensionAssessmentScoreItem {
   suggestions: string[];
 }
 
+export interface DimensionAssessmentTotalResult {
+  title: string;
+  score: number;
+  level: string;
+  description: string;
+  visitorDescription?: string;
+  analystDescription?: string;
+  suggestions: string[];
+}
+
 export interface DimensionAssessmentScoreResult {
   type: "dimension";
   dimensions: DimensionAssessmentScoreItem[];
   summary?: string;
+  /** 配置了总分的维度量表才有 */
+  total?: DimensionAssessmentTotalResult;
+  risk?: AssessmentRiskResult;
 }
 
 export type AssessmentScoreResult =

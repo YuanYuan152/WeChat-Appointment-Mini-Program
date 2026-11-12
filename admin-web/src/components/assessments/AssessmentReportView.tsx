@@ -7,10 +7,11 @@ import {
   resolveAssessmentAssetUrl,
 } from "@/lib/assessmentReport";
 import { API_BASE_URL } from "@/lib/api";
-import { getDimensionParentId } from "@/lib/assessmentEditor";
+import { getDimensionParentId, riskSeverityMeta } from "@/lib/assessmentEditor";
 import { formatUtcFullDateTime } from "@/lib/format";
 import type {
   AssessmentReportDetail,
+  AssessmentRiskResult,
   AssessmentScoreResult,
   DimensionAssessmentScoreItem,
   EapAssessmentReportDetail,
@@ -113,6 +114,7 @@ function EapReport({ detail }: { detail: EapAssessmentReportDetail }) {
           </p>
         </section>
       )}
+      {result.risk && <RiskResult assessment={assessment} risk={result.risk} />}
       <ScoreResult assessment={assessment} result={result} />
       <section className="rounded-2xl border border-[var(--lxxl-border)] bg-white p-5">
         <div className="flex items-start gap-3 text-sm leading-6 text-[var(--lxxl-muted)]">
@@ -174,6 +176,34 @@ function ScoreResult({
               {result.summary}
             </section>
           )}
+          {result.total && (
+            <section className="rounded-2xl border border-[var(--lxxl-border)] bg-white p-6">
+              <div className="grid gap-6 md:grid-cols-[220px_minmax(0,1fr)] md:items-center">
+                <ScoreRing
+                  label={result.total.title || "总分"}
+                  level={result.total.level}
+                  max={getAssessmentRangeMax(assessment.totalScore?.scoreRanges)}
+                  score={result.total.score}
+                />
+                <div>
+                  {assessment.totalScore?.intro && (
+                    <p className="mb-4 rounded-lg bg-[#FAF8F4] p-3 text-xs leading-6 text-[var(--lxxl-muted)]">
+                      {assessment.totalScore.intro}
+                    </p>
+                  )}
+                  <ResultText
+                    description={result.total.description}
+                    visitorDescription={result.total.visitorDescription}
+                    analystDescription={result.total.analystDescription}
+                    suggestions={result.total.suggestions}
+                  />
+                  {assessment.totalScore?.scoreRanges?.length ? (
+                    <RangeReference ranges={assessment.totalScore.scoreRanges} />
+                  ) : null}
+                </div>
+              </div>
+            </section>
+          )}
           <section className="rounded-2xl border border-[var(--lxxl-border)] bg-white p-5">
             <h5 className="font-semibold">维度结果</h5>
             <div className="mt-4 grid gap-4 lg:grid-cols-2">
@@ -224,6 +254,105 @@ function ScoreResult({
   }
 }
 
+const RISK_SOURCE_LABELS: Record<AssessmentRiskResult["source"], string> = {
+  trigger: "选项触发",
+  score: "计分判定",
+  none: "未触发任何规则",
+};
+
+/** 风险维度：只有管理端接口返回，来访端看不到。 */
+function RiskResult({
+  assessment,
+  risk,
+}: {
+  assessment: AssessmentDefinition;
+  risk: AssessmentRiskResult;
+}) {
+  const meta = riskSeverityMeta(risk.severity);
+  const optionLabels = new Map(
+    assessment.questions.flatMap((question) =>
+      (question.options || []).map(
+        (option) =>
+          [option.id, `${question.id} · ${question.text} → ${option.text || option.id}`] as const,
+      ),
+    ),
+  );
+  const intro = assessment.riskDimension?.intro?.trim();
+  return (
+    <section
+      className="rounded-2xl border bg-white p-5"
+      style={{ borderColor: meta.color, boxShadow: `inset 4px 0 0 ${meta.color}` }}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs text-[var(--lxxl-muted)]">
+            {risk.title || "风险"}维度 · 仅后台可见，来访端不显示
+          </p>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <h5 className="text-xl font-semibold" style={{ color: meta.color }}>
+              {risk.level || meta.label}
+            </h5>
+            <span
+              className="rounded-full px-2.5 py-0.5 text-xs font-medium"
+              style={{ background: meta.bg, color: meta.color }}
+            >
+              {meta.label}
+            </span>
+          </div>
+        </div>
+        <div className="text-right text-xs leading-5 text-[var(--lxxl-muted)]">
+          <div>判定依据：{RISK_SOURCE_LABELS[risk.source] || "-"}</div>
+          {typeof risk.score === "number" && (
+            <div>
+              风险计分 {risk.score} 分 · {risk.scoreLevel || "-"}
+            </div>
+          )}
+        </div>
+      </div>
+      {intro && (
+        <p className="mt-3 rounded-lg bg-[#FAF8F4] p-3 text-xs leading-6 text-[var(--lxxl-muted)]">
+          判定口径：{intro}
+        </p>
+      )}
+      {risk.triggers.length > 0 && (
+        <div className="mt-4">
+          <h6 className="text-sm font-semibold">命中的触发规则</h6>
+          <ul className="mt-2 space-y-2">
+            {risk.triggers.map((trigger) => {
+              const triggerMeta = riskSeverityMeta(trigger.severity);
+              return (
+                <li
+                  className="rounded-xl bg-[#FAF8F4] px-3 py-2 text-xs leading-6"
+                  key={trigger.id}
+                >
+                  <span className="font-medium" style={{ color: triggerMeta.color }}>
+                    {trigger.level || triggerMeta.label}
+                  </span>
+                  <span className="text-[var(--lxxl-muted)]">
+                    ：{trigger.optionIds.map((id) => optionLabels.get(id) || id).join("；")}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+      {(risk.description || risk.suggestions.length > 0) && (
+        <div className="mt-4">
+          <ResultText
+            analystDescription={risk.description}
+            analystTitle="分析说明"
+            description=""
+            hideVisitor
+            suggestions={risk.suggestions}
+            suggestionsTitle="跟进建议"
+          />
+        </div>
+      )}
+    </section>
+  );
+}
+
 function ScoreRing({
   score,
   max,
@@ -267,31 +396,42 @@ function ResultText({
   visitorDescription,
   analystDescription,
   suggestions,
+  hideVisitor = false,
+  analystTitle = "面向分析方结果说明",
+  suggestionsTitle = "建议",
 }: {
   description: string;
   visitorDescription?: string;
   analystDescription?: string;
   suggestions: string[];
+  /** 风险维度没有面向来访的说明 */
+  hideVisitor?: boolean;
+  analystTitle?: string;
+  suggestionsTitle?: string;
 }) {
   const visitorText = visitorDescription?.trim() || description.trim();
   const analystText = analystDescription?.trim() || "";
   return (
     <div>
-      <h5 className="font-semibold">面向来访结果说明</h5>
-      <p className="mt-2 whitespace-pre-line text-sm leading-7 text-[var(--lxxl-muted)]">
-        {visitorText || "暂无结果解读"}
-      </p>
+      {!hideVisitor && (
+        <>
+          <h5 className="font-semibold">面向来访结果说明</h5>
+          <p className="mt-2 whitespace-pre-line text-sm leading-7 text-[var(--lxxl-muted)]">
+            {visitorText || "暂无结果解读"}
+          </p>
+        </>
+      )}
       {analystText ? (
-        <div className="mt-5">
-          <h5 className="font-semibold">面向分析方结果说明</h5>
+        <div className={hideVisitor ? "" : "mt-5"}>
+          <h5 className="font-semibold">{analystTitle}</h5>
           <p className="mt-2 whitespace-pre-line text-sm leading-7 text-[var(--lxxl-muted)]">
             {analystText}
           </p>
         </div>
       ) : null}
       {suggestions.length > 0 && (
-        <div className="mt-5">
-          <h5 className="font-semibold">建议</h5>
+        <div className={hideVisitor && !analystText ? "" : "mt-5"}>
+          <h5 className="font-semibold">{suggestionsTitle}</h5>
           <ul className="mt-2 space-y-2">
             {suggestions.map((suggestion, index) => (
               <li

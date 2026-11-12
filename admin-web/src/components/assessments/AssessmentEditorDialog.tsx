@@ -11,8 +11,14 @@ import {
   COMPOSED_MERGED_SOURCE_ID,
   COMPOSED_MERGED_SOURCE_TITLE,
   createDefaultAssessmentDefinition,
+  createDefaultRiskDimension,
+  createDefaultRiskScoring,
+  createDefaultTotalScore,
+  createRiskRange,
+  createRiskTrigger,
   createStableId,
   getAssessmentScoreCoverageSummaries,
+  getCalculationCoverageSummary,
   getDimensionParentId,
   getQuestionInputType,
   isFixedScoringType,
@@ -20,6 +26,12 @@ import {
   formatLines,
   parseLines,
   removeComposedQuestions,
+  removeOptionsFromRiskTriggers,
+  removeQuestionsFromExtras,
+  renameOptionInRiskTriggers,
+  renameQuestionInExtras,
+  RISK_SEVERITY_OPTIONS,
+  riskSeverityMeta,
   syncComposedSourceReports,
   type AssessmentScoreCoverageSummary,
   type ComposedQuestionRemovalMode,
@@ -46,9 +58,16 @@ import type {
   AssessmentQuestion,
   AssessmentQuestionInputType,
   AssessmentReportProfile,
+  AssessmentRiskDimension,
+  AssessmentRiskRange,
+  AssessmentRiskScoring,
+  AssessmentRiskSeverity,
+  AssessmentRiskTrigger,
+  AssessmentScoreCalculation,
   AssessmentScoreMode,
   AssessmentScoreRange,
   AssessmentScoringType,
+  AssessmentTotalScore,
   AssessmentValidationIssue,
 } from "@/types/assessment";
 
@@ -1284,8 +1303,9 @@ function QuestionFields({
       ...questions[index],
       id: nextId,
     });
+    const withExtras = renameQuestionInExtras(definition, previousId, nextId, knownQuestionIds);
     onChange({
-      ...definition,
+      ...withExtras,
       questions: nextQuestions,
       reverseQuestionIds: definition.reverseQuestionIds?.map((id) =>
         id === previousId ? nextId : id,
@@ -1312,8 +1332,14 @@ function QuestionFields({
   function removeQuestion(index: number) {
     const removedId = questions[index].id;
     const knownQuestionIds = questions.map((question) => question.id);
+    const withExtras = removeQuestionsFromExtras(
+      definition,
+      [removedId],
+      knownQuestionIds,
+      questions,
+    );
     onChange({
-      ...definition,
+      ...withExtras,
       questions: questions.filter((_, itemIndex) => itemIndex !== index),
       reverseQuestionIds: definition.reverseQuestionIds?.filter((id) => id !== removedId),
       dimensions: definition.dimensions?.map((dimension) => ({
@@ -1427,13 +1453,21 @@ function QuestionFields({
       });
       return;
     }
-    updateQuestion(index, {
-      ...question,
-      inputType,
-      scoreMode: question.scoreMode || "filled",
-      completedScore: Number.isFinite(question.completedScore) ? question.completedScore : 1,
-      emptyScore: Number.isFinite(question.emptyScore) ? question.emptyScore : 0,
-      options: [],
+    // 改为填空/数字题后选项不复存在，风险触发规则里对应的选项一并去掉
+    const withoutTriggers = removeOptionsFromRiskTriggers(
+      definition,
+      (question.options || []).map((option) => option.id),
+    );
+    onChange({
+      ...withoutTriggers,
+      questions: replaceAt(questions, index, {
+        ...question,
+        inputType,
+        scoreMode: question.scoreMode || "filled",
+        completedScore: Number.isFinite(question.completedScore) ? question.completedScore : 1,
+        emptyScore: Number.isFinite(question.emptyScore) ? question.emptyScore : 0,
+        options: [],
+      }),
     });
   }
 
@@ -1748,11 +1782,18 @@ function QuestionFields({
                       placeholder="选项 ID"
                       value={option.id}
                       onChange={(event) =>
-                        updateQuestion(questionIndex, {
-                          ...question,
-                          options: replaceAt(question.options, optionIndex, {
-                            ...option,
-                            id: event.target.value,
+                        onChange({
+                          ...renameOptionInRiskTriggers(
+                            definition,
+                            option.id,
+                            event.target.value,
+                          ),
+                          questions: replaceAt(questions, questionIndex, {
+                            ...question,
+                            options: replaceAt(question.options, optionIndex, {
+                              ...option,
+                              id: event.target.value,
+                            }),
                           }),
                         })
                       }
@@ -1811,9 +1852,12 @@ function QuestionFields({
                       disabled={disabled || fixedStructure || question.options.length <= 2}
                       label="删除选项"
                       onClick={() =>
-                        updateQuestion(questionIndex, {
-                          ...question,
-                          options: question.options.filter((_, index) => index !== optionIndex),
+                        onChange({
+                          ...removeOptionsFromRiskTriggers(definition, [option.id]),
+                          questions: replaceAt(questions, questionIndex, {
+                            ...question,
+                            options: question.options.filter((_, index) => index !== optionIndex),
+                          }),
                         })
                       }
                     />
@@ -2771,11 +2815,24 @@ function ResultFields({
 }) {
   if (composeMode) {
     return (
-      <ComposedSourceReportEditor
-        definition={definition}
-        disabled={disabled}
-        onChange={onChange}
-      />
+      <div className="space-y-5">
+        <ComposedSourceReportEditor
+          definition={definition}
+          disabled={disabled}
+          onChange={onChange}
+        />
+        <TotalScoreEditor
+          composeMode
+          definition={definition}
+          disabled={disabled}
+          onChange={onChange}
+        />
+        <RiskDimensionEditor
+          definition={definition}
+          disabled={disabled}
+          onChange={onChange}
+        />
+      </div>
     );
   }
   const hasScoreRanges = definition.scoringType === "sum" || definition.scoringType === "psqi";
@@ -2843,6 +2900,14 @@ function ResultFields({
         />
       )}
 
+      {hasDimensions && (
+        <TotalScoreEditor
+          definition={definition}
+          disabled={disabled}
+          onChange={onChange}
+        />
+      )}
+
       {hasMatchResults && (
         <MatchResultEditor
           definition={definition}
@@ -2866,7 +2931,951 @@ function ResultFields({
       {!hasScoreRanges && !hasDimensions && !hasMatchResults && profiles.length === 0 && (
         <EditorEmpty text="该固定计分量表没有可编辑的结构化报告内容，可在高级 JSON 中查看完整定义。" />
       )}
+
+      <RiskDimensionEditor
+        definition={definition}
+        disabled={disabled}
+        onChange={onChange}
+      />
     </div>
+  );
+}
+
+function ExtraToggleButton({
+  enabled,
+  disabled,
+  addLabel,
+  removeLabel,
+  onToggle,
+}: {
+  enabled: boolean;
+  disabled: boolean;
+  addLabel: string;
+  removeLabel: string;
+  onToggle: () => void;
+}) {
+  if (!enabled) {
+    return (
+      <AddButton disabled={disabled} onClick={onToggle}>
+        {addLabel}
+      </AddButton>
+    );
+  }
+  return (
+    <button
+      className="h-9 rounded-xl border border-[#E8B7B2] px-4 text-sm font-medium text-[#A13F37] transition hover:bg-[#FFF5F4] disabled:cursor-not-allowed disabled:opacity-40"
+      disabled={disabled}
+      type="button"
+      onClick={onToggle}
+    >
+      {removeLabel}
+    </button>
+  );
+}
+
+/** 单个计算块下方的覆盖提示（组合量表不显示顶部覆盖面板，靠它即时反馈）。 */
+function InlineCoverage({ summary }: { summary: AssessmentScoreCoverageSummary | null }) {
+  if (!summary) {
+    return null;
+  }
+  const valid = !summary.validationError && summary.uncoveredScores.length === 0;
+  return (
+    <div
+      className={`rounded-lg border px-3 py-2 text-xs leading-5 ${
+        valid
+          ? "border-[#CFE1D6] bg-[#F2F7F4] text-[var(--lxxl-green-dark)]"
+          : "border-[#E8B7B2] bg-[#FFF5F4] text-[#A13F37]"
+      }`}
+    >
+      {summary.validationError ? (
+        summary.validationError
+      ) : (
+        <>
+          可达范围 {formatCoverageScore(summary.minimum)}–{formatCoverageScore(summary.maximum)}，共{" "}
+          {summary.reachableCount.toLocaleString("zh-CN")} 个可达分值
+          {summary.uncoveredScores.length > 0
+            ? `；未覆盖：${summary.uncoveredScores
+                .slice(0, 12)
+                .map(formatCoverageScore)
+                .join("、")}${
+                summary.uncoveredScores.length > 12
+                  ? ` 等 ${summary.uncoveredScores.length.toLocaleString("zh-CN")} 个`
+                  : ""
+              }`
+            : "，已全部覆盖。"}
+        </>
+      )}
+    </div>
+  );
+}
+
+/** 「选题 + 计算方式」编辑：总分与风险计分共用。 */
+function ScoreCalculationFields({
+  block,
+  definition,
+  disabled,
+  name,
+  onChange,
+}: {
+  block: AssessmentScoreCalculation;
+  definition: AssessmentDefinition;
+  disabled: boolean;
+  name: string;
+  onChange: (block: AssessmentScoreCalculation) => void;
+}) {
+  const questions = definition.questions;
+  const allQuestionIds = questions.map((question) => question.id);
+  const calculationMode = block.calculationMode ?? "simple";
+  const reverseIds = block.reverseQuestionIds ?? [];
+  const [expanded, setExpanded] = useState(questions.length <= 12);
+  let formulaError = "";
+  if (calculationMode === "formula") {
+    try {
+      compileDimensionFormula(block.formula ?? "", allQuestionIds);
+    } catch (error) {
+      formulaError = error instanceof Error ? error.message : "公式不合法";
+    }
+  }
+
+  function patch(next: Partial<AssessmentScoreCalculation>) {
+    onChange({ ...block, ...next });
+  }
+
+  function toggleQuestion(questionId: string, checked: boolean) {
+    const questionIds = checked
+      ? [...block.questionIds, questionId]
+      : block.questionIds.filter((id) => id !== questionId);
+    const currentFormula = block.formula ?? "";
+    const formula =
+      calculationMode !== "formula"
+        ? block.formula
+        : checked
+          ? currentFormula.trim()
+            ? `${currentFormula.trim()} + ${questionId}`
+            : questionId
+          : removeFormulaQuestionId(currentFormula, questionId, allQuestionIds);
+    patch({
+      questionIds,
+      formula,
+      reverseQuestionIds: reverseIds.filter((id) => questionIds.includes(id)),
+    });
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <CompactField label="计算方式">
+          <div className="flex h-9 items-center gap-4 rounded-lg border border-[var(--lxxl-border)] bg-white px-3 text-sm">
+            {(["simple", "formula"] as const).map((mode) => (
+              <label className="flex cursor-pointer items-center gap-1.5" key={mode}>
+                <input
+                  checked={calculationMode === mode}
+                  disabled={disabled}
+                  name={`${name}-calculation`}
+                  type="radio"
+                  onChange={() =>
+                    patch({
+                      calculationMode: mode,
+                      formula:
+                        mode === "formula"
+                          ? block.formula ?? block.questionIds.join(" + ")
+                          : undefined,
+                    })
+                  }
+                />
+                {mode === "simple" ? "简单计算" : "设置公式计算"}
+              </label>
+            ))}
+          </div>
+        </CompactField>
+        {calculationMode === "simple" ? (
+          <CompactField label="简单计算">
+            <select
+              className={compactInputClass}
+              disabled={disabled}
+              value={block.aggregate}
+              onChange={(event) =>
+                patch({
+                  aggregate: event.target.value as AssessmentScoreCalculation["aggregate"],
+                })
+              }
+            >
+              <option value="sum">全部相加</option>
+              <option value="product">全部相乘</option>
+              <option value="average">平均数</option>
+            </select>
+          </CompactField>
+        ) : (
+          <CompactField label="计算公式">
+            <input
+              className={compactInputClass}
+              disabled={disabled}
+              placeholder="例如：(q1 + q2) / q3"
+              value={block.formula ?? ""}
+              onChange={(event) => {
+                const formula = event.target.value;
+                const questionIds = formulaQuestionIds(formula, allQuestionIds);
+                patch({
+                  formula,
+                  questionIds,
+                  reverseQuestionIds: reverseIds.filter((id) => questionIds.includes(id)),
+                });
+              }}
+            />
+            <p className={`mt-1 text-xs ${formulaError ? "text-[#A13F37]" : "text-[var(--lxxl-muted)]"}`}>
+              {formulaError || "仅支持题目 ID、+、-、*、/ 和英文括号 ()。"}
+            </p>
+          </CompactField>
+        )}
+      </div>
+
+      <div className="rounded-xl border border-[var(--lxxl-border)] bg-[#FCFBF8] p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <button
+            aria-expanded={expanded}
+            className="flex items-center gap-2 text-left text-sm font-medium"
+            type="button"
+            onClick={() => setExpanded((current) => !current)}
+          >
+            <span aria-hidden>{expanded ? "▾" : "▸"}</span>
+            <span>参与计算的题目</span>
+            <span className="text-xs font-normal text-[var(--lxxl-muted)]">
+              已选 {block.questionIds.length}/{questions.length}
+            </span>
+          </button>
+          {expanded && (
+            <div className="flex gap-2">
+              <button
+                className="text-xs text-[var(--lxxl-green)] hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={disabled}
+                type="button"
+                onClick={() =>
+                  patch({
+                    questionIds: allQuestionIds,
+                    formula:
+                      calculationMode === "formula" ? allQuestionIds.join(" + ") : block.formula,
+                  })
+                }
+              >
+                全选题目
+              </button>
+              <button
+                className="text-xs text-[var(--lxxl-muted)] hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={disabled}
+                type="button"
+                onClick={() =>
+                  patch({
+                    questionIds: [],
+                    reverseQuestionIds: [],
+                    formula: calculationMode === "formula" ? "" : block.formula,
+                  })
+                }
+              >
+                取消全选
+              </button>
+            </div>
+          )}
+        </div>
+        {expanded && (
+          <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
+            {questions.map((question) => {
+              const selected = block.questionIds.includes(question.id);
+              return (
+                <div
+                  key={question.id}
+                  className="rounded-lg border border-[var(--lxxl-border)] bg-white px-3 py-2"
+                >
+                  <label className="flex items-start gap-2 text-xs leading-5">
+                    <input
+                      checked={selected}
+                      className="mt-1"
+                      disabled={disabled}
+                      type="checkbox"
+                      onChange={(event) => toggleQuestion(question.id, event.target.checked)}
+                    />
+                    <span>
+                      <span className="font-medium">{question.id}</span>
+                      {question.sourceAssessmentTitle && (
+                        <span className="ml-1 text-[var(--lxxl-muted)]">
+                          （{question.sourceAssessmentTitle}）
+                        </span>
+                      )}{" "}
+                      · {question.text || "未命名题目"}
+                    </span>
+                  </label>
+                  {selected && (
+                    <label className="mt-2 flex items-center gap-2 pl-5 text-xs text-[var(--lxxl-muted)]">
+                      <input
+                        checked={reverseIds.includes(question.id)}
+                        disabled={disabled}
+                        type="checkbox"
+                        onChange={(event) =>
+                          patch({
+                            reverseQuestionIds: event.target.checked
+                              ? [...reverseIds, question.id]
+                              : reverseIds.filter((id) => id !== question.id),
+                          })
+                        }
+                      />
+                      反向计分
+                    </label>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TotalScoreEditor({
+  composeMode = false,
+  definition,
+  disabled,
+  onChange,
+}: {
+  composeMode?: boolean;
+  definition: AssessmentDefinition;
+  disabled: boolean;
+  onChange: (definition: AssessmentDefinition) => void;
+}) {
+  const total = definition.totalScore;
+  const coverage = total
+    ? getCalculationCoverageSummary(
+        definition,
+        total,
+        total.scoreRanges,
+        "totalScore.scoreRanges",
+        "总分",
+      )
+    : null;
+
+  function setTotal(next: AssessmentTotalScore | undefined) {
+    const updated = { ...definition };
+    if (next) {
+      updated.totalScore = next;
+    } else {
+      delete updated.totalScore;
+    }
+    onChange(updated);
+  }
+
+  return (
+    <EditorSection
+      action={
+        <ExtraToggleButton
+          addLabel="添加总分"
+          disabled={disabled}
+          enabled={Boolean(total)}
+          removeLabel="移除总分"
+          onToggle={() => setTotal(total ? undefined : createDefaultTotalScore(definition))}
+        />
+      }
+      description={
+        composeMode
+          ? "为整份组合量表计算一个总分，来访结果页会在各维度结果之上展示总分和解读。发布时如果只剩一个覆盖全部题目的求和结果，会按总分计分处理，这里的总分配置自动忽略。"
+          : "在各维度之外再计算一个总分，来访结果页会在维度结果之上展示总分、所处区间和解读。默认全部题目相加，也可改为平均数或公式。"
+      }
+      title="总分（可选）"
+    >
+      {total ? (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <CompactField label="总分名称" required>
+              <input
+                className={compactInputClass}
+                disabled={disabled}
+                value={total.title}
+                onChange={(event) => setTotal({ ...total, title: event.target.value })}
+              />
+            </CompactField>
+            <CompactField className="md:col-span-2" label="总分说明（来访端可见）">
+              <input
+                className={compactInputClass}
+                disabled={disabled}
+                placeholder="例如：所有题目得分相加，分数越高表示……"
+                value={total.intro || ""}
+                onChange={(event) => setTotal({ ...total, intro: event.target.value })}
+              />
+            </CompactField>
+          </div>
+          <ScoreCalculationFields
+            block={total}
+            definition={definition}
+            disabled={disabled}
+            name="total-score"
+            onChange={(block) => setTotal({ ...total, ...block })}
+          />
+          <InlineCoverage summary={coverage} />
+          <ScoreRangeEditor
+            disabled={disabled}
+            ranges={total.scoreRanges}
+            onChange={(scoreRanges) => setTotal({ ...total, scoreRanges })}
+          />
+        </div>
+      ) : (
+        <p className="text-sm text-[var(--lxxl-muted)]">
+          未添加总分。多维度量表需要整体分数时，点击右上角「添加总分」。
+        </p>
+      )}
+    </EditorSection>
+  );
+}
+
+function RiskSeveritySelect({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: AssessmentRiskSeverity;
+  disabled: boolean;
+  onChange: (value: AssessmentRiskSeverity) => void;
+}) {
+  return (
+    <select
+      className={compactInputClass}
+      disabled={disabled}
+      value={value}
+      onChange={(event) => onChange(event.target.value as AssessmentRiskSeverity)}
+    >
+      {RISK_SEVERITY_OPTIONS.map((option) => (
+        <option key={option.value} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function RiskRangeEditor({
+  ranges,
+  disabled,
+  onChange,
+}: {
+  ranges: AssessmentRiskRange[];
+  disabled: boolean;
+  onChange: (ranges: AssessmentRiskRange[]) => void;
+}) {
+  return (
+    <div className="rounded-xl border border-[var(--lxxl-border)] bg-white p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div className="text-sm font-medium">风险分数区间</div>
+          <div className="mt-1 text-xs text-[var(--lxxl-muted)]">
+            区间不可重叠，并需覆盖全部可达分值；每个区间指定一个风险分级。
+          </div>
+        </div>
+        <SmallButton
+          disabled={disabled}
+          onClick={() => {
+            const top = ranges.length
+              ? Math.max(...ranges.map((item) => (typeof item.max === "number" ? item.max : 0)))
+              : -1;
+            onChange([...ranges, createRiskRange(top + 1, top + 2)]);
+          }}
+        >
+          添加区间
+        </SmallButton>
+      </div>
+      <div className="mt-4 space-y-3">
+        {ranges.map((range, rangeIndex) => (
+          <div
+            key={rangeIndex}
+            className="rounded-xl border border-[var(--lxxl-border)] bg-[#FCFBF8] p-3"
+            style={{ borderLeft: `4px solid ${riskSeverityMeta(range.severity).color}` }}
+          >
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[0.6fr_0.6fr_1fr_0.9fr_auto]">
+              <CompactField label="最低分">
+                <input
+                  className={compactInputClass}
+                  disabled={disabled}
+                  step="any"
+                  type="number"
+                  value={range.min ?? ""}
+                  onChange={(event) =>
+                    onChange(
+                      replaceAt(ranges, rangeIndex, {
+                        ...range,
+                        min: event.target.value === "" ? null : numberValue(event.target.value, 0),
+                      }),
+                    )
+                  }
+                />
+              </CompactField>
+              <CompactField label="最高分">
+                <input
+                  className={compactInputClass}
+                  disabled={disabled}
+                  step="any"
+                  type="number"
+                  value={range.max ?? ""}
+                  onChange={(event) =>
+                    onChange(
+                      replaceAt(ranges, rangeIndex, {
+                        ...range,
+                        max: event.target.value === "" ? null : numberValue(event.target.value, 0),
+                      }),
+                    )
+                  }
+                />
+              </CompactField>
+              <CompactField label="风险等级名称">
+                <input
+                  className={compactInputClass}
+                  disabled={disabled}
+                  placeholder="如：中风险"
+                  value={range.level}
+                  onChange={(event) =>
+                    onChange(replaceAt(ranges, rangeIndex, { ...range, level: event.target.value }))
+                  }
+                />
+              </CompactField>
+              <CompactField label="风险分级">
+                <RiskSeveritySelect
+                  disabled={disabled}
+                  value={range.severity}
+                  onChange={(severity) =>
+                    onChange(replaceAt(ranges, rangeIndex, { ...range, severity }))
+                  }
+                />
+              </CompactField>
+              <div className="flex items-end justify-end pb-1">
+                <RemoveButton
+                  disabled={disabled || ranges.length <= 1}
+                  label="删除区间"
+                  onClick={() => onChange(ranges.filter((_, index) => index !== rangeIndex))}
+                />
+              </div>
+            </div>
+            <CompactField className="mt-3" label="分析说明（仅后台）">
+              <textarea
+                className={compactTextareaClass}
+                disabled={disabled}
+                value={range.analystDescription}
+                onChange={(event) =>
+                  onChange(
+                    replaceAt(ranges, rangeIndex, {
+                      ...range,
+                      analystDescription: event.target.value,
+                    }),
+                  )
+                }
+              />
+            </CompactField>
+            <CompactField className="mt-3" label="跟进建议（每行一条，仅后台）">
+              <LinesTextarea
+                disabled={disabled}
+                value={formatLines(range.suggestions)}
+                onChange={(value) =>
+                  onChange(
+                    replaceAt(ranges, rangeIndex, { ...range, suggestions: parseLines(value) }),
+                  )
+                }
+              />
+            </CompactField>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RiskTriggerCard({
+  canRemove,
+  definition,
+  disabled,
+  index,
+  trigger,
+  onChange,
+  onRemove,
+}: {
+  canRemove: boolean;
+  definition: AssessmentDefinition;
+  disabled: boolean;
+  index: number;
+  trigger: AssessmentRiskTrigger;
+  onChange: (trigger: AssessmentRiskTrigger) => void;
+  onRemove: () => void;
+}) {
+  const [pickerOpen, setPickerOpen] = useState(trigger.optionIds.length === 0);
+  const [keyword, setKeyword] = useState("");
+  const choiceQuestions = definition.questions.filter(
+    (question) => getQuestionInputType(question) === "choice",
+  );
+  const optionLookup = new Map(
+    choiceQuestions.flatMap((question) =>
+      (question.options || []).map((option) => [option.id, { question, option }] as const),
+    ),
+  );
+  const normalizedKeyword = keyword.trim().toLowerCase();
+  const visibleQuestions = normalizedKeyword
+    ? choiceQuestions.filter((question) =>
+        [
+          question.id,
+          question.text,
+          ...(question.options || []).map((option) => option.text),
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(normalizedKeyword),
+      )
+    : choiceQuestions;
+
+  function toggleOption(optionId: string) {
+    const selected = trigger.optionIds.includes(optionId);
+    onChange({
+      ...trigger,
+      optionIds: selected
+        ? trigger.optionIds.filter((id) => id !== optionId)
+        : [...trigger.optionIds, optionId],
+    });
+  }
+
+  return (
+    <div
+      className="rounded-xl border border-[var(--lxxl-border)] bg-[#FCFBF8] p-4"
+      style={{ borderLeft: `4px solid ${riskSeverityMeta(trigger.severity).color}` }}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-sm font-medium">触发规则 {index + 1}</div>
+        <RemoveButton disabled={disabled || !canRemove} label="删除规则" onClick={onRemove} />
+      </div>
+      <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+        <CompactField label="触发后的风险等级名称">
+          <input
+            className={compactInputClass}
+            disabled={disabled}
+            placeholder="如：高风险"
+            value={trigger.level}
+            onChange={(event) => onChange({ ...trigger, level: event.target.value })}
+          />
+        </CompactField>
+        <CompactField label="风险分级">
+          <RiskSeveritySelect
+            disabled={disabled}
+            value={trigger.severity}
+            onChange={(severity) => onChange({ ...trigger, severity })}
+          />
+        </CompactField>
+      </div>
+
+      <div className="mt-3 rounded-lg border border-[var(--lxxl-border)] bg-white p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="text-xs font-medium">
+            触发选项（作答选中任意一个即触发）
+            <span className="ml-1 font-normal text-[var(--lxxl-muted)]">
+              已选 {trigger.optionIds.length} 个
+            </span>
+          </div>
+          <SmallButton disabled={disabled} onClick={() => setPickerOpen((current) => !current)}>
+            {pickerOpen ? "收起选项列表" : "选择触发选项"}
+          </SmallButton>
+        </div>
+        {trigger.optionIds.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {trigger.optionIds.map((optionId) => {
+              const hit = optionLookup.get(optionId);
+              return (
+                <span
+                  key={optionId}
+                  className={`inline-flex max-w-full items-center gap-1 rounded-full border px-2.5 py-1 text-xs ${
+                    hit
+                      ? "border-[#E8B7B2] bg-[#FFF5F4] text-[#8F3832]"
+                      : "border-dashed border-[#A13F37] text-[#A13F37]"
+                  }`}
+                  title={hit ? `${hit.question.id} · ${hit.question.text}` : undefined}
+                >
+                  <span className="truncate">
+                    {hit
+                      ? `${hit.question.id} · ${hit.option.text || hit.option.id}`
+                      : `已失效：${optionId}`}
+                  </span>
+                  <button
+                    aria-label="移除该触发选项"
+                    className="shrink-0 rounded-full px-1 leading-none hover:bg-white disabled:opacity-40"
+                    disabled={disabled}
+                    type="button"
+                    onClick={() => toggleOption(optionId)}
+                  >
+                    ×
+                  </button>
+                </span>
+              );
+            })}
+          </div>
+        )}
+        {pickerOpen && (
+          <div className="mt-3 space-y-2">
+            <input
+              className={compactInputClass}
+              placeholder="按题号、题干或选项文字筛选"
+              value={keyword}
+              onChange={(event) => setKeyword(event.target.value)}
+            />
+            <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
+              {visibleQuestions.length === 0 ? (
+                <p className="py-4 text-center text-xs text-[var(--lxxl-muted)]">
+                  {choiceQuestions.length === 0 ? "当前量表没有选择题。" : "没有匹配的题目。"}
+                </p>
+              ) : (
+                visibleQuestions.map((question) => (
+                  <div
+                    key={question.id}
+                    className="rounded-lg border border-[var(--lxxl-border)] px-3 py-2"
+                  >
+                    <div className="text-xs leading-5">
+                      <span className="font-medium">{question.id}</span> ·{" "}
+                      {question.text || "未命名题目"}
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {(question.options || []).map((option) => {
+                        const active = trigger.optionIds.includes(option.id);
+                        return (
+                          <button
+                            key={option.id}
+                            aria-pressed={active}
+                            className={`rounded-full border px-2.5 py-1 text-xs transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                              active
+                                ? "border-[#B3261E] bg-[#FBE8E6] text-[#8F2A22]"
+                                : "border-[var(--lxxl-border)] bg-white text-[var(--lxxl-muted)] hover:border-[#B3261E] hover:text-[#8F2A22]"
+                            }`}
+                            disabled={disabled}
+                            type="button"
+                            onClick={() => toggleOption(option.id)}
+                          >
+                            {option.text || option.id}
+                            <span className="ml-1 opacity-60">（{option.value} 分）</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <CompactField className="mt-3" label="分析说明（仅后台）">
+        <textarea
+          className={compactTextareaClass}
+          disabled={disabled}
+          value={trigger.analystDescription}
+          onChange={(event) => onChange({ ...trigger, analystDescription: event.target.value })}
+        />
+      </CompactField>
+      <CompactField className="mt-3" label="跟进建议（每行一条，仅后台）">
+        <LinesTextarea
+          disabled={disabled}
+          value={formatLines(trigger.suggestions)}
+          onChange={(value) => onChange({ ...trigger, suggestions: parseLines(value) })}
+        />
+      </CompactField>
+    </div>
+  );
+}
+
+function RiskDimensionEditor({
+  definition,
+  disabled,
+  onChange,
+}: {
+  definition: AssessmentDefinition;
+  disabled: boolean;
+  onChange: (definition: AssessmentDefinition) => void;
+}) {
+  const risk = definition.riskDimension;
+  const triggers = risk?.triggers;
+  const scoring = risk?.scoring;
+  const coverage = scoring
+    ? getCalculationCoverageSummary(
+        definition,
+        scoring,
+        scoring.scoreRanges,
+        "riskDimension.scoring.scoreRanges",
+        "风险计分",
+      )
+    : null;
+
+  function setRisk(next: AssessmentRiskDimension | undefined) {
+    const updated = { ...definition };
+    if (next) {
+      updated.riskDimension = next;
+    } else {
+      delete updated.riskDimension;
+    }
+    onChange(updated);
+  }
+
+  function patchRisk(next: Partial<AssessmentRiskDimension>) {
+    if (!risk) {
+      return;
+    }
+    setRisk({ ...risk, ...next });
+  }
+
+  function setScoring(next: AssessmentRiskScoring | undefined) {
+    if (!risk) {
+      return;
+    }
+    const updated: AssessmentRiskDimension = { ...risk };
+    if (next) {
+      updated.scoring = next;
+    } else {
+      delete updated.scoring;
+    }
+    setRisk(updated);
+  }
+
+  function setTriggers(next: AssessmentRiskTrigger[] | undefined) {
+    if (!risk) {
+      return;
+    }
+    const updated: AssessmentRiskDimension = { ...risk };
+    if (next) {
+      updated.triggers = next;
+    } else {
+      delete updated.triggers;
+    }
+    setRisk(updated);
+  }
+
+  return (
+    <EditorSection
+      action={
+        <ExtraToggleButton
+          addLabel="添加风险维度"
+          disabled={disabled}
+          enabled={Boolean(risk)}
+          removeLabel="移除风险维度"
+          onToggle={() => setRisk(risk ? undefined : createDefaultRiskDimension())}
+        />
+      }
+      description="用于后台识别需要跟进的作答：可按计分区间判定，也可在选中指定选项时稳定触发；两者同时配置时取风险更高的一项。这部分只在管理后台显示，来访端的题目、结果页、报告和接口都不会出现。"
+      title="风险维度（可选 · 仅后台可见）"
+    >
+      {risk ? (
+        <div className="space-y-4">
+          <div className="flex items-start gap-2 rounded-lg border border-dashed border-[#E8B7B2] bg-[#FFF8F6] px-3 py-2 text-xs leading-5 text-[#8F3832]">
+            <span aria-hidden>🔒</span>
+            <span>
+              风险判定结果会显示在「量表结果」报告详情和「企业定制数据管理」的风险分级中；配置了风险维度后，企业数据的风险等级以它为准，不再按结果等级文字推断。
+            </span>
+          </div>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <CompactField label="维度名称" required>
+              <input
+                className={compactInputClass}
+                disabled={disabled}
+                value={risk.title}
+                onChange={(event) => patchRisk({ title: event.target.value })}
+              />
+            </CompactField>
+            <CompactField className="md:col-span-2" label="判定口径说明（仅后台）">
+              <input
+                className={compactInputClass}
+                disabled={disabled}
+                placeholder="例如：第 9 题选择“经常”及以上，或总分 ≥ 15 视为高风险"
+                value={risk.intro || ""}
+                onChange={(event) => patchRisk({ intro: event.target.value })}
+              />
+            </CompactField>
+          </div>
+
+          <div className="rounded-xl border border-[var(--lxxl-border)] bg-white p-4">
+            <label className="flex items-center gap-2 text-sm font-medium">
+              <input
+                checked={Boolean(scoring)}
+                disabled={disabled}
+                type="checkbox"
+                onChange={(event) =>
+                  setScoring(event.target.checked ? createDefaultRiskScoring(definition) : undefined)
+                }
+              />
+              按计分判定
+            </label>
+            <p className="mt-1 pl-6 text-xs leading-5 text-[var(--lxxl-muted)]">
+              像维度一样选择题目和计算方式，再按分数区间给出风险等级。
+            </p>
+            {scoring && (
+              <div className="mt-4 space-y-4">
+                <ScoreCalculationFields
+                  block={scoring}
+                  definition={definition}
+                  disabled={disabled}
+                  name="risk-scoring"
+                  onChange={(block) => setScoring({ ...scoring, ...block })}
+                />
+                <InlineCoverage summary={coverage} />
+                <RiskRangeEditor
+                  disabled={disabled}
+                  ranges={scoring.scoreRanges}
+                  onChange={(scoreRanges) => setScoring({ ...scoring, scoreRanges })}
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-xl border border-[var(--lxxl-border)] bg-white p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <input
+                  checked={Boolean(triggers)}
+                  disabled={disabled}
+                  type="checkbox"
+                  onChange={(event) =>
+                    setTriggers(event.target.checked ? [createRiskTrigger([])] : undefined)
+                  }
+                />
+                按选项触发
+              </label>
+              {triggers && (
+                <SmallButton
+                  disabled={disabled}
+                  onClick={() =>
+                    setTriggers([
+                      ...triggers,
+                      createRiskTrigger(triggers.map((trigger) => trigger.id)),
+                    ])
+                  }
+                >
+                  添加触发规则
+                </SmallButton>
+              )}
+            </div>
+            <p className="mt-1 pl-6 text-xs leading-5 text-[var(--lxxl-muted)]">
+              作答中选中规则里任意一个选项就稳定命中该规则，不受总分影响；可以设置多条规则对应不同风险等级。
+            </p>
+            {triggers && (
+              <div className="mt-4 space-y-3">
+                {triggers.map((trigger, index) => (
+                  <RiskTriggerCard
+                    key={trigger.id || index}
+                    canRemove={triggers.length > 1 || Boolean(scoring)}
+                    definition={definition}
+                    disabled={disabled}
+                    index={index}
+                    trigger={trigger}
+                    onChange={(next) => setTriggers(replaceAt(triggers, index, next))}
+                    onRemove={() => {
+                      const rest = triggers.filter((_, itemIndex) => itemIndex !== index);
+                      setTriggers(rest.length ? rest : undefined);
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        <p className="text-sm text-[var(--lxxl-muted)]">
+          未添加风险维度。需要在后台标记高风险作答时，点击右上角「添加风险维度」。
+        </p>
+      )}
+    </EditorSection>
   );
 }
 

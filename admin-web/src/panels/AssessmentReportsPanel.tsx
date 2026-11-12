@@ -13,6 +13,7 @@ import {
   TableActionButton,
   queryControlClass,
 } from "@/components/ui";
+import { riskSeverityMeta } from "@/lib/assessmentEditor";
 import { formatUtcFullDateTime } from "@/lib/format";
 import { fetchAssessments } from "@/services/assessments";
 import { fetchAssessmentReportSourceOptions } from "@/services/assessmentReports";
@@ -22,6 +23,7 @@ import type {
   AssessmentReportListFilters,
   AssessmentReportListItem,
   AssessmentReportSourceOption,
+  AssessmentRiskSummary,
 } from "@/types/assessmentReport";
 
 export function AssessmentReportsPanel({
@@ -348,6 +350,7 @@ export function AssessmentReportsPanel({
                           </div>
                         </td>
                         <td className="max-w-[360px] px-5 py-4 leading-6 text-[var(--lxxl-muted)]">
+                          {item.risk && <RiskBadge risk={item.risk} />}
                           {item.resultSummary || "-"}
                         </td>
                         <td className="whitespace-nowrap px-5 py-4 text-[var(--lxxl-muted)]">
@@ -386,6 +389,23 @@ export function AssessmentReportsPanel({
         />
       )}
     </>
+  );
+}
+
+/** 风险维度判定（仅后台）：未触发时不打标，避免列表里满屏“无风险”。 */
+function RiskBadge({ risk }: { risk: AssessmentRiskSummary }) {
+  if (!risk.severity || risk.severity === "ok") {
+    return null;
+  }
+  const meta = riskSeverityMeta(risk.severity);
+  return (
+    <span
+      className="mb-1 mr-1.5 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
+      style={{ background: meta.bg, color: meta.color }}
+      title="风险维度判定，仅后台可见"
+    >
+      {risk.level || meta.label}
+    </span>
   );
 }
 

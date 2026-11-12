@@ -25,6 +25,7 @@ from assessment_share_service import (
     assessment_admin_list_stats,
     public_share_info,
 )
+from assessment_visibility import public_definition
 from config import settings
 from database import get_db
 from models import AppAssessmentReport, AppAssessmentShareScan, assessment_utc_now
@@ -163,6 +164,8 @@ def get_published_assessment(assessment_id: str):
         result = get_assessment_store().get_published(assessment_id)
         if result["definition"].get("visibility", "public") != "public":
             raise AssessmentNotFound("量表不存在或未公开")
+        # 风险维度只给管理端：来访端拿到的定义不含 riskDimension
+        result["definition"] = public_definition(result["definition"])
         try:
             result.update(public_share_info(assessment_id))
         except (AssessmentShareCodeError, AssessmentShareConfigurationError):

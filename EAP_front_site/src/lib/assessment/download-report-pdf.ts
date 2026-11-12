@@ -1,16 +1,20 @@
 "use client";
 
 import type { Assessment, AssessmentScoreResult } from "@/lib/api/types";
-import { getLevelTone, getRangeMax } from "@/components/assessment/report-score-visuals";
+import { EAP_TONES } from "@/components/assessment/report-visual-blocks";
+import {
+  buildReportVisualModel,
+  formatVisualScore,
+  type VisualScore,
+} from "@/lib/assessment/report-visual-model";
 import { ASSISTANT_CONTACT } from "@/lib/booking/contact-info";
 
 function sanitizeFilename(name: string) {
   return name.replace(/[\\/:*?"<>|]+/g, "_").slice(0, 60);
 }
 
-function barColorOf(level: string) {
-  const tone = getLevelTone(level);
-  return tone.ring.startsWith("#") ? tone.ring : "#c4795a";
+function barColorOf(item: VisualScore) {
+  return EAP_TONES[item.tone].color;
 }
 
 function hexAlpha(hex: string, alpha: number) {
@@ -232,11 +236,10 @@ function drawScoreBlock(
   contentW: number,
   cursor: Cursor,
   label: string,
-  score: number,
-  max: number,
-  level: string
+  item: VisualScore
 ) {
-  const color = barColorOf(level);
+  const color = barColorOf(item);
+  const level = item.level || "—";
   const badgePadX = 10;
   const badgePadY = 4;
   ctx.font = `600 11px "Microsoft YaHei","PingFang SC",sans-serif`;
@@ -264,15 +267,25 @@ function drawScoreBlock(
   ctx.fillStyle = "#6b6560";
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
-  ctx.fillText(`得分 ${score} / 满分 ${max}`, x, cursor.y);
+  ctx.fillText(
+    `得分 ${formatVisualScore(item.score)} / 满分 ${formatVisualScore(item.max)}`,
+    x,
+    cursor.y
+  );
   cursor.y += 18;
 
   const barH = 8;
-  const pct = max > 0 ? Math.min(1, Math.max(0, score / max)) : 0;
+  const pct = item.ratio;
   const fillW = Math.max(pct > 0 ? 4 : 0, Math.round(contentW * pct));
   drawRoundRect(ctx, x, cursor.y, contentW, barH, 4, "#ece6dc");
   if (fillW > 0) {
     drawRoundRect(ctx, x, cursor.y, fillW, barH, 4, color);
+  }
+  const span = item.max - item.min || 1;
+  for (const marker of item.markers) {
+    const markerX = x + Math.round(contentW * Math.min(1, Math.max(0, (marker.value - item.min) / span)));
+    ctx.fillStyle = "rgba(44,44,44,0.55)";
+    ctx.fillRect(markerX - 1, cursor.y - 2, 2, barH + 4);
   }
   cursor.y += barH + 12;
 }
@@ -281,8 +294,7 @@ function drawDimensionRadar(
   ctx: CanvasRenderingContext2D,
   centerX: number,
   topY: number,
-  dimensions: { id: string; title: string; score: number }[],
-  getMax: (id: string) => number
+  dimensions: VisualScore[]
 ): number {
   if (dimensions.length < 3) return 0;
 
@@ -331,11 +343,7 @@ function drawDimensionRadar(
     ctx.stroke();
   }
 
-  const valuePts = dimensions.map((d, i) => {
-    const max = Math.max(1, getMax(d.id));
-    const ratio = Math.min(1, Math.max(0, d.score / max));
-    return pointAt(i, ratio);
-  });
+  const valuePts = dimensions.map((d, i) => pointAt(i, Math.max(0.04, d.ratio)));
   ctx.beginPath();
   valuePts.forEach((p, i) => {
     if (i === 0) ctx.moveTo(p.x, p.y);
@@ -362,7 +370,7 @@ function drawDimensionRadar(
   dimensions.forEach((d, i) => {
     const label = pointAt(i, 1.38);
     const name =
-      d.title.replace(/^维度[一二三四五六七八九十\d]+[：:]\s*/, "").trim() || d.title;
+      d.label.replace(/^维度[一二三四五六七八九十\d]+[：:]\s*/, "").trim() || d.label;
     const maxChars = 6;
     const lines: string[] = [];
     for (let j = 0; j < name.length; j += maxChars) {
@@ -470,140 +478,99 @@ export async function downloadAssessmentReportPdf(options: {
     page.cursor.y += 12;
   }
 
-  if (result.type === "sum") {
-    ensureSpace(80);
-    drawScoreBlock(
-      page.ctx,
-      x,
-      contentW,
-      page.cursor,
-      "测评得分",
-      result.totalScore,
-      getRangeMax(assessment.scoreRanges),
-      result.level
-    );
-    if (assessment.scoreRanges?.length) {
-      ensureSpace(30);
-      drawTextBlock(
-        page.ctx,
-        `得分区间：${assessment.scoreRanges.map((r) => `${r.level}（${r.min}–${r.max}）`).join("；")}`,
-        x,
-        page.cursor,
-        contentW,
-        { size: 11, color: "#6b6560", lineHeight: 16, gapAfter: 10, ensureLine: lineGuard }
-      );
-    }
+  const model = buildReportVisualModel(assessment, result);
+  const sectionTitle = (text: string) => {
     ensureSpace(40);
-    drawTextBlock(page.ctx, "结果解读", x, page.cursor, contentW, {
+    drawTextBlock(page.ctx, text, x, page.cursor, contentW, {
       size: 13,
       color: "#2c2c2c",
       weight: "700",
       lineHeight: 18,
       gapAfter: 4,
     });
-    drawTextBlock(page.ctx, result.description, x, page.cursor, contentW, {
+  };
+  const paragraph = (text: string, indent = 0) => {
+    ensureSpace(24);
+    drawTextBlock(page.ctx, text, x + indent, page.cursor, contentW - indent, {
       size: 11,
       color: "#6b6560",
       lineHeight: 17,
-      gapAfter: 10,
+      gapAfter: 6,
       ensureLine: lineGuard,
     });
-    if (result.suggestions.length) {
-      ensureSpace(30);
-      drawTextBlock(page.ctx, "建议", x, page.cursor, contentW, {
-        size: 13,
-        color: "#2c2c2c",
-        weight: "700",
-        lineHeight: 18,
-        gapAfter: 4,
-      });
-      result.suggestions.forEach((s, i) => {
-        ensureSpace(24);
-        drawTextBlock(page.ctx, `${i + 1}. ${s}`, x, page.cursor, contentW, {
-          size: 11,
-          color: "#6b6560",
-          lineHeight: 17,
-          gapAfter: 4,
-          ensureLine: lineGuard,
-        });
-      });
-    }
-  } else if (result.type === "dimension") {
-    if (result.summary) {
-      ensureSpace(40);
-      drawTextBlock(page.ctx, result.summary, x, page.cursor, contentW, {
-        size: 11,
-        color: "#6b6560",
-        lineHeight: 17,
-        gapAfter: 10,
-        ensureLine: lineGuard,
-      });
-    }
-
-    if (result.dimensions.length >= 3) {
-      ensureSpace(260);
-      const radarH = drawDimensionRadar(
-        page.ctx,
-        x + contentW / 2,
-        page.cursor.y,
-        result.dimensions,
-        (id) => getRangeMax(assessment.dimensions?.find((d) => d.id === id)?.scoreRanges)
+  };
+  const divider = () => {
+    ensureSpace(16);
+    page.cursor.y += 6;
+    page.ctx.strokeStyle = "#eee5d8";
+    page.ctx.lineWidth = 1;
+    page.ctx.beginPath();
+    page.ctx.moveTo(x, page.cursor.y);
+    page.ctx.lineTo(x + contentW, page.cursor.y);
+    page.ctx.stroke();
+    page.cursor.y += 10;
+  };
+  const drawScoreSection = (item: VisualScore, label: string, depth = 0) => {
+    ensureSpace(90);
+    drawScoreBlock(page.ctx, x + depth * 12, contentW - depth * 12, page.cursor, label, item);
+    if (item.bands.length > 1 && depth === 0) {
+      paragraph(
+        `得分区间：${item.bands
+          .map((band) => `${band.level}（${formatVisualScore(band.min)}–${formatVisualScore(band.max)}）`)
+          .join("；")}`
       );
+    }
+    if (item.markers.length) {
+      paragraph(item.markers.map((marker) => marker.label).join("；"), depth * 12);
+    }
+    if (item.intro) {
+      paragraph(`说明：${item.intro}`, depth * 12);
+    }
+    if (item.description) {
+      paragraph(`解读：${item.description}`, depth * 12);
+    }
+    item.suggestions.forEach((suggestion, index) => {
+      paragraph(`${index + 1}. ${suggestion}`, depth * 12 + 10);
+    });
+    item.children.forEach((child) => drawScoreSection(child, `子维度 · ${child.title}`, depth + 1));
+  };
+
+  if (model.kind === "score" && model.hero) {
+    drawScoreSection(model.hero, "测评得分");
+  } else if (model.kind === "profile") {
+    if (model.hero) {
+      drawScoreSection(model.hero, model.hero.title || "总分");
+      divider();
+    }
+    if (model.summary) {
+      paragraph(model.summary);
+    }
+    model.quadrants.forEach((quadrant) => {
+      paragraph(
+        `${quadrant.title}：${quadrant.result}（${quadrant.x.label} ${formatVisualScore(quadrant.x.score)}，${quadrant.y.label} ${formatVisualScore(quadrant.y.score)}）`
+      );
+    });
+
+    if (model.radar.length >= 3) {
+      ensureSpace(260);
+      const radarH = drawDimensionRadar(page.ctx, x + contentW / 2, page.cursor.y, model.radar);
       page.cursor.y += radarH;
-      page.ctx.strokeStyle = "#e8e0d5";
-      page.ctx.lineWidth = 1;
-      page.ctx.beginPath();
-      page.ctx.moveTo(x, page.cursor.y);
-      page.ctx.lineTo(x + contentW, page.cursor.y);
-      page.ctx.stroke();
-      page.cursor.y += 12;
+      divider();
     }
 
-    result.dimensions.forEach((dim, idx) => {
-      ensureSpace(90);
-      const dimDef = assessment.dimensions?.find((d) => d.id === dim.id);
-      const max = getRangeMax(dimDef?.scoreRanges);
-      drawScoreBlock(page.ctx, x, contentW, page.cursor, dim.title, dim.score, max, dim.level);
-      if (dimDef?.intro) {
-        ensureSpace(36);
-        drawTextBlock(page.ctx, `维度说明：${dimDef.intro}`, x, page.cursor, contentW, {
-          size: 11,
-          color: "#6b6560",
-          lineHeight: 16,
-          gapAfter: 3,
-          ensureLine: lineGuard,
-        });
+    model.groups.forEach((group, groupIndex) => {
+      if (group.title) {
+        sectionTitle(group.title);
       }
-      ensureSpace(36);
-      drawTextBlock(page.ctx, `解读：${dim.description}`, x, page.cursor, contentW, {
-        size: 11,
-        color: "#6b6560",
-        lineHeight: 16,
-        gapAfter: 3,
-        ensureLine: lineGuard,
+      group.items.forEach((item, index) => {
+        drawScoreSection(item, item.title);
+        const last = groupIndex === model.groups.length - 1 && index === group.items.length - 1;
+        if (!last) {
+          divider();
+        }
       });
-      dim.suggestions.forEach((s) => {
-        ensureSpace(22);
-        drawTextBlock(page.ctx, `· ${s}`, x + 10, page.cursor, contentW - 10, {
-          size: 11,
-          color: "#6b6560",
-          lineHeight: 16,
-          gapAfter: 2,
-          ensureLine: lineGuard,
-        });
-      });
-      if (idx < result.dimensions.length - 1) {
-        ensureSpace(16);
-        page.cursor.y += 6;
-        page.ctx.strokeStyle = "#eee5d8";
-        page.ctx.beginPath();
-        page.ctx.moveTo(x, page.cursor.y);
-        page.ctx.lineTo(x + contentW, page.cursor.y);
-        page.ctx.stroke();
-        page.cursor.y += 10;
-      }
     });
-  } else {
+  } else if (result.type === "match") {
     ensureSpace(40);
     drawTextBlock(page.ctx, `你的结果是：${result.title}`, x, page.cursor, contentW, {
       size: 14,
@@ -619,6 +586,11 @@ export async function downloadAssessmentReportPdf(options: {
       gapAfter: 8,
       ensureLine: lineGuard,
     });
+    const matchSuggestions = model.match?.suggestions ?? [];
+    if (matchSuggestions.length) {
+      sectionTitle("建议");
+      matchSuggestions.forEach((suggestion, index) => paragraph(`${index + 1}. ${suggestion}`));
+    }
     if (result.shareText) {
       ensureSpace(30);
       drawTextBlock(page.ctx, `「${result.shareText}」`, x, page.cursor, contentW, {

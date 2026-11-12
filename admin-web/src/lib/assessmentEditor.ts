@@ -5,11 +5,18 @@ import type {
   AssessmentOptionFollowUp,
   AssessmentQuestion,
   AssessmentQuestionInputType,
+  AssessmentRiskDimension,
+  AssessmentRiskRange,
+  AssessmentRiskScoring,
+  AssessmentRiskSeverity,
+  AssessmentRiskTrigger,
+  AssessmentScoreCalculation,
   AssessmentScoreMode,
   AssessmentScoreRange,
   AssessmentScoringPreset,
   AssessmentScoringType,
   AssessmentSourceReport,
+  AssessmentTotalScore,
   AssessmentValidationIssue,
 } from "@/types/assessment";
 import {
@@ -235,6 +242,12 @@ export function normalizeAssessmentDefinition(
       ...dimension,
       scoreRanges: normalizeScoreRanges(dimension.scoreRanges) || dimension.scoreRanges,
     }));
+  }
+  if (next.totalScore && Array.isArray(next.totalScore.scoreRanges)) {
+    next.totalScore = {
+      ...next.totalScore,
+      scoreRanges: normalizeScoreRanges(next.totalScore.scoreRanges),
+    };
   }
   return next;
 }
@@ -483,6 +496,8 @@ export function changeAssessmentScoringType(
   delete next.matchResults;
   delete next.reportProfiles;
   delete next.reverseQuestionIds;
+  // 总分只属于维度计分；风险维度按题目和选项配置，与计分方式无关，保留
+  delete next.totalScore;
   next.questions = next.questions.map((question) => ({
     ...question,
     options: (question.options || []).map((option) => {
@@ -811,7 +826,7 @@ function buildCoverageSummary(
   path: string,
   label: string,
   reachableScores: number[],
-  ranges: AssessmentScoreRange[] | undefined,
+  ranges: ReadonlyArray<{ min: number | null; max: number | null }> | undefined,
 ): AssessmentScoreCoverageSummary {
   const uncoveredScores = reachableScores.filter(
     (score) =>
@@ -840,6 +855,15 @@ function formatScore(value: number): string {
 }
 
 export function getAssessmentScoreCoverageSummaries(
+  definition: AssessmentDefinition,
+): AssessmentScoreCoverageSummary[] {
+  return [
+    ...getBaseScoreCoverageSummaries(definition),
+    ...getExtraScoreCoverageSummaries(definition),
+  ];
+}
+
+function getBaseScoreCoverageSummaries(
   definition: AssessmentDefinition,
 ): AssessmentScoreCoverageSummary[] {
   try {
@@ -1698,6 +1722,9 @@ export function validateAssessmentDefinition(
     }
   });
 
+  validateTotalScore(definition, questionIds, issues);
+  validateRiskDimension(definition, questionIds, issues);
+
   coverageSummaries.forEach((summary) => {
     if (summary.validationError) {
       issues.push({
@@ -1998,7 +2025,7 @@ export function removeComposedQuestions(
     return ids.size === 0 ? definition : null;
   }
   const knownQuestionIds = definition.questions.map((question) => question.id);
-  return {
+  return removeQuestionsFromExtras({
     ...definition,
     questions,
     reverseQuestionIds: definition.reverseQuestionIds?.filter((id) => !ids.has(id)),
@@ -2016,7 +2043,7 @@ export function removeComposedQuestions(
           rewriteScoreRangesForRemoval(dimension.scoreRanges, mode) || dimension.scoreRanges,
       })),
     })),
-  };
+  }, ids, knownQuestionIds, definition.questions);
 }
 
 /**
@@ -2084,6 +2111,8 @@ export function syncComposedSourceReports(
         scoreRanges: only.scoreRanges,
         reverseQuestionIds: only.reverseQuestionIds || [],
         dimensions: undefined,
+        // 只剩一个覆盖全部题目的结果时它本身就是总分，多维度总分不再适用
+        totalScore: undefined,
       };
     }
   }
@@ -2273,4 +2302,560 @@ export function composeAssessmentDefinition(
 
   definition.sourceReports = buildSourceReports(definition, sources);
   return definition;
+}
+
+// ---------------------------------------------------------------------------
+// 多维度总分与风险维度
+// ---------------------------------------------------------------------------
+
+/** 风险分级选项，与企业定制数据管理的风险等级一致。 */
+export const RISK_SEVERITY_OPTIONS: ReadonlyArray<{
+  value: AssessmentRiskSeverity;
+  label: string;
+  color: string;
+  bg: string;
+}> = [
+  { value: "high", label: "高风险", color: "#B3261E", bg: "#FBE8E6" },
+  { value: "mid", label: "中度风险", color: "#B4570F", bg: "#FCEFE0" },
+  { value: "watch", label: "一般关注", color: "#86660F", bg: "#FBF3DF" },
+  { value: "ok", label: "无风险", color: "#2F7A55", bg: "#EAF2ED" },
+];
+
+const RISK_SEVERITY_VALUES = new Set<string>(
+  RISK_SEVERITY_OPTIONS.map((option) => option.value),
+);
+
+export function riskSeverityMeta(severity: string | null | undefined) {
+  return (
+    RISK_SEVERITY_OPTIONS.find((option) => option.value === severity) || {
+      value: null,
+      label: "未分级",
+      color: "#8A8A8A",
+      bg: "#F4F1EB",
+    }
+  );
+}
+
+export const RISK_DIMENSION_TITLE = "风险";
+
+function choiceOptionIds(definition: AssessmentDefinition): Set<string> {
+  return new Set(
+    definition.questions
+      .filter((question) => getQuestionInputType(question) === "choice")
+      .flatMap((question) => (question.options || []).map((option) => option.id)),
+  );
+}
+
+export function createDefaultTotalScore(
+  definition: AssessmentDefinition,
+): AssessmentTotalScore {
+  const questionIds = definition.questions.map((question) => question.id);
+  return {
+    title: "总分",
+    intro: "",
+    questionIds,
+    reverseQuestionIds: [],
+    calculationMode: "simple",
+    aggregate: "sum",
+    scoreRanges: createDefaultScoreRanges(definition.questions, questionIds),
+  };
+}
+
+export function createRiskRange(
+  min: number | null,
+  max: number | null,
+): AssessmentRiskRange {
+  return {
+    min,
+    max,
+    level: "低风险",
+    severity: "ok",
+    analystDescription: "",
+    suggestions: [],
+  };
+}
+
+export function createDefaultRiskScoring(
+  definition: AssessmentDefinition,
+): AssessmentRiskScoring {
+  const questionIds = definition.questions.map((question) => question.id);
+  const [minimum, maximum] = getQuestionScoreBounds(definition.questions, questionIds);
+  return {
+    questionIds,
+    reverseQuestionIds: [],
+    calculationMode: "simple",
+    aggregate: "sum",
+    scoreRanges: [createRiskRange(minimum, maximum)],
+  };
+}
+
+export function createRiskTrigger(existingIds: Iterable<string>): AssessmentRiskTrigger {
+  return {
+    id: createStableId("trigger", existingIds),
+    level: "高风险",
+    severity: "high",
+    optionIds: [],
+    analystDescription: "",
+    suggestions: [],
+  };
+}
+
+export function createDefaultRiskDimension(): AssessmentRiskDimension {
+  return {
+    title: RISK_DIMENSION_TITLE,
+    intro: "",
+    triggers: [createRiskTrigger([])],
+  };
+}
+
+/** 单个计算块（总分 / 风险计分）的可达分值覆盖情况。 */
+export function getCalculationCoverageSummary(
+  definition: AssessmentDefinition,
+  block: AssessmentScoreCalculation | undefined,
+  ranges: ReadonlyArray<{ min: number | null; max: number | null }> | undefined,
+  path: string,
+  label: string,
+): AssessmentScoreCoverageSummary | null {
+  if (!block || !Array.isArray(block.questionIds) || block.questionIds.length === 0) {
+    return null;
+  }
+  try {
+    const reachableScores = enumerateReachableScores(
+      definition,
+      block.questionIds,
+      block.reverseQuestionIds ?? [],
+      block.aggregate,
+      label,
+      true,
+      block.calculationMode ?? "simple",
+      block.formula ?? "",
+    );
+    return reachableScores
+      ? buildCoverageSummary(path, label, reachableScores, ranges)
+      : null;
+  } catch (error) {
+    if (error instanceof Error) {
+      return {
+        path,
+        label,
+        minimum: 0,
+        maximum: 0,
+        reachableCount: 0,
+        uncoveredScores: [],
+        validationError: error.message,
+      };
+    }
+    throw error;
+  }
+}
+
+function getExtraScoreCoverageSummaries(
+  definition: AssessmentDefinition,
+): AssessmentScoreCoverageSummary[] {
+  if (!Array.isArray(definition.questions)) {
+    return [];
+  }
+  const summaries: AssessmentScoreCoverageSummary[] = [];
+  const total = definition.totalScore;
+  if (definition.scoringType === "dimension" && total) {
+    const summary = getCalculationCoverageSummary(
+      definition,
+      total,
+      total.scoreRanges,
+      "totalScore.scoreRanges",
+      `总分“${total.title || "总分"}”`,
+    );
+    if (summary) {
+      summaries.push(summary);
+    }
+  }
+  const scoring = definition.riskDimension?.scoring;
+  if (scoring) {
+    const summary = getCalculationCoverageSummary(
+      definition,
+      scoring,
+      scoring.scoreRanges,
+      "riskDimension.scoring.scoreRanges",
+      "风险维度计分",
+    );
+    if (summary) {
+      summaries.push(summary);
+    }
+  }
+  return summaries;
+}
+
+function validateCalculationBlock(
+  block: AssessmentScoreCalculation,
+  path: string,
+  label: string,
+  definition: AssessmentDefinition,
+  questionIds: Set<string>,
+  issues: AssessmentValidationIssue[],
+): void {
+  const calculationMode = block.calculationMode ?? "simple";
+  if (!["simple", "formula"].includes(calculationMode)) {
+    issues.push({
+      path: `${path}.calculationMode`,
+      message: `${label}计算方式不合法`,
+      severity: "error",
+    });
+  }
+  if (!["sum", "product", "average"].includes(block.aggregate)) {
+    issues.push({
+      path: `${path}.aggregate`,
+      message: `${label}简单计算方式不合法`,
+      severity: "error",
+    });
+  }
+  const selected = Array.isArray(block.questionIds) ? block.questionIds : [];
+  if (selected.length === 0) {
+    issues.push({
+      path: `${path}.questionIds`,
+      message: `${label}至少选择一道参与计算的题目`,
+      severity: "error",
+    });
+  }
+  addDuplicateIssues(
+    selected.map((id, index) => ({ id, path: `${path}.questionIds[${index}]` })),
+    issues,
+    `${label}题目重复`,
+  );
+  selected.forEach((id, index) => {
+    if (!questionIds.has(id)) {
+      issues.push({
+        path: `${path}.questionIds[${index}]`,
+        message: `${label}引用了不存在的题目：${id}`,
+        severity: "error",
+      });
+    }
+  });
+  (block.reverseQuestionIds ?? []).forEach((id, index) => {
+    if (!selected.includes(id)) {
+      issues.push({
+        path: `${path}.reverseQuestionIds[${index}]`,
+        message: `${label}反向计分题目必须是已选题目：${id}`,
+        severity: "error",
+      });
+    }
+  });
+  if (calculationMode === "formula") {
+    try {
+      const compiled = compileDimensionFormula(
+        block.formula ?? "",
+        definition.questions.map((question) => question.id),
+      );
+      const referenced = new Set(compiled.questionIds);
+      const selectedSet = new Set(selected);
+      if (
+        selectedSet.size !== referenced.size ||
+        [...selectedSet].some((id) => !referenced.has(id))
+      ) {
+        issues.push({
+          path: `${path}.formula`,
+          message: `${label}公式中的题目 ID 必须与已点选题目完全一致`,
+          severity: "error",
+        });
+      }
+    } catch (error) {
+      issues.push({
+        path: `${path}.formula`,
+        message: error instanceof Error ? `${label}${error.message}` : `${label}公式不合法`,
+        severity: "error",
+      });
+    }
+  }
+}
+
+function validateTotalScore(
+  definition: AssessmentDefinition,
+  questionIds: Set<string>,
+  issues: AssessmentValidationIssue[],
+): void {
+  const total = definition.totalScore;
+  if (!total) {
+    return;
+  }
+  if (definition.scoringType !== "dimension") {
+    issues.push({
+      path: "totalScore",
+      message: "总分仅适用于维度计分量表",
+      severity: "error",
+    });
+    return;
+  }
+  if (!total.title?.trim()) {
+    issues.push({
+      path: "totalScore.title",
+      message: "请填写总分名称",
+      severity: "error",
+    });
+  }
+  validateCalculationBlock(total, "totalScore", "总分", definition, questionIds, issues);
+  validateRanges(total.scoreRanges, "totalScore.scoreRanges", issues);
+}
+
+function validateRiskRanges(
+  ranges: AssessmentRiskRange[] | undefined,
+  path: string,
+  issues: AssessmentValidationIssue[],
+): void {
+  if (!Array.isArray(ranges) || ranges.length === 0) {
+    issues.push({
+      path,
+      message: "风险计分至少需要一个分数区间",
+      severity: "error",
+    });
+    return;
+  }
+  const ordered: Array<{ min: number; max: number; path: string }> = [];
+  ranges.forEach((range, index) => {
+    const itemPath = `${path}[${index}]`;
+    const low = finiteScoreBound(range.min);
+    const high = finiteScoreBound(range.max);
+    if (low === null || high === null) {
+      issues.push({ path: itemPath, message: "请填写风险区间的最低分和最高分", severity: "error" });
+    } else if (low > high) {
+      issues.push({ path: itemPath, message: "风险区间下限不能大于上限", severity: "error" });
+    } else {
+      ordered.push({ min: low, max: high, path: itemPath });
+    }
+    if (!range.level?.trim()) {
+      issues.push({ path: `${itemPath}.level`, message: "请填写风险等级名称", severity: "error" });
+    }
+    if (!RISK_SEVERITY_VALUES.has(range.severity)) {
+      issues.push({ path: `${itemPath}.severity`, message: "请选择风险分级", severity: "error" });
+    }
+    if (
+      !Array.isArray(range.suggestions) ||
+      range.suggestions.some((suggestion) => typeof suggestion !== "string" || !suggestion.trim())
+    ) {
+      issues.push({ path: `${itemPath}.suggestions`, message: "跟进建议不能包含空行", severity: "error" });
+    }
+  });
+  ordered.sort((left, right) => left.min - right.min || left.max - right.max);
+  for (let index = 1; index < ordered.length; index += 1) {
+    if (ordered[index].min <= ordered[index - 1].max) {
+      issues.push({ path: ordered[index].path, message: "风险区间不能重叠", severity: "error" });
+    }
+  }
+}
+
+function validateRiskDimension(
+  definition: AssessmentDefinition,
+  questionIds: Set<string>,
+  issues: AssessmentValidationIssue[],
+): void {
+  const risk = definition.riskDimension;
+  if (!risk) {
+    return;
+  }
+  if (!risk.title?.trim()) {
+    issues.push({ path: "riskDimension.title", message: "请填写风险维度名称", severity: "error" });
+  }
+  const triggers = risk.triggers ?? [];
+  if (!risk.scoring && triggers.length === 0) {
+    issues.push({
+      path: "riskDimension",
+      message: "风险维度至少需要配置计分判定或选项触发规则",
+      severity: "error",
+    });
+  }
+  if (risk.scoring) {
+    validateCalculationBlock(
+      risk.scoring,
+      "riskDimension.scoring",
+      "风险计分",
+      definition,
+      questionIds,
+      issues,
+    );
+    validateRiskRanges(risk.scoring.scoreRanges, "riskDimension.scoring.scoreRanges", issues);
+  }
+  const optionIds = choiceOptionIds(definition);
+  addDuplicateIssues(
+    triggers.map((trigger, index) => ({ id: trigger.id, path: `riskDimension.triggers[${index}].id` })),
+    issues,
+    "触发规则 ID 重复",
+  );
+  triggers.forEach((trigger, index) => {
+    const path = `riskDimension.triggers[${index}]`;
+    if (!trigger.id || !STABLE_ID_PATTERN.test(trigger.id)) {
+      issues.push({ path: `${path}.id`, message: "触发规则 ID 格式不合法", severity: "error" });
+    }
+    if (!trigger.level?.trim()) {
+      issues.push({ path: `${path}.level`, message: "请填写触发后的风险等级名称", severity: "error" });
+    }
+    if (!RISK_SEVERITY_VALUES.has(trigger.severity)) {
+      issues.push({ path: `${path}.severity`, message: "请选择触发后的风险分级", severity: "error" });
+    }
+    const selected = Array.isArray(trigger.optionIds) ? trigger.optionIds : [];
+    if (selected.length === 0) {
+      issues.push({ path: `${path}.optionIds`, message: "请至少选择一个触发选项", severity: "error" });
+    }
+    selected.forEach((id) => {
+      if (!optionIds.has(id)) {
+        issues.push({ path: `${path}.optionIds`, message: `触发选项不存在：${id}`, severity: "error" });
+      }
+    });
+    if (
+      !Array.isArray(trigger.suggestions) ||
+      trigger.suggestions.some((suggestion) => typeof suggestion !== "string" || !suggestion.trim())
+    ) {
+      issues.push({ path: `${path}.suggestions`, message: "跟进建议不能包含空行", severity: "error" });
+    }
+  });
+}
+
+function withoutQuestionsInBlock<T extends AssessmentScoreCalculation>(
+  block: T,
+  removed: Set<string>,
+  knownQuestionIds: string[],
+): T {
+  let formula = block.formula;
+  if (block.calculationMode === "formula" && formula) {
+    for (const id of removed) {
+      formula = removeFormulaQuestionId(formula, id, knownQuestionIds);
+    }
+  }
+  return {
+    ...block,
+    questionIds: block.questionIds.filter((id) => !removed.has(id)),
+    reverseQuestionIds: block.reverseQuestionIds?.filter((id) => !removed.has(id)),
+    formula,
+  };
+}
+
+/** 删除题目后，同步清理总分 / 风险维度里对这些题目及其选项的引用。 */
+export function removeQuestionsFromExtras(
+  definition: AssessmentDefinition,
+  removedIds: Iterable<string>,
+  knownQuestionIds: string[],
+  previousQuestions: AssessmentQuestion[],
+): AssessmentDefinition {
+  const removed = new Set(removedIds);
+  if (removed.size === 0 || (!definition.totalScore && !definition.riskDimension)) {
+    return definition;
+  }
+  const removedOptionIds = new Set(
+    previousQuestions
+      .filter((question) => removed.has(question.id))
+      .flatMap((question) => (question.options || []).map((option) => option.id)),
+  );
+  const next: AssessmentDefinition = { ...definition };
+  if (definition.totalScore) {
+    next.totalScore = withoutQuestionsInBlock(definition.totalScore, removed, knownQuestionIds);
+  }
+  if (definition.riskDimension) {
+    const risk = definition.riskDimension;
+    next.riskDimension = {
+      ...risk,
+      ...(risk.scoring
+        ? { scoring: withoutQuestionsInBlock(risk.scoring, removed, knownQuestionIds) }
+        : {}),
+      ...(risk.triggers
+        ? {
+            triggers: risk.triggers.map((trigger) => ({
+              ...trigger,
+              optionIds: trigger.optionIds.filter((id) => !removedOptionIds.has(id)),
+            })),
+          }
+        : {}),
+    };
+  }
+  return next;
+}
+
+function renameQuestionInBlock<T extends AssessmentScoreCalculation>(
+  block: T,
+  previousId: string,
+  nextId: string,
+  knownQuestionIds: string[],
+): T {
+  return {
+    ...block,
+    questionIds: block.questionIds.map((id) => (id === previousId ? nextId : id)),
+    reverseQuestionIds: block.reverseQuestionIds?.map((id) => (id === previousId ? nextId : id)),
+    formula:
+      block.calculationMode === "formula" && block.formula
+        ? replaceFormulaQuestionId(block.formula, previousId, nextId, knownQuestionIds)
+        : block.formula,
+  };
+}
+
+/** 修改题目 ID 时同步总分 / 风险计分里的引用。 */
+export function renameQuestionInExtras(
+  definition: AssessmentDefinition,
+  previousId: string,
+  nextId: string,
+  knownQuestionIds: string[],
+): AssessmentDefinition {
+  if (!definition.totalScore && !definition.riskDimension?.scoring) {
+    return definition;
+  }
+  const next: AssessmentDefinition = { ...definition };
+  if (definition.totalScore) {
+    next.totalScore = renameQuestionInBlock(
+      definition.totalScore,
+      previousId,
+      nextId,
+      knownQuestionIds,
+    );
+  }
+  if (definition.riskDimension?.scoring) {
+    next.riskDimension = {
+      ...definition.riskDimension,
+      scoring: renameQuestionInBlock(
+        definition.riskDimension.scoring,
+        previousId,
+        nextId,
+        knownQuestionIds,
+      ),
+    };
+  }
+  return next;
+}
+
+/** 删除选项后，从风险触发规则里去掉这些选项。 */
+export function removeOptionsFromRiskTriggers(
+  definition: AssessmentDefinition,
+  optionIds: Iterable<string>,
+): AssessmentDefinition {
+  const removed = new Set(optionIds);
+  const risk = definition.riskDimension;
+  if (!risk?.triggers?.length || removed.size === 0) {
+    return definition;
+  }
+  return {
+    ...definition,
+    riskDimension: {
+      ...risk,
+      triggers: risk.triggers.map((trigger) => ({
+        ...trigger,
+        optionIds: trigger.optionIds.filter((id) => !removed.has(id)),
+      })),
+    },
+  };
+}
+
+/** 修改选项 ID 时同步风险触发规则里的引用。 */
+export function renameOptionInRiskTriggers(
+  definition: AssessmentDefinition,
+  previousId: string,
+  nextId: string,
+): AssessmentDefinition {
+  const risk = definition.riskDimension;
+  if (!risk?.triggers?.some((trigger) => trigger.optionIds.includes(previousId))) {
+    return definition;
+  }
+  return {
+    ...definition,
+    riskDimension: {
+      ...risk,
+      triggers: risk.triggers.map((trigger) => ({
+        ...trigger,
+        optionIds: trigger.optionIds.map((id) => (id === previousId ? nextId : id)),
+      })),
+    },
+  };
 }
