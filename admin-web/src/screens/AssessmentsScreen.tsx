@@ -8,6 +8,7 @@ import { AppRoute, useAppRoute } from "@/components/AppRoute";
 import { DEFAULT_PAGE_SIZE } from "@/config/pagination";
 import { ApiError } from "@/lib/api";
 import { composeAssessmentDefinition } from "@/lib/assessmentEditor";
+import { downloadAssessmentPdfs } from "@/lib/download-assessment-pdf";
 import { AssessmentComposerBar } from "@/panels/AssessmentComposerBar";
 import { AssessmentsPanel } from "@/panels/AssessmentsPanel";
 import { fetchAssessmentEnterprises } from "@/services/assessmentEnterprises";
@@ -56,6 +57,7 @@ export interface AssessmentsPanelPropsContract {
   onOpenCreate: () => void;
   onOpenReports: (assessmentId?: string) => void;
   onOpenShareStats: (assessmentId: string) => void;
+  onDownloadAssessment: (assessmentId: string) => Promise<void>;
   onOpenDetail: (
     assessmentId: string,
     mode?: Exclude<AssessmentEditorMode, "create" | null>,
@@ -272,6 +274,26 @@ function AssessmentsScreenContent({ variant }: { variant: "parent" | "composed" 
       router.push(`/assessment-reports?${params.toString()}`);
     },
     [router],
+  );
+
+  const downloadAssessment = useCallback(
+    async (assessmentId: string) => {
+      setActionLoading(true);
+      clearNotice();
+      try {
+        const detail = await fetchAssessmentDetail(assessmentId);
+        await downloadAssessmentPdfs(detail.definition);
+        showNotice("success", "已开始下载题目卷与结果卷两份 PDF");
+      } catch (error) {
+        showNotice(
+          "error",
+          error instanceof Error ? error.message : "量表下载失败",
+        );
+      } finally {
+        setActionLoading(false);
+      }
+    },
+    [clearNotice, showNotice],
   );
 
   const openDetail = useCallback(
@@ -555,6 +577,7 @@ function AssessmentsScreenContent({ variant }: { variant: "parent" | "composed" 
         onOpenCreate={openCreate}
         onOpenReports={openReports}
         onOpenShareStats={openShareStats}
+        onDownloadAssessment={downloadAssessment}
         onOpenDetail={openDetail}
         onCloseEditor={closeEditor}
         onSaveDefinition={saveDefinition}
