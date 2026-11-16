@@ -134,6 +134,22 @@ export interface MatchResult {
   description: string;
   image: string;
   shareText: string;
+  suggestions?: string[];
+}
+
+/** 维度量表可选的总分配置（来访端可见） */
+export interface TotalScoreDefinition {
+  title: string;
+  intro?: string;
+  questionIds: string[];
+  scoreRanges: ScoreRange[];
+}
+
+/** 组合量表按母量表拼接的报告结构，结果页据此把维度按母量表分组 */
+export interface AssessmentSourceReport {
+  sourceId: string;
+  sourceTitle: string;
+  dimensions?: Array<{ id: string; title?: string }>;
 }
 
 export interface DimensionDefinition {
@@ -210,6 +226,11 @@ export interface Assessment {
   reportIntro?: string;
   /** 固定计分模板的可编辑报告文案 */
   reportProfiles?: AssessmentReportProfile[];
+  /** 维度量表的总分配置 */
+  totalScore?: TotalScoreDefinition;
+  /** 组合量表来源 */
+  composedFrom?: Array<{ id: string; title: string }>;
+  sourceReports?: AssessmentSourceReport[];
   disclaimer: string;
   createdAt?: string;
   updatedAt?: string;
@@ -264,10 +285,21 @@ export interface DimensionScoreItem {
   suggestions: string[];
 }
 
+export interface DimensionTotalScoreResult {
+  title: string;
+  score: number;
+  level: string;
+  description: string;
+  visitorDescription?: string;
+  suggestions: string[];
+}
+
 export interface DimensionScoreResult {
   type: "dimension";
   dimensions: DimensionScoreItem[];
   summary?: string;
+  /** 量表配置了总分时才有 */
+  total?: DimensionTotalScoreResult;
 }
 
 export type AssessmentScoreResult =

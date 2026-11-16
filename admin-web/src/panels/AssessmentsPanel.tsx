@@ -51,6 +51,7 @@ export function AssessmentsPanel({
   onOpenCreate,
   onOpenReports,
   onOpenShareStats,
+  onDownloadAssessment,
   onOpenDetail,
   onCloseEditor,
   onSaveDefinition,
@@ -84,6 +85,7 @@ export function AssessmentsPanel({
   onOpenCreate: () => void;
   onOpenReports: (assessmentId?: string) => void;
   onOpenShareStats: (assessmentId: string) => void;
+  onDownloadAssessment: (assessmentId: string) => void | Promise<void>;
   onOpenDetail: (assessmentId: string, mode?: Exclude<AssessmentEditorMode, "create" | null>) => void;
   onCloseEditor: () => void;
   onSaveDefinition: (definition: AssessmentDefinition) => Promise<AssessmentAdminDetail | undefined>;
@@ -334,6 +336,13 @@ export function AssessmentsPanel({
                                 onClick={() => onOpenShareStats(item.id)}
                               >
                                 数据统计
+                              </TableActionButton>
+                              <TableActionButton
+                                disabled={actionLoading}
+                                title="下载题目卷与结果卷两份 PDF"
+                                onClick={() => void onDownloadAssessment(item.id)}
+                              >
+                                下载量表
                               </TableActionButton>
                               <TableActionButton
                                 disabled={archived}

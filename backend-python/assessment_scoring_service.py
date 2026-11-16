@@ -460,37 +460,53 @@ def _js_round_2(value: float) -> float:
     return math.floor(value * 100 + 0.5) / 100
 
 
+def _calculation_score(
+    definition: dict[str, Any],
+    answers: dict[str, Any],
+    block: dict[str, Any],
+    *,
+    formula_error: str,
+) -> float:
+    """按「选题 + 计算方式」计算一个维度 / 总分 / 风险分，结果保留两位小数。"""
+    reverse_ids = set(block.get("reverseQuestionIds", []))
+    question_ids = block.get("questionIds", [])
+    value_map = {
+        question_id: _option_value(
+            definition,
+            answers,
+            question_id,
+            reverse_ids,
+        )
+        for question_id in question_ids
+    }
+    values = list(value_map.values())
+    if block.get("calculationMode", "simple") == "formula":
+        try:
+            node = parse_dimension_formula(
+                str(block.get("formula", "")),
+                [str(question["id"]) for question in definition.get("questions", [])],
+            )
+            score = evaluate_dimension_formula(node, value_map)
+        except AssessmentFormulaError as exc:
+            raise AssessmentAnswerError(f"{formula_error}：{exc}") from exc
+    elif block.get("aggregate") == "product":
+        score = math.prod(values)
+    else:
+        score = sum(values)
+        if block.get("aggregate") == "average":
+            score = score / len(values)
+    return _js_round_2(float(score))
+
+
 def _dimension_result(definition: dict[str, Any], answers: dict[str, Any]):
     dimensions = []
     for dimension in definition.get("dimensions", []):
-        reverse_ids = set(dimension.get("reverseQuestionIds", []))
-        question_ids = dimension.get("questionIds", [])
-        value_map = {
-            question_id: _option_value(
-                definition,
-                answers,
-                question_id,
-                reverse_ids,
-            )
-            for question_id in question_ids
-        }
-        values = list(value_map.values())
-        if dimension.get("calculationMode", "simple") == "formula":
-            try:
-                node = parse_dimension_formula(
-                    str(dimension.get("formula", "")),
-                    [str(question["id"]) for question in definition.get("questions", [])],
-                )
-                score = evaluate_dimension_formula(node, value_map)
-            except AssessmentFormulaError as exc:
-                raise AssessmentAnswerError(f"维度计算公式无效：{exc}") from exc
-        elif dimension.get("aggregate") == "product":
-            score = math.prod(values)
-        else:
-            score = sum(values)
-            if dimension.get("aggregate") == "average":
-                score = score / len(values)
-        score = _js_round_2(float(score))
+        score = _calculation_score(
+            definition,
+            answers,
+            dimension,
+            formula_error="维度计算公式无效",
+        )
         range_item = _find_range(score, dimension.get("scoreRanges"))
         dimensions.append(
             {
@@ -860,6 +876,144 @@ def _dark_result(definition: dict[str, Any], answers: dict[str, Any]):
     }
 
 
+def _total_result(
+    definition: dict[str, Any], answers: dict[str, Any]
+) -> dict[str, Any] | None:
+    """多维度量表的总分（来访端可见）。"""
+    block = definition.get("totalScore")
+    if not isinstance(block, dict):
+        return None
+    score = _calculation_score(
+        definition,
+        answers,
+        block,
+        formula_error="总分计算公式无效",
+    )
+    range_item = _find_range(score, block.get("scoreRanges"))
+    visitor_description, analyst_description = _range_result_text(range_item)
+    return {
+        "title": str(block.get("title") or "总分"),
+        "score": score,
+        "level": range_item.get("level", "未知") if range_item else "未知",
+        "description": visitor_description,
+        "visitorDescription": visitor_description,
+        "analystDescription": analyst_description,
+        "suggestions": list(range_item.get("suggestions", [])) if range_item else [],
+    }
+
+
+RISK_SEVERITY_RANK = {"ok": 0, "watch": 1, "mid": 2, "high": 3}
+
+
+def _selected_option_ids(
+    definition: dict[str, Any], answers: dict[str, Any]
+) -> set[str]:
+    selected: set[str] = set()
+    for question in definition.get("questions", []):
+        if _question_input_type(question) != "choice":
+            continue
+        option_id = _selected_option_id(answers.get(str(question.get("id"))))
+        if option_id:
+            selected.add(option_id)
+    return selected
+
+
+def _risk_result(
+    definition: dict[str, Any], answers: dict[str, Any]
+) -> dict[str, Any] | None:
+    """风险维度：只给管理端看，来访端接口返回前会剥离（assessment_visibility）。
+
+    计分判定按分数区间取等级；选项触发在作答选中指定选项时稳定命中。
+    两者都配置时取风险更高的一项，同级时选项触发优先。
+    """
+    block = definition.get("riskDimension")
+    if not isinstance(block, dict):
+        return None
+    result: dict[str, Any] = {
+        "title": str(block.get("title") or "风险"),
+        "level": "未触发",
+        "severity": "ok",
+        "source": "none",
+        "description": "",
+        "suggestions": [],
+        "triggers": [],
+    }
+    candidates: list[dict[str, Any]] = []
+
+    selected = _selected_option_ids(definition, answers)
+    for trigger in block.get("triggers") or []:
+        if not isinstance(trigger, dict):
+            continue
+        matched = [
+            str(option_id)
+            for option_id in trigger.get("optionIds") or []
+            if str(option_id) in selected
+        ]
+        severity = str(trigger.get("severity") or "")
+        if not matched or severity not in RISK_SEVERITY_RANK:
+            continue
+        description = str(trigger.get("analystDescription") or "")
+        result["triggers"].append(
+            {
+                "id": str(trigger.get("id") or ""),
+                "level": str(trigger.get("level") or ""),
+                "severity": severity,
+                "optionIds": matched,
+                "description": description,
+            }
+        )
+        candidates.append(
+            {
+                "source": "trigger",
+                "level": str(trigger.get("level") or ""),
+                "severity": severity,
+                "description": description,
+                "suggestions": list(trigger.get("suggestions") or []),
+            }
+        )
+
+    scoring = block.get("scoring")
+    if isinstance(scoring, dict):
+        score = _calculation_score(
+            definition,
+            answers,
+            scoring,
+            formula_error="风险计分公式无效",
+        )
+        range_item = _find_range(score, scoring.get("scoreRanges"))
+        result["score"] = score
+        result["scoreLevel"] = range_item.get("level", "未知") if range_item else "未知"
+        range_severity = str(range_item.get("severity") or "") if range_item else ""
+        result["scoreSeverity"] = range_severity if range_severity in RISK_SEVERITY_RANK else None
+        if range_item and range_severity in RISK_SEVERITY_RANK:
+            candidates.append(
+                {
+                    "source": "score",
+                    "level": str(range_item.get("level") or ""),
+                    "severity": range_severity,
+                    "description": str(range_item.get("analystDescription") or ""),
+                    "suggestions": list(range_item.get("suggestions") or []),
+                }
+            )
+
+    if candidates:
+        # max 取第一个最大值：选项触发排在前面，同级时以触发规则为准
+        decisive = max(candidates, key=lambda item: RISK_SEVERITY_RANK[item["severity"]])
+        result.update(
+            {
+                "level": decisive["level"] or result["level"],
+                "severity": decisive["severity"],
+                "source": decisive["source"],
+                "description": decisive["description"],
+                "suggestions": decisive["suggestions"],
+            }
+        )
+    elif isinstance(scoring, dict):
+        result["level"] = result.get("scoreLevel") or "未知"
+        result["severity"] = None
+    return result
+
+
 def calculate_assessment_result(
     definition: dict[str, Any], answers: dict[str, Any]
 ) -> dict[str, Any]:
@@ -881,7 +1035,15 @@ def calculate_assessment_result(
     calculator = calculators.get(scoring_type)
     if not calculator:
         raise AssessmentAnswerError("量表计分类型不受支持")
-    return calculator(definition, answers)
+    result = calculator(definition, answers)
+    if scoring_type == "dimension":
+        total = _total_result(definition, answers)
+        if total is not None:
+            result["total"] = total
+    risk = _risk_result(definition, answers)
+    if risk is not None:
+        result["risk"] = risk
+    return result
 
 
 def validate_generated_scoring_examples(definition: dict[str, Any]) -> None:
@@ -931,6 +1093,12 @@ def validate_generated_scoring_examples(definition: dict[str, Any]) -> None:
 
     for label, answers in samples:
         result = calculate_assessment_result(definition, answers)
+        total = result.get("total")
+        if isinstance(total, dict) and total.get("level") == "未知":
+            raise AssessmentAnswerError(f"{label}总分样例没有命中有效报告结果")
+        risk = result.get("risk")
+        if isinstance(risk, dict) and risk.get("scoreLevel") == "未知":
+            raise AssessmentAnswerError(f"{label}风险计分样例没有命中有效风险区间")
         result_type = result.get("type")
         if result_type == "sum":
             score = result.get("totalScore")
@@ -971,6 +1139,7 @@ def validate_generated_scoring_examples(definition: dict[str, Any]) -> None:
 
 
 def assessment_result_summary(result: dict[str, Any]) -> str:
+    """来访端也会看到的结果摘要：只用总分 / 维度，绝不包含风险维度。"""
     result_type = result.get("type")
     if result_type == "sum":
         return f"{result.get('level', '未知')}（{result.get('totalScore', 0)} 分）"
@@ -980,10 +1149,23 @@ def assessment_result_summary(result: dict[str, Any]) -> str:
         if result.get("summary"):
             return str(result["summary"])
         dimensions = result.get("dimensions") or []
+        total = result.get("total")
+        total_text = ""
+        if isinstance(total, dict):
+            total_score = total.get("score", 0)
+            if isinstance(total_score, float) and total_score.is_integer():
+                total_score = int(total_score)
+            total_text = (
+                f"{total.get('title') or '总分'} {total.get('level', '')}（{total_score} 分）"
+            )
         if len(dimensions) == 1:
             item = dimensions[0]
-            return f"{item.get('title', '')}：{item.get('level', '')}"
-        return " · ".join(
+            single = f"{item.get('title', '')}：{item.get('level', '')}"
+            return f"{total_text} · {single}" if total_text else single
+        parts = [
             f"{item.get('title', '')} {item.get('level', '')}" for item in dimensions
-        )
+        ]
+        if total_text:
+            parts.insert(0, total_text)
+        return " · ".join(parts)
     raise AssessmentAnswerError("服务端计分结果类型不合法")
