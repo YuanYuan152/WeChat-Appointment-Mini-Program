@@ -251,7 +251,9 @@ export function ReportView({
 
         <div className="flex items-start gap-2 rounded-xl bg-muted/50 p-4 text-xs text-muted-foreground">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>{assessment.disclaimer || "测评结果仅供参考，不能替代专业诊断。"} · 连心心理</span>
+          <span className="min-w-0 whitespace-pre-line">
+            {assessment.disclaimer || "测评结果仅供参考，不能替代专业诊断。"} · 连心心理
+          </span>
         </div>
       </div>
 

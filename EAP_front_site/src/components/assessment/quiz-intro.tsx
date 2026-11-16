@@ -56,7 +56,7 @@ export function QuizIntro({
         </section>
       ) : null}
 
-      <p className="text-xs leading-relaxed text-muted-foreground">{assessment.disclaimer}</p>
+      <p className="whitespace-pre-line text-xs leading-relaxed text-muted-foreground">{assessment.disclaimer}</p>
 
       {isComplete ? (
         <div className="space-y-3 border-t border-border pt-5">

@@ -42,7 +42,7 @@ export function AssessmentCard({ assessment, type, index = 0 }: AssessmentCardPr
           <h3 className="font-serif text-lg font-semibold">{assessment.title}</h3>
           <p className="mt-1 text-sm text-muted-foreground">{assessment.subtitle}</p>
           {assessment.description ? (
-            <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">
+            <p className="mt-2 line-clamp-2 whitespace-pre-line text-sm text-muted-foreground">
               {assessment.description}
             </p>
           ) : null}
