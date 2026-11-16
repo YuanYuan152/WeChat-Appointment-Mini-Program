@@ -49,10 +49,10 @@ export function buildCaseRecordPdfBlocks(
       gapAfter: 24,
     },
     section("表头信息", formatCaseRecordHeaderInfo(record.HeaderInfo)),
-    section("S｜患者情况记录（主观陈述）", record.Subjective),
-    section("O｜客观观察", record.Objective),
-    section("A｜评估分析", record.Assessment),
-    section("P｜计划方向", record.Plan),
+    section("来访者的主观描述", record.Subjective),
+    section("对来访者客观描述", record.Objective),
+    section("咨询师对个案的风险等级评估、以及对来访者的问题和咨询过程的评估", record.Assessment),
+    section("本次咨询要点及处理", record.Plan),
     { type: "text", text: "完整风险/危机评估", fontSize: 32, bold: true, gapBefore: 12, gapAfter: 12 },
   ];
   if (!risk) {

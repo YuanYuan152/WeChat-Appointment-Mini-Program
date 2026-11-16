@@ -320,10 +320,10 @@ function CounselorOrderRecordDetail({
           {formatDateTime(item.subtitle)} · {statusLabel(item.status)} · {item.extra || `咨询单 #${record.ConsultationId}`}
         </div>
       </section>
-      <RecordContent title="患者情况记录（主观陈述）" value={record.Subjective} />
-      <RecordContent title="客观观察" value={record.Objective} />
-      <RecordContent title="评估分析" value={record.Assessment} />
-      <RecordContent title="计划方向" value={record.Plan} />
+      <RecordContent title="来访者的主观描述" value={record.Subjective} />
+      <RecordContent title="对来访者客观描述" value={record.Objective} />
+      <RecordContent title="咨询师对个案的风险等级评估、以及对来访者的问题和咨询过程的评估" value={record.Assessment} />
+      <RecordContent title="本次咨询要点及处理" value={record.Plan} />
       <section className="border-t border-[var(--lxxl-border)] pt-4">
         <h4 className="font-semibold">风险/危机评估</h4>
         {riskAssessment ? (

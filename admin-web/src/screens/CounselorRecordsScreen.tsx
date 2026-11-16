@@ -306,10 +306,10 @@ const HEADER_FIELD_LABELS: Record<(typeof HEADER_FIELD_KEYS)[number], string> = 
 function validateForm(form: CounselorRecordFormState): CounselorRecordFormErrors {
   const errors: CounselorRecordFormErrors = {};
   const requiredTextFields: Array<[keyof CounselorRecordFormState, string]> = [
-    ["subjective", "患者情况记录（主观陈述）"],
-    ["objective", "客观观察"],
-    ["assessment", "评估分析"],
-    ["plan", "计划方向"],
+    ["subjective", "来访者的主观描述"],
+    ["objective", "对来访者客观描述"],
+    ["assessment", "咨询师对个案的风险等级评估、以及对来访者的问题和咨询过程的评估"],
+    ["plan", "本次咨询要点及处理"],
   ];
 
   for (const [field, label] of requiredTextFields) {

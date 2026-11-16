@@ -290,10 +290,10 @@ function CaseRecordDetailView({ record, onBack }: { record: AdminCaseRecordDetai
         </div>
       </div>
       <RecordBlock title="表头信息" value={formatCaseRecordHeaderInfo(record.HeaderInfo)} />
-      <RecordBlock title="患者情况记录（主观陈述）" value={record.Subjective} />
-      <RecordBlock title="客观观察" value={record.Objective} />
-      <RecordBlock title="评估分析" value={record.Assessment} />
-      <RecordBlock title="计划方向" value={record.Plan} />
+      <RecordBlock title="来访者的主观描述" value={record.Subjective} />
+      <RecordBlock title="对来访者客观描述" value={record.Objective} />
+      <RecordBlock title="咨询师对个案的风险等级评估、以及对来访者的问题和咨询过程的评估" value={record.Assessment} />
+      <RecordBlock title="本次咨询要点及处理" value={record.Plan} />
       <RiskAssessmentBlock value={riskAssessment} />
       {record.PhotoUrls.length > 0 && <RecordPhotos urls={record.PhotoUrls} />}
     </div>

@@ -258,25 +258,25 @@ function amendmentChangedFields(item: CaseRecordAmendment) {
   const fields = [
     {
       key: "subjective",
-      title: "患者情况记录（主观陈述）",
+      title: "来访者的主观描述",
       current: item.current.subjective,
       proposed: item.proposed.subjective,
     },
     {
       key: "objective",
-      title: "客观观察",
+      title: "对来访者客观描述",
       current: item.current.objective,
       proposed: item.proposed.objective,
     },
     {
       key: "assessment",
-      title: "评估分析",
+      title: "咨询师对个案的风险等级评估、以及对来访者的问题和咨询过程的评估",
       current: item.current.assessment,
       proposed: item.proposed.assessment,
     },
     {
       key: "plan",
-      title: "计划方向",
+      title: "本次咨询要点及处理",
       current: item.current.plan,
       proposed: item.proposed.plan,
     },

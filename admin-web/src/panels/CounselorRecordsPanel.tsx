@@ -83,26 +83,25 @@ const CASE_RECORD_TEXT_FIELDS: Array<{
 }> = [
   {
     key: "subjective",
-    label: "患者情况记录（主观陈述）",
-    hint: "记录来访者本次陈述的主要内容、主诉与情绪状态。",
+    label: "来访者的主观描述",
+    hint: "本周来访者主诉变化情况、与咨询师约定的任务完成情况、自身学业、生活情况及其它来访者主动报告的情况等",
     placeholder: "请记录来访者主观陈述...",
   },
   {
     key: "objective",
-    label: "客观观察",
-    hint: "记录行为观察、情绪状态、量表结果或其它客观资料。",
+    label: "对来访者客观描述",
+    hint: "咨询师的观察、测试结果、医院就诊结果等",
     placeholder: "请记录客观观察与测试结果...",
   },
   {
     key: "assessment",
-    label: "评估分析",
-    hint: "记录风险等级判断、问题分析与咨询过程评估。",
+    label: "咨询师对个案的风险等级评估、以及对来访者的问题和咨询过程的评估",
     placeholder: "请记录风险等级判断、问题分析与咨询过程评估...",
   },
   {
     key: "plan",
-    label: "计划方向",
-    hint: "记录下次咨询方向、作业建议、处理措施或转介安排。",
+    label: "本次咨询要点及处理",
+    hint: "本次咨询目标、方案、及当前会谈的效果，包括使用主要咨询方法及技术、作业、以及对风险的处理措施",
     placeholder: "请记录咨询要点与处理措施...",
   },
 ];
@@ -700,10 +699,10 @@ function RevisionHistory({ revisions }: { revisions: CounselorCaseRecordRevision
         {revisions.map((revision) => (
           <div key={revision.Id} className="rounded-xl bg-white p-4 text-sm leading-6">
             <div className="text-xs text-[var(--lxxl-muted)]">{formatDateTime(revision.RevisedAt)}</div>
-            <RevisionLine label="患者情况" value={revision.Subjective} />
-            <RevisionLine label="客观观察" value={revision.Objective} />
-            <RevisionLine label="评估分析" value={revision.Assessment} />
-            <RevisionLine label="计划方向" value={revision.Plan} />
+            <RevisionLine label="来访者的主观描述" value={revision.Subjective} />
+            <RevisionLine label="对来访者客观描述" value={revision.Objective} />
+            <RevisionLine label="咨询师对个案的风险等级评估、以及对来访者的问题和咨询过程的评估" value={revision.Assessment} />
+            <RevisionLine label="本次咨询要点及处理" value={revision.Plan} />
             {(revision.PhotoUrls || []).length > 0 && (
               <div className="mt-3 grid grid-cols-4 gap-2">
                 {revision.PhotoUrls.filter(Boolean).map((url) => {
