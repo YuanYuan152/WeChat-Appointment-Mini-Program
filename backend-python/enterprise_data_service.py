@@ -367,6 +367,30 @@ def normalize_visitor_key(visitor_key: str) -> str:
     return key if len(key) >= 8 else ""
 
 
+def is_enterprise_eap_account_row(account: Any) -> bool:
+    """是否企业定制站答卷占位账号（不应出现在小程序用户/来访角色管理）。"""
+    if getattr(account, "PatientSource", None) == "ENTERPRISE_EAP":
+        return True
+    openid = str(getattr(account, "OpenId", "") or "")
+    return openid.startswith("eap-ent-")
+
+
+def enterprise_eap_account_id_subquery(db: Session):
+    """企业 EAP 占位账号 Id 集合，供后台列表排除。"""
+    return {
+        int(row[0])
+        for row in db.query(AppAccount.Id)
+        .filter(
+            or_(
+                AppAccount.PatientSource == "ENTERPRISE_EAP",
+                AppAccount.OpenId.like("eap-ent-%"),
+            )
+        )
+        .all()
+        if row[0]
+    }
+
+
 def enterprise_visitor_openid(slug: str, visitor_key: str) -> str:
     """企业站访客在 AppAccount 中的 OpenId；答卷提交与学习记录共用同一算法。"""
     digest = hashlib.sha256(f"{slug}:{visitor_key}".encode("utf-8")).hexdigest()[:16]

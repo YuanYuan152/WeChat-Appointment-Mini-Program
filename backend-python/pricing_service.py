@@ -112,18 +112,21 @@ def _staff_account_ids(db: Session) -> set[int]:
 
 def all_visitor_patient_ids(db: Session) -> list[int]:
     """全部来访账号（与来访者管理列表口径一致）。"""
+    from enterprise_data_service import enterprise_eap_account_id_subquery
+
     staff_ids = _staff_account_ids(db)
+    enterprise_ids = enterprise_eap_account_id_subquery(db)
     role_ids = {
         b.AccountId
         for b in db.query(AppRoleBinding)
         .filter(AppRoleBinding.RoleType == "Patient")
         .all()
-    } - staff_ids
+    } - staff_ids - enterprise_ids
     cons_ids = {
         row[0]
         for row in db.query(AppConsultation.PatientId).distinct().all()
         if row[0]
-    } - staff_ids
+    } - staff_ids - enterprise_ids
     return sorted(role_ids | cons_ids)
 
 

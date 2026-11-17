@@ -80,8 +80,7 @@ from enterprise_onboarding_progress_service import (
     parse_client_updated_at,
     upsert_progress as upsert_onboarding_progress,
 )
-from models import AppAccount, EnterpriseSitePersonnel
-from patient_registration import ensure_default_patient_registration
+from models import AppAccount, AppRoleBinding, EnterpriseSitePersonnel
 
 
 public_router = APIRouter(
@@ -222,6 +221,10 @@ def _enterprise_source_label(enterprise: dict[str, Any]) -> str:
     return site_name or company_name or "企业定制EAP"
 
 
+# 企业站答卷占位账号：不写入员工表单 PII，也不注册为小程序「来访」角色。
+_ENTERPRISE_VISITOR_DISPLAY_NAME = "企业EAP访客"
+
+
 def _ensure_enterprise_visitor(
     db: Session,
     *,
@@ -229,42 +232,62 @@ def _ensure_enterprise_visitor(
     visitor_key: str,
     employee_info: dict[str, Any],
 ) -> AppAccount:
+    """仅为 AppAssessmentReport.AccountId 提供占位账号。
+
+    员工基本信息只写入答卷 DemographicAnswers._employeeInfo 与进度 BasicInfoJson，
+    不得落入小程序用户/角色管理（RealName、AppRoleBinding 等）。
+    """
+    del employee_info  # 显式忽略：禁止把表单内容写进 AppAccount
     key = normalize_visitor_key(visitor_key)
     if not key:
         raise HTTPException(status_code=422, detail="访客标识无效")
     openid = enterprise_visitor_openid(slug, key)
 
     account = db.query(AppAccount).filter(AppAccount.OpenId == openid).first()
-    display_name = str(
-        employee_info.get("name")
-        or employee_info.get("empNo")
-        or "企业来访"
-    ).strip()[:50] or "企业来访"
     if not account:
         account = AppAccount(
             OpenId=openid,
+            # 占位角色仅满足报告外键；不调用 ensure_default_patient_registration，
+            # 避免进入小程序后台来访/角色列表。
             ActiveRole="Patient",
-            RealName=display_name,
-            Nickname=display_name,
+            RealName=_ENTERPRISE_VISITOR_DISPLAY_NAME,
+            Nickname=_ENTERPRISE_VISITOR_DISPLAY_NAME,
             PatientSource="ENTERPRISE_EAP",
             PatientSourceDetail=slug[:200],
         )
         db.add(account)
         db.commit()
         db.refresh(account)
-    else:
-        changed = False
-        if display_name and account.RealName != display_name:
-            account.RealName = display_name
-            account.Nickname = display_name
-            changed = True
-        if ensure_default_patient_registration(db, account):
-            changed = True
-        if changed:
-            db.commit()
-            db.refresh(account)
+        return account
 
-    if ensure_default_patient_registration(db, account):
+    # 纠正历史：曾把姓名/工号写入 RealName 的账号，统一匿名化
+    changed = False
+    if account.PatientSource != "ENTERPRISE_EAP":
+        account.PatientSource = "ENTERPRISE_EAP"
+        changed = True
+    detail = (slug or "")[:200]
+    if (account.PatientSourceDetail or "") != detail:
+        account.PatientSourceDetail = detail
+        changed = True
+    if account.RealName != _ENTERPRISE_VISITOR_DISPLAY_NAME:
+        account.RealName = _ENTERPRISE_VISITOR_DISPLAY_NAME
+        changed = True
+    if account.Nickname != _ENTERPRISE_VISITOR_DISPLAY_NAME:
+        account.Nickname = _ENTERPRISE_VISITOR_DISPLAY_NAME
+        changed = True
+    # 历史误写入的 Patient 角色绑定会导致出现在小程序角色/来访管理，此处卸掉
+    stale_bindings = (
+        db.query(AppRoleBinding)
+        .filter(
+            AppRoleBinding.AccountId == account.Id,
+            AppRoleBinding.RoleType == "Patient",
+        )
+        .all()
+    )
+    for binding in stale_bindings:
+        db.delete(binding)
+        changed = True
+    if changed:
         db.commit()
         db.refresh(account)
     return account

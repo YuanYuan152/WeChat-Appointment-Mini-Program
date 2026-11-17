@@ -41,6 +41,7 @@ from models import (
     AppSchedule,
     AppStaffAccountRemark,
 )
+from enterprise_data_service import enterprise_eap_account_id_subquery
 from consultation_feedback import feedback_detail, feedback_summary
 from api_time_clock import ApiTimeClock, approved_amendment_review_times
 from app_time import china_now
@@ -603,6 +604,11 @@ def list_admin_users(
         db.commit()
 
     q = db.query(AppAccount)
+    # 企业定制站答卷占位账号：不属于小程序用户/角色管理
+    q = q.filter(
+        not_(AppAccount.PatientSource == "ENTERPRISE_EAP"),
+        not_(AppAccount.OpenId.like("eap-ent-%")),
+    )
     q = _apply_admin_user_role_group_filters(q, db, normalized_group, normalized_subtype)
     if kw:
         profile_account_ids = [
@@ -1410,14 +1416,15 @@ def _admin_visitor_patient_ids(db: Session) -> set[int]:
         .filter(AppRoleBinding.RoleType == "Tester")
         .all()
     }
+    enterprise_ids = enterprise_eap_account_id_subquery(db)
     role_ids = {
         b.AccountId
         for b in db.query(AppRoleBinding)
         .filter(AppRoleBinding.RoleType == "Patient")
         .all()
-    } - staff_ids - tester_ids
+    } - staff_ids - tester_ids - enterprise_ids
     cons_rows = db.query(AppConsultation.PatientId).distinct().all()
-    cons_ids = {row[0] for row in cons_rows if row[0]} - staff_ids - tester_ids
+    cons_ids = {row[0] for row in cons_rows if row[0]} - staff_ids - tester_ids - enterprise_ids
     return role_ids | cons_ids
 
 
