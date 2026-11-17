@@ -39,16 +39,16 @@ export function AccessKeyGateScreen({
   };
 
   return (
-    <main className="grid min-h-screen place-items-center bg-[var(--lxxl-bg)] px-6 text-[var(--lxxl-text)]">
-      <section className="grid w-full max-w-5xl grid-cols-[1fr_420px] overflow-hidden rounded-2xl border border-[var(--lxxl-border)] bg-white shadow-sm">
-        <div className="flex min-h-[420px] flex-col justify-center bg-[var(--lxxl-green)] p-10 text-white">
+    <main className="grid min-h-screen place-items-center bg-[var(--lxxl-bg)] px-3 py-6 text-[var(--lxxl-text)] sm:px-6">
+      <section className="grid w-full max-w-5xl grid-cols-1 lg:grid-cols-[1fr_420px] overflow-hidden rounded-2xl border border-[var(--lxxl-border)] bg-white shadow-sm">
+        <div className="flex flex-col justify-center bg-[var(--lxxl-green)] p-6 text-white sm:p-10 lg:min-h-[420px]">
           <div className="text-sm opacity-75">连心心理</div>
           <h1 className="mt-5 text-3xl font-semibold">管理后台登录</h1>
           <p className="mt-4 max-w-xl text-sm leading-7 text-white/75">
             请使用访问密钥登录。验证通过后将自动进入管理员工作台。
           </p>
         </div>
-        <form className="p-8" onSubmit={handleSubmit}>
+        <form className="p-5 sm:p-8" onSubmit={handleSubmit}>
           <h2 className="text-xl font-semibold">输入访问密钥</h2>
           <p className="mt-2 text-sm leading-6 text-[var(--lxxl-muted)]">
             请输入团队提供的访问密钥后继续。

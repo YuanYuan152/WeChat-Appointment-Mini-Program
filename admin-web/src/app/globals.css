@@ -29,4 +29,92 @@ body {
   background: var(--lxxl-bg);
   color: var(--lxxl-text);
   font-family: Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* ==================== 移动端适配（手机 / 平板，< 1024px） ==================== */
+
+@keyframes lxxl-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes lxxl-drawer-in {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+.lxxl-fade-in {
+  animation: lxxl-fade-in 0.18s ease-out both;
+}
+
+.lxxl-drawer-in {
+  animation: lxxl-drawer-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lxxl-fade-in,
+  .lxxl-drawer-in {
+    animation: none;
+  }
+}
+
+@media (max-width: 1023px) {
+  /*
+   * 表格：小屏上表格自身横向滚动（原先没有滚动容器的表格会被挤成一列一个字）。
+   * 表头不换行，保证每列至少有表头宽度；已有 overflow-x-auto + min-w 的表格不受影响。
+   */
+  .lxxl-content table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .lxxl-content th {
+    white-space: nowrap;
+  }
+
+  /*
+   * 弹窗遮罩：内容比屏幕高时允许整体滚动，并改为从顶部开始排，
+   * 避免居中布局把弹窗顶部（标题、关闭按钮）推出屏幕外且滚不回来。
+   */
+  .fixed.inset-0 {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .fixed.inset-0.grid.place-items-center {
+    place-items: start center;
+  }
+
+  .fixed.inset-0.flex.items-center {
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 639px) {
+  /* 手机上弹窗贴边留白收窄，正文区域更宽 */
+  .fixed.inset-0.grid.place-items-center,
+  .fixed.inset-0.flex.items-center {
+    padding: 12px;
+  }
+
+  /* 输入框不小于 16px，避免 iOS 聚焦时整页放大 */
+  .lxxl-content input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  .lxxl-content select,
+  .lxxl-content textarea,
+  .fixed.inset-0 input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  .fixed.inset-0 select,
+  .fixed.inset-0 textarea {
+    font-size: 16px;
+  }
 }

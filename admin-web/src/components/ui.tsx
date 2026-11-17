@@ -253,7 +253,7 @@ export function Pagination({
           </label>
         )}
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <button
           className={buttonClass}
           type="button"
@@ -270,7 +270,7 @@ export function Pagination({
         >
           上一页
         </button>
-        <span className="min-w-24 text-center text-[var(--lxxl-muted)]">
+        <span className="min-w-16 text-center text-[var(--lxxl-muted)] sm:min-w-24">
           {currentPage} / {totalPages}
         </span>
         <button

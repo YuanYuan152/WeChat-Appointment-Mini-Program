@@ -18,23 +18,33 @@ let cachedMenuScrollTop = 0;
 export function MainMenu({
   activeSection,
   currentUser,
-  collapsed,
+  collapsed: collapsedProp,
   unreadMessageCount = 0,
+  variant = "sidebar",
   onCollapsedChange,
   onChangeSection,
+  onClose,
 }: {
   activeSection: SectionId;
   currentUser: CurrentUser;
   collapsed: boolean;
   unreadMessageCount?: number | null;
+  /** sidebar：桌面端（≥ lg）固定在左侧；drawer：手机 / 平板上从左侧滑出的抽屉 */
+  variant?: "sidebar" | "drawer";
   onCollapsedChange: (collapsed: boolean) => void;
   onChangeSection: (section: SectionId) => void;
+  onClose?: () => void;
 }) {
+  const drawer = variant === "drawer";
+  const collapsed = drawer ? false : collapsedProp;
   const activeGroupId = getNavigationGroupBySection(activeSection)?.id;
   const navRef = useRef<HTMLElement | null>(null);
-  const [expandedGroupIds, setExpandedGroupIds] = useState<string[]>(
-    () => cachedExpandedGroupIds ?? [],
-  );
+  const [expandedGroupIds, setExpandedGroupIds] = useState<string[]>(() => {
+    const initial = cachedExpandedGroupIds ?? [];
+    // 抽屉里默认展开当前页面所在的分组，打开菜单就能看到同组的其它页面
+    // （抽屉只在用户点开后才挂载，此时侧栏实例已把展开状态读进缓存，不涉及服务端渲染）
+    return drawer && activeGroupId && !initial.includes(activeGroupId) ? [...initial, activeGroupId] : initial;
+  });
   const [expandedStateReady, setExpandedStateReady] = useState(cachedExpandedGroupIds !== null);
 
   useEffect(() => {
@@ -78,9 +88,13 @@ export function MainMenu({
 
   return (
     <aside
-      className={`sticky top-0 flex h-screen shrink-0 flex-col border-r border-[var(--lxxl-border)] bg-white transition-[width] duration-200 ${
-        collapsed ? "w-28" : "w-72"
-      }`}
+      className={
+        drawer
+          ? "flex h-full w-full flex-col bg-white"
+          : `sticky top-0 hidden h-screen shrink-0 flex-col border-r border-[var(--lxxl-border)] bg-white transition-[width] duration-200 lg:flex ${
+              collapsed ? "w-28" : "w-72"
+            }`
+      }
     >
       <div
         className={`flex shrink-0 border-b border-[var(--lxxl-border)] px-3 py-4 ${
@@ -95,16 +109,27 @@ export function MainMenu({
             <div className="mt-1 text-sm text-[var(--lxxl-muted)]">Web 管理端</div>
           </div>
         )}
-        <button
-          aria-label={collapsed ? "展开主菜单" : "收起主菜单"}
-          className={`flex h-8 shrink-0 items-center text-[var(--lxxl-muted)] transition hover:text-[var(--lxxl-green)] ${
-            collapsed ? "w-5 justify-start" : "w-8 justify-center"
-          }`}
-          type="button"
-          onClick={() => onCollapsedChange(!collapsed)}
-        >
-          <SidebarToggleIcon collapsed={collapsed} />
-        </button>
+        {drawer ? (
+          <button
+            aria-label="关闭主菜单"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-[var(--lxxl-muted)] transition hover:bg-[#F4F1EB] hover:text-[var(--lxxl-green)]"
+            type="button"
+            onClick={onClose}
+          >
+            <CloseIcon />
+          </button>
+        ) : (
+          <button
+            aria-label={collapsed ? "展开主菜单" : "收起主菜单"}
+            className={`flex h-8 shrink-0 items-center text-[var(--lxxl-muted)] transition hover:text-[var(--lxxl-green)] ${
+              collapsed ? "w-5 justify-start" : "w-8 justify-center"
+            }`}
+            type="button"
+            onClick={() => onCollapsedChange(!collapsed)}
+          >
+            <SidebarToggleIcon collapsed={collapsed} />
+          </button>
+        )}
       </div>
 
       <nav
@@ -199,6 +224,22 @@ function UnreadDot() {
       aria-label="有未读消息"
       className="absolute -right-3 -top-1 h-2.5 w-2.5 rounded-full bg-[#D94A3A] ring-2 ring-white"
     />
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-5 w-5"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeWidth="1.9"
+      viewBox="0 0 24 24"
+    >
+      <path d="M6 6l12 12M18 6 6 18" />
+    </svg>
   );
 }
 

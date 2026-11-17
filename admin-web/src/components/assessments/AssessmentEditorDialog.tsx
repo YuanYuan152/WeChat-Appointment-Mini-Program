@@ -466,8 +466,8 @@ export function AssessmentEditorDialog({
         role="dialog"
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <header className="flex flex-wrap items-start justify-between gap-4 border-b border-[var(--lxxl-border)] px-5 py-4 sm:px-6">
-          <div className="min-w-0">
+        <header className="flex items-start justify-between gap-3 border-b border-[var(--lxxl-border)] px-4 py-3 sm:gap-4 sm:px-6 sm:py-4">
+          <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="truncate text-lg font-semibold">{title}</h3>
               {!isCreate && currentDetail && (
