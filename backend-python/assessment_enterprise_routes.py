@@ -73,6 +73,13 @@ from enterprise_data_service import (
     normalize_visitor_key,
     record_learning_event,
 )
+from enterprise_onboarding_progress_service import (
+    OnboardingProgressConflict,
+    OnboardingProgressError,
+    get_progress as get_onboarding_progress,
+    parse_client_updated_at,
+    upsert_progress as upsert_onboarding_progress,
+)
 from models import AppAccount, EnterpriseSitePersonnel
 from patient_registration import ensure_default_patient_registration
 
@@ -159,6 +166,20 @@ class EnterpriseLearningEventPayload(BaseModel):
     contentTitle: str = Field(default="", max_length=200)
     action: Literal["view", "read", "play", "complete"]
     durationSec: Optional[int] = Field(default=None, ge=0, le=86400)
+
+
+class EnterpriseOnboardingProgressPayload(BaseModel):
+    """入职测评进度：按登录人员账号持久化，跨设备续答。"""
+
+    step: str = Field(default="welcome", max_length=40)
+    activeScaleId: str = Field(default="", max_length=80)
+    answersByScale: dict[str, Any] = Field(default_factory=dict)
+    basicInfo: dict[str, Any] = Field(default_factory=dict)
+    completedScaleIds: list[str] = Field(default_factory=list)
+    resultsByScale: dict[str, Any] = Field(default_factory=dict)
+    status: Literal["in_progress", "completed"] = "in_progress"
+    # 客户端上次已知的服务端 updatedAt；若服务端更新则返回 409
+    clientUpdatedAt: Optional[str] = Field(default=None, max_length=64)
 
 
 class EnterpriseCounselorInput(BaseModel):
@@ -374,6 +395,7 @@ def get_public_enterprise_assessments(
             "authenticated": authorized,
             "sessionUser": (
                 {
+                    "id": int(person.Id),
                     "username": person.Username,
                     "role": person.Role,
                     "realName": person.RealName or "",
@@ -521,6 +543,60 @@ def record_enterprise_learning_event(
     except EnterpriseDataError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     return {"recorded": recorded}
+
+
+@public_router.get("/{slug}/progress", summary="读取当前登录人员的入职测评进度")
+def get_enterprise_onboarding_progress(
+    slug: str,
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    try:
+        enterprise = get_enterprise_by_slug(slug)
+    except EnterpriseConfigError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    person = _require_site_person(db, enterprise, authorization, "请先登录后再读取测评进度")
+    if person is None:
+        # 未启用人员登录：不做服务端进度，由前端 localStorage 承担
+        return {"exists": False, "loginRequired": False, "submittedReports": []}
+    # GET 时以正式答卷校准 completed / publicId，并在需要时回写进度行
+    return get_onboarding_progress(
+        db,
+        enterprise=enterprise,
+        personnel_id=int(person.Id),
+    )
+
+
+@public_router.put("/{slug}/progress", summary="保存当前登录人员的入职测评进度")
+def put_enterprise_onboarding_progress(
+    slug: str,
+    body: EnterpriseOnboardingProgressPayload,
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    try:
+        enterprise = get_enterprise_by_slug(slug)
+    except EnterpriseConfigError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    person = _require_site_person(db, enterprise, authorization, "请先登录后再保存测评进度")
+    if person is None:
+        raise HTTPException(status_code=401, detail="该站点未启用人员登录，无法保存服务端进度")
+    try:
+        client_updated_at = parse_client_updated_at(body.clientUpdatedAt)
+        return upsert_onboarding_progress(
+            db,
+            enterprise=enterprise,
+            personnel_id=int(person.Id),
+            payload=body.model_dump(),
+            client_updated_at=client_updated_at,
+        )
+    except OnboardingProgressConflict as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"message": str(exc), "conflict": True, "progress": exc.progress},
+        ) from exc
+    except OnboardingProgressError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
 
 def register_assessment_enterprise_admin_routes(

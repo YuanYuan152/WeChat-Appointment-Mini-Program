@@ -1057,3 +1057,38 @@ class EnterpriseLearningEvent(Base):
     Action = Column(String(20), nullable=False)
     DurationSec = Column(Integer, nullable=True)
     CreatedAt = Column(DateTime, default=utc_naive_now, nullable=False)
+
+
+class EnterpriseOnboardingProgress(Base):
+    """企业站入职测评进度：按站点人员账号隔离，支持跨设备续答。
+
+    仅在启用人员表登录时写入；一行对应 (EnterpriseId, PersonnelId)。
+    """
+
+    __tablename__ = "EnterpriseOnboardingProgress"
+    __table_args__ = (
+        UniqueConstraint(
+            "EnterpriseId",
+            "PersonnelId",
+            name="UQ_EnterpriseOnboardingProgress_Ent_Person",
+        ),
+        Index(
+            "IX_EnterpriseOnboardingProgress_Slug_Person",
+            "EnterpriseSlug",
+            "PersonnelId",
+        ),
+    )
+
+    Id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    EnterpriseId = Column(String(64), nullable=False)
+    EnterpriseSlug = Column(String(80), nullable=False)
+    PersonnelId = Column(Integer, nullable=False)
+    Step = Column(String(40), nullable=False, default="welcome")
+    ActiveScaleId = Column(String(80), nullable=True)
+    AnswersJson = Column(UnicodeText, nullable=True)
+    BasicInfoJson = Column(UnicodeText, nullable=True)
+    CompletedScaleIdsJson = Column(UnicodeText, nullable=True)
+    ResultsJson = Column(UnicodeText, nullable=True)
+    Status = Column(String(20), nullable=False, default="in_progress")
+    CreatedAt = Column(DateTime, default=utc_naive_now, nullable=False)
+    UpdatedAt = Column(DateTime, nullable=True, default=utc_naive_now, onupdate=utc_naive_now)

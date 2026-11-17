@@ -458,6 +458,95 @@ def respondent_key_for(meta: dict[str, Any], account_id: int) -> str:
     return f"a{int(account_id)}"
 
 
+def _submission_summary(row: AppAssessmentReport) -> dict[str, Any]:
+    assessment_id = str(row.AssessmentId or "").strip()
+    completed_at = row.CompletedAt.isoformat() + "Z" if row.CompletedAt else None
+    return {
+        "assessmentId": assessment_id,
+        "publicId": str(row.PublicId or ""),
+        "assessmentTitle": str(row.AssessmentTitle or ""),
+        "scoringType": str(row.ScoringType or ""),
+        "resultSummary": str(row.ResultSummary or ""),
+        "result": _load_dict(row.ResultJson) or None,
+        "completedAt": completed_at,
+        "submittedAt": completed_at,
+    }
+
+
+def personnel_latest_submissions(
+    db: Session,
+    enterprise: dict[str, Any],
+    personnel_id: int,
+) -> dict[str, dict[str, Any]]:
+    """当前站点人员在本企业的正式答卷：assessmentId → 最近一次提交摘要。
+
+    供入职进度与正式结果对齐：completed / results 以本表为准，不以客户端自报为准。
+    """
+    try:
+        pid = int(personnel_id)
+    except (TypeError, ValueError):
+        return {}
+    if pid <= 0:
+        return {}
+
+    latest: dict[str, dict[str, Any]] = {}
+    for row, meta in enterprise_report_rows(db, enterprise):
+        person = _personnel_meta(meta)
+        if not person or int(person["id"]) != pid:
+            continue
+        assessment_id = str(row.AssessmentId or "").strip()
+        if not assessment_id:
+            continue
+        latest[assessment_id] = _submission_summary(row)
+    return latest
+
+
+def merge_submissions_from_result_public_ids(
+    db: Session,
+    enterprise: dict[str, Any],
+    personnel_id: int,
+    results_by_scale: dict[str, Any],
+    submissions: dict[str, dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    """用结果缓存里的 publicId 回查正式答卷，补齐刚提交尚未被列表扫到的记录。"""
+    try:
+        pid = int(personnel_id)
+    except (TypeError, ValueError):
+        return submissions
+    if pid <= 0 or not isinstance(results_by_scale, dict):
+        return submissions
+
+    merged = dict(submissions)
+    for assessment_id, payload in results_by_scale.items():
+        aid = str(assessment_id or "").strip()
+        if not aid or not isinstance(payload, dict):
+            continue
+        if aid in merged:
+            continue
+        public_id = str(payload.get("publicId") or "").strip()
+        if not public_id:
+            continue
+        row = (
+            db.query(AppAssessmentReport)
+            .options(load_only(*_REPORT_COLUMNS))
+            .filter(
+                AppAssessmentReport.PublicId == public_id,
+                AppAssessmentReport.DeletedAt.is_(None),
+            )
+            .first()
+        )
+        if not row or str(row.AssessmentId or "").strip() != aid:
+            continue
+        meta = _load_dict(row.DemographicAnswers)
+        if not report_matches_enterprise(meta, enterprise):
+            continue
+        person = _personnel_meta(meta)
+        if not person or int(person["id"]) != pid:
+            continue
+        merged[aid] = _submission_summary(row)
+    return merged
+
+
 def _personnel_meta(meta: dict[str, Any]) -> Optional[dict[str, Any]]:
     personnel = meta.get("_personnel")
     if not isinstance(personnel, dict):

@@ -321,6 +321,7 @@ def assert_not_app_account_table() -> None:
 
 def _public_profile(row: EnterpriseSitePersonnel) -> dict[str, Any]:
     return {
+        "id": int(row.Id),
         "username": row.Username,
         "role": row.Role,
         "realName": row.RealName or "",
