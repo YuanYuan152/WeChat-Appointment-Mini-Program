@@ -547,6 +547,33 @@ def merge_submissions_from_result_public_ids(
     return merged
 
 
+def personnel_latest_employee_info(
+    db: Session,
+    enterprise: dict[str, Any],
+    personnel_id: int,
+) -> dict[str, Any]:
+    """从该人员最近一次正式答卷回填 _employeeInfo（进度表基本信息为空时用）。"""
+    try:
+        pid = int(personnel_id)
+    except (TypeError, ValueError):
+        return {}
+    if pid <= 0:
+        return {}
+    latest_info: dict[str, Any] = {}
+    latest_at = None
+    for row, meta in enterprise_report_rows(db, enterprise):
+        person = _personnel_meta(meta)
+        if not person or int(person["id"]) != pid:
+            continue
+        info = _employee_info(meta)
+        if not info:
+            continue
+        if latest_at is None or (row.CompletedAt and row.CompletedAt >= latest_at):
+            latest_at = row.CompletedAt
+            latest_info = dict(info)
+    return latest_info
+
+
 def _personnel_meta(meta: dict[str, Any]) -> Optional[dict[str, Any]]:
     personnel = meta.get("_personnel")
     if not isinstance(personnel, dict):

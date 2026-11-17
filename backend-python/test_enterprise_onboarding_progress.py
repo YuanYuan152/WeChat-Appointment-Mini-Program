@@ -157,6 +157,58 @@ class EnterpriseOnboardingProgressTests(unittest.TestCase):
         self.assertEqual(saved["completedScaleIds"], [])
         self.assertEqual(saved["status"], "in_progress")
 
+    def test_keeps_completed_when_results_have_public_id(self):
+        saved = upsert_progress(
+            self.db,
+            enterprise=self.enterprise,
+            personnel_id=12,
+            payload={
+                "step": "select",
+                "answersByScale": {},
+                "basicInfo": {"name": "李四", "empNo": "12"},
+                "completedScaleIds": ["scale-a"],
+                "resultsByScale": {
+                    "scale-a": {
+                        "publicId": "rpt_local_keep",
+                        "submittedAt": "2026-11-17T00:00:00Z",
+                    }
+                },
+            },
+        )
+        self.assertEqual(saved["completedScaleIds"], ["scale-a"])
+        self.assertEqual(saved["basicInfo"]["name"], "李四")
+
+    def test_empty_put_does_not_wipe_existing(self):
+        upsert_progress(
+            self.db,
+            enterprise=self.enterprise,
+            personnel_id=13,
+            payload={
+                "step": "select",
+                "answersByScale": {"scale-a": {"q1": "1"}},
+                "basicInfo": {"name": "王五", "empNo": "13", "gender": "男", "age": "23-28",
+                              "dept": "d", "post": "p", "category": "职能支持", "workLoc": "公司本部"},
+                "completedScaleIds": ["scale-a"],
+                "resultsByScale": {
+                    "scale-a": {"publicId": "rpt_keep_13", "submittedAt": "2026-11-17T00:00:00Z"}
+                },
+            },
+        )
+        with self.assertRaises(OnboardingProgressConflict):
+            upsert_progress(
+                self.db,
+                enterprise=self.enterprise,
+                personnel_id=13,
+                payload={
+                    "step": "welcome",
+                    "answersByScale": {},
+                    "basicInfo": {},
+                    "completedScaleIds": [],
+                    "resultsByScale": {},
+                },
+                client_updated_at=None,
+            )
+
     def test_get_reconciles_from_formal_reports(self):
         report = self.add_report(personnel_id=11, assessment_id="scale-a", public_id="rpt_align_1")
         progress = get_progress(self.db, enterprise=self.enterprise, personnel_id=11)
