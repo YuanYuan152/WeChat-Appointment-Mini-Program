@@ -23,7 +23,7 @@ from urllib.parse import quote
 from fastapi import Response
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
-from sqlalchemy import case, func, or_
+from sqlalchemy import case, func, not_, or_
 from sqlalchemy.orm import Session, load_only
 
 from app_time import format_china_system_time
@@ -368,7 +368,11 @@ def normalize_visitor_key(visitor_key: str) -> str:
 
 
 def is_enterprise_eap_account_row(account: Any) -> bool:
-    """是否企业定制站答卷占位账号（不应出现在小程序用户/来访角色管理）。"""
+    """是否企业定制站答卷占位账号（不应出现在小程序用户/来访角色管理）。
+
+    仅认明确标记：PatientSource=ENTERPRISE_EAP，或 OpenId 以 eap-ent- 开头。
+    PatientSource / OpenId 为空的小程序账号（如后台添加的咨询师）不算企业 EAP。
+    """
     if getattr(account, "PatientSource", None) == "ENTERPRISE_EAP":
         return True
     openid = str(getattr(account, "OpenId", "") or "")
@@ -376,7 +380,10 @@ def is_enterprise_eap_account_row(account: Any) -> bool:
 
 
 def enterprise_eap_account_id_subquery(db: Session):
-    """企业 EAP 占位账号 Id 集合，供后台列表排除。"""
+    """企业 EAP 占位账号 Id 集合，供后台列表排除。
+
+    使用正向匹配（= / LIKE），不会把 PatientSource、OpenId 为 NULL 的行算进来。
+    """
     return {
         int(row[0])
         for row in db.query(AppAccount.Id)
@@ -389,6 +396,18 @@ def enterprise_eap_account_id_subquery(db: Session):
         .all()
         if row[0]
     }
+
+
+def exclude_enterprise_eap_accounts(query: Any, db: Session) -> Any:
+    """从 AppAccount 查询中去掉明确的企业 EAP 占位账号。
+
+    不要用 ``NOT (PatientSource = 'ENTERPRISE_EAP')``：在 SQL Server 上
+    PatientSource 为 NULL 时该条件为未知，会把小程序咨询师等正常账号一并滤掉。
+    """
+    enterprise_ids = enterprise_eap_account_id_subquery(db)
+    if not enterprise_ids:
+        return query
+    return query.filter(not_(AppAccount.Id.in_(enterprise_ids)))
 
 
 def enterprise_visitor_openid(slug: str, visitor_key: str) -> str:
