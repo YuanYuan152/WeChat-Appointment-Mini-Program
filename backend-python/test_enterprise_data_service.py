@@ -736,5 +736,63 @@ class TagLibraryTests(unittest.TestCase):
                     service.save_tag_library("missing", [])
 
 
+class EnterpriseEapAccountExclusionTests(unittest.TestCase):
+    """角色与权限列表不得把 PatientSource 为空的小程序账号当成企业 EAP 排除。"""
+
+    def setUp(self):
+        self.engine = create_engine(
+            "sqlite://",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        Base.metadata.create_all(self.engine)
+        self.db = sessionmaker(bind=self.engine)()
+
+    def tearDown(self):
+        self.db.close()
+        self.engine.dispose()
+
+    def test_null_patient_source_mini_accounts_are_kept(self):
+        mini_counselor = AppAccount(
+            OpenId="admin_invite_13526787654",
+            Mobile="13526787654",
+            Nickname="测试注册时间",
+            ActiveRole="Counselor",
+            PatientSource=None,
+            IsActive=True,
+        )
+        mini_patient = AppAccount(
+            OpenId="wx-openid-patient",
+            Mobile="13800138000",
+            Nickname="普通来访",
+            ActiveRole="Patient",
+            PatientSource="PROFESSIONAL",
+            IsActive=True,
+        )
+        enterprise = AppAccount(
+            OpenId=service.enterprise_visitor_openid("acme-secure-suffix-abcdef123456", "emp00001"),
+            ActiveRole="Patient",
+            PatientSource="ENTERPRISE_EAP",
+            IsActive=True,
+        )
+        self.db.add_all([mini_counselor, mini_patient, enterprise])
+        self.db.commit()
+
+        self.assertFalse(service.is_enterprise_eap_account_row(mini_counselor))
+        self.assertFalse(service.is_enterprise_eap_account_row(mini_patient))
+        self.assertTrue(service.is_enterprise_eap_account_row(enterprise))
+
+        excluded_ids = service.enterprise_eap_account_id_subquery(self.db)
+        self.assertEqual(excluded_ids, {enterprise.Id})
+
+        kept_ids = {
+            row.Id
+            for row in service.exclude_enterprise_eap_accounts(
+                self.db.query(AppAccount), self.db
+            ).all()
+        }
+        self.assertEqual(kept_ids, {mini_counselor.Id, mini_patient.Id})
+
+
 if __name__ == "__main__":
     unittest.main()

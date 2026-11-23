@@ -41,7 +41,10 @@ from models import (
     AppSchedule,
     AppStaffAccountRemark,
 )
-from enterprise_data_service import enterprise_eap_account_id_subquery
+from enterprise_data_service import (
+    enterprise_eap_account_id_subquery,
+    exclude_enterprise_eap_accounts,
+)
 from consultation_feedback import feedback_detail, feedback_summary
 from api_time_clock import ApiTimeClock, approved_amendment_review_times
 from app_time import china_now
@@ -324,7 +327,13 @@ def _last_revoke_meta(db: Session, account_id: int, access_revoked_at=None) -> d
     }
 
 
-def _user_admin_out(db: Session, account: AppAccount, *, staff_remark: str = "") -> dict:
+def _user_admin_out(
+    db: Session,
+    account: AppAccount,
+    *,
+    staff_remark: str = "",
+    clock: Optional[ApiTimeClock] = None,
+) -> dict:
     profile = get_counselor_profile(db, account.Id)
     access_revoked_at = getattr(account, "AccessRevokedAt", None)
     counselor_name = (profile.Name if profile else None) or None
@@ -345,6 +354,8 @@ def _user_admin_out(db: Session, account: AppAccount, *, staff_remark: str = "")
         active_role_label = patient_source_label(patient_source)
     else:
         active_role_label = None
+    # CreatedAt 由数据库 func.now() 写入：仅换算接口展示为 +08:00，不改库
+    time_clock = clock or ApiTimeClock.for_session(db)
     out = {
         "id": account.Id,
         "mobile": account.Mobile,
@@ -366,7 +377,7 @@ def _user_admin_out(db: Session, account: AppAccount, *, staff_remark: str = "")
         ),
         "roles": roles,
         "isKeyLoginAdmin": is_key_login_admin_account(account),
-        "createdAt": getattr(account, "CreatedAt", None),
+        "createdAt": time_clock.db(getattr(account, "CreatedAt", None)),
         "isSelfRegistered": getattr(account, "PatientSource", None) in {
             DEFAULT_PATIENT_SOURCE,
             "MINI_PROGRAM",
@@ -604,11 +615,8 @@ def list_admin_users(
         db.commit()
 
     q = db.query(AppAccount)
-    # 企业定制站答卷占位账号：不属于小程序用户/角色管理
-    q = q.filter(
-        not_(AppAccount.PatientSource == "ENTERPRISE_EAP"),
-        not_(AppAccount.OpenId.like("eap-ent-%")),
-    )
+    # 仅排除明确的企业 EAP 占位账号；PatientSource/OpenId 为空的小程序账号保留
+    q = exclude_enterprise_eap_accounts(q, db)
     q = _apply_admin_user_role_group_filters(q, db, normalized_group, normalized_subtype)
     if kw:
         profile_account_ids = [
@@ -640,11 +648,13 @@ def list_admin_users(
         u.Id for u in accounts if get_account_role(db, u.Id) in ("Counselor", "Patient")
     ]
     remarks_map = get_staff_remarks_map(db, remarkable_ids)
+    clock = ApiTimeClock.for_session(db)
     items = [
         _user_admin_out(
             db,
             u,
             staff_remark=remarks_map.get(u.Id, ""),
+            clock=clock,
         )
         for u in accounts
     ]
