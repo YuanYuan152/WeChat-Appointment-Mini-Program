@@ -50,7 +50,7 @@ export function ArchiveTab({
     if (!fieldId) return [];
     const values = new Set<string>();
     for (const row of rows) {
-      if (row.respondent) values.add(fieldValue(row.respondent, fieldId));
+      if (row.respondent || Object.keys(row.info).length) values.add(fieldValue(row, fieldId));
     }
     return [...values].sort((left, right) =>
       left === EMPTY_GROUP_VALUE ? 1 : right === EMPTY_GROUP_VALUE ? -1 : left.localeCompare(right, "zh-CN"),
@@ -66,7 +66,7 @@ export function ArchiveTab({
       if (severity && severity !== "risk" && severity !== "none" && row.severity !== severity) return false;
       if (tag && !row.tags.includes(tag)) return false;
       if (fieldId && fieldValueFilter) {
-        if (!row.respondent || fieldValue(row.respondent, fieldId) !== fieldValueFilter) return false;
+        if ((!row.respondent && !Object.keys(row.info).length) || fieldValue(row, fieldId) !== fieldValueFilter) return false;
       }
       return true;
     });
@@ -252,16 +252,10 @@ export function ArchiveTab({
                       </div>
                     </td>
                     <td className="px-4 py-3 text-[#4A4A4A]">
-                      {(() => {
-                        const respondent = row.respondent;
-                        if (!respondent) return "—";
-                        return (
-                          columnFields
-                            .map((field) => fieldValue(respondent, field.id))
-                            .filter((value) => value !== EMPTY_GROUP_VALUE)
-                            .join(" · ") || "—"
-                        );
-                      })()}
+                      {columnFields
+                        .map((field) => fieldValue(row, field.id))
+                        .filter((value) => value !== EMPTY_GROUP_VALUE)
+                        .join(" · ") || "—"}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">

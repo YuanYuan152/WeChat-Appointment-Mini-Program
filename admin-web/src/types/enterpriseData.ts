@@ -175,6 +175,7 @@ export interface EnterpriseRosterItem {
   empNo: string;
   realName: string;
   respondentKey: string | null;
+  info?: Record<string, string>;
 }
 
 export interface EnterpriseLearningContent {

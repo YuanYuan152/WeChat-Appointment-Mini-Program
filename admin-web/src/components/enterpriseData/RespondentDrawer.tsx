@@ -75,6 +75,7 @@ export function RespondentDrawer({
     [dataset.reports, respondentKey],
   );
   const displayName = respondent?.displayName || roster?.realName || roster?.username || "员工";
+  const info = respondent?.info || roster?.info || {};
   const accountIds = respondent?.accountIds;
   const [detail, setDetail] = useState<EnterpriseRespondentDetail>();
   const [detailError, setDetailError] = useState("");
@@ -171,13 +172,13 @@ export function RespondentDrawer({
           </div>
         </section>
 
-        <DrawerSection title="① 基本信息" sub="员工在企业链接中填写的信息（取最近一次提交）">
-          {respondent ? (
+        <DrawerSection title="① 基本信息" sub="员工在企业站保存的个人信息">
+          {Object.keys(info).length ? (
             <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
               {dataset.fields.map((field) => (
                 <div key={field.id} className="flex gap-3 text-sm">
                   <dt className="w-24 shrink-0 text-[var(--lxxl-muted)]">{field.label}</dt>
-                  <dd className="min-w-0 break-words">{respondent.info[field.id] || <span className="text-[#C0BAB0]">未填写</span>}</dd>
+                  <dd className="min-w-0 break-words">{info[field.id] || <span className="text-[#C0BAB0]">未填写</span>}</dd>
                 </div>
               ))}
             </dl>

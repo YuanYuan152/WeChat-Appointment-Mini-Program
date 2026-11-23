@@ -382,6 +382,49 @@ class EnterpriseDataServiceTests(unittest.TestCase):
         self.assertEqual(dataset["assessments"][0]["dimensions"][0]["title"], "抑郁")
         self.assertEqual(len(dataset["tagLibrary"]), len(service.DEFAULT_TAG_GROUPS))
 
+    def test_dataset_uses_saved_profile_without_requiring_a_new_report(self):
+        from enterprise_onboarding_progress_service import upsert_progress
+
+        seeded = self.seed()
+        personnel_id = seeded["personnel"].Id
+        idle_id = seeded["idle"].Id
+        original_demographics = seeded["first"].DemographicAnswers
+        upsert_progress(
+            self.db,
+            enterprise=self.enterprise,
+            personnel_id=personnel_id,
+            payload={"basicInfo": {"name": "李明（更新）", "dept": "项目管理部"}},
+        )
+        upsert_progress(
+            self.db,
+            enterprise=self.enterprise,
+            personnel_id=idle_id,
+            payload={"basicInfo": {"name": "赵青", "empNo": "E-02", "dept": "财务部"}},
+        )
+        upsert_progress(
+            self.db,
+            enterprise=self.other,
+            personnel_id=personnel_id,
+            payload={"basicInfo": {"name": "其他企业资料"}},
+        )
+
+        dataset = service.build_enterprise_dataset(self.db, self.enterprise)
+        respondents = {item["key"]: item for item in dataset["respondents"]}
+        person = respondents[f"p{personnel_id}"]
+        self.assertEqual(person["displayName"], "李明（更新）")
+        self.assertEqual(person["info"]["dept"], "项目管理部")
+        self.assertEqual(person["info"]["category"], "一线业务")
+        self.assertEqual(person["reportCount"], 3)
+        self.assertEqual(respondents[f"a{seeded['legacy_account'].Id}"]["displayName"], "张华")
+        self.assertEqual(seeded["first"].DemographicAnswers, original_demographics)
+
+        idle = next(item for item in dataset["roster"] if item["personnelId"] == idle_id)
+        self.assertEqual(idle["realName"], "赵青")
+        self.assertEqual(idle["empNo"], "E-02")
+        self.assertEqual(idle["info"]["dept"], "财务部")
+        self.assertIsNone(idle["respondentKey"])
+        self.assertNotIn(f"p{idle_id}", respondents)
+
     def test_follow_up_override_and_history(self):
         seeded = self.seed()
         result = service.save_follow_up(

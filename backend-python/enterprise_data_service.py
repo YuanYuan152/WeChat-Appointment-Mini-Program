@@ -45,6 +45,7 @@ from models import (
     AppAccount,
     AppAssessmentReport,
     EnterpriseLearningEvent,
+    EnterpriseOnboardingProgress,
     EnterpriseRespondentAnnotation,
     EnterpriseRiskFollowUp,
     EnterpriseSitePersonnel,
@@ -662,7 +663,10 @@ def _personnel_meta(meta: dict[str, Any]) -> Optional[dict[str, Any]]:
 
 
 def _employee_info(meta: dict[str, Any]) -> dict[str, str]:
-    raw = meta.get("_employeeInfo")
+    return _normalize_employee_info(meta.get("_employeeInfo"))
+
+
+def _normalize_employee_info(raw: Any) -> dict[str, str]:
     if not isinstance(raw, dict):
         return {}
     result: dict[str, str] = {}
@@ -679,6 +683,30 @@ def _employee_info(meta: dict[str, Any]) -> dict[str, str]:
         if text:
             result[field_id] = text[:200]
     return result
+
+
+def _saved_employee_info(
+    db: Session,
+    enterprise_id: str,
+    *,
+    personnel_id: int | None = None,
+) -> dict[int, dict[str, str]]:
+    progress = EnterpriseOnboardingProgress
+    query = (
+        db.query(progress.PersonnelId, progress.BasicInfoJson)
+        .join(EnterpriseSitePersonnel, EnterpriseSitePersonnel.Id == progress.PersonnelId)
+        .filter(
+            progress.EnterpriseId == enterprise_id,
+            EnterpriseSitePersonnel.EnterpriseId == enterprise_id,
+            progress.BasicInfoJson.is_not(None),
+        )
+    )
+    if personnel_id is not None:
+        query = query.filter(progress.PersonnelId == personnel_id)
+    return {
+        person_id: _normalize_employee_info(_load_dict(raw))
+        for person_id, raw in query
+    }
 
 
 def enterprise_info_fields(
@@ -819,13 +847,18 @@ def get_enterprise_report_detail(
         ) from exc
 
     meta = _load_dict(row.DemographicAnswers)
+    personnel = _personnel_meta(meta)
+    info = _employee_info(meta)
+    if personnel:
+        person_id = personnel["id"]
+        info.update(_saved_employee_info(db, str(enterprise["id"]), personnel_id=person_id).get(person_id, {}))
     title = str((enterprise.get("assessmentTitles") or {}).get(row.AssessmentId) or "").strip()
     detail.update(
         source="eap",
         reportId=detail["publicId"],
         accountId=row.AccountId,
         assessmentTitle=title or detail["assessmentTitle"],
-        patientName=_display_name(_employee_info(meta), _personnel_meta(meta), row.AccountId),
+        patientName=_display_name(info, personnel, row.AccountId),
         patientMobile=None,
         sourceLabel="企业定制 EAP",
     )
@@ -1538,6 +1571,7 @@ def build_enterprise_dataset(db: Session, enterprise: dict[str, Any]) -> dict[st
     report_rows = enterprise_report_rows(db, enterprise)
     reports = _build_reports(report_rows, _follow_up_map(db, enterprise_id), titles)
     annotations = _annotation_state(db, enterprise_id)
+    saved_info = _saved_employee_info(db, enterprise_id)
 
     respondents: dict[str, dict[str, Any]] = {}
     seen_info_keys: set[str] = set()
@@ -1592,6 +1626,9 @@ def build_enterprise_dataset(db: Session, enterprise: dict[str, Any]) -> dict[st
         latest_note = annotations["latestNote"].get(key)
         info = respondent["info"]
         personnel = respondent["personnel"]
+        if personnel:
+            info.update(saved_info.get(personnel["id"], {}))
+            seen_info_keys.update(info)
         first_account = respondent["accountIds"][0] if respondent["accountIds"] else None
         completed_authorized = len(authorized_set.intersection(completed_ids))
         respondent_items.append(
@@ -1634,16 +1671,18 @@ def build_enterprise_dataset(db: Session, enterprise: dict[str, Any]) -> dict[st
         .order_by(EnterpriseSitePersonnel.Id.asc())
         .all()
     )
-    roster = [
-        {
+    roster = []
+    for row in roster_rows:
+        info = saved_info.get(row.Id, {})
+        seen_info_keys.update(info)
+        roster.append({
             "personnelId": row.Id,
             "username": row.Username,
-            "empNo": row.EmpNo or "",
-            "realName": row.RealName or "",
+            "empNo": info.get("empNo") or row.EmpNo or "",
+            "realName": info.get("name") or row.RealName or "",
             "respondentKey": f"p{row.Id}" if f"p{row.Id}" in respondents else None,
-        }
-        for row in roster_rows
-    ]
+            "info": info,
+        })
 
     return {
         "enterprise": _enterprise_meta(db, enterprise),

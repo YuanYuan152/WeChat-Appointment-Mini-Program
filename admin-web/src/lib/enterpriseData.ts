@@ -681,6 +681,7 @@ export interface ArchiveRow {
   displayName: string;
   empNo: string;
   username: string;
+  info: Record<string, string>;
   status: RespondentStatus;
   severity: Severity | null;
   tags: string[];
@@ -700,6 +701,7 @@ export function buildArchiveRows(dataset: EnterpriseDataset): ArchiveRow[] {
     displayName: respondent.displayName,
     empNo: respondent.empNo,
     username: respondent.personnel?.username || "",
+    info: respondent.info,
     status: respondent.status,
     severity: respondent.severity,
     tags: respondent.tags,
@@ -716,6 +718,7 @@ export function buildArchiveRows(dataset: EnterpriseDataset): ArchiveRow[] {
       displayName: person.realName || person.username,
       empNo: person.empNo,
       username: person.username,
+      info: person.info || {},
       status: "todo",
       severity: null,
       tags: [],
@@ -734,7 +737,7 @@ export function matchesKeyword(row: ArchiveRow, keyword: string): boolean {
     row.displayName,
     row.empNo,
     row.username,
-    ...(row.respondent ? Object.values(row.respondent.info) : []),
+    ...Object.values(row.info),
     ...row.tags,
   ]
     .join(" ")

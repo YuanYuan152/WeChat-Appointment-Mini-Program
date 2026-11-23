@@ -22,7 +22,7 @@ export function fetchEnterpriseDataSummaries() {
 }
 
 export function fetchEnterpriseDataset(enterpriseId: string) {
-  return apiRequest<EnterpriseDataset>(`${enterprisePath(enterpriseId)}/dataset`);
+  return apiRequest<EnterpriseDataset>(`${enterprisePath(enterpriseId)}/dataset`, { cache: "no-store" });
 }
 
 export async function fetchEnterpriseReportDetail(

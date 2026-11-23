@@ -188,6 +188,21 @@ test("archive rows include roster members who have not started", () => {
   assert.ok(!lib.matchesKeyword(rows[0], "不存在"));
 });
 
+test("archive shows and searches the saved profile before a report is submitted", () => {
+  const data = dataset();
+  data.roster[0] = {
+    ...data.roster[0],
+    realName: "赵青",
+    empNo: "E-02",
+    info: { name: "赵青", dept: "财务部" },
+  };
+  const row = lib.buildArchiveRows(data).find((item) => item.key === "p9");
+  assert.equal(row.displayName, "赵青");
+  assert.equal(row.status, "todo");
+  assert.equal(lib.fieldValue(row, "dept"), "财务部");
+  assert.ok(lib.matchesKeyword(row, "财务"));
+});
+
 test("follow-up override changes report and respondent severity", () => {
   const data = dataset();
   const next = lib.applyFollowUp(data, "r2", {
