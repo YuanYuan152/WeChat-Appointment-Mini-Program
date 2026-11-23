@@ -182,6 +182,19 @@ function ScoreResult({
               {result.summary}
             </section>
           )}
+          <section className="rounded-2xl border border-[var(--lxxl-border)] bg-white p-5">
+            <h5 className="font-semibold">维度结果</h5>
+            <div className="mt-4 grid gap-4 lg:grid-cols-2">
+              {result.dimensions.map((dimension) => (
+                <DimensionResult
+                  assessment={assessment}
+                  dimension={dimension}
+                  key={dimension.id}
+                />
+              ))}
+            </div>
+          </section>
+          {/* 总分单独放最后；未配置总分时不显示 */}
           {result.total && (
             <section className="rounded-2xl border border-[var(--lxxl-border)] bg-white p-6">
               <div className="grid gap-6 md:grid-cols-[220px_minmax(0,1fr)] md:items-center">
@@ -210,18 +223,6 @@ function ScoreResult({
               </div>
             </section>
           )}
-          <section className="rounded-2xl border border-[var(--lxxl-border)] bg-white p-5">
-            <h5 className="font-semibold">维度结果</h5>
-            <div className="mt-4 grid gap-4 lg:grid-cols-2">
-              {result.dimensions.map((dimension) => (
-                <DimensionResult
-                  assessment={assessment}
-                  dimension={dimension}
-                  key={dimension.id}
-                />
-              ))}
-            </div>
-          </section>
         </div>
       );
     case "match": {

@@ -1518,9 +1518,9 @@ function QuestionFields({
                     : "border-[var(--lxxl-border)] bg-white text-[var(--lxxl-ink)] hover:border-[var(--lxxl-green)]"
                 }`}
                 type="button"
-                onClick={() => setOptionsExpanded(true)}
+                onClick={() => setOptionsExpanded((current) => !current)}
               >
-                全部展开
+                {optionsExpanded ? "全部收起" : "全部展开"}
               </button>
               <button
                 className={`h-9 rounded-xl border px-4 text-sm font-medium transition ${
@@ -2217,7 +2217,7 @@ function createEmptyMergedDimension(existingIds: string[]): AssessmentDimension 
   const id = createStableId("merged", existingIds);
   return {
     id,
-    title: "新合并结果",
+    title: "新维度",
     questionIds: [],
     reverseQuestionIds: [],
     calculationMode: "simple",
@@ -2270,7 +2270,10 @@ function ComposedSourceReportEditor({
 
   function ensureMergedReport() {
     if (mergedReport) {
-      return mergedReport;
+      return {
+        ...mergedReport,
+        sourceTitle: COMPOSED_MERGED_SOURCE_TITLE,
+      };
     }
     return {
       sourceId: COMPOSED_MERGED_SOURCE_ID,
@@ -2304,7 +2307,7 @@ function ComposedSourceReportEditor({
   return (
     <div className="space-y-5">
       <p className="text-sm leading-6 text-[var(--lxxl-muted)]">
-        每张母量表的报告结果按原结构拼接；底部「合并结果」可跨母量表选题记分。默认只显示结果名称；点击某一项可打开详细信息。删题后请补齐解释或分数，未补齐时不能发布版本。
+        每张母量表的报告结果按原结构拼接；底部「新增维度」可跨母量表选题记分，展示时与原有维度同级。默认只显示结果名称；点击某一项可打开详细信息。删题后请补齐解释或分数，未补齐时不能发布版本。
       </p>
       {parentReports.length === 0 && (
         <p className="text-sm text-[var(--lxxl-muted)]">正在读取母量表的报告结果...</p>
@@ -2532,7 +2535,7 @@ function ComposedSourceReportEditor({
         <div className="space-y-4">
           {mergedDimensions.length === 0 && (
             <p className="text-sm text-[var(--lxxl-muted)]">
-              还没有合并结果。点击右上角「新增维度」开始配置。
+              还没有新增维度。点击右上角「新增维度」开始配置。
             </p>
           )}
           {mergedDimensions.map((dimension, dimensionIndex) => {
@@ -2567,7 +2570,7 @@ function ComposedSourceReportEditor({
                         {dimensionIndex + 1}.
                       </span>
                       <span className="truncate text-sm font-semibold text-[var(--lxxl-ink)]">
-                        {dimension.title || dimension.id || "未命名合并结果"}
+                        {dimension.title || dimension.id || "未命名维度"}
                       </span>
                       <span className="ml-auto shrink-0 text-xs text-[var(--lxxl-muted)]">
                         {detailsOpen ? "收起详细信息" : "打开详细信息"}
@@ -2576,7 +2579,7 @@ function ComposedSourceReportEditor({
                   </button>
                   <RemoveButton
                     disabled={disabled}
-                    label="删除合并结果"
+                    label="删除维度"
                     onClick={() =>
                       updateMergedDimensions(
                         mergedDimensions.filter((_, index) => index !== dimensionIndex),

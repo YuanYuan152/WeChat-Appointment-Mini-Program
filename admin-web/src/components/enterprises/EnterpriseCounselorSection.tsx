@@ -108,6 +108,7 @@ function specialtyTags(item: EnterpriseCounselorCandidate) {
 }
 
 export function EnterpriseCounselorSection({ enterpriseId }: { enterpriseId?: string }) {
+  const [expanded, setExpanded] = useState(false);
   const [candidates, setCandidates] = useState<EnterpriseCounselorCandidate[]>([]);
   const [dropped, setDropped] = useState<number[]>([]);
   const [drafts, setDrafts] = useState<Draft[]>([]);
@@ -275,86 +276,121 @@ export function EnterpriseCounselorSection({ enterpriseId }: { enterpriseId?: st
 
   return (
     <div>
-      <h3 className="text-base font-semibold">咨询师勾选</h3>
-      <p className="mt-1 text-sm leading-6 text-[var(--lxxl-muted)]">
-        先勾选咨询师，行末会出现 🖊。点 🖊 编辑这家企业的介绍页，点向上箭头把这个人排到名单前面。这些改动要点「保存咨询师」之后，才会出现在这家企业的预约咨询区域。
-      </p>
-      {!enterpriseId ? (
-        <p className="mt-4 text-sm text-[var(--lxxl-muted)]">
-          请先确认保存这家企业，再进入编辑页勾选咨询师。
-        </p>
-      ) : loading ? (
-        <p className="mt-4 text-sm text-[var(--lxxl-muted)]">正在读取当前环境的咨询师名单...</p>
-      ) : !ready ? (
-        <p className="mt-4 text-sm text-[#A13F37]">{error || "咨询师名单加载失败"}</p>
-      ) : (
-        <div className="mt-4 space-y-5">
-          <QueryField label="筛选咨询师">
-            <input
-              className={queryControlClass}
-              placeholder="按姓名或头衔筛选"
-              value={keyword}
-              onChange={(event) => setKeyword(event.target.value)}
-            />
-          </QueryField>
-          {dropped.length > 0 && (
-            <p className="text-sm text-[#A13F37]">
-              账号 {dropped.join("、")} 已不在在职且对外可见名单中，这次保存后会从这家企业移除。
+      <div className="flex min-w-0 items-start gap-2">
+        <button
+          aria-expanded={expanded}
+          aria-label={expanded ? "收起咨询师勾选" : "展开咨询师勾选"}
+          className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-md text-[var(--lxxl-ink)] hover:bg-[#F4F1EB] hover:text-[var(--lxxl-green)]"
+          type="button"
+          onClick={() => setExpanded((current) => !current)}
+        >
+          <svg
+            aria-hidden="true"
+            className={`h-4 w-4 transition-transform ${expanded ? "rotate-90" : ""}`}
+            fill="none"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+            viewBox="0 0 24 24"
+          >
+            <path d="m9 6 6 6-6 6" />
+          </svg>
+        </button>
+        <div className="min-w-0 flex-1">
+          <h3 className="text-base font-semibold">咨询师勾选</h3>
+          {!expanded ? (
+            <p className="mt-1 text-sm text-[var(--lxxl-muted)]">
+              {enterpriseId
+                ? `已勾选 ${drafts.length} 位，点击左侧箭头展开编辑`
+                : "请先确认保存这家企业后再勾选咨询师"}
             </p>
-          )}
-          <div ref={listRef} className="max-h-[32rem] divide-y divide-[var(--lxxl-border)] overflow-auto rounded-xl border border-[var(--lxxl-border)]">
-            {visibleRows.length === 0 ? (
-              <p className="px-4 py-5 text-sm text-[var(--lxxl-muted)]">当前环境没有在职且对外可见的咨询师。</p>
-            ) : (
-              visibleRows.map((item) => {
-                const selected = selectedIds.has(item.accountId);
-                const draft = draftById.get(item.accountId);
-                return (
-                  <div key={item.accountId} className="flex items-center gap-3 px-4 py-3">
-                    <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3">
-                      <input
-                        checked={selected}
-                        type="checkbox"
-                        onChange={(event) => toggle(item.accountId, event.target.checked)}
-                      />
-                      <CounselorFace item={item} pinned={Boolean(draft?.pinned)} />
-                    </label>
-                    <button
-                      aria-label={draft?.pinned ? "取消置顶" : "置顶"}
-                      className={`grid h-8 w-8 shrink-0 place-items-center rounded-md border ${
-                        draft?.pinned
-                          ? "border-[var(--lxxl-green)] bg-[var(--lxxl-green)] text-white"
-                          : "border-[var(--lxxl-border)] bg-white text-[var(--lxxl-ink)] hover:border-[var(--lxxl-green)] hover:text-[var(--lxxl-green)]"
-                      }`}
-                      title={draft?.pinned ? "取消置顶" : "置顶到最前"}
-                      type="button"
-                      onClick={() => pinToTop(item.accountId)}
-                    >
-                      <ArrowUpIcon />
-                    </button>
-                    {selected && (
-                      <button
-                        aria-label={`编辑${item.name}的介绍页`}
-                        className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-base leading-none text-[var(--lxxl-muted)] hover:bg-[#F7F5F2] hover:text-[var(--lxxl-ink)]"
-                        title="编辑介绍页"
-                        type="button"
-                        onClick={() => openEditor(item.accountId)}
-                      >
-                        <span aria-hidden="true">🖊</span>
-                      </button>
-                    )}
-                  </div>
-                );
-              })
-            )}
-          </div>
-          {error && <p className="text-sm text-[#A13F37]">{error}</p>}
-          {savedText && <p className="text-sm text-[var(--lxxl-green)]">{savedText}</p>}
-          <QueryButton className="!w-auto px-4" disabled={saving || !ready} onClick={() => void save()}>
-            {saving ? "保存中..." : "保存咨询师"}
-          </QueryButton>
+          ) : null}
         </div>
-      )}
+      </div>
+      {expanded ? (
+        <>
+          <p className="mt-3 text-sm leading-6 text-[var(--lxxl-muted)]">
+            先勾选咨询师，行末会出现 🖊。点 🖊 编辑这家企业的介绍页，点向上箭头把这个人排到名单前面。这些改动要点「保存咨询师」之后，才会出现在这家企业的预约咨询区域。
+          </p>
+          {!enterpriseId ? (
+            <p className="mt-4 text-sm text-[var(--lxxl-muted)]">
+              请先确认保存这家企业，再进入编辑页勾选咨询师。
+            </p>
+          ) : loading ? (
+            <p className="mt-4 text-sm text-[var(--lxxl-muted)]">正在读取当前环境的咨询师名单...</p>
+          ) : !ready ? (
+            <p className="mt-4 text-sm text-[#A13F37]">{error || "咨询师名单加载失败"}</p>
+          ) : (
+            <div className="mt-4 space-y-5">
+              <QueryField label="筛选咨询师">
+                <input
+                  className={queryControlClass}
+                  placeholder="按姓名或头衔筛选"
+                  value={keyword}
+                  onChange={(event) => setKeyword(event.target.value)}
+                />
+              </QueryField>
+              {dropped.length > 0 && (
+                <p className="text-sm text-[#A13F37]">
+                  账号 {dropped.join("、")} 已不在在职且对外可见名单中，这次保存后会从这家企业移除。
+                </p>
+              )}
+              <div ref={listRef} className="max-h-[32rem] divide-y divide-[var(--lxxl-border)] overflow-auto rounded-xl border border-[var(--lxxl-border)]">
+                {visibleRows.length === 0 ? (
+                  <p className="px-4 py-5 text-sm text-[var(--lxxl-muted)]">当前环境没有在职且对外可见的咨询师。</p>
+                ) : (
+                  visibleRows.map((item) => {
+                    const selected = selectedIds.has(item.accountId);
+                    const draft = draftById.get(item.accountId);
+                    return (
+                      <div key={item.accountId} className="flex items-center gap-3 px-4 py-3">
+                        <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3">
+                          <input
+                            checked={selected}
+                            type="checkbox"
+                            onChange={(event) => toggle(item.accountId, event.target.checked)}
+                          />
+                          <CounselorFace item={item} pinned={Boolean(draft?.pinned)} />
+                        </label>
+                        <button
+                          aria-label={draft?.pinned ? "取消置顶" : "置顶"}
+                          className={`grid h-8 w-8 shrink-0 place-items-center rounded-md border ${
+                            draft?.pinned
+                              ? "border-[var(--lxxl-green)] bg-[var(--lxxl-green)] text-white"
+                              : "border-[var(--lxxl-border)] bg-white text-[var(--lxxl-ink)] hover:border-[var(--lxxl-green)] hover:text-[var(--lxxl-green)]"
+                          }`}
+                          title={draft?.pinned ? "取消置顶" : "置顶到最前"}
+                          type="button"
+                          onClick={() => pinToTop(item.accountId)}
+                        >
+                          <ArrowUpIcon />
+                        </button>
+                        {selected && (
+                          <button
+                            aria-label={`编辑${item.name}的介绍页`}
+                            className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-base leading-none text-[var(--lxxl-muted)] hover:bg-[#F7F5F2] hover:text-[var(--lxxl-ink)]"
+                            title="编辑介绍页"
+                            type="button"
+                            onClick={() => openEditor(item.accountId)}
+                          >
+                            <span aria-hidden="true">🖊</span>
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+              {error && <p className="text-sm text-[#A13F37]">{error}</p>}
+              {savedText && <p className="text-sm text-[var(--lxxl-green)]">{savedText}</p>}
+              <QueryButton className="!w-auto px-4" disabled={saving || !ready} onClick={() => void save()}>
+                {saving ? "保存中..." : "保存咨询师"}
+              </QueryButton>
+            </div>
+          )}
+        </>
+      ) : null}
       {editingCandidate && copyDraft && (
         <IntroEditorDialog
           copyDraft={copyDraft}

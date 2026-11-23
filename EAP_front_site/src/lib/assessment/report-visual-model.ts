@@ -506,6 +506,9 @@ function detectPreset(assessment: VisualAssessmentInput): VisualPreset {
   return "generic";
 }
 
+/** 组合量表「新增维度」段：与母量表维度同级展示，不单独成组标题。 */
+const COMPOSED_MERGED_SOURCE_ID = "__merged__";
+
 /** 组合量表：按母量表把维度分组（发布时维度按 sourceReports 顺序平铺，可按位置对应）。 */
 function sourceGroupTitles(assessment: VisualAssessmentInput): Map<string, string> | null {
   const reports = assessment.sourceReports;
@@ -514,7 +517,10 @@ function sourceGroupTitles(assessment: VisualAssessmentInput): Map<string, strin
     return null;
   }
   const flattened = reports.flatMap((report) =>
-    (report.dimensions ?? []).map(() => String(report.sourceTitle || "")),
+    (report.dimensions ?? []).map(() =>
+      // 新增维度与原有维度同级：不挂「新增维度/合并结果」分组标题
+      report.sourceId === COMPOSED_MERGED_SOURCE_ID ? "" : String(report.sourceTitle || ""),
+    ),
   );
   if (flattened.length !== dimensions.length || new Set(flattened).size <= 1) {
     return null;

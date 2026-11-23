@@ -1973,9 +1973,9 @@ export const COMPOSED_MULTI_SOURCE_PLACEHOLDERS = {
   disclaimer: "请填写免责声明。",
 } as const;
 
-/** 组合量表「合并结果」在 sourceReports 中的固定标识。 */
+/** 组合量表「新增维度」在 sourceReports 中的固定标识。 */
 export const COMPOSED_MERGED_SOURCE_ID = "__merged__";
-export const COMPOSED_MERGED_SOURCE_TITLE = "合并结果";
+export const COMPOSED_MERGED_SOURCE_TITLE = "新增维度";
 
 export type ComposedQuestionRemovalMode = "clear-explanations" | "clear-bounds";
 
@@ -2212,9 +2212,8 @@ export function composeAssessmentDefinition(
     category: sources.some((source) => source.category === "professional")
       ? "professional"
       : "fun",
-    visibility: sources.every((source) => source.visibility === "private")
-      ? "private"
-      : "public",
+    // 子量表默认私有，需在企业定制中勾选后才对企业可见
+    visibility: "private",
     title: trimmedTitle,
     subtitle: singleSource
       ? "由母量表组合生成"

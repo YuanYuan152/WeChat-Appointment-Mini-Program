@@ -883,7 +883,7 @@ test("one parent scale is inherited and several parents keep only a draft skelet
   assert.equal(combined.description, "甲说明");
   assert.equal(combined.features, "甲特点");
   assert.equal(combined.category, "professional");
-  assert.equal(combined.visibility, "public");
+  assert.equal(combined.visibility, "private");
 });
 
 test("removing a composed question clears report text or score bounds until publish", () => {

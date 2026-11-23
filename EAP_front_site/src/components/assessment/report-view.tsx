@@ -63,14 +63,6 @@ function ProfileSections({ model }: { model: ReportVisualModel }) {
   const radarDimensions = useMemo(() => model.radar.map(radarItem), [model.radar]);
   return (
     <>
-      {model.hero ? (
-        <HeroScoreCard
-          caption={model.hero.id === "total" ? "总分" : "综合得分"}
-          eyebrow="整体结果"
-          item={model.hero}
-        />
-      ) : null}
-
       {model.summary ? (
         <div className="rounded-[var(--radius)] border border-border bg-card p-5 shadow-sm sm:p-6">
           <h3 className="mb-2 font-serif text-sm font-semibold">结果概览</h3>
@@ -117,6 +109,15 @@ function ProfileSections({ model }: { model: ReportVisualModel }) {
           ))}
         </section>
       ))}
+
+      {/* 总分单独放最后；未配置总分时不显示 */}
+      {model.hero ? (
+        <HeroScoreCard
+          caption={model.hero.id === "total" ? "总分" : "综合得分"}
+          eyebrow="整体结果"
+          item={model.hero}
+        />
+      ) : null}
     </>
   );
 }
