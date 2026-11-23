@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
@@ -15,6 +15,7 @@ from enterprise_data_service import (
     delete_annotation,
     delete_enterprise_report,
     export_enterprise_dataset_xlsx,
+    get_enterprise_report_detail,
     list_enterprise_data_summaries,
     require_enterprise,
     respondent_detail,
@@ -164,6 +165,31 @@ def register_enterprise_data_admin_routes(
             return {"message": "标注记录已删除"}
         except EnterpriseDataError as exc:
             _raise(exc)
+
+    @router.get(
+        f"{BASE_PATH}/{{enterprise_id}}/reports/{{public_id}}",
+        summary="查看企业专属答卷报告",
+    )
+    def read_enterprise_report(
+        enterprise_id: str,
+        public_id: str,
+        request: Request,
+        response: Response,
+        db: Session = Depends(get_db),
+        actor: AppAccount = Depends(require_assessment_editor),
+    ):
+        try:
+            detail = get_enterprise_report_detail(
+                db,
+                enterprise=_enterprise(enterprise_id),
+                public_id=public_id,
+                actor=actor,
+                request_id=request.headers.get("x-request-id"),
+            )
+        except EnterpriseDataError as exc:
+            _raise(exc)
+        response.headers["Cache-Control"] = "no-store"
+        return detail
 
     @router.put(
         f"{BASE_PATH}/{{enterprise_id}}/reports/{{public_id}}/follow-up",

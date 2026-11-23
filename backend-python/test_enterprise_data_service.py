@@ -1,3 +1,4 @@
+import hashlib
 import json
 import tempfile
 import unittest
@@ -7,6 +8,7 @@ from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
 
+from fastapi import HTTPException, Request, Response
 from openpyxl import load_workbook
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -158,6 +160,87 @@ class EnterpriseDataServiceTests(unittest.TestCase):
         self.db.add(row)
         self.db.commit()
         return row
+
+    def test_enterprise_report_endpoint_checks_scope_and_renders_saved_snapshot(self):
+        from admin import require_assessment_editor, router
+
+        account = self.visitor("enterprise-report-detail")
+        result = {**self.psqi("睡眠质量差"), "risk": {"level": "高风险"}}
+        report = self.add_report(
+            account, "psqi", result, meta={"_employeeInfo": {"name": "示例员工"}}
+        )
+        report.ReportSnapshot = canonical({
+            "schemaVersion": 1,
+            "assessment": {"title": "原量表名"},
+            "result": result,
+            "reportContent": {"title": "原量表名"},
+        })
+        report.SnapshotSha256 = hashlib.sha256(report.ReportSnapshot.encode()).hexdigest()
+        self.db.commit()
+        public_id = report.PublicId
+        route = next(
+            item for item in router.routes
+            if item.path == "/api/mini/admin/assessment-enterprise-data/{enterprise_id}/reports/{public_id}"
+            and "GET" in item.methods
+        )
+        self.assertIn(require_assessment_editor, [item.call for item in route.dependant.dependencies])
+        request = Request({"type": "http", "headers": [(b"x-request-id", b"report-detail-test")]})
+        response = Response()
+        enterprises = {item["id"]: item for item in (self.enterprise, self.other)}
+
+        def read(enterprise):
+            return route.endpoint(
+                enterprise_id=enterprise["id"],
+                public_id=public_id,
+                request=request,
+                response=response,
+                db=self.db,
+                actor=require_assessment_editor(self.admin, self.db),
+            )
+
+        with patch.object(
+            assessment_enterprise_service, "get_enterprise_by_id", side_effect=enterprises.__getitem__
+        ):
+            detail = read(self.enterprise)
+            self.assertEqual(response.headers["Cache-Control"], "no-store")
+            self.assertEqual(detail["reportId"], public_id)
+            self.assertEqual(detail["patientName"], "示例员工")
+            self.assertEqual(detail["assessmentTitle"], "睡眠质量自评")
+            self.assertEqual(detail["reportSnapshot"]["result"]["risk"]["level"], "高风险")
+            self.assertIn("answers", detail)
+            audit = self.db.query(AppAssessmentAuditLog).filter_by(RequestId="report-detail-test").one()
+            self.assertEqual(audit.Action, "REPORT_VIEW_RAW")
+            self.assertEqual(audit.TargetPublicId, public_id)
+            with self.assertRaises(HTTPException) as other_enterprise:
+                read(self.other)
+            self.assertEqual(other_enterprise.exception.status_code, 404)
+
+            # 早期答卷只有 slug，仍可通过企业入口读取。
+            report.DemographicAnswers = canonical({"_enterpriseSlug": self.enterprise["slug"]})
+            self.admin.ActiveRole = "Research"
+            self.db.commit()
+            detail = read(self.enterprise)
+            self.assertNotIn("answers", detail)
+            self.assertNotIn("demographicAnswers", detail)
+
+            self.admin.ActiveRole = "Patient"
+            self.db.commit()
+            with self.assertRaises(HTTPException) as forbidden:
+                read(self.enterprise)
+            self.assertEqual(forbidden.exception.status_code, 403)
+
+            self.admin.ActiveRole = "Admin"
+            report.SnapshotSha256 = "0" * 64
+            self.db.commit()
+            with self.assertRaises(HTTPException) as invalid_snapshot:
+                read(self.enterprise)
+            self.assertEqual(invalid_snapshot.exception.status_code, 500)
+
+            report.DeletedAt = datetime.now()
+            self.db.commit()
+            with self.assertRaises(HTTPException) as deleted:
+                read(self.enterprise)
+            self.assertEqual(deleted.exception.status_code, 404)
 
     @staticmethod
     def bsi(level_dep="正常", level_anx="正常"):

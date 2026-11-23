@@ -1,4 +1,5 @@
 import { apiFileRequest, apiRequest } from "@/lib/api";
+import type { EapAssessmentReportDetail } from "@/types/assessmentReport";
 import type {
   EnterpriseAnnotation,
   EnterpriseAnnotationInput,
@@ -22,6 +23,27 @@ export function fetchEnterpriseDataSummaries() {
 
 export function fetchEnterpriseDataset(enterpriseId: string) {
   return apiRequest<EnterpriseDataset>(`${enterprisePath(enterpriseId)}/dataset`);
+}
+
+export async function fetchEnterpriseReportDetail(
+  enterpriseId: string,
+  publicId: string,
+  signal: AbortSignal,
+) {
+  const detail = await apiRequest<EapAssessmentReportDetail>(
+    `${enterprisePath(enterpriseId)}/reports/${encodeURIComponent(publicId)}`,
+    { cache: "no-store", signal },
+  );
+  if (
+    detail?.source !== "eap" ||
+    detail.publicId !== publicId ||
+    !detail.reportSnapshot?.assessment ||
+    !detail.reportSnapshot.reportContent ||
+    !detail.reportSnapshot.result
+  ) {
+    throw new Error("服务器返回的报告不完整");
+  }
+  return detail;
 }
 
 export function fetchEnterpriseRespondentDetail(

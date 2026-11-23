@@ -12,12 +12,16 @@ export function AssessmentReportDialog({
   loading,
   target,
   detail,
+  error,
   onClose,
+  onRetry,
 }: {
   loading: boolean;
-  target?: AssessmentReportListItem;
+  target?: Pick<AssessmentReportListItem, "assessmentTitle" | "patientName">;
   detail?: AssessmentReportDetail;
+  error?: string;
   onClose: () => void;
+  onRetry?: () => void;
 }) {
   const titleId = useId();
   const dialogRef = useRef<HTMLElement | null>(null);
@@ -98,7 +102,7 @@ export function AssessmentReportDialog({
                 "量表报告详情"}
             </h3>
             <p className="mt-1 text-sm text-[var(--lxxl-muted)]">
-              {detail?.patientName || target?.patientName || "正在读取报告"}
+              {detail?.patientName || target?.patientName || (loading ? "正在读取报告" : "")}
             </p>
           </div>
           <button
@@ -114,8 +118,27 @@ export function AssessmentReportDialog({
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-7">
           {loading && !detail ? (
-            <div className="grid min-h-72 place-items-center text-sm text-[var(--lxxl-muted)]">
+            <div role="status" className="grid min-h-72 place-items-center text-sm text-[var(--lxxl-muted)]">
               正在加载报告详情...
+            </div>
+          ) : error ? (
+            <div className="grid min-h-72 place-content-center gap-4 text-center">
+              <div role="alert">
+                <p className="font-semibold">报告加载失败</p>
+                <p className="mt-2 text-sm text-[var(--lxxl-muted)]">{error}</p>
+              </div>
+              {onRetry && (
+                <button
+                  className="mx-auto h-10 rounded-xl bg-[var(--lxxl-green)] px-5 text-sm font-medium text-white"
+                  type="button"
+                  onClick={() => {
+                    closeButtonRef.current?.focus();
+                    onRetry();
+                  }}
+                >
+                  重新加载
+                </button>
+              )}
             </div>
           ) : detail ? (
             <AssessmentReportView detail={detail} />

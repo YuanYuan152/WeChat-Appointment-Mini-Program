@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 
 import { AppRoute, useAppRoute } from "@/components/AppRoute";
@@ -15,6 +15,7 @@ import { RespondentDrawer } from "@/components/enterpriseData/RespondentDrawer";
 import { SubmissionsTab } from "@/components/enterpriseData/SubmissionsTab";
 import { TagsTab } from "@/components/enterpriseData/TagsTab";
 import { EmptyHint, GhostButton, downloadBlob } from "@/components/enterpriseData/ui";
+import { ApiError } from "@/lib/api";
 import {
   PERIOD_OPTIONS,
   applyFollowUp,
@@ -23,11 +24,11 @@ import {
   scopeDataset,
   type PeriodKey,
 } from "@/lib/enterpriseData";
-import { fetchAssessmentReportDetail } from "@/services/assessmentReports";
 import {
   deleteEnterpriseReport,
   exportEnterpriseDataset,
   fetchEnterpriseDataset,
+  fetchEnterpriseReportDetail,
   saveEnterpriseFollowUp,
   saveEnterpriseTagLibrary,
 } from "@/services/enterpriseData";
@@ -40,6 +41,16 @@ import type {
 } from "@/types/enterpriseData";
 
 type TabKey = "overview" | "analysis" | "alerts" | "archive" | "reports" | "tags";
+
+function getReportError(error: unknown) {
+  if (error instanceof ApiError && error.status === 403) {
+    return { message: "当前账号没有查看这份报告的权限，请联系平台管理员。", retryable: false };
+  }
+  if (error instanceof ApiError && error.status === 404) {
+    return { message: "这份报告可能已删除或不在当前企业，请关闭后刷新列表。", retryable: false };
+  }
+  return { message: "暂时无法加载这份报告。请重试，若仍失败，请联系平台管理员。", retryable: true };
+}
 
 const TABS: Array<{ key: TabKey; label: string; desc: string }> = [
   { key: "overview", label: "数据概览", desc: "建档进度、风险分布与趋势" },
@@ -55,16 +66,16 @@ function isTabKey(value: string | null): value is TabKey {
 }
 
 export function AssessmentEnterpriseDataDetailScreen() {
+  const params = useParams<{ enterpriseId: string }>();
+  const enterpriseId = decodeURIComponent(params.enterpriseId || "");
   return (
     <AppRoute sectionId="assessmentEnterpriseData">
-      <AssessmentEnterpriseDataDetailContent />
+      <AssessmentEnterpriseDataDetailContent key={enterpriseId} enterpriseId={enterpriseId} />
     </AppRoute>
   );
 }
 
-function AssessmentEnterpriseDataDetailContent() {
-  const params = useParams<{ enterpriseId: string }>();
-  const enterpriseId = decodeURIComponent(params.enterpriseId || "");
+function AssessmentEnterpriseDataDetailContent({ enterpriseId }: { enterpriseId: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { clearNotice, currentUser, isAdmin, refreshKey, setBreadcrumbTail, showNotice } = useAppRoute();
@@ -79,6 +90,8 @@ function AssessmentEnterpriseDataDetailContent() {
   const [reportTarget, setReportTarget] = useState<EnterpriseReportItem | null>(null);
   const [reportDetail, setReportDetail] = useState<AssessmentReportDetail>();
   const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState<ReturnType<typeof getReportError>>();
+  const reportRequest = useRef<AbortController | null>(null);
   const [exporting, setExporting] = useState(false);
   const [savingTags, setSavingTags] = useState(false);
 
@@ -102,6 +115,8 @@ function AssessmentEnterpriseDataDetailContent() {
     void load();
   }, [load, refreshKey]);
 
+  useEffect(() => () => reportRequest.current?.abort(), []);
+
   useEffect(() => {
     setBreadcrumbTail(dataset?.enterprise.companyName || "企业数据");
     return () => setBreadcrumbTail(null);
@@ -122,16 +137,23 @@ function AssessmentEnterpriseDataDetailContent() {
   };
 
   const openReport = (report: EnterpriseReportItem) => {
+    reportRequest.current?.abort();
+    const request = new AbortController();
+    reportRequest.current = request;
     setReportTarget(report);
     setReportDetail(undefined);
+    setReportError(undefined);
     setReportLoading(true);
-    void fetchAssessmentReportDetail("eap", report.publicId)
-      .then(setReportDetail)
-      .catch((error) => {
-        showNotice("error", error instanceof Error ? error.message : "报告加载失败");
-        setReportTarget(null);
+    void fetchEnterpriseReportDetail(enterpriseId, report.publicId, request.signal)
+      .then((detail) => {
+        if (!request.signal.aborted) setReportDetail(detail);
       })
-      .finally(() => setReportLoading(false));
+      .catch((error) => {
+        if (!request.signal.aborted) setReportError(getReportError(error));
+      })
+      .finally(() => {
+        if (!request.signal.aborted) setReportLoading(false);
+      });
   };
 
   const deleteReport = (report: EnterpriseReportItem) => {
@@ -395,11 +417,17 @@ function AssessmentEnterpriseDataDetailContent() {
       {reportTarget && (
         <AssessmentReportDialog
           detail={reportDetail}
+          error={reportError?.message}
           loading={reportLoading}
-          onClose={() => {
-            setReportTarget(null);
-            setReportDetail(undefined);
+          target={{
+            assessmentTitle: reportTarget.assessmentTitle,
+            patientName: dataset.respondents.find((item) => item.key === reportTarget.respondentKey)?.displayName || "",
           }}
+          onClose={() => {
+            reportRequest.current?.abort();
+            setReportTarget(null);
+          }}
+          onRetry={reportError?.retryable ? () => openReport(reportTarget) : undefined}
         />
       )}
     </div>

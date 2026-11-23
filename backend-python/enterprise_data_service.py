@@ -35,6 +35,7 @@ from assessment_enterprise_service import (
     mutate_enterprises,
     resolve_employee_info_fields,
 )
+from assessment_report_service import AssessmentReportError, report_detail
 from enterprise_site_personnel_service import (
     ROLE_EMPLOYEE,
     login_required,
@@ -48,6 +49,7 @@ from models import (
     EnterpriseRiskFollowUp,
     EnterpriseSitePersonnel,
 )
+from role_active import get_account_role
 
 
 class EnterpriseDataError(Exception):
@@ -793,6 +795,58 @@ def _find_enterprise_report(
     if not row or not report_matches_enterprise(_load_dict(row.DemographicAnswers), enterprise):
         raise EnterpriseDataError("答卷不存在或不属于该企业", status_code=404)
     return row
+
+
+def get_enterprise_report_detail(
+    db: Session,
+    *,
+    enterprise: dict[str, Any],
+    public_id: str,
+    actor: AppAccount,
+    request_id: Optional[str] = None,
+) -> dict[str, Any]:
+    row = _find_enterprise_report(db, enterprise, public_id)
+    # 答卷元数据用于确定企业归属，账号来源用于确认答卷来自企业站。
+    if not is_enterprise_eap_account_row(db.get(AppAccount, row.AccountId)):
+        raise EnterpriseDataError("答卷不存在或不属于该企业", status_code=404)
+
+    include_raw = get_account_role(db, actor.Id) == "Admin"
+    try:
+        detail = report_detail(row, include_raw_answers=include_raw, staff_view=True)
+    except AssessmentReportError as exc:
+        raise EnterpriseDataError(
+            "该答卷的报告数据暂不可用，请联系平台管理员。", status_code=500
+        ) from exc
+
+    meta = _load_dict(row.DemographicAnswers)
+    title = str((enterprise.get("assessmentTitles") or {}).get(row.AssessmentId) or "").strip()
+    detail.update(
+        source="eap",
+        reportId=detail["publicId"],
+        accountId=row.AccountId,
+        assessmentTitle=title or detail["assessmentTitle"],
+        patientName=_display_name(_employee_info(meta), _personnel_meta(meta), row.AccountId),
+        patientMobile=None,
+        sourceLabel="企业定制 EAP",
+    )
+    begin_assessment_audit(
+        db,
+        actor=actor,
+        action="REPORT_VIEW_RAW" if include_raw else "REPORT_VIEW",
+        target_type="REPORT",
+        request_id=request_id,
+        target_public_id=row.PublicId,
+        assessment_id=row.AssessmentId,
+        assessment_version=row.AssessmentVersion,
+        metadata={
+            "source": "enterprise-data",
+            "enterpriseId": str(enterprise["id"]),
+            "rawAnswers": include_raw,
+        },
+        outcome="SUCCEEDED",
+    )
+    db.commit()
+    return detail
 
 
 def save_follow_up(
