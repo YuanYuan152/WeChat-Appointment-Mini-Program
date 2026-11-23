@@ -1,6 +1,6 @@
 """风险编辑（定义里的 ``riskDimension``）的规则结构与旧格式升级。
 
-风险只给管理端看（见 assessment_visibility.py）。结构按风险等级组织，四个等级都可以不配置：
+风险只给管理端看（见 assessment_visibility.py）。结构按风险等级组织：
 
     {
       "title": "风险",
@@ -8,14 +8,13 @@
       "levels": {
         "high":  {"rules": [...], "analystDescription": "...", "suggestions": [...]},
         "mid":   {...},
-        "watch": {...},
-        "ok":    {"rules": [...], "fallback": true}
+        "watch": {...}
       }
     }
 
 同一等级内任意一条规则命中即命中该等级；多个等级同时命中时取风险最高的等级。
-没有任何规则命中时：``ok.fallback`` 为 true 判为无风险，否则不判定（severity 为 null，
-企业数据按结果等级文字自动识别）。
+已启用风险编辑的量表在未命中规则时自动判为无风险。
+旧定义中的 ``ok`` 和 ``fallback`` 保留用于兼容，计分不再执行无风险规则。
 
 规则类型：
 - ``dimension``：已编辑维度（或总分，ID 为 ``__total__``）的结果落在所选区间，按区间的等级名称匹配；
@@ -38,7 +37,6 @@ RISK_SEVERITY_LABELS = {
     "watch": "一般关注",
     "ok": "无风险",
 }
-RISK_UNMATCHED_LABEL = "未命中规则"
 # 规则 A 引用总分时使用的保留 ID：维度量表的 totalScore，或求和量表本身的总分区间。
 RISK_TOTAL_SOURCE_ID = "__total__"
 RISK_RULE_TYPES = ("dimension", "score", "options")

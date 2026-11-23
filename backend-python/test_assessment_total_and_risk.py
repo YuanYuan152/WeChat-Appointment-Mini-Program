@@ -521,25 +521,25 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(["q1-a", "q2-a"], two["risk"]["matchedRules"][0]["optionIds"])
         self.assertEqual(2, two["risk"]["matchedRules"][0]["requiredCount"])
         one = calculate_assessment_result(definition, {"q1": "q1-a", "q2": "q2-c", "q3": "q3-c"})
-        self.assertIsNone(one["risk"]["severity"])
+        self.assertEqual("ok", one["risk"]["severity"])
 
         # 不设置 minCount 时需要全部同时被选
         rule.pop("minCount")
         two = calculate_assessment_result(definition, {"q1": "q1-a", "q2": "q2-a", "q3": "q3-c"})
-        self.assertIsNone(two["risk"]["severity"])
+        self.assertEqual("ok", two["risk"]["severity"])
         three = calculate_assessment_result(definition, {"q1": "q1-a", "q2": "q2-a", "q3": "q3-a"})
         self.assertEqual("high", three["risk"]["severity"])
         self.assertEqual(3, three["risk"]["matchedRules"][0]["requiredCount"])
 
-    def test_unmatched_without_fallback_is_undetermined(self) -> None:
+    def test_unmatched_rules_are_automatically_no_risk(self) -> None:
         definition = with_risk({"high": {"rules": [option_rule("r1", ["q3-a"])]}})
         result = calculate_assessment_result(definition, {"q1": "q1-b", "q2": "q2-b", "q3": "q3-b"})
         self.assertEqual(
             {
                 "title": "风险",
-                "level": "未命中规则",
-                "severity": None,
-                "source": "none",
+                "level": "无风险",
+                "severity": "ok",
+                "source": "fallback",
                 "description": "",
                 "suggestions": [],
                 "matchedRules": [],
@@ -561,7 +561,7 @@ class ScoringTests(unittest.TestCase):
         triggered = calculate_assessment_result(definition, {"q1": "q1-b", "q2": "q2-b", "q3": "q3-a"})
         self.assertEqual("high", triggered["risk"]["severity"])
 
-    def test_ok_level_rules(self) -> None:
+    def test_legacy_ok_level_rules_are_replaced_by_default(self) -> None:
         definition = with_risk(
             {
                 "watch": {"rules": [dimension_rule("r1", "emotion", ["需要关注"])]},
@@ -569,12 +569,12 @@ class ScoringTests(unittest.TestCase):
             }
         )
         calm = calculate_assessment_result(definition, {"q1": "q1-c", "q2": "q2-c", "q3": "q3-c"})
-        self.assertEqual(("ok", "rule"), (calm["risk"]["severity"], calm["risk"]["source"]))
+        self.assertEqual(("ok", "fallback"), (calm["risk"]["severity"], calm["risk"]["source"]))
         both = calculate_assessment_result(definition, {"q1": "q1-a", "q2": "q2-a", "q3": "q3-c"})
         self.assertEqual("watch", both["risk"]["severity"])
-        self.assertEqual(["r1", "r2"], [rule["id"] for rule in both["risk"]["matchedRules"]])
+        self.assertEqual(["r1"], [rule["id"] for rule in both["risk"]["matchedRules"]])
         neither = calculate_assessment_result(definition, {"q1": "q1-c", "q2": "q2-c", "q3": "q3-a"})
-        self.assertIsNone(neither["risk"]["severity"])
+        self.assertEqual("ok", neither["risk"]["severity"])
 
     def test_total_source_for_dimension_and_sum_scales(self) -> None:
         definition = with_risk({"watch": {"rules": [dimension_rule("r1", "__total__", ["需要关注"])]}})
@@ -600,7 +600,7 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual("watch", result["risk"]["severity"])
         self.assertEqual("总分", result["risk"]["matchedRules"][0]["title"])
         calm = calculate_assessment_result(definition, {"q1": "q1-c", "q2": "q2-c", "q3": "q3-c"})
-        self.assertIsNone(calm["risk"]["severity"])
+        self.assertEqual("ok", calm["risk"]["severity"])
 
     def test_score_rule_open_bounds_and_formula(self) -> None:
         definition = with_risk(
@@ -906,7 +906,7 @@ class EnterpriseSeverityTests(unittest.TestCase):
         self.assertEqual("mid", summary["autoSeverity"])
         self.assertEqual(1, summary["risk"]["score"])
 
-    def test_unmatched_rules_fall_back_to_keyword_classification(self) -> None:
+    def test_unmatched_rules_mark_report_ok_in_enterprise_data(self) -> None:
         definition = with_total_and_risk()
         definition["riskDimension"]["levels"] = {
             "high": {"rules": [option_rule("r1", ["q3-a"])]},
@@ -916,9 +916,8 @@ class EnterpriseSeverityTests(unittest.TestCase):
             {"q1": "q1-a", "q2": "q2-a", "q3": "q3-b"},
         )
         summary = summarize_result(result)
-        self.assertIsNone(summary["risk"]["severity"])
-        # 风险规则没有给出结论：按维度 / 总分等级文字（需要关注）自动识别
-        self.assertEqual("watch", summary["autoSeverity"])
+        self.assertEqual("ok", summary["risk"]["severity"])
+        self.assertEqual("ok", summary["autoSeverity"])
 
     def test_untriggered_legacy_trigger_only_risk_marks_report_ok(self) -> None:
         definition = example_definition()

@@ -17,7 +17,6 @@ from assessment_risk_rules import (
     RISK_SCORE_RULE_DEFAULT_TITLE,
     RISK_SEVERITY_LABELS,
     RISK_TOTAL_SOURCE_ID,
-    RISK_UNMATCHED_LABEL,
     iter_risk_levels,
     risk_dimension_is_active,
     risk_level_rules,
@@ -1027,9 +1026,8 @@ def _risk_result(
 ) -> dict[str, Any] | None:
     """风险编辑：只给管理端看，来访端接口返回前会剥离（assessment_visibility）。
 
-    四个风险等级各自配置规则，同一等级内任意一条规则命中即命中该等级，
-    多个等级同时命中时取风险最高的一级；都没命中时，「无风险」开启了兜底就判为无风险，
-    否则不判定（severity 为 None，企业数据按结果等级文字自动识别）。
+    同一等级内任意一条规则命中即命中该等级。多个等级同时命中时取最高等级。
+    已启用风险编辑的量表在未命中风险规则时自动判为无风险。
     """
     block = upgrade_legacy_risk_dimension(definition.get("riskDimension"))
     if not risk_dimension_is_active(block):
@@ -1039,22 +1037,21 @@ def _risk_result(
     levels: dict[str, dict[str, Any]] = {}
     for severity, level in iter_risk_levels(block):
         levels[severity] = level
+        if severity == "ok":
+            continue  # 兼容旧定义中的无风险说明，无需执行旧的无风险规则
         for rule in risk_level_rules(level):
             hit = _evaluate_risk_rule(definition, answers, result, rule, selected_options)
             if hit is not None:
                 matched.append({**hit, "severity": severity})
 
     # iter_risk_levels 从高到低遍历，第一条命中规则所在的等级就是最高等级
-    decisive: str | None = matched[0]["severity"] if matched else None
-    source = "rule" if matched else "none"
-    if decisive is None and levels.get("ok", {}).get("fallback") is True:
-        decisive, source = "ok", "fallback"
-    decisive_level = levels.get(decisive, {}) if decisive else {}
+    decisive = matched[0]["severity"] if matched else "ok"
+    decisive_level = levels.get(decisive, {})
     return {
         "title": str(block.get("title") or "风险"),
-        "level": RISK_SEVERITY_LABELS[decisive] if decisive else RISK_UNMATCHED_LABEL,
+        "level": RISK_SEVERITY_LABELS[decisive],
         "severity": decisive,
-        "source": source,
+        "source": "rule" if matched else "fallback",
         "description": str(decisive_level.get("analystDescription") or ""),
         "suggestions": [
             str(item)

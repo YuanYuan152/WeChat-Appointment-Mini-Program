@@ -263,7 +263,7 @@ function ScoreResult({
 
 const RISK_SOURCE_LABELS: Record<AssessmentRiskResult["source"], string> = {
   rule: "命中风险规则",
-  fallback: "未命中任何规则，按「其余作答判为无风险」处理",
+  fallback: "未命中风险规则，自动判为无风险",
   none: "未命中任何规则，不做判定",
   // 以下为升级前保存的旧版结果
   trigger: "选项触发",

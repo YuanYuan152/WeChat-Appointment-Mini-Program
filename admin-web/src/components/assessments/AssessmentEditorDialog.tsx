@@ -3387,7 +3387,7 @@ function formatRiskRange(range: { min: number | null; max: number | null }) {
   return low === high ? `${low} 分` : `${low}–${high} 分`;
 }
 
-/** 风险编辑页签：高风险 / 中风险 / 一般关注 / 无风险各自配置规则，都可以不配置。 */
+/** 风险编辑页签：只配置高风险、中风险和一般关注。 */
 function RiskFields({
   definition,
   disabled,
@@ -3457,7 +3457,7 @@ function RiskFields({
             </button>
           ) : undefined
         }
-        description="按高风险、中风险、一般关注、无风险分别添加规则，每个等级都可以不配置（例如只配置高风险）。同一等级内任意一条规则命中即判为该等级；同时命中多个等级时取风险最高的一级。"
+        description="可为高风险、中风险和一般关注添加规则。命中多个等级时取最高等级，未命中任何规则时自动判为无风险。"
         title="风险编辑（可选 · 仅后台可见）"
       >
         <div className="space-y-4">
@@ -3494,7 +3494,7 @@ function RiskFields({
         </div>
       </EditorSection>
 
-      {RISK_SEVERITY_OPTIONS.map((option) => (
+      {RISK_SEVERITY_OPTIONS.filter((option) => option.value !== "ok").map((option) => (
         <RiskLevelCard
           key={option.value}
           definition={definition}
@@ -3530,18 +3530,14 @@ function RiskLevelCard({
   const meta = riskSeverityMeta(severity);
   const current: AssessmentRiskLevel = level ?? { rules: [] };
   const rules = current.rules ?? [];
-  const isOk = severity === "ok";
   const showDetails =
     rules.length > 0 ||
-    Boolean(current.fallback) ||
     Boolean(current.analystDescription?.trim()) ||
     (current.suggestions?.length ?? 0) > 0;
   const summary =
     rules.length > 0
       ? `${rules.length} 条规则，命中任意一条即判为${meta.label}`
-      : isOk && current.fallback
-        ? "未命中任何风险规则时判为无风险"
-        : "未配置（可不填）";
+      : "未配置（可不填）";
 
   function patch(values: Partial<AssessmentRiskLevel>) {
     onChange({ ...current, ...values });
@@ -3596,31 +3592,6 @@ function RiskLevelCard({
           label={meta.label}
           onAdd={addRule}
         />
-        {isOk && (
-          <label className="flex items-start gap-2 rounded-lg border border-[var(--lxxl-border)] bg-[#FCFBF8] px-3 py-2 text-xs leading-5">
-            <input
-              checked={Boolean(current.fallback)}
-              className="mt-1"
-              disabled={disabled}
-              type="checkbox"
-              onChange={(event) => {
-                const next: AssessmentRiskLevel = { ...current };
-                if (event.target.checked) {
-                  next.fallback = true;
-                } else {
-                  delete next.fallback;
-                }
-                onChange(next);
-              }}
-            />
-            <span>
-              <span className="font-medium">其余作答判为无风险</span>
-              <span className="text-[var(--lxxl-muted)]">
-                ：没有命中任何风险规则时判为无风险。不勾选时不做判定，企业定制数据会按结果等级文字自动识别风险。
-              </span>
-            </span>
-          </label>
-        )}
         {showDetails && (
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
             <CompactField label={`判为${meta.label}时的分析说明（仅后台）`}>

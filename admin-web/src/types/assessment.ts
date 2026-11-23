@@ -225,7 +225,7 @@ export interface AssessmentRiskLevel {
   rules: AssessmentRiskRule[];
   analystDescription?: string;
   suggestions?: string[];
-  /** 仅「无风险」可用：没有任何规则命中时判为无风险 */
+  /** 兼容旧定义的「其余判为无风险」开关。 */
   fallback?: boolean;
 }
 

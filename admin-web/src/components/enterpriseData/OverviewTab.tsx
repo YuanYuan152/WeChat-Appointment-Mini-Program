@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 
-import { Donut, TrendChart } from "@/components/enterpriseData/charts";
+import { Pie, TrendChart } from "@/components/enterpriseData/charts";
 import {
   DataCard,
   EmptyHint,
@@ -23,13 +23,17 @@ import {
   followUpStatusOf,
   formatPercent,
   groupRespondents,
-  groupableFields,
   isOpenAlert,
   ratio,
   severityRank,
   type ScopedDataset,
 } from "@/lib/enterpriseData";
 import type { EnterpriseDataset, EnterpriseReportItem } from "@/types/enterpriseData";
+
+const PROFILE_FIELDS = [
+  { id: "age", label: "年龄段" },
+  { id: "gender", label: "性别" },
+];
 
 export function OverviewTab({
   dataset,
@@ -46,7 +50,6 @@ export function OverviewTab({
 }) {
   const { enterprise } = dataset;
   const severity = countSeverities(scoped.respondents);
-  const graded = severity.total - severity.none;
   const risk = severity.high + severity.mid;
   const target = enterprise.personnelEmployeeCount;
   const doneCount = scoped.respondents.filter((item) => item.status === "done").length;
@@ -72,10 +75,9 @@ export function OverviewTab({
     [scoped.reports],
   );
   const authorized = dataset.assessments.filter((assessment) => assessment.authorized);
-  const groupFields = useMemo(() => groupableFields(dataset.fields), [dataset.fields]);
-  const [groupFieldId, setGroupFieldId] = useState(groupFields[0]?.id || "");
+  const [groupFieldId, setGroupFieldId] = useState("age");
   const groups = useMemo(
-    () => (groupFieldId ? groupRespondents(scoped.respondents, groupFieldId, 8) : []),
+    () => groupRespondents(scoped.respondents, groupFieldId, 8),
     [groupFieldId, scoped.respondents],
   );
   const learning = dataset.learning;
@@ -152,31 +154,32 @@ export function OverviewTab({
         >
           <TrendChart points={trend} />
         </DataCard>
-        <DataCard sub={`按每人最近一次答卷统计 · 可分级 ${graded} 人`} title="风险等级分布">
-          <div className="flex flex-wrap items-center gap-6">
-            <Donut
-              center={graded > 0 ? formatPercent(ratio(severity.ok, graded), 0) : "-"}
-              segments={[
-                ...[...SEVERITY_KEYS]
-                  .reverse()
-                  .map((key) => ({ key, value: severity[key], color: SEVERITY_META[key].chart })),
-                { key: "none", value: severity.none, color: UNGRADED_META.chart },
-              ]}
-              sub="状态良好"
-            />
-            <div className="min-w-[160px] flex-1 space-y-2.5">
-              {[...SEVERITY_KEYS].reverse().map((key) => (
-                <LegendRow
-                  key={key}
-                  color={SEVERITY_META[key].chart}
-                  count={severity[key]}
-                  label={SEVERITY_META[key].label}
-                  total={severity.total}
-                />
-              ))}
-              <LegendRow color={UNGRADED_META.chart} count={severity.none} label="未分级" total={severity.total} />
+        <DataCard sub="按每人各量表最新答卷的最高风险等级统计" title="风险等级分布">
+          {severity.total === 0 ? (
+            <EmptyHint text="当前时间范围内暂无答卷" />
+          ) : (
+            <div className="flex flex-wrap items-center gap-6">
+              <Pie
+                segments={[
+                  ...[...SEVERITY_KEYS]
+                    .reverse()
+                    .map((key) => ({ value: severity[key], color: SEVERITY_META[key].chart })),
+                  { value: severity.none, color: UNGRADED_META.chart },
+                ]}
+              />
+              <div className="min-w-[160px] flex-1 space-y-2.5">
+                {[...SEVERITY_KEYS].reverse().map((key) => (
+                  <LegendRow
+                    key={key}
+                    color={SEVERITY_META[key].chart}
+                    count={severity[key]}
+                    label={SEVERITY_META[key].label}
+                  />
+                ))}
+                <LegendRow color={UNGRADED_META.chart} count={severity.none} label="未分级" />
+              </div>
             </div>
-          </div>
+          )}
           {severity.none > 0 && (
             <p className="mt-4 text-xs leading-5 text-[var(--lxxl-muted)]">
               「未分级」表示量表结果等级无法对应风险程度（如只设置了一个结果区间）。可在风险提醒中人工调整等级，或在量表管理中细分分数区间。
@@ -266,26 +269,24 @@ export function OverviewTab({
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
         <DataCard
           right={
-            groupFields.length > 0 ? (
-              <select
-                aria-label="分组字段"
-                className="h-9 rounded-xl border border-[var(--lxxl-border)] bg-white px-3 text-sm outline-none focus:border-[var(--lxxl-green)]"
-                value={groupFieldId}
-                onChange={(event) => setGroupFieldId(event.target.value)}
-              >
-                {groupFields.map((field) => (
-                  <option key={field.id} value={field.id}>
-                    按{field.label}
-                  </option>
-                ))}
-              </select>
-            ) : undefined
+            <select
+              aria-label="人群画像分组"
+              className="h-9 rounded-xl border border-[var(--lxxl-border)] bg-white px-3 text-sm outline-none focus:border-[var(--lxxl-green)]"
+              value={groupFieldId}
+              onChange={(event) => setGroupFieldId(event.target.value)}
+            >
+              {PROFILE_FIELDS.map((field) => (
+                <option key={field.id} value={field.id}>
+                  按{field.label}
+                </option>
+              ))}
+            </select>
           }
           sub="按员工填写的基本信息分组 · 条形为中高风险人数占比"
           title="人群画像"
         >
           {groups.length === 0 ? (
-            <EmptyHint text="暂无可分组的员工信息字段" />
+            <EmptyHint text="当前时间范围内暂无答卷" />
           ) : (
             <div className="space-y-3">
               {groups.map((group) => {
@@ -353,13 +354,12 @@ export function OverviewTab({
   );
 }
 
-function LegendRow({ color, label, count, total }: { color: string; label: string; count: number; total: number }) {
+function LegendRow({ color, label, count }: { color: string; label: string; count: number }) {
   return (
     <div className="flex items-center gap-2 text-sm">
       <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: color }} />
       <span className="flex-1 text-[var(--lxxl-muted)]">{label}</span>
-      <span className="font-semibold">{count}</span>
-      <span className="w-12 text-right text-xs text-[var(--lxxl-muted)]">{formatPercent(ratio(count, total), 0)}</span>
+      <span className="font-semibold">{count} 人</span>
     </div>
   );
 }

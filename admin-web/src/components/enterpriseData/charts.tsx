@@ -83,61 +83,23 @@ export function TrendChart({ points, height = 220 }: { points: TrendPoint[]; hei
   );
 }
 
-export interface DonutSegment {
-  key: string;
-  value: number;
-  color: string;
-}
+export function Pie({ segments }: { segments: Array<{ value: number; color: string }> }) {
+  const visible = segments.filter((item) => item.value > 0);
+  const total = visible.reduce((sum, item) => sum + item.value, 0);
+  if (!total) return null;
+  let cumulative = 0;
+  const sectors = visible.map((item) => {
+    const from = (cumulative / total) * 360;
+    cumulative += item.value;
+    return `${item.color} ${from}deg ${(cumulative / total) * 360}deg`;
+  });
 
-export function Donut({
-  segments,
-  size = 150,
-  thickness = 20,
-  center,
-  sub,
-}: {
-  segments: DonutSegment[];
-  size?: number;
-  thickness?: number;
-  center: string;
-  sub: string;
-}) {
-  const total = segments.reduce((sum, item) => sum + item.value, 0);
-  const radius = (size - thickness) / 2;
-  const circumference = 2 * Math.PI * radius;
-  let offset = 0;
   return (
-    <div className="relative shrink-0" style={{ width: size, height: size }}>
-      <svg height={size} viewBox={`0 0 ${size} ${size}`} width={size}>
-        <circle cx={size / 2} cy={size / 2} fill="none" r={radius} stroke="#EFECE6" strokeWidth={thickness} />
-        {total > 0 &&
-          segments
-            .filter((item) => item.value > 0)
-            .map((item) => {
-              const length = (item.value / total) * circumference;
-              const element = (
-                <circle
-                  key={item.key}
-                  cx={size / 2}
-                  cy={size / 2}
-                  fill="none"
-                  r={radius}
-                  stroke={item.color}
-                  strokeDasharray={`${length} ${circumference - length}`}
-                  strokeDashoffset={-offset}
-                  strokeWidth={thickness}
-                  transform={`rotate(-90 ${size / 2} ${size / 2})`}
-                />
-              );
-              offset += length;
-              return element;
-            })}
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <div className="text-2xl font-semibold text-[var(--lxxl-text)]">{center}</div>
-        <div className="mt-1 text-[11px] text-[var(--lxxl-muted)]">{sub}</div>
-      </div>
-    </div>
+    <div
+      aria-hidden="true"
+      className="size-[150px] shrink-0 rounded-full"
+      style={{ background: visible.length === 1 ? visible[0].color : `conic-gradient(${sectors.join(", ")})` }}
+    />
   );
 }
 

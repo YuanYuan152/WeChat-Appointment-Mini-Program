@@ -136,7 +136,7 @@ export type AssessmentRiskRuleHit =
 export interface AssessmentRiskResult {
   title: string;
   level: string;
-  /** 没有命中任何规则且未设置兜底时为 null */
+  /** 旧版报告未判定风险时为 null。 */
   severity: AssessmentRiskSeverity | null;
   source: "rule" | "fallback" | "none" | "score" | "trigger";
   description: string;
