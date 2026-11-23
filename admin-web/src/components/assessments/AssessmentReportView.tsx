@@ -7,11 +7,17 @@ import {
   resolveAssessmentAssetUrl,
 } from "@/lib/assessmentReport";
 import { API_BASE_URL } from "@/lib/api";
-import { getDimensionParentId, riskSeverityMeta } from "@/lib/assessmentEditor";
+import {
+  formatRiskDimensionSource,
+  getDimensionParentId,
+  getRiskDimensionSources,
+  riskSeverityMeta,
+} from "@/lib/assessmentEditor";
 import { formatUtcFullDateTime } from "@/lib/format";
 import type {
   AssessmentReportDetail,
   AssessmentRiskResult,
+  AssessmentRiskRuleHit,
   AssessmentScoreResult,
   DimensionAssessmentScoreItem,
   EapAssessmentReportDetail,
@@ -255,12 +261,53 @@ function ScoreResult({
 }
 
 const RISK_SOURCE_LABELS: Record<AssessmentRiskResult["source"], string> = {
+  rule: "命中风险规则",
+  fallback: "未命中任何规则，按「其余作答判为无风险」处理",
+  none: "未命中任何规则，不做判定",
+  // 以下为升级前保存的旧版结果
   trigger: "选项触发",
   score: "计分判定",
-  none: "未触发任何规则",
 };
 
-/** 风险维度：只有管理端接口返回，来访端看不到。 */
+function formatRiskInterval(min: number | null, max: number | null) {
+  if (min !== null && max !== null) {
+    return min === max ? `${min} 分` : `${min}–${max} 分`;
+  }
+  if (min !== null) {
+    return `≥ ${min} 分`;
+  }
+  return max !== null ? `≤ ${max} 分` : "不限";
+}
+
+function describeRiskRuleHit(
+  hit: AssessmentRiskRuleHit,
+  optionLabels: Map<string, string>,
+  sourceLabels: Map<string, string>,
+): { kind: string; text: string } {
+  if (hit.type === "dimension") {
+    return {
+      kind: "维度区间",
+      text: `${sourceLabels.get(hit.dimensionId) || hit.title}：${hit.level}${
+        typeof hit.score === "number" ? `（${hit.score} 分）` : ""
+      }`,
+    };
+  }
+  if (hit.type === "score") {
+    return {
+      kind: "新增计分",
+      text: `${hit.title} ${hit.score} 分（规则区间 ${formatRiskInterval(hit.min, hit.max)}）`,
+    };
+  }
+  return {
+    kind:
+      hit.match === "multiple"
+        ? `选项触发 · 多项同时被选（需 ${hit.requiredCount} 项）`
+        : "选项触发 · 任意一项被选",
+    text: hit.optionIds.map((id) => optionLabels.get(id) || id).join("；"),
+  };
+}
+
+/** 风险判定：只有管理端接口返回，来访端看不到。兼容升级前保存的旧版结果。 */
 function RiskResult({
   assessment,
   risk,
@@ -278,6 +325,15 @@ function RiskResult({
     ),
   );
   const intro = assessment.riskDimension?.intro?.trim();
+  const matchedRules = risk.matchedRules;
+  const legacyTriggers = matchedRules ? [] : (risk.triggers ?? []);
+  const sourceLabels = new Map(
+    matchedRules?.some((hit) => hit.type === "dimension")
+      ? getRiskDimensionSources(assessment).map(
+          (source) => [source.id, formatRiskDimensionSource(source)] as const,
+        )
+      : [],
+  );
   return (
     <section
       className="rounded-2xl border bg-white p-5"
@@ -286,23 +342,27 @@ function RiskResult({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs text-[var(--lxxl-muted)]">
-            {risk.title || "风险"}维度 · 仅后台可见，来访端不显示
+            {risk.title || "风险"}判定 · 仅后台可见，来访端不显示
           </p>
           <div className="mt-1 flex flex-wrap items-center gap-2">
             <h5 className="text-xl font-semibold" style={{ color: meta.color }}>
               {risk.level || meta.label}
             </h5>
-            <span
-              className="rounded-full px-2.5 py-0.5 text-xs font-medium"
-              style={{ background: meta.bg, color: meta.color }}
-            >
-              {meta.label}
-            </span>
+            {/* 新版结果的等级名就是分级名，只有旧版自定义等级名时才另外标出分级 */}
+            {risk.level && risk.level !== meta.label && (
+              <span
+                className="rounded-full px-2.5 py-0.5 text-xs font-medium"
+                style={{ background: meta.bg, color: meta.color }}
+              >
+                {meta.label}
+              </span>
+            )}
           </div>
         </div>
-        <div className="text-right text-xs leading-5 text-[var(--lxxl-muted)]">
+        <div className="text-xs leading-5 text-[var(--lxxl-muted)] sm:text-right">
           <div>判定依据：{RISK_SOURCE_LABELS[risk.source] || "-"}</div>
-          {typeof risk.score === "number" && (
+          {matchedRules && matchedRules.length > 0 && <div>共命中 {matchedRules.length} 条规则</div>}
+          {!matchedRules && typeof risk.score === "number" && (
             <div>
               风险计分 {risk.score} 分 · {risk.scoreLevel || "-"}
             </div>
@@ -314,11 +374,37 @@ function RiskResult({
           判定口径：{intro}
         </p>
       )}
-      {risk.triggers.length > 0 && (
+      {matchedRules && matchedRules.length > 0 && (
+        <div className="mt-4">
+          <h6 className="text-sm font-semibold">命中的规则</h6>
+          <ul className="mt-2 space-y-2">
+            {matchedRules.map((hit) => {
+              const hitMeta = riskSeverityMeta(hit.severity);
+              const described = describeRiskRuleHit(hit, optionLabels, sourceLabels);
+              return (
+                <li
+                  className="flex flex-wrap items-start gap-x-2 gap-y-1 rounded-xl bg-[#FAF8F4] px-3 py-2 text-xs leading-6"
+                  key={`${hit.severity}-${hit.id}`}
+                >
+                  <span
+                    className="shrink-0 rounded-full px-2 font-medium"
+                    style={{ background: hitMeta.bg, color: hitMeta.color }}
+                  >
+                    {hitMeta.label}
+                  </span>
+                  <span className="shrink-0 font-medium">{described.kind}</span>
+                  <span className="min-w-0 text-[var(--lxxl-muted)]">{described.text}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+      {legacyTriggers.length > 0 && (
         <div className="mt-4">
           <h6 className="text-sm font-semibold">命中的触发规则</h6>
           <ul className="mt-2 space-y-2">
-            {risk.triggers.map((trigger) => {
+            {legacyTriggers.map((trigger) => {
               const triggerMeta = riskSeverityMeta(trigger.severity);
               return (
                 <li
@@ -404,7 +490,7 @@ function ResultText({
   visitorDescription?: string;
   analystDescription?: string;
   suggestions: string[];
-  /** 风险维度没有面向来访的说明 */
+  /** 风险判定没有面向来访的说明 */
   hideVisitor?: boolean;
   analystTitle?: string;
   suggestionsTitle?: string;

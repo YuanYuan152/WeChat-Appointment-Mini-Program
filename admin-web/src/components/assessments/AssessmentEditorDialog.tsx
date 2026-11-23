@@ -12,29 +12,40 @@ import {
   COMPOSED_MERGED_SOURCE_TITLE,
   createDefaultAssessmentDefinition,
   createDefaultRiskDimension,
-  createDefaultRiskScoring,
   createDefaultTotalScore,
-  createRiskRange,
-  createRiskTrigger,
+  createRiskDimensionRule,
+  createRiskOptionRule,
+  createRiskScoreRule,
   createStableId,
+  formatRiskDimensionSource,
   getAssessmentScoreCoverageSummaries,
   getCalculationCoverageSummary,
   getDimensionParentId,
   getQuestionInputType,
+  getRiskDimensionSources,
+  getRiskScoreRuleReach,
   isFixedScoringType,
+  isRiskDimensionActive,
+  listRiskRules,
   normalizeAssessmentDefinition,
   formatLines,
   parseLines,
   removeComposedQuestions,
-  removeOptionsFromRiskTriggers,
+  removeOptionsFromRiskRules,
   removeQuestionsFromExtras,
-  renameOptionInRiskTriggers,
+  renameOptionInRiskRules,
   renameQuestionInExtras,
+  RISK_DIMENSION_TITLE,
+  RISK_OPTION_MATCH_LABELS,
+  RISK_RULE_TYPE_LABELS,
   RISK_SEVERITY_OPTIONS,
   riskSeverityMeta,
   syncComposedSourceReports,
+  syncRiskDimensionReferences,
   type AssessmentScoreCoverageSummary,
   type ComposedQuestionRemovalMode,
+  type RiskDimensionSource,
+  type RiskScoreRuleReach,
   validateAssessmentDefinition,
 } from "@/lib/assessmentEditor";
 import {
@@ -59,10 +70,14 @@ import type {
   AssessmentQuestionInputType,
   AssessmentReportProfile,
   AssessmentRiskDimension,
-  AssessmentRiskRange,
-  AssessmentRiskScoring,
+  AssessmentRiskDimensionRule,
+  AssessmentRiskLevel,
+  AssessmentRiskOptionMatch,
+  AssessmentRiskOptionRule,
+  AssessmentRiskRule,
+  AssessmentRiskRuleType,
+  AssessmentRiskScoreRule,
   AssessmentRiskSeverity,
-  AssessmentRiskTrigger,
   AssessmentScoreCalculation,
   AssessmentScoreMode,
   AssessmentScoreRange,
@@ -71,7 +86,14 @@ import type {
   AssessmentValidationIssue,
 } from "@/types/assessment";
 
-type EditorTab = "basic" | "demographics" | "questions" | "results" | "advanced" | "versions";
+type EditorTab =
+  | "basic"
+  | "demographics"
+  | "questions"
+  | "results"
+  | "risk"
+  | "advanced"
+  | "versions";
 
 const textareaClass = `${queryControlClass} h-auto min-h-24 resize-y py-3`;
 const compactInputClass =
@@ -140,6 +162,7 @@ export function AssessmentEditorDialog({
     [coverageSummaries, definition],
   );
   const blockingIssues = issues.filter((issue) => issue.severity === "error");
+  const riskRuleCount = listRiskRules(definition.riskDimension).length;
   const fixedScoring = isFixedScoringType(definition.scoringType);
   const archived = currentDetail?.lifecycleStatus === "archived";
   const composeMode = Boolean(definition.composedFrom?.length);
@@ -270,7 +293,9 @@ export function AssessmentEditorDialog({
     draftUndoOffered &&
     (!definition.composedFrom?.length || Boolean(definition.sourceReports?.length));
 
-  function updateDefinition(next: AssessmentDefinition) {
+  function updateDefinition(proposed: AssessmentDefinition) {
+    // 维度 ID / 区间名称在其它页签改名时，风险编辑里引用它们的规则跟着改
+    const next = syncRiskDimensionReferences(definition, proposed);
     const serializedNext = serializeDefinition(next);
     const previous = serializeDefinition(definition);
     if (serializedNext === previous) {
@@ -512,6 +537,7 @@ export function AssessmentEditorDialog({
               {tab.label}
               {tab.id === "demographics" && `（${definition.demographicQuestions?.length || 0}）`}
               {tab.id === "questions" && `（${definition.questions.length}）`}
+              {tab.id === "risk" && riskRuleCount > 0 && `（${riskRuleCount}）`}
               {tab.id === "versions" && `（${currentDetail?.versions.length || 0}）`}
             </button>
           ))}
@@ -565,6 +591,13 @@ export function AssessmentEditorDialog({
                   fixedStructure={fixedScoring}
                   onChange={updateDefinition}
                   onUploadStateChange={handleUploadStateChange}
+                />
+              )}
+              {activeTab === "risk" && (
+                <RiskFields
+                  definition={definition}
+                  disabled={editorDisabled}
+                  onChange={updateDefinition}
                 />
               )}
               {activeTab === "advanced" && (
@@ -734,6 +767,7 @@ const editorTabs: Array<{ id: EditorTab; label: string }> = [
   { id: "demographics", label: "人口学题" },
   { id: "questions", label: "正式题目" },
   { id: "results", label: "报告结果" },
+  { id: "risk", label: "风险编辑" },
   { id: "advanced", label: "高级 JSON" },
   { id: "versions", label: "历史版本" },
 ];
@@ -1453,8 +1487,8 @@ function QuestionFields({
       });
       return;
     }
-    // 改为填空/数字题后选项不复存在，风险触发规则里对应的选项一并去掉
-    const withoutTriggers = removeOptionsFromRiskTriggers(
+    // 改为填空/数字题后选项不复存在，风险选项触发规则里对应的选项一并去掉
+    const withoutTriggers = removeOptionsFromRiskRules(
       definition,
       (question.options || []).map((option) => option.id),
     );
@@ -1783,7 +1817,7 @@ function QuestionFields({
                       value={option.id}
                       onChange={(event) =>
                         onChange({
-                          ...renameOptionInRiskTriggers(
+                          ...renameOptionInRiskRules(
                             definition,
                             option.id,
                             event.target.value,
@@ -1853,7 +1887,7 @@ function QuestionFields({
                       label="删除选项"
                       onClick={() =>
                         onChange({
-                          ...removeOptionsFromRiskTriggers(definition, [option.id]),
+                          ...removeOptionsFromRiskRules(definition, [option.id]),
                           questions: replaceAt(questions, questionIndex, {
                             ...question,
                             options: question.options.filter((_, index) => index !== optionIndex),
@@ -2827,11 +2861,6 @@ function ResultFields({
           disabled={disabled}
           onChange={onChange}
         />
-        <RiskDimensionEditor
-          definition={definition}
-          disabled={disabled}
-          onChange={onChange}
-        />
       </div>
     );
   }
@@ -2931,12 +2960,6 @@ function ResultFields({
       {!hasScoreRanges && !hasDimensions && !hasMatchResults && profiles.length === 0 && (
         <EditorEmpty text="该固定计分量表没有可编辑的结构化报告内容，可在高级 JSON 中查看完整定义。" />
       )}
-
-      <RiskDimensionEditor
-        definition={definition}
-        disabled={disabled}
-        onChange={onChange}
-      />
     </div>
   );
 }
@@ -3012,12 +3035,15 @@ function InlineCoverage({ summary }: { summary: AssessmentScoreCoverageSummary |
 /** 「选题 + 计算方式」编辑：总分与风险计分共用。 */
 function ScoreCalculationFields({
   block,
+  defaultExpanded,
   definition,
   disabled,
   name,
   onChange,
 }: {
   block: AssessmentScoreCalculation;
+  /** 题目列表初始是否展开；默认题目不多或还没选题时展开 */
+  defaultExpanded?: boolean;
   definition: AssessmentDefinition;
   disabled: boolean;
   name: string;
@@ -3027,7 +3053,10 @@ function ScoreCalculationFields({
   const allQuestionIds = questions.map((question) => question.id);
   const calculationMode = block.calculationMode ?? "simple";
   const reverseIds = block.reverseQuestionIds ?? [];
-  const [expanded, setExpanded] = useState(questions.length <= 12);
+  // 还没选题时默认展开，方便直接勾选
+  const [expanded, setExpanded] = useState(
+    defaultExpanded ?? (questions.length <= 12 || block.questionIds.length === 0),
+  );
   let formulaError = "";
   if (calculationMode === "formula") {
     try {
@@ -3141,6 +3170,11 @@ function ScoreCalculationFields({
             <span>参与计算的题目</span>
             <span className="text-xs font-normal text-[var(--lxxl-muted)]">
               已选 {block.questionIds.length}/{questions.length}
+              {!expanded &&
+                block.questionIds.length > 0 &&
+                `：${block.questionIds.slice(0, 8).join("、")}${
+                  block.questionIds.length > 8 ? " 等" : ""
+                }`}
             </span>
           </button>
           {expanded && (
@@ -3324,182 +3358,836 @@ function TotalScoreEditor({
   );
 }
 
-function RiskSeveritySelect({
-  value,
-  disabled,
-  onChange,
-}: {
-  value: AssessmentRiskSeverity;
-  disabled: boolean;
-  onChange: (value: AssessmentRiskSeverity) => void;
-}) {
+type RiskAccent = { color: string; bg: string };
+
+function isRiskLevelBlank(level: AssessmentRiskLevel) {
   return (
-    <select
-      className={compactInputClass}
-      disabled={disabled}
-      value={value}
-      onChange={(event) => onChange(event.target.value as AssessmentRiskSeverity)}
-    >
-      {RISK_SEVERITY_OPTIONS.map((option) => (
-        <option key={option.value} value={option.value}>
-          {option.label}
-        </option>
-      ))}
-    </select>
+    (level.rules?.length ?? 0) === 0 &&
+    !level.fallback &&
+    !level.analystDescription?.trim() &&
+    (level.suggestions?.length ?? 0) === 0
   );
 }
 
-function RiskRangeEditor({
-  ranges,
+/** 没有任何规则和文案、名称仍是默认值时，不在定义里保留空的风险编辑。 */
+function isRiskDimensionBlank(risk: AssessmentRiskDimension) {
+  return (
+    risk.title.trim() === RISK_DIMENSION_TITLE &&
+    !risk.intro?.trim() &&
+    Object.values(risk.levels ?? {}).every((level) => !level || isRiskLevelBlank(level))
+  );
+}
+
+function formatRiskRange(range: { min: number | null; max: number | null }) {
+  const low = range.min ?? "?";
+  const high = range.max ?? "?";
+  return low === high ? `${low} 分` : `${low}–${high} 分`;
+}
+
+/** 风险编辑页签：高风险 / 中风险 / 一般关注 / 无风险各自配置规则，都可以不配置。 */
+function RiskFields({
+  definition,
   disabled,
   onChange,
 }: {
-  ranges: AssessmentRiskRange[];
+  definition: AssessmentDefinition;
   disabled: boolean;
-  onChange: (ranges: AssessmentRiskRange[]) => void;
+  onChange: (definition: AssessmentDefinition) => void;
 }) {
+  const risk = definition.riskDimension;
+  const sources = useMemo(() => getRiskDimensionSources(definition), [definition]);
+  const ruleIds = listRiskRules(risk).map(({ rule }) => rule.id);
+  const active = isRiskDimensionActive(risk);
+
+  function setRisk(next: AssessmentRiskDimension | undefined) {
+    const updated = { ...definition };
+    if (next && !isRiskDimensionBlank(next)) {
+      updated.riskDimension = next;
+    } else {
+      delete updated.riskDimension;
+    }
+    onChange(updated);
+  }
+
+  function patchRisk(values: Partial<AssessmentRiskDimension>) {
+    setRisk({ ...(risk ?? createDefaultRiskDimension()), ...values });
+  }
+
+  function setLevel(severity: AssessmentRiskSeverity, level: AssessmentRiskLevel) {
+    const base = risk ?? createDefaultRiskDimension();
+    const merged = { ...base.levels, [severity]: level };
+    // 按风险从高到低写入，高级 JSON 里的顺序与页面一致；未知等级原样保留，交给校验提示
+    const levels: AssessmentRiskDimension["levels"] = {};
+    for (const { value } of RISK_SEVERITY_OPTIONS) {
+      const current = merged[value];
+      if (current && !isRiskLevelBlank(current)) {
+        levels[value] = current;
+      }
+    }
+    for (const [key, current] of Object.entries(merged)) {
+      if (!(key in levels) && !RISK_SEVERITY_OPTIONS.some((option) => option.value === key)) {
+        levels[key as AssessmentRiskSeverity] = current;
+      }
+    }
+    setRisk({ ...base, levels });
+  }
+
+  function clearAll() {
+    if (!window.confirm("确定清空全部风险规则吗？保存后该量表将不再产生风险判定。")) {
+      return;
+    }
+    setRisk(undefined);
+  }
+
   return (
-    <div className="rounded-xl border border-[var(--lxxl-border)] bg-white p-4">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <div className="text-sm font-medium">风险分数区间</div>
-          <div className="mt-1 text-xs text-[var(--lxxl-muted)]">
-            区间不可重叠，并需覆盖全部可达分值；每个区间指定一个风险分级。
+    <div className="space-y-5">
+      <EditorSection
+        action={
+          risk ? (
+            <button
+              className="h-9 rounded-xl border border-[#E8B7B2] px-4 text-sm font-medium text-[#A13F37] transition hover:bg-[#FFF5F4] disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={disabled}
+              type="button"
+              onClick={clearAll}
+            >
+              清空风险编辑
+            </button>
+          ) : undefined
+        }
+        description="按高风险、中风险、一般关注、无风险分别添加规则，每个等级都可以不配置（例如只配置高风险）。同一等级内任意一条规则命中即判为该等级；同时命中多个等级时取风险最高的一级。"
+        title="风险编辑（可选 · 仅后台可见）"
+      >
+        <div className="space-y-4">
+          <div className="flex items-start gap-2 rounded-lg border border-dashed border-[#E8B7B2] bg-[#FFF8F6] px-3 py-2 text-xs leading-5 text-[#8F3832]">
+            <span aria-hidden>🔒</span>
+            <span>
+              风险判定只显示在「量表结果」的报告详情和「企业定制数据管理」的风险分级中，来访端的题目、结果页、报告和接口都不会出现。有判定结果时，企业数据的风险等级以它为准，不再按结果等级文字推断。
+            </span>
           </div>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <CompactField label="名称" required={active}>
+              <input
+                className={compactInputClass}
+                disabled={disabled}
+                value={risk?.title ?? RISK_DIMENSION_TITLE}
+                onChange={(event) => patchRisk({ title: event.target.value })}
+              />
+            </CompactField>
+            <CompactField className="md:col-span-2" label="判定口径说明（仅后台）">
+              <input
+                className={compactInputClass}
+                disabled={disabled}
+                placeholder="例如：第 9 题选择“经常”及以上，或情绪维度为“需要关注”时视为高风险"
+                value={risk?.intro || ""}
+                onChange={(event) => patchRisk({ intro: event.target.value })}
+              />
+            </CompactField>
+          </div>
+          {!active && (
+            <p className="text-xs leading-5 text-[var(--lxxl-muted)]">
+              还没有任何风险规则，作答不会产生风险判定。需要时在下方对应等级点击「添加规则」。
+            </p>
+          )}
         </div>
-        <SmallButton
+      </EditorSection>
+
+      {RISK_SEVERITY_OPTIONS.map((option) => (
+        <RiskLevelCard
+          key={option.value}
+          definition={definition}
           disabled={disabled}
-          onClick={() => {
-            const top = ranges.length
-              ? Math.max(...ranges.map((item) => (typeof item.max === "number" ? item.max : 0)))
-              : -1;
-            onChange([...ranges, createRiskRange(top + 1, top + 2)]);
-          }}
+          level={risk?.levels?.[option.value]}
+          ruleIds={ruleIds}
+          severity={option.value}
+          sources={sources}
+          onChange={(level) => setLevel(option.value, level)}
+        />
+      ))}
+    </div>
+  );
+}
+
+function RiskLevelCard({
+  definition,
+  disabled,
+  level,
+  ruleIds,
+  severity,
+  sources,
+  onChange,
+}: {
+  definition: AssessmentDefinition;
+  disabled: boolean;
+  level: AssessmentRiskLevel | undefined;
+  ruleIds: string[];
+  severity: AssessmentRiskSeverity;
+  sources: RiskDimensionSource[];
+  onChange: (level: AssessmentRiskLevel) => void;
+}) {
+  const meta = riskSeverityMeta(severity);
+  const current: AssessmentRiskLevel = level ?? { rules: [] };
+  const rules = current.rules ?? [];
+  const isOk = severity === "ok";
+  const showDetails =
+    rules.length > 0 ||
+    Boolean(current.fallback) ||
+    Boolean(current.analystDescription?.trim()) ||
+    (current.suggestions?.length ?? 0) > 0;
+  const summary =
+    rules.length > 0
+      ? `${rules.length} 条规则，命中任意一条即判为${meta.label}`
+      : isOk && current.fallback
+        ? "未命中任何风险规则时判为无风险"
+        : "未配置（可不填）";
+
+  function patch(values: Partial<AssessmentRiskLevel>) {
+    onChange({ ...current, ...values });
+  }
+
+  function setRules(next: AssessmentRiskRule[]) {
+    patch({ rules: next });
+  }
+
+  function addRule(type: AssessmentRiskRuleType, match: AssessmentRiskOptionMatch = "any") {
+    const rule: AssessmentRiskRule =
+      type === "dimension"
+        ? createRiskDimensionRule(ruleIds, sources[0]?.id)
+        : type === "score"
+          ? createRiskScoreRule(ruleIds)
+          : createRiskOptionRule(ruleIds, match);
+    setRules([...rules, rule]);
+  }
+
+  return (
+    <section
+      className="rounded-xl border border-[var(--lxxl-border)] bg-white"
+      style={{ borderTop: `4px solid ${meta.color}` }}
+    >
+      <div className="flex flex-wrap items-center gap-2 border-b border-[var(--lxxl-border)] px-5 py-3">
+        <span
+          className="rounded-full px-3 py-1 text-sm font-semibold"
+          style={{ background: meta.bg, color: meta.color }}
         >
-          添加区间
-        </SmallButton>
+          {meta.label}
+        </span>
+        <span className="text-xs text-[var(--lxxl-muted)]">{summary}</span>
       </div>
-      <div className="mt-4 space-y-3">
-        {ranges.map((range, rangeIndex) => (
-          <div
-            key={rangeIndex}
-            className="rounded-xl border border-[var(--lxxl-border)] bg-[#FCFBF8] p-3"
-            style={{ borderLeft: `4px solid ${riskSeverityMeta(range.severity).color}` }}
-          >
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[0.6fr_0.6fr_1fr_0.9fr_auto]">
-              <CompactField label="最低分">
-                <input
-                  className={compactInputClass}
-                  disabled={disabled}
-                  step="any"
-                  type="number"
-                  value={range.min ?? ""}
-                  onChange={(event) =>
-                    onChange(
-                      replaceAt(ranges, rangeIndex, {
-                        ...range,
-                        min: event.target.value === "" ? null : numberValue(event.target.value, 0),
-                      }),
-                    )
-                  }
-                />
-              </CompactField>
-              <CompactField label="最高分">
-                <input
-                  className={compactInputClass}
-                  disabled={disabled}
-                  step="any"
-                  type="number"
-                  value={range.max ?? ""}
-                  onChange={(event) =>
-                    onChange(
-                      replaceAt(ranges, rangeIndex, {
-                        ...range,
-                        max: event.target.value === "" ? null : numberValue(event.target.value, 0),
-                      }),
-                    )
-                  }
-                />
-              </CompactField>
-              <CompactField label="风险等级名称">
-                <input
-                  className={compactInputClass}
-                  disabled={disabled}
-                  placeholder="如：中风险"
-                  value={range.level}
-                  onChange={(event) =>
-                    onChange(replaceAt(ranges, rangeIndex, { ...range, level: event.target.value }))
-                  }
-                />
-              </CompactField>
-              <CompactField label="风险分级">
-                <RiskSeveritySelect
-                  disabled={disabled}
-                  value={range.severity}
-                  onChange={(severity) =>
-                    onChange(replaceAt(ranges, rangeIndex, { ...range, severity }))
-                  }
-                />
-              </CompactField>
-              <div className="flex items-end justify-end pb-1">
-                <RemoveButton
-                  disabled={disabled || ranges.length <= 1}
-                  label="删除区间"
-                  onClick={() => onChange(ranges.filter((_, index) => index !== rangeIndex))}
-                />
-              </div>
-            </div>
-            <CompactField className="mt-3" label="分析说明（仅后台）">
+      <div className="space-y-3 p-4 sm:p-5">
+        {rules.map((rule, index) => (
+          <RiskRuleCard
+            key={rule.id || index}
+            accent={meta}
+            definition={definition}
+            disabled={disabled}
+            index={index}
+            rule={rule}
+            severity={severity}
+            sources={sources}
+            onChange={(next) => setRules(replaceAt(rules, index, next))}
+            onRemove={() => setRules(rules.filter((_, itemIndex) => itemIndex !== index))}
+          />
+        ))}
+        <RiskRuleAdder
+          dimensionAvailable={sources.length > 0}
+          disabled={disabled}
+          label={meta.label}
+          onAdd={addRule}
+        />
+        {isOk && (
+          <label className="flex items-start gap-2 rounded-lg border border-[var(--lxxl-border)] bg-[#FCFBF8] px-3 py-2 text-xs leading-5">
+            <input
+              checked={Boolean(current.fallback)}
+              className="mt-1"
+              disabled={disabled}
+              type="checkbox"
+              onChange={(event) => {
+                const next: AssessmentRiskLevel = { ...current };
+                if (event.target.checked) {
+                  next.fallback = true;
+                } else {
+                  delete next.fallback;
+                }
+                onChange(next);
+              }}
+            />
+            <span>
+              <span className="font-medium">其余作答判为无风险</span>
+              <span className="text-[var(--lxxl-muted)]">
+                ：没有命中任何风险规则时判为无风险。不勾选时不做判定，企业定制数据会按结果等级文字自动识别风险。
+              </span>
+            </span>
+          </label>
+        )}
+        {showDetails && (
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            <CompactField label={`判为${meta.label}时的分析说明（仅后台）`}>
               <textarea
                 className={compactTextareaClass}
                 disabled={disabled}
-                value={range.analystDescription}
-                onChange={(event) =>
-                  onChange(
-                    replaceAt(ranges, rangeIndex, {
-                      ...range,
-                      analystDescription: event.target.value,
-                    }),
-                  )
-                }
+                value={current.analystDescription || ""}
+                onChange={(event) => patch({ analystDescription: event.target.value })}
               />
             </CompactField>
-            <CompactField className="mt-3" label="跟进建议（每行一条，仅后台）">
+            <CompactField label="跟进建议（每行一条，仅后台）">
               <LinesTextarea
                 disabled={disabled}
-                value={formatLines(range.suggestions)}
-                onChange={(value) =>
-                  onChange(
-                    replaceAt(ranges, rangeIndex, { ...range, suggestions: parseLines(value) }),
-                  )
-                }
+                value={formatLines(current.suggestions)}
+                onChange={(value) => patch({ suggestions: parseLines(value) })}
               />
             </CompactField>
           </div>
-        ))}
+        )}
+      </div>
+    </section>
+  );
+}
+
+function RiskChoiceButton({
+  title,
+  description,
+  disabled,
+  onClick,
+}: {
+  title: string;
+  description: string;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      className="rounded-lg border border-[var(--lxxl-border)] bg-white px-3 py-2.5 text-left transition hover:border-[var(--lxxl-green)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-[var(--lxxl-border)]"
+      disabled={disabled}
+      type="button"
+      onClick={onClick}
+    >
+      <div className="text-sm font-medium">{title}</div>
+      <div className="mt-0.5 text-xs leading-5 text-[var(--lxxl-muted)]">{description}</div>
+    </button>
+  );
+}
+
+/** 添加规则：先选规则类型；选项触发还要先选是任意一项被选还是多项同时被选。 */
+function RiskRuleAdder({
+  dimensionAvailable,
+  disabled,
+  label,
+  onAdd,
+}: {
+  dimensionAvailable: boolean;
+  disabled: boolean;
+  label: string;
+  onAdd: (type: AssessmentRiskRuleType, match?: AssessmentRiskOptionMatch) => void;
+}) {
+  const [step, setStep] = useState<"closed" | "type" | "options">("closed");
+
+  if (step === "closed") {
+    return (
+      <button
+        className="flex h-10 w-full items-center justify-center rounded-xl border border-dashed border-[var(--lxxl-border)] text-sm font-medium text-[var(--lxxl-green)] transition hover:border-[var(--lxxl-green)] hover:bg-[#F7FAF8] disabled:cursor-not-allowed disabled:opacity-40"
+        disabled={disabled}
+        type="button"
+        onClick={() => setStep("type")}
+      >
+        + 添加{label}规则
+      </button>
+    );
+  }
+
+  function choose(type: AssessmentRiskRuleType, match?: AssessmentRiskOptionMatch) {
+    onAdd(type, match);
+    setStep("closed");
+  }
+
+  return (
+    <div className="rounded-xl border border-dashed border-[var(--lxxl-green)] bg-[#F7FAF8] p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="text-xs font-medium">
+          {step === "type" ? `为「${label}」选择规则类型` : "选项触发：先选择触发方式"}
+        </div>
+        <div className="flex gap-3">
+          {step === "options" && (
+            <button
+              className="text-xs text-[var(--lxxl-muted)] hover:underline"
+              type="button"
+              onClick={() => setStep("type")}
+            >
+              返回
+            </button>
+          )}
+          <button
+            className="text-xs text-[var(--lxxl-muted)] hover:underline"
+            type="button"
+            onClick={() => setStep("closed")}
+          >
+            取消
+          </button>
+        </div>
+      </div>
+      {step === "type" ? (
+        <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-3">
+          <RiskChoiceButton
+            description={
+              dimensionAvailable
+                ? "已编辑的维度或总分落在所选区间时命中"
+                : "当前计分方式没有可引用的维度区间"
+            }
+            disabled={disabled || !dimensionAvailable}
+            title={RISK_RULE_TYPE_LABELS.dimension}
+            onClick={() => choose("dimension")}
+          />
+          <RiskChoiceButton
+            description="单独选题并设置计算方式，得分落在设定区间时命中"
+            disabled={disabled}
+            title={RISK_RULE_TYPE_LABELS.score}
+            onClick={() => choose("score")}
+          />
+          <RiskChoiceButton
+            description="作答选中指定选项时命中，下一步选择触发方式"
+            disabled={disabled}
+            title={RISK_RULE_TYPE_LABELS.options}
+            onClick={() => setStep("options")}
+          />
+        </div>
+      ) : (
+        <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
+          <RiskChoiceButton
+            description="所选选项中任意一个被选中就命中"
+            disabled={disabled}
+            title="任意一项被选即触发"
+            onClick={() => choose("options", "any")}
+          />
+          <RiskChoiceButton
+            description="所选选项需要同时被选中才命中，可设置至少同时选中几项"
+            disabled={disabled}
+            title="多项同时被选才触发"
+            onClick={() => choose("options", "multiple")}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RiskRuleCard({
+  accent,
+  definition,
+  disabled,
+  index,
+  rule,
+  severity,
+  sources,
+  onChange,
+  onRemove,
+}: {
+  accent: RiskAccent;
+  definition: AssessmentDefinition;
+  disabled: boolean;
+  index: number;
+  rule: AssessmentRiskRule;
+  severity: AssessmentRiskSeverity;
+  sources: RiskDimensionSource[];
+  onChange: (rule: AssessmentRiskRule) => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div
+      className="rounded-xl border border-[var(--lxxl-border)] bg-[#FCFBF8] p-3 sm:p-4"
+      style={{ borderLeft: `4px solid ${accent.color}` }}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-medium">规则 {index + 1}</span>
+          <span className="rounded-full border border-[var(--lxxl-border)] bg-white px-2 py-0.5 text-xs text-[var(--lxxl-muted)]">
+            {RISK_RULE_TYPE_LABELS[rule.type] ?? "未知规则"}
+          </span>
+        </div>
+        <RemoveButton disabled={disabled} label="删除规则" onClick={onRemove} />
+      </div>
+      <div className="mt-3">
+        {rule.type === "dimension" ? (
+          <RiskDimensionRuleFields
+            accent={accent}
+            disabled={disabled}
+            rule={rule}
+            sources={sources}
+            onChange={onChange}
+          />
+        ) : rule.type === "score" ? (
+          <RiskScoreRuleFields
+            definition={definition}
+            disabled={disabled}
+            name={`risk-${severity}-${rule.id}`}
+            rule={rule}
+            onChange={onChange}
+          />
+        ) : rule.type === "options" ? (
+          <RiskOptionRuleFields
+            accent={accent}
+            definition={definition}
+            disabled={disabled}
+            rule={rule}
+            onChange={onChange}
+          />
+        ) : (
+          <p className="text-xs text-[#A13F37]">
+            无法识别的规则类型，请删除后重新添加。
+          </p>
+        )}
       </div>
     </div>
   );
 }
 
-function RiskTriggerCard({
-  canRemove,
+function RiskDimensionRuleFields({
+  accent,
+  disabled,
+  rule,
+  sources,
+  onChange,
+}: {
+  accent: RiskAccent;
+  disabled: boolean;
+  rule: AssessmentRiskDimensionRule;
+  sources: RiskDimensionSource[];
+  onChange: (rule: AssessmentRiskDimensionRule) => void;
+}) {
+  const source = sources.find((item) => item.id === rule.dimensionId);
+  const knownLevels = new Set((source?.ranges ?? []).map((range) => range.level));
+  const staleLevels = rule.levels.filter((level) => !knownLevels.has(level));
+
+  function toggleLevel(level: string) {
+    onChange({
+      ...rule,
+      levels: rule.levels.includes(level)
+        ? rule.levels.filter((item) => item !== level)
+        : [...rule.levels, level],
+    });
+  }
+
+  return (
+    <div className="space-y-3">
+      <CompactField className="md:max-w-md" label="维度 / 总分">
+        <select
+          className={compactInputClass}
+          disabled={disabled}
+          value={rule.dimensionId}
+          onChange={(event) => onChange({ ...rule, dimensionId: event.target.value, levels: [] })}
+        >
+          {!source && (
+            <option value={rule.dimensionId}>
+              {rule.dimensionId ? `已失效：${rule.dimensionId}` : "请选择维度"}
+            </option>
+          )}
+          {sources.map((item) => (
+            <option key={item.id} value={item.id}>
+              {formatRiskDimensionSource(item)}
+            </option>
+          ))}
+        </select>
+      </CompactField>
+      <div>
+        <div className="mb-1.5 text-xs font-medium text-[var(--lxxl-muted)]">
+          命中区间（可多选，作答落在任一所选区间即命中；区间按名称引用，调整分数边界后自动跟随）
+        </div>
+        {!source ? (
+          <p className="text-xs text-[#A13F37]">
+            {sources.length > 0
+              ? "引用的维度已不存在，请重新选择。"
+              : "当前计分方式没有可引用的维度区间，请删除这条规则。"}
+          </p>
+        ) : source.ranges.length === 0 ? (
+          <p className="text-xs text-[var(--lxxl-muted)]">
+            该维度还没有编辑区间，请先在「报告结果」中添加。
+          </p>
+        ) : (
+          <div className="flex flex-wrap gap-1.5">
+            {source.ranges.map((range, rangeIndex) => {
+              const selected = Boolean(range.level) && rule.levels.includes(range.level);
+              return (
+                <button
+                  key={rangeIndex}
+                  aria-pressed={selected}
+                  className={`rounded-full border px-3 py-1 text-xs transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                    selected
+                      ? "font-medium"
+                      : "border-[var(--lxxl-border)] bg-white text-[var(--lxxl-muted)] hover:border-[var(--lxxl-green)] hover:text-[var(--lxxl-text)]"
+                  }`}
+                  disabled={disabled || !range.level}
+                  style={
+                    selected
+                      ? { borderColor: accent.color, background: accent.bg, color: accent.color }
+                      : undefined
+                  }
+                  title={range.level ? undefined : "区间还没有名称，请先在「报告结果」中填写"}
+                  type="button"
+                  onClick={() => toggleLevel(range.level)}
+                >
+                  {selected ? "✓ " : ""}
+                  {range.level || "未命名区间"}
+                  <span className="ml-1 opacity-70">{formatRiskRange(range)}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {staleLevels.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {staleLevels.map((level) => (
+              <span
+                key={level}
+                className="inline-flex items-center gap-1 rounded-full border border-dashed border-[#A13F37] px-2.5 py-1 text-xs text-[#A13F37]"
+              >
+                已失效：{level || "（空）"}
+                <button
+                  aria-label="移除失效区间"
+                  className="rounded-full px-1 leading-none hover:bg-white disabled:opacity-40"
+                  disabled={disabled}
+                  type="button"
+                  onClick={() => toggleLevel(level)}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RiskScoreRuleFields({
   definition,
   disabled,
-  index,
-  trigger,
+  name,
+  rule,
   onChange,
-  onRemove,
 }: {
-  canRemove: boolean;
   definition: AssessmentDefinition;
   disabled: boolean;
-  index: number;
-  trigger: AssessmentRiskTrigger;
-  onChange: (trigger: AssessmentRiskTrigger) => void;
-  onRemove: () => void;
+  name: string;
+  rule: AssessmentRiskScoreRule;
+  onChange: (rule: AssessmentRiskScoreRule) => void;
 }) {
-  const [pickerOpen, setPickerOpen] = useState(trigger.optionIds.length === 0);
+  const reach = getRiskScoreRuleReach(definition, rule);
+  const hasBound = rule.min !== null || rule.max !== null;
+
+  function boundValue(value: string) {
+    return value === "" ? null : numberValue(value, 0);
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        <CompactField label="计分名称">
+          <input
+            className={compactInputClass}
+            disabled={disabled}
+            placeholder="如：自伤风险分"
+            value={rule.title}
+            onChange={(event) => onChange({ ...rule, title: event.target.value })}
+          />
+        </CompactField>
+        <CompactField label="最低分（含，留空不限）">
+          <input
+            className={compactInputClass}
+            disabled={disabled}
+            placeholder="不限"
+            step="any"
+            type="number"
+            value={rule.min ?? ""}
+            onChange={(event) => onChange({ ...rule, min: boundValue(event.target.value) })}
+          />
+        </CompactField>
+        <CompactField label="最高分（含，留空不限）">
+          <input
+            className={compactInputClass}
+            disabled={disabled}
+            placeholder="不限"
+            step="any"
+            type="number"
+            value={rule.max ?? ""}
+            onChange={(event) => onChange({ ...rule, max: boundValue(event.target.value) })}
+          />
+        </CompactField>
+      </div>
+      <ScoreCalculationFields
+        block={rule}
+        defaultExpanded={rule.questionIds.length === 0}
+        definition={definition}
+        disabled={disabled}
+        name={name}
+        onChange={(block) => onChange({ ...rule, ...block })}
+      />
+      <RiskScoreReachHint hasBound={hasBound} reach={reach} />
+    </div>
+  );
+}
+
+function RiskScoreReachHint({
+  hasBound,
+  reach,
+}: {
+  hasBound: boolean;
+  reach: RiskScoreRuleReach | null;
+}) {
+  if (!reach) {
+    return (
+      <p className="text-xs text-[var(--lxxl-muted)]">
+        勾选参与计算的题目后，这里会显示可达分值范围。
+      </p>
+    );
+  }
+  if (reach.validationError) {
+    return (
+      <p className="rounded-lg border border-[#E4D7B5] bg-[#FFF9EA] px-3 py-2 text-xs leading-5 text-[#6F5A24]">
+        暂时无法计算可达分值：{reach.validationError}
+      </p>
+    );
+  }
+  const matched = hasBound && reach.matchedCount > 0;
+  return (
+    <p
+      className={`rounded-lg border px-3 py-2 text-xs leading-5 ${
+        matched
+          ? "border-[#CFE1D6] bg-[#F2F7F4] text-[var(--lxxl-green-dark)]"
+          : hasBound
+            ? "border-[#E8B7B2] bg-[#FFF5F4] text-[#A13F37]"
+            : "border-[var(--lxxl-border)] bg-white text-[var(--lxxl-muted)]"
+      }`}
+    >
+      可达范围 {formatCoverageScore(reach.minimum)}–{formatCoverageScore(reach.maximum)}，共{" "}
+      {reach.reachableCount.toLocaleString("zh-CN")} 个可达分值
+      {hasBound
+        ? matched
+          ? `；当前区间可命中其中 ${reach.matchedCount.toLocaleString("zh-CN")} 个。`
+          : "；当前区间不包含任何可达分值，这条规则不会命中。"
+        : "；请填写最低分或最高分（另一端留空表示不限）。"}
+    </p>
+  );
+}
+
+function RiskOptionRuleFields({
+  accent,
+  definition,
+  disabled,
+  rule,
+  onChange,
+}: {
+  accent: RiskAccent;
+  definition: AssessmentDefinition;
+  disabled: boolean;
+  rule: AssessmentRiskOptionRule;
+  onChange: (rule: AssessmentRiskOptionRule) => void;
+}) {
+  const count = rule.optionIds.length;
+  const multiple = rule.match === "multiple";
+  const partial = rule.minCount !== undefined && rule.minCount < count;
+  const explanation = !multiple
+    ? "作答中选中下列任意一个选项即命中。"
+    : partial
+      ? `下列 ${count} 个选项中至少同时选中 ${rule.minCount} 个即命中。`
+      : `下列选项需要全部同时被选中才命中${count ? `（共 ${count} 个）` : ""}。同一道题只能选一个选项，请从不同题目中挑选。`;
+
+  function setMatch(match: AssessmentRiskOptionMatch) {
+    const next: AssessmentRiskOptionRule = { ...rule, match };
+    if (match === "any") {
+      delete next.minCount;
+    }
+    onChange(next);
+  }
+
+  function setOptionIds(optionIds: string[]) {
+    const next: AssessmentRiskOptionRule = { ...rule, optionIds };
+    if (next.minCount !== undefined && next.minCount >= optionIds.length) {
+      delete next.minCount;
+    }
+    onChange(next);
+  }
+
+  function setMinCount(value: string) {
+    const next: AssessmentRiskOptionRule = { ...rule };
+    if (value === "all") {
+      delete next.minCount;
+    } else {
+      next.minCount = Number(value);
+    }
+    onChange(next);
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <div
+          aria-label="触发方式"
+          className="inline-flex rounded-lg border border-[var(--lxxl-border)] bg-white p-0.5"
+          role="radiogroup"
+        >
+          {(["any", "multiple"] as const).map((match) => (
+            <button
+              key={match}
+              aria-checked={rule.match === match}
+              className={`rounded-md px-3 py-1.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                rule.match === match
+                  ? "bg-[var(--lxxl-green)] text-white"
+                  : "text-[var(--lxxl-muted)] hover:text-[var(--lxxl-text)]"
+              }`}
+              disabled={disabled}
+              role="radio"
+              type="button"
+              onClick={() => setMatch(match)}
+            >
+              {RISK_OPTION_MATCH_LABELS[match]}
+            </button>
+          ))}
+        </div>
+        {multiple && (
+          <label className="flex items-center gap-2 text-xs text-[var(--lxxl-muted)]">
+            触发条件
+            <select
+              className="h-8 rounded-lg border border-[var(--lxxl-border)] bg-white px-2 text-xs text-[var(--lxxl-text)] disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={disabled || count < 3}
+              value={partial ? String(rule.minCount) : "all"}
+              onChange={(event) => setMinCount(event.target.value)}
+            >
+              <option value="all">所选选项全部被选中</option>
+              {Array.from({ length: Math.max(0, count - 2) }, (_, offset) => offset + 2).map(
+                (minimum) => (
+                  <option key={minimum} value={minimum}>
+                    至少 {minimum} 项同时被选中
+                  </option>
+                ),
+              )}
+            </select>
+          </label>
+        )}
+      </div>
+      <p className="text-xs leading-5 text-[var(--lxxl-muted)]">{explanation}</p>
+      <RiskOptionPicker
+        accent={accent}
+        definition={definition}
+        disabled={disabled}
+        optionIds={rule.optionIds}
+        onChange={setOptionIds}
+      />
+    </div>
+  );
+}
+
+function RiskOptionPicker({
+  accent,
+  definition,
+  disabled,
+  optionIds,
+  onChange,
+}: {
+  accent: RiskAccent;
+  definition: AssessmentDefinition;
+  disabled: boolean;
+  optionIds: string[];
+  onChange: (optionIds: string[]) => void;
+}) {
+  const [pickerOpen, setPickerOpen] = useState(optionIds.length === 0);
   const [keyword, setKeyword] = useState("");
   const choiceQuestions = definition.questions.filter(
     (question) => getQuestionInputType(question) === "choice",
@@ -3524,358 +4212,115 @@ function RiskTriggerCard({
     : choiceQuestions;
 
   function toggleOption(optionId: string) {
-    const selected = trigger.optionIds.includes(optionId);
-    onChange({
-      ...trigger,
-      optionIds: selected
-        ? trigger.optionIds.filter((id) => id !== optionId)
-        : [...trigger.optionIds, optionId],
-    });
+    onChange(
+      optionIds.includes(optionId)
+        ? optionIds.filter((id) => id !== optionId)
+        : [...optionIds, optionId],
+    );
   }
 
   return (
-    <div
-      className="rounded-xl border border-[var(--lxxl-border)] bg-[#FCFBF8] p-4"
-      style={{ borderLeft: `4px solid ${riskSeverityMeta(trigger.severity).color}` }}
-    >
-      <div className="flex items-center justify-between gap-2">
-        <div className="text-sm font-medium">触发规则 {index + 1}</div>
-        <RemoveButton disabled={disabled || !canRemove} label="删除规则" onClick={onRemove} />
+    <div className="rounded-lg border border-[var(--lxxl-border)] bg-white p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="text-xs font-medium">
+          触发选项
+          <span className="ml-1 font-normal text-[var(--lxxl-muted)]">已选 {optionIds.length} 个</span>
+        </div>
+        <SmallButton disabled={disabled} onClick={() => setPickerOpen((current) => !current)}>
+          {pickerOpen ? "收起选项列表" : "选择触发选项"}
+        </SmallButton>
       </div>
-      <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
-        <CompactField label="触发后的风险等级名称">
+      {optionIds.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {optionIds.map((optionId) => {
+            const hit = optionLookup.get(optionId);
+            return (
+              <span
+                key={optionId}
+                className={`inline-flex max-w-full items-center gap-1 rounded-full border px-2.5 py-1 text-xs ${
+                  hit ? "" : "border-dashed border-[#A13F37] text-[#A13F37]"
+                }`}
+                style={
+                  hit ? { borderColor: accent.color, background: accent.bg, color: accent.color } : undefined
+                }
+                title={hit ? `${hit.question.id} · ${hit.question.text}` : undefined}
+              >
+                <span className="truncate">
+                  {hit
+                    ? `${hit.question.id} · ${hit.option.text || hit.option.id}`
+                    : `已失效：${optionId}`}
+                </span>
+                <button
+                  aria-label="移除该触发选项"
+                  className="shrink-0 rounded-full px-1 leading-none hover:bg-white disabled:opacity-40"
+                  disabled={disabled}
+                  type="button"
+                  onClick={() => toggleOption(optionId)}
+                >
+                  ×
+                </button>
+              </span>
+            );
+          })}
+        </div>
+      )}
+      {pickerOpen && (
+        <div className="mt-3 space-y-2">
           <input
             className={compactInputClass}
-            disabled={disabled}
-            placeholder="如：高风险"
-            value={trigger.level}
-            onChange={(event) => onChange({ ...trigger, level: event.target.value })}
+            placeholder="按题号、题干或选项文字筛选"
+            value={keyword}
+            onChange={(event) => setKeyword(event.target.value)}
           />
-        </CompactField>
-        <CompactField label="风险分级">
-          <RiskSeveritySelect
-            disabled={disabled}
-            value={trigger.severity}
-            onChange={(severity) => onChange({ ...trigger, severity })}
-          />
-        </CompactField>
-      </div>
-
-      <div className="mt-3 rounded-lg border border-[var(--lxxl-border)] bg-white p-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="text-xs font-medium">
-            触发选项（作答选中任意一个即触发）
-            <span className="ml-1 font-normal text-[var(--lxxl-muted)]">
-              已选 {trigger.optionIds.length} 个
-            </span>
-          </div>
-          <SmallButton disabled={disabled} onClick={() => setPickerOpen((current) => !current)}>
-            {pickerOpen ? "收起选项列表" : "选择触发选项"}
-          </SmallButton>
-        </div>
-        {trigger.optionIds.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {trigger.optionIds.map((optionId) => {
-              const hit = optionLookup.get(optionId);
-              return (
-                <span
-                  key={optionId}
-                  className={`inline-flex max-w-full items-center gap-1 rounded-full border px-2.5 py-1 text-xs ${
-                    hit
-                      ? "border-[#E8B7B2] bg-[#FFF5F4] text-[#8F3832]"
-                      : "border-dashed border-[#A13F37] text-[#A13F37]"
-                  }`}
-                  title={hit ? `${hit.question.id} · ${hit.question.text}` : undefined}
+          <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
+            {visibleQuestions.length === 0 ? (
+              <p className="py-4 text-center text-xs text-[var(--lxxl-muted)]">
+                {choiceQuestions.length === 0 ? "当前量表没有选择题。" : "没有匹配的题目。"}
+              </p>
+            ) : (
+              visibleQuestions.map((question) => (
+                <div
+                  key={question.id}
+                  className="rounded-lg border border-[var(--lxxl-border)] px-3 py-2"
                 >
-                  <span className="truncate">
-                    {hit
-                      ? `${hit.question.id} · ${hit.option.text || hit.option.id}`
-                      : `已失效：${optionId}`}
-                  </span>
-                  <button
-                    aria-label="移除该触发选项"
-                    className="shrink-0 rounded-full px-1 leading-none hover:bg-white disabled:opacity-40"
-                    disabled={disabled}
-                    type="button"
-                    onClick={() => toggleOption(optionId)}
-                  >
-                    ×
-                  </button>
-                </span>
-              );
-            })}
-          </div>
-        )}
-        {pickerOpen && (
-          <div className="mt-3 space-y-2">
-            <input
-              className={compactInputClass}
-              placeholder="按题号、题干或选项文字筛选"
-              value={keyword}
-              onChange={(event) => setKeyword(event.target.value)}
-            />
-            <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
-              {visibleQuestions.length === 0 ? (
-                <p className="py-4 text-center text-xs text-[var(--lxxl-muted)]">
-                  {choiceQuestions.length === 0 ? "当前量表没有选择题。" : "没有匹配的题目。"}
-                </p>
-              ) : (
-                visibleQuestions.map((question) => (
-                  <div
-                    key={question.id}
-                    className="rounded-lg border border-[var(--lxxl-border)] px-3 py-2"
-                  >
-                    <div className="text-xs leading-5">
-                      <span className="font-medium">{question.id}</span> ·{" "}
-                      {question.text || "未命名题目"}
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {(question.options || []).map((option) => {
-                        const active = trigger.optionIds.includes(option.id);
-                        return (
-                          <button
-                            key={option.id}
-                            aria-pressed={active}
-                            className={`rounded-full border px-2.5 py-1 text-xs transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                              active
-                                ? "border-[#B3261E] bg-[#FBE8E6] text-[#8F2A22]"
-                                : "border-[var(--lxxl-border)] bg-white text-[var(--lxxl-muted)] hover:border-[#B3261E] hover:text-[#8F2A22]"
-                            }`}
-                            disabled={disabled}
-                            type="button"
-                            onClick={() => toggleOption(option.id)}
-                          >
-                            {option.text || option.id}
-                            <span className="ml-1 opacity-60">（{option.value} 分）</span>
-                          </button>
-                        );
-                      })}
-                    </div>
+                  <div className="text-xs leading-5">
+                    <span className="font-medium">{question.id}</span> ·{" "}
+                    {question.text || "未命名题目"}
                   </div>
-                ))
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-
-      <CompactField className="mt-3" label="分析说明（仅后台）">
-        <textarea
-          className={compactTextareaClass}
-          disabled={disabled}
-          value={trigger.analystDescription}
-          onChange={(event) => onChange({ ...trigger, analystDescription: event.target.value })}
-        />
-      </CompactField>
-      <CompactField className="mt-3" label="跟进建议（每行一条，仅后台）">
-        <LinesTextarea
-          disabled={disabled}
-          value={formatLines(trigger.suggestions)}
-          onChange={(value) => onChange({ ...trigger, suggestions: parseLines(value) })}
-        />
-      </CompactField>
-    </div>
-  );
-}
-
-function RiskDimensionEditor({
-  definition,
-  disabled,
-  onChange,
-}: {
-  definition: AssessmentDefinition;
-  disabled: boolean;
-  onChange: (definition: AssessmentDefinition) => void;
-}) {
-  const risk = definition.riskDimension;
-  const triggers = risk?.triggers;
-  const scoring = risk?.scoring;
-  const coverage = scoring
-    ? getCalculationCoverageSummary(
-        definition,
-        scoring,
-        scoring.scoreRanges,
-        "riskDimension.scoring.scoreRanges",
-        "风险计分",
-      )
-    : null;
-
-  function setRisk(next: AssessmentRiskDimension | undefined) {
-    const updated = { ...definition };
-    if (next) {
-      updated.riskDimension = next;
-    } else {
-      delete updated.riskDimension;
-    }
-    onChange(updated);
-  }
-
-  function patchRisk(next: Partial<AssessmentRiskDimension>) {
-    if (!risk) {
-      return;
-    }
-    setRisk({ ...risk, ...next });
-  }
-
-  function setScoring(next: AssessmentRiskScoring | undefined) {
-    if (!risk) {
-      return;
-    }
-    const updated: AssessmentRiskDimension = { ...risk };
-    if (next) {
-      updated.scoring = next;
-    } else {
-      delete updated.scoring;
-    }
-    setRisk(updated);
-  }
-
-  function setTriggers(next: AssessmentRiskTrigger[] | undefined) {
-    if (!risk) {
-      return;
-    }
-    const updated: AssessmentRiskDimension = { ...risk };
-    if (next) {
-      updated.triggers = next;
-    } else {
-      delete updated.triggers;
-    }
-    setRisk(updated);
-  }
-
-  return (
-    <EditorSection
-      action={
-        <ExtraToggleButton
-          addLabel="添加风险维度"
-          disabled={disabled}
-          enabled={Boolean(risk)}
-          removeLabel="移除风险维度"
-          onToggle={() => setRisk(risk ? undefined : createDefaultRiskDimension())}
-        />
-      }
-      description="用于后台识别需要跟进的作答：可按计分区间判定，也可在选中指定选项时稳定触发；两者同时配置时取风险更高的一项。这部分只在管理后台显示，来访端的题目、结果页、报告和接口都不会出现。"
-      title="风险维度（可选 · 仅后台可见）"
-    >
-      {risk ? (
-        <div className="space-y-4">
-          <div className="flex items-start gap-2 rounded-lg border border-dashed border-[#E8B7B2] bg-[#FFF8F6] px-3 py-2 text-xs leading-5 text-[#8F3832]">
-            <span aria-hidden>🔒</span>
-            <span>
-              风险判定结果会显示在「量表结果」报告详情和「企业定制数据管理」的风险分级中；配置了风险维度后，企业数据的风险等级以它为准，不再按结果等级文字推断。
-            </span>
-          </div>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-            <CompactField label="维度名称" required>
-              <input
-                className={compactInputClass}
-                disabled={disabled}
-                value={risk.title}
-                onChange={(event) => patchRisk({ title: event.target.value })}
-              />
-            </CompactField>
-            <CompactField className="md:col-span-2" label="判定口径说明（仅后台）">
-              <input
-                className={compactInputClass}
-                disabled={disabled}
-                placeholder="例如：第 9 题选择“经常”及以上，或总分 ≥ 15 视为高风险"
-                value={risk.intro || ""}
-                onChange={(event) => patchRisk({ intro: event.target.value })}
-              />
-            </CompactField>
-          </div>
-
-          <div className="rounded-xl border border-[var(--lxxl-border)] bg-white p-4">
-            <label className="flex items-center gap-2 text-sm font-medium">
-              <input
-                checked={Boolean(scoring)}
-                disabled={disabled}
-                type="checkbox"
-                onChange={(event) =>
-                  setScoring(event.target.checked ? createDefaultRiskScoring(definition) : undefined)
-                }
-              />
-              按计分判定
-            </label>
-            <p className="mt-1 pl-6 text-xs leading-5 text-[var(--lxxl-muted)]">
-              像维度一样选择题目和计算方式，再按分数区间给出风险等级。
-            </p>
-            {scoring && (
-              <div className="mt-4 space-y-4">
-                <ScoreCalculationFields
-                  block={scoring}
-                  definition={definition}
-                  disabled={disabled}
-                  name="risk-scoring"
-                  onChange={(block) => setScoring({ ...scoring, ...block })}
-                />
-                <InlineCoverage summary={coverage} />
-                <RiskRangeEditor
-                  disabled={disabled}
-                  ranges={scoring.scoreRanges}
-                  onChange={(scoreRanges) => setScoring({ ...scoring, scoreRanges })}
-                />
-              </div>
-            )}
-          </div>
-
-          <div className="rounded-xl border border-[var(--lxxl-border)] bg-white p-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <label className="flex items-center gap-2 text-sm font-medium">
-                <input
-                  checked={Boolean(triggers)}
-                  disabled={disabled}
-                  type="checkbox"
-                  onChange={(event) =>
-                    setTriggers(event.target.checked ? [createRiskTrigger([])] : undefined)
-                  }
-                />
-                按选项触发
-              </label>
-              {triggers && (
-                <SmallButton
-                  disabled={disabled}
-                  onClick={() =>
-                    setTriggers([
-                      ...triggers,
-                      createRiskTrigger(triggers.map((trigger) => trigger.id)),
-                    ])
-                  }
-                >
-                  添加触发规则
-                </SmallButton>
-              )}
-            </div>
-            <p className="mt-1 pl-6 text-xs leading-5 text-[var(--lxxl-muted)]">
-              作答中选中规则里任意一个选项就稳定命中该规则，不受总分影响；可以设置多条规则对应不同风险等级。
-            </p>
-            {triggers && (
-              <div className="mt-4 space-y-3">
-                {triggers.map((trigger, index) => (
-                  <RiskTriggerCard
-                    key={trigger.id || index}
-                    canRemove={triggers.length > 1 || Boolean(scoring)}
-                    definition={definition}
-                    disabled={disabled}
-                    index={index}
-                    trigger={trigger}
-                    onChange={(next) => setTriggers(replaceAt(triggers, index, next))}
-                    onRemove={() => {
-                      const rest = triggers.filter((_, itemIndex) => itemIndex !== index);
-                      setTriggers(rest.length ? rest : undefined);
-                    }}
-                  />
-                ))}
-              </div>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {(question.options || []).map((option) => {
+                      const active = optionIds.includes(option.id);
+                      return (
+                        <button
+                          key={option.id}
+                          aria-pressed={active}
+                          className={`rounded-full border px-2.5 py-1 text-xs transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                            active
+                              ? "font-medium"
+                              : "border-[var(--lxxl-border)] bg-white text-[var(--lxxl-muted)] hover:border-[var(--lxxl-green)] hover:text-[var(--lxxl-text)]"
+                          }`}
+                          disabled={disabled}
+                          style={
+                            active
+                              ? { borderColor: accent.color, background: accent.bg, color: accent.color }
+                              : undefined
+                          }
+                          type="button"
+                          onClick={() => toggleOption(option.id)}
+                        >
+                          {option.text || option.id}
+                          <span className="ml-1 opacity-60">（{option.value} 分）</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))
             )}
           </div>
         </div>
-      ) : (
-        <p className="text-sm text-[var(--lxxl-muted)]">
-          未添加风险维度。需要在后台标记高风险作答时，点击右上角「添加风险维度」。
-        </p>
       )}
-    </EditorSection>
+    </div>
   );
 }
 

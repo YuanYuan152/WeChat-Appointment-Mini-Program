@@ -181,38 +181,87 @@ export interface AssessmentTotalScore extends AssessmentScoreCalculation {
 /** 风险分级，与企业定制数据管理的风险等级一致。 */
 export type AssessmentRiskSeverity = "high" | "mid" | "watch" | "ok";
 
-export interface AssessmentRiskRange {
+/**
+ * A. 维度区间：已编辑的维度（或总分，ID 为 `__total__`）结果落在所选区间时命中。
+ * 区间按等级名称引用，调整区间分数边界不影响规则。
+ */
+export interface AssessmentRiskDimensionRule {
+  id: string;
+  type: "dimension";
+  dimensionId: string;
+  levels: string[];
+}
+
+/** B. 新增计分：单独设置一套「选题 + 计算方式」，得分落在 [min, max] 时命中；null 表示该端不限。 */
+export interface AssessmentRiskScoreRule extends AssessmentScoreCalculation {
+  id: string;
+  type: "score";
+  title: string;
   min: number | null;
   max: number | null;
-  level: string;
-  severity: AssessmentRiskSeverity;
-  analystDescription: string;
-  suggestions: string[];
 }
 
-export interface AssessmentRiskScoring extends AssessmentScoreCalculation {
-  scoreRanges: AssessmentRiskRange[];
-}
+/** 选项触发方式：任意一项被选即触发，或多项同时被选才触发。 */
+export type AssessmentRiskOptionMatch = "any" | "multiple";
 
-/** 选中任一指定选项即稳定触发。 */
-export interface AssessmentRiskTrigger {
+/** C. 选项触发。multiple 时至少同时选中 minCount 项；不设置 minCount 表示所选选项必须全部被选。 */
+export interface AssessmentRiskOptionRule {
   id: string;
-  level: string;
-  severity: AssessmentRiskSeverity;
+  type: "options";
+  match: AssessmentRiskOptionMatch;
   optionIds: string[];
-  analystDescription: string;
-  suggestions: string[];
+  minCount?: number;
+}
+
+export type AssessmentRiskRule =
+  | AssessmentRiskDimensionRule
+  | AssessmentRiskScoreRule
+  | AssessmentRiskOptionRule;
+
+export type AssessmentRiskRuleType = AssessmentRiskRule["type"];
+
+export interface AssessmentRiskLevel {
+  /** 任意一条规则命中即命中该等级 */
+  rules: AssessmentRiskRule[];
+  analystDescription?: string;
+  suggestions?: string[];
+  /** 仅「无风险」可用：没有任何规则命中时判为无风险 */
+  fallback?: boolean;
 }
 
 /**
- * 风险维度：只在管理端显示和使用，来访端接口会剥离，来访者看不到。
- * 计分判定与选项触发可单独或同时配置，同时配置时取风险更高的一项。
+ * 风险编辑：只在管理端显示和使用，来访端接口会剥离，来访者看不到。
+ * 高风险 / 中风险 / 一般关注 / 无风险各自配置规则，都可以不配置；
+ * 多个等级同时命中时取风险最高的一级。
  */
 export interface AssessmentRiskDimension {
   title: string;
   intro?: string;
-  scoring?: AssessmentRiskScoring;
-  triggers?: AssessmentRiskTrigger[];
+  levels: Partial<Record<AssessmentRiskSeverity, AssessmentRiskLevel>>;
+}
+
+/** 旧版风险维度（一套计分区间 + 选项触发），载入时会升级为按等级配置的规则。 */
+export interface LegacyAssessmentRiskDimension {
+  title?: string;
+  intro?: string;
+  scoring?: AssessmentScoreCalculation & {
+    scoreRanges?: Array<{
+      min: number | null;
+      max: number | null;
+      level?: string;
+      severity?: string;
+      analystDescription?: string;
+      suggestions?: string[];
+    }>;
+  };
+  triggers?: Array<{
+    id?: string;
+    level?: string;
+    severity?: string;
+    optionIds?: string[];
+    analystDescription?: string;
+    suggestions?: string[];
+  }>;
 }
 
 export interface AssessmentMatchResult {
@@ -273,7 +322,7 @@ export interface AssessmentDefinition {
   sourceReports?: AssessmentSourceReport[];
   /** 维度计分量表的总分（可选），来访端结果页展示。 */
   totalScore?: AssessmentTotalScore;
-  /** 风险维度（可选），仅管理端可见。 */
+  /** 风险编辑（可选），仅管理端可见。 */
   riskDimension?: AssessmentRiskDimension;
 }
 

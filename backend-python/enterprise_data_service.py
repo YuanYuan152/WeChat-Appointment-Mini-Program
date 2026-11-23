@@ -146,7 +146,7 @@ def _number(value: Any) -> Optional[float | int]:
 
 
 def _severity_source_text(report: dict[str, Any], follow: dict[str, Any]) -> str:
-    """导出用：风险等级是人工调整、风险维度判定还是按等级文案推断。"""
+    """导出用：风险等级是人工调整、风险规则判定还是按等级文案推断。"""
     if follow.get("severityOverride"):
         return "人工调整"
     if not report.get("severity"):
@@ -154,42 +154,66 @@ def _severity_source_text(report: dict[str, Any], follow: dict[str, Any]) -> str
     risk = report.get("risk") or {}
     if risk.get("severity"):
         level = risk.get("level") or ""
-        return f"风险维度：{level}" if level else "风险维度"
+        return f"风险规则：{level}" if level else "风险规则"
     return "自动识别"
 
 
 def _risk_payload(result: dict[str, Any]) -> Optional[dict[str, Any]]:
+    """量表风险编辑的判定摘要；兼容旧版结果（计分区间 score + 选项触发 triggers）。"""
     risk = result.get("risk")
     if not isinstance(risk, dict):
         return None
     severity = risk.get("severity")
-    triggers = []
+    severity = severity if severity in SEVERITY_ORDER else None
+    rules: list[dict[str, Any]] = []
+    for raw in risk.get("matchedRules") or []:
+        if not isinstance(raw, dict):
+            continue
+        rules.append(
+            {
+                "id": str(raw.get("id") or ""),
+                "type": str(raw.get("type") or ""),
+                "severity": raw.get("severity") if raw.get("severity") in SEVERITY_ORDER else None,
+                "score": _number(raw.get("score")),
+            }
+        )
     for raw in risk.get("triggers") or []:
         if not isinstance(raw, dict):
             continue
-        triggers.append(
+        rules.append(
             {
                 "id": str(raw.get("id") or ""),
-                "level": str(raw.get("level") or ""),
+                "type": "options",
                 "severity": raw.get("severity") if raw.get("severity") in SEVERITY_ORDER else None,
-                "optionIds": [str(item) for item in raw.get("optionIds") or []],
+                "score": None,
             }
+        )
+    score = _number(risk.get("score"))
+    if score is None:
+        # 新版结果没有单一风险分：取决定最终等级的规则里第一个带分数的
+        score = next(
+            (
+                rule["score"]
+                for rule in rules
+                if rule["severity"] == severity and rule["score"] is not None
+            ),
+            None,
         )
     return {
         "title": str(risk.get("title") or "风险"),
         "level": str(risk.get("level") or ""),
-        "severity": severity if severity in SEVERITY_ORDER else None,
+        "severity": severity,
         "source": str(risk.get("source") or "none"),
-        "score": _number(risk.get("score")),
-        "triggers": triggers,
+        "score": score,
+        "rules": rules,
     }
 
 
 def summarize_result(result: Any) -> dict[str, Any]:
     """从计分结果里提取总分、等级、维度与触发风险的条目（不含解读长文）。
 
-    量表配置了风险维度时以风险维度的分级为准（管理员明确定义的风险口径），
-    没有时才按结果等级文案的关键词推断。
+    量表风险编辑给出了风险等级时以它为准（管理员明确定义的风险口径）；
+    没有配置风险规则、或规则都没命中且未设置「其余判为无风险」时，才按结果等级文案的关键词推断。
     """
     summary = _summarize_scores(result)
     summary["risk"] = None

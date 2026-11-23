@@ -111,18 +111,20 @@ export interface EnterpriseReportTrigger {
   severity: Severity;
 }
 
-/** 量表配置了风险维度时的判定（仅后台）；有分级时企业数据的自动风险等级以它为准。 */
+/** 量表风险编辑的判定（仅后台）；有分级时企业数据的自动风险等级以它为准。 */
 export interface EnterpriseReportRisk {
   title: string;
   level: string;
   severity: Severity | null;
-  source: "score" | "trigger" | "none";
+  /** score / trigger 来自升级前保存的旧版结果 */
+  source: "rule" | "fallback" | "none" | "score" | "trigger";
   score: number | null;
-  triggers: Array<{
+  /** 命中的规则 */
+  rules: Array<{
     id: string;
-    level: string;
+    type: string;
     severity: Severity | null;
-    optionIds: string[];
+    score: number | null;
   }>;
 }
 

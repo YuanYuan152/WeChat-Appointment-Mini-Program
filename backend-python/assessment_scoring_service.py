@@ -13,6 +13,16 @@ from assessment_formula import (
     evaluate_dimension_formula,
     parse_dimension_formula,
 )
+from assessment_risk_rules import (
+    RISK_SCORE_RULE_DEFAULT_TITLE,
+    RISK_SEVERITY_LABELS,
+    RISK_TOTAL_SOURCE_ID,
+    RISK_UNMATCHED_LABEL,
+    iter_risk_levels,
+    risk_dimension_is_active,
+    risk_level_rules,
+    upgrade_legacy_risk_dimension,
+)
 
 
 class AssessmentAnswerError(ValueError):
@@ -902,9 +912,6 @@ def _total_result(
     }
 
 
-RISK_SEVERITY_RANK = {"ok": 0, "watch": 1, "mid": 2, "high": 3}
-
-
 def _selected_option_ids(
     definition: dict[str, Any], answers: dict[str, Any]
 ) -> set[str]:
@@ -918,100 +925,144 @@ def _selected_option_ids(
     return selected
 
 
-def _risk_result(
-    definition: dict[str, Any], answers: dict[str, Any]
-) -> dict[str, Any] | None:
-    """风险维度：只给管理端看，来访端接口返回前会剥离（assessment_visibility）。
-
-    计分判定按分数区间取等级；选项触发在作答选中指定选项时稳定命中。
-    两者都配置时取风险更高的一项，同级时选项触发优先。
-    """
-    block = definition.get("riskDimension")
-    if not isinstance(block, dict):
+def _risk_source_outcome(
+    result: dict[str, Any], dimension_id: str
+) -> tuple[str, Any, str] | None:
+    """「维度区间」规则引用的维度 / 总分在本次结果里的（名称, 得分, 区间等级）。"""
+    if dimension_id == RISK_TOTAL_SOURCE_ID:
+        if result.get("type") == "dimension":
+            total = result.get("total")
+            if not isinstance(total, dict):
+                return None
+            return (
+                str(total.get("title") or "总分"),
+                total.get("score"),
+                str(total.get("level") or ""),
+            )
+        if result.get("type") == "sum":
+            return ("总分", result.get("totalScore"), str(result.get("level") or ""))
         return None
-    result: dict[str, Any] = {
-        "title": str(block.get("title") or "风险"),
-        "level": "未触发",
-        "severity": "ok",
-        "source": "none",
-        "description": "",
-        "suggestions": [],
-        "triggers": [],
-    }
-    candidates: list[dict[str, Any]] = []
+    for item in result.get("dimensions") or []:
+        if isinstance(item, dict) and item.get("id") == dimension_id:
+            return (
+                str(item.get("title") or dimension_id),
+                item.get("score"),
+                str(item.get("level") or ""),
+            )
+    return None
 
-    selected = _selected_option_ids(definition, answers)
-    for trigger in block.get("triggers") or []:
-        if not isinstance(trigger, dict):
-            continue
-        matched = [
-            str(option_id)
-            for option_id in trigger.get("optionIds") or []
-            if str(option_id) in selected
-        ]
-        severity = str(trigger.get("severity") or "")
-        if not matched or severity not in RISK_SEVERITY_RANK:
-            continue
-        description = str(trigger.get("analystDescription") or "")
-        result["triggers"].append(
-            {
-                "id": str(trigger.get("id") or ""),
-                "level": str(trigger.get("level") or ""),
-                "severity": severity,
-                "optionIds": matched,
-                "description": description,
-            }
-        )
-        candidates.append(
-            {
-                "source": "trigger",
-                "level": str(trigger.get("level") or ""),
-                "severity": severity,
-                "description": description,
-                "suggestions": list(trigger.get("suggestions") or []),
-            }
-        )
 
-    scoring = block.get("scoring")
-    if isinstance(scoring, dict):
+def _evaluate_risk_rule(
+    definition: dict[str, Any],
+    answers: dict[str, Any],
+    result: dict[str, Any],
+    rule: dict[str, Any],
+    selected_options: set[str],
+) -> dict[str, Any] | None:
+    """规则命中时返回命中详情（供后台报告展示），否则返回 None。"""
+    rule_id = str(rule.get("id") or "")
+    rule_type = rule.get("type")
+    if rule_type == "dimension":
+        dimension_id = str(rule.get("dimensionId") or "")
+        outcome = _risk_source_outcome(result, dimension_id)
+        if outcome is None:
+            return None
+        title, score, level = outcome
+        if level not in {str(item) for item in rule.get("levels") or []}:
+            return None
+        return {
+            "id": rule_id,
+            "type": "dimension",
+            "dimensionId": dimension_id,
+            "title": title,
+            "score": score,
+            "level": level,
+        }
+    if rule_type == "score":
+        low, high = rule.get("min"), rule.get("max")
+        if not rule.get("questionIds") or (low is None and high is None):
+            return None
         score = _calculation_score(
             definition,
             answers,
-            scoring,
+            rule,
             formula_error="风险计分公式无效",
         )
-        range_item = _find_range(score, scoring.get("scoreRanges"))
-        result["score"] = score
-        result["scoreLevel"] = range_item.get("level", "未知") if range_item else "未知"
-        range_severity = str(range_item.get("severity") or "") if range_item else ""
-        result["scoreSeverity"] = range_severity if range_severity in RISK_SEVERITY_RANK else None
-        if range_item and range_severity in RISK_SEVERITY_RANK:
-            candidates.append(
-                {
-                    "source": "score",
-                    "level": str(range_item.get("level") or ""),
-                    "severity": range_severity,
-                    "description": str(range_item.get("analystDescription") or ""),
-                    "suggestions": list(range_item.get("suggestions") or []),
-                }
-            )
+        if (low is not None and score < float(low)) or (high is not None and score > float(high)):
+            return None
+        return {
+            "id": rule_id,
+            "type": "score",
+            "title": str(rule.get("title") or RISK_SCORE_RULE_DEFAULT_TITLE),
+            "score": score,
+            "min": low,
+            "max": high,
+        }
+    if rule_type == "options":
+        option_ids = [str(item) for item in rule.get("optionIds") or []]
+        hits = [item for item in option_ids if item in selected_options]
+        multiple = rule.get("match") == "multiple"
+        required = 1
+        if multiple:
+            # 缺省 minCount 表示所选选项必须全部同时被选
+            min_count = rule.get("minCount")
+            valid_count = isinstance(min_count, int) and not isinstance(min_count, bool)
+            required = min_count if valid_count else len(option_ids)
+        if not option_ids or len(hits) < max(required, 1):
+            return None
+        return {
+            "id": rule_id,
+            "type": "options",
+            "match": "multiple" if multiple else "any",
+            "optionIds": hits,
+            "requiredCount": required,
+        }
+    return None
 
-    if candidates:
-        # max 取第一个最大值：选项触发排在前面，同级时以触发规则为准
-        decisive = max(candidates, key=lambda item: RISK_SEVERITY_RANK[item["severity"]])
-        result.update(
-            {
-                "level": decisive["level"] or result["level"],
-                "severity": decisive["severity"],
-                "source": decisive["source"],
-                "description": decisive["description"],
-                "suggestions": decisive["suggestions"],
-            }
-        )
-    elif isinstance(scoring, dict):
-        result["level"] = result.get("scoreLevel") or "未知"
-        result["severity"] = None
-    return result
+
+def _risk_result(
+    definition: dict[str, Any],
+    answers: dict[str, Any],
+    result: dict[str, Any],
+) -> dict[str, Any] | None:
+    """风险编辑：只给管理端看，来访端接口返回前会剥离（assessment_visibility）。
+
+    四个风险等级各自配置规则，同一等级内任意一条规则命中即命中该等级，
+    多个等级同时命中时取风险最高的一级；都没命中时，「无风险」开启了兜底就判为无风险，
+    否则不判定（severity 为 None，企业数据按结果等级文字自动识别）。
+    """
+    block = upgrade_legacy_risk_dimension(definition.get("riskDimension"))
+    if not risk_dimension_is_active(block):
+        return None
+    selected_options = _selected_option_ids(definition, answers)
+    matched: list[dict[str, Any]] = []
+    levels: dict[str, dict[str, Any]] = {}
+    for severity, level in iter_risk_levels(block):
+        levels[severity] = level
+        for rule in risk_level_rules(level):
+            hit = _evaluate_risk_rule(definition, answers, result, rule, selected_options)
+            if hit is not None:
+                matched.append({**hit, "severity": severity})
+
+    # iter_risk_levels 从高到低遍历，第一条命中规则所在的等级就是最高等级
+    decisive: str | None = matched[0]["severity"] if matched else None
+    source = "rule" if matched else "none"
+    if decisive is None and levels.get("ok", {}).get("fallback") is True:
+        decisive, source = "ok", "fallback"
+    decisive_level = levels.get(decisive, {}) if decisive else {}
+    return {
+        "title": str(block.get("title") or "风险"),
+        "level": RISK_SEVERITY_LABELS[decisive] if decisive else RISK_UNMATCHED_LABEL,
+        "severity": decisive,
+        "source": source,
+        "description": str(decisive_level.get("analystDescription") or ""),
+        "suggestions": [
+            str(item)
+            for item in decisive_level.get("suggestions") or []
+            if isinstance(item, str)
+        ],
+        "matchedRules": matched,
+    }
 
 
 def calculate_assessment_result(
@@ -1040,7 +1091,7 @@ def calculate_assessment_result(
         total = _total_result(definition, answers)
         if total is not None:
             result["total"] = total
-    risk = _risk_result(definition, answers)
+    risk = _risk_result(definition, answers, result)
     if risk is not None:
         result["risk"] = risk
     return result
@@ -1096,9 +1147,6 @@ def validate_generated_scoring_examples(definition: dict[str, Any]) -> None:
         total = result.get("total")
         if isinstance(total, dict) and total.get("level") == "未知":
             raise AssessmentAnswerError(f"{label}总分样例没有命中有效报告结果")
-        risk = result.get("risk")
-        if isinstance(risk, dict) and risk.get("scoreLevel") == "未知":
-            raise AssessmentAnswerError(f"{label}风险计分样例没有命中有效风险区间")
         result_type = result.get("type")
         if result_type == "sum":
             score = result.get("totalScore")

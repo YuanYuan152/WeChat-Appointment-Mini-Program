@@ -23,7 +23,7 @@ interface AssessmentReportListItemBase {
   /** 筛选用：mini-legacy | eap | eap:网站名.公司名 */
   sourceKey?: string | null;
   entryChannel?: string | null;
-  /** 量表配置了风险维度时的判定摘要（仅 EAP 报告，未配置为 null） */
+  /** 量表配置了风险规则时的判定摘要（仅 EAP 报告，未配置为 null） */
   risk?: AssessmentRiskSummary | null;
 }
 
@@ -82,6 +82,7 @@ export interface PatientAssessmentReportListFilters {
   sourceKey?: string;
 }
 
+/** 旧版风险结果里命中的选项触发规则。 */
 export interface AssessmentRiskTriggerHit {
   id: string;
   level: string;
@@ -91,17 +92,58 @@ export interface AssessmentRiskTriggerHit {
   description: string;
 }
 
-/** 风险维度计分结果：仅管理端接口返回。 */
+interface AssessmentRiskRuleHitBase {
+  id: string;
+  /** 规则所在的风险等级 */
+  severity: AssessmentRiskSeverity;
+}
+
+export interface AssessmentRiskDimensionRuleHit extends AssessmentRiskRuleHitBase {
+  type: "dimension";
+  dimensionId: string;
+  title: string;
+  score: number | null;
+  /** 本次作答落入的区间等级 */
+  level: string;
+}
+
+export interface AssessmentRiskScoreRuleHit extends AssessmentRiskRuleHitBase {
+  type: "score";
+  title: string;
+  score: number;
+  min: number | null;
+  max: number | null;
+}
+
+export interface AssessmentRiskOptionRuleHit extends AssessmentRiskRuleHitBase {
+  type: "options";
+  match: "any" | "multiple";
+  /** 本次作答命中的选项 */
+  optionIds: string[];
+  requiredCount: number;
+}
+
+export type AssessmentRiskRuleHit =
+  | AssessmentRiskDimensionRuleHit
+  | AssessmentRiskScoreRuleHit
+  | AssessmentRiskOptionRuleHit;
+
+/**
+ * 风险判定结果：仅管理端接口返回。
+ * source：rule 命中规则；fallback 未命中任何规则、按「无风险」兜底；none 未命中且不判定。
+ * score / trigger 以及 triggers、score 等字段来自升级前保存的旧版结果。
+ */
 export interface AssessmentRiskResult {
   title: string;
   level: string;
-  /** 计分判定没有命中区间时为 null */
+  /** 没有命中任何规则且未设置兜底时为 null */
   severity: AssessmentRiskSeverity | null;
-  source: "score" | "trigger" | "none";
+  source: "rule" | "fallback" | "none" | "score" | "trigger";
   description: string;
   suggestions: string[];
-  triggers: AssessmentRiskTriggerHit[];
-  /** 配置了计分判定时才有 */
+  /** 本次命中的全部规则（按风险从高到低） */
+  matchedRules?: AssessmentRiskRuleHit[];
+  triggers?: AssessmentRiskTriggerHit[];
   score?: number;
   scoreLevel?: string;
   scoreSeverity?: AssessmentRiskSeverity | null;

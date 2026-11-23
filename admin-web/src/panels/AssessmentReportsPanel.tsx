@@ -392,7 +392,7 @@ export function AssessmentReportsPanel({
   );
 }
 
-/** 风险维度判定（仅后台）：未触发时不打标，避免列表里满屏“无风险”。 */
+/** 风险规则判定（仅后台）：无风险或未判定时不打标，避免列表里满屏“无风险”。 */
 function RiskBadge({ risk }: { risk: AssessmentRiskSummary }) {
   if (!risk.severity || risk.severity === "ok") {
     return null;
@@ -402,7 +402,7 @@ function RiskBadge({ risk }: { risk: AssessmentRiskSummary }) {
     <span
       className="mb-1 mr-1.5 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
       style={{ background: meta.bg, color: meta.color }}
-      title="风险维度判定，仅后台可见"
+      title="风险规则判定，仅后台可见"
     >
       {risk.level || meta.label}
     </span>
