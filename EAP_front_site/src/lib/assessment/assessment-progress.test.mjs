@@ -121,3 +121,41 @@ test("resume finds a required gap before an untouched optional fallback", () => 
     1,
   );
 });
+
+test("multi-select answers count only with a valid, non-empty selection", () => {
+  const multi = [
+    {
+      id: "m",
+      required: true,
+      inputType: "choice",
+      multiple: true,
+      options: [
+        { id: "a", text: "A", value: 0 },
+        {
+          id: "b",
+          text: "B",
+          value: 1,
+          followUp: { inputType: "number", required: true, validation: { min: 1, max: 3 } },
+        },
+      ],
+    },
+  ];
+  assert.equal(progress.areRequiredAssessmentQuestionsAnswered(multi, { m: [] }), false);
+  assert.equal(progress.areRequiredAssessmentQuestionsAnswered(multi, { m: ["a"] }), true);
+  assert.equal(
+    progress.areRequiredAssessmentQuestionsAnswered(multi, { m: ["a", { optionId: "b" }] }),
+    false,
+  );
+  assert.equal(
+    progress.areRequiredAssessmentQuestionsAnswered(multi, {
+      m: ["a", { optionId: "b", followUp: 2 }],
+    }),
+    true,
+  );
+  assert.equal(progress.areRequiredAssessmentQuestionsAnswered(multi, { m: ["a", "a"] }), false);
+  // 单选题出现数组视为未作答
+  assert.equal(
+    progress.areRequiredAssessmentQuestionsAnswered([{ ...multi[0], multiple: false }], { m: ["a"] }),
+    false,
+  );
+});

@@ -444,6 +444,35 @@
           "enum": ["choice", "text", "number"],
           "description": "缺省 choice。text/number 按是否填写或填写数字计分。"
         },
+        "multiple": {
+          "type": "boolean",
+          "description": "仅 choice 使用；缺省单选。为 true 时作答为已选项数组（选项 ID 或 {optionId, followUp}），不能反向计分，固定计分量表不支持。"
+        },
+        "innerScoring": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode"],
+          "description": "题内计分，仅多选题可设置；未设置时多选题不计分（0 分）。所选选项的分值（含追问得分）按 sum 相加，或代入 formula（只能引用本题选项 ID 与 + - * / ( )，未选中的选项按 0 计算），结果保留两位小数，即该题得分。",
+          "properties": {
+            "mode": {
+              "enum": ["sum", "formula"]
+            },
+            "formula": {
+              "type": "string",
+              "maxLength": 2000
+            }
+          },
+          "if": {
+            "properties": {
+              "mode": {
+                "const": "formula"
+              }
+            }
+          },
+          "then": {
+            "required": ["mode", "formula"]
+          }
+        },
         "scoreMode": {
           "enum": ["filled", "value"],
           "description": "仅 text/number 使用；缺省 filled。"
@@ -509,6 +538,39 @@
               "options": {
                 "minItems": 2
               }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": ["innerScoring"]
+          },
+          "then": {
+            "required": ["multiple"],
+            "properties": {
+              "multiple": {
+                "const": true
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "multiple": {
+                "const": true
+              }
+            },
+            "required": ["multiple"]
+          },
+          "then": {
+            "not": {
+              "properties": {
+                "inputType": {
+                  "enum": ["text", "number"]
+                }
+              },
+              "required": ["inputType"]
             }
           }
         }

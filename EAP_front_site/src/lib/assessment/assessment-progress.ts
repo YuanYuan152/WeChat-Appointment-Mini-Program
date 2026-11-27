@@ -47,6 +47,25 @@ function isPresent(
   }
 
   const options = Array.isArray(question.options) ? question.options : [];
+  if (Array.isArray(answer)) {
+    // 多选题：至少选一项，选项不能重复，每个已选项（含追问）都要有效
+    if (question.multiple !== true || answer.length === 0) return false;
+    const seen = new Set<string>();
+    return answer.every((entry) => {
+      const optionId = typeof entry === "string" ? entry : entry?.optionId;
+      if (typeof optionId !== "string" || seen.has(optionId)) return false;
+      seen.add(optionId);
+      return isChoiceEntryPresent(options, entry);
+    });
+  }
+  return isChoiceEntryPresent(options, answer);
+}
+
+/** 选择题的一个已选项是否有效：选项存在，追问按要求填写。 */
+function isChoiceEntryPresent(
+  options: AssessmentQuestion["options"],
+  answer: AssessmentAnswerValue,
+): boolean {
   if (typeof answer === "string") {
     if (options.length === 0) return Boolean(answer);
     const option = options.find((item) => item.id === answer);

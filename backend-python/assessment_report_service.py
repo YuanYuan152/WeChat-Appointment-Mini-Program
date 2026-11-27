@@ -25,6 +25,7 @@ from assessment_share_service import (
     AssessmentShareConfigurationError,
     decode_share_code,
 )
+from assessment_scoring_variants import resolve_scoring_definition
 from assessment_visibility import public_report_snapshot, public_result
 from config import settings
 from models import AppAccount, AppAssessmentReport
@@ -132,6 +133,12 @@ def report_list_item(row: AppAssessmentReport) -> dict[str, Any]:
     return _report_list_item(row, _load_verified_snapshot(row))
 
 
+def public_snapshot_assessment(row: AppAssessmentReport) -> dict[str, Any]:
+    """校验快照后返回这份答卷实际计分用的量表定义（来访端口径，已剥离风险维度）。"""
+    assessment = public_report_snapshot(_load_verified_snapshot(row)).get("assessment")
+    return assessment if isinstance(assessment, dict) else {}
+
+
 def report_detail(
     row: AppAssessmentReport,
     *,
@@ -236,7 +243,7 @@ def submit_report(
             demographic_answers,
             answers,
         )
-        result = calculate_assessment_result(definition, normalized_answers)
+        result = calculate_assessment_result(definition, normalized_answers, demographics)
         summary = assessment_result_summary(result)
     except AssessmentAnswerError as exc:
         raise AssessmentReportValidationError(str(exc)) from exc
@@ -244,7 +251,10 @@ def submit_report(
     _assert_payload_size("计分结果", result, 512 * 1024)
 
     completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
-    snapshot = _snapshot(definition, result, completed_at)
+    # 快照保存实际用于计分的定义（已套用命中的人口学计分方案、去掉方案列表），
+    # 报告页按快照展示区间与维度时就与本次计分一致
+    scoring_definition, _variant = resolve_scoring_definition(definition, demographics)
+    snapshot = _snapshot(scoring_definition, result, completed_at)
     snapshot_json = _canonical_json(snapshot)
     if len(snapshot_json.encode("utf-8")) > 2 * 1024 * 1024:
         raise AssessmentReportValidationError("报告快照内容过大")

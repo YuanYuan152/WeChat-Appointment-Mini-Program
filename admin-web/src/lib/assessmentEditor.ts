@@ -2,6 +2,7 @@ import type {
   AssessmentDefinition,
   AssessmentDemographicQuestion,
   AssessmentDimension,
+  AssessmentOption,
   AssessmentOptionFollowUp,
   AssessmentQuestion,
   AssessmentQuestionInputType,
@@ -19,6 +20,9 @@ import type {
   AssessmentScoreRange,
   AssessmentScoringPreset,
   AssessmentScoringType,
+  AssessmentScoringVariant,
+  AssessmentScoringVariantCondition,
+  AssessmentScoringVariantScoring,
   AssessmentSourceReport,
   AssessmentTotalScore,
   AssessmentValidationIssue,
@@ -26,6 +30,7 @@ import type {
 } from "@/types/assessment";
 import {
   compileDimensionFormula,
+  remapFormulaIds,
   removeFormulaQuestionId,
   replaceFormulaQuestionId,
 } from "@/lib/assessmentFormula";
@@ -34,6 +39,34 @@ export function getQuestionInputType(
   question: Pick<AssessmentQuestion, "inputType">,
 ): AssessmentQuestionInputType {
   return question.inputType || "choice";
+}
+
+/** 多选题：选择题且主动设置了 multiple（缺省为单选）。 */
+export function isMultipleChoiceQuestion(
+  question: Pick<AssessmentQuestion, "inputType" | "multiple">,
+): boolean {
+  return getQuestionInputType(question) === "choice" && question.multiple === true;
+}
+
+/** 题内计分公式可引用的标识符：本题的选项 ID。 */
+export function getInnerScoringOptionIds(question: Pick<AssessmentQuestion, "options">): string[] {
+  return (question.options || []).map((option) => option.id).filter(Boolean);
+}
+
+/** 题内计分公式错误提示：公式引擎沿用维度公式，提示里的“题目 ID”换成“选项 ID”。 */
+export function getInnerScoringFormulaError(
+  question: Pick<AssessmentQuestion, "options" | "innerScoring">,
+): string {
+  if (question.innerScoring?.mode !== "formula") {
+    return "";
+  }
+  try {
+    compileDimensionFormula(question.innerScoring.formula ?? "", getInnerScoringOptionIds(question));
+    return "";
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "公式不合法";
+    return message.replace(/题目 ID/g, "选项 ID");
+  }
 }
 
 const STABLE_ID_PATTERN = /^[A-Za-z0-9]+(?:[-_.][A-Za-z0-9]+)*$/;
@@ -235,10 +268,11 @@ function normalizeScoreRanges(
   return ranges.map((range) => normalizeScoreRange(range));
 }
 
-export function normalizeAssessmentDefinition(
-  definition: AssessmentDefinition,
-): AssessmentDefinition {
-  const next = cloneDefinition(definition);
+/** 总分区间、维度区间、多维总分区间统一成当前写法（默认方案和计分方案共用）。 */
+function normalizeScoringRangeFields<
+  T extends Pick<AssessmentDefinition, "scoreRanges" | "dimensions" | "totalScore">,
+>(target: T): T {
+  const next = { ...target };
   if (Array.isArray(next.scoreRanges)) {
     next.scoreRanges = normalizeScoreRanges(next.scoreRanges);
   }
@@ -254,8 +288,18 @@ export function normalizeAssessmentDefinition(
       scoreRanges: normalizeScoreRanges(next.totalScore.scoreRanges),
     };
   }
+  return next;
+}
+
+export function normalizeAssessmentDefinition(
+  definition: AssessmentDefinition,
+): AssessmentDefinition {
+  const next = normalizeScoringRangeFields(cloneDefinition(definition));
   if (next.riskDimension) {
     next.riskDimension = normalizeRiskDimension(next.riskDimension);
+  }
+  if (Array.isArray(next.scoringVariants)) {
+    next.scoringVariants = normalizeScoringVariants(next.scoringVariants);
   }
   return next;
 }
@@ -707,22 +751,27 @@ function questionScoreValues(
   if (!Array.isArray(question.options) || question.options.length === 0) {
     return undefined;
   }
-  const values: number[] = [];
-  for (const option of question.options) {
-    if (!Number.isFinite(option.value)) {
+  if (isMultipleChoiceQuestion(question)) {
+    // 多选题不支持反向计分；公式错误等问题由题目校验单独提示，这里只放过组合过多的上限错误
+    if (reverse) {
       return undefined;
     }
-    if (option.followUp) {
-      const extras = followUpScoreValues(option.followUp);
-      if (extras.length === 0) {
-        return undefined;
+    try {
+      return getInnerScoreValues(question);
+    } catch (error) {
+      if (error instanceof ReachabilityLimitError) {
+        throw error;
       }
-      for (const extra of extras) {
-        values.push(option.value + extra);
-      }
-    } else {
-      values.push(option.value);
+      return undefined;
     }
+  }
+  const values: number[] = [];
+  for (const option of question.options) {
+    const contributions = optionContributionValues(option);
+    if (!contributions) {
+      return undefined;
+    }
+    values.push(...contributions);
   }
   const minimum = Math.min(...values);
   const maximum = Math.max(...values);
@@ -733,6 +782,106 @@ function questionScoreValues(
     scoreValues.push(0);
   }
   return [...new Set(scoreValues)];
+}
+
+/** 选项被选中时可能贡献的分值：选项分值 + 追问得分的各种取值；无法确定时返回 undefined。 */
+function optionContributionValues(option: AssessmentOption): number[] | undefined {
+  if (!Number.isFinite(option.value)) {
+    return undefined;
+  }
+  if (!option.followUp) {
+    return [option.value];
+  }
+  const extras = followUpScoreValues(option.followUp);
+  if (extras.length === 0) {
+    return undefined;
+  }
+  return [...new Set(extras.map((extra) => option.value + extra))];
+}
+
+function roundInnerScore(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+/**
+ * 多选题本题可能得到的全部分值（与后端 assessment_multiple_choice.reachable_inner_scores 一致）。
+ * 未开启题内计分时只有 0；必答题至少选一项，选答题可以不答（0 分）。
+ * 公式不合法、出现除以零或组合过多时抛出错误。
+ */
+export function getInnerScoreValues(question: AssessmentQuestion): number[] | undefined {
+  const config = question.innerScoring;
+  if (!isMultipleChoiceQuestion(question) || !config) {
+    return [0];
+  }
+  const options = question.options || [];
+  const contributions = new Map<string, number[]>();
+  for (const option of options) {
+    const values = optionContributionValues(option);
+    if (!values) {
+      return undefined;
+    }
+    contributions.set(option.id, values);
+  }
+  const required = question.required !== false;
+  const scores = new Set<number>();
+  if (config.mode === "formula") {
+    const compiled = compileDimensionFormula(
+      config.formula ?? "",
+      getInnerScoringOptionIds(question),
+    );
+    let states: Array<{ values: Record<string, number>; selected: boolean }> = [
+      { values: {}, selected: false },
+    ];
+    for (const option of options) {
+      const nextStates: typeof states = [];
+      for (const state of states) {
+        // 不选该项：变量按 0 计算
+        nextStates.push(state);
+        for (const value of contributions.get(option.id) ?? []) {
+          nextStates.push({ values: { ...state.values, [option.id]: value }, selected: true });
+        }
+      }
+      if (nextStates.length > MAX_REACHABLE_SCORE_STATES) {
+        throw new ReachabilityLimitError(
+          `题内计分公式的选项组合超过 ${MAX_REACHABLE_SCORE_STATES.toLocaleString("zh-CN")} 种，无法完成校验，请减少选项或改用“选项分值相加”`,
+        );
+      }
+      states = nextStates;
+    }
+    for (const state of states) {
+      if (state.selected || !required) {
+        scores.add(roundInnerScore(compiled.evaluate(state.values)));
+      }
+    }
+  } else {
+    let sums = new Map<string, { total: number; selected: boolean }>([
+      ["0|0", { total: 0, selected: false }],
+    ]);
+    for (const option of options) {
+      const nextSums = new Map(sums);
+      for (const { total } of sums.values()) {
+        for (const value of contributions.get(option.id) ?? []) {
+          const nextTotal = roundInnerScore(total + value);
+          nextSums.set(`${nextTotal}|1`, { total: nextTotal, selected: true });
+        }
+      }
+      if (nextSums.size > MAX_REACHABLE_SCORE_STATES) {
+        throw new ReachabilityLimitError(
+          `题内计分可达分值超过 ${MAX_REACHABLE_SCORE_STATES.toLocaleString("zh-CN")} 个，无法完成校验，请简化选项分值`,
+        );
+      }
+      sums = nextSums;
+    }
+    for (const { total, selected } of sums.values()) {
+      if (selected || !required) {
+        scores.add(total);
+      }
+    }
+  }
+  if (!required) {
+    scores.add(0);
+  }
+  return [...scores].sort((left, right) => left - right);
 }
 
 function enumerateReachableScores(
@@ -1061,6 +1210,65 @@ function validateRanges(
   }
 }
 
+/** 多选题不支持反向计分。 */
+function addMultipleReverseIssues(
+  definition: AssessmentDefinition,
+  reverseIds: string[],
+  path: string,
+  issues: AssessmentValidationIssue[],
+): void {
+  const multipleIds = new Set(
+    definition.questions
+      .filter((question) => isMultipleChoiceQuestion(question))
+      .map((question) => question.id),
+  );
+  reverseIds.forEach((id, index) => {
+    if (multipleIds.has(id)) {
+      issues.push({
+        path: `${path}[${index}]`,
+        message: `多选题不支持反向计分：${id}`,
+        severity: "error",
+      });
+    }
+  });
+}
+
+/** 题内计分：方式、公式，以及逐个组合算一遍（发现除以零、组合过多等问题）。 */
+function validateInnerScoring(
+  question: AssessmentQuestion,
+  questionPath: string,
+  issues: AssessmentValidationIssue[],
+): void {
+  const config = question.innerScoring;
+  if (!config) {
+    return;
+  }
+  const path = `${questionPath}.innerScoring`;
+  if (config.mode !== "sum" && config.mode !== "formula") {
+    issues.push({ path: `${path}.mode`, message: "题内计分方式不合法", severity: "error" });
+    return;
+  }
+  const formulaError = getInnerScoringFormulaError(question);
+  if (formulaError) {
+    issues.push({
+      path: `${path}.formula`,
+      message: `题内计分公式不合法：${formulaError}`,
+      severity: "error",
+    });
+    return;
+  }
+  try {
+    getInnerScoreValues(question);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "无法计算题内得分";
+    issues.push({
+      path: config.mode === "formula" ? `${path}.formula` : path,
+      message: message.startsWith("题内计分") ? message : `题内计分公式不合法：${message}`,
+      severity: "error",
+    });
+  }
+}
+
 function addDuplicateIssues(
   entries: Array<{ id: string; path: string }>,
   issues: AssessmentValidationIssue[],
@@ -1213,6 +1421,30 @@ export function validateAssessmentDefinition(
         severity: "error",
       });
     }
+    if (question.multiple !== undefined && typeof question.multiple !== "boolean") {
+      issues.push({ path: `${questionPath}.multiple`, message: "多选设置不合法", severity: "error" });
+    }
+    if (question.multiple === true && inputType !== "choice") {
+      issues.push({
+        path: `${questionPath}.multiple`,
+        message: "只有选择题可以设置多选",
+        severity: "error",
+      });
+    }
+    if (question.innerScoring && question.multiple !== true) {
+      issues.push({
+        path: `${questionPath}.innerScoring`,
+        message: "只有多选题可以开启题内计分",
+        severity: "error",
+      });
+    }
+    if (question.multiple === true && isFixedScoringType(definition.scoringType)) {
+      issues.push({
+        path: `${questionPath}.multiple`,
+        message: "固定计分量表不支持多选题",
+        severity: "error",
+      });
+    }
     const scoreMode = question.scoreMode || "filled";
     if (!["filled", "value"].includes(scoreMode)) {
       issues.push({
@@ -1322,6 +1554,9 @@ export function validateAssessmentDefinition(
         }
       }
     });
+    if (isMultipleChoiceQuestion(question) && question.innerScoring) {
+      validateInnerScoring(question, questionPath, issues);
+    }
   });
   addDuplicateIssues(questionEntries, issues, "题目 ID 重复");
   addDuplicateIssues(optionEntries, issues, "选项 ID 必须全局唯一");
@@ -1344,6 +1579,7 @@ export function validateAssessmentDefinition(
       });
     }
   });
+  addMultipleReverseIssues(definition, reverseIds, "reverseQuestionIds", issues);
 
   const demographicQuestions = definition.demographicQuestions ?? [];
   addDuplicateIssues(
@@ -1547,6 +1783,12 @@ export function validateAssessmentDefinition(
             }
           },
         );
+        addMultipleReverseIssues(
+          definition,
+          dimension.reverseQuestionIds ?? [],
+          `${path}.reverseQuestionIds`,
+          issues,
+        );
         validateRanges(dimension.scoreRanges, `${path}.scoreRanges`, issues);
       });
     }
@@ -1735,6 +1977,7 @@ export function validateAssessmentDefinition(
 
   validateTotalScore(definition, questionIds, issues);
   validateRiskDimension(definition, questionIds, issues);
+  validateScoringVariants(definition, issues);
 
   coverageSummaries.forEach((summary) => {
     if (summary.validationError) {
@@ -2166,20 +2409,34 @@ export function composeAssessmentDefinition(
     for (const question of source.questions || []) {
       const nextId = allocateStableId(question.id, usedQuestionIds);
       idMap.set(question.id, nextId);
+      const optionIdMap = new Map<string, string>();
       const options = (question.options || []).map((option) => {
         const next = structuredClone(option);
         next.id = allocateStableId(option.id, usedOptionIds);
+        optionIdMap.set(option.id, next.id);
         delete next.matchTags;
         return next;
       });
-      questions.push({
+      const copied: AssessmentQuestion = {
         ...structuredClone(question),
         id: nextId,
         options,
         sourceAssessmentId: source.id,
         sourceAssessmentTitle: source.title || source.id,
         sourceQuestionId: question.id,
-      });
+      };
+      // 选项 ID 重名时会追加序号，题内计分公式里的引用要跟着换
+      if (copied.innerScoring?.mode === "formula" && copied.innerScoring.formula) {
+        copied.innerScoring = {
+          ...copied.innerScoring,
+          formula: remapFormulaIds(
+            copied.innerScoring.formula,
+            optionIdMap,
+            [...optionIdMap.keys()],
+          ),
+        };
+      }
+      questions.push(copied);
     }
     sourceMaps.push({ definition: source, idMap });
   }
@@ -2365,14 +2622,19 @@ export const RISK_OPTION_MATCH_LABELS: Record<AssessmentRiskOptionMatch, string>
 const RISK_SCORE_RULE_TITLE = "风险计分";
 
 /** 选择题选项 ID → 所属题目 ID。 */
+/**
+ * 选择题选项 ID → 作答槽位：单选题同一题的选项共用一个槽位（一次只能选一个），
+ * 多选题每个选项各占一个槽位。
+ */
 function choiceOptionQuestionMap(definition: AssessmentDefinition): Map<string, string> {
   const map = new Map<string, string>();
   for (const question of definition.questions) {
     if (getQuestionInputType(question) !== "choice") {
       continue;
     }
+    const multiple = isMultipleChoiceQuestion(question);
     for (const option of question.options || []) {
-      map.set(option.id, question.id);
+      map.set(option.id, multiple ? `option:${option.id}` : `question:${question.id}`);
     }
   }
   return map;
@@ -2848,6 +3110,12 @@ function validateCalculationBlock(
       });
     }
   });
+  addMultipleReverseIssues(
+    definition,
+    block.reverseQuestionIds ?? [],
+    `${path}.reverseQuestionIds`,
+    issues,
+  );
   (block.reverseQuestionIds ?? []).forEach((id, index) => {
     if (!selected.includes(id)) {
       issues.push({
@@ -3064,7 +3332,7 @@ function validateRiskOptionRule(
   if (required > reachable) {
     issues.push({
       path: `${path}.optionIds`,
-      message: `${label}要求同时命中 ${required} 项，但同一道题只能选中一个选项，所选选项最多同时命中 ${reachable} 项`,
+      message: `${label}要求同时命中 ${required} 项，但单选题同一题只能选中一个选项，所选选项最多同时命中 ${reachable} 项`,
       severity: "error",
     });
   }
@@ -3408,4 +3676,848 @@ export function syncRiskDimensionReferences(
     return { ...rule, dimensionId, levels };
   });
   return nextRisk === risk ? next : { ...next, riskDimension: nextRisk };
+}
+
+// ---------------------------------------------------------------------------
+// 多选题与题内计分
+// ---------------------------------------------------------------------------
+
+/** 改选项 ID 时同步本题题内计分公式里的引用。 */
+export function renameOptionInInnerScoring(
+  question: AssessmentQuestion,
+  previousId: string,
+  nextId: string,
+): AssessmentQuestion {
+  const config = question.innerScoring;
+  if (config?.mode !== "formula" || !config.formula || !previousId || !nextId || previousId === nextId) {
+    return question;
+  }
+  return {
+    ...question,
+    innerScoring: {
+      ...config,
+      formula: replaceFormulaQuestionId(
+        config.formula,
+        previousId,
+        nextId,
+        getInnerScoringOptionIds(question),
+      ),
+    },
+  };
+}
+
+/** 删除选项时从本题题内计分公式里去掉它。 */
+export function removeOptionFromInnerScoring(
+  question: AssessmentQuestion,
+  optionId: string,
+): AssessmentQuestion {
+  const config = question.innerScoring;
+  if (config?.mode !== "formula" || !config.formula || !optionId) {
+    return question;
+  }
+  return {
+    ...question,
+    innerScoring: {
+      ...config,
+      formula: removeFormulaQuestionId(config.formula, optionId, getInnerScoringOptionIds(question)),
+    },
+  };
+}
+
+/** 题目改成多选后不能再反向计分：从总分、维度、组合来源和风险计分的反向题里移除。 */
+export function removeQuestionFromReverseLists(
+  definition: AssessmentDefinition,
+  questionId: string,
+): AssessmentDefinition {
+  const drop = (ids: string[] | undefined) =>
+    ids?.includes(questionId) ? ids.filter((id) => id !== questionId) : ids;
+  const withoutInDimension = (dimension: AssessmentDimension): AssessmentDimension =>
+    dimension.reverseQuestionIds?.includes(questionId)
+      ? { ...dimension, reverseQuestionIds: drop(dimension.reverseQuestionIds) }
+      : dimension;
+  const next: AssessmentDefinition = { ...definition };
+  if (definition.reverseQuestionIds?.includes(questionId)) {
+    next.reverseQuestionIds = drop(definition.reverseQuestionIds);
+  }
+  if (definition.dimensions?.some((dimension) => dimension.reverseQuestionIds?.includes(questionId))) {
+    next.dimensions = definition.dimensions.map(withoutInDimension);
+  }
+  if (definition.totalScore?.reverseQuestionIds?.includes(questionId)) {
+    next.totalScore = {
+      ...definition.totalScore,
+      reverseQuestionIds: drop(definition.totalScore.reverseQuestionIds),
+    };
+  }
+  if (
+    definition.sourceReports?.some(
+      (report) =>
+        report.reverseQuestionIds?.includes(questionId) ||
+        report.dimensions?.some((dimension) => dimension.reverseQuestionIds?.includes(questionId)),
+    )
+  ) {
+    next.sourceReports = definition.sourceReports.map((report) => ({
+      ...report,
+      reverseQuestionIds: drop(report.reverseQuestionIds),
+      dimensions: report.dimensions?.map(withoutInDimension),
+    }));
+  }
+  if (definition.riskDimension) {
+    const risk = mapRiskRules(definition.riskDimension, (rule) =>
+      rule.type === "score" && rule.reverseQuestionIds?.includes(questionId)
+        ? { ...rule, reverseQuestionIds: drop(rule.reverseQuestionIds) }
+        : rule,
+    );
+    if (risk !== definition.riskDimension) {
+      next.riskDimension = risk;
+    }
+  }
+  return next;
+}
+
+// ---------------------------------------------------------------------------
+// 人口学计分方案
+// ---------------------------------------------------------------------------
+
+/** 方案“计分”部分包含的字段（与后端 assessment_scoring_variants.VARIANT_SCORING_FIELDS 一致）。 */
+export const SCORING_VARIANT_SCORING_FIELDS = [
+  "scoreRanges",
+  "reverseQuestionIds",
+  "dimensions",
+  "totalScore",
+  "matchResults",
+  "sourceReports",
+] as const;
+
+export type ScoringVariantPart = "scoring" | "risk";
+
+/** 可作为方案条件的人口学题：有选项的单选 / 多选题。 */
+export function getChoiceDemographicQuestions(
+  definition: Pick<AssessmentDefinition, "demographicQuestions">,
+): AssessmentDemographicQuestion[] {
+  return (definition.demographicQuestions ?? []).filter(
+    (question) =>
+      (question.inputType === "single" || question.inputType === "multiple") &&
+      (question.options?.length ?? 0) > 0,
+  );
+}
+
+/** 报告结果 / 风险编辑是否显示“计分方案”：有可用的单选 / 多选人口学题，或已经配置过方案。 */
+export function hasScoringVariantSupport(definition: AssessmentDefinition): boolean {
+  return (
+    getChoiceDemographicQuestions(definition).length > 0 ||
+    (definition.scoringVariants?.length ?? 0) > 0
+  );
+}
+
+function pickScoringFields(
+  definition: AssessmentDefinition,
+  clone: boolean,
+): AssessmentScoringVariantScoring {
+  const scoring: Record<string, unknown> = {};
+  for (const field of SCORING_VARIANT_SCORING_FIELDS) {
+    const value = definition[field];
+    if (value !== undefined) {
+      scoring[field] = clone ? structuredClone(value) : value;
+    }
+  }
+  return scoring as AssessmentScoringVariantScoring;
+}
+
+/** 方案实际生效的定义：去掉方案列表，套用方案单独设置的计分 / 风险（与后端 effective_definition 一致）。 */
+export function getScoringVariantView(
+  definition: AssessmentDefinition,
+  variant: AssessmentScoringVariant | undefined,
+): AssessmentDefinition {
+  const view: AssessmentDefinition = { ...definition };
+  delete view.scoringVariants;
+  if (!variant) {
+    return view;
+  }
+  if (variant.scoring) {
+    for (const field of SCORING_VARIANT_SCORING_FIELDS) {
+      delete view[field];
+    }
+    Object.assign(view, variant.scoring);
+  }
+  if (variant.riskDimension) {
+    view.riskDimension = variant.riskDimension;
+  }
+  return view;
+}
+
+function mapScoringVariants(
+  definition: AssessmentDefinition,
+  mapper: (variant: AssessmentScoringVariant) => AssessmentScoringVariant,
+): AssessmentDefinition {
+  const variants = definition.scoringVariants;
+  if (!variants?.length) {
+    return definition;
+  }
+  let changed = false;
+  const next = variants.map((variant) => {
+    const mapped = mapper(variant);
+    if (mapped !== variant) {
+      changed = true;
+    }
+    return mapped;
+  });
+  return changed ? { ...definition, scoringVariants: next } : definition;
+}
+
+function replaceScoringVariant(
+  definition: AssessmentDefinition,
+  variantId: string,
+  update: (variant: AssessmentScoringVariant) => AssessmentScoringVariant | null,
+): AssessmentDefinition {
+  const variants = definition.scoringVariants ?? [];
+  const index = variants.findIndex((variant) => variant.id === variantId);
+  if (index < 0) {
+    return definition;
+  }
+  const updated = update(variants[index]);
+  if (updated === variants[index]) {
+    return definition;
+  }
+  const nextVariants = updated
+    ? variants.map((variant, itemIndex) => (itemIndex === index ? updated : variant))
+    : variants.filter((_, itemIndex) => itemIndex !== index);
+  const next: AssessmentDefinition = { ...definition, scoringVariants: nextVariants };
+  if (nextVariants.length === 0) {
+    delete next.scoringVariants;
+  }
+  return next;
+}
+
+/** 方案名称建议：条件里选中的选项文字，例如“女”“女 · 教师、医生”。 */
+export function suggestScoringVariantTitle(
+  definition: AssessmentDefinition,
+  conditions: AssessmentScoringVariantCondition[],
+): string {
+  const questions = new Map(
+    getChoiceDemographicQuestions(definition).map((question) => [question.id, question]),
+  );
+  return conditions
+    .map((condition) => {
+      const question = questions.get(condition.questionId);
+      return condition.optionIds
+        .map((id) => question?.options?.find((option) => option.id === id)?.text?.trim() || id)
+        .join("、");
+    })
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/** 方案适用条件的文字说明，例如“性别：女；职业：教师、医生”。 */
+export function describeScoringVariantConditions(
+  definition: AssessmentDefinition,
+  variant: AssessmentScoringVariant,
+): string {
+  const questions = new Map(
+    (definition.demographicQuestions ?? []).map((question) => [question.id, question]),
+  );
+  return (variant.conditions ?? [])
+    .map((condition) => {
+      const question = questions.get(condition.questionId);
+      const label = (question?.text?.trim() || condition.questionId).replace(/[？?：:]+$/, "");
+      const options = condition.optionIds
+        .map((id) => question?.options?.find((option) => option.id === id)?.text?.trim() || id)
+        .join("、");
+      return `${label}：${options || "未选择选项"}`;
+    })
+    .join("；");
+}
+
+/** 新增方案：复制默认方案的计分和风险规则（固定计分量表只复制风险规则）。 */
+export function createScoringVariant(definition: AssessmentDefinition): {
+  definition: AssessmentDefinition;
+  variantId: string;
+} {
+  const variants = definition.scoringVariants ?? [];
+  const variantId = createStableId(
+    "variant",
+    variants.map((variant) => variant.id),
+  );
+  const question = getChoiceDemographicQuestions(definition)[0];
+  const variant: AssessmentScoringVariant = {
+    id: variantId,
+    title: `方案 ${variants.length + 1}`,
+    conditions: question ? [{ questionId: question.id, optionIds: [] }] : [],
+  };
+  if (!isFixedScoringType(definition.scoringType)) {
+    variant.scoring = pickScoringFields(definition, true);
+  }
+  if (definition.riskDimension) {
+    variant.riskDimension = structuredClone(definition.riskDimension);
+  }
+  return {
+    definition: { ...definition, scoringVariants: [...variants, variant] },
+    variantId,
+  };
+}
+
+export function updateScoringVariant(
+  definition: AssessmentDefinition,
+  variantId: string,
+  patch: Partial<Pick<AssessmentScoringVariant, "title" | "conditions">>,
+): AssessmentDefinition {
+  return replaceScoringVariant(definition, variantId, (variant) => ({ ...variant, ...patch }));
+}
+
+export function removeScoringVariant(
+  definition: AssessmentDefinition,
+  variantId: string,
+): AssessmentDefinition {
+  return replaceScoringVariant(definition, variantId, () => null);
+}
+
+/** 调整方案顺序：多个方案都满足时使用排在前面的。 */
+export function moveScoringVariant(
+  definition: AssessmentDefinition,
+  variantId: string,
+  offset: -1 | 1,
+): AssessmentDefinition {
+  const variants = definition.scoringVariants ?? [];
+  const index = variants.findIndex((variant) => variant.id === variantId);
+  const target = index + offset;
+  if (index < 0 || target < 0 || target >= variants.length) {
+    return definition;
+  }
+  const next = [...variants];
+  [next[index], next[target]] = [next[target], next[index]];
+  return { ...definition, scoringVariants: next };
+}
+
+/** 方案的计分 / 风险改为“单独设置”（复制当前默认方案）或“沿用默认方案”。 */
+export function setScoringVariantPartOwned(
+  definition: AssessmentDefinition,
+  variantId: string,
+  part: ScoringVariantPart,
+  owned: boolean,
+): AssessmentDefinition {
+  return replaceScoringVariant(definition, variantId, (variant) => {
+    const next: AssessmentScoringVariant = { ...variant };
+    if (part === "scoring") {
+      if (owned) {
+        next.scoring = pickScoringFields(definition, true);
+      } else {
+        delete next.scoring;
+      }
+    } else if (owned) {
+      next.riskDimension = definition.riskDimension
+        ? structuredClone(definition.riskDimension)
+        : createDefaultRiskDimension();
+    } else {
+      delete next.riskDimension;
+    }
+    return next;
+  });
+}
+
+/**
+ * 把方案视图里的修改写回方案单独设置的部分（沿用默认的部分不变）。
+ * 方案自己的维度 / 区间改名时，方案风险规则里的引用一并同步。
+ */
+export function applyScoringVariantView(
+  definition: AssessmentDefinition,
+  variantId: string,
+  previousView: AssessmentDefinition,
+  nextView: AssessmentDefinition,
+): AssessmentDefinition {
+  const synced = syncRiskDimensionReferences(previousView, nextView);
+  return replaceScoringVariant(definition, variantId, (variant) => {
+    const next: AssessmentScoringVariant = { ...variant };
+    if (variant.scoring) {
+      next.scoring = pickScoringFields(synced, false);
+    }
+    if (variant.riskDimension) {
+      // 方案自己的风险清空后仍算“单独设置”（不再判定风险），不退回沿用默认方案
+      next.riskDimension = synced.riskDimension ?? createDefaultRiskDimension();
+    }
+    return next;
+  });
+}
+
+/** 组合量表发布前：方案自己的来源报告同样同步成实际计分结构（结构需与默认方案一致）。 */
+export function syncComposedScoringVariants(definition: AssessmentDefinition): AssessmentDefinition {
+  if (!definition.composedFrom?.length) {
+    return definition;
+  }
+  return mapScoringVariants(definition, (variant) => {
+    if (!variant.scoring?.sourceReports?.length) {
+      return variant;
+    }
+    const synced = syncComposedSourceReports(getScoringVariantView(definition, variant));
+    if (synced.scoringType !== definition.scoringType) {
+      return variant;
+    }
+    return { ...variant, scoring: pickScoringFields(synced, false) };
+  });
+}
+
+function isScoringIssuePath(path: string): boolean {
+  return SCORING_VARIANT_SCORING_FIELDS.some(
+    (field) => path === field || path.startsWith(`${field}.`) || path.startsWith(`${field}[`),
+  );
+}
+
+function isRiskIssuePath(path: string): boolean {
+  return path === "riskDimension" || path.startsWith("riskDimension.");
+}
+
+const SCORING_TYPE_NAMES: Partial<Record<AssessmentScoringType, string>> = {
+  sum: "总分计分",
+  dimension: "维度计分",
+  match: "类型匹配",
+};
+
+function validateScoringVariants(
+  definition: AssessmentDefinition,
+  issues: AssessmentValidationIssue[],
+): void {
+  const variants = definition.scoringVariants;
+  if (variants === undefined) {
+    return;
+  }
+  if (!Array.isArray(variants)) {
+    issues.push({ path: "scoringVariants", message: "计分方案格式不正确", severity: "error" });
+    return;
+  }
+  const questions = new Map(
+    getChoiceDemographicQuestions(definition).map((question) => [question.id, question]),
+  );
+  const fixed = isFixedScoringType(definition.scoringType);
+  const seenIds = new Set<string>();
+  const seenConditions = new Map<string, string>();
+  variants.forEach((variant, index) => {
+    const path = `scoringVariants[${index}]`;
+    const title = variant.title?.trim() ?? "";
+    const label = title || `方案 ${index + 1}`;
+    const name = `计分方案「${label}」`;
+    const add = (
+      subPath: string,
+      message: string,
+      severity: AssessmentValidationIssue["severity"] = "error",
+    ) => issues.push({ path: subPath ? `${path}.${subPath}` : path, message, severity });
+
+    if (!variant.id || !STABLE_ID_PATTERN.test(variant.id)) {
+      add("id", `${name}的 ID 只能包含字母、数字和 - _ .`);
+    } else if (seenIds.has(variant.id)) {
+      add("id", `${name}的 ID 重复：${variant.id}`);
+    }
+    seenIds.add(variant.id);
+    if (!title) {
+      add("title", `请填写第 ${index + 1} 个计分方案的名称`);
+    }
+
+    const conditions = Array.isArray(variant.conditions) ? variant.conditions : [];
+    if (conditions.length === 0) {
+      add("conditions", `${name}至少需要一个适用条件`);
+    }
+    const usedQuestions = new Set<string>();
+    const signature: string[] = [];
+    conditions.forEach((condition, conditionIndex) => {
+      const conditionPath = `conditions[${conditionIndex}]`;
+      const question = questions.get(condition.questionId);
+      if (!question) {
+        add(`${conditionPath}.questionId`, `${name}的适用条件只能使用单选或多选人口学题`);
+        return;
+      }
+      if (usedQuestions.has(question.id)) {
+        add(`${conditionPath}.questionId`, `${name}的同一道人口学题只能设置一个条件`);
+      }
+      usedQuestions.add(question.id);
+      const optionIds = Array.isArray(condition.optionIds) ? condition.optionIds : [];
+      if (optionIds.length === 0) {
+        add(
+          `${conditionPath}.optionIds`,
+          `${name}：请为「${question.text || question.id}」至少选择一个选项`,
+        );
+      }
+      const known = new Set((question.options ?? []).map((option) => option.id));
+      const unknown = optionIds.filter((id) => !known.has(id));
+      if (unknown.length > 0) {
+        add(`${conditionPath}.optionIds`, `${name}引用了不存在的人口学选项：${unknown.join("、")}`);
+      }
+      signature.push(`${question.id}=${[...new Set(optionIds)].sort().join(",")}`);
+    });
+    if (conditions.length > 0) {
+      const key = signature.sort().join("&");
+      const previous = seenConditions.get(key);
+      if (previous !== undefined) {
+        add("conditions", `${name}与计分方案「${previous}」的适用条件完全相同，本方案不会被使用`);
+      } else {
+        seenConditions.set(key, label);
+      }
+    }
+
+    if (variant.scoring && fixed) {
+      add("scoring", `${name}：固定计分量表的计分规则固定，方案只能单独设置风险规则`);
+    }
+    if (!variant.scoring && !variant.riskDimension) {
+      add("", `${name}的计分和风险都沿用默认方案，与默认方案没有区别`, "warning");
+      return;
+    }
+    const view = getScoringVariantView(definition, variant);
+    if (definition.composedFrom?.length && variant.scoring?.sourceReports?.length) {
+      const derived = syncComposedSourceReports(view).scoringType;
+      if (derived !== definition.scoringType) {
+        add(
+          "scoring",
+          `${name}：组合量表方案的报告结构需要与默认方案一致（默认方案为${
+            SCORING_TYPE_NAMES[definition.scoringType] ?? definition.scoringType
+          }，本方案为${SCORING_TYPE_NAMES[derived] ?? derived}）`,
+        );
+      }
+    }
+    // 方案生效后的定义按同样规则校验，只保留方案自己负责的部分（计分 / 风险）的问题
+    for (const issue of validateAssessmentDefinition(view)) {
+      const relevant =
+        (variant.scoring && isScoringIssuePath(issue.path)) || isRiskIssuePath(issue.path);
+      if (relevant) {
+        issues.push({
+          ...issue,
+          path: `${path}.${issue.path}`,
+          message: `${name}：${issue.message}`,
+        });
+      }
+    }
+  });
+}
+
+// ---- 改题目 / 人口学题 / 计分方式时同步方案里的引用 ----
+
+interface QuestionChangeSet {
+  renames: Array<[string, string]>;
+  removed: Set<string>;
+  optionRenames: Array<[string, string]>;
+  removedOptions: Set<string>;
+  becameMultiple: string[];
+}
+
+/** 按位置识别一一对应的改名：旧 ID 消失且新 ID 原本不存在（与维度改名同步的口径一致）。 */
+function detectRenames(previousIds: string[], nextIds: string[]): Array<[string, string]> {
+  if (previousIds.length !== nextIds.length) {
+    return [];
+  }
+  const before = new Set(previousIds);
+  const after = new Set(nextIds);
+  const renames: Array<[string, string]> = [];
+  previousIds.forEach((id, index) => {
+    const nextId = nextIds[index];
+    if (id !== nextId && !after.has(id) && !before.has(nextId)) {
+      renames.push([id, nextId]);
+    }
+  });
+  return renames;
+}
+
+function detectQuestionChanges(
+  previous: AssessmentQuestion[],
+  next: AssessmentQuestion[],
+): QuestionChangeSet | null {
+  if (previous === next) {
+    return null;
+  }
+  const renames = detectRenames(
+    previous.map((question) => question.id),
+    next.map((question) => question.id),
+  );
+  const renameMap = new Map(renames);
+  const nextById = new Map(next.map((question) => [question.id, question]));
+  const removed = new Set<string>();
+  const optionRenames: Array<[string, string]> = [];
+  const removedOptions = new Set<string>();
+  const becameMultiple: string[] = [];
+  for (const question of previous) {
+    const current = nextById.get(renameMap.get(question.id) ?? question.id);
+    const oldOptions = (question.options ?? []).map((option) => option.id);
+    if (!current) {
+      removed.add(question.id);
+      oldOptions.forEach((id) => removedOptions.add(id));
+      continue;
+    }
+    const newOptions = (current.options ?? []).map((option) => option.id);
+    const renamedOptions = detectRenames(oldOptions, newOptions);
+    optionRenames.push(...renamedOptions);
+    const renamedFrom = new Set(renamedOptions.map(([id]) => id));
+    const kept = new Set(newOptions);
+    oldOptions.forEach((id) => {
+      if (!kept.has(id) && !renamedFrom.has(id)) {
+        removedOptions.add(id);
+      }
+    });
+    if (!isMultipleChoiceQuestion(question) && isMultipleChoiceQuestion(current)) {
+      becameMultiple.push(current.id);
+    }
+  }
+  if (
+    renames.length === 0 &&
+    removed.size === 0 &&
+    optionRenames.length === 0 &&
+    removedOptions.size === 0 &&
+    becameMultiple.length === 0
+  ) {
+    return null;
+  }
+  return { renames, removed, optionRenames, removedOptions, becameMultiple };
+}
+
+function renameIds(ids: string[] | undefined, previousId: string, nextId: string) {
+  return ids?.map((id) => (id === previousId ? nextId : id));
+}
+
+/** 题目改名：同步方案计分里的反向题、维度、组合来源、总分，以及风险计分规则。 */
+function renameQuestionInScoringView(
+  view: AssessmentDefinition,
+  previousId: string,
+  nextId: string,
+  knownQuestionIds: string[],
+): AssessmentDefinition {
+  const renameDimension = (dimension: AssessmentDimension): AssessmentDimension => ({
+    ...dimension,
+    questionIds: renameIds(dimension.questionIds, previousId, nextId) ?? [],
+    reverseQuestionIds: renameIds(dimension.reverseQuestionIds, previousId, nextId),
+    formula:
+      dimension.calculationMode === "formula" && dimension.formula
+        ? replaceFormulaQuestionId(dimension.formula, previousId, nextId, knownQuestionIds)
+        : dimension.formula,
+  });
+  const next: AssessmentDefinition = {
+    ...renameQuestionInExtras(view, previousId, nextId, knownQuestionIds),
+  };
+  if (view.reverseQuestionIds) {
+    next.reverseQuestionIds = renameIds(view.reverseQuestionIds, previousId, nextId);
+  }
+  if (view.dimensions) {
+    next.dimensions = view.dimensions.map(renameDimension);
+  }
+  if (view.sourceReports) {
+    next.sourceReports = view.sourceReports.map((report) => ({
+      ...report,
+      questionIds: renameIds(report.questionIds, previousId, nextId) ?? [],
+      reverseQuestionIds: renameIds(report.reverseQuestionIds, previousId, nextId),
+      dimensions: report.dimensions?.map(renameDimension),
+    }));
+  }
+  return next;
+}
+
+/** 删除题目：从方案计分和风险规则里去掉这些题目及其选项。 */
+function removeQuestionsFromScoringView(
+  view: AssessmentDefinition,
+  removed: Set<string>,
+  knownQuestionIds: string[],
+  previousQuestions: AssessmentQuestion[],
+): AssessmentDefinition {
+  const next: AssessmentDefinition = {
+    ...removeQuestionsFromExtras(view, removed, knownQuestionIds, previousQuestions),
+  };
+  if (view.reverseQuestionIds) {
+    next.reverseQuestionIds = view.reverseQuestionIds.filter((id) => !removed.has(id));
+  }
+  if (view.dimensions) {
+    next.dimensions = view.dimensions.map((dimension) =>
+      withoutRemovedQuestionLinks(dimension, removed, knownQuestionIds),
+    );
+  }
+  if (view.sourceReports) {
+    next.sourceReports = view.sourceReports.map((report) => ({
+      ...report,
+      questionIds: report.questionIds.filter((id) => !removed.has(id)),
+      reverseQuestionIds: report.reverseQuestionIds?.filter((id) => !removed.has(id)),
+      dimensions: report.dimensions?.map((dimension) =>
+        withoutRemovedQuestionLinks(dimension, removed, knownQuestionIds),
+      ),
+    }));
+  }
+  return next;
+}
+
+function applyQuestionChangesToView(
+  view: AssessmentDefinition,
+  changes: QuestionChangeSet,
+  previousQuestions: AssessmentQuestion[],
+): AssessmentDefinition {
+  const knownQuestionIds = previousQuestions.map((question) => question.id);
+  let result = view;
+  for (const [previousId, nextId] of changes.renames) {
+    result = renameQuestionInScoringView(result, previousId, nextId, knownQuestionIds);
+  }
+  if (changes.removed.size > 0) {
+    result = removeQuestionsFromScoringView(result, changes.removed, knownQuestionIds, previousQuestions);
+  }
+  for (const [previousId, nextId] of changes.optionRenames) {
+    result = renameOptionInRiskRules(result, previousId, nextId);
+  }
+  if (changes.removedOptions.size > 0) {
+    result = removeOptionsFromRiskRules(result, changes.removedOptions);
+  }
+  for (const questionId of changes.becameMultiple) {
+    result = removeQuestionFromReverseLists(result, questionId);
+  }
+  return result;
+}
+
+/** 对方案的生效定义做同样的改写，只写回方案单独设置的部分。 */
+function transformScoringVariantViews(
+  definition: AssessmentDefinition,
+  base: AssessmentDefinition,
+  transform: (view: AssessmentDefinition) => AssessmentDefinition,
+): AssessmentDefinition {
+  return mapScoringVariants(definition, (variant) => {
+    if (!variant.scoring && !variant.riskDimension) {
+      return variant;
+    }
+    const view = getScoringVariantView(base, variant);
+    const transformed = transform(view);
+    if (transformed === view) {
+      return variant;
+    }
+    const next: AssessmentScoringVariant = { ...variant };
+    let changed = false;
+    if (variant.scoring) {
+      const scoring = pickScoringFields(transformed, false);
+      const current = variant.scoring;
+      if (
+        SCORING_VARIANT_SCORING_FIELDS.some(
+          (field) =>
+            (scoring as Record<string, unknown>)[field] !==
+            (current as Record<string, unknown>)[field],
+        )
+      ) {
+        next.scoring = scoring;
+        changed = true;
+      }
+    }
+    if (variant.riskDimension && transformed.riskDimension !== variant.riskDimension) {
+      next.riskDimension = transformed.riskDimension ?? createDefaultRiskDimension();
+      changed = true;
+    }
+    return changed ? next : variant;
+  });
+}
+
+/** 人口学题改名、删除、改成非选择题，以及选项改名 / 删除时，同步方案适用条件。 */
+function syncScoringVariantConditions(
+  previous: AssessmentDefinition,
+  next: AssessmentDefinition,
+): AssessmentDefinition {
+  const before = previous.demographicQuestions ?? [];
+  const after = next.demographicQuestions ?? [];
+  if (before === after) {
+    return next;
+  }
+  const renameMap = new Map(
+    detectRenames(
+      before.map((question) => question.id),
+      after.map((question) => question.id),
+    ),
+  );
+  const beforeById = new Map(before.map((question) => [question.id, question]));
+  const afterById = new Map(after.map((question) => [question.id, question]));
+  return mapScoringVariants(next, (variant) => {
+    let changed = false;
+    const conditions = (variant.conditions ?? []).flatMap((condition) => {
+      const previousQuestion = beforeById.get(condition.questionId);
+      const questionId = renameMap.get(condition.questionId) ?? condition.questionId;
+      const question = afterById.get(questionId);
+      const choice = question?.inputType === "single" || question?.inputType === "multiple";
+      if (!question || !choice) {
+        // 人口学题被删除或改成填空 / 数字 / 日期：去掉这个条件（原本就无效的条件交给校验提示）
+        if (previousQuestion) {
+          changed = true;
+          return [];
+        }
+        return [condition];
+      }
+      let optionIds = condition.optionIds;
+      if (previousQuestion) {
+        const oldOptions = (previousQuestion.options ?? []).map((option) => option.id);
+        const newOptions = (question.options ?? []).map((option) => option.id);
+        const optionRenames = new Map(detectRenames(oldOptions, newOptions));
+        const oldSet = new Set(oldOptions);
+        const newSet = new Set(newOptions);
+        const mapped = optionIds.flatMap((id) => {
+          const renamed = optionRenames.get(id);
+          if (renamed) {
+            return [renamed];
+          }
+          // 删除的选项去掉；原本就不存在的选项保留，交给校验提示
+          return newSet.has(id) || !oldSet.has(id) ? [id] : [];
+        });
+        if (mapped.length !== optionIds.length || mapped.some((id, index) => id !== optionIds[index])) {
+          optionIds = mapped;
+          changed = true;
+        }
+      }
+      if (questionId !== condition.questionId) {
+        changed = true;
+      }
+      return [{ questionId, optionIds }];
+    });
+    return changed ? { ...variant, conditions } : variant;
+  });
+}
+
+/**
+ * 编辑器每次修改后调用：把对题目、人口学题、计分方式和默认方案维度的修改同步到各计分方案。
+ * - 题目改名 / 删除、选项改名 / 删除、改成多选：同步方案自己的计分与风险规则；
+ * - 人口学题 / 选项改名或删除：同步方案适用条件；
+ * - 切换计分方式：方案的计分改为沿用默认方案，风险里引用维度区间的规则移除；
+ * - 默认方案的维度 / 区间改名：沿用默认计分但单独设置风险的方案同步风险引用。
+ */
+export function syncScoringVariantReferences(
+  previous: AssessmentDefinition,
+  next: AssessmentDefinition,
+): AssessmentDefinition {
+  if (!next.scoringVariants?.length) {
+    return next;
+  }
+  let result = syncScoringVariantConditions(previous, next);
+  if (previous.scoringType !== next.scoringType) {
+    return mapScoringVariants(result, (variant) => {
+      const updated: AssessmentScoringVariant = { ...variant };
+      delete updated.scoring;
+      if (updated.riskDimension) {
+        updated.riskDimension = withoutDimensionRiskRules(updated.riskDimension);
+      }
+      return updated;
+    });
+  }
+  const changes = detectQuestionChanges(previous.questions, next.questions);
+  if (changes) {
+    result = transformScoringVariantViews(result, previous, (view) =>
+      applyQuestionChangesToView(view, changes, previous.questions),
+    );
+  }
+  if (SCORING_VARIANT_SCORING_FIELDS.some((field) => previous[field] !== next[field])) {
+    result = mapScoringVariants(result, (variant) => {
+      if (variant.scoring || !variant.riskDimension) {
+        return variant;
+      }
+      const synced = syncRiskDimensionReferences(
+        getScoringVariantView(previous, variant),
+        getScoringVariantView(next, variant),
+      );
+      return synced.riskDimension === variant.riskDimension
+        ? variant
+        : { ...variant, riskDimension: synced.riskDimension ?? createDefaultRiskDimension() };
+    });
+  }
+  return result;
+}
+
+function normalizeScoringVariants(
+  variants: AssessmentScoringVariant[],
+): AssessmentScoringVariant[] {
+  return variants.map((variant) => {
+    const next: AssessmentScoringVariant = { ...variant };
+    if (variant.scoring) {
+      next.scoring = normalizeScoringRangeFields(variant.scoring);
+    }
+    if (variant.riskDimension) {
+      next.riskDimension = normalizeRiskDimension(variant.riskDimension);
+    }
+    return next;
+  });
 }

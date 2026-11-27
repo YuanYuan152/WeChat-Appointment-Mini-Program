@@ -186,3 +186,100 @@ test("zhongjian_site serializes choice, follow-up, text, and number answers for 
     { number: 5 },
   );
 });
+
+const multipleQuestion = {
+  id: "q4",
+  text: "最近出现过哪些情况",
+  required: true,
+  inputType: "choice",
+  multiple: true,
+  options: [
+    { id: "insomnia", text: "失眠", value: 1 },
+    { id: "headache", text: "头痛", value: 1 },
+    {
+      id: "other",
+      text: "其他",
+      value: 1,
+      followUp: {
+        inputType: "text",
+        label: "请说明",
+        required: true,
+        scoreMode: "filled",
+        validation: { minLength: 2, maxLength: 10 },
+      },
+    },
+  ],
+};
+
+test("EAP_front_site toggles and validates multi-select answers", () => {
+  assert.equal(answerLib.isMultipleChoiceQuestion(multipleQuestion), true);
+  assert.equal(answerLib.isMultipleChoiceQuestion(choiceWithFollowUp), false);
+
+  let value = answerLib.toggleMultipleChoiceOption(multipleQuestion, undefined, "headache");
+  assert.deepEqual(value, ["headache"]);
+  value = answerLib.toggleMultipleChoiceOption(multipleQuestion, value, "insomnia");
+  assert.deepEqual(value, ["insomnia", "headache"]);
+  assert.equal(answerLib.isAssessmentAnswerPresent(multipleQuestion, value), true);
+  // 多选题不自动跳到下一题
+  assert.equal(answerLib.canAutoAdvanceAfterAnswer(multipleQuestion, value), false);
+
+  value = answerLib.toggleMultipleChoiceOption(multipleQuestion, value, "other");
+  assert.deepEqual(value, ["insomnia", "headache", { optionId: "other" }]);
+  assert.equal(answerLib.isAssessmentAnswerPresent(multipleQuestion, value), false);
+  value = answerLib.setMultipleChoiceFollowUp(multipleQuestion, value, "other", "胸闷");
+  assert.equal(answerLib.isAssessmentAnswerPresent(multipleQuestion, value), true);
+
+  value = answerLib.toggleMultipleChoiceOption(multipleQuestion, value, "insomnia");
+  value = answerLib.toggleMultipleChoiceOption(multipleQuestion, value, "headache");
+  assert.deepEqual(value, [{ optionId: "other", followUp: "胸闷" }]);
+  // 全部取消即清空作答
+  assert.equal(answerLib.toggleMultipleChoiceOption(multipleQuestion, value, "other"), undefined);
+
+  assert.equal(answerLib.isAssessmentAnswerPresent(multipleQuestion, []), false);
+  assert.equal(
+    answerLib.isAssessmentAnswerPresent(multipleQuestion, ["insomnia", "insomnia"]),
+    false,
+  );
+  assert.equal(answerLib.isAssessmentAnswerPresent(multipleQuestion, ["missing"]), false);
+  // 单选题不接受数组
+  assert.equal(answerLib.isAssessmentAnswerPresent(choiceWithFollowUp, ["good"]), false);
+});
+
+test("zhongjian_site serializes multi-select answers and explains invalid input", () => {
+  assert.deepEqual(
+    onboardingLib.serializeDynamicQuestionAnswer(multipleQuestion, [
+      "headache",
+      { optionId: "other", followUp: "胸闷" },
+      "insomnia",
+    ]),
+    ["insomnia", "headache", { optionId: "other", followUp: "胸闷" }],
+  );
+  assert.equal(onboardingLib.serializeDynamicQuestionAnswer(multipleQuestion, []), undefined);
+  assert.equal(
+    onboardingLib.serializeDynamicQuestionAnswer(multipleQuestion, [{ optionId: "other" }]),
+    undefined,
+  );
+  assert.equal(
+    onboardingLib.describeDynamicAnswerIssue(multipleQuestion, [
+      { optionId: "other", followUp: "x" },
+    ]),
+    "「其他」的请说明：请填写 2–10 个字",
+  );
+  assert.equal(
+    onboardingLib.describeDynamicAnswerIssue(multipleQuestion, [{ optionId: "other" }]),
+    "",
+  );
+  assert.equal(
+    onboardingLib.describeDynamicAnswerIssue(numberQuestion, { number: 9 }),
+    "请填写 0–7 之间的数字",
+  );
+  assert.equal(onboardingLib.describeDynamicAnswerIssue(numberQuestion, { number: 3 }), "");
+  assert.equal(
+    onboardingLib.describeDynamicAnswerIssue(textQuestion, { text: "好" }),
+    "请填写 2–20 个字",
+  );
+  assert.equal(
+    onboardingLib.describeDynamicAnswerIssue(choiceWithFollowUp, { optionId: "bad", followUp: 9 }),
+    "「较差」的失眠天数：请填写 1–7 之间的数字",
+  );
+});

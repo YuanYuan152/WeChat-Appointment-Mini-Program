@@ -1,4 +1,5 @@
 import type {
+  AssessmentAnswerValue,
   AssessmentCategory,
   AssessmentDefinition,
   AssessmentRiskSeverity,
@@ -155,6 +156,14 @@ export interface AssessmentRiskSummary {
   source: AssessmentRiskResult["source"];
 }
 
+/** 按人口学信息命中的计分方案（未命中时没有该字段，即默认方案）。 */
+export interface AssessmentScoringVariantSummary {
+  id: string;
+  title: string;
+  /** 适用条件说明，例如“性别：女” */
+  description: string;
+}
+
 export interface SumAssessmentScoreResult {
   type: "sum";
   totalScore: number;
@@ -164,6 +173,7 @@ export interface SumAssessmentScoreResult {
   analystDescription?: string;
   suggestions: string[];
   risk?: AssessmentRiskResult;
+  scoringVariant?: AssessmentScoringVariantSummary;
 }
 
 export interface MatchAssessmentScoreResult {
@@ -174,6 +184,7 @@ export interface MatchAssessmentScoreResult {
   image: string;
   shareText: string;
   risk?: AssessmentRiskResult;
+  scoringVariant?: AssessmentScoringVariantSummary;
 }
 
 export interface DimensionAssessmentScoreItem {
@@ -204,6 +215,7 @@ export interface DimensionAssessmentScoreResult {
   /** 配置了总分的维度量表才有 */
   total?: DimensionAssessmentTotalResult;
   risk?: AssessmentRiskResult;
+  scoringVariant?: AssessmentScoringVariantSummary;
 }
 
 export type AssessmentScoreResult =
@@ -235,7 +247,7 @@ export interface EapAssessmentReportDetail
   result: AssessmentScoreResult;
   reportSnapshot: AssessmentReportSnapshot;
   demographicAnswers?: Record<string, unknown>;
-  answers?: Record<string, string>;
+  answers?: Record<string, AssessmentAnswerValue>;
 }
 
 export interface LegacyAssessmentResult {

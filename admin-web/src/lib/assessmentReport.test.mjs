@@ -4,7 +4,21 @@ import test from "node:test";
 import ts from "typescript";
 
 const sourceUrl = new URL("./assessmentReport.ts", import.meta.url);
-const source = await readFile(sourceUrl, "utf8");
+// assessmentReport 依赖公式引擎：先把它转译成 data URL 模块再替换导入路径
+const formulaSourceUrl = new URL("./assessmentFormula.ts", import.meta.url);
+const { outputText: formulaOutputText } = ts.transpileModule(
+  await readFile(formulaSourceUrl, "utf8"),
+  {
+    compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022 },
+    fileName: formulaSourceUrl.pathname,
+  },
+);
+const formulaModuleUrl =
+  `data:text/javascript;base64,${Buffer.from(formulaOutputText).toString("base64")}`;
+const source = (await readFile(sourceUrl, "utf8")).replace(
+  'from "@/lib/assessmentFormula"',
+  `from "${formulaModuleUrl}"`,
+);
 const { outputText } = ts.transpileModule(source, {
   compilerOptions: {
     module: ts.ModuleKind.ES2022,
@@ -183,6 +197,7 @@ test("maps raw answers using only the immutable report snapshot", () => {
       selectedOptionId: "q1-b",
       answerText: "经常",
       scoreValue: 3,
+      scoreText: "3 分",
     },
     {
       questionId: "q2",
@@ -190,6 +205,7 @@ test("maps raw answers using only the immutable report snapshot", () => {
       selectedOptionId: "removed-option",
       answerText: "未知选项（removed-option）",
       scoreValue: null,
+      scoreText: "",
     },
   ]);
   assert.equal(
@@ -198,8 +214,129 @@ test("maps raw answers using only the immutable report snapshot", () => {
   );
   assert.deepEqual(
     report.mapAssessmentAnswers(snapshot.assessment, { q1: "q1-a" })[0],
-    { id: "q1", label: "快照中的题目一", value: "从不" },
+    { id: "q1", label: "快照中的题目一", value: "从不", score: "0 分" },
   );
+  assert.deepEqual(
+    report.mapAssessmentAnswers(snapshot.assessment, {})[0],
+    { id: "q1", label: "快照中的题目一", value: "未作答" },
+  );
+});
+
+function mixedQuestions() {
+  return [
+    {
+      id: "single",
+      text: "单选带追问",
+      required: true,
+      options: [
+        {
+          id: "single-a",
+          text: "有",
+          value: 1,
+          followUp: {
+            inputType: "number",
+            label: "天数",
+            required: true,
+            scoreMode: "value",
+            validation: { min: 0, max: 7 },
+          },
+        },
+        { id: "single-b", text: "没有", value: 0 },
+      ],
+    },
+    {
+      id: "multi-sum",
+      text: "多选相加",
+      required: true,
+      multiple: true,
+      innerScoring: { mode: "sum" },
+      options: [
+        { id: "ms-a", text: "失眠", value: 1 },
+        { id: "ms-b", text: "食欲下降", value: 2 },
+        {
+          id: "ms-c",
+          text: "其他",
+          value: 1,
+          followUp: {
+            inputType: "text",
+            label: "请说明",
+            required: true,
+            scoreMode: "filled",
+            completedScore: 1,
+            emptyScore: 0,
+          },
+        },
+      ],
+    },
+    {
+      id: "multi-formula",
+      text: "多选公式",
+      required: true,
+      multiple: true,
+      innerScoring: { mode: "formula", formula: "mf-a + mf-b * mf-c" },
+      options: [
+        { id: "mf-a", text: "甲", value: 1 },
+        { id: "mf-b", text: "乙", value: 2 },
+        { id: "mf-c", text: "丙", value: 3 },
+      ],
+    },
+    {
+      id: "multi-plain",
+      text: "多选不计分",
+      required: false,
+      multiple: true,
+      options: [
+        { id: "mp-a", text: "运动", value: 5 },
+        { id: "mp-b", text: "阅读", value: 5 },
+      ],
+    },
+    {
+      id: "fill",
+      text: "填空",
+      required: false,
+      inputType: "text",
+      scoreMode: "filled",
+      completedScore: 2,
+      emptyScore: 0,
+      options: [],
+    },
+    {
+      id: "count",
+      text: "数字",
+      required: true,
+      inputType: "number",
+      scoreMode: "value",
+      validation: { min: 0, max: 10 },
+      options: [],
+    },
+  ];
+}
+
+test("describes multi-select, follow-up, text and number answers with question scores", () => {
+  const assessment = { ...createSnapshot().assessment, questions: mixedQuestions() };
+  const rows = report.mapAssessmentAnswers(assessment, {
+    single: { optionId: "single-a", followUp: 3 },
+    "multi-sum": ["ms-a", { optionId: "ms-c", followUp: "头痛" }],
+    "multi-formula": ["mf-b", "mf-c"],
+    "multi-plain": ["mp-a", "mp-b"],
+    fill: { text: "多睡觉" },
+    count: { number: 6 },
+  });
+  assert.deepEqual(
+    rows.map((row) => [row.id, row.value, row.score]),
+    [
+      ["single", "有（天数：3）", "4 分"],
+      ["multi-sum", "失眠、其他（请说明：头痛）", "题内计分 3 分"],
+      // 公式：甲未选按 0，0 + 2 × 3 = 6
+      ["multi-formula", "乙、丙", "题内计分 6 分"],
+      ["multi-plain", "运动、阅读", "不计分"],
+      ["fill", "多睡觉", "2 分"],
+      ["count", "6", "6 分"],
+    ],
+  );
+  assert.equal(report.computeQuestionScore(mixedQuestions()[1], []), null);
+  assert.equal(report.computeQuestionScore(mixedQuestions()[1], ["unknown"]), 0);
+  assert.equal(report.describeQuestionAnswer(mixedQuestions()[1], ["unknown"]), "未知选项（unknown）");
 });
 
 test("maps demographic option values and free-form values from snapshot", () => {

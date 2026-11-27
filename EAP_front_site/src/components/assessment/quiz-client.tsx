@@ -7,7 +7,9 @@ import { useAuthStore } from "@/lib/stores/auth-store";
 import { QuizProgress } from "./quiz-progress";
 import { QuestionCard } from "./question-card";
 import { QuizIntro } from "./quiz-intro";
+import { DemographicForm } from "./demographic-form";
 import { Button } from "@/components/ui/button";
+import { areDemographicAnswersComplete } from "@/lib/assessment/demographic-answers";
 import {
   areRequiredAssessmentQuestionsAnswered,
   findAssessmentResumeQuestionIndex,
@@ -18,6 +20,7 @@ import {
   canAutoAdvanceAfterAnswer,
   getQuestionInputType,
   isAssessmentAnswerPresent,
+  isMultipleChoiceQuestion,
 } from "@/lib/assessment/assessment-answer";
 import type { Assessment, AssessmentAnswerValue } from "@/lib/api/types";
 
@@ -31,7 +34,9 @@ export function QuizClient({ assessment, type }: QuizClientProps) {
   const {
     getAnswers,
     getCurrentIndex,
+    getDemographicAnswers,
     setAnswer,
+    setDemographicAnswer,
     setCurrentIndex,
     clearSession,
     ensureAccount,
@@ -46,7 +51,8 @@ export function QuizClient({ assessment, type }: QuizClientProps) {
   const version = assessment.version ?? 1;
 
   const [hydrated, setHydrated] = useState(false);
-  const [phase, setPhase] = useState<"intro" | "quiz">("intro");
+  // 有人口学题的量表：介绍 → 填写基本信息 → 答题；没有人口学题时与原来一样直接答题
+  const [phase, setPhase] = useState<"intro" | "demographics" | "quiz">("intro");
   const advancingRef = useRef(false);
 
   useEffect(() => {
@@ -79,6 +85,13 @@ export function QuizClient({ assessment, type }: QuizClientProps) {
   const answeredCurrent = question
     ? isAssessmentAnswerPresent(question, currentAnswer)
     : false;
+  const demographicQuestions = assessment.demographicQuestions ?? [];
+  const hasDemographics = demographicQuestions.length > 0;
+  const demographicAnswers = getDemographicAnswers(assessment.id, version);
+  const demographicsComplete = areDemographicAnswersComplete(
+    demographicQuestions,
+    demographicAnswers,
+  );
 
   const goResult = () => {
     router.push(`/assessment/${type}/${assessment.id}/result`);
@@ -96,7 +109,8 @@ export function QuizClient({ assessment, type }: QuizClientProps) {
     }
     markStarted(assessment.id);
     setCurrentIndex(assessment.id, 0);
-    setPhase("quiz");
+    // 每次重新开始都先确认基本信息（上一次填写的内容会预填）
+    setPhase(hasDemographics ? "demographics" : "quiz");
   };
 
   const handleResume = () => {
@@ -107,7 +121,7 @@ export function QuizClient({ assessment, type }: QuizClientProps) {
     );
     markStarted(assessment.id);
     setCurrentIndex(assessment.id, resumeIdx);
-    setPhase("quiz");
+    setPhase(hasDemographics && !demographicsComplete ? "demographics" : "quiz");
   };
 
   const advanceAfterAnswer = (
@@ -162,7 +176,12 @@ export function QuizClient({ assessment, type }: QuizClientProps) {
   };
 
   const handlePrev = () => {
-    if (isFirst || advancingRef.current) return;
+    if (advancingRef.current) return;
+    if (isFirst) {
+      // 第一题再往前：回到基本信息修改
+      if (hasDemographics) setPhase("demographics");
+      return;
+    }
     setCurrentIndex(assessment.id, currentIndex - 1);
   };
 
@@ -211,6 +230,24 @@ export function QuizClient({ assessment, type }: QuizClientProps) {
     );
   }
 
+  if (phase === "demographics") {
+    return (
+      <div className="mx-auto max-w-2xl">
+        <DemographicForm
+          questions={demographicQuestions}
+          values={demographicAnswers}
+          description="开始答题前，请先填写以下基本信息，用于生成更准确的报告。"
+          submitLabel={answeredCount > 0 ? "继续答题" : "开始答题"}
+          onBack={() => setPhase("intro")}
+          onChange={(questionId, value) =>
+            setDemographicAnswer(assessment.id, questionId, value)
+          }
+          onSubmit={() => setPhase("quiz")}
+        />
+      </div>
+    );
+  }
+
   if (!question) {
     return (
       <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
@@ -222,8 +259,10 @@ export function QuizClient({ assessment, type }: QuizClientProps) {
     );
   }
 
+  const multipleChoice = isMultipleChoiceQuestion(question);
   const needsManualNext =
     inputType !== "choice" ||
+    multipleChoice ||
     Boolean(
       typeof currentAnswer === "object" &&
         "optionId" in (currentAnswer || {}) &&
@@ -246,11 +285,17 @@ export function QuizClient({ assessment, type }: QuizClientProps) {
         index={currentIndex}
       />
       <div className="mt-8 flex items-center justify-between gap-3">
-        <Button variant="outline" onClick={handlePrev} disabled={isFirst}>
-          上一题
+        <Button
+          variant="outline"
+          onClick={handlePrev}
+          disabled={isFirst && !hasDemographics}
+        >
+          {isFirst && hasDemographics ? "上一步" : "上一题"}
         </Button>
         <p className="text-center text-xs text-muted-foreground">
-          {needsManualNext
+          {multipleChoice
+            ? "可选择多项，选好后点击下一题"
+            : needsManualNext
             ? "填写完成后点击下一题"
             : isRequiredAssessmentQuestion(question)
               ? "点选选项后自动进入下一题"

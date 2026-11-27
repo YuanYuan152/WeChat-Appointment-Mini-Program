@@ -148,8 +148,8 @@
 | --- | --- |
 | `clientSubmissionId` | 客户端生成 UUID；同一用户下唯一，用于防重复提交 |
 | `assessmentVersion` | 用户开始答题时获取的已发布版本 |
-| `demographicAnswers` | 人口学答案，不参与计分 |
-| `answers` | 正式题目 ID 到选项 ID 的映射 |
+| `demographicAnswers` | 人口学答案：单选为选项值（`value`），多选为选项值数组，填空 / 日期为字符串，数字为数值；未填写的题不传。本身不计分，但会决定使用哪个人口学计分方案（见下） |
+| `answers` | 正式题目 ID 到作答的映射：单选为选项 ID（带追问的选项为 `{"optionId", "followUp"}`）；多选（`multiple: true`）为已选项数组，如 `["q3-a", {"optionId": "q3-d", "followUp": 2}]`，空数组视为未作答；填空为 `{"text"}`，数字为 `{"number"}` |
 | `entrySource` | `web`、`mini-webview`、`qr` 或 `direct` |
 | `shareCode` | 从分享二维码进入时携带，用于转化归因 |
 | `consentVersion` | 用户同意的隐私协议版本 |
@@ -162,9 +162,27 @@ EAP 客户端只把经当前量表详情校验的 `shareCode` 绑定到当前账
 
 1. 校验量表版本仍存在且曾发布。
 2. 校验必答题、选项和人口学答案。
-3. 根据白名单 `scoringPreset` 重新计分，不信任前端计算结果。
+3. 按人口学答案选出计分方案后，根据白名单 `scoringPreset` 重新计分，不信任前端计算结果。
 4. 生成不可变的报告快照。
 5. 按 `AccountId + clientSubmissionId` 幂等保存。
+
+人口学计分方案（`scoringVariants`，仅管理端可见，所有来访端接口都会剥离）：
+
+- 每个方案有适用条件 `conditions`（单选 / 多选人口学题的选项 ID，所填答案包含任一选项即满足该条件，
+  同一方案的多个条件需同时满足），以及可选的 `scoring`（`scoreRanges`、`reverseQuestionIds`、
+  `dimensions`、`totalScore`、`matchResults`、`sourceReports` 的完整副本）和 `riskDimension`。
+  没有设置的部分沿用默认方案；固定计分量表的方案只能设置 `riskDimension`。
+- 按列表顺序使用第一个条件全部满足的方案；都不满足或未填写相应人口学题时使用默认方案。
+- 命中方案时 `result.scoringVariant` 为 `{"id", "title", "description"}`（`description` 为条件说明，
+  如“性别：女”）；报告快照的 `assessment` 保存实际用于计分的定义（已套用方案、去掉方案列表），
+  报告页按快照展示的区间与维度即与本次计分一致。
+- EAP 网站和企业定制站点都在答题前收集量表的人口学信息（与员工基本信息表分开，员工信息不参与方案匹配）。
+  企业站提交接口 `POST /api/web/assessment-enterprises/{slug}/reports` 的每个 `reports[]` 项可带
+  `demographicAnswers`（格式同上；下划线开头的键是服务端写入的企业归档字段，客户端传入会被忽略），
+  不传时按默认方案计分，旧版前端不受影响。命中方案时该项额外返回 `reportStructure`（实际使用的
+  `scoringType`、`scoringPreset`、`scoreRanges`、`dimensions`、`totalScore`、`matchResults`、
+  `composedFrom`、`sourceReports` 与题目 ID 列表，不含风险维度），入职进度的 `resultsByScale` 也以
+  正式答卷为准带上同样的 `reportStructure`；企业站结果页与 PDF 据此画区间和维度。
 
 成功响应：
 

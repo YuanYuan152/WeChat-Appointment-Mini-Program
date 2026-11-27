@@ -321,3 +321,46 @@ test("legacy unbound persisted share codes fail closed after hydration", async (
     undefined,
   );
 });
+
+test("demographic answers are kept for a fresh attempt but cleared on version or account change", () => {
+  const assessmentId = "demographic-session-test";
+  let state = useQuizSession.getState();
+  state.ensureAccount(101);
+  state.ensureVersion(assessmentId, 1);
+  state.setDemographicAnswer(assessmentId, "gender", "female");
+  state.setDemographicAnswer(assessmentId, "hobbies", ["sport"]);
+  state.setDemographicAnswer(assessmentId, "note", "");
+  state = useQuizSession.getState();
+  assert.deepEqual(state.getDemographicAnswers(assessmentId, 1), {
+    gender: "female",
+    hobbies: ["sport"],
+  });
+  // 清空单项
+  state.setDemographicAnswer(assessmentId, "hobbies", []);
+  assert.deepEqual(useQuizSession.getState().getDemographicAnswers(assessmentId, 1), {
+    gender: "female",
+  });
+  // 未填写时返回同一个空对象，组件不会因此反复渲染
+  assert.equal(
+    useQuizSession.getState().getDemographicAnswers("unknown", 1),
+    useQuizSession.getState().getDemographicAnswers("other", 1),
+  );
+
+  // 重新开始作答：答案清空，人口学信息保留作为预填
+  state = useQuizSession.getState();
+  state.setAnswer(assessmentId, "q1", "q1-a");
+  state.clearSession(assessmentId, 1);
+  state = useQuizSession.getState();
+  assert.deepEqual(state.getAnswers(assessmentId, 1), {});
+  assert.deepEqual(state.getDemographicAnswers(assessmentId, 1), { gender: "female" });
+
+  // 发布了新版本：人口学题可能变了，不再沿用
+  state.ensureVersion(assessmentId, 2);
+  assert.deepEqual(useQuizSession.getState().getDemographicAnswers(assessmentId, 2), {});
+
+  // 切换账号
+  state = useQuizSession.getState();
+  state.setDemographicAnswer(assessmentId, "gender", "male");
+  state.ensureAccount(202);
+  assert.deepEqual(useQuizSession.getState().getDemographicAnswers(assessmentId, 2), {});
+});

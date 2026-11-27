@@ -95,6 +95,28 @@ export interface AssessmentOption {
   followUp?: AssessmentOptionFollowUp;
 }
 
+/** 选择题的一个作答：选项 ID，或带追问时的 { optionId, followUp }。 */
+export type AssessmentChoiceAnswer = string | { optionId: string; followUp?: string | number };
+
+/** 正式题目的作答：单选 / 多选（数组）/ 填空 / 数字。 */
+export type AssessmentAnswerValue =
+  | AssessmentChoiceAnswer
+  | AssessmentChoiceAnswer[]
+  | { text: string }
+  | { number: number };
+
+/** 题内计分方式：所选选项分值相加，或按公式计算。 */
+export type AssessmentInnerScoringMode = "sum" | "formula";
+
+/**
+ * 多选题的题内计分，本题得分即计算结果（参与总分、维度等）。
+ * 公式只能引用本题选项 ID：选中取该选项分值（含追问得分），未选中按 0 计算。
+ */
+export interface AssessmentInnerScoring {
+  mode: AssessmentInnerScoringMode;
+  formula?: string;
+}
+
 export interface AssessmentQuestion {
   id: string;
   text: string;
@@ -111,6 +133,10 @@ export interface AssessmentQuestion {
   validation?: AssessmentQuestionValidation;
   /** choice 题必填；text/number 题可为空数组。 */
   options: AssessmentOption[];
+  /** 仅 choice：为 true 时多选，作答为所选选项列表；缺省单选。 */
+  multiple?: boolean;
+  /** 仅多选题：开启题内计分；未开启时多选题不计分（0 分）。 */
+  innerScoring?: AssessmentInnerScoring;
   /** 组合量表记录题目来自哪份母量表，供批量删除时提示。 */
   sourceAssessmentId?: string;
   sourceAssessmentTitle?: string;
@@ -323,6 +349,41 @@ export interface AssessmentDefinition {
   /** 维度计分量表的总分（可选），来访端结果页展示。 */
   totalScore?: AssessmentTotalScore;
   /** 风险编辑（可选），仅管理端可见。 */
+  riskDimension?: AssessmentRiskDimension;
+  /** 按人口学信息切换的计分 / 风险方案（可选），仅管理端可见。 */
+  scoringVariants?: AssessmentScoringVariant[];
+}
+
+/** 方案适用条件：所填人口学题的答案包含其中任一选项即满足。 */
+export interface AssessmentScoringVariantCondition {
+  /** 单选或多选人口学题 ID */
+  questionId: string;
+  /** 人口学题选项 ID */
+  optionIds: string[];
+}
+
+/** 方案“计分”部分：设置后整体替换默认方案的这些报告结果字段。 */
+export type AssessmentScoringVariantScoring = Partial<
+  Pick<
+    AssessmentDefinition,
+    | "scoreRanges"
+    | "reverseQuestionIds"
+    | "dimensions"
+    | "totalScore"
+    | "matchResults"
+    | "sourceReports"
+  >
+>;
+
+/**
+ * 人口学计分方案：条件全部满足时使用。未设置 scoring / riskDimension 的部分沿用默认方案；
+ * 多个方案都满足时按列表顺序使用第一个，都不满足时使用默认方案。
+ */
+export interface AssessmentScoringVariant {
+  id: string;
+  title: string;
+  conditions: AssessmentScoringVariantCondition[];
+  scoring?: AssessmentScoringVariantScoring;
   riskDimension?: AssessmentRiskDimension;
 }
 

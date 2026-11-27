@@ -78,6 +78,8 @@ export interface AssessmentQuestion {
   helpText?: string;
   required?: boolean;
   inputType?: AssessmentQuestionInputType;
+  /** 选择题是否多选；缺省为单选 */
+  multiple?: boolean;
   scoreMode?: AssessmentScoreMode;
   completedScore?: number;
   emptyScore?: number;
@@ -85,10 +87,15 @@ export interface AssessmentQuestion {
   options: AssessmentOption[];
 }
 
-/** 作答值：旧选择题为选项 ID 字符串；新题型为结构化对象。 */
-export type AssessmentAnswerValue =
+/** 选择题单个选项的作答：无追问时为选项 ID，有追问时带上填写内容。 */
+export type AssessmentChoiceAnswer =
   | string
-  | { optionId: string; followUp?: string | number }
+  | { optionId: string; followUp?: string | number };
+
+/** 作答值：旧选择题为选项 ID 字符串；新题型为结构化对象；多选题为按选项顺序排列的已选项。 */
+export type AssessmentAnswerValue =
+  | AssessmentChoiceAnswer
+  | AssessmentChoiceAnswer[]
   | { text: string }
   | { number: number };
 

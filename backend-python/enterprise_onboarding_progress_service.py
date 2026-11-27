@@ -199,7 +199,7 @@ def align_progress_with_submissions(
 
     for aid, submission in submissions.items():
         current = results.get(aid) if isinstance(results.get(aid), dict) else {}
-        results[aid] = {
+        aligned_result = {
             **current,
             "assessmentId": aid,
             "publicId": submission.get("publicId") or current.get("publicId") or "",
@@ -216,6 +216,14 @@ def align_progress_with_submissions(
             "submittedAt": submission.get("submittedAt") or current.get("submittedAt"),
             "completedAt": submission.get("completedAt") or current.get("completedAt"),
         }
+        # 计分结构以正式答卷为准：按人口学计分方案计分的带上实际结构；
+        # 按默认方案计分的去掉旧结构，重新作答换了方案时不会沿用上一次的区间
+        structure = submission.get("reportStructure")
+        if isinstance(structure, dict):
+            aligned_result["reportStructure"] = structure
+        else:
+            aligned_result.pop("reportStructure", None)
+        results[aid] = aligned_result
 
     if authorized_ids and all(aid in seen for aid in authorized_ids):
         status = "completed"

@@ -35,7 +35,12 @@ from assessment_enterprise_service import (
     mutate_enterprises,
     resolve_employee_info_fields,
 )
-from assessment_report_service import AssessmentReportError, report_detail
+from assessment_report_service import (
+    AssessmentReportError,
+    public_snapshot_assessment,
+    report_detail,
+)
+from assessment_visibility import public_definition, public_result
 from enterprise_site_personnel_service import (
     ROLE_EMPLOYEE,
     login_required,
@@ -528,19 +533,67 @@ def respondent_key_for(meta: dict[str, Any], account_id: int) -> str:
     return f"a{int(account_id)}"
 
 
+# 企业站结果页可视化用到的计分结构（与前端 toOnboardingScales 里 report 的字段一致）
+REPORT_STRUCTURE_FIELDS = (
+    "scoringType",
+    "scoringPreset",
+    "scoreRanges",
+    "dimensions",
+    "totalScore",
+    "matchResults",
+    "composedFrom",
+    "sourceReports",
+)
+
+
+def report_structure(assessment: Any) -> Optional[dict[str, Any]]:
+    """量表定义 → 结果页可视化用的计分结构（区间、维度、总分、匹配结果、组合来源；不含风险维度）。"""
+    if not isinstance(assessment, dict):
+        return None
+    public = public_definition(assessment)
+    structure = {field: public[field] for field in REPORT_STRUCTURE_FIELDS if field in public}
+    questions = public.get("questions")
+    structure["questions"] = [
+        {"id": str(question.get("id") or "")}
+        for question in (questions if isinstance(questions, list) else [])
+        if isinstance(question, dict)
+    ]
+    return structure
+
+
+def scoring_variant_applied(result: Any) -> bool:
+    """答卷是否按人口学计分方案计分（按默认方案计分的结果里没有 scoringVariant）。"""
+    return isinstance(result, dict) and isinstance(result.get("scoringVariant"), dict)
+
+
+def _snapshot_report_structure(row: AppAssessmentReport) -> Optional[dict[str, Any]]:
+    try:
+        return report_structure(public_snapshot_assessment(row))
+    except AssessmentReportError:
+        return None
+
+
 def _submission_summary(row: AppAssessmentReport) -> dict[str, Any]:
     assessment_id = str(row.AssessmentId or "").strip()
     completed_at = row.CompletedAt.isoformat() + "Z" if row.CompletedAt else None
-    return {
+    result = _load_dict(row.ResultJson) or None
+    summary = {
         "assessmentId": assessment_id,
         "publicId": str(row.PublicId or ""),
         "assessmentTitle": str(row.AssessmentTitle or ""),
         "scoringType": str(row.ScoringType or ""),
         "resultSummary": str(row.ResultSummary or ""),
-        "result": _load_dict(row.ResultJson) or None,
+        # 摘要随入职进度返回给来访端：风险维度只给管理端看
+        "result": public_result(result),
         "completedAt": completed_at,
         "submittedAt": completed_at,
     }
+    if scoring_variant_applied(result):
+        # 按人口学计分方案计分的答卷带上实际使用的计分结构，换设备后结果页的区间也与计分一致
+        structure = _snapshot_report_structure(row)
+        if structure is not None:
+            summary["reportStructure"] = structure
+    return summary
 
 
 def personnel_latest_submissions(
@@ -559,7 +612,7 @@ def personnel_latest_submissions(
     if pid <= 0:
         return {}
 
-    latest: dict[str, dict[str, Any]] = {}
+    latest: dict[str, AppAssessmentReport] = {}
     for row, meta in enterprise_report_rows(db, enterprise):
         person = _personnel_meta(meta)
         if not person or int(person["id"]) != pid:
@@ -567,8 +620,9 @@ def personnel_latest_submissions(
         assessment_id = str(row.AssessmentId or "").strip()
         if not assessment_id:
             continue
-        latest[assessment_id] = _submission_summary(row)
-    return latest
+        latest[assessment_id] = row
+    # 只为每张量表最近一次的答卷生成摘要（按计分方案计分的要读报告快照）
+    return {assessment_id: _submission_summary(row) for assessment_id, row in latest.items()}
 
 
 def merge_submissions_from_result_public_ids(

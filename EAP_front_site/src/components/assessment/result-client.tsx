@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { useQuizSession } from "@/lib/stores/quiz-session";
 import { useAuthStore } from "@/lib/stores/auth-store";
 import {
@@ -12,14 +11,14 @@ import {
   isProfessionalAssessmentPrivacyAccepted,
 } from "@/lib/assessment/privacy-content";
 import { areRequiredAssessmentQuestionsAnswered } from "@/lib/assessment/assessment-progress";
+import {
+  areDemographicAnswersComplete,
+  cleanDemographicAnswers,
+} from "@/lib/assessment/demographic-answers";
 import { submitAssessmentReport } from "@/lib/assessment/api";
+import { DemographicForm } from "./demographic-form";
 import { ReportView } from "./report-view";
-import type {
-  Assessment,
-  AssessmentReportDetail,
-  DemographicQuestion,
-  DemographicValue,
-} from "@/lib/api/types";
+import type { Assessment, AssessmentReportDetail } from "@/lib/api/types";
 
 interface ResultClientProps {
   assessment: Assessment;
@@ -46,121 +45,6 @@ function fallbackSubmissionId(userId: number, assessment: Assessment): string {
   return created;
 }
 
-function isEmptyDemographicValue(value: unknown): boolean {
-  return value == null || value === "" || (Array.isArray(value) && value.length === 0);
-}
-
-function scalarEquals(left: unknown, right: DemographicValue): boolean {
-  return typeof left === typeof right && left === right;
-}
-
-function DemographicField({
-  question,
-  value,
-  onChange,
-}: {
-  question: DemographicQuestion;
-  value: unknown;
-  onChange: (value: unknown) => void;
-}) {
-  const commonLabel = (
-    <div className="mb-2">
-      <label className="text-sm font-medium text-foreground" htmlFor={`demographic-${question.id}`}>
-        {question.text}
-        {question.required ? <span className="ml-1 text-destructive">*</span> : null}
-      </label>
-      {question.helpText ? (
-        <p className="mt-1 text-xs text-muted-foreground">{question.helpText}</p>
-      ) : null}
-    </div>
-  );
-
-  if (question.inputType === "single") {
-    const selected = question.options?.find((option) => scalarEquals(value, option.value));
-    return (
-      <div>
-        {commonLabel}
-        <select
-          id={`demographic-${question.id}`}
-          value={selected?.id ?? ""}
-          onChange={(event) => {
-            const option = question.options?.find((item) => item.id === event.target.value);
-            onChange(option ? option.value : "");
-          }}
-          className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
-          required={question.required}
-        >
-          <option value="">请选择</option>
-          {question.options?.map((option) => (
-            <option key={option.id} value={option.id}>
-              {option.text}
-            </option>
-          ))}
-        </select>
-      </div>
-    );
-  }
-
-  if (question.inputType === "multiple") {
-    const selected = Array.isArray(value) ? value : [];
-    return (
-      <fieldset>
-        {commonLabel}
-        <div className="grid gap-2 sm:grid-cols-2">
-          {question.options?.map((option) => {
-            const checked = selected.some((item) => scalarEquals(item, option.value));
-            return (
-              <label
-                key={option.id}
-                className="flex cursor-pointer items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm"
-              >
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={() =>
-                    onChange(
-                      checked
-                        ? selected.filter((item) => !scalarEquals(item, option.value))
-                        : [...selected, option.value]
-                    )
-                  }
-                />
-                {option.text}
-              </label>
-            );
-          })}
-        </div>
-      </fieldset>
-    );
-  }
-
-  const stringValue = value == null ? "" : String(value);
-  const inputType = question.inputType === "number" ? "number" : question.inputType;
-  return (
-    <div>
-      {commonLabel}
-      <Input
-        id={`demographic-${question.id}`}
-        type={inputType}
-        value={stringValue}
-        required={question.required}
-        min={question.validation?.min}
-        max={question.validation?.max}
-        minLength={question.validation?.minLength}
-        maxLength={question.validation?.maxLength}
-        pattern={question.validation?.pattern}
-        onChange={(event) => {
-          if (question.inputType === "number") {
-            onChange(event.target.value === "" ? "" : Number(event.target.value));
-          } else {
-            onChange(event.target.value);
-          }
-        }}
-      />
-    </div>
-  );
-}
-
 export function ResultClient({ assessment, type }: ResultClientProps) {
   const router = useRouter();
   const {
@@ -169,12 +53,14 @@ export function ResultClient({ assessment, type }: ResultClientProps) {
     getShareCode,
     ensureAccount,
     isReadyToSubmit,
+    setDemographicAnswer,
   } = useQuizSession();
   const version = assessment.version ?? 1;
   const token = useAuthStore((state) => state.token);
   const userId = useAuthStore((state) => state.user?.id);
   const [hydrated, setHydrated] = useState(false);
-  const [demographicAnswers, setDemographicAnswers] = useState<Record<string, unknown>>({});
+  // 进入结果页时人口学信息是否需要补填：齐全时直接生成报告；需要补填时填完由用户手动提交
+  const [needsDemographicForm, setNeedsDemographicForm] = useState(false);
   const [report, setReport] = useState<AssessmentReportDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -182,6 +68,12 @@ export function ResultClient({ assessment, type }: ResultClientProps) {
   const answers = useMemo(
     () => (hydrated ? getAnswers(assessment.id, version) : {}),
     [assessment.id, getAnswers, hydrated, version],
+  );
+  // 作答前填写的人口学信息（订阅存储，结果页补填时也能实时更新）
+  const storedDemographics = useQuizSession((state) => state.demographicAnswers[assessment.id]);
+  const demographicAnswers = useMemo(
+    () => (hydrated ? storedDemographics ?? {} : {}),
+    [hydrated, storedDemographics],
   );
   const validSession =
     hydrated && isReadyToSubmit(assessment.id, version);
@@ -192,8 +84,9 @@ export function ResultClient({ assessment, type }: ResultClientProps) {
 
   const requiredQuestionsAnswered =
     areRequiredAssessmentQuestionsAnswered(assessment.questions, answers);
-  const demographicsComplete = demographicQuestions.every(
-    (question) => !question.required || !isEmptyDemographicValue(demographicAnswers[question.id])
+  const demographicsComplete = areDemographicAnswersComplete(
+    demographicQuestions,
+    demographicAnswers,
   );
 
   useEffect(() => {
@@ -206,13 +99,15 @@ export function ResultClient({ assessment, type }: ResultClientProps) {
         return;
       }
       ensureAccount(userId);
+      const stored = useQuizSession.getState().demographicAnswers[assessment.id];
+      setNeedsDemographicForm(!areDemographicAnswersComplete(demographicQuestions, stored));
       setHydrated(true);
     };
     if (useQuizSession.persist.hasHydrated()) {
       sync();
     }
     return useQuizSession.persist.onFinishHydration(sync);
-  }, [ensureAccount, userId]);
+  }, [assessment.id, demographicQuestions, ensureAccount, userId]);
 
   useEffect(() => {
     if (hydrated && (!validSession || !requiredQuestionsAnswered)) {
@@ -259,7 +154,7 @@ export function ResultClient({ assessment, type }: ResultClientProps) {
         clientSubmissionId,
         assessmentId: assessment.id,
         assessmentVersion: assessment.version ?? 1,
-        demographicAnswers,
+        demographicAnswers: cleanDemographicAnswers(demographicQuestions, demographicAnswers),
         answers,
         entrySource: shareCode ? "qr" : "web",
         shareCode,
@@ -284,16 +179,19 @@ export function ResultClient({ assessment, type }: ResultClientProps) {
     getShareCode,
     assessment,
     version,
+    demographicQuestions,
     demographicAnswers,
     answers,
   ]);
 
+  // 人口学信息已在作答前填好（或量表没有人口学题）时直接生成报告
+  const autoSubmit = hydrated && !needsDemographicForm;
   useEffect(() => {
-    if (demographicQuestions.length === 0) {
+    if (autoSubmit) {
       const timer = window.setTimeout(() => void saveReport(), 0);
       return () => window.clearTimeout(timer);
     }
-  }, [demographicQuestions.length, saveReport]);
+  }, [autoSubmit, saveReport]);
 
   if (!hydrated) {
     return (
@@ -321,46 +219,22 @@ export function ResultClient({ assessment, type }: ResultClientProps) {
     );
   }
 
-  if (demographicQuestions.length > 0) {
+  if (needsDemographicForm) {
+    // 一般在作答前已填写；升级前开始的作答等情况缺少时在这里补填
     return (
-      <form
-        className="rounded-[var(--radius)] border border-border bg-card p-6 shadow-sm"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void saveReport();
-        }}
-      >
-        <h2 className="font-serif text-xl font-semibold">补充基本信息</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          以下信息用于完善本次报告，不参与量表计分。
-        </p>
-        <div className="mt-6 space-y-5">
-          {demographicQuestions.map((question) => (
-            <DemographicField
-              key={question.id}
-              question={question}
-              value={demographicAnswers[question.id]}
-              onChange={(value) =>
-                setDemographicAnswers((current) => ({ ...current, [question.id]: value }))
-              }
-            />
-          ))}
-        </div>
-        {error ? (
-          <div className="mt-5 flex items-start gap-2 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-            {error}
-          </div>
-        ) : null}
-        <Button
-          type="submit"
-          className="mt-6 w-full"
-          disabled={!demographicsComplete || submitting}
-        >
-          {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-          {submitting ? "生成并保存中…" : "生成并保存报告"}
-        </Button>
-      </form>
+      <DemographicForm
+        questions={demographicQuestions}
+        values={demographicAnswers}
+        title="补充基本信息"
+        description="生成报告前还需要补充以下信息。"
+        submitLabel={submitting ? "生成并保存中…" : "生成并保存报告"}
+        submitting={submitting}
+        error={error}
+        onChange={(questionId, value) =>
+          setDemographicAnswer(assessment.id, questionId, value)
+        }
+        onSubmit={() => void saveReport()}
+      />
     );
   }
 

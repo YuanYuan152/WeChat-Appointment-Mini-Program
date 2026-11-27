@@ -213,7 +213,7 @@ test("option rules support any / multiple matching", () => {
   );
   rule.optionIds = ["q1-b", "q1-c"];
   assert.deepEqual(errorMessages(definition), [
-    "riskDimension.levels.high.rules[0].optionIds：高风险第 1 条规则要求同时命中 2 项，但同一道题只能选中一个选项，所选选项最多同时命中 1 项",
+    "riskDimension.levels.high.rules[0].optionIds：高风险第 1 条规则要求同时命中 2 项，但单选题同一题只能选中一个选项，所选选项最多同时命中 1 项",
   ]);
   rule.optionIds = ["q1-b", "q1-c", "q2-c", "q3-c"];
   rule.minCount = 3;
@@ -583,4 +583,199 @@ test("composed scale synced to a single sum result drops the total score", () =>
 
   const removed = editor.removeComposedQuestions(definition, ["q1"], "clear-explanations");
   assert.deepEqual(removed.totalScore.questionIds, ["q2", "q3"]);
+});
+
+// ---------------------------------------------------------------------------
+// 多选题与题内计分
+// ---------------------------------------------------------------------------
+
+/** q1 改成多选（选项分值 0 / 1 / 2），情绪维度区间放宽到多选后的可达范围。 */
+function multipleDefinition(innerScoring = { mode: "sum" }) {
+  const definition = dimensionDefinition();
+  const q1 = definition.questions[0];
+  q1.multiple = true;
+  if (innerScoring) {
+    q1.innerScoring = innerScoring;
+  }
+  definition.dimensions[0].scoreRanges[1].max = 5;
+  return definition;
+}
+
+test("multi-select is opt-in and inner scoring needs a multi-select question", () => {
+  const definition = dimensionDefinition();
+  const q1 = definition.questions[0];
+  assert.equal(editor.isMultipleChoiceQuestion(q1), false);
+  q1.innerScoring = { mode: "sum" };
+  assert.deepEqual(errorMessages(definition), [
+    "questions[0].innerScoring：只有多选题可以开启题内计分",
+  ]);
+
+  q1.multiple = true;
+  definition.dimensions[0].scoreRanges[1].max = 5;
+  assert.equal(editor.isMultipleChoiceQuestion(q1), true);
+  assert.deepEqual(errorMessages(definition), []);
+
+  // 多选但不开启题内计分：本题不计分，只有 0 分
+  delete q1.innerScoring;
+  assert.deepEqual(editor.getInnerScoreValues(q1), [0]);
+  assert.deepEqual(errorMessages(definition), []);
+
+  q1.multiple = "yes";
+  assert.ok(errorMessages(definition).includes("questions[0].multiple：多选设置不合法"));
+
+  const textDefinition = dimensionDefinition();
+  Object.assign(textDefinition.questions[2], {
+    inputType: "text",
+    options: [],
+    multiple: true,
+    scoreMode: "filled",
+    completedScore: 1,
+    emptyScore: 0,
+  });
+  assert.ok(
+    errorMessages(textDefinition).includes("questions[2].multiple：只有选择题可以设置多选"),
+  );
+});
+
+test("fixed scoring presets reject multi-select questions", () => {
+  const definition = multipleDefinition();
+  definition.scoringType = "aas";
+  assert.ok(errorMessages(definition).includes("questions[0].multiple：固定计分量表不支持多选题"));
+});
+
+test("inner score values follow the sum and formula modes", () => {
+  const definition = multipleDefinition();
+  const q1 = definition.questions[0];
+  // 必答至少选一项：0 / 1 / 2 / 0+1 / 0+2 / 1+2 / 0+1+2
+  assert.deepEqual(editor.getInnerScoreValues(q1), [0, 1, 2, 3]);
+
+  q1.options[0].value = 1;
+  assert.deepEqual(editor.getInnerScoreValues(q1), [1, 2, 3, 4]);
+  q1.required = false;
+  assert.deepEqual(editor.getInnerScoreValues(q1), [0, 1, 2, 3, 4]);
+
+  q1.required = true;
+  q1.innerScoring = { mode: "formula", formula: "q1-b * q1-c" };
+  // 未选中的选项按 0 计算
+  assert.deepEqual(editor.getInnerScoreValues(q1), [0, 2]);
+  assert.deepEqual(errorMessages(definition), []);
+
+  // 追问得分计入所选选项的分值
+  q1.innerScoring = { mode: "sum" };
+  q1.options[2].followUp = {
+    inputType: "text",
+    label: "具体情况",
+    required: false,
+    scoreMode: "filled",
+    completedScore: 1,
+    emptyScore: 0,
+  };
+  assert.deepEqual(editor.getInnerScoreValues(q1), [1, 2, 3, 4, 5]);
+});
+
+test("inner scoring formula problems are reported on the question", () => {
+  const definition = multipleDefinition({ mode: "formula", formula: "q1-b + q2-a" });
+  assert.deepEqual(
+    errorMessages(definition).filter((message) => message.startsWith("questions[0]")),
+    [
+      "questions[0].innerScoring.formula：题内计分公式不合法：公式第 8 个字符无效，仅支持选项 ID 和 + - * / ( )",
+    ],
+  );
+  assert.equal(
+    editor.getInnerScoringFormulaError(definition.questions[0]),
+    "公式第 8 个字符无效，仅支持选项 ID 和 + - * / ( )",
+  );
+
+  definition.questions[0].innerScoring.formula = "q1-c / q1-b";
+  const messages = errorMessages(definition).filter((message) =>
+    message.startsWith("questions[0]"),
+  );
+  assert.equal(messages.length, 1);
+  assert.match(messages[0], /^questions\[0\]\.innerScoring\.formula：题内计分公式不合法：/);
+
+  definition.questions[0].innerScoring = { mode: "max" };
+  assert.ok(
+    errorMessages(definition).includes("questions[0].innerScoring.mode：题内计分方式不合法"),
+  );
+});
+
+test("multi-select questions cannot be reverse scored anywhere", () => {
+  const definition = multipleDefinition();
+  definition.dimensions[0].reverseQuestionIds = ["q1", "q2"];
+  definition.totalScore = editor.createDefaultTotalScore(definition);
+  definition.totalScore.reverseQuestionIds = ["q1"];
+  withRisk(definition, {
+    high: { rules: [scoreRule("score-1", { reverseQuestionIds: ["q1"] })] },
+  });
+  const messages = errorMessages(definition);
+  for (const expected of [
+    "dimensions[0].reverseQuestionIds[0]：多选题不支持反向计分：q1",
+    "totalScore.reverseQuestionIds[0]：多选题不支持反向计分：q1",
+    "riskDimension.levels.high.rules[0].reverseQuestionIds[0]：多选题不支持反向计分：q1",
+  ]) {
+    assert.ok(messages.includes(expected), `${expected}\n${messages.join("\n")}`);
+  }
+
+  const cleaned = editor.removeQuestionFromReverseLists(definition, "q1");
+  assert.deepEqual(cleaned.dimensions[0].reverseQuestionIds, ["q2"]);
+  assert.deepEqual(cleaned.totalScore.reverseQuestionIds, []);
+  assert.deepEqual(cleaned.riskDimension.levels.high.rules[0].reverseQuestionIds, []);
+  assert.equal(
+    errorMessages(cleaned).some((message) => message.includes("多选题不支持反向计分")),
+    false,
+  );
+  // 原定义不被修改
+  assert.deepEqual(definition.dimensions[0].reverseQuestionIds, ["q1", "q2"]);
+});
+
+test("option rename and removal keep the inner scoring formula in sync", () => {
+  const definition = multipleDefinition({ mode: "formula", formula: "q1-a + q1-b + q1-c" });
+  const q1 = definition.questions[0];
+  const renamed = editor.renameOptionInInnerScoring(q1, "q1-b", "q1-often");
+  assert.equal(renamed.innerScoring.formula, "q1-a + q1-often + q1-c");
+  // 逐字修改时出现的中间 ID 也能继续替换
+  const typing = editor.renameOptionInInnerScoring(
+    { ...q1, options: q1.options.map((option) => ({ ...option, id: option.id === "q1-b" ? "q1-" : option.id })), innerScoring: { mode: "formula", formula: "q1-a + q1- * q1-c" } },
+    "q1-",
+    "q1-x",
+  );
+  assert.equal(typing.innerScoring.formula, "q1-a + q1-x * q1-c");
+  assert.equal(editor.renameOptionInInnerScoring(q1, "q1-b", ""), q1);
+
+  const removed = editor.removeOptionFromInnerScoring(q1, "q1-b");
+  assert.equal(removed.innerScoring.formula, "q1-a + q1-c");
+  // 相加模式没有公式，原样返回
+  const sumQuestion = { ...q1, innerScoring: { mode: "sum" } };
+  assert.equal(editor.removeOptionFromInnerScoring(sumQuestion, "q1-b"), sumQuestion);
+});
+
+test("risk option rules count each multi-select option separately", () => {
+  const definition = multipleDefinition();
+  withRisk(definition, {
+    high: { rules: [optionRule("option-1", ["q1-b", "q1-c"], { match: "multiple" })] },
+  });
+  assert.deepEqual(errorMessages(definition), []);
+  definition.questions[0].multiple = false;
+  delete definition.questions[0].innerScoring;
+  assert.ok(
+    errorMessages(definition).includes(
+      "riskDimension.levels.high.rules[0].optionIds：高风险第 1 条规则要求同时命中 2 项，但单选题同一题只能选中一个选项，所选选项最多同时命中 1 项",
+    ),
+  );
+});
+
+test("composed scales remap inner scoring formulas with renamed option ids", () => {
+  const first = multipleDefinition({ mode: "formula", formula: "q1-b * q1-c" });
+  const second = multipleDefinition({ mode: "formula", formula: "q1-a + q1-c" });
+  second.id = "extras-test-2";
+  second.title = "第二个量表";
+  const composed = editor.composeAssessmentDefinition("组合量表", [first, second]);
+  const copies = composed.questions.filter((question) => question.sourceQuestionId === "q1");
+  assert.equal(copies.length, 2);
+  assert.equal(copies[0].innerScoring.formula, "q1-b * q1-c");
+  const [a, , c] = copies[1].options.map((option) => option.id);
+  assert.notEqual(a, "q1-a");
+  assert.equal(copies[1].innerScoring.formula, `${a} + ${c}`);
+  assert.equal(copies[1].multiple, true);
+  assert.equal(editor.getInnerScoringFormulaError(copies[1]), "");
 });

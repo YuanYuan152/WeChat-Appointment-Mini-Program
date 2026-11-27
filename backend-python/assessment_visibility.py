@@ -3,13 +3,14 @@
 风险维度（定义里的 ``riskDimension``、计分结果里的 ``risk``）只给管理端看：
 所有面向来访者的接口（公开量表详情、企业站点量表、提交 / 查看报告）返回前都要经过这里，
 管理端接口则直接使用完整数据。报告快照本身仍完整存库，只在输出时剥离。
+人口学计分方案（``scoringVariants``，含各方案的风险规则）只在服务端计分时使用，同样不对外输出。
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-STAFF_ONLY_DEFINITION_FIELDS = ("riskDimension",)
+STAFF_ONLY_DEFINITION_FIELDS = ("riskDimension", "scoringVariants")
 STAFF_ONLY_RESULT_FIELDS = ("risk",)
 
 

@@ -237,6 +237,21 @@ export function replaceFormulaQuestionId(
   }
 }
 
+/** 一次性按映射替换公式里的全部标识符（避免逐个替换时新旧 ID 互相串改）。 */
+export function remapFormulaIds(
+  formula: string,
+  idMap: ReadonlyMap<string, string>,
+  knownIds: string[],
+): string {
+  try {
+    return tokenize(formula, knownIds)
+      .map((token) => (token.type === "id" ? idMap.get(token.value) ?? token.value : token.value))
+      .join(" ");
+  } catch {
+    return formula;
+  }
+}
+
 export function removeFormulaQuestionId(
   formula: string,
   removedId: string,

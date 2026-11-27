@@ -13,6 +13,11 @@ interface QuizShareAttribution {
 interface QuizSessionState {
   ownerAccountId: number | null;
   answers: Record<string, Record<string, AssessmentAnswerValue>>;
+  /**
+   * 作答前填写的人口学信息（按量表）。重新开始作答时保留，作为下一次的预填；
+   * 切换账号、量表版本变化或退出登录时清空。
+   */
+  demographicAnswers: Record<string, Record<string, unknown>>;
   currentIndex: Record<string, number>;
   attemptIds: Record<string, string>;
   shareAttributions: Record<string, QuizShareAttribution>;
@@ -26,6 +31,11 @@ interface QuizSessionState {
     questionId: string,
     value: AssessmentAnswerValue | undefined,
   ) => void;
+  setDemographicAnswer: (assessmentId: string, questionId: string, value: unknown) => void;
+  getDemographicAnswers: (
+    assessmentId: string,
+    version?: number,
+  ) => Record<string, unknown>;
   setCurrentIndex: (assessmentId: string, index: number) => void;
   markStarted: (assessmentId: string) => void;
   markReadyToSubmit: (assessmentId: string, version: number) => void;
@@ -55,6 +65,9 @@ interface QuizSessionState {
   clearSession: (assessmentId: string, version?: number) => void;
   clearAllSessions: () => void;
 }
+
+/** 未填写时返回同一个空对象，避免组件每次渲染拿到新对象。 */
+const EMPTY_DEMOGRAPHIC_ANSWERS: Record<string, unknown> = Object.freeze({});
 
 function createAttemptId(): string {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
@@ -91,6 +104,7 @@ export const useQuizSession = create<QuizSessionState>()(
     (set, get) => ({
       ownerAccountId: null,
       answers: {},
+      demographicAnswers: {},
       currentIndex: {},
       attemptIds: {},
       shareAttributions: {},
@@ -113,6 +127,36 @@ export const useQuizSession = create<QuizSessionState>()(
             },
           };
         }),
+
+      setDemographicAnswer: (assessmentId, questionId, value) =>
+        set((state) => {
+          const current = { ...(state.demographicAnswers[assessmentId] ?? {}) };
+          const empty =
+            value == null ||
+            value === "" ||
+            (Array.isArray(value) && value.length === 0);
+          if (empty) {
+            delete current[questionId];
+          } else {
+            current[questionId] = value;
+          }
+          return {
+            demographicAnswers: {
+              ...state.demographicAnswers,
+              [assessmentId]: current,
+            },
+          };
+        }),
+
+      getDemographicAnswers: (assessmentId, version) => {
+        if (
+          version !== undefined &&
+          get().assessmentVersions[assessmentId] !== version
+        ) {
+          return EMPTY_DEMOGRAPHIC_ANSWERS;
+        }
+        return get().demographicAnswers[assessmentId] ?? EMPTY_DEMOGRAPHIC_ANSWERS;
+      },
 
       setCurrentIndex: (assessmentId, index) =>
         set((state) => ({
@@ -148,6 +192,7 @@ export const useQuizSession = create<QuizSessionState>()(
           return {
             ownerAccountId: accountId,
             answers: {},
+            demographicAnswers: {},
             currentIndex: {},
             attemptIds: {},
             shareAttributions: {},
@@ -163,17 +208,21 @@ export const useQuizSession = create<QuizSessionState>()(
             return state;
           }
           const answers = { ...state.answers };
+          const demographicAnswers = { ...state.demographicAnswers };
           const currentIndex = { ...state.currentIndex };
           const started = { ...state.started };
           const readyToSubmit = { ...state.readyToSubmit };
           const shareAttributions = { ...state.shareAttributions };
           delete answers[assessmentId];
+          // 新版本的人口学题可能变了，不沿用旧版本填写的内容
+          delete demographicAnswers[assessmentId];
           delete currentIndex[assessmentId];
           delete started[assessmentId];
           delete readyToSubmit[assessmentId];
           delete shareAttributions[assessmentId];
           return {
             answers,
+            demographicAnswers,
             currentIndex,
             started,
             readyToSubmit,
@@ -314,6 +363,7 @@ export const useQuizSession = create<QuizSessionState>()(
         set({
           ownerAccountId: null,
           answers: {},
+          demographicAnswers: {},
           currentIndex: {},
           attemptIds: {},
           shareAttributions: {},

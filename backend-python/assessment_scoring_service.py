@@ -13,6 +13,11 @@ from assessment_formula import (
     evaluate_dimension_formula,
     parse_dimension_formula,
 )
+from assessment_multiple_choice import (
+    inner_score,
+    is_multiple_choice,
+    multiple_answer_entries,
+)
 from assessment_risk_rules import (
     RISK_SCORE_RULE_DEFAULT_TITLE,
     RISK_SEVERITY_LABELS,
@@ -22,6 +27,7 @@ from assessment_risk_rules import (
     risk_level_rules,
     upgrade_legacy_risk_dimension,
 )
+from assessment_scoring_variants import resolve_scoring_definition
 
 
 class AssessmentAnswerError(ValueError):
@@ -142,7 +148,19 @@ def _normalize_question_answer(
             raise AssessmentAnswerError(f"题目 {question_id} 大于最大值")
         return {"number": float(number) if isinstance(number, float) else number}
 
-    option_id, follow_up_value = _parse_choice_answer(answer)
+    if is_multiple_choice(question):
+        return _normalize_multiple_answer(question, answer, question_id=question_id)
+    return _normalize_choice_entry(question, answer, question_id=question_id)[1]
+
+
+def _normalize_choice_entry(
+    question: dict[str, Any],
+    entry: Any,
+    *,
+    question_id: str,
+) -> tuple[str, Any]:
+    """校验一个选项作答，返回 (optionId, 规范化后的作答)。"""
+    option_id, follow_up_value = _parse_choice_answer(entry)
     if not option_id:
         raise AssessmentAnswerError(f"题目 {question_id} 的答案格式错误")
     options = {str(option["id"]): option for option in question.get("options", [])}
@@ -151,9 +169,7 @@ def _normalize_question_answer(
         raise AssessmentAnswerError(f"题目 {question_id} 的选项不存在")
     follow_up = option.get("followUp")
     if not isinstance(follow_up, dict):
-        if isinstance(answer, str):
-            return answer
-        return option_id
+        return option_id, option_id
     normalized_follow_up = _validate_follow_up_value(
         follow_up,
         follow_up_value,
@@ -162,7 +178,26 @@ def _normalize_question_answer(
     payload: dict[str, Any] = {"optionId": option_id}
     if normalized_follow_up is not None:
         payload["followUp"] = normalized_follow_up
-    return payload
+    return option_id, payload
+
+
+def _normalize_multiple_answer(
+    question: dict[str, Any],
+    answer: Any,
+    *,
+    question_id: str,
+) -> list[Any]:
+    """多选题作答：选项不能重复，按题目里的选项顺序保存。"""
+    normalized: dict[str, Any] = {}
+    for entry in multiple_answer_entries(answer):
+        option_id, value = _normalize_choice_entry(question, entry, question_id=question_id)
+        if option_id in normalized:
+            raise AssessmentAnswerError(f"题目 {question_id} 包含重复选项")
+        normalized[option_id] = value
+    if not normalized:
+        raise AssessmentAnswerError(f"题目 {question_id} 至少选择一项")
+    order = [str(option["id"]) for option in question.get("options", [])]
+    return [normalized[option_id] for option_id in order if option_id in normalized]
 
 
 def validate_submission_answers(
@@ -184,6 +219,9 @@ def validate_submission_answers(
     normalized_answers: dict[str, Any] = {}
     for question_id, question in questions.items():
         answer = answers.get(question_id)
+        if is_multiple_choice(question) and isinstance(answer, list) and not answer:
+            # 多选题一项都没选等同于未作答
+            answer = None
         if answer is None:
             if question.get("required", True):
                 raise AssessmentAnswerError(f"请完成题目：{question.get('text', question_id)}")
@@ -342,6 +380,9 @@ def _option_value(
             return float(number) if filled else empty_score
         return completed_score if filled else empty_score
 
+    if is_multiple_choice(question):
+        return _multiple_choice_score(question, answer, question_id=question_id)
+
     option_id, follow_up_value = _parse_choice_answer(answer)
     option = next(
         (
@@ -365,9 +406,51 @@ def _option_value(
     return value
 
 
+def _multiple_choice_score(
+    question: dict[str, Any],
+    answer: Any,
+    *,
+    question_id: str,
+) -> float | int:
+    """多选题得分：开启题内计分时按相加 / 公式计算，未开启时不计分（0 分）。
+
+    选中选项的分值含追问得分；多选题不支持反向计分（定义校验会拦截）。
+    """
+    options = {str(item.get("id")): item for item in question.get("options", [])}
+    contributions: dict[str, float] = {}
+    for entry in multiple_answer_entries(answer):
+        option_id, follow_up_value = _parse_choice_answer(entry)
+        option = options.get(str(option_id))
+        if option is None:
+            continue
+        value = float(option.get("value", 0))
+        follow_up = option.get("followUp")
+        if isinstance(follow_up, dict):
+            value += _follow_up_score(follow_up, follow_up_value)
+        contributions[str(option_id)] = value
+    try:
+        score = inner_score(question, contributions)
+    except AssessmentFormulaError as exc:
+        raise AssessmentAnswerError(f"题目 {question_id} 的题内计分公式无效：{exc}") from exc
+    return int(score) if score == int(score) else score
+
+
 def _selected_option_id(answer: Any) -> str | None:
     option_id, _ = _parse_choice_answer(answer)
     return option_id
+
+
+def _answer_option_ids(question: dict[str, Any], answer: Any) -> list[str]:
+    """一道选择题本次选中的全部选项（单选最多一个，多选可能多个）。"""
+    if _question_input_type(question) != "choice" or answer is None:
+        return []
+    entries = multiple_answer_entries(answer) if is_multiple_choice(question) else [answer]
+    selected: list[str] = []
+    for entry in entries:
+        option_id = _selected_option_id(entry)
+        if option_id and option_id not in selected:
+            selected.append(option_id)
+    return selected
 
 
 def _find_range(score: float | int, ranges: list[dict[str, Any]] | None):
@@ -537,17 +620,13 @@ def _dimension_result(definition: dict[str, Any], answers: dict[str, Any]):
 def _match_result(definition: dict[str, Any], answers: dict[str, Any]):
     tag_scores: dict[str, float] = {}
     for question in definition.get("questions", []):
-        selected_id = _selected_option_id(answers.get(str(question.get("id"))))
-        option = next(
-            (
-                item
-                for item in question.get("options", [])
-                if item.get("id") == selected_id
-            ),
-            None,
-        )
-        for tag, weight in (option or {}).get("matchTags", {}).items():
-            tag_scores[tag] = tag_scores.get(tag, 0) + float(weight)
+        selected_ids = _answer_option_ids(question, answers.get(str(question.get("id"))))
+        # 多选题每个选中的选项都累加结果权重
+        for option in question.get("options", []):
+            if option.get("id") not in selected_ids:
+                continue
+            for tag, weight in (option.get("matchTags") or {}).items():
+                tag_scores[tag] = tag_scores.get(tag, 0) + float(weight)
     result_id = max(tag_scores, key=tag_scores.get) if tag_scores else ""
     match_results = definition.get("matchResults", [])
     if not result_id and match_results:
@@ -916,11 +995,7 @@ def _selected_option_ids(
 ) -> set[str]:
     selected: set[str] = set()
     for question in definition.get("questions", []):
-        if _question_input_type(question) != "choice":
-            continue
-        option_id = _selected_option_id(answers.get(str(question.get("id"))))
-        if option_id:
-            selected.add(option_id)
+        selected.update(_answer_option_ids(question, answers.get(str(question.get("id")))))
     return selected
 
 
@@ -1063,6 +1138,19 @@ def _risk_result(
 
 
 def calculate_assessment_result(
+    definition: dict[str, Any],
+    answers: dict[str, Any],
+    demographics: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """按人口学信息选出计分方案后计分；命中方案时在结果里记下方案名称与条件说明。"""
+    effective, variant = resolve_scoring_definition(definition, demographics)
+    result = _calculate_effective_result(effective, answers)
+    if variant is not None:
+        result["scoringVariant"] = variant
+    return result
+
+
+def _calculate_effective_result(
     definition: dict[str, Any], answers: dict[str, Any]
 ) -> dict[str, Any]:
     scoring_type = str(definition.get("scoringType"))
@@ -1118,18 +1206,22 @@ def validate_generated_scoring_examples(definition: dict[str, Any]) -> None:
         options = question.get("options") or []
         option = options[option_index]
         follow_up = option.get("followUp")
+        entry: Any
         if not isinstance(follow_up, dict):
-            return str(option["id"])
-        payload: dict[str, Any] = {"optionId": str(option["id"])}
-        if follow_up.get("inputType") == "number":
-            validation = follow_up.get("validation") or {}
-            if "min" in validation:
-                payload["followUp"] = validation["min"]
-            elif follow_up.get("required"):
-                payload["followUp"] = 0
-        elif follow_up.get("required") or follow_up.get("scoreMode") == "filled":
-            payload["followUp"] = "样例"
-        return payload
+            entry = str(option["id"])
+        else:
+            payload: dict[str, Any] = {"optionId": str(option["id"])}
+            if follow_up.get("inputType") == "number":
+                validation = follow_up.get("validation") or {}
+                if "min" in validation:
+                    payload["followUp"] = validation["min"]
+                elif follow_up.get("required"):
+                    payload["followUp"] = 0
+            elif follow_up.get("required") or follow_up.get("scoreMode") == "filled":
+                payload["followUp"] = "样例"
+            entry = payload
+        # 多选题的样例只选这一项
+        return [entry] if is_multiple_choice(question) else entry
 
     for label, option_index in (("首选项", 0), ("末选项", -1)):
         answers = {

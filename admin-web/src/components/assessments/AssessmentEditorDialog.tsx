@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { AssessmentImageField } from "@/components/assessments/AssessmentImageField";
 import { Badge, QueryField, queryControlClass } from "@/components/ui";
 import {
+  applyScoringVariantView,
   changeAssessmentScoringType,
   buildSourceReports,
   COMPOSED_MERGED_SOURCE_ID,
@@ -16,23 +17,37 @@ import {
   createRiskDimensionRule,
   createRiskOptionRule,
   createRiskScoreRule,
+  createScoringVariant,
   createStableId,
+  describeScoringVariantConditions,
   formatRiskDimensionSource,
   getAssessmentScoreCoverageSummaries,
   getCalculationCoverageSummary,
+  getChoiceDemographicQuestions,
   getDimensionParentId,
+  getInnerScoreValues,
+  getInnerScoringFormulaError,
+  getInnerScoringOptionIds,
   getQuestionInputType,
   getRiskDimensionSources,
   getRiskScoreRuleReach,
+  getScoringVariantView,
+  hasScoringVariantSupport,
   isFixedScoringType,
+  isMultipleChoiceQuestion,
   isRiskDimensionActive,
   listRiskRules,
+  moveScoringVariant,
   normalizeAssessmentDefinition,
   formatLines,
   parseLines,
   removeComposedQuestions,
+  removeOptionFromInnerScoring,
   removeOptionsFromRiskRules,
+  removeQuestionFromReverseLists,
   removeQuestionsFromExtras,
+  removeScoringVariant,
+  renameOptionInInnerScoring,
   renameOptionInRiskRules,
   renameQuestionInExtras,
   RISK_DIMENSION_TITLE,
@@ -40,12 +55,18 @@ import {
   RISK_RULE_TYPE_LABELS,
   RISK_SEVERITY_OPTIONS,
   riskSeverityMeta,
+  setScoringVariantPartOwned,
+  suggestScoringVariantTitle,
+  syncComposedScoringVariants,
   syncComposedSourceReports,
   syncRiskDimensionReferences,
+  syncScoringVariantReferences,
   type AssessmentScoreCoverageSummary,
   type ComposedQuestionRemovalMode,
   type RiskDimensionSource,
   type RiskScoreRuleReach,
+  type ScoringVariantPart,
+  updateScoringVariant,
   validateAssessmentDefinition,
 } from "@/lib/assessmentEditor";
 import {
@@ -63,11 +84,12 @@ import type {
   AssessmentDemographicInputType,
   AssessmentDemographicQuestion,
   AssessmentDimension,
+  AssessmentInnerScoring,
+  AssessmentInnerScoringMode,
   AssessmentMatchResult,
   AssessmentOption,
   AssessmentOptionFollowUp,
   AssessmentQuestion,
-  AssessmentQuestionInputType,
   AssessmentReportProfile,
   AssessmentRiskDimension,
   AssessmentRiskDimensionRule,
@@ -82,6 +104,8 @@ import type {
   AssessmentScoreMode,
   AssessmentScoreRange,
   AssessmentScoringType,
+  AssessmentScoringVariant,
+  AssessmentScoringVariantCondition,
   AssessmentTotalScore,
   AssessmentValidationIssue,
 } from "@/types/assessment";
@@ -150,6 +174,8 @@ export function AssessmentEditorDialog({
   const coalesceFieldRef = useRef<string | null>(null);
   const [undoCount, setUndoCount] = useState(0);
   const [publishIssues, setPublishIssues] = useState<AssessmentValidationIssue[]>([]);
+  // 报告结果 / 风险编辑里正在编辑的计分方案；null 为默认方案
+  const [activeVariantId, setActiveVariantId] = useState<string | null>(null);
 
   const serializedDefinition = useMemo(() => serializeDefinition(definition), [definition]);
   const dirty = serializedDefinition !== baseline;
@@ -163,6 +189,16 @@ export function AssessmentEditorDialog({
   );
   const blockingIssues = issues.filter((issue) => issue.severity === "error");
   const riskRuleCount = listRiskRules(definition.riskDimension).length;
+  const variantSupport = hasScoringVariantSupport(definition);
+  const activeVariant = definition.scoringVariants?.find((variant) => variant.id === activeVariantId);
+  const variantView = useMemo(
+    () => (activeVariant ? getScoringVariantView(definition, activeVariant) : null),
+    [activeVariant, definition],
+  );
+  const variantCoverageSummaries = useMemo(
+    () => (variantView ? getAssessmentScoreCoverageSummaries(variantView) : []),
+    [variantView],
+  );
   const fixedScoring = isFixedScoringType(definition.scoringType);
   const archived = currentDetail?.lifecycleStatus === "archived";
   const composeMode = Boolean(definition.composedFrom?.length);
@@ -294,8 +330,12 @@ export function AssessmentEditorDialog({
     (!definition.composedFrom?.length || Boolean(definition.sourceReports?.length));
 
   function updateDefinition(proposed: AssessmentDefinition) {
-    // 维度 ID / 区间名称在其它页签改名时，风险编辑里引用它们的规则跟着改
-    const next = syncRiskDimensionReferences(definition, proposed);
+    // 维度 ID / 区间名称在其它页签改名时，风险编辑里引用它们的规则跟着改；
+    // 题目、人口学题、计分方式的修改同步到各计分方案
+    const next = syncScoringVariantReferences(
+      definition,
+      syncRiskDimensionReferences(definition, proposed),
+    );
     const serializedNext = serializeDefinition(next);
     const previous = serializeDefinition(definition);
     if (serializedNext === previous) {
@@ -384,7 +424,9 @@ export function AssessmentEditorDialog({
     if (uploading || !currentDetail || dirty || !currentDetail.draftVersion) {
       return;
     }
-    const prepared = composeMode ? syncComposedSourceReports(definition) : definition;
+    const prepared = composeMode
+      ? syncComposedScoringVariants(syncComposedSourceReports(definition))
+      : definition;
     const summaries = getAssessmentScoreCoverageSummaries(prepared);
     const nextBlocking = validateAssessmentDefinition(prepared, summaries).filter(
       (issue) => issue.severity === "error",
@@ -582,24 +624,69 @@ export function AssessmentEditorDialog({
                   onPersist={save}
                 />
               )}
-              {activeTab === "results" && (
-                <ResultFields
-                  composeMode={composeMode}
-                  coverageSummaries={coverageSummaries}
+              {(activeTab === "results" || activeTab === "risk") && variantSupport && (
+                <ScoringVariantPanel
+                  activeVariantId={activeVariant ? activeVariant.id : null}
                   definition={definition}
                   disabled={editorDisabled}
-                  fixedStructure={fixedScoring}
+                  issues={issues}
+                  part={activeTab === "results" ? "scoring" : "risk"}
                   onChange={updateDefinition}
-                  onUploadStateChange={handleUploadStateChange}
+                  onSelect={setActiveVariantId}
                 />
               )}
-              {activeTab === "risk" && (
-                <RiskFields
-                  definition={definition}
-                  disabled={editorDisabled}
-                  onChange={updateDefinition}
-                />
-              )}
+              {activeTab === "results" &&
+                (activeVariant && variantView ? (
+                  activeVariant.scoring ? (
+                    <ResultFields
+                      composeMode={composeMode}
+                      coverageSummaries={variantCoverageSummaries}
+                      definition={variantView}
+                      disabled={editorDisabled}
+                      fixedStructure={fixedScoring}
+                      onChange={(nextView) =>
+                        updateDefinition(
+                          applyScoringVariantView(definition, activeVariant.id, variantView, nextView),
+                        )
+                      }
+                      onUploadStateChange={handleUploadStateChange}
+                    />
+                  ) : (
+                    !fixedScoring && <VariantInheritNote part="scoring" />
+                  )
+                ) : (
+                  <ResultFields
+                    composeMode={composeMode}
+                    coverageSummaries={coverageSummaries}
+                    definition={definition}
+                    disabled={editorDisabled}
+                    fixedStructure={fixedScoring}
+                    onChange={updateDefinition}
+                    onUploadStateChange={handleUploadStateChange}
+                  />
+                ))}
+              {activeTab === "risk" &&
+                (activeVariant && variantView ? (
+                  activeVariant.riskDimension ? (
+                    <RiskFields
+                      definition={variantView}
+                      disabled={editorDisabled}
+                      onChange={(nextView) =>
+                        updateDefinition(
+                          applyScoringVariantView(definition, activeVariant.id, variantView, nextView),
+                        )
+                      }
+                    />
+                  ) : (
+                    <VariantInheritNote part="risk" />
+                  )
+                ) : (
+                  <RiskFields
+                    definition={definition}
+                    disabled={editorDisabled}
+                    onChange={updateDefinition}
+                  />
+                ))}
               {activeTab === "advanced" && (
                 <AdvancedJsonEditor
                   fixedScoring={fixedScoring}
@@ -771,6 +858,393 @@ const editorTabs: Array<{ id: EditorTab; label: string }> = [
   { id: "advanced", label: "高级 JSON" },
   { id: "versions", label: "历史版本" },
 ];
+
+/**
+ * 人口学计分方案：在“报告结果”“风险编辑”顶部切换默认方案 / 各方案，并编辑方案名称、适用条件，
+ * 以及本页规则是沿用默认方案还是单独设置。没有单选 / 多选人口学题的量表不显示。
+ */
+function ScoringVariantPanel({
+  activeVariantId,
+  definition,
+  disabled,
+  issues,
+  part,
+  onChange,
+  onSelect,
+}: {
+  activeVariantId: string | null;
+  definition: AssessmentDefinition;
+  disabled: boolean;
+  issues: AssessmentValidationIssue[];
+  part: ScoringVariantPart;
+  onChange: (definition: AssessmentDefinition) => void;
+  onSelect: (variantId: string | null) => void;
+}) {
+  const variants = definition.scoringVariants ?? [];
+  const activeIndex = variants.findIndex((variant) => variant.id === activeVariantId);
+  const active = activeIndex >= 0 ? variants[activeIndex] : undefined;
+  const choiceQuestions = getChoiceDemographicQuestions(definition);
+  const fixed = isFixedScoringType(definition.scoringType);
+  const partLabel = part === "scoring" ? "报告结果" : "风险规则";
+
+  function errorCount(index: number) {
+    const prefix = `scoringVariants[${index}]`;
+    return issues.filter(
+      (issue) =>
+        issue.severity === "error" &&
+        (issue.path === prefix ||
+          issue.path.startsWith(`${prefix}.`) ||
+          issue.path.startsWith(`${prefix}[`)),
+    ).length;
+  }
+
+  function addVariant() {
+    const created = createScoringVariant(definition);
+    onChange(created.definition);
+    onSelect(created.variantId);
+  }
+
+  function setConditions(variant: AssessmentScoringVariant, conditions: AssessmentScoringVariantCondition[]) {
+    const index = variants.indexOf(variant);
+    const autoTitles = new Set([
+      `方案 ${index + 1}`,
+      suggestScoringVariantTitle(definition, variant.conditions ?? []),
+    ]);
+    const patch: { conditions: AssessmentScoringVariantCondition[]; title?: string } = { conditions };
+    // 名称还是自动生成的时候，跟着所选条件更新（如“女”“女 · 教师、医生”）
+    if (autoTitles.has(variant.title.trim())) {
+      const suggested = suggestScoringVariantTitle(definition, conditions);
+      if (suggested) {
+        patch.title = suggested;
+      }
+    }
+    onChange(updateScoringVariant(definition, variant.id, patch));
+  }
+
+  function setOwned(variant: AssessmentScoringVariant, owned: boolean) {
+    const currentlyOwned = part === "scoring" ? Boolean(variant.scoring) : Boolean(variant.riskDimension);
+    if (currentlyOwned === owned) {
+      return;
+    }
+    if (
+      !owned &&
+      !window.confirm(
+        `改为沿用默认方案后，「${variant.title || "本方案"}」单独设置的${partLabel}会被删除，确定吗？`,
+      )
+    ) {
+      return;
+    }
+    onChange(setScoringVariantPartOwned(definition, variant.id, part, owned));
+  }
+
+  function removeVariant(variant: AssessmentScoringVariant) {
+    if (!window.confirm(`确定删除计分方案「${variant.title || "未命名方案"}」吗？`)) {
+      return;
+    }
+    onChange(removeScoringVariant(definition, variant.id));
+    onSelect(null);
+  }
+
+  const owned = active
+    ? part === "scoring"
+      ? Boolean(active.scoring)
+      : Boolean(active.riskDimension)
+    : false;
+  const unusedQuestions = active
+    ? choiceQuestions.filter(
+        (question) => !(active.conditions ?? []).some((condition) => condition.questionId === question.id),
+      )
+    : [];
+
+  return (
+    <section className="mb-5 rounded-2xl border border-[var(--lxxl-border)] bg-[#FCFBF8] p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <h4 className="text-sm font-semibold">计分方案</h4>
+          <p className="mt-1 text-xs leading-5 text-[var(--lxxl-muted)]">
+            按人口学信息（如性别）使用不同的{part === "scoring" ? "分数区间、维度等报告结果" : "风险规则"}。
+            来访者的人口学答案满足方案的全部条件时使用该方案；多个方案都满足时使用排在前面的，都不满足或未填写时使用默认方案。
+          </p>
+        </div>
+        <SmallButton disabled={disabled || choiceQuestions.length === 0} onClick={addVariant}>
+          新增计分方案
+        </SmallButton>
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-2" role="tablist" aria-label="计分方案">
+        <VariantPill active={!active} label="默认方案" onClick={() => onSelect(null)} />
+        {variants.map((variant, index) => (
+          <VariantPill
+            key={variant.id || index}
+            active={variant.id === active?.id}
+            errorCount={errorCount(index)}
+            label={variant.title?.trim() || `方案 ${index + 1}`}
+            title={describeScoringVariantConditions(definition, variant)}
+            onClick={() => onSelect(variant.id)}
+          />
+        ))}
+      </div>
+
+      {!active ? (
+        <p className="mt-3 text-xs leading-5 text-[var(--lxxl-muted)]">
+          {variants.length > 0
+            ? "正在编辑默认方案：没有命中任何计分方案的作答都按它计分。"
+            : choiceQuestions.length > 0
+              ? "需要按性别等人口学信息区分计分时，点击“新增计分方案”，会复制当前的报告结果和风险规则供修改。"
+              : "在“人口学题”中添加单选或多选题后，才能新增计分方案。"}
+        </p>
+      ) : (
+        <div className="mt-4 space-y-4 rounded-xl border border-[var(--lxxl-border)] bg-white p-4">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+            <CompactField label="方案名称" required>
+              <input
+                className={compactInputClass}
+                disabled={disabled}
+                placeholder="例如：女性"
+                value={active.title}
+                onChange={(event) =>
+                  onChange(updateScoringVariant(definition, active.id, { title: event.target.value }))
+                }
+              />
+            </CompactField>
+            <div className="flex flex-wrap gap-2">
+              <SmallButton
+                disabled={disabled || activeIndex === 0}
+                onClick={() => onChange(moveScoringVariant(definition, active.id, -1))}
+              >
+                上移
+              </SmallButton>
+              <SmallButton
+                disabled={disabled || activeIndex === variants.length - 1}
+                onClick={() => onChange(moveScoringVariant(definition, active.id, 1))}
+              >
+                下移
+              </SmallButton>
+              <button
+                className="rounded-lg border border-[#E8B7B2] px-3 py-1.5 text-xs font-medium text-[#A13F37] transition hover:bg-[#FFF5F4] disabled:cursor-not-allowed disabled:opacity-40"
+                disabled={disabled}
+                type="button"
+                onClick={() => removeVariant(active)}
+              >
+                删除方案
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <div className="text-sm font-medium">
+              适用条件
+              <span className="ml-2 text-xs font-normal text-[var(--lxxl-muted)]">
+                同时满足以下全部条件时使用本方案
+              </span>
+            </div>
+            <div className="mt-2 space-y-2">
+              {(active.conditions ?? []).map((condition, conditionIndex) => {
+                const question = choiceQuestions.find((item) => item.id === condition.questionId);
+                return (
+                  <div
+                    key={conditionIndex}
+                    className="rounded-lg border border-dashed border-[var(--lxxl-border)] p-3"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <select
+                        aria-label="人口学题"
+                        className={`${compactInputClass} md:max-w-xs`}
+                        disabled={disabled}
+                        value={condition.questionId}
+                        onChange={(event) =>
+                          setConditions(
+                            active,
+                            replaceAt(active.conditions, conditionIndex, {
+                              questionId: event.target.value,
+                              optionIds: [],
+                            }),
+                          )
+                        }
+                      >
+                        {!question && (
+                          <option value={condition.questionId}>
+                            已失效：{condition.questionId || "未选择"}
+                          </option>
+                        )}
+                        {choiceQuestions.map((item) => (
+                          <option
+                            key={item.id}
+                            disabled={
+                              item.id !== condition.questionId &&
+                              active.conditions.some((other) => other.questionId === item.id)
+                            }
+                            value={item.id}
+                          >
+                            {item.text || item.id}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="text-xs text-[var(--lxxl-muted)]">选中以下任一项即满足</span>
+                      {active.conditions.length > 1 && (
+                        <RemoveButton
+                          disabled={disabled}
+                          label="删除条件"
+                          onClick={() =>
+                            setConditions(
+                              active,
+                              active.conditions.filter((_, index) => index !== conditionIndex),
+                            )
+                          }
+                        />
+                      )}
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {(question?.options ?? []).map((option) => {
+                        const checked = condition.optionIds.includes(option.id);
+                        return (
+                          <label
+                            key={option.id}
+                            className={`flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition ${
+                              checked
+                                ? "border-[var(--lxxl-green)] bg-[#F2F7F4] text-[var(--lxxl-green-dark)]"
+                                : "border-[var(--lxxl-border)] bg-white"
+                            }`}
+                          >
+                            <input
+                              checked={checked}
+                              disabled={disabled}
+                              type="checkbox"
+                              onChange={() => {
+                                const selected = new Set(condition.optionIds);
+                                if (checked) {
+                                  selected.delete(option.id);
+                                } else {
+                                  selected.add(option.id);
+                                }
+                                setConditions(
+                                  active,
+                                  replaceAt(active.conditions, conditionIndex, {
+                                    ...condition,
+                                    // 按选项原顺序保存
+                                    optionIds: (question?.options ?? [])
+                                      .map((item) => item.id)
+                                      .filter((id) => selected.has(id)),
+                                  }),
+                                );
+                              }}
+                            />
+                            {option.text || option.id}
+                          </label>
+                        );
+                      })}
+                    </div>
+                    {question && !question.required && (
+                      <p className="mt-2 text-xs leading-5 text-[#9A6B12]">
+                        该人口学题为选填，来访者没有填写时使用默认方案。
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            {unusedQuestions.length > 0 && (
+              <div className="mt-2">
+                <SmallButton
+                  disabled={disabled}
+                  onClick={() =>
+                    setConditions(active, [
+                      ...(active.conditions ?? []),
+                      { questionId: unusedQuestions[0].id, optionIds: [] },
+                    ])
+                  }
+                >
+                  添加条件
+                </SmallButton>
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-lg bg-[#FAF8F4] px-3 py-3">
+            <div className="text-sm font-medium">本方案的{partLabel}</div>
+            {part === "scoring" && fixed ? (
+              <p className="mt-1 text-xs leading-5 text-[var(--lxxl-muted)]">
+                固定计分量表的计分规则固定，各方案共用默认的报告结果；可在“风险编辑”中为本方案单独设置风险规则。
+              </p>
+            ) : (
+              <div className="mt-2 flex flex-wrap gap-x-5 gap-y-2 text-sm">
+                <label className="flex cursor-pointer items-center gap-1.5">
+                  <input
+                    checked={!owned}
+                    disabled={disabled}
+                    name={`variant-${part}-${active.id}`}
+                    type="radio"
+                    onChange={() => setOwned(active, false)}
+                  />
+                  沿用默认方案
+                </label>
+                <label className="flex cursor-pointer items-center gap-1.5">
+                  <input
+                    checked={owned}
+                    disabled={disabled}
+                    name={`variant-${part}-${active.id}`}
+                    type="radio"
+                    onChange={() => setOwned(active, true)}
+                  />
+                  单独设置（复制默认方案后修改）
+                </label>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function VariantPill({
+  active,
+  errorCount = 0,
+  label,
+  title,
+  onClick,
+}: {
+  active: boolean;
+  errorCount?: number;
+  label: string;
+  title?: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      aria-selected={active}
+      className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition ${
+        active
+          ? "border-[var(--lxxl-green)] bg-[var(--lxxl-green)] text-white"
+          : "border-[var(--lxxl-border)] bg-white text-[var(--lxxl-text)] hover:border-[var(--lxxl-green)]"
+      }`}
+      role="tab"
+      title={title}
+      type="button"
+      onClick={onClick}
+    >
+      {label}
+      {errorCount > 0 && (
+        <span
+          className={`rounded-full px-1.5 text-xs ${active ? "bg-white/25" : "bg-[#FFF5F4] text-[#A13F37]"}`}
+        >
+          {errorCount}
+        </span>
+      )}
+    </button>
+  );
+}
+
+/** 方案沿用默认方案时，本页显示的说明。 */
+function VariantInheritNote({ part }: { part: ScoringVariantPart }) {
+  return (
+    <div className="rounded-xl border border-dashed border-[var(--lxxl-border)] bg-white px-4 py-6 text-center text-sm leading-6 text-[var(--lxxl-muted)]">
+      {part === "scoring"
+        ? "本方案的报告结果沿用默认方案。需要不同的分数区间、维度或反向题时，在上方选择“单独设置”。"
+        : "本方案的风险规则沿用默认方案。需要不同的风险判定时，在上方选择“单独设置”。"}
+    </div>
+  );
+}
 
 function BasicFields({
   definition,
@@ -973,9 +1447,32 @@ function DemographicFields({
   onChange: (definition: AssessmentDefinition) => void;
 }) {
   const questions = definition.demographicQuestions || [];
+  // 人口学题 ID → 用它做适用条件的计分方案名称
+  const variantTitlesByQuestion = new Map<string, string[]>();
+  (definition.scoringVariants ?? []).forEach((variant, index) => {
+    for (const condition of variant.conditions ?? []) {
+      const titles = variantTitlesByQuestion.get(condition.questionId) ?? [];
+      titles.push(variant.title?.trim() || `方案 ${index + 1}`);
+      variantTitlesByQuestion.set(condition.questionId, titles);
+    }
+  });
 
   function setQuestions(next: AssessmentDemographicQuestion[]) {
     onChange({ ...definition, demographicQuestions: next });
+  }
+
+  function removeQuestion(questionIndex: number) {
+    const question = questions[questionIndex];
+    const usedBy = variantTitlesByQuestion.get(question.id);
+    if (
+      usedBy?.length &&
+      !window.confirm(
+        `「${question.text || question.id}」是计分方案「${usedBy.join("」「")}」的适用条件，删除后这些条件会一并移除，确定删除吗？`,
+      )
+    ) {
+      return;
+    }
+    setQuestions(questions.filter((_, index) => index !== questionIndex));
   }
 
   function updateQuestion(index: number, next: AssessmentDemographicQuestion) {
@@ -1007,7 +1504,7 @@ function DemographicFields({
           新增人口学题
         </AddButton>
       }
-      description="人口学题用于收集报告背景信息，不参与计分。单选和多选题至少配置一个选项。"
+      description="来访者在作答前填写人口学题。人口学题本身不计分；单选和多选题可以在“报告结果”“风险编辑”中作为计分方案的适用条件（例如男女使用不同的分数区间和风险规则）。单选和多选题至少配置一个选项。"
       title="人口学题目"
     >
       {questions.length === 0 ? (
@@ -1023,8 +1520,13 @@ function DemographicFields({
                 index={questionIndex}
                 label={question.text || question.id || "未命名人口学题"}
                 removeDisabled={disabled || fixedStructure}
-                onRemove={() => setQuestions(questions.filter((_, index) => index !== questionIndex))}
+                onRemove={() => removeQuestion(questionIndex)}
               />
+              {variantTitlesByQuestion.has(question.id) && (
+                <p className="mt-2 text-xs leading-5 text-[var(--lxxl-green-dark)]">
+                  用于计分方案：{variantTitlesByQuestion.get(question.id)?.join("、")}
+                </p>
+              )}
               <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
                 <CompactField label="题目 ID">
                   <input
@@ -1461,30 +1963,44 @@ function QuestionFields({
     ]);
   }
 
-  function changeInputType(index: number, inputType: AssessmentQuestionInputType) {
+  function changeQuestionKind(index: number, kind: QuestionKind) {
     const question = questions[index];
-    if (inputType === "choice") {
-      const optionIds = new Set(
-        questions.flatMap((item) => (item.options || []).map((option) => option.id)),
-      );
-      const firstId = createStableId(`${question.id}-a`, Array.from(optionIds));
-      optionIds.add(firstId);
-      const secondId = createStableId(`${question.id}-b`, Array.from(optionIds));
-      updateQuestion(index, {
-        ...question,
-        inputType,
-        scoreMode: undefined,
-        completedScore: undefined,
-        emptyScore: undefined,
-        validation: undefined,
-        options:
-          question.options && question.options.length >= 2
-            ? question.options
-            : [
-                { id: firstId, text: "", value: 0 },
-                { id: secondId, text: "", value: 1 },
-              ],
-      });
+    if (kind === "single" || kind === "multiple") {
+      let nextQuestion: AssessmentQuestion = { ...question };
+      if (getQuestionInputType(question) !== "choice") {
+        const optionIds = new Set(
+          questions.flatMap((item) => (item.options || []).map((option) => option.id)),
+        );
+        const firstId = createStableId(`${question.id}-a`, Array.from(optionIds));
+        optionIds.add(firstId);
+        const secondId = createStableId(`${question.id}-b`, Array.from(optionIds));
+        nextQuestion = {
+          ...question,
+          inputType: "choice",
+          scoreMode: undefined,
+          completedScore: undefined,
+          emptyScore: undefined,
+          validation: undefined,
+          options:
+            question.options && question.options.length >= 2
+              ? question.options
+              : [
+                  { id: firstId, text: "", value: 0 },
+                  { id: secondId, text: "", value: 1 },
+                ],
+        };
+      }
+      if (kind === "multiple") {
+        // 多选需要主动选择；题内计分默认不开启，由管理员在下方勾选
+        nextQuestion.multiple = true;
+      } else {
+        delete nextQuestion.multiple;
+        delete nextQuestion.innerScoring;
+      }
+      // 多选题不支持反向计分：改成多选时从各处反向计分里移除
+      const base =
+        kind === "multiple" ? removeQuestionFromReverseLists(definition, question.id) : definition;
+      onChange({ ...base, questions: replaceAt(questions, index, nextQuestion) });
       return;
     }
     // 改为填空/数字题后选项不复存在，风险选项触发规则里对应的选项一并去掉
@@ -1492,16 +2008,19 @@ function QuestionFields({
       definition,
       (question.options || []).map((option) => option.id),
     );
+    const nextQuestion: AssessmentQuestion = {
+      ...question,
+      inputType: kind,
+      scoreMode: question.scoreMode || "filled",
+      completedScore: Number.isFinite(question.completedScore) ? question.completedScore : 1,
+      emptyScore: Number.isFinite(question.emptyScore) ? question.emptyScore : 0,
+      options: [],
+    };
+    delete nextQuestion.multiple;
+    delete nextQuestion.innerScoring;
     onChange({
       ...withoutTriggers,
-      questions: replaceAt(questions, index, {
-        ...question,
-        inputType,
-        scoreMode: question.scoreMode || "filled",
-        completedScore: Number.isFinite(question.completedScore) ? question.completedScore : 1,
-        emptyScore: Number.isFinite(question.emptyScore) ? question.emptyScore : 0,
-        options: [],
-      }),
+      questions: replaceAt(questions, index, nextQuestion),
     });
   }
 
@@ -1555,13 +2074,15 @@ function QuestionFields({
           ? "默认只显示题目，选项收起。删除题目时要选择如何处理报告结果。正式题目可以先保存；发布版本时才会核对报告结果和题目内容是否补齐。"
           : fixedStructure
             ? "固定计分量表可修改题目和选项文案，但题目 ID、选项 ID、分值及题目数量保持锁定。"
-            : "题目可为选择题、填空题或数字题。填空/数字题可按是否填写或填写数字计分；选择题可在选项上配置追问计分。"
+            : "题目默认为单选题，也可改为多选题、填空题或数字题。多选题可开启题内计分（选项分值相加或简单公式），结果即该题得分；填空/数字题可按是否填写或填写数字计分；选择题可在选项上配置追问计分。"
       }
       title="正式题目与选项"
     >
       <div className="space-y-4">
         {questions.map((question, questionIndex) => {
           const inputType = getQuestionInputType(question);
+          const questionKind: QuestionKind =
+            inputType === "choice" ? (question.multiple ? "multiple" : "single") : inputType;
           const checked = checkedIds.includes(question.id);
           const showDetails = !composeMode || optionsExpanded;
           return (
@@ -1626,15 +2147,13 @@ function QuestionFields({
                 <select
                   className={compactInputClass}
                   disabled={disabled || fixedStructure}
-                  value={inputType}
+                  value={questionKind}
                   onChange={(event) =>
-                    changeInputType(
-                      questionIndex,
-                      event.target.value as AssessmentQuestionInputType,
-                    )
+                    changeQuestionKind(questionIndex, event.target.value as QuestionKind)
                   }
                 >
-                  <option value="choice">选择题</option>
+                  <option value="single">单选题</option>
+                  <option value="multiple">多选题</option>
                   <option value="text">填空题</option>
                   <option value="number">数字题</option>
                 </select>
@@ -1776,7 +2295,15 @@ function QuestionFields({
             {inputType === "choice" && (
             <div className="mt-4 rounded-xl border border-[var(--lxxl-border)] bg-white p-4">
               <div className="flex items-center justify-between gap-3">
-                <div className="text-sm font-medium">选项</div>
+                <div className="text-sm font-medium">
+                  选项
+                  {isMultipleChoiceQuestion(question) && (
+                    <span className="ml-2 text-xs font-normal text-[var(--lxxl-muted)]">
+                      多选：来访者可同时勾选多项
+                      {question.innerScoring ? "，分值按题内计分合计" : "，未开启题内计分时分值不参与计分"}
+                    </span>
+                  )}
+                </div>
                 <SmallButton
                   disabled={disabled || fixedStructure}
                   onClick={() => {
@@ -1823,7 +2350,8 @@ function QuestionFields({
                             event.target.value,
                           ),
                           questions: replaceAt(questions, questionIndex, {
-                            ...question,
+                            // 题内计分公式引用了选项 ID，改名时一起换
+                            ...renameOptionInInnerScoring(question, option.id, event.target.value),
                             options: replaceAt(question.options, optionIndex, {
                               ...option,
                               id: event.target.value,
@@ -1889,7 +2417,7 @@ function QuestionFields({
                         onChange({
                           ...removeOptionsFromRiskRules(definition, [option.id]),
                           questions: replaceAt(questions, questionIndex, {
-                            ...question,
+                            ...removeOptionFromInnerScoring(question, option.id),
                             options: question.options.filter((_, index) => index !== optionIndex),
                           }),
                         })
@@ -1909,6 +2437,13 @@ function QuestionFields({
                   </div>
                 ))}
               </div>
+              {isMultipleChoiceQuestion(question) && (
+                <InnerScoringEditor
+                  disabled={disabled || fixedStructure}
+                  question={question}
+                  onChange={(nextQuestion) => updateQuestion(questionIndex, nextQuestion)}
+                />
+              )}
             </div>
             )}
           </div>
@@ -2000,6 +2535,132 @@ function QuestionFields({
         </ConfirmOverlay>
       )}
     </EditorSection>
+  );
+}
+
+/** 编辑器里的题型：单选 / 多选同为 choice，多选用 multiple 区分。 */
+type QuestionKind = "single" | "multiple" | "text" | "number";
+
+function MultipleReverseHint() {
+  return (
+    <div className="mt-2 pl-5 text-xs text-[var(--lxxl-muted)]">多选题不支持反向计分</div>
+  );
+}
+
+function formatInnerScore(value: number) {
+  return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+}
+
+/** 多选题的题内计分：不开启时本题不计分；开启后按“选项分值相加”或“简单公式”计算本题得分。 */
+function InnerScoringEditor({
+  disabled,
+  question,
+  onChange,
+}: {
+  disabled: boolean;
+  question: AssessmentQuestion;
+  onChange: (question: AssessmentQuestion) => void;
+}) {
+  const config = question.innerScoring;
+  const optionIds = getInnerScoringOptionIds(question);
+  const formulaError = getInnerScoringFormulaError(question);
+  let values: number[] | undefined;
+  let reachError = "";
+  if (config && !formulaError) {
+    try {
+      values = getInnerScoreValues(question);
+    } catch (error) {
+      reachError = error instanceof Error ? error.message : "暂时无法计算本题可能得分";
+    }
+  }
+
+  function setConfig(next: AssessmentInnerScoring | undefined) {
+    const updated: AssessmentQuestion = { ...question };
+    if (next) {
+      updated.innerScoring = next;
+    } else {
+      delete updated.innerScoring;
+    }
+    onChange(updated);
+  }
+
+  function setMode(mode: AssessmentInnerScoringMode) {
+    if (!config || config.mode === mode) {
+      return;
+    }
+    setConfig(
+      mode === "formula"
+        ? { mode, formula: config.formula?.trim() ? config.formula : optionIds.join(" + ") }
+        : { mode },
+    );
+  }
+
+  return (
+    <div className="mt-4 rounded-lg border border-dashed border-[var(--lxxl-border)] bg-[#FCFBF8] p-3">
+      <label className="flex items-start gap-2 text-sm font-medium">
+        <input
+          checked={Boolean(config)}
+          className="mt-1"
+          disabled={disabled}
+          type="checkbox"
+          onChange={(event) => setConfig(event.target.checked ? { mode: "sum" } : undefined)}
+        />
+        <span>
+          开启题内计分
+          <span className="mt-0.5 block text-xs font-normal leading-5 text-[var(--lxxl-muted)]">
+            {config
+              ? "本题得分 = 所选选项按下方方式计算的结果，参与总分、维度和报告中该题的得分。"
+              : "未开启时本题只记录所选项，不参与计分（报告中该题得分为 0）。"}
+          </span>
+        </span>
+      </label>
+      {config && (
+        <div className="mt-3 space-y-2 pl-6">
+          <div className="flex flex-wrap items-center gap-4 text-sm">
+            {(["sum", "formula"] as const).map((mode) => (
+              <label className="flex cursor-pointer items-center gap-1.5" key={mode}>
+                <input
+                  checked={config.mode === mode}
+                  disabled={disabled}
+                  name={`inner-scoring-${question.id}`}
+                  type="radio"
+                  onChange={() => setMode(mode)}
+                />
+                {mode === "sum" ? "选项分值相加" : "简单公式"}
+              </label>
+            ))}
+          </div>
+          {config.mode === "formula" && (
+            <div>
+              <input
+                aria-label="题内计分公式"
+                className={compactInputClass}
+                disabled={disabled}
+                placeholder={`例如：${optionIds.slice(0, 2).join(" + ") || "选项ID + 选项ID"}`}
+                value={config.formula ?? ""}
+                onChange={(event) => setConfig({ ...config, formula: event.target.value })}
+              />
+              <p
+                className={`mt-1 text-xs leading-5 ${
+                  formulaError ? "text-[#A13F37]" : "text-[var(--lxxl-muted)]"
+                }`}
+              >
+                {formulaError ||
+                  `可用选项 ID：${optionIds.join("、") || "（请先填写选项 ID）"}。选中时取该选项分值（含追问得分），未选中按 0 计算；仅支持 + - * / 和英文括号 ()。`}
+              </p>
+            </div>
+          )}
+          {values && values.length > 0 && (
+            <p className="text-xs leading-5 text-[var(--lxxl-green-dark)]">
+              本题可能得分 {formatInnerScore(values[0])}–{formatInnerScore(values[values.length - 1])}
+              ，共 {values.length} 个取值
+              {question.required ? "（必答，至少选一项）" : "（选答，不答按 0 分）"}。
+            </p>
+          )}
+          {reachError && <p className="text-xs leading-5 text-[#A13F37]">{reachError}</p>}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -2463,7 +3124,10 @@ function ComposedSourceReportEditor({
                                       </span>
                                     </span>
                                   </label>
-                                  {selected && (
+                                  {selected && isMultipleChoiceQuestion(question) && (
+                                    <MultipleReverseHint />
+                                  )}
+                                  {selected && !isMultipleChoiceQuestion(question) && (
                                     <label className="mt-2 flex items-center gap-2 pl-5 text-xs text-[var(--lxxl-muted)]">
                                       <input
                                         checked={reverseIds.includes(question.id)}
@@ -2770,6 +3434,9 @@ function ComposedSourceReportEditor({
                                   </span>
                                 </span>
                               </label>
+                              {isMultipleChoiceQuestion(question) ? (
+                                <MultipleReverseHint />
+                              ) : (
                               <label className="mt-2 flex items-center gap-2 pl-5 text-xs text-[var(--lxxl-muted)]">
                                 <input
                                   checked={isReverse}
@@ -2806,6 +3473,7 @@ function ComposedSourceReportEditor({
                                 />
                                 反向计分
                               </label>
+                              )}
                             </div>
                           );
                         })}
@@ -3240,7 +3908,8 @@ function ScoreCalculationFields({
                       · {question.text || "未命名题目"}
                     </span>
                   </label>
-                  {selected && (
+                  {selected && isMultipleChoiceQuestion(question) && <MultipleReverseHint />}
+                  {selected && !isMultipleChoiceQuestion(question) && (
                     <label className="mt-2 flex items-center gap-2 pl-5 text-xs text-[var(--lxxl-muted)]">
                       <input
                         checked={reverseIds.includes(question.id)}
@@ -4387,11 +5056,17 @@ function ReverseQuestionSelector({
   onChange: (definition: AssessmentDefinition) => void;
 }) {
   const reverseIds = definition.reverseQuestionIds || [];
+  const multipleCount = definition.questions.filter(isMultipleChoiceQuestion).length;
   return (
     <div className="mb-4 rounded-xl border border-dashed border-[var(--lxxl-border)] bg-[#FCFBF8] p-4">
       <div className="text-sm font-medium">反向计分题</div>
+      {multipleCount > 0 && (
+        <p className="mt-1 text-xs text-[var(--lxxl-muted)]">
+          多选题不支持反向计分，已从下方列表中省略 {multipleCount} 道。
+        </p>
+      )}
       <div className="mt-3 flex flex-wrap gap-3">
-        {definition.questions.map((question) => (
+        {definition.questions.filter((question) => !isMultipleChoiceQuestion(question)).map((question) => (
           <label
             key={question.id}
             className="flex items-center gap-2 rounded-lg border border-[var(--lxxl-border)] bg-white px-3 py-2 text-xs"
@@ -4755,7 +5430,8 @@ function DimensionEditor({
                             {question.text || "未命名题目"}
                           </span>
                         </label>
-                        {selected && (
+                        {selected && isMultipleChoiceQuestion(question) && <MultipleReverseHint />}
+                        {selected && !isMultipleChoiceQuestion(question) && (
                           <label className="mt-2 flex items-center gap-2 pl-5 text-xs text-[var(--lxxl-muted)]">
                             <input
                               checked={dimensionReverseIds.includes(question.id)}

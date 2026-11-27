@@ -51,6 +51,9 @@ function ReportMeta({ detail }: { detail: AssessmentReportDetail }) {
       ? detail.reportSnapshot.reportContent.subtitle ||
         detail.reportSnapshot.assessment.subtitle
       : "";
+  // 按人口学信息命中的计分方案（未命中时为默认方案，不显示）
+  const scoringVariant =
+    detail.source === "eap" ? detail.reportSnapshot.result.scoringVariant : undefined;
   return (
     <section className="rounded-2xl border border-[var(--lxxl-border)] bg-white p-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -96,6 +99,15 @@ function ReportMeta({ detail }: { detail: AssessmentReportDetail }) {
           value={formatUtcFullDateTime(detail.completedAt)}
         />
       </div>
+      {scoringVariant && (
+        <p className="mt-3 rounded-xl bg-[#F2F7F4] px-4 py-2.5 text-sm leading-6 text-[var(--lxxl-green-dark)]">
+          计分方案：{scoringVariant.title}
+          {scoringVariant.description ? `（${scoringVariant.description}）` : ""}
+          <span className="ml-1 text-xs text-[var(--lxxl-muted)]">
+            按来访者填写的人口学信息选用，下方区间和风险判定均按此方案。
+          </span>
+        </p>
+      )}
     </section>
   );
 }
@@ -667,7 +679,7 @@ function RawRows({
   rows,
 }: {
   title: string;
-  rows: Array<{ id: string; label: string; value: string }>;
+  rows: Array<{ id: string; label: string; value: string; score?: string }>;
 }) {
   return (
     <div>
@@ -682,7 +694,14 @@ function RawRows({
               key={row.id}
             >
               <dt className="text-[var(--lxxl-muted)]">{row.label}</dt>
-              <dd className="font-medium sm:text-right">{row.value}</dd>
+              <dd className="break-words font-medium sm:text-right">
+                {row.value}
+                {row.score && (
+                  <span className="ml-2 inline-block whitespace-nowrap rounded-full bg-[#F4F1EB] px-2 py-0.5 text-xs font-normal text-[var(--lxxl-muted)]">
+                    {row.score}
+                  </span>
+                )}
+              </dd>
             </div>
           ))}
         </dl>

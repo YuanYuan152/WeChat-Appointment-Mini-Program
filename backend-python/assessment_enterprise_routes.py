@@ -72,6 +72,8 @@ from enterprise_data_service import (
     enterprise_visitor_openid,
     normalize_visitor_key,
     record_learning_event,
+    report_structure,
+    scoring_variant_applied,
 )
 from enterprise_onboarding_progress_service import (
     OnboardingProgressConflict,
@@ -135,6 +137,8 @@ class EnterpriseReportItemPayload(BaseModel):
     assessmentId: str = Field(..., min_length=1, max_length=80)
     assessmentVersion: int = Field(..., ge=1)
     answers: dict[str, Any]
+    # 量表自带的人口学题（如性别，可决定按哪套计分方案计分）；没有人口学题的量表和旧版前端不传
+    demographicAnswers: dict[str, Any] = Field(default_factory=dict)
 
 
 class ArticlePayload(BaseModel):
@@ -306,6 +310,20 @@ def _require_site_person(
     if not person:
         raise HTTPException(status_code=401, detail=message)
     return person
+
+
+def _with_enterprise_meta(
+    demographic_answers: dict[str, Any],
+    meta: dict[str, Any],
+) -> dict[str, Any]:
+    """量表人口学答案 + 企业归档信息。下划线开头的是服务端写入的归档字段，不接受客户端传入。"""
+    merged = {
+        str(key): value
+        for key, value in (demographic_answers or {}).items()
+        if not str(key).startswith("_")
+    }
+    merged.update(meta)
+    return merged
 
 
 def _published_assessments(
@@ -506,24 +524,31 @@ def submit_enterprise_assessment_reports(
                 client_submission_id=str(item.clientSubmissionId),
                 assessment_id=item.assessmentId,
                 assessment_version=item.assessmentVersion,
-                demographic_answers=demographic_meta,
+                demographic_answers=_with_enterprise_meta(item.demographicAnswers, demographic_meta),
                 answers=item.answers,
                 entry_source="web",
                 share_code=None,
                 consent_version=consent_version,
             )
-            saved.append(
-                {
-                    "assessmentId": item.assessmentId,
-                    "publicId": detail.get("publicId") or detail.get("reportId"),
-                    "assessmentTitle": detail.get("assessmentTitle"),
-                    "assessmentSubtitle": detail.get("assessmentSubtitle"),
-                    "scoringType": detail.get("scoringType"),
-                    "resultSummary": detail.get("resultSummary"),
-                    # 企业站单量表提交后需立即展示结果（无需再鉴权拉报告）
-                    "result": detail.get("result"),
-                }
-            )
+            saved_item = {
+                "assessmentId": item.assessmentId,
+                "publicId": detail.get("publicId") or detail.get("reportId"),
+                "assessmentTitle": detail.get("assessmentTitle"),
+                "assessmentSubtitle": detail.get("assessmentSubtitle"),
+                "scoringType": detail.get("scoringType"),
+                "resultSummary": detail.get("resultSummary"),
+                # 企业站单量表提交后需立即展示结果（无需再鉴权拉报告）
+                "result": detail.get("result"),
+            }
+            if scoring_variant_applied(detail.get("result")):
+                # 按人口学计分方案计分：结果页要用这套方案的区间 / 维度来画图
+                snapshot = detail.get("reportSnapshot")
+                structure = report_structure(
+                    snapshot.get("assessment") if isinstance(snapshot, dict) else None
+                )
+                if structure is not None:
+                    saved_item["reportStructure"] = structure
+            saved.append(saved_item)
     except (AssessmentReportError, AssessmentDefinitionError) as exc:
         status = getattr(exc, "status_code", 500)
         raise HTTPException(status_code=status, detail=str(exc)) from exc

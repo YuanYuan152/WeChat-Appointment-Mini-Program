@@ -28,6 +28,9 @@ export function QuizIntro({
         <h2 className="font-serif text-xl font-semibold">答题前请阅读</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           {assessment.questionCount} 题 · 约 {assessment.duration} 分钟
+          {assessment.demographicQuestions?.length
+            ? ` · 答题前需填写 ${assessment.demographicQuestions.length} 项基本信息`
+            : ""}
         </p>
       </div>
 

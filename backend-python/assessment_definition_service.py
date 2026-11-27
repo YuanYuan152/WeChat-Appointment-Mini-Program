@@ -29,6 +29,14 @@ from assessment_formula import (
     formula_question_ids,
     parse_dimension_formula,
 )
+from assessment_multiple_choice import (
+    INNER_SCORING_FIELDS,
+    INNER_SCORING_MODES,
+    InnerScoringLimitError,
+    is_multiple_choice,
+    question_option_ids,
+    reachable_inner_scores,
+)
 from assessment_risk_rules import (
     RISK_OPTION_MATCH_MODES,
     RISK_SEVERITIES,
@@ -37,6 +45,13 @@ from assessment_risk_rules import (
     SCORE_CALCULATION_KEYS,
     risk_dimension_is_active,
     upgrade_legacy_risk_dimension,
+)
+from assessment_scoring_variants import (
+    CONDITION_FIELDS,
+    VARIANT_FIELDS,
+    VARIANT_SCORING_FIELDS,
+    choice_demographic_questions,
+    effective_definition,
 )
 
 
@@ -166,6 +181,8 @@ TOP_LEVEL_FIELDS = {
     "totalScore",
     # 风险维度：仅管理端可见，来访端接口会剥离（见 assessment_visibility.py）
     "riskDimension",
+    # 按人口学信息切换的计分 / 风险方案：仅管理端可见（见 assessment_scoring_variants.py）
+    "scoringVariants",
 }
 REQUIRED_TOP_LEVEL_FIELDS = {
     "schemaVersion",
@@ -469,6 +486,58 @@ def _follow_up_score_values(follow_up: dict[str, Any]) -> set[float]:
     return values
 
 
+def _option_contribution_values(option: dict[str, Any]) -> set[float]:
+    """选项被选中时可能贡献的分值：选项分值 + 追问得分的各种取值。"""
+    base = float(option["value"])
+    follow_up = option.get("followUp")
+    if isinstance(follow_up, dict):
+        return {base + extra for extra in _follow_up_score_values(follow_up)}
+    return {base}
+
+
+def _assert_no_multiple_reverse(
+    reverse_ids: set[str],
+    questions: list[dict[str, Any]],
+    label: str,
+) -> None:
+    multiple_ids = sorted(
+        str(question.get("id"))
+        for question in questions
+        if is_multiple_choice(question) and str(question.get("id")) in reverse_ids
+    )
+    if multiple_ids:
+        raise AssessmentValidationError(f"{label}不能包含多选题（多选题不支持反向计分）：{multiple_ids}")
+
+
+def _validate_inner_scoring(
+    question: dict[str, Any],
+    label: str,
+    *,
+    allow_incomplete: bool,
+) -> None:
+    config = _assert_object(question.get("innerScoring"), f"{label}.innerScoring")
+    if config.keys() - INNER_SCORING_FIELDS:
+        raise AssessmentValidationError(f"{label}.innerScoring 包含未知字段")
+    mode = config.get("mode")
+    if mode not in INNER_SCORING_MODES:
+        raise AssessmentValidationError(f"{label} 题内计分方式不合法")
+    formula = config.get("formula")
+    if formula is not None and not isinstance(formula, str):
+        raise AssessmentValidationError(f"{label} 题内计分公式必须是字符串")
+    if allow_incomplete:
+        return
+    if mode == "formula":
+        try:
+            parse_dimension_formula(formula or "", question_option_ids(question))
+        except AssessmentFormulaError as exc:
+            raise AssessmentValidationError(f"{label} 题内计分公式不合法：{exc}") from exc
+    # 枚举一遍选项组合：提前发现除以零、组合过多等问题，避免来访者提交时才报错
+    try:
+        _question_score_values(question, reverse=False)
+    except AssessmentValidationError as exc:
+        raise AssessmentValidationError(f"{label} {exc}") from exc
+
+
 def _question_score_values(
     question: dict[str, Any],
     *,
@@ -501,15 +570,27 @@ def _question_score_values(
                 values.add(empty)
         return values
 
+    if is_multiple_choice(question):
+        if reverse:
+            raise AssessmentValidationError("多选题不支持反向计分")
+        option_values = {
+            str(option["id"]): _option_contribution_values(option)
+            for option in question.get("options") or []
+        }
+        try:
+            return reachable_inner_scores(
+                question,
+                option_values,
+                max_states=MAX_REACHABLE_SCORE_STATES,
+            )
+        except InnerScoringLimitError as exc:
+            raise AssessmentValidationError(str(exc)) from exc
+        except AssessmentFormulaError as exc:
+            raise AssessmentValidationError(f"题内计分公式不合法：{exc}") from exc
+
     values: set[float] = set()
     for option in question.get("options") or []:
-        base = float(option["value"])
-        follow_up = option.get("followUp")
-        if isinstance(follow_up, dict):
-            for extra in _follow_up_score_values(follow_up):
-                values.add(base + extra)
-        else:
-            values.add(base)
+        values.update(_option_contribution_values(option))
     if not values:
         raise AssessmentValidationError("选择题缺少可计分选项")
     if reverse:
@@ -676,6 +757,7 @@ def _validate_score_calculation(
         raise AssessmentValidationError(f"{label}包含不存在的题目")
     if not reverse <= references:
         raise AssessmentValidationError(f"{label}.reverseQuestionIds 必须属于参与计分的题目")
+    _assert_no_multiple_reverse(reverse, questions, f"{label}.reverseQuestionIds ")
     calculation_mode = block.get("calculationMode", "simple")
     if calculation_mode not in {"simple", "formula"}:
         raise AssessmentValidationError(f"{label}.calculationMode 不合法")
@@ -798,15 +880,21 @@ def _risk_dimension_sources(definition: dict[str, Any]) -> dict[str, set[str]]:
     return sources
 
 
-def _choice_option_questions(questions: list[dict[str, Any]]) -> dict[str, str]:
-    """选择题的选项 ID → 所属题目 ID（选项 ID 全局唯一）。"""
+def _choice_option_slots(questions: list[dict[str, Any]]) -> dict[str, str]:
+    """选择题的选项 ID → 作答槽位（选项 ID 全局唯一）。
+
+    单选题同一题的选项共用一个槽位（一次只能选一个）；多选题每个选项各占一个槽位。
+    """
     mapping: dict[str, str] = {}
     for question in questions:
         if not isinstance(question, dict) or question.get("inputType", "choice") != "choice":
             continue
+        multiple = is_multiple_choice(question)
         for option in question.get("options") or []:
             if isinstance(option, dict) and isinstance(option.get("id"), str):
-                mapping[option["id"]] = str(question.get("id"))
+                mapping[option["id"]] = (
+                    f"option:{option['id']}" if multiple else f"question:{question.get('id')}"
+                )
     return mapping
 
 
@@ -873,7 +961,7 @@ def _validate_risk_option_rule(
     rule: dict[str, Any],
     label: str,
     *,
-    option_questions: dict[str, str],
+    option_slots: dict[str, str],
     allow_incomplete: bool,
 ) -> None:
     match = rule.get("match")
@@ -884,7 +972,7 @@ def _validate_risk_option_rule(
         f"{label}.optionIds",
         allow_empty=allow_incomplete,
     )
-    unknown = sorted(referenced - option_questions.keys())
+    unknown = sorted(referenced - option_slots.keys())
     if unknown:
         raise AssessmentValidationError(f"{label}引用了不存在的选项：{unknown[:8]}")
     min_count = rule.get("minCount")
@@ -903,10 +991,10 @@ def _validate_risk_option_rule(
     required = min_count if min_count is not None else len(referenced)
     if required > len(referenced):
         raise AssessmentValidationError(f"{label}要求命中的选项数不能超过已选选项数")
-    reachable = len({option_questions[item] for item in referenced})
+    reachable = len({option_slots[item] for item in referenced})
     if required > reachable:
         raise AssessmentValidationError(
-            f"{label}要求同时命中 {required} 项，但同一道题只能选中一个选项，"
+            f"{label}要求同时命中 {required} 项，但单选题同一题只能选中一个选项，"
             f"所选选项最多同时命中 {reachable} 项"
         )
 
@@ -937,7 +1025,7 @@ def _validate_risk_dimension(
     if unknown_levels:
         raise AssessmentValidationError(f"riskDimension.levels 包含未知风险等级：{unknown_levels}")
     sources = _risk_dimension_sources(definition)
-    option_questions = _choice_option_questions(questions)
+    option_slots = _choice_option_slots(questions)
     rule_ids: set[str] = set()
     for severity in RISK_SEVERITIES:
         if severity not in levels:
@@ -990,7 +1078,7 @@ def _validate_risk_dimension(
                 _validate_risk_option_rule(
                     rule,
                     rule_label,
-                    option_questions=option_questions,
+                    option_slots=option_slots,
                     allow_incomplete=allow_incomplete,
                 )
 
@@ -1092,6 +1180,115 @@ def _sync_composed_source_reports(definition: dict[str, Any]) -> None:
     definition["dimensions"] = dimensions
     definition.pop("scoreRanges", None)
     definition.pop("reverseQuestionIds", None)
+
+
+def _validate_scoring_variants(
+    definition: dict[str, Any],
+    *,
+    allow_fixed_scoring: bool,
+    strict_scoring: bool,
+    strict_assets: bool,
+    allow_incomplete: bool,
+) -> None:
+    """人口学计分方案：条件只能引用单选 / 多选人口学题的选项；每个方案套用后的定义按同样的规则校验。"""
+    raw_variants = definition.get("scoringVariants")
+    if raw_variants is None:
+        return
+    if not isinstance(raw_variants, list):
+        raise AssessmentValidationError("scoringVariants 必须是数组")
+    if not raw_variants:
+        return
+    _assert_unique_ids(raw_variants, "scoringVariants")
+    choice_questions = choice_demographic_questions(definition)
+    fixed = definition.get("scoringType") in FIXED_SCORING_PRESETS
+    seen_conditions: dict[frozenset[tuple[str, frozenset[str]]], str] = {}
+    for index, raw_variant in enumerate(raw_variants):
+        path = f"scoringVariants[{index}]"
+        variant = _assert_object(raw_variant, path)
+        if variant.keys() - VARIANT_FIELDS:
+            raise AssessmentValidationError(f"{path}包含未知字段")
+        title = _assert_string(variant.get("title"), f"{path}.title", allow_empty=allow_incomplete)
+        name = f"计分方案「{title or variant.get('id')}」"
+
+        conditions = variant.get("conditions")
+        if not isinstance(conditions, list) or not conditions:
+            raise AssessmentValidationError(f"{name}至少需要一个适用条件")
+        used_questions: set[str] = set()
+        signature: list[tuple[str, frozenset[str]]] = []
+        for condition_index, raw_condition in enumerate(conditions):
+            condition = _assert_object(raw_condition, f"{path}.conditions[{condition_index}]")
+            if condition.keys() != CONDITION_FIELDS:
+                raise AssessmentValidationError(f"{name}的第 {condition_index + 1} 个条件字段不完整")
+            question_id = condition.get("questionId")
+            question = (
+                choice_questions.get(question_id) if isinstance(question_id, str) else None
+            )
+            if question is None:
+                raise AssessmentValidationError(
+                    f"{name}的适用条件只能引用单选或多选人口学题：{question_id}"
+                )
+            if question_id in used_questions:
+                raise AssessmentValidationError(f"{name}的同一道人口学题只能设置一个条件")
+            used_questions.add(question_id)
+            option_ids = condition.get("optionIds")
+            if (
+                not isinstance(option_ids, list)
+                or not option_ids
+                or any(not isinstance(item, str) for item in option_ids)
+            ):
+                raise AssessmentValidationError(
+                    f"{name}的条件「{question.get('text') or question_id}」至少需要选择一个选项"
+                )
+            if len(set(option_ids)) != len(option_ids):
+                raise AssessmentValidationError(f"{name}的条件包含重复选项")
+            known_options = {
+                str(option.get("id"))
+                for option in question.get("options") or []
+                if isinstance(option, dict)
+            }
+            unknown_options = [item for item in option_ids if item not in known_options]
+            if unknown_options:
+                raise AssessmentValidationError(
+                    f"{name}的条件引用了不存在的人口学选项：{unknown_options}"
+                )
+            signature.append((question_id, frozenset(option_ids)))
+        condition_key = frozenset(signature)
+        if condition_key in seen_conditions:
+            raise AssessmentValidationError(
+                f"{name}与计分方案「{seen_conditions[condition_key]}」的适用条件完全相同"
+            )
+        seen_conditions[condition_key] = str(title or variant.get("id"))
+
+        scoring = variant.get("scoring")
+        if scoring is not None:
+            scoring = _assert_object(scoring, f"{path}.scoring")
+            if fixed:
+                raise AssessmentValidationError(
+                    f"{name}：固定计分量表的计分规则固定，方案只能单独设置风险规则"
+                )
+            if scoring.keys() - set(VARIANT_SCORING_FIELDS):
+                raise AssessmentValidationError(f"{path}.scoring 包含未知字段")
+        if "riskDimension" in variant:
+            _assert_object(variant.get("riskDimension"), f"{path}.riskDimension")
+
+        effective = effective_definition(definition, variant)
+        try:
+            validate_definition(
+                effective,
+                allow_fixed_scoring=allow_fixed_scoring,
+                strict_scoring=strict_scoring,
+                strict_assets=strict_assets,
+                allow_incomplete=allow_incomplete,
+            )
+        except AssessmentValidationError as exc:
+            raise AssessmentValidationError(f"{name}：{exc}") from exc
+        # 校验时会规范化区间写法、升级旧版风险格式，把方案自己的部分写回
+        if scoring is not None:
+            variant["scoring"] = {
+                field: effective[field] for field in VARIANT_SCORING_FIELDS if field in effective
+            }
+        if "riskDimension" in variant:
+            variant["riskDimension"] = effective.get("riskDimension")
 
 
 def validate_definition(
@@ -1201,6 +1398,8 @@ def validate_definition(
             "completedScore",
             "emptyScore",
             "validation",
+            "multiple",
+            "innerScoring",
         }
         allowed_question_fields |= {
             "sourceAssessmentId",
@@ -1241,6 +1440,19 @@ def validate_definition(
         if input_type not in {"choice", "text", "number"}:
             raise AssessmentValidationError(
                 f"questions[{question_index}].inputType 不合法"
+            )
+        multiple = question.get("multiple", False)
+        if not isinstance(multiple, bool):
+            raise AssessmentValidationError(f"questions[{question_index}].multiple 必须是布尔值")
+        if multiple and input_type != "choice":
+            raise AssessmentValidationError(f"questions[{question_index}] 只有选择题可以设置多选")
+        if question.get("innerScoring") is not None and not multiple:
+            raise AssessmentValidationError(
+                f"questions[{question_index}] 只有多选题可以开启题内计分"
+            )
+        if multiple and scoring_type in FIXED_SCORING_PRESETS:
+            raise AssessmentValidationError(
+                f"questions[{question_index}] 固定计分量表不支持多选题"
             )
         score_mode = question.get("scoreMode", "filled")
         if score_mode not in {"filled", "value"}:
@@ -1421,6 +1633,12 @@ def validate_definition(
                         raise AssessmentValidationError(
                             f"questions[{question_index}].options[{option_index}].followUp 按数字计分必须设置 validation.min/max"
                         )
+        if question.get("innerScoring") is not None:
+            _validate_inner_scoring(
+                question,
+                f"questions[{question_index}]",
+                allow_incomplete=allow_incomplete,
+            )
 
     demographic_questions = definition.get("demographicQuestions", [])
     if not isinstance(demographic_questions, list):
@@ -1497,6 +1715,7 @@ def validate_definition(
     )
     if not reverse_ids <= question_ids:
         raise AssessmentValidationError("reverseQuestionIds 包含不存在的题目")
+    _assert_no_multiple_reverse(reverse_ids, questions, "reverseQuestionIds ")
 
     if scoring_type in {"sum", "psqi"}:
         score_ranges = definition.get("scoreRanges")
@@ -1568,6 +1787,11 @@ def validate_definition(
                 raise AssessmentValidationError(
                     f"dimensions[{index}].reverseQuestionIds 必须属于该维度"
                 )
+            _assert_no_multiple_reverse(
+                dimension_reverse,
+                questions,
+                f"dimensions[{index}].reverseQuestionIds ",
+            )
             calculation_mode = dimension.get("calculationMode", "simple")
             if calculation_mode not in {"simple", "formula"}:
                 raise AssessmentValidationError(
@@ -1779,6 +2003,14 @@ def validate_definition(
             validate_generated_scoring_examples(definition)
         except ValueError as exc:
             raise AssessmentValidationError(f"计分样例校验失败：{exc}") from exc
+
+    _validate_scoring_variants(
+        definition,
+        allow_fixed_scoring=allow_fixed_scoring,
+        strict_scoring=strict_scoring,
+        strict_assets=strict_assets,
+        allow_incomplete=allow_incomplete,
+    )
 
 
 class AssessmentDefinitionStore:

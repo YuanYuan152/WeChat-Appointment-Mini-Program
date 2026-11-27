@@ -3,9 +3,13 @@ import type {
   AssessmentDemographicOption,
   AssessmentDemographicQuestion,
   AssessmentDemographicValue,
+  AssessmentOption,
+  AssessmentOptionFollowUp,
+  AssessmentQuestion,
   AssessmentScoreRange,
 } from "@/types/assessment";
 import type { AssessmentReportSnapshot } from "@/types/assessmentReport";
+import { compileDimensionFormula } from "@/lib/assessmentFormula";
 
 export type ChinaDayBoundary = "start" | "end";
 
@@ -22,9 +26,13 @@ export interface ScoreRangeBounds {
 export interface SnapshotAnswerDisplay {
   questionId: string;
   questionText: string;
+  /** 选择题第一个选中的选项（多选题看 answerText） */
   selectedOptionId: string | null;
   answerText: string;
+  /** 本题得分（多选题为题内计分结果；未作答或选项已失效为 null） */
   scoreValue: number | null;
+  /** 得分说明：如“3 分”“题内计分 3 分”“不计分”；未作答为空 */
+  scoreText: string;
 }
 
 export interface SnapshotDemographicAnswerDisplay {
@@ -38,6 +46,8 @@ export interface AssessmentReportAnswerRow {
   id: string;
   label: string;
   value: string;
+  /** 本题得分说明，人口学信息没有 */
+  score?: string;
 }
 
 export interface AssessmentAssetUrlOptions {
@@ -178,26 +188,208 @@ export function getScoreRangeMax(
 
 export const getAssessmentRangeMax = getScoreRangeMax;
 
+interface ChoiceAnswerEntry {
+  optionId: string;
+  followUp?: unknown;
+}
+
+function parseChoiceAnswerEntry(entry: unknown): ChoiceAnswerEntry | null {
+  if (typeof entry === "string") {
+    return { optionId: entry };
+  }
+  if (entry && typeof entry === "object" && !Array.isArray(entry)) {
+    const record = entry as { optionId?: unknown; followUp?: unknown };
+    if (typeof record.optionId === "string") {
+      return { optionId: record.optionId, followUp: record.followUp };
+    }
+  }
+  return null;
+}
+
+function isMultipleAnswerQuestion(question: Readonly<AssessmentQuestion>): boolean {
+  return (question.inputType || "choice") === "choice" && question.multiple === true;
+}
+
+function isEmptyAnswer(answer: unknown): boolean {
+  return answer == null || answer === "" || (Array.isArray(answer) && answer.length === 0);
+}
+
+/** 选择题本次作答的选项条目：单选一个，多选全部列出。 */
+function choiceAnswerEntries(
+  question: Readonly<AssessmentQuestion>,
+  answer: unknown,
+): ChoiceAnswerEntry[] {
+  if (isEmptyAnswer(answer)) {
+    return [];
+  }
+  const raw = isMultipleAnswerQuestion(question) && Array.isArray(answer) ? answer : [answer];
+  return raw
+    .map(parseChoiceAnswerEntry)
+    .filter((entry): entry is ChoiceAnswerEntry => entry !== null);
+}
+
+function finiteOr(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function isFilledTextValue(value: unknown): value is string {
+  return typeof value === "string" && value.trim() !== "";
+}
+
+function isFilledNumberValue(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function followUpScore(followUp: AssessmentOptionFollowUp, value: unknown): number {
+  const completed = finiteOr(followUp.completedScore, 0);
+  const empty = finiteOr(followUp.emptyScore, 0);
+  const filled =
+    followUp.inputType === "text" ? isFilledTextValue(value) : isFilledNumberValue(value);
+  if (followUp.scoreMode === "value") {
+    return isFilledNumberValue(value) ? value : empty;
+  }
+  return filled ? completed : empty;
+}
+
+function optionScore(option: AssessmentOption, entry: ChoiceAnswerEntry): number {
+  return option.value + (option.followUp ? followUpScore(option.followUp, entry.followUp) : 0);
+}
+
+function roundScore(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+/**
+ * 按作答计算单题得分，与后端计分口径一致（不含维度里的反向计分）：
+ * 单选取选项分值 + 追问得分；多选开启题内计分时按相加 / 公式计算，未开启时不计分（0）；
+ * 填空、数字按是否填写或填写的数字计分。未作答或选项已失效返回 null。
+ */
+export function computeQuestionScore(
+  question: Readonly<AssessmentQuestion>,
+  answer: unknown,
+): number | null {
+  if (isEmptyAnswer(answer)) {
+    return null;
+  }
+  const inputType = question.inputType || "choice";
+  const completed = finiteOr(question.completedScore, 0);
+  const empty = finiteOr(question.emptyScore, 0);
+  if (inputType === "text") {
+    const text = typeof answer === "object" ? (answer as { text?: unknown }).text : undefined;
+    return isFilledTextValue(text) ? completed : empty;
+  }
+  if (inputType === "number") {
+    const number = typeof answer === "object" ? (answer as { number?: unknown }).number : undefined;
+    if ((question.scoreMode || "filled") === "value") {
+      return isFilledNumberValue(number) ? number : empty;
+    }
+    return isFilledNumberValue(number) ? completed : empty;
+  }
+  const options = new Map(question.options.map((option) => [option.id, option]));
+  const entries = choiceAnswerEntries(question, answer);
+  if (isMultipleAnswerQuestion(question)) {
+    const config = question.innerScoring;
+    if (!config) {
+      return 0;
+    }
+    const contributions: Record<string, number> = {};
+    for (const entry of entries) {
+      const option = options.get(entry.optionId);
+      if (option) {
+        contributions[option.id] = optionScore(option, entry);
+      }
+    }
+    if (config.mode === "formula") {
+      try {
+        return roundScore(
+          compileDimensionFormula(
+            config.formula ?? "",
+            question.options.map((option) => option.id),
+          ).evaluate(contributions),
+        );
+      } catch {
+        return null;
+      }
+    }
+    return roundScore(Object.values(contributions).reduce((total, value) => total + value, 0));
+  }
+  const entry = entries[0];
+  const option = entry ? options.get(entry.optionId) : undefined;
+  return entry && option ? optionScore(option, entry) : null;
+}
+
+function followUpText(option: AssessmentOption, value: unknown): string {
+  if (!option.followUp || value == null || value === "") {
+    return "";
+  }
+  return `（${option.followUp.label || "补充"}：${String(value)}）`;
+}
+
+/** 作答的可读文字：选项文字（含追问内容）、填写的文字或数字。 */
+export function describeQuestionAnswer(
+  question: Readonly<AssessmentQuestion>,
+  answer: unknown,
+): string {
+  if (isEmptyAnswer(answer)) {
+    return EMPTY_ANSWER_TEXT;
+  }
+  const inputType = question.inputType || "choice";
+  if (inputType === "text") {
+    const text = typeof answer === "object" ? (answer as { text?: unknown }).text : undefined;
+    return isFilledTextValue(text) ? text : EMPTY_ANSWER_TEXT;
+  }
+  if (inputType === "number") {
+    const number = typeof answer === "object" ? (answer as { number?: unknown }).number : undefined;
+    return isFilledNumberValue(number) ? String(number) : EMPTY_ANSWER_TEXT;
+  }
+  const entries = choiceAnswerEntries(question, answer);
+  if (entries.length === 0) {
+    return EMPTY_ANSWER_TEXT;
+  }
+  return entries
+    .map((entry) => {
+      const option = question.options.find((item) => item.id === entry.optionId);
+      return option
+        ? `${option.text || option.id}${followUpText(option, entry.followUp)}`
+        : `未知选项（${entry.optionId}）`;
+    })
+    .join("、");
+}
+
+function questionScoreText(
+  question: Readonly<AssessmentQuestion>,
+  answer: unknown,
+  score: number | null,
+): string {
+  if (isEmptyAnswer(answer)) {
+    return "";
+  }
+  if (isMultipleAnswerQuestion(question)) {
+    if (!question.innerScoring) {
+      return "不计分";
+    }
+    return score === null ? "" : `题内计分 ${score} 分`;
+  }
+  return score === null ? "" : `${score} 分`;
+}
+
 function mapAssessmentAnswerDisplays(
   assessment: Readonly<AssessmentDefinition>,
-  answers: Readonly<Record<string, string>> | null | undefined,
+  answers: Readonly<Record<string, unknown>> | null | undefined,
 ): SnapshotAnswerDisplay[] {
   return assessment.questions.map((question) => {
-    const selectedOptionId = answers?.[question.id] ?? null;
-    const selectedOption = selectedOptionId
-      ? question.options.find((option) => option.id === selectedOptionId)
-      : undefined;
-
+    const answer = answers?.[question.id];
+    const inputType = question.inputType || "choice";
+    const firstEntry =
+      inputType === "choice" ? choiceAnswerEntries(question, answer)[0] : undefined;
+    const scoreValue = computeQuestionScore(question, answer);
     return {
       questionId: question.id,
       questionText: question.text,
-      selectedOptionId,
-      answerText:
-        selectedOption?.text ??
-        (selectedOptionId
-          ? `未知选项（${selectedOptionId}）`
-          : EMPTY_ANSWER_TEXT),
-      scoreValue: selectedOption?.value ?? null,
+      selectedOptionId: firstEntry?.optionId ?? null,
+      answerText: describeQuestionAnswer(question, answer),
+      scoreValue,
+      scoreText: questionScoreText(question, answer, scoreValue),
     };
   });
 }
@@ -208,7 +400,7 @@ function mapAssessmentAnswerDisplays(
  */
 export function mapSnapshotAnswers(
   snapshot: Readonly<AssessmentReportSnapshot>,
-  answers: Readonly<Record<string, string>> | null | undefined,
+  answers: Readonly<Record<string, unknown>> | null | undefined,
 ): SnapshotAnswerDisplay[] {
   return mapAssessmentAnswerDisplays(snapshot.assessment, answers);
 }
@@ -219,12 +411,13 @@ export function mapSnapshotAnswers(
  */
 export function mapAssessmentAnswers(
   assessment: Readonly<AssessmentDefinition>,
-  answers: Readonly<Record<string, string>> | null | undefined,
+  answers: Readonly<Record<string, unknown>> | null | undefined,
 ): AssessmentReportAnswerRow[] {
   return mapAssessmentAnswerDisplays(assessment, answers).map((row) => ({
     id: row.questionId,
     label: row.questionText,
     value: row.answerText,
+    ...(row.scoreText ? { score: row.scoreText } : {}),
   }));
 }
 
