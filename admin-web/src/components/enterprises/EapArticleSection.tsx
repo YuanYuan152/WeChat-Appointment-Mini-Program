@@ -249,7 +249,7 @@ export function EapArticleSection({
           article={editor}
           busy={busy}
           onClose={() => setEditor(undefined)}
-          onSave={(input) => void save(input, false)}
+          onSave={(input) => save(input, false)}
         />
       )}
       {pendingOverwrite && (
