@@ -2,10 +2,10 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Play, Headphones } from "lucide-react";
+import { Play } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAudioPlayer } from "@/lib/stores/audio-player";
-import { formatDuration, formatPlayCount } from "@/lib/utils";
+import { formatDuration } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import type { AudioEpisode } from "@/lib/api/types";
 
@@ -35,12 +35,8 @@ export function EpisodeCard({ episode, index = 0 }: EpisodeCardProps) {
           <h3 className="truncate font-medium group-hover:text-primary">{episode.title}</h3>
         </Link>
         <p className="text-xs text-muted-foreground">{episode.series}</p>
-        <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
+        <div className="mt-1 text-xs text-muted-foreground">
           <span>{formatDuration(episode.duration)}</span>
-          <span className="flex items-center gap-1">
-            <Headphones className="h-3 w-3" />
-            {formatPlayCount(episode.playCount)}
-          </span>
         </div>
       </div>
 

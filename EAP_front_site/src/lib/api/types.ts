@@ -24,7 +24,6 @@ export interface AudioEpisode {
   cover: string;
   description: string;
   duration: number;
-  playCount: number;
   audioUrl: string;
   publishedAt: string;
 }

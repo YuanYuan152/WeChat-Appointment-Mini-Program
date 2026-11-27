@@ -164,7 +164,69 @@ def create_shared_article(payload: dict[str, Any]) -> dict[str, Any]:
     return _public_article(article, "shared")
 
 
-def update_shared_article(article_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+def enterprises_with_article_override(article_id: str) -> list[dict[str, str]]:
+    """返回对该通用图文有单独改稿的企业（不含仅隐藏、不含专属新增）。"""
+    from assessment_enterprise_service import list_enterprises
+
+    affected: list[dict[str, str]] = []
+    for item in list_enterprises():
+        overrides = item.get("articleOverrides")
+        if isinstance(overrides, dict) and article_id in overrides:
+            affected.append(
+                {
+                    "id": str(item.get("id") or ""),
+                    "companyName": str(item.get("companyName") or item.get("siteName") or item.get("id") or ""),
+                }
+            )
+    return [row for row in affected if row["id"]]
+
+
+def _sync_enterprise_article_overrides(article_id: str, shared_article: dict[str, Any]) -> int:
+    """把最新通用内容写入各企业对该条的改稿，实现「覆盖定制」。"""
+    synced = 0
+
+    def mutate(items: list[dict[str, Any]]) -> bool:
+        nonlocal synced
+        changed = False
+        for item in items:
+            overrides = item.get("articleOverrides")
+            if not isinstance(overrides, dict) or article_id not in overrides:
+                continue
+            overrides[article_id] = {
+                key: shared_article[key]
+                for key in (
+                    "id",
+                    "title",
+                    "imageUrl",
+                    "body",
+                    "tags",
+                    "duration",
+                    "publishedAt",
+                    "author",
+                )
+                if key in shared_article
+            }
+            item["articleOverrides"] = overrides
+            synced += 1
+            changed = True
+        return changed
+
+    mutate_enterprises(mutate)
+    return synced
+
+
+def update_shared_article(
+    article_id: str,
+    payload: dict[str, Any],
+    *,
+    overwrite_enterprise_overrides: bool = False,
+) -> dict[str, Any]:
+    """更新通用图文。
+
+    默认保留各企业对该条的单独改稿；仅在 overwrite_enterprise_overrides=True
+    时把最新通用内容同步覆盖到这些企业改稿（与心理音画一致）。
+    """
+    updated: dict[str, Any]
     with _lock:
         items = _read_articles()
         current = next((item for item in items if item.get("id") == article_id), None)
@@ -175,8 +237,15 @@ def update_shared_article(article_id: str, payload: dict[str, Any]) -> dict[str,
         current.update(updated)
         _write_articles(items)
         result = _public_article(current, "shared")
-    # 通用内容更新后，清掉各企业的单独改稿，让所有仍展示该图文的页面使用新内容。
-    _clear_enterprise_article_state(article_id, drop_hidden=False)
+
+    affected = enterprises_with_article_override(article_id)
+    if affected and overwrite_enterprise_overrides:
+        _sync_enterprise_article_overrides(article_id, updated)
+        affected = []
+
+    result["needsOverwriteConfirm"] = bool(affected) and not overwrite_enterprise_overrides
+    result["affectedEnterprises"] = affected if result["needsOverwriteConfirm"] else []
+    result["affectedEnterpriseCount"] = len(result["affectedEnterprises"])
     return result
 
 

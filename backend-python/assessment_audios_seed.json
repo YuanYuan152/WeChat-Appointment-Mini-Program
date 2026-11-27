@@ -1,0 +1,29 @@
+[
+  {
+    "id": "audio-night-01",
+    "title": "睡前冥想：放下一天的疲惫",
+    "audioUrl": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+    "description": "用十分钟的引导冥想，让身体和心灵慢慢沉入安宁的睡眠。",
+    "series": "晚安心灵",
+    "duration": "10 分钟",
+    "publishedAt": "2026-03-15"
+  },
+  {
+    "id": "audio-breath-01",
+    "title": "焦虑时的呼吸锚点",
+    "audioUrl": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
+    "description": "当焦虑来袭，这个练习帮你在三分钟内找回内心的平静。",
+    "series": "情绪调节",
+    "duration": "8 分钟",
+    "publishedAt": "2026-03-22"
+  },
+  {
+    "id": "audio-inner-child-01",
+    "title": "与内在小孩对话",
+    "audioUrl": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
+    "description": "温柔地触碰内心深处的那个孩子，给予 TA 迟来的拥抱。",
+    "series": "自我关怀",
+    "duration": "12 分钟",
+    "publishedAt": "2026-04-01"
+  }
+]

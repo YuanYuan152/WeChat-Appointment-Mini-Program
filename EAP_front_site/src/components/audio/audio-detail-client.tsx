@@ -2,7 +2,7 @@
 
 import { Play, Pause } from "lucide-react";
 import { useAudioPlayer } from "@/lib/stores/audio-player";
-import { formatDuration, formatPlayCount } from "@/lib/utils";
+import { formatDuration } from "@/lib/utils";
 import { VinylDisc } from "./vinyl-disc";
 import { Button } from "@/components/ui/button";
 import type { AudioEpisode } from "@/lib/api/types";
@@ -37,7 +37,6 @@ export function AudioDetailClient({ episode }: AudioDetailClientProps) {
         </p>
         <div className="mt-4 flex items-center justify-center gap-4 text-sm text-muted-foreground sm:justify-start">
           <span>{formatDuration(episode.duration)}</span>
-          <span>{formatPlayCount(episode.playCount)} 次播放</span>
         </div>
         <Button size="lg" className="mt-6 rounded-full px-8" onClick={handlePlay}>
           {playing ? (

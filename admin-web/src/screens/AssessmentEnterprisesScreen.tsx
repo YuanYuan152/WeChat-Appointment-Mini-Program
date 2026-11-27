@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { AppRoute, useAppRoute } from "@/components/AppRoute";
 import { ContentImageUpload } from "@/components/content/ContentImageUpload";
 import { EapArticleSection } from "@/components/enterprises/EapArticleSection";
+import { EapAudioSection } from "@/components/enterprises/EapAudioSection";
 import { EnterpriseCounselorSection } from "@/components/enterprises/EnterpriseCounselorSection";
 import {
   EmptyState,
@@ -23,9 +24,11 @@ import {
   fetchAssessmentEnterpriseDefault,
   fetchEmployeeInfoFieldCatalog,
   fetchEnterpriseEapArticles,
+  fetchEnterpriseEapAudios,
   fetchEnterprisePersonnel,
   fetchPrivateAssessmentOptions,
   fetchSharedEapArticles,
+  fetchSharedEapAudios,
   generateAssessmentEnterpriseQrCode,
   generateEnterprisePersonnel,
   saveAssessmentEnterprise,
@@ -37,6 +40,7 @@ import type {
   AssessmentEnterpriseHeroSlide,
   CustomEmployeeInfoField,
   EapArticle,
+  EapAudio,
   EmployeeInfoFieldOption,
   EnterprisePersonnelAccountMode,
   EnterprisePersonnelPasswordMode,
@@ -87,6 +91,7 @@ function AssessmentEnterprisesContent() {
   const [employeeInfoFieldCatalog, setEmployeeInfoFieldCatalog] = useState<EmployeeInfoFieldOption[]>([]);
   const [defaultBranding, setDefaultBranding] = useState<AssessmentEnterpriseBranding>();
   const [articles, setArticles] = useState<EapArticle[]>([]);
+  const [audios, setAudios] = useState<EapAudio[]>([]);
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState<AssessmentEnterprise | null | undefined>(undefined);
   const [qr, setQr] = useState<{ companyName: string; url: string; svg: string }>();
@@ -96,18 +101,20 @@ function AssessmentEnterprisesContent() {
     setLoading(true);
     clearNotice();
     try {
-      const [enterprises, privateAssessments, branding, fieldCatalog, sharedArticles] = await Promise.all([
+      const [enterprises, privateAssessments, branding, fieldCatalog, sharedArticles, sharedAudios] = await Promise.all([
         fetchAssessmentEnterprises(),
         fetchPrivateAssessmentOptions(),
         fetchAssessmentEnterpriseDefault(),
         fetchEmployeeInfoFieldCatalog(),
         fetchSharedEapArticles(),
+        fetchSharedEapAudios(),
       ]);
       setItems(enterprises);
       setAssessmentOptions(privateAssessments);
       setDefaultBranding(branding);
       setEmployeeInfoFieldCatalog(fieldCatalog);
       setArticles(sharedArticles);
+      setAudios(sharedAudios);
     } catch (error) {
       showNotice("error", error instanceof Error ? error.message : "企业定制配置加载失败");
     } finally {
@@ -214,6 +221,12 @@ function AssessmentEnterprisesContent() {
           articles={articles}
           mode="shared"
           onChange={async () => setArticles(await fetchSharedEapArticles())}
+        />
+        <EapAudioSection
+          audios={audios}
+          divided
+          mode="shared"
+          onChange={async () => setAudios(await fetchSharedEapAudios())}
         />
       </section>
       <section className="overflow-hidden rounded-xl border border-[var(--lxxl-border)] bg-white">
@@ -1135,15 +1148,25 @@ function EnterpriseEditor({
     normalizeHeroSlides(item?.heroSlides?.length ? item.heroSlides : defaultHeroSlides),
   );
   const [enterpriseArticles, setEnterpriseArticles] = useState<EapArticle[]>([]);
+  const [enterpriseAudios, setEnterpriseAudios] = useState<EapAudio[]>([]);
   const reloadArticles = useCallback(async () => {
     const next = enterpriseId
       ? await fetchEnterpriseEapArticles(enterpriseId)
       : await fetchSharedEapArticles();
     setEnterpriseArticles(next);
   }, [enterpriseId]);
+  const reloadAudios = useCallback(async () => {
+    const next = enterpriseId
+      ? await fetchEnterpriseEapAudios(enterpriseId)
+      : await fetchSharedEapAudios();
+    setEnterpriseAudios(next);
+  }, [enterpriseId]);
   useEffect(() => {
     void reloadArticles();
   }, [reloadArticles]);
+  useEffect(() => {
+    void reloadAudios();
+  }, [reloadAudios]);
   const [saving, setSaving] = useState(false);
   const heroReady = heroSlides.every(
     (slide) => slide.imageUrl.trim() && slide.title.trim() && slide.desc.trim(),
@@ -1362,6 +1385,13 @@ function EnterpriseEditor({
               enterpriseId={enterpriseId}
               mode="enterprise"
               onChange={reloadArticles}
+            />
+            <EapAudioSection
+              audios={enterpriseAudios}
+              divided
+              enterpriseId={enterpriseId}
+              mode="enterprise"
+              onChange={reloadAudios}
             />
           </div>
           <div className="mt-8 border-y border-[var(--lxxl-border)] py-6 lg:col-span-2">

@@ -85,6 +85,8 @@ const actionTypeLabels: Record<string, string> = {
   ENTERPRISE_COUNSELOR_SAVE: "保存企业咨询师勾选",
   ENTERPRISE_ARTICLE_SAVE: "保存企业图文",
   ENTERPRISE_ARTICLE_DELETE: "删除企业图文",
+  ENTERPRISE_AUDIO_SAVE: "保存企业音画",
+  ENTERPRISE_AUDIO_DELETE: "删除企业音画",
   ENTERPRISE_PERSONNEL_GENERATE: "生成企业人员账号",
   ENTERPRISE_PERSONNEL_EXPORT: "导出企业人员表",
   ENTERPRISE_PERSONNEL_DELETE: "删除企业人员表",
@@ -114,6 +116,7 @@ const targetTypeLabels: Record<string, string> = {
   Article: "文章",
   Enterprise: "企业定制",
   EnterpriseArticle: "企业图文",
+  EnterpriseAudio: "企业音画",
   EnterpriseDefault: "企业站默认设置",
   Pricing: "定价",
   Feedback: "系统反馈",
@@ -377,6 +380,8 @@ export function OperationLogsPanel({
                 <option value="ENTERPRISE_COUNSELOR_SAVE">保存企业咨询师勾选</option>
                 <option value="ENTERPRISE_ARTICLE_SAVE">保存企业图文</option>
                 <option value="ENTERPRISE_ARTICLE_DELETE">删除企业图文</option>
+                <option value="ENTERPRISE_AUDIO_SAVE">保存企业音画</option>
+                <option value="ENTERPRISE_AUDIO_DELETE">删除企业音画</option>
                 <option value="ENTERPRISE_PERSONNEL_GENERATE">生成企业人员账号</option>
                 <option value="ENTERPRISE_PERSONNEL_EXPORT">导出企业人员表</option>
                 <option value="ENTERPRISE_PERSONNEL_DELETE">删除企业人员表</option>

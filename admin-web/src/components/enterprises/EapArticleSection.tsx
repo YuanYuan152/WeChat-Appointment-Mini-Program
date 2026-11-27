@@ -40,18 +40,33 @@ export function EapArticleSection({
 }) {
   const [editor, setEditor] = useState<EapArticle | null | undefined>(undefined);
   const [pendingDelete, setPendingDelete] = useState<EapArticle | null>(null);
+  const [pendingOverwrite, setPendingOverwrite] = useState<{
+    input: EapArticleInput;
+    articleId: string;
+    enterprises: Array<{ id: string; companyName: string }>;
+  } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState(false);
   const locked = mode === "enterprise" && !enterpriseId;
 
-  const save = async (input: EapArticleInput) => {
+  const save = async (input: EapArticleInput, overwriteEnterpriseOverrides = false) => {
     setBusy(true);
     setError("");
     try {
       if (mode === "shared") {
         if (editor?.id) {
-          await updateSharedEapArticle(editor.id, input);
+          const saved = await updateSharedEapArticle(editor.id, input, {
+            overwriteEnterpriseOverrides,
+          });
+          if (saved.needsOverwriteConfirm && !overwriteEnterpriseOverrides) {
+            setPendingOverwrite({
+              input,
+              articleId: editor.id,
+              enterprises: saved.affectedEnterprises || [],
+            });
+            return;
+          }
         } else {
           await createSharedEapArticle(input);
         }
@@ -63,12 +78,37 @@ export function EapArticleSection({
         }
       }
       setEditor(undefined);
+      setPendingOverwrite(null);
       await onChange();
     } catch (err) {
       setError(err instanceof Error ? err.message : "图文保存失败");
     } finally {
       setBusy(false);
     }
+  };
+
+  const confirmOverwrite = async () => {
+    if (!pendingOverwrite) return;
+    setBusy(true);
+    setError("");
+    try {
+      await updateSharedEapArticle(pendingOverwrite.articleId, pendingOverwrite.input, {
+        overwriteEnterpriseOverrides: true,
+      });
+      setPendingOverwrite(null);
+      setEditor(undefined);
+      await onChange();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "覆盖企业改稿失败");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const keepEnterpriseOverrides = async () => {
+    setPendingOverwrite(null);
+    setEditor(undefined);
+    await onChange();
   };
 
   const confirmDelete = async () => {
@@ -121,7 +161,7 @@ export function EapArticleSection({
             </h3>
             <p className="mt-1 text-sm leading-6 text-[var(--lxxl-muted)]">
               {mode === "shared"
-                ? "这里新增、修改或删除的图文会同步到所有企业页面。若某企业曾单独改过同一篇，通用保存后也会改回这份内容。"
+                ? "这里新增、修改或删除的图文会作为各企业页面的默认内容。若某企业曾单独改过同一篇，保存通用修改时会询问是否覆盖该企业改稿。"
                 : "可以单独调整当前企业页面上的图文。修改和删除只影响这家企业，不会改动通用图文。"}
             </p>
           </div>
@@ -209,8 +249,34 @@ export function EapArticleSection({
           article={editor}
           busy={busy}
           onClose={() => setEditor(undefined)}
-          onSave={save}
+          onSave={(input) => void save(input, false)}
         />
+      )}
+      {pendingOverwrite && (
+        <div className="fixed inset-0 z-[90] grid place-items-center bg-black/40 p-6">
+          <section className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+            <h3 className="text-lg font-semibold">是否覆盖企业定制图文？</h3>
+            <p className="mt-3 text-sm leading-6 text-[var(--lxxl-muted)]">
+              通用图文已保存。以下 {pendingOverwrite.enterprises.length}{" "}
+              家企业对该篇有单独改稿。确认覆盖后，会把本次修改同步到这些企业对应的图文数据；选择保留则这些企业继续使用各自改稿。
+            </p>
+            <ul className="mt-3 max-h-40 overflow-y-auto rounded-xl border border-[var(--lxxl-border)] px-3 py-2 text-sm">
+              {pendingOverwrite.enterprises.map((item) => (
+                <li className="border-b border-[var(--lxxl-border)] py-2 last:border-b-0" key={item.id}>
+                  {item.companyName || item.id}
+                </li>
+              ))}
+            </ul>
+            <div className="mt-5 flex flex-wrap gap-3">
+              <QueryButton className="!w-auto px-4" disabled={busy} onClick={() => void confirmOverwrite()}>
+                {busy ? "覆盖中..." : "确认覆盖"}
+              </QueryButton>
+              <QueryResetButton disabled={busy} onClick={() => void keepEnterpriseOverrides()}>
+                保留企业改稿
+              </QueryResetButton>
+            </div>
+          </section>
+        </div>
       )}
       {pendingDelete && (
         <div className="fixed inset-0 z-[80] grid place-items-center bg-black/40 p-6">

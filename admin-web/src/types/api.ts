@@ -501,6 +501,9 @@ export interface EapArticle {
   author?: string;
   /** shared=通用；override=本企业改过；local=仅本企业新增 */
   source?: "shared" | "override" | "local";
+  needsOverwriteConfirm?: boolean;
+  affectedEnterpriseCount?: number;
+  affectedEnterprises?: Array<{ id: string; companyName: string }>;
 }
 
 export interface EapArticleInput {
@@ -508,6 +511,29 @@ export interface EapArticleInput {
   imageUrl: string;
   body: string;
   tags: string[];
+  duration: string;
+}
+
+export interface EapAudio {
+  id: string;
+  title: string;
+  audioUrl: string;
+  description: string;
+  series?: string;
+  duration: string;
+  publishedAt?: string;
+  /** shared=通用；override=本企业改过；local=仅本企业新增 */
+  source?: "shared" | "override" | "local";
+  needsOverwriteConfirm?: boolean;
+  affectedEnterpriseCount?: number;
+  affectedEnterprises?: Array<{ id: string; companyName: string }>;
+}
+
+export interface EapAudioInput {
+  title: string;
+  audioUrl: string;
+  description: string;
+  series?: string;
   duration: string;
 }
 

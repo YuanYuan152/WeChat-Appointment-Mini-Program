@@ -6,6 +6,8 @@ import type {
   CustomEmployeeInfoField,
   EapArticle,
   EapArticleInput,
+  EapAudio,
+  EapAudioInput,
   EmployeeInfoFieldOption,
   EnterpriseCounselorEditor,
   EnterpriseCounselorSaveItem,
@@ -93,11 +95,23 @@ export function createSharedEapArticle(input: EapArticleInput) {
   });
 }
 
-export function updateSharedEapArticle(articleId: string, input: EapArticleInput) {
-  return apiRequest<EapArticle>(`${BASE_PATH}/articles/${encodeURIComponent(articleId)}`, {
-    method: "PUT",
-    body: JSON.stringify(input),
-  });
+export function updateSharedEapArticle(
+  articleId: string,
+  input: EapArticleInput,
+  options?: { overwriteEnterpriseOverrides?: boolean },
+) {
+  const search = new URLSearchParams();
+  if (options?.overwriteEnterpriseOverrides) {
+    search.set("overwrite_enterprise_overrides", "true");
+  }
+  const query = search.toString();
+  return apiRequest<EapArticle>(
+    `${BASE_PATH}/articles/${encodeURIComponent(articleId)}${query ? `?${query}` : ""}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(input),
+    },
+  );
 }
 
 export function deleteSharedEapArticle(articleId: string) {
@@ -134,6 +148,74 @@ export function updateEnterpriseEapArticle(
 export function deleteEnterpriseEapArticle(enterpriseId: string, articleId: string) {
   return apiRequest<{ message: string }>(
     `${BASE_PATH}/${encodeURIComponent(enterpriseId)}/articles/${encodeURIComponent(articleId)}`,
+    { method: "DELETE" },
+  );
+}
+
+export function fetchSharedEapAudios() {
+  return apiRequest<EapAudio[]>(`${BASE_PATH}/audios`);
+}
+
+export function createSharedEapAudio(input: EapAudioInput) {
+  return apiRequest<EapAudio>(`${BASE_PATH}/audios`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateSharedEapAudio(
+  audioId: string,
+  input: EapAudioInput,
+  options?: { overwriteEnterpriseOverrides?: boolean },
+) {
+  const search = new URLSearchParams();
+  if (options?.overwriteEnterpriseOverrides) {
+    search.set("overwrite_enterprise_overrides", "true");
+  }
+  const query = search.toString();
+  return apiRequest<EapAudio>(
+    `${BASE_PATH}/audios/${encodeURIComponent(audioId)}${query ? `?${query}` : ""}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(input),
+    },
+  );
+}
+
+export function deleteSharedEapAudio(audioId: string) {
+  return apiRequest<{ message: string }>(`${BASE_PATH}/audios/${encodeURIComponent(audioId)}`, {
+    method: "DELETE",
+  });
+}
+
+export function fetchEnterpriseEapAudios(enterpriseId: string) {
+  return apiRequest<EapAudio[]>(`${BASE_PATH}/${encodeURIComponent(enterpriseId)}/audios`);
+}
+
+export function createEnterpriseEapAudio(enterpriseId: string, input: EapAudioInput) {
+  return apiRequest<EapAudio>(`${BASE_PATH}/${encodeURIComponent(enterpriseId)}/audios`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateEnterpriseEapAudio(
+  enterpriseId: string,
+  audioId: string,
+  input: EapAudioInput,
+) {
+  return apiRequest<EapAudio>(
+    `${BASE_PATH}/${encodeURIComponent(enterpriseId)}/audios/${encodeURIComponent(audioId)}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(input),
+    },
+  );
+}
+
+export function deleteEnterpriseEapAudio(enterpriseId: string, audioId: string) {
+  return apiRequest<{ message: string }>(
+    `${BASE_PATH}/${encodeURIComponent(enterpriseId)}/audios/${encodeURIComponent(audioId)}`,
     { method: "DELETE" },
   );
 }

@@ -8,7 +8,7 @@ from uuid import UUID
 
 import qrcode
 import qrcode.image.svg
-from fastapi import APIRouter, Depends, Header, HTTPException, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
@@ -22,6 +22,17 @@ from assessment_article_service import (
     resolve_enterprise_articles,
     update_enterprise_article,
     update_shared_article,
+)
+from assessment_audio_service import (
+    create_enterprise_audio,
+    create_shared_audio,
+    delete_enterprise_audio,
+    delete_shared_audio,
+    list_enterprise_audios,
+    list_shared_audios,
+    resolve_enterprise_audios,
+    update_enterprise_audio,
+    update_shared_audio,
 )
 from assessment_enterprise_service import (
     EnterpriseConfigError,
@@ -146,6 +157,14 @@ class ArticlePayload(BaseModel):
     imageUrl: str = Field(..., min_length=1, max_length=500)
     body: str = Field(..., min_length=1, max_length=20000)
     tags: list[str] = Field(..., min_length=1, max_length=8)
+    duration: str = Field(..., min_length=1, max_length=40)
+
+
+class AudioPayload(BaseModel):
+    title: str = Field(..., min_length=1, max_length=80)
+    audioUrl: str = Field(..., min_length=1, max_length=800)
+    description: str = Field(..., min_length=1, max_length=2000)
+    series: str = Field(default="", max_length=40)
     duration: str = Field(..., min_length=1, max_length=40)
 
 
@@ -350,6 +369,7 @@ def _published_assessments(
 def get_public_default_branding():
     payload = get_default_branding()
     payload["articles"] = list_shared_articles()
+    payload["audios"] = list_shared_audios()
     return payload
 
 
@@ -454,6 +474,7 @@ def get_public_enterprise_assessments(
             "hideLibrary": bool(enterprise.get("hideLibrary")),
             "assessments": definitions,
             "articles": resolve_enterprise_articles(enterprise) if authorized else [],
+            "audios": resolve_enterprise_audios(enterprise) if authorized else [],
         }
     except EnterpriseConfigError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -827,16 +848,28 @@ def register_assessment_enterprise_admin_routes(
         body: ArticlePayload,
         actor: Any = Depends(require_assessment_editor),
         db: Session = Depends(get_db),
+        overwrite_enterprise_overrides: bool = Query(
+            False,
+            description="为 true 时，将本次通用修改同步覆盖各企业对该条的单独改稿",
+        ),
     ):
         try:
-            saved = update_shared_article(article_id, body.model_dump())
+            saved = update_shared_article(
+                article_id,
+                body.model_dump(),
+                overwrite_enterprise_overrides=overwrite_enterprise_overrides,
+            )
         except EnterpriseConfigError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         _audit(
             db,
             actor,
             action_type="ENTERPRISE_ARTICLE_SAVE",
-            action_label="修改通用心理图文",
+            action_label=(
+                "修改通用心理图文并覆盖企业改稿"
+                if overwrite_enterprise_overrides
+                else "修改通用心理图文"
+            ),
             summary=saved.get("title") or body.title,
             target_type="EnterpriseArticle",
             target_id=article_id,
@@ -949,6 +982,175 @@ def register_assessment_enterprise_admin_routes(
             summary=article_id,
             target_type="EnterpriseArticle",
             target_id=article_id,
+        )
+        return {"message": "已从该企业页面移除"}
+
+    @router.get("/assessment-enterprises/audios", summary="通用心理音画")
+    def list_admin_audios(_actor: Any = Depends(require_assessment_editor)):
+        return list_shared_audios()
+
+    @router.post("/assessment-enterprises/audios", summary="新增通用心理音画")
+    def create_admin_audio(
+        body: AudioPayload,
+        actor: Any = Depends(require_assessment_editor),
+        db: Session = Depends(get_db),
+    ):
+        try:
+            saved = create_shared_audio(body.model_dump())
+        except EnterpriseConfigError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        _audit(
+            db,
+            actor,
+            action_type="ENTERPRISE_AUDIO_SAVE",
+            action_label="新增通用心理音画",
+            summary=saved.get("title") or body.title,
+            target_type="EnterpriseAudio",
+            target_id=saved.get("id"),
+            target_name=saved.get("title"),
+        )
+        return saved
+
+    @router.put("/assessment-enterprises/audios/{audio_id}", summary="修改通用心理音画")
+    def update_admin_audio(
+        audio_id: str,
+        body: AudioPayload,
+        actor: Any = Depends(require_assessment_editor),
+        db: Session = Depends(get_db),
+        overwrite_enterprise_overrides: bool = Query(
+            False,
+            description="为 true 时，将本次通用修改同步覆盖各企业对该条的单独改稿",
+        ),
+    ):
+        try:
+            saved = update_shared_audio(
+                audio_id,
+                body.model_dump(),
+                overwrite_enterprise_overrides=overwrite_enterprise_overrides,
+            )
+        except EnterpriseConfigError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        _audit(
+            db,
+            actor,
+            action_type="ENTERPRISE_AUDIO_SAVE",
+            action_label=(
+                "修改通用心理音画并覆盖企业改稿"
+                if overwrite_enterprise_overrides
+                else "修改通用心理音画"
+            ),
+            summary=saved.get("title") or body.title,
+            target_type="EnterpriseAudio",
+            target_id=audio_id,
+            target_name=saved.get("title"),
+        )
+        return saved
+
+    @router.delete("/assessment-enterprises/audios/{audio_id}", summary="删除通用心理音画")
+    def delete_admin_audio(
+        audio_id: str,
+        actor: Any = Depends(require_assessment_editor),
+        db: Session = Depends(get_db),
+    ):
+        try:
+            delete_shared_audio(audio_id)
+        except EnterpriseConfigError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        _audit(
+            db,
+            actor,
+            action_type="ENTERPRISE_AUDIO_DELETE",
+            action_label="删除通用心理音画",
+            summary=audio_id,
+            target_type="EnterpriseAudio",
+            target_id=audio_id,
+        )
+        return {"message": "音画已删除"}
+
+    @router.get("/assessment-enterprises/{enterprise_id}/audios", summary="企业可见心理音画")
+    def list_admin_enterprise_audios(
+        enterprise_id: str,
+        _actor: Any = Depends(require_assessment_editor),
+    ):
+        try:
+            return list_enterprise_audios(enterprise_id)
+        except EnterpriseConfigError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    @router.post("/assessment-enterprises/{enterprise_id}/audios", summary="为企业新增专属音画")
+    def create_admin_enterprise_audio(
+        enterprise_id: str,
+        body: AudioPayload,
+        actor: Any = Depends(require_assessment_editor),
+        db: Session = Depends(get_db),
+    ):
+        try:
+            saved = create_enterprise_audio(enterprise_id, body.model_dump())
+        except EnterpriseConfigError as exc:
+            status = 404 if "不存在" in str(exc) else 422
+            raise HTTPException(status_code=status, detail=str(exc)) from exc
+        _audit(
+            db,
+            actor,
+            action_type="ENTERPRISE_AUDIO_SAVE",
+            action_label="为企业新增专属音画",
+            summary=saved.get("title") or body.title,
+            target_type="EnterpriseAudio",
+            target_id=saved.get("id"),
+            target_name=saved.get("title"),
+        )
+        return saved
+
+    @router.put(
+        "/assessment-enterprises/{enterprise_id}/audios/{audio_id}",
+        summary="修改企业音画（不改通用库）",
+    )
+    def update_admin_enterprise_audio(
+        enterprise_id: str,
+        audio_id: str,
+        body: AudioPayload,
+        actor: Any = Depends(require_assessment_editor),
+        db: Session = Depends(get_db),
+    ):
+        try:
+            saved = update_enterprise_audio(enterprise_id, audio_id, body.model_dump())
+        except EnterpriseConfigError as exc:
+            status = 404 if "不存在" in str(exc) else 422
+            raise HTTPException(status_code=status, detail=str(exc)) from exc
+        _audit(
+            db,
+            actor,
+            action_type="ENTERPRISE_AUDIO_SAVE",
+            action_label="修改企业音画",
+            summary=saved.get("title") or body.title,
+            target_type="EnterpriseAudio",
+            target_id=audio_id,
+            target_name=saved.get("title"),
+        )
+        return saved
+
+    @router.delete(
+        "/assessment-enterprises/{enterprise_id}/audios/{audio_id}",
+        summary="从企业页面移除音画",
+    )
+    def delete_admin_enterprise_audio(
+        enterprise_id: str,
+        audio_id: str,
+        actor: Any = Depends(require_assessment_editor),
+        db: Session = Depends(get_db),
+    ):
+        try:
+            delete_enterprise_audio(enterprise_id, audio_id)
+        except EnterpriseConfigError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        _audit(
+            db,
+            actor,
+            action_type="ENTERPRISE_AUDIO_DELETE",
+            action_label="从企业页面移除音画",
+            summary=audio_id,
+            target_type="EnterpriseAudio",
+            target_id=audio_id,
         )
         return {"message": "已从该企业页面移除"}
 
